@@ -22,13 +22,18 @@ extends RefCounted
 ## quietly skipped, because a table that claims twelve rows and delivers zero is the failure this
 ## repo keeps paying for.
 ##
-## The sim is stepped at `TICK_STILL` (under `Rules.EPS`) wherever a body must not move, and at the
+## The sim is stepped at `TICK_ONE` (under `Rules.EPS`) wherever a body must not move, and at the
 ## same delta as the view wherever the sim's OWN clock is what is being measured — the lion's
 ## telegraph is the one that needs the two clocks to agree, because it is drawn from sim state.
 
 
-## Below Rules.EPS, so `_walk` never turns and nobody moves.
-const TICK_STILL := 1e-5
+## ⚠ **`step` runs whole `Rules.SIM_SUBSTEP_SEC` sub-steps and carries the leftover**
+## (`plan-then-watch`, 5.2), so there is no step too small to do anything any more: a `dt` under one
+## sub-step runs ZERO phases and every column stays at its fixture value — which reads as 「the rule
+## did not fire」 on every check at once. ⇒ **One sub-step is the smallest thing that happens**, and
+## that is what `TICK_ONE` is. A unit already inside its reach still does not walk, so the fixtures
+## that needed 「nobody moves」 keep the property they actually needed.
+const TICK_ONE := Rules.SIM_SUBSTEP_SEC
 
 ## Pixel slack for a coordinate that made a round trip through a `Vector2` — Godot's `real_t` is a
 ## 32-bit float, so a double computed here and the same double stored in an fx differ in the seventh
@@ -151,6 +156,21 @@ class FieldSpy extends FieldView:
 		seq += 1
 
 
+## The HUD layer's one drawer, captured the same way. `HudView` has exactly one hook that reaches a
+## rectangle (`_paint_button`, shared by the start button and the five speed chips), so the whole
+## spy is one override.
+class HudSpy extends HudView:
+	var buttons := []
+
+	func _draw() -> void:
+		buttons.clear()
+		super()
+
+	func _paint_button(face: Font, rect: Rect2, bg: Color, text: String, at: Vector2, fsize: int,
+			col: Color) -> void:
+		buttons.append({"rect": rect, "bg": bg, "text": text, "at": at, "fsize": fsize, "col": col})
+
+
 func run(t) -> void:
 	await _the_engine_really_drives_it(t)
 	await _transit_body_is_drawn_and_can_flash(t)
@@ -164,11 +184,215 @@ func run(t) -> void:
 	await _landing_rings(t)
 	await _shake(t)
 	await _gait(t)
+	await _the_ladder_does_not_destroy_the_picture(t)
+	await _the_hud_ladder_ages_with_the_speed(t)
+	await _zero_speed_freezes_the_picture(t)
 	_spark_points_is_a_function_of_progress(t)
 	_the_inequalities_the_spark_stands_on(t)
 	_fx_gain_is_indexed_by_item_number(t)
 	_the_readers_themselves(t)
 
+
+
+# -- the speed ladder, and the picture it would destroy if the view did not scale with it ------------
+
+## ⚠⚠ **No net drove a view above 1x before this round, and three of `look.gd`'s own written
+## inequalities break at 6x.** `HIT_FLASH_SEC` 0.14 claims 「14% duty against the 1.0 s attack period」;
+## at 6x that period is 0.1667 real seconds and an unscaled flash is **84%** — every body permanently
+## white. `LUNGE_SEC` 0.18 claims 「exactly 0 at both ends, so no body is ever left sitting displaced」;
+## 0.18 > 0.1667, so an unscaled lunge never returns to rest. `SPARK_SEC` 0.12's own eight-neighbour
+## bound goes from 0.96 to **5.76**.
+##
+## ⇒ **`field_view` ages its drawers by `delta * _time_scale`**, and these rows are the only thing
+## standing between that line and a destroyed picture. Each one drives the SIM at `dt * k` and the VIEW
+## at the real `dt`, exactly as `game.gd::_process` does, and measures over one real attack period.
+##
+## ⚠ **Every row is bounded at BOTH ends.** A duty ceiling with no floor is green with the effect
+## deleted outright — this repo found that on four items at once in the presentation round.
+func _the_ladder_does_not_destroy_the_picture(t) -> void:
+	for raw_k in [1.0, 2.0, 3.0, 6.0]:
+		var k := float(raw_k)
+		var m: Dictionary = await _ladder_measure(t, k)
+		# ① the white. `CELL_MELEE`'s period is 1.0 s, so the duty is `HIT_FLASH_SEC / 1.0` at every
+		# rung once the view is scaled — 0.14. Unscaled at 6x it is 0.84.
+		t.ok(float(m["flash_duty"]) > 0.05,
+			"%.0f배속 — 몸이 실제로 하얗게 번쩍인다 (듀티 %.3f, 바닥 0.05)" % [k, float(m["flash_duty"])])
+		t.ok(float(m["flash_duty"]) <= 0.25,
+			"%.0f배속으로 감아도 몸이 하얗게 물들지 않는다 (듀티 %.3f, 천장 0.25)"
+				% [k, float(m["flash_duty"])])
+		# ② the lunge. Both ends of ONE quantity: it leaves rest, and it comes back to EXACTLY rest.
+		t.ok(float(m["lunge_peak"]) > 0.5,
+			"%.0f배속 — 때린 몸이 실제로 앞으로 나갔다 (%.2f px, 바닥)" % [k, float(m["lunge_peak"])])
+		t.ok(float(m["lunge_duty"]) <= 0.45,
+			"%.0f배속으로 감아도 몸이 밀린 채로 안 남는다 (밀려 있던 프레임 비율 %.3f, 천장 0.45)"
+				% [k, float(m["lunge_duty"])])
+		# ③ the shards. One bundle per body at a time, and the fraction of the period they cover has to
+		# stay well under 1 or a body's rim is never clean.
+		t.ok(float(m["spark_duty"]) > 0.02,
+			"%.0f배속 — 파편이 실제로 튄다 (듀티 %.3f, 바닥)" % [k, float(m["spark_duty"])])
+		t.ok(float(m["spark_duty"]) <= 0.45,
+			"%.0f배속에서도 불꽃이 몸 테두리를 다 덮지 않는다 (듀티 %.3f, 천장 0.45)"
+				% [k, float(m["spark_duty"])])
+		t.ok(int(m["spark_max_per_frame"]) <= int(m["bodies_max"]),
+			"%.0f배속에서도 한 프레임의 파편 묶음이 몸 수를 안 넘는다 — 몸마다 하나뿐이다 (%d개 / 몸 %d개)"
+				% [k, int(m["spark_max_per_frame"]), int(m["bodies_max"])])
+
+
+## One melee cell beside one bison, driven for `2.0 / k` REAL seconds in 1/60 s real frames — two whole
+## attack periods at that rung. The sim is stepped `dt * k` and the view `dt`, which is exactly the
+## pair `game.gd::_process` hands out.
+##
+## Returns the three duties and the lunge's two ends. ⚠ **Everything is read off the CAPTURED draw
+## arguments**, never off `_flash_of` / `_lunge_offset` directly: a pure function measured on its own
+## proves nothing about whether the picture uses it.
+func _ladder_measure(t, k: float) -> Dictionary:
+	var army := _army_of([Rules.CELL_MELEE])
+	var b := _battle_of(_open(), army, [_spawn(Rules.BISON, 13, 5)], 999.0)
+	_ashore(b, 0, Vector2(12, 5))
+	var fv := _view_of(t, b, army)
+	fv.set_time_scale(k)
+
+	var soldier_px := Look.tile_point_px(Vector2(12, 5))
+	var plain_enemy := Look.body_colour_of(true)
+	var frames := int(round(120.0 / k))
+	var flash_frames := 0
+	var spark_frames := 0
+	var spark_max := 0
+	var lunge_peak := 0.0
+	var lunge_frames := 0
+	var bodies_max := 0
+	var drawn := 0
+	for _f in frames:
+		await _frame(t, b, fv, (1.0 / 60.0) * k, 1.0 / 60.0)
+		drawn += 1
+		# The bison is the body that gets hit; the cell is the body that lunges.
+		for rawb: Dictionary in fv.bodies:
+			if _col(rawb, "colour") != plain_enemy and _col(rawb, "colour") == Look.body_colour_of(true).lerp(
+					Look.COL_FLASH, Look.HIT_FLASH_STRENGTH):
+				flash_frames += 1
+				break
+		var here := 0
+		for _s in fv.sparks:
+			here += 1
+		spark_max = maxi(spark_max, here)
+		bodies_max = maxi(bodies_max, fv.bodies.size())
+		if here > 0:
+			spark_frames += 1
+		for rawb2: Dictionary in fv.bodies:
+			if _col(rawb2, "colour") == Look.body_colour_of(false):
+				var off: float = (_pt(rawb2, "centre") - soldier_px).length()
+				lunge_peak = maxf(lunge_peak, off)
+				# ⚠⚠ **Counted as a DUTY, not as 「it was 0 at some point」.** Every fixture starts at
+				# rest, so 「it returned to 0」 is true on frame one and stays true — measured: the
+				# unscaled 6x view passed that shape with the body never returning at all. The fraction
+				# of frames on which the body is displaced is the quantity that actually moves: scaled
+				# it is `LUNGE_SEC / period` = 0.18, unscaled at 6x it approaches 1.0.
+				if off > 0.01:
+					lunge_frames += 1
+	t.ok(drawn == frames and frames > 0, "%.0f배속 — 실제 프레임 %d장을 돌렸다 (자가 점검)" % [k, drawn])
+	_drop(t, fv)
+	return {
+		"flash_duty": float(flash_frames) / float(maxi(frames, 1)),
+		"spark_duty": float(spark_frames) / float(maxi(frames, 1)),
+		"spark_max_per_frame": spark_max,
+		"lunge_peak": lunge_peak,
+		"lunge_duty": float(lunge_frames) / float(maxi(frames, 1)),
+		"bodies_max": bodies_max,
+	}
+
+
+## ⚠⚠ **The HUD takes the same multiplier, and nothing proved it USED it.** `net_shell` reads
+## `hud_view._speed_scale` off the field and finds the shell's number there — which proves it was
+## computed and handed down, never that a drawer ages by it. **Measured: `_fx_step(delta *
+## _speed_scale)` changed to `_fx_step(delta)` left the whole round green**, because `_chip_fx` is
+## this layer's only drawer and it can only fire pre-commit, where the shell is always at 1x. The
+## moment a second drawer lands here, or the start button gains a post-commit state, the ladder
+## destroys it silently — this is `CLAUDE.md`'s named shape: capturing an argument proves it was
+## computed, never that it was used.
+##
+## The shake is read off the DRAWN rect, not off `_chip_offset`, so a hook that stopped applying the
+## offset would fail here too. Both arms run the same REAL interval and the same real frames; only
+## the multiplier differs, so the 1x arm is the self-check that the interval is genuinely short.
+func _the_hud_ladder_ages_with_the_speed(t) -> void:
+	# One sixth of the drawer's life, plus a hair. At 6x that is the whole of it; at 1x it is a
+	# sixth of it, and the button is still visibly displaced.
+	var real_sec := Look.CHIP_FX_SEC / 6.0 + 0.001
+	var top := float(Rules.SPEED_STEPS[Rules.speed_slot_count() - 1])
+	t.eq(top, 6.0, "사다리 꼭대기가 6배속이다 (자가 점검 — 이 행의 산술이 그 숫자에서 나온다)")
+	for raw_k in [1.0, top]:
+		var k := float(raw_k)
+		var army := _army_of([Rules.CELL_MELEE])
+		var b := _planning_battle_of(_open(), army, [_spawn(Rules.BISON, 13, 5)], 999.0)
+		var hud := HudSpy.new()
+		hud.bind(b)
+		t.root.add_child(hud)
+		hud.set_process(false)
+		hud.set_speed(Rules.SPEED_SLOT_DEFAULT if k == 1.0 else Rules.speed_slot_count() - 1, k)
+		# A refused start — `boats` is empty, so `commit()` says false and this is the real refusal
+		# the shell pushes in, not a hand-set field.
+		t.ok(not b.commit(), "%.0f배속 — 빈 계획으로 누른 시작이 거절된다 (자가 점검)" % k)
+		hud.note_chip(0, false)
+		await t.pump_frames(1)
+		var peak := _start_shift(hud)
+		t.ok(peak.length() > 0.0,
+			"%.0f배속 — 거절 흔들림이 실제로 일어난다 (%.2f px, 바닥)" % [k, peak.length()])
+		t.ok(peak.length() <= Look.REFUSE_SHAKE_PX + 0.01,
+			"%.0f배속 — 그리고 REFUSE_SHAKE_PX 를 안 넘는다 (천장)" % k)
+		# The real clock advances by the same amount in both arms.
+		hud._process(real_sec)
+		await t.pump_frames(1)
+		var after := _start_shift(hud)
+		if k == 1.0:
+			t.ok(after.length() > 0.0,
+				"1배속 — 실제 %.3fs 뒤에도 단추가 아직 흔들리고 있다 (자가 점검 — 간격이 진짜 짧다)"
+					% real_sec)
+		else:
+			t.eq(after, Vector2.ZERO,
+				"%.0f배속 — 같은 실제 시간에 흔들림이 정확히 끝나 있다 (HUD 도 배속으로 늙는다)" % k)
+		t.root.remove_child(hud)
+		hud.free()
+
+
+## The start button's displacement from its resting rect, read off the captured draw call. The
+## reader matches on SIZE because the shake moves the position, and a reader keyed on the whole rect
+## would stop finding the button on the one frame that matters.
+func _start_shift(hud: HudSpy) -> Vector2:
+	for raw in hud.buttons:
+		var btn: Dictionary = raw
+		if (btn["rect"] as Rect2).size == Look.HUD_START_SIZE_PX:
+			return (btn["rect"] as Rect2).position - Look.start_rect_px().position
+	return Vector2(1e9, 1e9)
+
+
+## ⚠ **0x is not a viewing rate for the picture either.** A still sim under a running animation is the
+## exact shape 「pause」 must not be, so the view's own clock has to stop with it. Both ends: the effect
+## exists at all on the frame of the blow, and it does not age by so much as one frame afterwards.
+func _zero_speed_freezes_the_picture(t) -> void:
+	var army := _army_of([Rules.CELL_MELEE])
+	var b := _battle_of(_open(), army, [_spawn(Rules.BISON, 13, 5)], 999.0)
+	_ashore(b, 0, Vector2(12, 5))
+	var fv := _view_of(t, b, army)
+
+	# One real frame at 1x to make a blow, and to spawn the drawers this row is about.
+	fv.set_time_scale(1.0)
+	await _frame(t, b, fv, TICK_ONE, 1.0 / 60.0)
+	var flash_col := Look.body_colour_of(true).lerp(Look.COL_FLASH, Look.HIT_FLASH_STRENGTH)
+	var lit := 0
+	for rawb: Dictionary in fv.bodies:
+		if _col(rawb, "colour") == flash_col:
+			lit += 1
+	t.eq(lit, 1, "0배속 시험 — 먼저 1배속에서 몸 하나가 실제로 번쩍였다 (바닥)")
+	var frozen_col := _col(_at(fv.bodies, 0), "colour")
+	var frozen_pos := _pt(_at(fv.bodies, 1), "centre")
+
+	# Now 0x, and twenty real frames. Nothing on either clock may move.
+	fv.set_time_scale(0.0)
+	for _f in 20:
+		await _frame(t, b, fv, 0.0, 1.0 / 60.0)
+	t.eq(_col(_at(fv.bodies, 0), "colour"), frozen_col,
+		"0배속이면 연출도 멈춘다 — 스무 프레임을 돌려도 흰색이 한 톨도 안 빠진다")
+	t.eq(_pt(_at(fv.bodies, 1), "centre"), frozen_pos, "런지도 그 자리에 얼어붙어 있다")
+	_drop(t, fv)
 
 # -- the instrument, inverted ----------------------------------------------------------------------
 
@@ -226,7 +450,7 @@ func _the_engine_really_drives_it(t) -> void:
 	t.root.add_child(fv)
 
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	t.ok(b.events.size() > 0, "sim 이 이 프레임에 사건을 냈다 (%d개)" % b.events.size())
 	await t.pump_frames(3)
 	t.ok(fv.draws >= 1, "트리 위에서 _draw 가 진짜 돌았다 (%d프레임)" % fv.draws)
@@ -243,9 +467,12 @@ func _the_engine_really_drives_it(t) -> void:
 	fv._process(0.001)
 	await t.pump_frames(2)
 	# The literal, not `(Look.GRID_W + 2*margin) * (Look.GRID_H + 2*margin)` — a check whose bound
-	# comes from the constants it is checking shrinks with them. 58 x 42 = 2436 (48+10, 32+10).
-	t.eq(fv.tiles.size(), 2436,
-			"지형을 물 여백까지 2436칸 그렸다 — 줌 아웃해도 가장자리에 맨바닥이 안 드러난다")
+	# comes from the constants it is checking shrinks with them. **72 x 56 = 4032** (48 + 2x12,
+	# 32 + 2x12): `WATER_MARGIN_TILES` went 5 -> 12 with `ZOOM_MIN` 0.5625 -> 0.45, because at the new
+	# framing the visible world runs 11.6 tiles past the grid on the x axis and bare ground would show.
+	# ⚠ `_paint_tile` is 2 draw calls, so this is 8064 a frame, up from 4872 — `plan-then-watch`, 6.3.
+	t.eq(fv.tiles.size(), 4032,
+			"지형을 물 여백까지 4032칸 그렸다 — 줌 아웃해도 가장자리에 맨바닥이 안 드러난다")
 	fv.tiles_on = false
 	_drop(t, fv)
 
@@ -258,23 +485,30 @@ func _the_engine_really_drives_it(t) -> void:
 ## coloured one sitting inside its OWN boat's hull rectangle, and — once a crow actually lands a
 ## hit — the white mix and the halo that item 3 has always produced for anyone else `is_hittable`.
 func _transit_body_is_drawn_and_can_flash(t) -> void:
-	# TWO passengers, not one — a single passenger on a cap-4 hull still sits in ITS deck slot rather
-	# than the hull's centre, so a fallback bug (halo reading the boat's raw `pos` instead of the
-	# shared `transit_pos` slot) can hide behind one passenger without ever being exercised the way a
-	# real 4-slot hull is. Measured: with one passenger, swapping the halo's position source for
-	# `battle.soldier_pos[ti]` stayed green; with two, it moves the halo 46.5 px off its own body.
+	# TWO passengers, and now on TWO BOATS — 결정 14R deleted capacity, so a boat carries the one
+	# soldier that was dragged onto it (`plan-then-watch`, 4.2). That makes the fallback bug this
+	# fixture was built for MORE reachable, not less: each body has to be drawn at ITS OWN boat's
+	# position, and a halo reading some shared boat point lands on the wrong hull entirely.
 	var army := _army_of([Rules.CELL_RANGED, Rules.CELL_RANGED])
 	# 3.0 tiles from the harbour's own water, inside a crow's 4.5-tile reach — the same distance
 	# `net_battle`'s TRANSIT fixture already measured for "the crow can hit a boat this far out".
-	var b := _battle_of(_port(), army, [_spawn(Rules.CROW, 2, 2)], 999.0)
+	var b := _planning_battle_of(_port(), army, [_spawn(Rules.CROW, 2, 2)], 999.0)
 	var fv := _view_of(t, b, army)
 
-	b.load_soldier(Rules.CELL_RANGED)
-	b.load_soldier(Rules.CELL_RANGED)
+	# Two DIFFERENT landings, so the two boats are two places. Aimed at one tile they would sail the
+	# identical route and the "not drawn on top of each other" floor below would be measuring nothing.
 	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
-	t.ok(b.launch(0, landing), "배를 띄웠다 (자가 점검)")
+	var landing2 := int(_PORT_LANDING.y - 2.0) * ARENA_W + int(_PORT_LANDING.x)
+	t.ok(b.send(0, landing) >= 0, "1번 병사를 배에 태워 보냈다 (자가 점검)")
+	t.ok(b.send(1, landing2) >= 0, "2번 병사는 다른 해안으로 보냈다 (자가 점검)")
+	t.ok(b.commit(), "시작을 눌러 두 척을 띄웠다 (자가 점검)")
 
-	await _frame(t, b, fv, TICK_STILL, 0.001)
+	# 0.4 s of SIM and 0.001 s of VIEW, on purpose. The two boats leave the same harbour, so a single
+	# sub-step leaves them 1.2 px apart and the "not drawn on top of each other" floor below would be
+	# measuring nothing; 0.4 s at `BOAT_SPEED` 4.0 is 1.6 tiles of divergence and neither has arrived
+	# (the shorter leg is 4.0 tiles). The view clock stays at ~0 so no hit reaction has surfaced yet
+	# and the two bodies are still their own colour.
+	await _frame(t, b, fv, 0.4, 0.001)
 	t.eq(b.soldier_state[0], Battle.SoldierState.TRANSIT, "병사 둘 다 아직 배 위에 있다 (자가 점검)")
 	t.eq(b.soldier_state[1], Battle.SoldierState.TRANSIT, "(자가 점검, 두 번째 병사)")
 	t.eq(fv.bodies.size(), 3, "적 하나 + 배 위의 병사 둘, 몸 셋을 그렸다 — 예전엔 하나(적)뿐이었다")
@@ -283,22 +517,21 @@ func _transit_body_is_drawn_and_can_flash(t) -> void:
 	var body1 := _at(fv.bodies, 1)
 	t.eq(_col(body0, "colour"), Look.body_colour_of(false), "1번 병사도 자기 편 색이다")
 	t.eq(_col(body1, "colour"), Look.body_colour_of(false), "2번 병사도 자기 편 색이다")
-	var hull_w := 124.0   # boat 0's own width, LITERAL — see net_shell's own note on this shape
-	var hull_rect := Rect2(
-		Look.tile_point_px(Vector2(b.boats[0]["pos"])) - Vector2(hull_w, Look.BOAT_HULL_H_PX) * 0.5,
-		Vector2(hull_w, Look.BOAT_HULL_H_PX))
-	t.ok(hull_rect.has_point(_pt(body0, "centre")) and hull_rect.has_point(_pt(body1, "centre")),
-			"둘 다 그 배 자신의 선체 사각형 안에서 그려졌다 — 갑판 위다")
+	# Every hull is `BOAT_SLOT_PX 26 + 2 x BOAT_HULL_PAD_PX 10` = 46 px wide now — the 124 / 72 pair
+	# died with the boat table. Each passenger has to be inside ITS OWN boat's rectangle.
+	var hull_w := 46.0
+	t.eq(_hull_rect_at(b, 0, hull_w).has_point(_pt(body0, "centre")), true,
+			"1번 병사는 자기 배의 선체 사각형 안에서 그려졌다 — 갑판 위다")
+	t.eq(_hull_rect_at(b, 1, hull_w).has_point(_pt(body1, "centre")), true,
+			"2번 병사도 자기 배의 선체 사각형 안이다 — 남의 배가 아니다")
 	t.eq(fv.hps.size(), 3, "몸마다 HP 막대도 하나씩이다 — 배 위에서도 막대가 있다")
 
-	# F: the two passengers must not be drawn on top of each other. `_deck_slots` spreads `cap`
-	# points across the hull's width; a mutation collapsing every slot to the SAME point (`step *
-	# 0.5` instead of `step * (k + 0.5)`) stayed green under every check that only asked "is it
-	# somewhere inside the hull rect" — two stacked bodies satisfy that just as well as two spread
-	# ones. A body diameter is the floor: closer than that and the two outlines would overlap.
+	# The two passengers must not be drawn on top of each other. A body diameter is the floor: closer
+	# than that and the two outlines would overlap, which is exactly what a body drawn at some shared
+	# boat point instead of its own would produce.
 	var one_diameter := Look.body_radius_of(Rules.CELL_RANGED) * 2.0
 	t.ok(_pt(body0, "centre").distance_to(_pt(body1, "centre")) >= one_diameter,
-		"두 병사의 갑판 자리가 적어도 몸 지름만큼 떨어져 있다 (%.1f px, 지름 %.1f px)"
+		"두 병사가 적어도 몸 지름만큼 떨어져 그려진다 (%.1f px, 지름 %.1f px)"
 		% [_pt(body0, "centre").distance_to(_pt(body1, "centre")), one_diameter])
 
 	# Real sim time now, until the crow actually lands a hit on ONE of the boarded soldiers.
@@ -322,19 +555,50 @@ func _transit_body_is_drawn_and_can_flash(t) -> void:
 	# halo's fallback path used to read `battle.soldier_pos[ti]`, the boat's shared raw position,
 	# while the body read the deck slot; the two only ever agreed by coincidence in a one-passenger
 	# fixture where the slot happened to be close to the boat's own point).
-	await _frame(t, b, fv, 0.001, Look.SHOT_SEC + 0.02)
+	# ⚠ Sim `dt` 0.0, not 0.001: a `dt` under one sub-step runs zero phases anyway, and writing it as
+	# zero says what is meant — only the VIEW clock moves here, to clear `SHOT_SEC`.
+	await _frame(t, b, fv, 0.0, Look.SHOT_SEC + 0.02)
 	var flash_col := Look.body_colour_of(false).lerp(Look.COL_FLASH, Look.HIT_FLASH_STRENGTH)
 	var hit_body := {}
+	var flashed := 0
 	for raw: Dictionary in fv.bodies:
 		if raw["colour"] == flash_col:
 			hit_body = raw
+			flashed += 1
 	t.ok(not hit_body.is_empty(),
 		"맞은 뒤 그 몸에 흰색이 실제로 섞였다 — 그릴 몸이 없던 예전에는 있을 수 없던 일이다")
-	t.eq(fv.halos.size(), 1, "헤일로가 정확히 하나 떴다 — 안 맞은 병사에는 안 뜬다")
-	t.ok(not hit_body.is_empty() and fv.halos.size() > 0
-			and _pt(hit_body, "centre").distance_to(_pt(_at(fv.halos, 0), "centre")) < NEAR_PX,
-		"그리고 그 헤일로가 맞은 그 몸의 정확한 자리에 떴다 — 배의 대표 위치가 아니라 그 병사의 갑판 자리다")
+	# ⚠ **Counted, not asserted as one halo.** The crow's period is 1.0 s and this fixture runs several
+	# seconds of sim, so the NUMBER of hits is not a stable quantity — what is stable, and what G's gap
+	# was actually about, is WHERE they land. So: exactly one body is white, and **every** halo sits on
+	# that body. A halo reading a boat's shared point instead of the passenger's own lands off it.
+	t.eq(flashed, 1, "맞은 병사 하나만 하얗게 물들었다 — 안 맞은 병사는 자기 색 그대로다")
+	t.ok(fv.halos.size() >= 1, "헤일로가 떴다 (바닥 — 하나도 없으면 연출이 아예 없는 것이다)")
+	# The two ends of the claim, and the count is deliberately not one of them: a halo is anchored where
+	# the body stood when it was spawned, and this fixture runs several crow periods, so older halos sit
+	# behind the moving boat. What has to be true is that one of them is ON the body that was hit, and
+	# that NONE of them is on the soldier who was not.
+	var other := {}
+	for raw: Dictionary in fv.bodies:
+		if raw["colour"] == Look.body_colour_of(false):
+			other = raw
+	var on_hit := 0
+	var on_other := 0
+	for raw: Dictionary in fv.halos:
+		if _pt(raw, "centre").distance_to(_pt(hit_body, "centre")) <= NEAR_PX:
+			on_hit += 1
+		if not other.is_empty() and _pt(raw, "centre").distance_to(_pt(other, "centre")) <= NEAR_PX:
+			on_other += 1
+	t.ok(not other.is_empty(), "안 맞은 병사의 몸도 화면에 있다 (자가 점검)")
+	t.ok(on_hit >= 1, "헤일로가 맞은 그 몸의 정확한 자리에 떴다 — 배의 대표 위치가 아니라 그 병사의 자리다")
+	t.eq(on_other, 0, "안 맞은 병사 위에는 헤일로가 하나도 없다")
 	_drop(t, fv)
+
+
+## Boat `i`'s hull rectangle, built the way `field_view._hull_rect` builds it and centred on that
+## boat's OWN `pos` — so a body drawn at some other boat's point falls outside it.
+func _hull_rect_at(b: Battle, i: int, hull_w: float) -> Rect2:
+	var at := Look.tile_point_px(Vector2((b.boats[i] as Dictionary)["pos"]))
+	return Rect2(at - Vector2(hull_w, Look.BOAT_HULL_H_PX) * 0.5, Vector2(hull_w, Look.BOAT_HULL_H_PX))
 
 
 ## `Color` has no `distance_to` — Euclidean distance over r/g/b, alpha ignored (every colour here is
@@ -359,11 +623,10 @@ func _hull_colour(fv: FieldSpy, want_w: float) -> Color:
 ## paints it, and paints it as a BLINK — bound at both ends, or a static tint would pass this too.
 func _hull_waits_and_blinks(t) -> void:
 	var army := _army_of([Rules.CELL_MELEE])
-	var b := _battle_of(_port(), army, [_spawn(Rules.BISON, 20, 9)], 999.0)
+	var b := _planning_battle_of(_port(), army, [_spawn(Rules.BISON, 20, 9)], 999.0)
 	var fv := _view_of(t, b, army)
-	b.load_soldier(Rules.CELL_MELEE)
 	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
-	t.ok(b.launch(0, landing), "배를 띄웠다 (자가 점검)")
+	t.ok(b.send(0, landing) >= 0 and b.commit(), "배를 한 척 띄웠다 (자가 점검)")
 	# The sim is frozen from here (`sim_dt` 0.0 in every `_frame` call below) — with the coast wide
 	# open in `_port()`, a real `_phase_landings` would unload this boat for real on the very next
 	# `step` and silently resolve the forced state before the view ever saw "waiting" at all.
@@ -371,7 +634,9 @@ func _hull_waits_and_blinks(t) -> void:
 	boat["t"] = float(boat["dist"]) / float(boat["speed"])
 	b.boats[0] = boat
 
-	var hull_w := 124.0   # boat 0's own width, LITERAL — see `net_shell`'s own note on this shape
+	# Every hull is `BOAT_SLOT_PX 26 + 2 x BOAT_HULL_PAD_PX 10` = 46 px. LITERAL: the 124 / 72 pair
+	# died with the boat table, and a width read back off `_hull_rect` would move with it.
+	var hull_w := 46.0
 	# A tolerance, not `==`: the clock has already moved 0.001s off zero, so the blend is a hair
 	# above 0.0 rather than exactly it — the floor this row measures is "still near COL_BOAT", not
 	# "bit-identical to it".
@@ -408,13 +673,12 @@ func _hull_waits_and_blinks(t) -> void:
 ## this only asks whether the view reads the field it changed.
 func _destination_marker_both_legs(t) -> void:
 	var army := _army_of([Rules.CELL_MELEE])
-	var b := _battle_of(_port(), army, [_spawn(Rules.BISON, 20, 9)], 999.0)
+	var b := _planning_battle_of(_port(), army, [_spawn(Rules.BISON, 20, 9)], 999.0)
 	var fv := _view_of(t, b, army)
-	b.load_soldier(Rules.CELL_MELEE)
 	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
-	t.ok(b.launch(0, landing), "배를 띄웠다 (자가 점검)")
+	t.ok(b.send(0, landing) >= 0 and b.commit(), "배를 한 척 띄웠다 (자가 점검)")
 
-	await _frame(t, b, fv, TICK_STILL, 0.001)
+	await _frame(t, b, fv, TICK_ONE, 0.001)
 	var target_px := Look.tile_point_px(b.grid.tile_point(landing))
 	var ring_found := false
 	for raw: Dictionary in fv.rings:
@@ -488,7 +752,9 @@ func _contact(t) -> void:
 	var contact := s_px + facing * (r_s + push_s)
 
 	# --- the frame of the blow --------------------------------------------------------------------
-	await _frame(t, b, fv, 0.001, 0.001)
+	# One SUB-STEP, not 0.001: `step` runs whole `Rules.SIM_SUBSTEP_SEC` sub-steps, so a smaller `dt`
+	# runs no phases at all and this frame would carry no blow, no telegraph and no target line.
+	await _frame(t, b, fv, TICK_ONE, 0.001)
 	t.eq(fv.bodies.size(), 2, "적 하나와 병사 하나, 몸 둘을 그렸다")
 	var lion := _at(fv.bodies, 0)
 	var cell := _at(fv.bodies, 1)
@@ -676,7 +942,7 @@ func _contact(t) -> void:
 
 	# --- the death burst, and the view clock that keeps running with the sim stopped ----------------
 	b.enemy_hp[0] = 0.0
-	await _frame(t, b, fv, TICK_STILL, 0.001)
+	await _frame(t, b, fv, TICK_ONE, 0.001)
 	t.eq(b.outcome(), Battle.Outcome.WON, "마지막 적이 죽어 섬이 끝났다 — 여기서부터 sim 은 멈춘다")
 	t.eq(fv.bodies.size(), 1, "죽은 몸은 그 프레임부터 안 그려진다")
 	var burst := _rings_of(fv, Look.body_colour_of(true))
@@ -713,7 +979,7 @@ func _contact(t) -> void:
 	# `position` now also carries the camera's own pan (`boat-and-landing`), so only the SHAKE
 	# component of it is asserted here — `_shake_component` subtracts the camera's own contribution.
 	t.eq(_shake_component(fv), Vector2.ZERO, "setup 이 흔들림 오프셋도 0으로 돌렸다")
-	await _frame(t, b, fv, TICK_STILL, 0.001)
+	await _frame(t, b, fv, TICK_ONE, 0.001)
 	t.eq(fv.rings.size(), 0, "다시 연 첫 프레임에 링 호출이 0이다")
 	t.eq(fv.halos.size(), 0, "헤일로 호출도 0이다")
 	t.eq(fv.sparks.size(), 0, "파편 호출도 0이다")
@@ -736,13 +1002,13 @@ func _tracer(t) -> void:
 	var muzzle := Look.tile_point_px(Vector2(8, 5))
 	var target := Look.tile_point_px(Vector2(12, 5))
 
-	await _frame(t, b, fv, TICK_STILL, 0.001)
+	await _frame(t, b, fv, TICK_ONE, 0.001)
 	t.eq(b.soldier_target[0], 0, "원거리 병사가 0번 적을 쐈다")
 	t.eq(fv.shots.size(), 1, "예광선 하나가 떴다")
 	t.eq(_col(_at(fv.shots, 0), "colour"), Look.COL_SHOT, "예광선 색이 COL_SHOT 이다")
 	t.ok(absf(_num(_at(fv.shots, 0), "width") - Look.SHOT_WIDTH_PX) <= NEAR_PX, "예광선 굵기가 look.gd 값이다")
 
-	await _frame(t, b, fv, TICK_STILL, 0.02)
+	await _frame(t, b, fv, TICK_ONE, 0.02)
 	var early := _at(fv.shots, 0)
 	var early_from := _pt(early, "from")
 	var early_to := _pt(early, "to")
@@ -751,7 +1017,7 @@ func _tracer(t) -> void:
 			% early_from.distance_to(early_to))
 	t.ok(_before(_at(fv.bodies, 0), early), "예광선은 몸 위를 지난다")
 
-	await _frame(t, b, fv, TICK_STILL, 0.04)
+	await _frame(t, b, fv, TICK_ONE, 0.04)
 	var later := _at(fv.shots, 0)
 	var later_to := _pt(later, "to")
 	t.ok(later_to.distance_to(early_to) >= 2.0,
@@ -760,9 +1026,9 @@ func _tracer(t) -> void:
 
 	# the target dies and the shooter re-targets — the bullet must not follow
 	b.enemy_hp[0] = 0.0
-	await _frame(t, b, fv, TICK_STILL, 0.02)
+	await _frame(t, b, fv, TICK_ONE, 0.02)
 	t.eq(b.enemy_alive[0], 0, "표적이 죽었다")
-	await _frame(t, b, fv, TICK_STILL, 0.01)
+	await _frame(t, b, fv, TICK_ONE, 0.01)
 	t.eq(b.soldier_target[0], 1, "병사는 다음 적으로 갈아탔다 — 비교할 대상이 실제로 생겼다")
 	t.eq(fv.shots.size(), 1, "예광선은 아직 날고 있다")
 	var flight := _pt(_at(fv.shots, 0), "to")
@@ -777,7 +1043,7 @@ func _tracer(t) -> void:
 			"파열은 마지막 몸보다도 뒤에 그려진다")
 	var was := _num(_at(burst, 0), "radius")
 
-	await _frame(t, b, fv, TICK_STILL, 0.09)
+	await _frame(t, b, fv, TICK_ONE, 0.09)
 	t.eq(fv.shots.size(), 0, "SHOT_SEC 이 지나면 예광선 호출이 0이다")
 	t.ok(_num(_at(_rings_of(fv, Look.body_colour_of(true)), 0), "radius") > was + 1.0,
 			"그 사이 파열은 계속 커졌다")
@@ -794,22 +1060,27 @@ func _the_reaction_waits_for_the_bullet(t) -> void:
 	var fv := _view_of(t, b, army)
 	var enemy_px := Look.tile_point_px(Vector2(12, 5))
 
-	await _frame(t, b, fv, TICK_STILL, 0.001)
+	await _frame(t, b, fv, TICK_ONE, 0.001)
 	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.BISON) - Rules.damage_of(Rules.CELL_RANGED),
 			"sim 은 발사 프레임에 이미 피해를 넣었다")
-	await _frame(t, b, fv, TICK_STILL, 0.05)
+	await _frame(t, b, fv, TICK_ONE, 0.05)
 	t.eq(_col(_at(fv.bodies, 0), "colour"), Look.body_colour_of(true),
 			"총알이 도착하기 전에는 표적 색이 그대로다 — 지연이 없으면 여기서 이미 하얗다")
 	t.eq(fv.halos.size(), 0, "헤일로도 아직 안 켜졌다")
-	t.eq(_pt(_at(fv.bodies, 0), "centre"), enemy_px, "움찔도 아직 없다")
+	# ⚠ **Against the sim's own current position, not the fixture's literal.** The bison detects the
+	# soldier and walks, and one sub-step is 2.5/60 of a tile — so a literal anchor would measure the
+	# walk instead of the flinch. The flinch IS the view-side offset on top of `enemy_pos`, so zero
+	# distance between the drawn centre and the sim point is exactly "no flinch yet", and the mutation
+	# this row exists for (dropping the `SHOT_SEC` delay) opens it by `HIT_KNOCK_PX`.
+	t.eq(_pt(_at(fv.bodies, 0), "centre"), Look.tile_point_px(b.enemy_pos[0]), "움찔도 아직 없다")
 
-	await _frame(t, b, fv, TICK_STILL, 0.06)
+	await _frame(t, b, fv, TICK_ONE, 0.06)
 	t.eq(_col(_at(fv.bodies, 0), "colour"), Look.body_colour_of(true).lerp(Look.COL_FLASH, Look.HIT_FLASH_STRENGTH),
 			"SHOT_SEC 이 지나자 표적이 번쩍인다 (바닥)")
 	t.eq(fv.halos.size(), 1, "그때 헤일로도 같이 켜진다")
 
-	await _frame(t, b, fv, TICK_STILL, 0.04)
-	var flinch := _pt(_at(fv.bodies, 0), "centre") - enemy_px
+	await _frame(t, b, fv, TICK_ONE, 0.04)
+	var flinch := _pt(_at(fv.bodies, 0), "centre") - Look.tile_point_px(b.enemy_pos[0])
 	t.ok(flinch.length() > 0.5, "움찔도 그때부터 실린다 (%.2f px)" % flinch.length())
 	t.ok(flinch.length() <= Look.HIT_KNOCK_PX + NEAR_PX, "그리고 HIT_KNOCK_PX 를 안 넘는다")
 	_drop(t, fv)
@@ -831,7 +1102,7 @@ func _spark_over_body_under_burst(t) -> void:
 	b.enemy_hp[1] = 0.0
 	var fv := _view_of(t, b, army)
 
-	await _frame(t, b, fv, TICK_STILL, 0.001)
+	await _frame(t, b, fv, TICK_ONE, 0.001)
 	t.eq(b.enemy_alive[1], 0, "구석의 적 하나가 그 프레임에 죽었다")
 	# Both soldiers are within reach of the same bison, so it is hit twice in one frame.
 	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.BISON) - 2.0 * Rules.damage_of(Rules.CELL_MELEE),
@@ -850,7 +1121,7 @@ func _spark_over_body_under_burst(t) -> void:
 			on_bison += 1
 	t.eq(on_bison, 1, "그래서 그 몸 위의 헤일로도 하나뿐이다")
 
-	await _frame(t, b, fv, TICK_STILL, Look.LUNGE_SEC * 0.5)
+	await _frame(t, b, fv, TICK_ONE, Look.LUNGE_SEC * 0.5)
 	t.ok(fv.sparks.size() >= 1, "파편이 떠 있다 (%d묶음)" % fv.sparks.size())
 	var burst := _rings_of(fv, Look.body_colour_of(true))
 	t.eq(burst.size(), 1, "파열 링도 같은 프레임에 떠 있다")
@@ -872,9 +1143,15 @@ func _spark_over_body_under_burst(t) -> void:
 
 # -- item 6: target lines ---------------------------------------------------------------------------
 
-## Six enemies draw six lines; nine draw none. **The nine is synthetic and says so** — the three real
-## islands hold 4, 6 and 5 enemies, so `TARGET_LINE_MAX_COUNT` 8 never bites in play, and a guard that
-## cannot bite must not be described as a guard.
+## Six enemies draw six lines; `TARGET_LINE_MAX_COUNT + 1` draw none.
+##
+## ⚠ **RE-MEASURED when `plan-then-watch` stage 4 raised the counts to 8 · 12 · 14.** At the old
+## `TARGET_LINE_MAX_COUNT` 8 the guard bit for the first time ever — islands 2 and 3 would have drawn
+## ZERO intent lines until 4 and 6 enemies were dead, which is the opening of the fight and exactly
+## the phase where the hand cannot move and reading is the whole activity. The constant went to 14,
+## **the largest island's count**, so the row below is no longer synthetic on its lower end: 14 is a
+## real island's opening and it has to draw all fourteen. The upper end (15) still is synthetic, and
+## says so.
 func _target_lines(t) -> void:
 	var six := await _lines_with(t, [
 		Vector2(9, 6), Vector2(15, 6), Vector2(12, 3), Vector2(12, 9), Vector2(9, 3), Vector2(15, 9),
@@ -884,12 +1161,29 @@ func _target_lines(t) -> void:
 	t.ok(bool(six["under_bodies"]), "선이 전부 몸보다 먼저 그려진다")
 	t.eq(six["colour"], Look.COL_TARGET_LINE, "선 색이 COL_TARGET_LINE 이다 (알파 0.12)")
 
-	var nine := await _lines_with(t, [
+	# Fifteen tiles, every one of them inside BISON detect 6.0 of the soldier at (12, 6), so every
+	# enemy really acquires a target and a missing line is the guard and not an absent aim.
+	var spots := [
 		Vector2(9, 6), Vector2(15, 6), Vector2(12, 3), Vector2(12, 9), Vector2(9, 3), Vector2(15, 9),
-		Vector2(9, 9), Vector2(15, 3), Vector2(12, 10),
-	])
-	t.eq(int(nine["alive"]), 9, "합성 전투 — 적을 아홉으로 만들었다")
-	t.eq(int(nine["lines"]), 0, "TARGET_LINE_MAX_COUNT 를 넘으면 하나도 안 그린다")
+		Vector2(9, 9), Vector2(15, 3), Vector2(12, 10), Vector2(8, 6), Vector2(16, 6),
+		Vector2(10, 4), Vector2(14, 8), Vector2(10, 8), Vector2(14, 4),
+	]
+	t.eq(spots.size(), Look.TARGET_LINE_MAX_COUNT + 1,
+		"자가 점검 — 상한보다 딱 하나 많은 자리를 준비했다 (%d개)" % spots.size())
+	# ⚠ **The floor, and it is the half the raise was for.** The largest real island holds
+	# `TARGET_LINE_MAX_COUNT` enemies, so the fight OPENS at exactly the guard's limit and every line
+	# has to be on. At the old 8 this arm drew zero.
+	var at_cap := await _lines_with(t, spots.slice(0, Look.TARGET_LINE_MAX_COUNT))
+	t.eq(int(at_cap["alive"]), Look.TARGET_LINE_MAX_COUNT,
+		"가장 큰 섬만큼 적을 세웠다 (%d마리)" % Look.TARGET_LINE_MAX_COUNT)
+	t.eq(int(at_cap["lines"]), Look.TARGET_LINE_MAX_COUNT,
+		"상한과 같은 수까지는 전부 그린다 — 가장 큰 섬은 첫 프레임부터 의도선이 다 켜져 있다 (바닥)")
+
+	# The ceiling. One over the limit is synthetic — no island holds this many — and it says so.
+	var over := await _lines_with(t, spots)
+	t.eq(int(over["alive"]), Look.TARGET_LINE_MAX_COUNT + 1,
+		"합성 전투 — 상한보다 하나 많게 만들었다 (%d마리)" % (Look.TARGET_LINE_MAX_COUNT + 1))
+	t.eq(int(over["lines"]), 0, "TARGET_LINE_MAX_COUNT 를 넘으면 하나도 안 그린다 (천장)")
 
 
 func _lines_with(t, spots: Array) -> Dictionary:
@@ -901,7 +1195,7 @@ func _lines_with(t, spots: Array) -> Dictionary:
 	var b := _battle_of(_open(), army, spawns, 999.0)
 	_ashore(b, 0, Vector2(12, 6))
 	var fv := _view_of(t, b, army)
-	await _frame(t, b, fv, TICK_STILL, 0.001)
+	await _frame(t, b, fv, TICK_ONE, 0.001)
 
 	var ends_ok := fv.lines.size() > 0
 	var under := true
@@ -938,12 +1232,14 @@ func _lines_with(t, spots: Array) -> Dictionary:
 
 func _landing_rings(t) -> void:
 	var army := _army_of([Rules.CELL_MELEE, Rules.CELL_MELEE])
-	var b := _battle_of(_port(), army, [_spawn(Rules.LION, 20, 9)], 999.0)
+	var b := _planning_battle_of(_port(), army, [_spawn(Rules.LION, 20, 9)], 999.0)
 	var fv := _view_of(t, b, army)
-	b.load_soldier(Rules.CELL_MELEE)
-	b.load_soldier(Rules.CELL_MELEE)
 	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
-	b.launch(0, landing)
+	# Two boats aimed at ONE tile: they arrive on the same sub-step, and 「the first dropped stands on
+	# the target tile」 is what puts the second on the neighbour — two rings, two places.
+	b.send(0, landing)
+	b.send(1, landing)
+	b.commit()
 	var sailed := 0
 	while sailed < 80 and b.ashore_ids().size() < 2:
 		sailed += 1
@@ -969,7 +1265,7 @@ func _landing_rings(t) -> void:
 			"상륙 링도 몸 밑이다")
 	t.ok(absf(_num(_at(born, 0), "width") - Look.LAND_RING_WIDTH_PX) <= NEAR_PX, "상륙 링 굵기가 look.gd 값이다")
 
-	await _frame(t, b, fv, TICK_STILL, Look.LAND_RING_SEC * 0.9)
+	await _frame(t, b, fv, TICK_ONE, Look.LAND_RING_SEC * 0.9)
 	var grown := _rings_of(fv, Look.COL_LAND_RING)
 	t.eq(grown.size(), 2, "링 둘이 아직 살아 있다")
 	t.ok(_num(_at(grown, 0), "radius") >= Look.LAND_RING_R_PX * 0.85,
@@ -978,7 +1274,7 @@ func _landing_rings(t) -> void:
 	t.ok(grown.size() > 0 and _num(_at(grown, 0), "radius") <= Look.LAND_RING_R_PX + NEAR_PX,
 			"그리고 타일 반 칸을 안 넘는다 — 직교 인접한 두 링이 딱 맞닿는 값이다")
 
-	await _frame(t, b, fv, TICK_STILL, 0.09)
+	await _frame(t, b, fv, TICK_ONE, 0.09)
 	t.eq(_rings_of(fv, Look.COL_LAND_RING).size(), 0, "LAND_RING_SEC 이 지나면 링 호출이 0이다")
 	_drop(t, fv)
 
@@ -1014,12 +1310,12 @@ func _shake_peak(t, stype: int, spot: Vector2, etype: int, espot: Vector2) -> Di
 	var b := _battle_of(_open(), army, [_spawn(etype, int(espot.x), int(espot.y))], 999.0)
 	_ashore(b, 0, spot)
 	var fv := _view_of(t, b, army)
-	await _frame(t, b, fv, TICK_STILL, 0.001)
+	await _frame(t, b, fv, TICK_ONE, 0.001)
 	var peak := 0.0
 	for _f in 20:
-		await _frame(t, b, fv, TICK_STILL, Look.SHAKE_SEC / 20.0)
+		await _frame(t, b, fv, TICK_ONE, Look.SHAKE_SEC / 20.0)
 		peak = maxf(peak, _shake_component(fv).length())
-	await _frame(t, b, fv, TICK_STILL, 0.02)
+	await _frame(t, b, fv, TICK_ONE, 0.02)
 	var out := {"peak": peak, "rest": _shake_component(fv)}
 	_drop(t, fv)
 	return out
@@ -1046,18 +1342,22 @@ func _gait(t) -> void:
 	_ashore(b, 0, Vector2(12, 5))
 	var fv := _view_of(t, b, army)
 
-	await _frame(t, b, fv, TICK_STILL, 0.001)
+	await _frame(t, b, fv, TICK_ONE, 0.001)
 	var rest := _pt(_at(fv.bodies, 1), "squash")
 	t.eq(rest, Vector2.ONE, "서 있는 몸의 스쿼시는 Vector2.ONE 이다")
 	var moved_while_still := 0
+	# ⚠ **Sim `dt` 0.0 for these twenty frames.** The soldier's target is a bison it can see, so any
+	# simulated time at all makes it WALK — and then the squash changing would be correct rather than a
+	# defect. 「안 움직인 채」 has to be literally true for this row to mean what it says, and only a
+	# frozen sim gives that.
 	for _f in 20:
-		await _frame(t, b, fv, TICK_STILL, 1.0 / 60.0)
+		await _frame(t, b, fv, 0.0, 1.0 / 60.0)
 		if _pt(_at(fv.bodies, 1), "squash") != rest:
 			moved_while_still += 1
 	t.eq(moved_while_still, 0, "안 움직인 채 20프레임을 돌려도 스쿼시가 안 변한다 — 위상이 시간이 아니라 거리로 돈다")
 
 	_place(b, 0, Vector2(12 + Look.GAIT_PERIOD_TILES * 0.25, 5))
-	await _frame(t, b, fv, TICK_STILL, 1.0 / 60.0)
+	await _frame(t, b, fv, 0.0, 1.0 / 60.0)
 	var squash := _pt(_at(fv.bodies, 1), "squash")
 	t.ok(absf(squash.x - 1.0) >= Look.GAIT_SQUASH * 0.5,
 			"주기의 1/4 만큼 옮기자 스쿼시가 %.3f 로 변했다 (GAIT_SQUASH 의 절반 이상)" % squash.x)
@@ -1309,7 +1609,20 @@ func _spawn(type_id: int, x: int, y: int) -> Dictionary:
 	return {"type_id": type_id, "tile": y * ARENA_W + x}
 
 
+## An island already under way. ⚠ **The commit flag is set directly, and that matters more here than
+## anywhere else**: `step` refuses everything until the island is committed (`plan-then-watch`, 4.3),
+## and **an uncommitted battle produces no `events` at all** — which is what every effect in this file
+## is driven by. A fixture that forgot to commit would run its checks against an empty effect list and
+## the zero-check rule would not catch it, because the file still runs plenty of checks. The commit
+## gate itself is `net_plan`'s to measure.
 func _battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
+	var b := _planning_battle_of(rows, army, spawns, limit)
+	b._committed = true
+	return b
+
+
+## The same island, left in the planning state, so a check can drive `send` and `commit` for real.
+func _planning_battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
 	var b := Battle.new()
 	# load_rows first, always: setup writes a reservation per enemy and load_rows clears the table.
 	var g := Grid.new()

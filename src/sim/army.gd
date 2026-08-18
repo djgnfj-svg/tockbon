@@ -96,6 +96,23 @@ func living_count() -> int:
 	return n
 
 
+## Every LIVING soldier back to its type's maximum. Dead rows are not touched and are not resurrected:
+## a row this file has never deleted is what makes permanent death structurally true, and healing one
+## would undo that in the one place nothing is watching. **The chest's whole cost model is that wounds
+## come back and deaths do not.**
+##
+## It reads `Rules.hp_of(...)` rather than storing a max per row, or the maximum lives in two files and
+## the beak's sibling — anything that ever raises a soldier's HP — would have to remember to move both.
+##
+## It SETS rather than adds, so healing an undamaged army is a no-op and the pool can never climb past
+## the sum of the living rows' maxima.
+func heal_all() -> void:
+	for i in range(type_id.size()):
+		if alive[i] == 0:
+			continue
+		hp[i] = Rules.hp_of(int(type_id[i]))
+
+
 ## The force a run starts with, in melee-then-ranged order. Called on a fresh `Army`; it appends, so a
 ## caller that wants a clean start builds a new one rather than clearing this.
 func add_starting_force() -> void:

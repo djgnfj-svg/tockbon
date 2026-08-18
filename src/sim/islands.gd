@@ -22,9 +22,10 @@ class_name Islands
 ## `grid.dock_tiles` — an open coastline replaces it, and `grid.gd`'s `landable` / `sendable` /
 ## `can_land_at` are what decide where a boat may go now.
 ##
-## Harbour index is the order an `H` is met scanning row-major, top-left first, so `battle.launch(0,
-## tile)` means "the boat sitting at the first harbour met in that order" — `grid.gd` is what records
-## it; this file only holds the characters.
+## Harbour index is the order an `H` is met scanning row-major, top-left first. Nothing chooses a
+## harbour by hand any more — `grid.home_harbour_for(landing)` picks the nearest one that can still
+## see the landing — but the ORDER is still what `harbour_tiles` and `start_harbour` are indexed by;
+## `grid.gd` is what records it, and this file only holds the characters.
 ##
 ## Enemy placement here is measured, not eyeballed: see `boat-and-landing`, section 5, for the coast
 ## counts, the narrowest column cut, and the crossing distances measured off these exact rows.
@@ -44,7 +45,7 @@ const ISLAND_ROWS := [
 		"~~............................................~~",
 		"~~............................................~~",
 		"~~............................................~~",
-		"~~...........####..............####...........~~",
+		"~~..B........####..............####...........~~",
 		"~~...........####..............####...........~~",
 		"~~...........####..............####...........~~",
 		"~~............................................~~",
@@ -53,10 +54,10 @@ const ISLAND_ROWS := [
 		"~~.....B.................................B....~~",
 		"~~............................................~~",
 		"~~............................................~~",
-		"~~............................................~~",
+		"~~.................B..........................~~",
 		"~~..................~~~~~~~~..................~~",
 		"~~..................~~~~~~~~..................~~",
-		"~~..................~~~~~~~~..................~~",
+		"~~.....B............~~~~~~~~.....B............~~",
 		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
 		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
 		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
@@ -80,20 +81,20 @@ const ISLAND_ROWS := [
 		"~~....................^^......................~~",
 		"~~....................^^......................~~",
 		"~~....................^^......................~~",
+		"~~........C...........^^......................~~",
 		"~~....................^^......................~~",
-		"~~....................^^......................~~",
-		"~~....................^^......................~~",
+		"~~....B...............^^..........B...........~~",
 		"~~....................^^......................~~",
 		"~~....................^^..B...................~~",
 		"~~....................^^.....B................~~",
+		"~~............B.......//......................~~",
 		"~~....................//......................~~",
-		"~~....................//......................~~",
-		"~~....................^^..B...................~~",
+		"~~....................^^..B.............B.....~~",
 		"~~....................^^......B...............~~",
 		"~~....................^^......................~~",
 		"~~....................^^......................~~",
 		"~~......C.......C.....^^......................~~",
-		"~~....................^^......................~~",
+		"~~....................^^......C...............~~",
 		"~~....................^^......................~~",
 		"~~~~~~~~~~~~~~~~~~~~~~^^~~~~~~~~~~~~~~~~~~~~~~~~",
 		"~~~~~~~~~~~~~~~~~~~~~~^^~~~~~~~~~~~~~~~~~~~~~~~~",
@@ -117,19 +118,19 @@ const ISLAND_ROWS := [
 		"~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^~~",
 		"~~............................................~~",
 		"~~............................................~~",
-		"~~............................................~~",
+		"~~........B...........................B.......~~",
 		"~~.............^^^^^^^^^^^^^^^^^^^............~~",
 		"~~.............^.................^............~~",
-		"~~.............^....C............^............~~",
+		"~~.............^...BC........C...^............~~",
 		"~~.............^.................^............~~",
 		"~~............./........L......../............~~",
 		"~~............./................./............~~",
-		"~~.............^.................^............~~",
-		"~~.............^............B....^............~~",
+		"~~....C........^.................^..B.........~~",
+		"~~.............^............BB...^............~~",
 		"~~.............^.................^............~~",
 		"~~.............^^^^^^^^^^^^^^^^^^^............~~",
 		"~~............................................~~",
-		"~~......B...............................C.....~~",
+		"~~......B...B.......C...................C.....~~",
 		"~~............................................~~",
 		"~~................~~~~~~~~~~~~~...............~~",
 		"~~................~~~~~~~~~~~~~...............~~",
@@ -146,16 +147,23 @@ const ISLAND_ROWS := [
 		"~~~~~~~~~~~~~~~~~~~~~~~~H~~~~~~~~~~~~~~~~~~~~~~~",
 	],]
 
-## Seconds per island. The clock starts when the island OPENS, not on the first landing, so waiting
-## for a full boat costs the same as a bad landing does.
+## Seconds per island. **The clock starts at the start button, and planning is free.** Structural,
+## not a rule anyone has to honour: `Battle._phase_clock` is the only writer of `elapsed`, and an
+## uncommitted `Battle.step` returns before it. The line that used to stand here — "the clock starts
+## when the island OPENS, so waiting for a full boat costs the same as a bad landing does" — died with
+## 결정 3, 「배는 언제든지 … 시작하기 전에 어디서든지」: there is no boat to wait for and thinking costs
+## nothing. `plan-then-watch` is where that reversal is recorded.
 ## ⚠⚠ **MEASURED 2026-08-18: this clock has never once bound.** The probe ran five landing policies over
 ## all three islands — **15 wins out of 15**, the worst plan finishing at **49%** of its limit, and island
 ## 3's entire spread between best and worst plan is **1.50 s** (30.30 vs 31.80). To discriminate there,
 ## the limit would have to sit inside a window narrower than the error on the next untried plan.
 ## ⇒ **Lowering these numbers cannot make the landing point a decision** — that is a level-design problem,
 ## not a constant. Numbers and consequences: `plan-then-watch`.
-## ⚠ And the first sentence above dies the day a planning phase lands: planning would be free and the
-## clock would start at the start button instead.
+## ⚠ **That 49% is a PRE-SUB-STEP number and is not comparable to anything measured after it.**
+## `Battle.step` now runs whole `Rules.SIM_SUBSTEP_SEC` passes, so the probe's own `DT` became three
+## passes instead of one and every per-step quantity in the fight was re-discretised. **Re-measure the
+## baseline at the OLD enemy counts before judging any new count against it**, or the round books a
+## design win that is a discretisation artefact.
 const TIME_LIMITS := [60.0, 60.0, 90.0]
 
 

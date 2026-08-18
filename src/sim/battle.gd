@@ -4,12 +4,24 @@ extends RefCounted
 ## deaths and the clock — and nothing in this file is a Node, so a net builds one with `.new()` and
 ## drives it frame by frame with no tree at all.
 ##
+## **The island is planned before it is fought, and the plan lives in `boats`.** `send` creates a boat
+## sitting at its harbour with `t == 0.0`; `step` refuses to move anything until `commit` has been
+## called. That is a RULE and not a calling habit: without `_committed` "planning" would exist only as
+## the shell choosing not to call `step`, and every net, probe and future caller would break it in
+## silence. `plan-then-watch` is where the reversal that produced this is recorded.
+##
 ## **The phase order inside `step` is a contract, not an implementation detail.** Boats before
-## landings means a boat that reaches the shore this frame unloads this frame instead of next.
+## landings means a boat that reaches the shore this sub-step unloads this sub-step instead of next.
 ## Attacks before deaths means two units that finish each other off both land their blow — the
 ## alternative silently gives whoever iterates first a free kill, and the free kill is invisible in
-## final state. The clock last means an island cleared on the very frame the timer expires is a WIN.
+## final state. The clock last means an island cleared on the very sub-step the timer expires is a WIN.
 ## The first slice plan pins this under "The sim — shapes and entry points".
+##
+## **`step` has three guard lines and they are not interchangeable.** The null test and the `dt <= 0.0`
+## test are per-CALL facts and stay outside the sub-step loop; the running test is answered per
+## SUB-STEP, inside, as a `break`. Hoisted out, a WIN latched on sub-step 3 of 6 would let 4, 5 and 6
+## keep attacking — and since `army` carries to the next island and death is permanent, a soldier
+## could die AFTER the island was already won, at 6x and not at 1x.
 ##
 ## Distances are in TILES throughout, centre to centre, and positions carry tile centres on integers.
 ## The view multiplies by the tile size and nothing here knows what a pixel is.
@@ -24,10 +36,16 @@ enum Lose { NONE, TIMEOUT, WIPED }
 ## Where a soldier is right now, on THIS island. It is per-island state and not part of the roster:
 ## `army` holds who exists and how hurt they are, and that is what carries to the next island.
 ##
-## RESERVE -> LOADED -> TRANSIT -> ASHORE is one way. **A soldier that has landed never goes back to
-## RESERVE**, which is what makes "one deployment per soldier per island" structural instead of a
-## rule someone has to remember in `load_soldier`.
-enum SoldierState { RESERVE, LOADED, TRANSIT, ASHORE, DEAD }
+## RESERVE -> TRANSIT -> ASHORE is one way. **A soldier that has landed never goes back to RESERVE**,
+## which is what makes "one deployment per soldier per island" structural instead of a rule someone
+## has to remember in `send`. The one edge that runs backwards is `recall`, which is refused after the
+## commit, so it can only ever undo a boat that has not moved.
+##
+## There used to be a LOADED state between RESERVE and TRANSIT, for a soldier standing on a boat that
+## had not sailed. **It is deleted rather than left unreachable**: with boats created by the drop
+## there is no quayside to wait on, and an enum member no code path can enter is a slot a future
+## writer fills by accident.
+enum SoldierState { RESERVE, TRANSIT, ASHORE, DEAD }
 
 ## Which leg of the round trip a boat at sea is on. OUTBOUND carries cargo toward `target`;
 ## RETURNING is the empty hull sailing to its new harbour, `home`. There is no third state — a boat
@@ -114,20 +132,51 @@ var _soldier_goal: Array = []
 var _soldier_stale := PackedByteArray()
 
 # --- boats -----------------------------------------------------------------------------------------
-## Which harbour each boat is sitting at, indexed by boat (`Rules.boat_count()` of them). Meaningless
-## while a boat is in `boats` — see `pending` below for why there is no third "berth" state.
-var boat_at := PackedInt32Array()
-## Soldier ids loaded onto each boat that has not sailed yet — one `PackedInt32Array` per boat,
-## capped at `Rules.cap_of(boat)`.
-var pending: Array = []
-## Boats at sea. **A boat is busy IFF it is in here** — `boat-and-landing`, 4.2, deletes the old berth
-## timer outright rather than indexing it per boat: the return leg is now simulated and drawn, so a
-## timer running in parallel with it would be a second copy of the same fact, and two clocks drift.
-## Each entry is `{boat, phase, speed, from, to, dist, t, soldiers, target, home}`, with `from` / `to`
-## in tile units. `phase` is `Phase.OUTBOUND` (soldiers aboard, sailing to `target`) or
-## `Phase.RETURNING` (empty, sailing to harbour `home`). Waiting-to-unload is OUTBOUND with `t` past
-## arrival — there is no separate waiting state.
+## **The plan AND the fleet, in one array.** There is no second structure: `send` appends here with
+## `t == 0.0`, and free undo is one `remove_at` that cannot leave a duplicate behind.
+##
+## ⚠ **The drop CREATES the boat; the commit is what makes it move.** Every boat is still at
+## `t == 0.0` when `commit()` lands, so they all depart on the same frame, and there is no
+## departure-time field. **That is a CHOICE and it is not settled** — 미정 16 in `plan-then-watch`
+## asks whether 「끌어서 탁 놓으면은 그때부터 출발하는 거지」 means ① the drop is that boat's own commit
+## and the start button only starts the clock, or ② everything dropped leaves together at the start
+## button. **This build assumes ②**, because 결정 1 (the hand does not move during combat) survives
+## under both and ② needs no per-boat state. The user has not chosen between them, and a comment
+## reading the user's sentence as already implemented is how the repo starts lying about a decision
+## nobody made.
+##
+## Each entry is `{uid, phase, speed, from, to, dist, t, pos, soldiers, target, home}`, with
+## `from` / `to` / `pos` in tile units. `phase` is `Phase.OUTBOUND` (one soldier aboard, sailing to
+## `target`) or `Phase.RETURNING` (empty, sailing to harbour `home`). Waiting-to-unload is OUTBOUND
+## with `t` past arrival — there is no separate waiting state.
+##
+## **The append order IS the drop order**, and `_phase_landings` reads it: two boats aimed at one tile
+## arrive on the same sub-step, and whoever unloads first stands on the target tile.
 var boats: Array = []
+
+## False until `commit()`. **`step()` refuses to do anything at all while it is false.**
+var _committed := false
+
+## Whole sub-steps only: `step` adds `dt` here and consumes `Rules.SIM_SUBSTEP_SEC` at a time, so the
+## decomposition is additive over ANY sequence of `dt`s and a 6x run lands on the same state as a 1x
+## run. Consuming a remainder pass instead would hand `_phase_targeting`, `_phase_landings` and
+## `_phase_deaths` — which take no `dt` at all — a free extra retarget and death latch on every frame
+## whose `dt` is not a multiple of the sub-step, which in the shipped shell is every frame.
+var _substep_acc := 0.0
+
+## How many whole sub-steps this island has run, counted **inside** the loop. It is an instrument and
+## nothing in `src/` reads it: comparing final state across a 1x arm and a 6x arm catches *diverged*
+## and never *vanished*, so the equivalence rows need the process itself to compare, and a pass count
+## derived from `elapsed` would be blind to exactly the defect they exist to catch — a remainder pass
+## adds a phase pass without adding a second of simulated time. `plan-then-watch`, the net row
+## 「서브스텝 횟수 자체가 같다」.
+var substeps := 0
+
+## Monotonic boat id. `boats` entries carry `uid` instead of a fleet-slot index, because with boats
+## created on demand there is no fleet slot to index and the view keys its per-boat effects by it.
+## **Never reused inside one island** — a recalled boat's uid dies with it, so a stale reference
+## cannot silently come to name a different boat.
+var _next_boat_uid := 0
 
 var _fields := {}                         # target tile -> PackedInt32Array
 var _field_age := {}                      # target tile -> seconds since it was built
@@ -152,16 +201,13 @@ func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
 	_fields = {}
 	_field_age = {}
 	boats = []
-	pending = []
-	for _b in Rules.boat_count():
-		pending.append(PackedInt32Array())
-	# Every boat starts at the same harbour — the one `grid.load_rows` derived as farthest from its
-	# own reachable coast (`boat-and-landing`, section 5), so the run opens with the fleet out at sea
-	# and the longest crossing it will ever face.
-	boat_at = PackedInt32Array()
-	boat_at.resize(Rules.boat_count())
-	if grid != null:
-		boat_at.fill(grid.start_harbour)
+	# All three, every time. A `Battle` is reused across islands, and a leftover `_substep_acc` is a
+	# fraction of the previous island's fight; a leftover `_committed` would start the next island
+	# already fought. `setup` exists to make a reused Battle indistinguishable from a fresh one.
+	_committed = false
+	_substep_acc = 0.0
+	_next_boat_uid = 0
+	substeps = 0
 
 	if grid == null or grid.w <= 0 or grid.h <= 0:
 		# Not swallowed: a battle on an unloaded grid has no tiles, so every unit would stand still
@@ -221,8 +267,9 @@ func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
 	_soldier_goal = []
 	for i in roster:
 		# A soldier who died on an earlier island is DEAD here, never RESERVE. Leaving them in
-		# RESERVE would let `load_soldier` walk past them one by one and the boarding order would
-		# quietly skip live soldiers behind a wall of corpses.
+		# RESERVE would make a corpse draggable at the harbour and sendable to a beach — `send`
+		# refuses anything that is not RESERVE, and this line is what gives that test something
+		# to refuse.
 		soldier_state[i] = SoldierState.RESERVE if army.alive[i] != 0 else SoldierState.DEAD
 		soldier_target[i] = -1
 		_soldier_cd[i] = 0.0
@@ -231,99 +278,100 @@ func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
 		_soldier_goal.append(OFFMAP)
 
 
-## Puts one soldier of `type_id` on a boat that has not sailed. **The highest-HP living soldier of
-## that type still in reserve** — `army.living_ids_of_type` is already sorted that way and breaks
-## ties on the smaller id, so two runs from identical state board identically.
+# --- the plan ------------------------------------------------------------------------------------
+
+## Puts soldier `soldier_id` on a boat aimed at `tile`, and returns that boat's **uid**, or **-1** on
+## refusal with **nothing at all changed**. One drag, one boat, one soldier — there is no fleet, no
+## capacity and no queue to join, so the caller names both halves and this call has no choice of its
+## own to make.
 ##
-## **Which boat**: the lowest-index boat that is not at sea and still has room — the big boat first,
-## the fast boat once the big one is full or at sea. Returns that boat's index so the caller (the HUD)
-## can mark the right one, or **-1** when every boat is at sea or no such soldier exists. This is a
-## feel item and the user marked it temporary (`boat-and-landing`, 4.4) — it is a rule only because
-## per-boat capacity forces the question of who boards where.
+## ⚠ **The return is an int and uid 0 is the FIRST boat of every island**, so `if battle.send(...)`
+## is a bug that refuses the common case. Every caller compares `>= 0`.
 ##
-## ⚠ **A boat at sea can no longer be loaded** — `boat-and-landing`, 4.4. With per-boat cargo there is
-## no queue for a load to join while every boat is out; a harbour drawn empty then means exactly one
-## thing: nothing to load, nothing to send.
-func load_soldier(type_id: int) -> int:
-	if army == null:
+## Refused when: already committed · no grid or army · `soldier_id` out of range · that soldier is not
+## RESERVE (dead, already sent, or already ashore) · **no harbour can see `tile`**.
+##
+## ⚠ **`grid.home_harbour_for` is the one predicate for both the refusal and the departure point**, and
+## it is also what the droppable overlay is drawn from, so the screen can never promise a tile this
+## call refuses. It returns the nearest harbour AMONG those that can still see the landing, so a boat
+## departs from and returns to the same harbour by construction.
+func send(soldier_id: int, tile: int) -> int:
+	if _committed:
 		return -1
-	var boat := -1
-	for b in Rules.boat_count():
-		if boat_busy(b):
-			continue
-		var here: PackedInt32Array = pending[b]
-		if here.size() >= Rules.cap_of(b):
-			continue
-		boat = b
-		break
-	if boat == -1:
+	if grid == null or army == null:
 		return -1
-	for raw in army.living_ids_of_type(type_id):
-		var i := int(raw)
-		if soldier_state[i] != SoldierState.RESERVE:
-			continue
-		soldier_state[i] = SoldierState.LOADED
-		var loaded: PackedInt32Array = pending[boat]
-		loaded.append(i)
-		pending[boat] = loaded
-		return boat
-	return -1
+	if soldier_id < 0 or soldier_id >= soldier_state.size():
+		return -1
+	if soldier_state[soldier_id] != SoldierState.RESERVE:
+		return -1
+	var hb := grid.home_harbour_for(tile)
+	if hb < 0:
+		return -1
 
-
-## True while `boat` is at sea (outbound with cargo, or returning empty) — the state that makes it
-## unloadable and undraggable. There is no separate berth timer; membership in `boats` IS the state
-## (`boat-and-landing`, 4.2).
-func boat_busy(boat: int) -> bool:
-	for raw in boats:
-		var bo: Dictionary = raw
-		if int(bo["boat"]) == boat:
-			return true
-	return false
-
-
-## Sends `boat` — sitting loaded at whichever harbour `boat_at[boat]` names — to `tile`. False and
-## **nothing happens at all** when the boat index is out of range, the boat is empty, the boat is
-## already at sea, or `tile` is not a coast that boat's OWN harbour can reach
-## (`grid.can_land_at(boat_at[boat], tile)` — the one predicate the drag overlay and this call both
-## answer to, so the screen can never disagree with the rule).
-func launch(boat: int, tile: int) -> bool:
-	if grid == null or boat < 0 or boat >= Rules.boat_count():
-		return false
-	if boat_busy(boat):
-		return false
-	var cargo: PackedInt32Array = pending[boat]
-	if cargo.is_empty():
-		return false
-	var harbour_idx := int(boat_at[boat])
-	if not grid.can_land_at(harbour_idx, tile):
-		return false
-
-	var from: Vector2 = _point_of_tile(int(grid.harbour_tiles[harbour_idx]))
+	var from: Vector2 = _point_of_tile(int(grid.harbour_tiles[hb]))
 	var to: Vector2 = _point_of_tile(tile)
-	var carried := []
-	for raw in cargo:
-		var i := int(raw)
-		soldier_state[i] = SoldierState.TRANSIT
-		soldier_pos[i] = from
-		carried.append(i)
-	pending[boat] = PackedInt32Array()
+	var uid := _next_boat_uid
+	_next_boat_uid += 1
+	soldier_state[soldier_id] = SoldierState.TRANSIT
+	soldier_pos[soldier_id] = from
 	boats.append({
-		"boat": boat,
+		"uid": uid,
 		"phase": Phase.OUTBOUND,
-		"speed": Rules.boat_speed_of(boat),
+		"speed": Rules.BOAT_SPEED,
 		"from": from,
 		"to": to,
 		"dist": maxf(from.distance_to(to), Rules.EPS),
 		"t": 0.0,
-		# `pos` is also set here, not only by the first `_phase_boats` call — the view reads
-		# `boat["pos"]` on layer 6 and nothing steps between `launch` and the first `_draw()` unless
-		# the caller does so on purpose (a net proving the drag overlay before the first frame, say).
+		# `pos` is set here and not only by the first `_phase_boats` call: before the commit `step`
+		# never runs at all, so the whole planning screen would have nothing to draw the boat at.
 		"pos": from,
-		"soldiers": carried,
+		"soldiers": [soldier_id],
 		"target": tile,
-		"home": -1,
+		"home": hb,
 	})
+	return uid
+
+
+## Undoes one `send`. The boat leaves `boats` and its soldier goes back to exactly what `setup` left —
+## RESERVE at `OFFMAP` — so it can be sent again and no duplicate can be left behind. False when
+## already committed, or when no boat carries that uid.
+##
+## ⚠ **This is not the inverse of `send` for a boat that has MOVED, and must never be called on one.**
+## After the commit the `_committed` test refuses it, and there is no other window in which a boat has
+## `t > 0` — which is what makes 「언제든지 어디서든지」 a rule rather than a habit.
+func recall(uid: int) -> bool:
+	if _committed:
+		return false
+	for i in boats.size():
+		var boat: Dictionary = boats[i]
+		if int(boat["uid"]) != uid:
+			continue
+		for raw in boat["soldiers"]:
+			var sid := int(raw)
+			soldier_state[sid] = SoldierState.RESERVE
+			soldier_pos[sid] = OFFMAP
+		boats.remove_at(i)
+		return true
+	return false
+
+
+## Closes the plan and lets the clock run. **False and nothing changes** when already committed, or
+## when `boats` is empty — a start press that would land nobody is a refusal with a shake, not a fight
+## nobody can win.
+##
+## It launches nothing: every boat was built by `send` and is already sitting at `t == 0.0`, so the
+## commit adds no motion of its own. That is the whole point — the plan and the fleet are one array.
+func commit() -> bool:
+	if _committed:
+		return false
+	if boats.is_empty():
+		return false
+	_committed = true
 	return true
+
+
+func committed() -> bool:
+	return _committed
 
 
 ## Throws away last frame's `events`. **Every driver of this class calls it once a frame, before
@@ -337,19 +385,35 @@ func begin_frame() -> void:
 	events.clear()
 
 
-## One frame. The phase order below is the contract described at the top of this file.
+## One frame's worth of simulated time, run as whole `Rules.SIM_SUBSTEP_SEC` sub-steps with the
+## leftover carried in `_substep_acc`. The phase order below is the contract described at the top of
+## this file, and it is the SUB-STEP that is one pass of it, not the call.
+##
+## ⇒ **`step(dt)` and `step(dt/k)` k times land on identical state**, which is what makes the speed
+## ladder a viewing rate instead of a different game. Without it a cooldown reset to the whole period
+## on fire loses `dt/period` of every cycle, and the loss is asymmetric: the bison's 2.0 s period
+## sheds half the fraction the 1.0 s cells do, so speeding up is a quiet buff to the player.
 func step(dt: float) -> void:
-	if _outcome != Outcome.RUNNING or grid == null or army == null:
+	# Per-CALL facts, answered once. See the header for why the running test is NOT one of them.
+	if grid == null or army == null:
+		return
+	if not _committed:
 		return
 	if dt <= 0.0:
 		return
-	_phase_boats(dt)
-	_phase_landings()
-	_phase_targeting()
-	_phase_movement(dt)
-	_phase_attacks(dt)
-	_phase_deaths()
-	_phase_clock(dt)
+	_substep_acc += dt
+	while _substep_acc >= Rules.SIM_SUBSTEP_SEC:
+		if _outcome != Outcome.RUNNING:
+			break
+		_substep_acc -= Rules.SIM_SUBSTEP_SEC
+		substeps += 1
+		_phase_boats(Rules.SIM_SUBSTEP_SEC)
+		_phase_landings()
+		_phase_targeting()
+		_phase_movement(Rules.SIM_SUBSTEP_SEC)
+		_phase_attacks(Rules.SIM_SUBSTEP_SEC)
+		_phase_deaths()
+		_phase_clock(Rules.SIM_SUBSTEP_SEC)
 
 
 func outcome() -> int:
@@ -434,37 +498,58 @@ func _phase_boats(dt: float) -> void:
 			soldier_pos[int(sid)] = here
 
 
-## Boats that have finished a leg act on it. **OUTBOUND** tries to unload — if there are fewer free
-## tiles than soldiers aboard the whole boat waits (landing part of a load would silently reorder the
-## deployment the player chose), and only on success does it turn RETURNING and sail to
-## `grid.home_harbour_for(target)` — the harbour nearest the landing among the ones that can still see
-## it, never simply the nearest, or a beachhead behind a headland strands itself (`boat-and-landing`,
-## 4.3). **RETURNING** leaves `boats` on arrival and hands the harbour back to `boat_at`, which is the
-## whole of what makes a boat loadable and draggable again.
+## Boats that have finished a leg act on it. **Two passes, and the split is load-bearing.**
+##
+## ⚠ **Pass 1 walks ASCENDING because `boats` append order IS drop order**, and `_try_unload` writes
+## `grid.reserved` as it lands, so whoever unloads first stands on the target tile and the next stands
+## on the BFS-next. Several boats aimed at one beach from one harbour have identical `dist` and
+## identical speed, so they arrive on exactly the same sub-step — the sim carries no randomness — and
+## this walk is therefore the ONLY thing in the sim that reads the drop order at all. A single
+## descending pass (which is what shipped before the planning round) gave the front row to the boat
+## dropped LAST, the exact opposite of 「끌어서 탁 놓으면」. **Nothing is removed in pass 1**, so
+## ascending is safe here and only here.
+##
+## Pass 2 walks DESCENDING because `remove_at` is in it. A boat that turned RETURNING in pass 1 cannot
+## be removed by pass 2 on the same sub-step: it is set to `t == 0.0` and its new leg spans at least
+## one tile (a harbour is water, a landing is land, so they are never the same tile).
+##
+## **OUTBOUND** tries to unload — if there are fewer free tiles than soldiers aboard the whole boat
+## waits, because landing part of a load would silently reorder the deployment the player chose — and
+## only on success does it turn RETURNING and sail to `home`, the harbour nearest the landing among
+## the ones that can still SEE it. Never simply the nearest, or a beachhead behind a headland strands
+## itself (`boat-and-landing`, 4.3). **RETURNING** leaves `boats` on arrival and the boat ceases to
+## exist: 「배는 왕복」 ends there, with nothing to reload and nothing to re-launch.
 func _phase_landings() -> void:
-	var i := boats.size() - 1
-	while i >= 0:
+	for i in boats.size():
 		var boat: Dictionary = boats[i]
-		var arrived := float(boat["t"]) * float(boat["speed"]) + Rules.EPS >= float(boat["dist"])
-		if not arrived:
-			i -= 1
+		if int(boat["phase"]) != Phase.OUTBOUND or not _arrived(boat):
 			continue
-		if int(boat["phase"]) == Phase.OUTBOUND:
-			if _try_unload(boat):
-				var target := int(boat["target"])
-				var home := grid.home_harbour_for(target)
-				boat["phase"] = Phase.RETURNING
-				boat["soldiers"] = []
-				boat["home"] = home
-				boat["from"] = _point_of_tile(target)
-				boat["to"] = _point_of_tile(int(grid.harbour_tiles[home]))
-				boat["dist"] = maxf(Vector2(boat["from"]).distance_to(Vector2(boat["to"])), Rules.EPS)
-				boat["t"] = 0.0
-				boats[i] = boat
-		else:
-			boat_at[int(boat["boat"])] = int(boat["home"])
-			boats.remove_at(i)
-		i -= 1
+		if not _try_unload(boat):
+			continue
+		var target := int(boat["target"])
+		# `home` was decided by `send` off the same `home_harbour_for(target)` call the refusal test
+		# used. Recomputing it here would be the same fact written in two places.
+		var home := int(boat["home"])
+		boat["phase"] = Phase.RETURNING
+		boat["soldiers"] = []
+		boat["from"] = _point_of_tile(target)
+		boat["to"] = _point_of_tile(int(grid.harbour_tiles[home]))
+		boat["dist"] = maxf(Vector2(boat["from"]).distance_to(Vector2(boat["to"])), Rules.EPS)
+		boat["t"] = 0.0
+		boats[i] = boat
+
+	var j := boats.size() - 1
+	while j >= 0:
+		var boat: Dictionary = boats[j]
+		if int(boat["phase"]) == Phase.RETURNING and _arrived(boat):
+			boats.remove_at(j)
+		j -= 1
+
+
+## This boat has covered its leg. `dist` is floored at `Rules.EPS` in both writers, so a zero-length
+## leg reads as arrived on the sub-step it is created rather than never.
+func _arrived(boat: Dictionary) -> bool:
+	return float(boat["t"]) * float(boat["speed"]) + Rules.EPS >= float(boat["dist"])
 
 
 func _try_unload(boat: Dictionary) -> bool:
@@ -726,7 +811,6 @@ func _phase_deaths() -> void:
 		soldier_state[i] = SoldierState.DEAD
 		soldier_target[i] = -1
 		_drop_from_boats(i)
-		_drop_from_pending(i)
 		events.append({"kind": Event.DEATH, "id": i, "is_enemy": false})
 
 
@@ -911,7 +995,13 @@ func _tile_of(pos: Vector2) -> int:
 
 
 ## Free tiles nearest `target_tile`, breadth-first, in visit order — so the landing tile itself comes
-## first when it is free and the load lands in the order it boarded.
+## first when it is free.
+##
+## ⚠ **This is where the drop order becomes a picture.** A boat is one soldier now, so with several
+## boats aimed at one beach every call after the first finds the target tile already reserved and
+## walks one ring out. Combined with `_phase_landings`' ascending pass that makes "the first dropped
+## stands in front" a property of the search order rather than of a rule someone maintains — and it is
+## the ONLY thing the drop order decides, since every boat departs on the commit sub-step.
 ##
 ## The search WALKS OVER reserved tiles and only COLLECTS unreserved ones. A search that refused to
 ## cross an occupied tile would be sealed in by the first soldier to land, and the boat behind it
@@ -949,6 +1039,11 @@ func _free_tiles_from(target_tile: int, wanted: int) -> PackedInt32Array:
 
 # --- bookkeeping ---------------------------------------------------------------------------------
 
+## A soldier shot dead in transit leaves its boat, and the empty boat sails on: `_try_unload` returns
+## true for empty cargo, so it turns RETURNING at the beach and vanishes at its harbour like any
+## other. **This is the ONLY cleanup a death needs** — with no queue and no berth there is no second
+## list a dead id can be sitting in, which is what makes "a body killed far from home loses its cargo"
+## structurally true rather than something a caller has to remember.
 func _drop_from_boats(sid: int) -> void:
 	for raw in boats:
 		var boat: Dictionary = raw
@@ -956,15 +1051,3 @@ func _drop_from_boats(sid: int) -> void:
 		var at := carried.find(sid)
 		if at != -1:
 			carried.remove_at(at)
-
-
-## A LOADED soldier cannot be attacked, so this only ever fires if a future rule lets one die at the
-## quayside. It is one line per boat and it keeps a dead id out of the next launch.
-func _drop_from_pending(sid: int) -> void:
-	for b in pending.size():
-		var here: PackedInt32Array = pending[b]
-		var at := here.find(sid)
-		if at != -1:
-			here.remove_at(at)
-			pending[b] = here
-			return

@@ -68,6 +68,8 @@ func run(t) -> void:
 	t.eq(bad_doc.size(), 0, "문서 경로를 박아둔 인용이 없다 — 이름만 부른다 %s" % str(bad_doc))
 	t.eq(bad_line.size(), 0, "파일:줄번호 인용이 없다 %s" % str(bad_line))
 
+	_tools_still_parse(t)
+
 	# **Inverting the instrument, not only the subject.** A scanner for wrapped citations that joins on
 	# spaces cannot see a mid-token wrap — the one shape it exists to find. These two synthetic files feed
 	# the joiner directly: if it ever regresses to a line-wise or space-only join, this goes red while the
@@ -200,6 +202,45 @@ func _join_comments(text: String) -> Array[String]:
 		out.append(space_join)
 		out.append(tight_join)
 	return out
+
+
+## ⚠⚠ **`tools/` is loaded by nothing at all, and a round can be green over a dead instrument.**
+## Measured 2026-08-18: `plan-then-watch` deleted `Rules.boat_count`, `Rules.cap_of`,
+## `battle.load_soldier`, `battle.pending` and `battle.launch`, and `tools/probe/run_run.gd` — which drove
+## every one of them — stopped parsing outright. **The round stayed green at 1262 checks**, because the
+## runner loads `res://tests/nets/` and nothing else, and this file read `tools/` as TEXT (citation shapes)
+## and never as CODE. The probe is what `CLAUDE.md` names as the instrument for turning 「애매하다」 into a
+## number, and three acceptance rows of the plan are scored by it.
+##
+## ⇒ **Every `.gd` under `tools/` is LOADED here.** A parse error makes `load()` return null AND barks on
+## stderr, so it reddens twice over. ⚠ **Loading is not running**: both files `extend SceneTree` and are
+## never instantiated, so nothing here opens a window or plays a run.
+##
+## ⚠ **Loading is not enough on its own** — a file emptied to `extends SceneTree` parses perfectly. So the
+## probe's shape is pinned too: the two functions that make it a plan-then-watch probe rather than a
+## summon-and-launch one have to still be in it. **Naming them here is what catches an API deletion that
+## leaves a stub behind.**
+func _tools_still_parse(t) -> void:
+	var tool_files: Array[String] = []
+	_walk("res://tools", tool_files)
+	t.ok(tool_files.size() >= 2, "tools/ 아래 .gd 를 찾았다 (%d개, 최소 2)" % tool_files.size())
+	var unloadable: Array[String] = []
+	var probe_shape := PackedStringArray()
+	for f: String in tool_files:
+		var scr := ResourceLoader.load(f)
+		if scr == null:
+			unloadable.append(f)
+			continue
+		if f.ends_with("run_run.gd"):
+			for m: Dictionary in (scr as GDScript).get_script_method_list():
+				probe_shape.append(str(m["name"]))
+	t.eq(unloadable.size(), 0,
+		"tools/ 의 .gd 가 전부 파싱된다 — 아무 넷도 안 부르는 파일이라 여기서만 잡힌다 %s" % str(unloadable))
+	t.ok(probe_shape.size() > 0, "그중에 프로브가 있고 함수 목록을 읽었다 (%d개, 자가 점검)"
+		% probe_shape.size())
+	t.ok(probe_shape.has("_make_plan"),
+		"프로브가 계획을 먼저 짠다 (_make_plan — 전투 중에 손이 움직이면 이 이름이 없다)")
+	t.ok(probe_shape.has("_play_island"), "그리고 그 계획을 커밋한 뒤 판정까지 본다 (_play_island)")
 
 
 func _gd_files() -> Array[String]:

@@ -129,52 +129,78 @@ const LION_WINDUP_SEC := 0.6
 const START_MELEE := 6
 const START_RANGED := 4
 
-## Island 1's reward: three more soldiers at FULL HP. It has nothing to click, so it is applied on
-## the win and the run goes straight to the next island; only the beak opens a reward screen.
+## What a `Reward.COUNT` node pays: three more soldiers at FULL HP. It has nothing to click, so it is
+## applied on the win and the run goes straight back to the map; only the beak opens a reward screen.
+##
+## ⚠ It is a NODE's reward and no longer an island's. A route may step on up to
+## `map_max_count_nodes_on_a_route()` of them, which is why nothing downstream may assume one per run —
+## the roster capacity and `net_islands`' landing-region floor both ride on that accessor. See
+## `title-and-map`, the reward-belongs-to-the-node refutation box.
 const REWARD_MELEE := 2
 const REWARD_RANGED := 1
 
-## The beak (island 2's reward): range += 1.0 on one surviving soldier. Deliberately NOT +1 HP —
+## The beak (a `Reward.BEAK` node's pay): range += 1.0 on one surviving soldier. Deliberately NOT +1 HP —
 ## that candidate is unadopted, and the slice exists to learn whether "who do I bolt it onto" is a
 ## real decision. Range 1 means a second rank can attack, so it doubles the effective contact width
 ## at a doorway: it is the boss's answer and the terrain's undoing in the same line.
 const BEAK_RANGE := 1.0
 
 
-# --- The boats -----------------------------------------------------------------------------------
-## `boat-and-landing` replaces the two-boat, fixed-crossing fleet with per-boat capacity and speed,
-## since the coastline is open now and a crossing's length is a property of the (harbour, landing)
-## pair, not a constant. Columns: name, capacity, speed (tiles/s).
+# --- The boat ------------------------------------------------------------------------------------
+## How fast a boat crosses, tiles per second. The ONE surviving number of the old `BOATS` table:
+## with unlimited boats there is no capacity column (a boat carries the one soldier that was dragged
+## onto it), no name column (nothing distinguishes two boats) and no count (`boats` is as long as the
+## player made it). `plan-then-watch` records the reversal that deleted the rest; the rejected branch
+## is `unlimited-boats-not-a-five-boat-cap`.
 ##
-## The inequality is an acceptance condition, not a comment: round-trip throughput is
-## `cap * speed / (2 * distance)`, so the fast boat must LOSE on throughput and win on latency or it
-## dominates every send. `cap_fast * speed_fast < cap_big * speed_big` -> `2 * 5.0 = 10 < 4 * 3.0 = 12`.
-## Exactly 2x would be a tie ("빠른 배가 두 배 빠르다" could not be used) — the margin here is 20%.
-## Distance cancels out of that comparison, so plural harbours do not touch it.
-const BOATS := [
-	["BIG", 4, 3.0],
-	["FAST", 2, 5.0],
-]
-
-const _BOAT_COL_NAME := 0
-const _BOAT_COL_CAP := 1
-const _BOAT_COL_SPEED := 2
+## ⚠ It is a rule constant and not a look constant because it sets the crossing time, which is the
+## only thing between the commit and the first blow. **It is also the lever the deferred brake would
+## be built from** — a departure interval is this number's sibling — so do not retune it as a feel
+## value.
+const BOAT_SPEED := 4.0
 
 
-static func boat_count() -> int:
-	return BOATS.size()
+# --- The clock the fight is computed at -----------------------------------------------------------
+## The discretisation the whole fight runs on. `Battle.step` consumes WHOLE sub-steps of exactly this
+## length and carries the leftover, so the same simulated second costs the same number of phase
+## passes whatever `dt` the caller hands in.
+##
+## It changes WHAT HAPPENS and not how anything looks, so it lives here. Five things inside `step` are
+## per-step rather than per-second — a cooldown reset to the whole period on fire, a leg transition
+## that discards its overshoot, targeting and death latching that take no `dt` at all, `_walk`'s
+## per-tile reservation, and the field TTL — and every one of them is measured against this number.
+## `plan-then-watch` works the table out.
+const SIM_SUBSTEP_SEC := 1.0 / 60.0
+
+## The rates the fight may be computed at, as a ladder the shell indexes into. Every step ABOVE zero
+## is arithmetically inert under `SIM_SUBSTEP_SEC` and changes only whether the picture can be read.
+##
+## ⚠ **0x IS NOT A VIEWING RATE, which is why this table is not in look.gd.** `Battle.step` returns on
+## `dt <= 0.0` before `_phase_clock`, and `_phase_clock` is the only writer of `elapsed`, which is the
+## loss condition. This table therefore decides whether the island's clock advances at all.
+##
+## 2, 3 and 6 are exact divisors of every attack period in `UNITS` (1.0, 1.5, 2.0) and of
+## `LION_WINDUP_SEC` 0.6 — belt-and-braces on top of the sub-step, so an edit that removed the
+## sub-step by accident would not silently start changing outcomes. The ceiling is 7x: 0.6 s of
+## telegraph is five rendered frames at k = 7.2, and this repo has measured a beat under five frames
+## going entirely unseen. 4x and 5x are absent on the divisor argument, not the ceiling.
+##
+## `const X := PackedInt32Array([...])` is a parse error, so this is a plain const Array and every
+## read casts — see the `UNITS` header.
+const SPEED_STEPS := [0.0, 1.0, 2.0, 3.0, 6.0]
+
+## The slot the shell opens every island at. ⚠ **NOT 0.** A shell that opened at slot 0 would call
+## `step(0.0)` every frame and the fight would be frozen from the moment the start button was pressed,
+## with nothing barking. A net pins this to the index whose value is 1.0 rather than to a bare 0.
+const SPEED_SLOT_DEFAULT := 1
 
 
-static func boat_name_of(boat: int) -> String:
-	return str(BOATS[boat][_BOAT_COL_NAME])
+static func speed_slot_count() -> int:
+	return SPEED_STEPS.size()
 
 
-static func cap_of(boat: int) -> int:
-	return int(BOATS[boat][_BOAT_COL_CAP])
-
-
-static func boat_speed_of(boat: int) -> float:
-	return float(BOATS[boat][_BOAT_COL_SPEED])
+static func speed_mul_of(slot: int) -> float:
+	return float(SPEED_STEPS[slot])
 
 
 # --- The coastline ---------------------------------------------------------------------------------
@@ -190,3 +216,133 @@ const LINE_SAMPLE_STEP := 0.05
 ## beside them. Also a rule constant for the same reason as the step above: 0 vs 1 changes which
 ## tiles a boat may be sent to.
 const LINE_SAMPLE_EXEMPT_CHEBYSHEV := 1
+
+
+# --- The map ---------------------------------------------------------------------------------------
+## The shape of a run: which nodes exist, what each one pays, and which ones may follow which.
+##
+## It is here and not in `run.gd` because what a node PAYS changes what happens, and because `run.gd`
+## already reads this file — `rules.gd` referencing `Run` would close a class cycle. `Run.State` stays
+## on `Run` for the same reason in reverse: nothing here needs it.
+##
+## ⚠ **Nothing in this section is generated and no seed is read.** The map is authored, identical every
+## run, and `title-and-map` records that as a decision rather than a stage that was skipped: a map that
+## is the same every time is the one whose four routes can be walked exhaustively by a net.
+
+## The GDD's node kinds, minus the elite. Only `CHEST` has no fight, which is also the only reason a
+## node may carry no island.
+enum NodeKind { FIGHT, CHEST, BOSS }
+
+## What a node pays on the way out. Moved here from `Run` so the table below can name it.
+##
+## `HEAL` is new: it restores every LIVING soldier to full and touches no dead row, which is why the
+## chest cannot undo a death. `COUNT` is applied on the win with nothing to choose; only `BEAK` opens a
+## `REWARD` state; `HEAL` lands the instant the node is entered, because a chest has no fight to wait
+## for.
+enum Reward { NONE, COUNT, BEAK, HEAL }
+
+## One row is ONE NODE: floor, kind, reward, island index (-1 = opens no island).
+##
+## ⚠ The reward is the NODE's and not the KIND's. Keyed by kind, every fight node would pay the
+## identical thing and a fork could never put "cells or beak" side by side — see `title-and-map`, the
+## reward-belongs-to-the-node refutation box. That is why this table has a reward column at all.
+##
+## ⚠ `const X := PackedInt32Array([...])` is a parse error on 4.7.1, so this is a plain const Array and
+## every read below casts.
+##
+## ⚠ The island column ships as [0, 1, 2, 1, 2, -1, 2] — three grids serving six nodes — and a later
+## stage replaces it with [0, 1, 3, 4, 5, -1, 2] once the three new grids exist. The check that forbids
+## two nodes sharing a grid lands WITH those grids, so no round is red for the gap. It is a declared,
+## temporary lie and the only one in this round.
+const MAP_NODES := [
+	[0, NodeKind.FIGHT, Reward.COUNT, 0],   # 0 — floor 1, fixed, where every run lands
+	[1, NodeKind.FIGHT, Reward.COUNT, 1],   # 1 — floor 2 left
+	[1, NodeKind.FIGHT, Reward.BEAK,  2],   # 2 — floor 2 right
+	[2, NodeKind.FIGHT, Reward.BEAK,  1],   # 3 — floor 3 left
+	[2, NodeKind.FIGHT, Reward.COUNT, 2],   # 4 — floor 3 right
+	[3, NodeKind.CHEST, Reward.HEAL, -1],   # 5 — floor 4, no fight, no grid
+	[4, NodeKind.BOSS,  Reward.NONE,  2],   # 6 — floor 5, the lion, the run ends here
+]
+
+const _MAP_COL_FLOOR := 0
+const _MAP_COL_KIND := 1
+const _MAP_COL_REWARD := 2
+const _MAP_COL_ISLAND := 3
+
+## Directed and upward only. A run never walks down, so an edge is a permission and nothing else — and
+## because every edge climbs exactly one floor, a route's length is the floor count and a walker over
+## this table always terminates.
+##
+## Both floor-2 nodes reach both floor-3 nodes on purpose: branches that split and rejoin are what stop
+## one bad turn locking the rest of the map. Delete `[2,4]` and the map still walks, still draws, and
+## quietly becomes two corridors.
+const MAP_EDGES := [[0, 1], [0, 2], [1, 3], [1, 4], [2, 3], [2, 4], [3, 5], [4, 5], [5, 6]]
+
+
+static func map_node_count() -> int:
+	return MAP_NODES.size()
+
+
+static func map_floor_of(n: int) -> int:
+	return int(MAP_NODES[n][_MAP_COL_FLOOR])
+
+
+static func map_kind_of(n: int) -> int:
+	return int(MAP_NODES[n][_MAP_COL_KIND])
+
+
+static func map_reward_of(n: int) -> int:
+	return int(MAP_NODES[n][_MAP_COL_REWARD])
+
+
+## The island this node opens, or **-1** for a node with no fight. -1 is not an error and not a
+## sentinel to be clamped: it is what makes the chest cost no grid at all.
+static func map_island_of(n: int) -> int:
+	return int(MAP_NODES[n][_MAP_COL_ISLAND])
+
+
+## How many floors the map has. Derived from the table rather than written beside it, because a floor
+## count written twice is the second copy that rots the day a floor is added.
+static func map_floor_count() -> int:
+	var top := -1
+	for n in range(map_node_count()):
+		top = maxi(top, map_floor_of(n))
+	return top + 1
+
+
+static func map_edge_count() -> int:
+	return MAP_EDGES.size()
+
+
+static func map_edge_from(e: int) -> int:
+	return int(MAP_EDGES[e][0])
+
+
+static func map_edge_to(e: int) -> int:
+	return int(MAP_EDGES[e][1])
+
+
+## The most `Reward.COUNT` nodes a single route can step on — 3 on the map as authored.
+##
+## ⚠ **Walked over the table, never written as a literal 3.** `net_islands`' landing-region floor and
+## the roster capacity both ride on this number, and a hand-written 3 beside a table that can grow is
+## exactly the second copy this repo has watched rot twice. Change `MAP_NODES` and this moves with it.
+static func map_max_count_nodes_on_a_route() -> int:
+	var best := 0
+	for n in range(map_node_count()):
+		if map_floor_of(n) == 0:
+			best = maxi(best, _map_max_count_from(n))
+	return best
+
+
+## Terminates because every edge climbs exactly one floor: the recursion can only run `map_floor_count()`
+## deep. A node with no outgoing edge is the end of a route and contributes only itself.
+static func _map_max_count_from(n: int) -> int:
+	var here := 1 if map_reward_of(n) == Reward.COUNT else 0
+	var best := -1
+	for e in range(map_edge_count()):
+		if map_edge_from(e) == n:
+			best = maxi(best, _map_max_count_from(map_edge_to(e)))
+	if best < 0:
+		return here
+	return here + best

@@ -11,6 +11,14 @@ of them so far."*
 twice and not a third time. **But "ambiguous" came instead, and that is not acceptance.** verify-look
 never ran; the user's own eyes are the stronger instrument, so it is not being run after the fact.
 
+⚠⚠ **Still true, but not the end of it — 곁다리 returned a THIRD time on the same day, pointed somewhere
+else.** Later on 2026-08-18 the user said **「배는 너무 곁다리 느낌이다 그냥 바다위에 초록색 지역에 내가
+설계한 몬스터들을 무한으로 배를 띄워서 보낼 수 있는걸로하고 싶어」**. The first two occurrences were
+*the boat is a side-thing in the FICTION*, and this round genuinely stopped those. The third is **the boat
+is a RESOURCE I have to manage** — a different complaint about the same word — and the answer to it is
+**less boat, not more**: 결정 14R deletes the fleet, the capacity and the launch click outright. **Do not
+overwrite the line above; both readings are true at once.** See `plan-then-watch`.
+
 ⚠ **Implementation and acceptance are two axes, and these two lines are them.** The verdict is the last
 row of 「What success means」 below, not the 967 above it.
 

@@ -51,7 +51,13 @@ const SRC_DIR := "res://src"
 const LOOK_PATH := "res://src/look.gd"
 
 ## The size-ish half. Swept over every `.gd` under `src/` except `look.gd`.
-const PIXEL_SUFFIXES := "px|width|radius|size|margin|alpha|ratio|offset|gap|font_size"
+##
+## ⚠ `cols` was added by `plan-then-watch`: `IDLE_SOLDIER_COLS` — how many soldiers stand across at
+## the harbour — matched none of the other suffixes, and a layout count that the scan cannot see is a
+## layout number free to be written in `field_view.gd`. `alpha` already covered `GHOST_ALPHA`, which
+## was CHECKED rather than assumed; the plan flagged both names as possibly invisible and only one of
+## them was.
+const PIXEL_SUFFIXES := "px|width|radius|size|margin|alpha|ratio|offset|gap|font_size|cols"
 
 ## What `combat-juice` added on top of it, for `src/view/` + `src/shell/` only.
 ##
@@ -90,6 +96,10 @@ func _table() -> Dictionary:
 			# boat-and-landing stage 4 drag (P8): set_drag is the one state setter a press-start and
 			# a release-end both go through, so it is pure, like the camera functions above it.
 			"set_drag": 0,
+			# `plan-then-watch` 5.4: the shell hands the speed multiplier down and every drawer in the
+			# file is aged by `delta * k`. Pure — it stores one float — and it is the only thing
+			# standing between the ladder and a picture where every body is permanently white.
+			"set_time_scale": 0,
 			"_draw": 0,
 			"_paint_tile": 2,
 			"_paint_dock": 1,
@@ -107,8 +117,13 @@ func _table() -> Dictionary:
 			"_paint_cliff_face": 1,
 			"_tile_xy": 0,
 			"_hull_rect": 0,
-			"idle_hull_rect": 0,
-			"_deck_slots": 0,
+			# `plan-then-watch` 결정 14R: `idle_hull_rect` became `idle_soldier_rect` — what stands at
+			# the harbour before the start button is the ARMY, not the fleet — and `_deck_slots` died
+			# outright, because a one-soldier deck is the hull's own centre and computing it was one
+			# fact written twice. **`field_view`'s count does not move (43 -> 43) while one function is
+			# added, one deleted and one renamed**, which is exactly why it has to be re-derived by hand
+			# rather than trusted for having stayed still.
+			"idle_soldier_rect": 0,
 			"_hp_rects": 0,
 			"_beak_points": 0,
 			"_facing_of": 0,
@@ -128,28 +143,31 @@ func _table() -> Dictionary:
 			# `draw_multiline(PackedVector2Array(), ...)` would be green with nothing on screen.
 			"_spark_points": 0,
 		},
+		# ⚠ **Seven names left this file in one edit and one arrived** (`plan-then-watch`, 6.5).
+		# `key_slot_count` · `key_type_of` · `reserve_count` — the 1/2 key roster, and the keyboard does
+		# nothing in this game now. `boat_label` · `note_launch` · `_berth_offset` · `_paint_berth` ·
+		# `_paint_load` — the berths, which were the fleet drawn as a resource meter, and the boat
+		# stopped being a resource. `set_speed` is the arrival. Three renames on top: `note_key` ->
+		# `note_chip`, `_key_offset` -> `_chip_offset`, `_key_colour` -> `_chip_colour`, `_paint_key` ->
+		# `_paint_button`. **20 -> 13 names, 5 -> 3 leaves**, and both halves of the rename have to
+		# land: a name the table holds that the file no longer has is caught by `_scan`'s
+		# `표에는 있는데 파일에 없는 함수` direction, whose synthetic case (c2) proves it bites.
 		"hud_view.gd": {
 			"default_font": 0,
 			"type_label": 0,
-			"key_slot_count": 0,
-			"key_type_of": 0,
 			"bind": 0,
-			"reserve_count": 0,
-			"boat_label": 0,
+			"set_speed": 0,
 			"_process": 0,
 			"_draw": 0,
-			"note_key": 0,
-			"note_launch": 0,
+			"note_chip": 0,
 			"_fx_step": 0,
-			"_key_offset": 0,
-			"_key_colour": 0,
-			# `boat-and-landing` stage 4, P9's berth shake — the same shape as `_key_offset`, mirrored
-			# rather than shared because the two boxes' rects come from different `look.gd` functions.
-			"_berth_offset": 0,
+			"_chip_offset": 0,
+			"_chip_colour": 0,
 			"_paint_timer": 1,
-			"_paint_berth": 1,
-			"_paint_load": 1,
-			"_paint_key": 2,
+			# 2 calls, and it is one hook with two kinds of call site on purpose: the start button and
+			# every speed chip are the same shape (a filled rect with one label in it), so two leaves
+			# would be two copies of one `draw_rect` + `draw_string`.
+			"_paint_button": 2,
 			"_paint_enemies_left": 1,
 		},
 		"panel_view.gd": {
@@ -175,6 +193,76 @@ func _table() -> Dictionary:
 			"_message_text": 0,
 			"_message_colour": 0,
 		},
+		# `title-and-map`'s two new files. The title holds no `Run` at all — it IS `run == null` — so
+		# every function here is either geometry read out of `look.gd` or a clock of its own.
+		"title_view.gd": {
+			"slot_rect_of": 0,
+			"slot_hit_rect_of": 0,
+			"slot_at": 0,
+			"is_slot_pressable": 0,
+			"note_press": 0,
+			"set_hover": 0,
+			"_hover_of": 0,
+			"_press_of": 0,
+			"_slot_fill": 0,
+			"_slot_box": 0,
+			"_cell_centre": 0,
+			"_fx_step": 0,
+			"_process": 0,
+			"_draw": 0,
+			"_paint_cell": 1,
+			"_paint_title": 1,
+			# 2 calls: the fill, then the border that says it presses. One hook and not two — a box
+			# without its border is the same box saying something else, not a second thing to draw.
+			"_paint_slot_box": 2,
+			"_paint_slot_label": 1,
+		},
+		"map_view.gd": {
+			"bind": 0,
+			"node_at": 0,
+			"node_centre_of": 0,
+			"node_hit_radius_of": 0,
+			"is_node_pressable": 0,
+			"set_hover": 0,
+			"note_press": 0,
+			"note_cleared": 0,
+			"_hover_of": 0,
+			"_press_of": 0,
+			"_reveal_alpha_of": 0,
+			"_pulse_scale_of": 0,
+			"_here_centre": 0,
+			# The four-state read, added the round the map's states were made to carry at rest.
+			# `_look_of` answers once and BOTH `_node_fill` and `_node_radius_of` read it, so the
+			# colour channel and the size channel cannot disagree about which state a node is in.
+			"_look_of": 0,
+			"_node_radius_of": 0,
+			"_node_fill": 0,
+			"_edge_style": 0,
+			# draw 0 and NOT leaves, the `_spark_points` precedent: the geometry is built here and
+			# handed to `_paint_glyph` / `_paint_node_border` as an argument. Built inside the leaf it
+			# never leaves it, and the unused-argument check below skips every function whose count is
+			# 0 — so a leaf holding `draw_multiline(PackedVector2Array(), ...)` would read as one draw
+			# call with every argument used, and draw nothing at all.
+			# ⚠ `_ring_points` is NOT in `title-and-map`'s table and was added by the build: the
+			# alternative was the same ring loop written inline three times in `_draw`.
+			"_glyph_points": 0,
+			"_ring_points": 0,
+			"_fx_step": 0,
+			"_process": 0,
+			"_draw": 0,
+			"_paint_edge": 1,
+			# 2, and it is not a mistake: `draw_circle` in one branch and `draw_colored_polygon` in the
+			# other, one of which runs per call. `_draw_calls` counts call SITES textually, so writing
+			# 1 here reddens the round on day one.
+			"_paint_node": 2,
+			"_paint_node_border": 1,
+			"_paint_glyph": 1,
+			"_paint_here_ring": 1,
+			"_paint_army": 1,
+			# ⚠ Also not in the design's table. The scene wash needs a full-screen rect and no existing
+			# leaf draws one; without it 시작하기 cuts to the map, which reads as a glitch.
+			"_paint_fade": 1,
+		},
 	}
 
 
@@ -184,8 +272,8 @@ func run(t) -> void:
 	# "It is not 0" first. A directory walk that found nothing would report a perfectly clean tree and
 	# every assertion below would simply stop running.
 	var view_files := _gd_files(VIEW_DIR)
-	t.eq(view_files.size(), 3, "src/view/ 에 그릴 줄 아는 파일이 셋이다 %s" % str(view_files))
-	t.eq(table.size(), 3, "표도 파일 셋을 덮는다")
+	t.eq(view_files.size(), 5, "src/view/ 에 그릴 줄 아는 파일이 다섯이다 %s" % str(view_files))
+	t.eq(table.size(), 5, "표도 파일 다섯을 덮는다")
 
 	# -- 1~3. the per-function table, the closed class, and the leaf arguments ----------------------
 	var total_funcs := 0
@@ -214,8 +302,18 @@ func run(t) -> void:
 	# removed `_paint_boat` / `_boat_rect` in field_view.gd (39 -> 42, net +3); the verify-read pass
 	# on stages 4/5 added `idle_hull_rect`, shared between `_draw()` and `game.gd`'s hit test so
 	# neither one re-derives the anchor and the slot a second time (42 -> 43).
-	t.eq(total_funcs, 84, "세 파일의 함수는 모두 84개다 (43 + 20 + 21)")
-	t.eq(total_leaves, 23, "그중 draw 를 실제로 부르는 잎은 23개다 (14 + 5 + 4)")
+	# `plan-then-watch` moved BOTH totals, and that is deliberate: an earlier draft of that plan landed
+	# them back on 84 and 23 while five per-file counts moved, and a literal that does not move is the
+	# one nobody re-derives. 43 is field_view (one added, one deleted, one renamed — no net change, so
+	# it is the one to count by hand), 13 is hud_view (20 - 8 + 1), 21 is panel_view, untouched.
+	# `title-and-map` added two whole files, and its own table was re-derived by hand here rather than
+	# copied: it named 18 functions for `title_view` (which held) and 25 for `map_view` (which did
+	# not — `_ring_points` and `_paint_fade` were added by the build, with the reasons beside them).
+	# The map's four-state read added `_look_of` and `_node_radius_of` to `map_view` (27 -> 29), and
+	# the total is re-derived by hand here rather than nudged: a literal that moves by whatever the
+	# last edit happened to be is a literal nobody re-derives.
+	t.eq(total_funcs, 124, "다섯 파일의 함수는 모두 124개다 (43 + 13 + 21 + 18 + 29)")
+	t.eq(total_leaves, 32, "그중 draw 를 실제로 부르는 잎은 32개다 (14 + 3 + 4 + 4 + 7)")
 
 	# -- 4. no presentation constant loose in src/ -------------------------------------------------
 	var src_files := _gd_files_deep(SRC_DIR)
@@ -245,7 +343,7 @@ func run(t) -> void:
 		if wides.size() > 0:
 			wide_bad.append("%s %s" % [path.get_file(), str(wides)])
 	t.ok(scanned >= 8, "look.gd 를 뺀 나머지 %d개를 실제로 훑었다" % scanned)
-	t.eq(wide_scanned, 4, "그중 뷰 셋과 셸 하나, 넷을 넓힌 목록으로 다시 훑었다 — 셸이 빠지면 hold 초가 game.gd 에 박힌다")
+	t.eq(wide_scanned, 6, "그중 뷰 다섯과 셸 하나, 여섯을 넓힌 목록으로 다시 훑었다 — 셸이 빠지면 hold 초가 game.gd 에 박힌다")
 	t.eq(colour_bad.size(), 0, "look.gd 밖에 Color( 도 Color. 도 없다 %s" % str(colour_bad))
 	t.eq(pixel_bad.size(), 0, "look.gd 밖에 픽셀 이름에 박힌 리터럴이 없다 %s" % str(pixel_bad))
 	t.eq(wide_bad.size(), 0, "뷰와 셸에는 시간·비율 이름에 박힌 리터럴도 없다 %s" % str(wide_bad))

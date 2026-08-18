@@ -60,8 +60,16 @@ func bind(r: Run, b: Battle) -> void:
 ## True while the panel owns the screen. The shell must not route a click into `soldier_id_at` or
 ## `button_hit` without asking this first — the panel's rectangles exist whether it is drawn or not,
 ## so a click during a battle would land on an invisible roster.
+##
+## ⚠ **An ALLOW-list, never `state() != BATTLE`.** The denylist form was correct only for as long as
+## BATTLE was the only state that is not a panel, and one added `Run.State` member breaks it five ways
+## at once: a red 「패배」 band paints over the live screen and the panel then swallows every click,
+## drag, pan and zoom, with `panel_active()` reading perfectly true the whole time. This costs nothing
+## today — `plan-then-watch`'s planning phase deliberately adds no `Run.State` member, and the gap
+## between `_open_island` and the first committed `step` is spent in BATTLE — so this is insurance,
+## and it must not be read as evidence that a planning state lives in `Run`.
 func panel_active() -> bool:
-	return run != null and run.state() != Run.State.BATTLE
+	return run != null and (run.state() == Run.State.REWARD or is_finished())
 
 
 func is_reward() -> bool:
@@ -74,10 +82,14 @@ func is_finished() -> bool:
 	return run.state() == Run.State.WON or run.state() == Run.State.LOST
 
 
-## Living soldier ids in ascending id order, capped at what the panel can physically show. The run
-## holds at most 13 soldiers against 14 slots, so the cap never actually bites; it is here so that a
-## roster grown past the panel silently drops entries instead of drawing off the edge, where a
-## clickable rectangle would sit outside the viewport.
+## Living soldier ids in ascending id order, capped at what the panel can physically show.
+##
+## ⚠ **This comment used to say the cap never actually bites, and the node map made that false.** A
+## route can step on `Rules.map_max_count_nodes_on_a_route()` = 3 count nodes, so the roster reaches
+## `10 + 3 * 3 = 19` against what were 14 slots — five soldiers the player could see nowhere and could
+## never give the beak to, with every check about the panel still green. `ROSTER_ROWS` went 7 -> 10 in
+## the same edit and the capacity is 20; the cap is still here so that a roster grown past the panel
+## drops entries instead of drawing a clickable rectangle outside the viewport.
 func roster_ids() -> Array:
 	var ids := []
 	if run == null or run.army == null:

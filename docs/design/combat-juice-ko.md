@@ -1,6 +1,6 @@
 # 전투 연출 12개
 
-**Implemented**: full — 열두 개 전부, 0절의 사자 wind-up 까지. 라운드는 넷 9개 · 검사 725개 초록
+**Implemented**: full — 열두 개 전부, 0절의 사자 wind-up 까지. ⚠ **8번은 2026-08-18 `plan-then-watch` 로 자리를 옮겼다**: 키 절반은 시작 버튼의 칩 가족이 되었고 선착장 절반은 삭제됐으며, 아래 `hud_view.gd` 훅 표를 통째로 다시 쟀다(함수 20개·잎 5개 → 13개·3개). 나머지 열한 개는 그대로다 — 전부 view 쪽이고 `Battle.events` 로 굴러가므로 조작을 지워도 하나도 안 죽었다. 라운드는 넷 12개 · 검사 1328개 초록
 **Accepted**: **pass (2026-08-17)** — 사용자가 켜서 보고 말했다: *"연출은 좋아."*
 
 ⚠ **인수된 것은 연출이지 게임이 아니다.** 같은 자리에서 사용자가 이어서 말했다 —
@@ -187,7 +187,7 @@
 | 5 광역 | `ATTACK` 의 `area` | 링 시간 · 두께 | 모름 |
 | 6 타겟 선 | **없음** — `enemy_target` 이 이미 public | 알파 · 굵기 · 언제 안 그리나 | 모름 |
 | 7 상륙 | `LAND` | 링 시간 · 반지름 | 모름 |
-| 8 소환 피드백 | **없음** — 셸이 `load_soldier` 의 bool 을 HUD 로 | 반응 시간 · 색 | 모름 |
+| 8 누름 피드백 | **없음** — 셸이 `commit()` 의 bool 을 `note_chip(0, ok)` 로 | 반응 시간 · 색 | 모름 |
 | 9 부리 부착 | **없음** — 셸이 고른 id 를 판넬로 **먼저** 주고, `apply_beak` 는 hold 뒤에 부른다 | 물드는 시간 | 모름 |
 | 10 승패 전환 | **없음** — 셸의 hold + 판넬의 나이 | hold 초 · 페이드 초 | 모름 |
 | 11 카메라 | `ATTACK` 의 `dmg` | 진폭 · 감쇠 · 주파수 | 모름 |
@@ -456,7 +456,7 @@
 - **⚠ 12개 중 유일하게 가독성을 순손해로 만들 수 있는 항목이다.** Into the Breach 는 의도를 그리지만
   **턴제이고 개체가 10개 미만**이고, **TFT 도 Bad North 도 타겟 선을 안 그린다.** Riot 이 명시적으로 지운
   *"cloud of visual effects and particles"* 와 같은 것이 된다
-- **그래서 두 가지로 좁힌다**: ① **적 쪽만** ② 살아 있는 적이 `TARGET_LINE_MAX_COUNT` **8** 을 넘으면
+- **그래서 두 가지로 좁힌다**: ① **적 쪽만** ② 살아 있는 적이 `TARGET_LINE_MAX_COUNT` ~~**8**~~ **14** 를 넘으면
   **하나도 안 그린다.** 알파 `COL_TARGET_LINE` 은 0.12
 
 > **반박 상자 — 「40줄이 동시에 켜진다」는 이 게임에서 불가능하고, 상한 12는 절대 안 문다.**
@@ -468,6 +468,19 @@
 > **상한 12는 도달 불가능한 안전장치였다.** 8로 내렸지만 **8도 지금 세 섬에서는 안 문다**(최대 6).
 > ⇒ **F 절의 그 검사는 합성 전투다.** 그 행에 그렇게 적어 뒀다. **안 무는 안전장치를 안전장치라고 부르면
 > 다음 사람이 그것을 믿는다.**
+>
+> ### ⚠ **2026-08-18 반증** — 위 상자의 「안 문다」가 뒤집힌다
+>
+> 섬당 적이 **8 · 12 · 14** 로 올라가면서 이 상수는 **처음으로 문다.** 섬 2·3은 적이 4마리·6마리 죽을
+> 때까지 의도선을 **한 줄도** 안 그린다 — 손이 안 움직이는 그 구간이 바로 읽어야 하는 구간이다.
+> **14로 올린다.**
+> ✅ **2026-08-18 에 둘 다 코드에 들어갔다.** `islands.gd` 는 이제 **8 · 12 · 14** 이고(그 행들에서 직접
+> 잰 값이 `net_islands` 의 `EXPECT_SPAWNS`), `look.gd` 는 **`TARGET_LINE_MAX_COUNT := 14`** 다.
+> ⚠ **14는 가장 큰 섬의 적 수라서 이 관문은 다시 「실제로는 안 문다」가 되었다 — 일부러 그렇다.**
+> 무는 것이 목적인 적이 없었고, 아직 아무도 읽어 본 적 없는 화면에 씌운 천장이다. 그래서 `net_fx_view` 는
+> **양 끝을 다 잰다**: 적이 정확히 `TARGET_LINE_MAX_COUNT` 마리면 전부 그린다(**이 쪽은 합성이 아니라
+> 실제 섬의 첫 프레임이다**), 하나 더 많으면 하나도 안 그린다(**이 쪽은 여전히 합성이고 그렇게 적혀 있다**).
+> ⚠ **14는 첫 값이고 verify-look 이 채점한다** — 14줄이 소음으로 읽히면 내리고, 그 측정을 여기 적는다.
 
 ### 7. 상륙
 
@@ -495,16 +508,32 @@
 > `CLAUDE.md`가 「바닥과 천장을 같이 걸어라」로 얻어낸 바로 그 행들이다. **`_paint_key`를 지우면
 > 그 계측이 같이 사라진다.** 아래 훅 표와 상수는 **지워진 게 아니라 이관 대상**이다.
 
-- **보이는 것**: 누른 키 상자가 **먹혔으면** `COL_WIN` 쪽으로 한 번 밝아지고, **거절됐으면** `COL_LOSE` 쪽으로
-  물들며 좌우로 흔들린다. 부두 클릭이 먹히면 선착장 아이콘이 같은 방식으로 반응한다
-- **파일 / 훅**: `hud_view.gd` / **기존 `_paint_key` 의 `bg` 와 `rect`·`at`, `_paint_berth` 의 `col`.
-  새 잎 없음**
+> ### ✅ **2026-08-18 에 옮겨졌고, 선착장 절반은 이름을 바꾼 게 아니라 지웠다**
+>
+> `plan-then-watch` 가 들어갔다. **키 상자도 선착장도 `hud_view.gd` 에서 사라졌다** — 1/2 키가 없고 잴
+> 함대가 없다 — 그리고 그것들이 그리던 **모양**(글자 하나 든 누를 수 있는 상자)만 **시작 버튼과 배속 칩
+> 다섯**으로 살아남았다. 그래서 잎은 지운 게 아니라 이름을 바꿨다. 아래 항목은 실제로 들어간 것이다.
+> **`_paint_berth` · `_paint_load` · `note_launch` · `_berth_offset` · `berth_rect_px` · 모든
+> `HUD_BERTH_*` · `COL_BERTH_EMPTY` · `BERTH_FX_SEC` 은 없다.** 위 상자가 걱정한 `Look.COL_BUTTON`
+> 리터럴과 거절 흔들림의 양끝은 **잃은 게 아니라 `net_shell` 안에서 자리를 옮겼다**: 색은 `panel_view` 의
+> 메시지·단추 캡처로, 흔들림은 시작 버튼으로 — **그리고 원래 없던 천장이 붙었다**
+> (`shift.length() <= Look.REFUSE_SHAKE_PX + 0.01`).
+
+- **보이는 것**: **시작 버튼**이 커밋이 **먹혔으면** `COL_WIN` 쪽으로 밝아지고, **거절됐으면**(`boats` 가
+  비었다) `COL_LOSE` 쪽으로 물들며 좌우로 흔들린다. **배속 칩에는 따로 피드백이 없다 — 켜진 칩이 곧
+  피드백이다**
+- **파일 / 훅**: `hud_view.gd` / **`_paint_button`(`_paint_key` 에서 이름만 바꿈)의 `bg` 와 `rect`·`at`.
+  새 잎 없음**이고, 배속 칩도 같은 잎이 그린다
 - **⚠ 흔들림은 `rect` 와 글자 `at` **둘 다**에 같은 오프셋으로 실린다.** 상자만 흔들면 글자가 상자 밖으로
   나가고, 글자만 흔들면 상자가 안 움직여 아무것도 안 흔들린 것처럼 보인다
-- **몇 초**: `KEY_FX_SEC` **0.18**, 거절 흔들림 `KEY_REFUSE_SHAKE_PX` **4.0**, 선착장 `BERTH_FX_SEC` **0.25**
-- **sim 이 내는 것**: **없음.** `battle.load_soldier()` 와 `battle.launch()` 가 이미 bool 을 돌려주는데
-  **`game.gd` 가 그것을 버리고 있다.** 셸이 받아서 `hud_view.note_key(slot, ok)` /
-  `hud_view.note_launch(dock, ok)` 로 넘긴다
+- **몇 초**: `CHIP_FX_SEC` **0.18**, 거절 흔들림 `REFUSE_SHAKE_PX` **4.0**. ⚠ `_berth_offset` 이 사라지면서
+  **`_chip_offset` 이 `REFUSE_SHAKE_PX` 의 유일한 독자**가 되었다 — 흔들림을 지우면 상수의 마지막 독자가
+  사라진다는 뜻이라, `net_shell` 이 진폭을 **양 끝**으로 박는다
+- **sim 이 내는 것**: **없음.** `battle.commit()` 이 이미 bool 을 돌려주고, 셸이 그것을 받아 시작을 누를
+  때마다 `hud_view.note_chip(0, ok)` 로 넘긴다. **0번 칸이 시작 버튼이고, 무언가 쓰는 칸은 그것뿐이다**
+- ⚠ **드로어는 `delta` 가 아니라 `delta * _speed_scale` 로 늙는다** — 배속 사다리가 여기 모든 시간이
+  기준으로 삼은 간격 자체를 움직인다. `net_fx_view` 가 HUD 를 6배속으로 몰아 **실제** `CHIP_FX_SEC / 6` 초
+  안에 흔들림이 정확히 0으로 돌아오는지 잰다. **그 행이 없으면 배수를 넘겨주기만 하고 안 쓰는 게 초록이다**
 - **거절 사유는 구분하지 않는다.** 사유는 셋(배 만석 · 그 타입 예비 없음 · 선착장이 둘 다 바다에)인데
   bool 하나로는 못 가른다. **enum 으로 바꾸면 `net_battle` · `net_boat` 의 기존 검사가 흔들린다** — 이 문서는
   그 대가를 안 산다
@@ -729,11 +758,17 @@ func _unhandled_input(event):
 > - **잎이 넷 늘었다.** 연출의 열하나 위에 `_paint_hull` · `_paint_overlay` · `_paint_route` ·
 >   `_paint_cliff_face`.
 > - **총계가 68 / 20 에서 함수 84개 (43 + 20 + 21) · 잎 23개 (14 + 5 + 4) 로 갔다.**
+>   ⚠ **2026-08-18 에 또 움직였다** — `plan-then-watch` 가 `hud_view` 를 13개·3개로 깎아서 총계는
+>   **함수 77개 (43 + 13 + 21) · 잎 21개 (14 + 3 + 4)** 다. `field_view` 의 43은 함수 하나가 늘고 하나가
+>   지워지고 하나가 이름을 바꾸는 동안 **안 움직였다 — 그래서 손으로 다시 세야 하는 것이 그 43이다.**
 > - 카메라와 드래그가 순수 함수 아홉을 데려왔다 (`_compose_position` · `screen_to_world_px` ·
 >   `world_to_tile` · `pan_by` · `zoom_at` · `_clamp_cam` · `_visible_world_rect` · `set_drag` ·
 >   `idle_hull_rect`). 전부 draw 0 이고, **0 은 잎의 수만큼 하중을 받는다** — 훅 밖으로 draw 가 새는 것을
 >   막는 것이 그 0 이다.
 > - 지형 패스는 **2436칸 (58 × 42)** 을 칠한다. 격자가 48 × 32 이고 `WATER_MARGIN_TILES` 가 5다.
+>   ⚠ **2026-08-18 재측정**: `plan-then-watch` 가 계획 화면을 위해 `ZOOM_MIN` 을 0.45로 뒤로 뺐고, 그러면
+>   x축으로 맨바닥이 11.6칸 드러나서 여백이 **5 → 12** 로 갔다. 패스는 **4032칸 (72 × 56)** 을 칠하고
+>   **한 프레임에 draw 8064번** — 이전 4872번에서.
 >
 > ⚠ **아래 표와 파급 목록은 안 고쳤고, 그것이 일부러다.** 그것들은 *이* 기능의 빌드가 무엇을 해야 했는지의
 > 기록이고, 그때 그 빌드에 대해서는 옳은 지시였다. 지금 트리에 맞춰 다시 쓰면 이미 일어난 빌드를 거짓으로
@@ -781,20 +816,27 @@ func _unhandled_input(event):
 ⚠ **`SPARK_WIDTH_PX` 도 그때 비로소 잡힌다** — 선 잎 셋(`_paint_shot` · `_paint_ring` · `_paint_target_line`)은
 전부 굵기를 인자로 받는데 **초안의 `_paint_spark` 만 안 받아서 F 절에 그것을 무는 줄이 하나도 없었다.**
 
-### `src/view/hud_view.gd` — 18개 함수, 잎 5개
+### `src/view/hud_view.gd` — 13개 함수, 잎 3개
+
+⚠ **2026-08-18 `plan-then-watch` 로 다시 쟀다. 이 파일이 가장 크게 깎였다 — 함수 20개·잎 5개가 13개·3개가
+됐다.** 여덟이 1/2 키와 선착장과 함께 죽었고(`key_slot_count` · `key_type_of` · `reserve_count` ·
+`boat_label` · `note_launch` · `_berth_offset` · `_paint_berth` · `_paint_load`), 하나가 들어왔고
+(`set_speed`), 넷이 칩 가족으로 이름이 바뀌었다(`note_key`→`note_chip` · `_key_offset`→`_chip_offset` ·
+`_key_colour`→`_chip_colour` · `_paint_key`→`_paint_button`).
+**`net_draw_leaf._table()` 이 권위이고, 아래가 그 이름들이다.**
 
 | 함수 | draw | 함수 | draw |
 |---|---|---|---|
 | `default_font` | 0 | `_paint_timer` | 1 |
-| `type_label` | 0 | `_paint_berth` | 1 |
-| `key_slot_count` | 0 | `_paint_load` | 1 |
-| `key_type_of` | 0 | `_paint_key` | 2 |
+| `type_label` | 0 | **`_paint_button`** | **2** |
 | `bind` | 0 | `_paint_enemies_left` | 1 |
-| `reserve_count` | 0 | **`note_key`** | **0** |
-| `_process` | 0 | **`note_launch`** | **0** |
-| `_draw` | 0 | **`_fx_step`** | **0** |
-| | | **`_key_offset`** | **0** |
-| | | **`_key_colour`** | **0** |
+| **`set_speed`** | **0** | | |
+| `_process` | 0 | | |
+| `_draw` | 0 | | |
+| **`note_chip`** | **0** | | |
+| **`_fx_step`** | **0** | | |
+| **`_chip_offset`** | **0** | | |
+| **`_chip_colour`** | **0** | | |
 
 ### `src/view/panel_view.gd` — 21개 함수, 잎 4개
 
@@ -834,7 +876,8 @@ func _unhandled_input(event):
    ⇒ **격자 안쪽 576칸만 그 목록에 넣는다.** 화면 사각형 자체를 넓히면 「레이아웃이 화면 밖으로 걸어 나갔다」를
    잡던 검사가 부두·HP·HUD 에 대해서도 같이 죽는다
 7. **세 뷰 파일 전부의 `_process(_delta)` 가 `delta` 로 바뀐다.** `field_view` 와 `panel_view` 만이 아니다 —
-   이 표가 `hud_view` 에도 `_fx_step` 을 실었고 8번이 `KEY_FX_SEC` · `BERTH_FX_SEC` 이라는 시간을 준다.
+   이 표가 `hud_view` 에도 `_fx_step` 을 실었고 8번이 `CHIP_FX_SEC` 이라는 시간을 준다
+   (⚠ 초안은 `BERTH_FX_SEC` 도 같이 적었지만 그것은 삭제됐다 — 8번 항목).
    **함수 이름은 안 바뀌므로 표는 안 건드린다**
 8. **세 뷰 파일의 헤더 주석.** 특히 `field_view.gd` 의 *"every `draw_*` call in the file lives inside one of
    those **six hooks**"* — 잎이 6에서 **11**로 가면 그 문장이 거짓이 된다.
@@ -954,7 +997,7 @@ func _unhandled_input(event):
 | `AREA_RING_START_RATIO` | `0.4` | 사자 60px 반경이면 **24px 에서 시작** |
 | `AREA_RING_WIDTH_PX` | `3.0` | |
 | `TARGET_LINE_WIDTH_PX` | `1.0` | |
-| `TARGET_LINE_MAX_COUNT` | `8` | **지금 세 섬에서는 절대 안 문다(최대 적 6). 검사는 합성이다** — C 절 6번 |
+| `TARGET_LINE_MAX_COUNT` | ~~`8`~~ **`14`** | ~~**지금 세 섬에서는 절대 안 문다(최대 적 6). 검사는 합성이다**~~ ⚠ **2026-08-18 반증** — 8인 채로 적이 8 · 12 · 14 로 오르자 처음으로 물어서 섬 2·3의 **첫 구간**을 가렸다. **14로 올렸고, 적 수와 이 상수 둘 다 코드에 들어갔다.** C 절 6번의 상자 |
 | `LAND_RING_SEC` | `0.40` | |
 | `LAND_RING_R_PX` | `20.0` | **타일의 50%. 20 × 2 = 40 이라 직교 인접한 두 링이 딱 맞닿고 안 겹친다** |
 | `LAND_RING_WIDTH_PX` | `2.0` | |
@@ -965,13 +1008,13 @@ func _unhandled_input(event):
 | `SHAKE_B_FREQ` | `47.0` | |
 | `GAIT_PERIOD_TILES` | `0.7` | **28px** 마다 한 걸음 |
 | `GAIT_SQUASH` | `0.20` | 진행 축 `1−s·sinφ` · 직교 축 `1+s·sinφ`. 최대 변위 **까마귀 2.0 · 원거리 2.2 · 근접 2.8 · 들소 3.2 · 사자 4.4 px** — 바닥 2.0px 위 |
-| `KEY_FX_SEC` | `0.18` | |
-| `KEY_REFUSE_SHAKE_PX` | `4.0` | |
-| `BERTH_FX_SEC` | `0.25` | |
+| `CHIP_FX_SEC` | `0.18` | ~~`KEY_FX_SEC`~~ — **2026-08-18 개명.** 키가 없어졌고 그 모양은 시작 버튼이다 |
+| `REFUSE_SHAKE_PX` | `4.0` | ~~`KEY_REFUSE_SHAKE_PX`~~ — **개명**, 그리고 이제 `_chip_offset` 이 유일한 독자다 |
+| ~~`BERTH_FX_SEC`~~ | — | **2026-08-18 선착장과 함께 삭제.** 잴 함대가 없다 |
 | `PANEL_FADE_SEC` | `0.25` | |
 | `HOLD_OUTCOME_SEC` | `0.80` | 셸이 다음 섬을 열기 전에 멈춰 있는 시간 |
 | `HOLD_BEAK_SEC` | `0.50` | **9번의 물드는 시간이기도 하다. 별도 상수를 두지 않는다** |
-| `WATER_MARGIN_TILES` | ~~`1`~~ **`5`** | 바깥을 `COL_WATER` 로 칠하는 폭 ⇒ ~~680~~ **2436칸 (58 × 42)**. ⚠ **`boat-and-landing` 이 올렸고, 흔들림 때문이 아니다**: `ZOOM_MIN` 에서 보이는 월드가 지도보다 양쪽 4.45칸씩 넓어서, 여백이 1이면 줌 아웃하는 순간 맨바닥이 드러난다 |
+| `WATER_MARGIN_TILES` | ~~`1`~~ ~~`5`~~ **`12`** | 바깥을 `COL_WATER` 로 칠하는 폭 ⇒ ~~680~~ ~~2436~~ **4032칸 (72 × 56)**. ⚠ **두 번 올랐고 둘 다 흔들림 때문이 아니다**: `boat-and-landing` 이 5로 올린 것은 그때 `ZOOM_MIN` 에서 보이는 월드가 지도보다 양쪽 4.45칸씩 넓어서였고, `plan-then-watch` 가 12로 올린 것은 `ZOOM_MIN` 이 **0.45** 로 내려가 그 틈이 **11.6칸**이 되어서다. 뒤처지면 `net_camera` 의 `_painted_area_covers_the_viewport` 가 붉어진다 |
 | `FX_MAX_COUNT` | `256` | **스쳐 가는 서랍만의 상한.** 몸에 붙은 것은 여기 안 산다 — B 절 |
 | `FX_GAIN` | `[1.0] × 12` | **12개 각각의 강도.** 아래 |
 
@@ -1106,16 +1149,16 @@ flash threshold** 이고, 그것은 화면이 아니라 **시야 10도 안의 �
 | 4 | `_hold_sec` 없이 바로 다음 섬을 연다 | 승리 프레임 뒤 `battle` 이 **같은 객체로 남아 있다**, 그리고 `HOLD_OUTCOME_SEC` 뒤에는 **바뀐다** (바닥) |
 | 5 | 링 반지름을 상수로 박는다 | 사자(1.5타일=60px)와 원거리 셀(1.0타일=40px)이 **다른 반지름**이다 |
 | 5 | 광역 링을 몸 위에 그린다 | 모든 `area ring.seq` 가 **모든 `body.seq` 보다 작다** |
-| 6 | 적이 9마리일 때도 선을 그린다 | **합성 전투** — 살아 있는 적을 9로 만들면 `_paint_target_line` 호출이 **0**, 6마리면 **6** (⚠ 지금 세 섬의 최대는 6이라 이 상한은 플레이에서 안 문다) |
+| 6 | 상한을 넘겨도 선을 그린다 | ⚠ **2026-08-18 `TARGET_LINE_MAX_COUNT` 14 로 재측정.** 양 끝: 살아 있는 적이 정확히 **14** 마리면 `_paint_target_line` 이 **14번** 불린다 — **이 쪽은 합성이 아니라 실제 섬의 첫 프레임이다** — 그리고 **15** 마리면 **0번**인데, 그 쪽은 여전히 합성이고 그렇게 적혀 있다 |
 | 6 | 선을 몸 위에 그린다 | 모든 `target_line.seq` 가 **모든 `body.seq` 보다 작다** |
 | 7 | `LAND` 를 안 낸다 | 하선 프레임의 `events` 에 병사 수만큼 `LAND` 가 있다 |
 | 7 | 링이 안 자란다 | 첫 프레임 반지름 **0에 가깝고**, 마지막 프레임이 `LAND_RING_R_PX` 의 **90% 이상** |
-| 8 | 셸이 `load_soldier` 의 bool 을 다시 버린다 | 거절되는 키를 눌러 **1프레임 pump** 후 `_paint_key` 의 `bg` 가 성공과 **다르다** |
+| 8 | 셸이 `commit()` 의 bool 을 다시 버린다 | `boats` 가 빈 채로 시작을 눌러 **1프레임 pump** 후 `_paint_button` 의 `bg` 가 성공과 **다르고**, 흔들림이 0 초과이며 `REFUSE_SHAKE_PX` 이하다 |
 | 8 | 흔들림을 `rect` 에만 싣는다 | 거절 프레임에서 `rect.position` 과 글자 `at` 이 **같은 오프셋만큼** 움직였다 |
 | 9 | `note_beak` 를 안 부른다 | 고른 프레임의 그 줄 `bg` 와 `HOLD_BEAK_SEC` 뒤 프레임의 `bg` 가 **다르고**, `note_beak` 를 빼면 **두 프레임이 같아진다** |
 | 9 | `apply_beak` 를 hold 전에 부른다 | 고른 직후 프레임에 `run.state()` 가 **여전히 REWARD** 이고 `army.has_beak[picked]` 가 **여전히 0** |
 | 10 | 페이드를 건너뛰고 꽉 찬 알파로 뜬다 | 첫 프레임 `_paint_panel` 알파 **<** 마지막 프레임 알파 **==** `COL_PANEL_BG.a` |
-| 10 | hold 동안 입력을 안 막는다 | outcome hold 중에 1키를 눌러도 `battle.pending.size()` 가 **안 는다** |
+| 10 | hold 동안 입력을 안 막는다 | ⚠ **2026-08-18 재구동**: 1/2 키가 없어져서 outcome hold 중에 **시작 버튼**을 누르고 `battle.committed()` 가 **여전히 거짓**인지 본다 — sim 이 가진 상태다 |
 | 11 | 흔들림을 `+=` 로 누적한다 | `SHAKE_SEC` 뒤 `field_view.position` 이 **정확히 (0,0)**, 그리고 최대 오프셋 ≤ `SHAKE_MAX_PX` |
 | 11 | **세기가 피해에 비례하지 않는다 (바닥)** | 데미지 2와 데미지 4의 최대 오프셋이 **서로 다르고**, 각각 `dmg × SHAKE_PER_DAMAGE_PX × 0.8` **이상** |
 | 11 | 부두 클릭을 흔들림만큼 안 뺀다 | 흔든 프레임에 **그려진** 부두 사각형의 중심을 클릭하면 `battle.boats.size()` 가 는다 |
@@ -1141,7 +1184,8 @@ flash threshold** 이고, 그것은 화면이 아니라 **시야 10도 안의 �
 > **반박 상자 — 초안의 「그 항목의 훅이 한 번도 안 불린다」 한 줄은 열둘을 덮는 것처럼 읽히면서 실제로는
 > 둘만 덮었다.**
 > 같은 문서가 항목별로 **「새 잎 없음」이라고 못 박은 것이 3①③ · 8 · 9 · 10 · 11 · 12 — 일곱이다.**
-> 이것들이 타는 훅(`_paint_body` · `_paint_key` · `_paint_berth` · `_paint_roster_entry` · `_paint_panel`)은
+> 이것들이 타는 훅(`_paint_body` · `_paint_button` · `_paint_roster_entry` · `_paint_panel` —
+> ⚠ 2026-08-18 전까지 이름이 `_paint_key` · `_paint_berth` 였다)은
 > **몸과 키와 판넬이 있는 한 매 프레임 무조건 불린다.** 그리고 **4 · 5 · 7 은 `_paint_ring` 하나를
 > 공유**하므로 `FX_GAIN[4] = 0` 이어도 5와 7이 계속 부른다. 실제로 무는 것은
 > **1(`_paint_shot`) · 2②(`_paint_spark`) · 6(`_paint_target_line`) 셋이다.**
@@ -1159,7 +1203,7 @@ flash threshold** 이고, 그것은 화면이 아니라 **시야 10도 안의 �
 | 5 | `AREA` 가 만드는 `_paint_ring` 호출 **0** |
 | 6 | `_paint_target_line` 호출 **0** |
 | 7 | `LAND` 가 만드는 `_paint_ring` 호출 **0** |
-| 8 | `_paint_key` 의 `bg` == `Look.COL_BUTTON`, `rect` == `Look.key_rect_px(slot)` |
+| 8 | `_paint_button` 의 `bg` == `Look.COL_START`, `rect` == `Look.start_rect_px()` |
 | 9 | 그 줄의 `bg` == `Look.COL_BUTTON` |
 | 10 | 첫 프레임 `_paint_panel` 알파 == `COL_PANEL_BG.a` |
 | 11 | `field_view.position` == `(0, 0)` |

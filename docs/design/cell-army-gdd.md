@@ -185,6 +185,30 @@ decisions, and you exercise those four once every 3–5 seconds.**
 
 ### The boat — **five per trip, ~~every 3 seconds~~, and the crossing takes time** (user, 2026-08-17)
 
+> ### ⚠⚠ **EVERY NUMBER IN THIS SECTION IS DEAD — 결정 14R (the user, 2026-08-18)**
+>
+> > **「배는 너무 곁다리 느낌이다 그냥 바다위에 초록색 지역에 내가 설계한 몬스터들을 무한으로 배를 띄워서
+> > 보낼 수 있는걸로하고 싶어」**
+>
+> **Boats are unlimited and free.** There is no fleet count, no capacity, no interval, no queue and no
+> launch click. **One drag creates one boat carrying one soldier**, it round-trips, and it ceases to exist
+> when it gets home. ⇒ **The cap moved off the boat and onto how many monsters you own** — 10 at the start,
+> 13 after island 1. `Rules.BOATS`, `boat_count`, `cap_of`, `boat_name_of` and `boat_speed_of` are deleted
+> from the code; one `Rules.BOAT_SPEED` survives.
+>
+> ⚠ **This box governs the whole section AND the two later restatements of its arithmetic** — one in the
+> 「hold back」 refutation and one in the next-session list. *A correction pass that only fixes the row
+> someone is arguing about* is this repo's named failure, so all three carry the strike.
+>
+> ⚠ **곁다리 came back a THIRD time, and it is pointed somewhere new.** The first two were *the boat is a
+> side-thing in the fiction*, and the boat round stopped that (`boat-invasion`'s `Accepted` line). The third
+> is *the boat is a resource I have to manage*, and the answer is **less boat, not more.**
+>
+> ⚠⚠ **And the brake that all this arithmetic was standing in for is DELIBERATELY ABSENT.** The user was
+> told, in as many words, that infinite + free makes 「send everything to the nearest beach」 dominant, and
+> answered **「일단 빼고 만든 이후에 추가하자는 거임」**. **Nothing here licenses writing a cap.** The rejected
+> branch is `unlimited-boats-not-a-five-boat-cap`; the three candidate brakes are in `plan-then-watch`.
+
 ⚠ **"Every 3 seconds" was updated the same day — the "Updated" section just below is the live rule.**
 The capacity of five and the crossing time both survive intact.
 
@@ -241,7 +265,7 @@ per click" and the already-decided capacity of five.** The user did not say that
 - **The return trip is the rhythm.** A boat that never comes back makes a static puzzle; one that does makes
   a beat
 
-#### ⚠ But **2 boats × capacity 5 = 10 = the entire starting force**
+#### ~~⚠ But **2 boats × capacity 5 = 10 = the entire starting force**~~ ⚠⚠ **DEAD — 결정 14R.** There is no fleet and no capacity; see the box at the head of this section
 
 On the first island **two clicks land everyone.** The 6-second round trip only acquires a value after that.
 ⇒ **On the first island the boats do not limit throughput at all; they ask exactly one question — "which
@@ -482,8 +506,11 @@ arithmetic caught it.
 multiplication~~ — **all three went away with multiplication.** With no exponent there is nothing to ask
 about a cap or a crossover point.
 
-- **Whether a chest gives one artifact or one of three.** One is no decision; three puts a decision in the
-  resting square
+- ~~**Whether a chest gives one artifact or one of three.**~~ — **closed (user, 2026-08-18):**
+  ***"아티팩트 녗개중 선택"*** ⇒ **four come up and you take one.** Four, not three.
+  ⚠ **How large the pool is has NOT been decided** — a pool of exactly four means the choice is gone on
+  the second run. [The title and the map](title-and-map.md)'s *chest* section carries that arithmetic and
+  the screen
 
 ### ⚠ The other three the adversarial review found — **one is half closed**
 
@@ -526,7 +553,10 @@ specialties, where the identical sentence applies.**
 ⚠ **The 20% below is an input nothing in this document produces** — the live damage model gives per-soldier
 damage `A·E/(k²·d)`, which is 2.5 of 10 HP at `k`=10, and the "send everyone" table in this same file reads
 **"0 deaths."** So the paragraph's own premise contradicts the model two sections up, and it assumes eight
-islands when the map length is undecided and the first slice is three. ⇒ **Read 20% as a target the enemy
+islands — **and the map length is no longer undecided**: [the title and the map](title-and-map.md) fixed it
+at **four fight islands per run** (2026-08-18). ⇒ the exponent is **4**, not 8, so `0.8⁴ =` **41%**, and
+the 17% below is **more than twice as pessimistic as the real map.** (The paragraph itself is already void
+per the box beneath it.) ⇒ **Read 20% as a target the enemy
 tuning has to hit, not as a derived number.** The conclusion (a recovery path is needed) survives only if
 the target is met.
 
@@ -643,7 +673,7 @@ The user inverted the question: *"그냥 안 아끼고 다 소환하게 하면 �
 **The answer: only one thing is lost.** "When" and "who" drop out of the decision and **only "where"
 remains.**
 
-⚠ **A sentence that used to live here has since died**: *~~the landing-craft interval already physically
+⚠⚠ **결정 14R (2026-08-18) kills this paragraph too, and its conclusion got STRONGER, not weaker.** With boats unlimited and free, *nothing prevents "everything at once"* is no longer a side effect of a deleted interval — it is the shipped rule, and the probe measures the dominant plan as exactly that. **The brake is deferred on the user's own instruction** (「일단 빼고 만든 이후에 추가하자는 거임」). The arithmetic below is kept as the record of how the barrier was lost.
 prevents "everything at once"~~*. **Deleting the interval removed that barrier** — 2 boats × capacity 5 = 10
 = the entire starting force, and both can launch at t=0. ⇒ **Nothing prevents "everything at once" any
 more.** The fleet only becomes a limit once the army passes 10.
@@ -1396,7 +1426,7 @@ as `v1-sim`, and the current prototype was already written down as *"a reference
 ## What to do next session — **in order**
 
 1. ~~Pick the commitment limiter~~ — **decided: the fleet.** ~~The landing-craft interval~~ was replaced the
-   same day: **2 boats · capacity 5 · one leaves per click · 6-second round trip.** Neither a resource nor a
+   same day: **2 boats · capacity 5 · one leaves per click · 6-second round trip.** ⚠⚠ **And that was itself reversed on 2026-08-18 by 결정 14R — boats are unlimited, one soldier each, created by a drag. THE COMMITMENT LIMITER IS OPEN AGAIN and the user deferred picking it.** Neither a resource nor a
    cooldown was needed.
    ⇒ **Building it swappable is still the spec.** All of them differ by one or two constants.
    ⚠ **The numbers are now pinned, so this item is closed** — but the section *"the unit of the limit is the

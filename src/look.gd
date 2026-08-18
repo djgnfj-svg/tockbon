@@ -45,13 +45,25 @@ const GRID_H := 32
 
 ## `field_view`'s own `zoom` is a runtime float, not a constant — the wheel changes it. These are its
 ## bounds. Both ends measured against the 48 x 32 grid:
-##   ZOOM_MIN — at 0.5625 the visible world is exactly wide enough to show the full 1920 px map width
-##     (1280 / 0.5625 = 2275). Below 0.4 a 14 px body is under 6 px and unreadable.
+##   ZOOM_MIN — **0.45, lowered from 0.5625 by `plan-then-watch`** on the user's own sentence
+##     「조금 더 카메라를 뒤로 빼야 될」. RE-MEASURED, not adjusted: at 0.5625 the visible world was
+##     2275.6 x 1280.0 px against a 1920 x 1280 map, so the island filled the FULL screen height with
+##     **zero** vertical margin and `_clamp_cam` had a zero-length range to clamp y into. At 0.45 the
+##     visible world is 2844.4 x 1600.0, the island lands on x 208..1072 and y 72..648, and
+##     `_clamp_cam` centres BOTH axes. One tile is 18.0 px and the smallest body (ranged, 20 px
+##     across) is 9.0 px. Floor 0.40 — below it that body drops under 8 px, which is the row
+##     `net_camera` already carries. Ceiling 0.50 — above it the vertical margin disappears again,
+##     which is the framing the user asked to move back from.
+##     ⚠ Two other constants are derived from this number and BOTH moved with it —
+##     `WATER_MARGIN_TILES` and `CLIFF_FACE_WIDTH_PX`. Re-measure the whole set, never the one row
+##     being argued about.
 ##   ZOOM_MAX — at 1.0 one tile is 40 px, today's scale (never zoom IN past that — nothing is gained
 ##     and it breaks the "island fits on screen" survey read). Ceiling 1.5.
 ##   ZOOM_STEP — per wheel notch. Above 1.05 or a notch does nothing perceptible; below 1.4 or two
-##     notches cross the whole range.
-const ZOOM_MIN := 0.5625
+##     notches cross the whole range. ⚠ It is also the mitigation for an 18 px tile being a small drop
+##     target: the camera is unrestricted before the commit, so one notch puts a tile at 20.7 px and
+##     four at 31.5 px.
+const ZOOM_MIN := 0.45
 const ZOOM_MAX := 1.0
 const ZOOM_STEP := 1.15
 
@@ -93,10 +105,12 @@ const COL_BEAK := Color(1.0, 0.863, 0.451)
 const COL_HP_FULL := Color(0.400, 0.898, 0.451)
 const COL_HP_EMPTY := Color(0.118, 0.141, 0.141, 0.851)
 
-# Boats. The berth icon and the boat crossing the water are the same colour on purpose: the limit
-# is the picture, so the thing missing from the harbour must be recognisable as the thing at sea.
+# Boats. One tone for every hull, because after `plan-then-watch`'s 결정 14R nothing distinguishes
+# two boats: a boat exists between one drag and one round trip, and there is no fleet to tell apart.
+# ⚠ `COL_BERTH_EMPTY` died with the berths — there is no resource meter to empty, because the boat
+# stopped being a resource. The thing that visibly goes down is now the stack of soldiers standing at
+# the harbour: every one you drag away leaves its slot empty (`idle_soldier_offset_px`).
 const COL_BOAT := Color(0.851, 0.780, 0.600)
-const COL_BERTH_EMPTY := Color(0.302, 0.322, 0.341, 0.600)
 
 # P7 — a boat that has arrived and cannot unload is drawn waiting, blended toward this on a blink
 # rather than a flat tint, so a stalled boat never reads as merely "differently coloured."
@@ -117,6 +131,38 @@ const COL_PANEL_BG := Color(0.071, 0.090, 0.122, 0.941)
 const COL_BUTTON := Color(0.239, 0.341, 0.459)
 const COL_WIN := Color(0.549, 0.949, 0.600)
 const COL_LOSE := Color(1.0, 0.451, 0.420)
+
+## `plan-then-watch`'s two new HUD colours, and there are only two because everything else on those
+## screens already had a value. `COL_START` is the one press that ends the planning phase, so it is
+## deliberately NOT `COL_BUTTON` — the restart button in the panel is `COL_BUTTON`, and one tone
+## answering to two verbs is how a restart gets pressed by someone aiming at start.
+## `COL_SPEED_ON` marks the chip the ladder is currently sitting on; a resting chip is `COL_BUTTON`.
+const COL_START := Color(0.302, 0.541, 0.404)
+const COL_SPEED_ON := Color(0.945, 0.729, 0.290)
+
+## `title-and-map`'s four new colours, and there are only four because the title's own two boxes
+## already have tones that mean the right thing.
+##
+## ⚠ **시작하기 reuses `COL_START` and 종료 reuses `COL_BUTTON`, on purpose.** The rule this file
+## already carries — *one rectangle must not answer to two verbs* — has a second half: **the same verb
+## keeps the same tone.** 시작하기 and the fight's 시작 button are literally the same verb, so a third
+## green would be the same concept under two names.
+##
+## `COL_SLOT_OFF` is the one tone the title needs that nothing else can stand in for: a slot that does
+## not press. It is drawn at `PRESS_ALPHA_OFF` with no border and no hover, and it is deliberately a
+## NEUTRAL grey rather than a dimmed `COL_BUTTON` — a dark blue box reads as "a button in shadow".
+##
+## The three node tones differ in HUE as well as in shape and size, which is the whole point: Slay the
+## Spire's map is criticised for symbols that differ in neither, and that is the same failure shape the
+## user hit on the plan screen. See `title-and-map`, the map table.
+## ⚠ **None of the three is an existing constant re-typed.** They are near-neighbours of `COL_ALLY`,
+## `COL_WIN` and `COL_LOSE` in hue and deliberately not equal to them: a node is not a body and not a
+## verdict, and a value shared by two concepts diverges the first time one of them is tuned. What is
+## pinned is that the three differ from EACH OTHER — 210 deg, 105 deg and 5 deg apart.
+const COL_SLOT_OFF := Color(0.420, 0.420, 0.440)
+const COL_NODE_FIGHT := Color(0.373, 0.678, 0.941)
+const COL_NODE_CHEST := Color(0.545, 0.878, 0.471)
+const COL_NODE_BOSS := Color(0.933, 0.322, 0.290)
 
 # Combat juice. Seven, and every one of them is a colour no existing name can stand in for.
 # Items 8, 9, 4 and the shake margin deliberately REUSE what is already above — COL_WIN / COL_LOSE,
@@ -174,87 +220,471 @@ const HP_BAR_W_PX := 24.0
 const HP_BAR_H_PX := 3.0
 const HP_BAR_GAP_PX := 4.0
 
-## The hull (`boat-and-landing` stage 5, P2) — sized by the boat's OWN capacity, so the big boat and
-## the fast boat read apart without anyone reading a number. `_hull_rect` (field_view.gd) computes
-## `cap * BOAT_SLOT_PX + 2 * BOAT_HULL_PAD_PX`: the big boat (cap 4) comes out 124 px wide, the fast
-## boat (cap 2) 72 px — both wider than one 40 px tile, and 124 against 72 is unmistakable at a
-## glance. `HULL_BERTH_OFFSET_PX` is how far a SECOND hull at the same harbour is shifted sideways so
-## the two never overlap.
-const BOAT_SLOT_PX := 26.0            # >= 24 (a 14 px melee body plus air); <= 40 (stays under 3.5
-                                      # tiles for a 4-slot hull)
+## The hull. **Every hull is the same size now**, because `plan-then-watch`'s 결정 14R deleted the
+## capacity column: one drag makes one boat and it carries the one soldier that was dragged onto it.
+## `_hull_rect` (field_view.gd) computes `BOAT_SLOT_PX + 2 * BOAT_HULL_PAD_PX` = **46 px** wide.
+## ⚠ **The old 124 / 72 px arithmetic is gone with the axis it measured**, and so is
+## `HULL_BERTH_OFFSET_PX`: two hulls never share a harbour ANCHOR any more, because a boat is only
+## drawn once the plan is committed and it is moving from the first sub-step.
+const BOAT_SLOT_PX := 26.0            # >= 24 (a 14 px melee body plus air); <= 40 (or one hull is
+                                      # wider than 1.5 tiles and reads as terrain)
 const BOAT_HULL_PAD_PX := 10.0        # >= 4 (a visible gunwale); <= 20
 const BOAT_HULL_H_PX := 56.0          # > 40, taller than a tile (decided #8); <= 80
-## ⚠ MEASURED, not guessed: the two hulls are centred `HULL_BERTH_OFFSET_PX` apart, so they clear
-## each other only once the offset exceeds HALF of each hull's own width summed —
-## `(124 + 72) / 2 = 98`. A first value of 30 here (floor comment claiming ">= 28" against an actual
-## requirement of 98) shipped a 68 px overlap — 94% of the fast boat's own width — at every island's
-## OPENING frame, since `battle.setup` parks both boats at `start_harbour` before anything ever
-## launches. 110 clears it with 12 px of air.
-const HULL_BERTH_OFFSET_PX := 110.0   # >= 98 (98 = (124 + 72) / 2, the two hulls' own half-widths
-                                      # summed — anything under this overlaps); <= 160 (or the second
-                                      # hull walks off a narrow harbour's own coastline)
 
 
 # ---------------------------------------------------------------------------------------------
 # HUD — laid out in absolute viewport pixels
 # ---------------------------------------------------------------------------------------------
 
-const HUD_FONT_SIZE_PX := 18
-const HUD_TIMER_FONT_SIZE_PX := 24
+## ⚠ **Both sizes were raised by `plan-then-watch` and the reason is the user's own sentence**:
+## 「글자가 너무 많고 조금 더 단순하게 해줄래? 아니면 좀 UI를 크게 해서」. The answer was BOTH halves —
+## the screen dropped from six text items to three during a fight, and what is left is drawn bigger.
+const HUD_FONT_SIZE_PX := 22          # > 16 (unreadable against terrain at this contrast); <= 26 or
+                                      # 「적 %d」 runs off the right margin at 1060
+const HUD_TIMER_FONT_SIZE_PX := 30    # > HUD_FONT_SIZE_PX, or the clock stops being the loudest
+                                      # thing on screen; <= 36 or it collides with the enemy count
 const HUD_MARGIN_PX := 12.0
 
-## Remaining time, top centre.
+## Remaining time, top centre. The label is 「시간 %.1f」 and NOT 「남은 시간 %.1f」 — one word instead
+## of two, same meaning, and the word count is what the user asked to cut.
 const HUD_TIMER_POS_PX := Vector2(600.0, 38.0)
 
-## Two berth icons, top left, one per boat, STACKED vertically (`boat-and-landing` stage 4, P9 —
-## each box grew a label of its own, so two boxes side by side ran their labels into each other).
-## A berth drawn empty IS the resource meter — there is no separate bar anywhere. The label beside
-## each box is drawn through `HudView._paint_load`, reused rather than duplicated, at
-## `berth_rect_px(b).position + HUD_BERTH_LABEL_OFFSET_PX` — the SAME rect the box itself just used,
-## after any refuse-shake offset, so the two can never read two different boats.
-const HUD_BERTH_ORIGIN_PX := Vector2(16.0, 20.0)
-const HUD_BERTH_SIZE_PX := Vector2(30.0, 18.0)
-const HUD_BERTH_ROW_PX := 26.0            # box height 18 + an 8 px gap between boats
-const HUD_BERTH_LABEL_OFFSET_PX := Vector2(38.0, 14.0)   # to the right of the box, same row
+## ⚠ **The berth boxes and the 1/2 key boxes are DELETED, not moved.** Thirteen constants went with
+## them (`HUD_BERTH_*`, `berth_rect_px`, `HUD_KEY_*`, `key_rect_px`, `HULL_BERTH_OFFSET_PX`,
+## `COL_BERTH_EMPTY`, `BERTH_FX_SEC`) because `plan-then-watch` deleted the two things they drew: the
+## fleet as a resource, and the keyboard as the way soldiers reach the island.
 
-## The 1 / 2 key roster, bottom left, one box per summonable type.
-const HUD_KEY_ORIGIN_PX := Vector2(12.0, 640.0)
-const HUD_KEY_SIZE_PX := Vector2(150.0, 26.0)
-const HUD_KEY_GAP_PX := 6.0
-const HUD_KEY_TEXT_OFFSET_PX := Vector2(8.0, 19.0)
+## **The start button** — one large press, bottom LEFT, and the whole of the planning phase ends on
+## it. It is drawn only while `battle.committed()` is false: a button that cannot be pressed and is
+## still on screen is the 「well, while we're stopped…」 door the design closes on purpose.
+## ⚠ Bottom-left is not taste. At `ZOOM_MIN` the island occupies x 208..1072 and the speed chips take
+## the bottom RIGHT, so the bottom-centre band — where all three islands put `start_harbour`, and
+## therefore where the army you drag is standing — is left clear BY LAYOUT rather than by luck.
+const HUD_START_ORIGIN_PX := Vector2(24.0, 632.0)   # y >= 560 (or it floats in the middle of the
+                                      # island); y + HUD_START_SIZE_PX.y <= 720
+const HUD_START_SIZE_PX := Vector2(220.0, 64.0)     # strictly larger on BOTH axes than the key box
+                                      # it replaces (150 x 26); <= (320, 96) or it reaches the chips
+const HUD_START_TEXT_OFFSET_PX := Vector2(70.0, 42.0)   # > (0, HUD_START_FONT_SIZE_PX) — a glyph at
+                                      # the rect's own origin is a glyph that was never placed, and
+                                      # that floor is the half proving the label exists at all;
+                                      # x + label width <= 220 and y <= 64
+const HUD_START_FONT_SIZE_PX := 28    # > HUD_FONT_SIZE_PX; <= HUD_TIMER_FONT_SIZE_PX + 8
+
+## **The speed ladder**, bottom RIGHT — one chip per `Rules.SPEED_STEPS` entry, five of them, and the
+## pause is slot 0 of the same row rather than a widget of its own (미정 4). The chips are the ONLY
+## thing that can be pressed once the plan is committed.
+## Width check: 1060 + 5 * 36 + 4 * 5 = 1260 <= 1280. Height check: 648 + 40 = 688 <= 720.
+## ⚠ The ladder itself lives in `rules.gd` and NOT here — slot 0 is 0.0, `step` returns before
+## `_phase_clock`, and `elapsed` is the loss condition, so that table changes WHAT HAPPENS.
+const HUD_SPEED_ORIGIN_PX := Vector2(1060.0, 648.0) # x >= 1000 (clear of the start button with the
+                                      # island band between them); x + 5*w + 4*gap <= 1280
+const HUD_SPEED_SIZE_PX := Vector2(36.0, 40.0)      # >= (30, 30), a touchable chip; <= (48, 48)
+const HUD_SPEED_GAP_PX := 5.0         # >= 3 or two chips read as one bar; <= 10
+const HUD_SPEED_TEXT_OFFSET_PX := Vector2(11.0, 31.0)   # > (0, 0) and inside the chip: one digit at
+                                      # HUD_START_FONT_SIZE_PX is ~16 px wide, so 11 + 16 = 27 <= 36
+                                      # and the baseline at 31 <= 40
 
 ## Enemies left, top right. It has to survive onto the lose screen — the player must be able to
 ## see WHY they lost, and "the timer ran out with four alive" is a different loss to a wipe.
 const HUD_ENEMIES_LEFT_POS_PX := Vector2(1060.0, 38.0)
+
+## **The army standing at the harbour, before anything is sent** (`plan-then-watch`, P4) — this is
+## what the player drags, and it is drawn ON THE MAP rather than in a HUD strip because the user's
+## sentence is 「내가 내릴 수 있는 곳 위치에 딱 나서 … 끌어서 탁 놓으면」. Drawing it in a strip as well
+## would be the same fact under two names, which this file's own header forbids.
+##
+## The offsets are from the START HARBOUR's tile centre and they go UP, because a harbour sits on the
+## bottom row of all three islands and below it is off-map. Slot index is the SOLDIER ID, so a
+## soldier you drag away leaves its slot empty and the stack visibly shortens as the plan fills —
+## that is the "something on screen goes down" the last game died for the want of.
+## Geometry check with 13 soldiers: 7 columns spanning 6 * 34 = 204 px, centred by an origin.x of
+## -102, two rows at y -48 and -82. Against a start harbour at (24, 31) that is world x 878..1082,
+## y 1178..1212 — inside the 1920 x 1280 map with a body radius to spare.
+const IDLE_SOLDIER_PITCH_PX := 34.0   # >= 30 (a melee body is 0.35 * 40 * 2 = 28 px across, so
+                                      # anything smaller overlaps its neighbour); <= 48 or seven
+                                      # across is seven tiles wide and covers the harbour approach
+const IDLE_SOLDIER_COLS := 7          # >= 5 — thirteen soldiers in fewer than five columns is three
+                                      # rows and the stack walks off the bottom edge; <= 9 or the row
+                                      # is wider than eight tiles and reaches the neighbouring coast
+const IDLE_SOLDIER_ORIGIN_PX := Vector2(-102.0, -48.0)  # y <= -40, the stack sits ABOVE the harbour;
+                                      # abs(x) and abs(y) <= 3 * TILE_PX or it stops reading as *at*
+                                      # the harbour at all
+
+## **The ghost of a soldier that has been sent but has not left yet** (P7), drawn at its LANDING and
+## fanned by its index in `battle.boats` — which is the drop order. That fan is the only picture the
+## order gets, and it is the only claim the order can carry: with unlimited boats every one of them
+## departs on the commit frame, so 「어느 순서로」 decides FORMATION and nothing else.
+## ⚠ A ghost gets no colour of its own. It is `COL_ALLY` at `GHOST_ALPHA`, through `ghost_tint()`.
+const GHOST_FAN_PX := Vector2(9.0, 9.0)  # >= (6, 6) or two ghosts are one blob and the drop order
+                                      # has no picture at all; <= (14, 14) or thirteen ghosts span
+                                      # 168 px = 4 tiles and stop reading as ONE landing
+const GHOST_ALPHA := 0.55             # >= 0.35 — dimmer than that and the plan is invisible, which
+                                      # deletes this design's stated survival condition; <= 0.75 or
+                                      # a ghost is indistinguishable from a soldier already ashore
 
 
 # ---------------------------------------------------------------------------------------------
 # Panel — reward pick, win, lose, restart
 # ---------------------------------------------------------------------------------------------
 
-## Centred: (1280 - 560) / 2 = 360, (720 - 400) / 2 = 160.
-const PANEL_ORIGIN_PX := Vector2(360.0, 160.0)
-const PANEL_SIZE_PX := Vector2(560.0, 400.0)
+## Centred: (1280 - 560) / 2 = 360, (720 - 480) / 2 = 120.
+##
+## ⚠ **The panel grew 400 -> 480 px tall with the node map, and it is not taste.** A route through
+## `Rules.MAP_NODES` can step on `map_max_count_nodes_on_a_route()` = 3 count nodes, so the roster
+## reaches `10 + 3 * 3 = 19` soldiers against a capacity that used to be 14. `panel_view.roster_ids`
+## caps at `roster_capacity()` and drops the rest **silently**, so the overflow would have been five
+## soldiers the player can see nowhere and can never give the beak to.
+## Height check: `72 + 10 * (28 + 6) = 412 <= 480` and `420 + 48 = 468 <= 480`.
+const PANEL_ORIGIN_PX := Vector2(360.0, 120.0)
+const PANEL_SIZE_PX := Vector2(560.0, 480.0)
 
 const PANEL_TITLE_OFFSET_PX := Vector2(40.0, 44.0)
 const PANEL_TITLE_FONT_SIZE_PX := 28
 const PANEL_BODY_FONT_SIZE_PX := 18
 
-## The roster the player clicks to bolt the beak on. Two columns of seven = 14 slots, and the run
-## can hold at most 13 soldiers, so no entry is ever off the panel.
-## Width check: 40 + 240 + 24 + 240 = 544 <= 560. Height check: 72 + 7 * (28 + 6) = 310 <= 400.
+## The roster the player clicks to bolt the beak on. Two columns of **ten** = 20 slots, against a run
+## that can now field 19 soldiers (see PANEL_SIZE_PX above), so no entry is ever off the panel.
+## Width check: 40 + 240 + 24 + 240 = 544 <= 560. Height check: 72 + 10 * (28 + 6) = 412 <= 480.
 const ROSTER_ORIGIN_OFFSET_PX := Vector2(40.0, 72.0)
 const ROSTER_ENTRY_SIZE_PX := Vector2(240.0, 28.0)
 const ROSTER_ENTRY_GAP_PX := 6.0
 const ROSTER_COLUMN_GAP_PX := 24.0
 const ROSTER_COLUMNS := 2
-const ROSTER_ROWS := 7
+const ROSTER_ROWS := 10
 const ROSTER_TEXT_OFFSET_PX := Vector2(8.0, 20.0)
 
-## The restart / continue button. 320 + 48 = 368 <= 400, so it clears the roster block above it.
-const BUTTON_OFFSET_PX := Vector2(180.0, 320.0)
+## The restart / continue button. 420 + 48 = 468 <= 480, so it clears the roster block above it.
+const BUTTON_OFFSET_PX := Vector2(180.0, 420.0)
 const BUTTON_SIZE_PX := Vector2(200.0, 48.0)
 const BUTTON_TEXT_OFFSET_PX := Vector2(24.0, 32.0)
+
+
+# ---------------------------------------------------------------------------------------------
+# Pressable things — the set BOTH new screens share
+# ---------------------------------------------------------------------------------------------
+
+## ⚠ **This block exists because the last round failed on contact with a human.** The plan screen
+## shipped with a 10 px drag source and a drop zone at alpha 0.18, and the user could not work out how
+## to operate it at all (「뭐 어떻게 동작시키는지 전혀모르겠는데?」). So what is pressable now says so
+## with a SET of signals rather than one: size, a border, a hover that answers, and a press that dips.
+##
+## The numbers are shared by the title and the map on purpose. Two screens with two different "this
+## presses" vocabularies is two things to learn, and neither of them is the game.
+
+## How far outside its drawn edge a press still lands. Floor 4 — a slightly-off aim must still count;
+## ceiling 11 — the title's slot pitch is `88 + 24 = 112`, so a hit height of `88 + 2p` has to stay
+## under 112 and `p < 12`.
+const PRESS_HIT_PAD_PX := 8.0
+
+## The alpha pair, and **the RATIO is the rule rather than either absolute**: 1.0 / 0.30 = 3.3x.
+## `PRESS_ALPHA_OFF` floor 0.20 — under it a disabled thing is invisible rather than disabled, which
+## is a different sentence; ceiling 0.45 — over it, it stops reading as disabled at all. The failure
+## this pair is measured against is the drop tint at **0.18**, which the user read as terrain.
+const PRESS_ALPHA_ON := 1.0
+const PRESS_ALPHA_OFF := 0.30
+
+## The border is the "it presses" mark, and the hover is the border getting thicker.
+## ⚠ `PRESS_HOVER_BORDER_WIDTH_PX` must exceed `PRESS_BORDER_WIDTH_PX` by more than 2.0 — this file's
+## snap floor — or the hover changes nothing that reaches the screen. 3 -> 6 is a delta of 3.
+const PRESS_BORDER_WIDTH_PX := 3.0        # >= 2.0 (snap floor); <= 5
+const PRESS_HOVER_BORDER_WIDTH_PX := 6.0  # > PRESS_BORDER_WIDTH_PX + 2; <= 10
+const PRESS_HOVER_BRIGHTEN := 0.12        # >= 0.08; <= 0.25, over which the hover reads as a
+                                          # different colour rather than the same thing lit
+
+## ⚠ **0.10 and not 0.08.** The design's first draft wrote 0.08 and, in the same file, wrote that every
+## duration exceeds the five-frame floor of 0.084 s. Two sentences that kill each other; the number was
+## RAISED rather than the sentence deleted. Ceiling 0.20, over which the hover lags the cursor.
+const PRESS_HOVER_SEC := 0.10
+
+## The press dip. Swink's Game Feel puts input-to-response under 100 ms, which is why it is this short.
+## `PRESS_DOWN_SCALE` ceiling 0.98 — at a 360 px slot 0.98 is a 7.2 px inset and 0.99 is 3.6 px, which
+## reads as a wobble rather than a press; floor 0.92 or the slot visibly shrinks.
+const PRESS_DOWN_SEC := 0.10              # >= 0.084 (five frames); <= 0.15
+const PRESS_DOWN_SCALE := 0.96
+const PRESS_DOWN_DIM := 0.15              # >= 0.10; <= 0.30
+
+## The scene change into the map: it arrives out of the background colour instead of cutting.
+## Floor 0.20 — under it the fade reads as the hard cut it exists to remove; ceiling 0.60 or leaving
+## the title feels slow.
+const SCENE_FADE_SEC := 0.35
+
+
+# ---------------------------------------------------------------------------------------------
+# The title screen
+# ---------------------------------------------------------------------------------------------
+
+## The name, top left of centre. y floor 120 — a 72 px glyph needs its own height above the baseline;
+## y ceiling 280 or it collides with the slot block starting at 340.
+const TITLE_TEXT_POS_PX := Vector2(400.0, 200.0)
+
+## ⚠ **Larger than `TITLE_SLOT_FONT_SIZE_PX` by more than 16**, or the title stops being the loudest
+## thing on its own screen. Ceiling 96.
+const TITLE_FONT_SIZE_PX := 72
+
+## The three slots, stacked. x is `(1280 - 360) / 2 = 460` exactly; y ceiling 408, from
+## `y + 3 * 88 + 2 * 24 <= 720`. At 340 the block ends at 652 and the padded hit box at 660.
+const TITLE_SLOT_ORIGIN_PX := Vector2(460.0, 340.0)
+
+## ⚠ **Floor (220, 64) — the largest press in the game today (`HUD_START_SIZE_PX`), and no new press
+## is allowed to be smaller than the biggest one that already exists.** Ceiling (480, 120).
+const TITLE_SLOT_SIZE_PX := Vector2(360.0, 88.0)
+const TITLE_SLOT_GAP_PX := 24.0           # >= 12 or two slots read as one bar; <= 44 (from the origin
+                                          # arithmetic above)
+
+## ⚠ **> `HUD_TIMER_FONT_SIZE_PX` 30, which is today's largest glyph** — the design's first draft said
+## the largest was the start button's 28 and was simply wrong. Ceiling 56, or 「시작하기」 at roughly
+## 0.6 em a glyph overruns 360 px.
+const TITLE_SLOT_FONT_SIZE_PX := 40
+
+## ⚠ **Floor `> (0, TITLE_SLOT_FONT_SIZE_PX)`**: a glyph drawn at the rect's own origin is a glyph that
+## was never placed, and that floor is the half of the check proving the label exists at all.
+## `96 + ~200 = 296 <= 360` across, `58 <= 88` down.
+const TITLE_SLOT_TEXT_OFFSET_PX := Vector2(96.0, 58.0)
+
+## The background: cells drifting behind the menu, drawn by code. **No image file** — see the decision
+## "the body is a line drawn by code", which forbids a sprite here as much as in the fight.
+## ⚠ **The drift is `sin`/`cos` of the index and the age, with NO RNG**, the same reason `SHAKE_A_FREQ`
+## is a constant: a random drift cannot be measured, and this repo has already paid for that once.
+## The two frequencies are coprime-ish so nine cells do not march in step.
+const TITLE_CELL_COUNT := 9               # >= 5, under which the background is three dots rather than
+                                          # a drift; <= 16 or it competes with the slots
+const TITLE_CELL_RADIUS_PX := 14.0        # >= 8; <= 24
+const TITLE_CELL_SPEED_PX := 8.0          # px/s. >= 3 — under it nothing visibly moves over a title's
+                                          # dwell; <= 20 or it reads as gameplay
+const TITLE_CELL_ALPHA := 0.14            # >= 0.06 or there is no background at all; <= 0.30 or it
+                                          # ties `PRESS_ALPHA_OFF` and a drifting cell reads as a
+                                          # disabled button
+const TITLE_CELL_A_FREQ := 0.13
+const TITLE_CELL_B_FREQ := 0.19
+
+
+# ---------------------------------------------------------------------------------------------
+# The node map — EVERY KNOB THIS SCREEN HAS IS BETWEEN HERE AND THE NEXT BANNER
+# ---------------------------------------------------------------------------------------------
+#
+# Written to be changed by hand, one number at a time, without reading any other file. Six groups,
+# in the order you would tune them:
+#
+#   1. WHERE THE SEVEN CIRCLES SIT   MAP_NODE_POS_PX
+#   2. HOW BIG THEY ARE              MAP_NODE_R_PX · MAP_BOSS_R_PX
+#   3. WHICH OF THE FOUR STATES      MAP_NODE_PAST_SCALE · MAP_NODE_LOCKED_SCALE
+#      A CIRCLE IS IN                MAP_NODE_PAST_ALPHA   (+ PRESS_ALPHA_ON / _OFF, shared with
+#                                    the title screen, in the "Pressable things" block above)
+#   4. THE LINES BETWEEN THEM        MAP_LINE_*
+#   5. THE MARKS ON TOP              MAP_HERE_RING_* · MAP_BOSS_RING_* · MAP_GLYPH_* · MAP_PULSE_*
+#   6. THE BEATS (how long each      MAP_NODE_FADE_SEC · MAP_REVEAL_STEP_SEC · MAP_TRAVEL_SEC ·
+#      little animation takes)       MAP_CLEAR_FILL_SEC · MAP_HEAL_SEC
+#
+# ⚠ **The three node COLOURS are not here** — `COL_NODE_FIGHT` / `COL_NODE_CHEST` / `COL_NODE_BOSS`
+# live in the colours block near the top of this file, with every other colour in the game. One
+# concept, one place: a colour written in two blocks is a colour that diverges.
+#
+# ⚠ **A node is drawn in one of FOUR states, and every number in group 3 belongs to exactly one of
+# them.** The state machine itself is `map_view._look_of` and there is no second copy of it:
+#
+#   HERE    the node the army is standing on — full radius, full colour, wrapped by the here ring
+#   OPEN    a node the army may step onto next — full radius, full colour, white border, pulsing
+#   PAST    walked and finished with — MAP_NODE_PAST_SCALE radius, MAP_NODE_PAST_ALPHA
+#   LOCKED  not reachable from where the army stands — MAP_NODE_LOCKED_SCALE radius, no colour at
+#           all (`dimmed`), PRESS_ALPHA_OFF
+#
+# The four are told apart by SIZE, by BRIGHTNESS and by what is drawn on top — three channels, so
+# no one of them is carrying the read alone and a colour-blind player loses none of it. That is the
+# whole of the fix the user asked for with 「현재 위치 제대로 표현해야 되고」.
+
+## One centre per node, indexed by the node id in `Rules.MAP_NODES`. **Absolute viewport pixels.**
+##
+## ⚠ **The vertical arithmetic is what killed the previous draft's "160 px apart" rule**: five floors
+## at 160 px is 640 px of gaps, plus the boss's 56 and the bottom ring's 52 = 748 px against a 720 px
+## screen. The real minimum is **120 px**, because two hit circles are `48 + 48 = 96` across.
+## Margins, against the literals 1280 x 720: bottom `620 + 52 = 672`; top `110 - 64 = 46`;
+## sides `470 - 48 = 422` and `810 + 48 = 858`.
+##
+## A `const` Array of `Vector2` literals — **measured on 4.7.1 before it was written**, because the
+## packed form is a parse error and this repo has been bitten by the const-expression rules twice.
+## It is read-only with no element typing, so `map_node_pos_px` casts.
+const MAP_NODE_POS_PX := [
+	Vector2(640.0, 620.0), Vector2(470.0, 500.0), Vector2(810.0, 500.0),
+	Vector2(470.0, 380.0), Vector2(810.0, 380.0), Vector2(640.0, 250.0),
+	Vector2(640.0, 110.0),
+]
+
+## Drawn radii, and they are the radius of a node in its BIGGEST state (HERE or OPEN). The two
+## scales below shrink it for the other two. The boss is the biggest thing on the map by construction.
+const MAP_NODE_R_PX := 40.0               # >= 28, under which a glyph inside the node draws at under
+                                          # 2 px strokes; <= 52, since 2 * 52 = 104 against a 120 px
+                                          # vertical gap leaves 16 px and two nodes touch
+const MAP_BOSS_R_PX := 56.0               # > MAP_NODE_R_PX; <= 70, from 56 + 48 = 104 < 140
+
+## **Size is the second channel that says which of the four states a node is in**, and it is a
+## channel on purpose: brightness alone is one signal, and one signal is what the user could not
+## read at rest. Both are FRACTIONS of the radius above — HERE and OPEN have no entry here because
+## they are drawn at the full radius, which is what keeps `map_node_hit_radius_px` a single number.
+##
+## AT MAP_NODE_R_PX = 40 THESE ARE 34.4 px AND 30.0 px, against 40.0 px for a node on offer.
+## At MAP_BOSS_R_PX = 56 they are 48.2 px and 42.0 px.
+##
+##   MAP_NODE_PAST_SCALE   raise it toward 1.0 and a node you have already walked stops being
+##                         distinguishable from one you may walk next; drop it toward the locked
+##                         scale and "walked" and "cannot reach" become one picture.
+##   MAP_NODE_LOCKED_SCALE raise it and the map flattens into seven identical circles — the defect
+##                         this pair exists to remove; drop it and a locked node is a dot whose
+##                         glyph no longer fits inside it (the glyph does NOT shrink with the node,
+##                         deliberately: a reward you cannot reach yet is still a reward you have to
+##                         be able to read, because reading it is how you choose the route).
+const MAP_NODE_PAST_SCALE := 0.86         # > MAP_NODE_LOCKED_SCALE + 0.08; <= 0.94
+const MAP_NODE_LOCKED_SCALE := 0.75       # >= 0.62 — under it the widest glyph (1.08 x
+                                          # MAP_GLYPH_R_PX = 22.7 px) no longer fits inside
+                                          # 40 x scale; <= 0.86, or the size channel says nothing
+
+## **Brightness is the third channel.** A walked node keeps its HUE — you must be able to see what
+## the place you came through was — and sits between a node on offer (`PRESS_ALPHA_ON`, 1.0) and one
+## out of reach (`PRESS_ALPHA_OFF`, 0.30, and with its colour taken away entirely by `dimmed`).
+const MAP_NODE_PAST_ALPHA := 0.62         # >= 0.45, or a walked node is confused with a locked one;
+                                          # <= 0.85, or it is confused with a node on offer
+
+## **The you-are-here ring — this is the mark that answers 「지금 내가 어디 있나」.** It has to sit
+## OUTSIDE the node it marks or it hides inside it, and it is the only closed ring on the screen that
+## is not part of the boss, which is what makes it unambiguous rather than merely visible.
+## ⚠ Before the first node is entered there is no ring at all, and that is correct: the army has not
+## landed anywhere yet, and a ring drawn then would say "you are here" about a place you are not.
+const MAP_HERE_RING_R_PX := 52.0          # > MAP_NODE_R_PX; <= 68, from 68 + 48 = 116 < 120
+const MAP_HERE_RING_WIDTH_PX := 6.0       # >= 4 — at 2 px this ring is a hairline and the one thing
+                                          # on screen saying where you are stops carrying; <= 8, over
+                                          # which it swallows the node it is meant to point at
+
+## The boss's nested inner rings. ⚠ **Its own constant and NOT `MAP_HERE_RING_WIDTH_PX` reused.**
+## They were one number until this round, so thickening the you-are-here ring silently thickened the
+## boss as well — two concepts sharing a knob is exactly what stops a person tuning either.
+const MAP_BOSS_RING_WIDTH_PX := 5.0       # >= 2.0 (snap floor); <= MAP_BOSS_RING_STEP_PX - 4, or two
+                                          # neighbouring rings' strokes touch and read as one band
+
+## How many straight segments a drawn circle is built from. One number for the ring, the node outlines
+## and the boss's nested rings, so a circle cannot be smooth in one place and faceted in another.
+const MAP_RING_SEGMENTS := 32             # >= 16, under which a 56 px circle visibly has corners;
+                                          # <= 64, over which the outlines cost more than they show
+
+## The three line weights, and they are three because a line says one of three things: walked,
+## choosable, neither. **Travelled must be thicker than choosable and choosable than dim**, each by
+## more than the 2.0 px snap floor, or two of the three are the same picture.
+##
+## ⚠ **PAST WAS 8.0 AND THE SENTENCE ABOVE WAS FALSE OF IT.** `8 - 6 = 2` is the snap floor exactly,
+## not more than it, and its own inline comment said only `> MAP_LINE_OPEN_WIDTH_PX` while its
+## sibling one line down said `+ 2` — the fix applied to one value and not to the other, which is
+## this repo's own named shape. Measured on the shipped frame before it moved: three pale lines and
+## no way to say which was the road taken. At 9.0 both steps are 3.0 px.
+const MAP_LINE_PAST_WIDTH_PX := 9.0       # > MAP_LINE_OPEN_WIDTH_PX + 2; <= 12
+const MAP_LINE_OPEN_WIDTH_PX := 6.0       # > MAP_LINE_DIM_WIDTH_PX + 2; <= 8
+const MAP_LINE_DIM_WIDTH_PX := 3.0        # >= 2.0; <= 4
+
+## The same three, on the brightness channel. Ordered the same way and for the same reason: the
+## width ladder carries most of the read, and these must never invert it.
+const MAP_LINE_PAST_ALPHA := 1.0          # >= MAP_LINE_OPEN_ALPHA; <= 1.0
+const MAP_LINE_OPEN_ALPHA := 0.9          # > MAP_LINE_DIM_ALPHA + 0.3; <= MAP_LINE_PAST_ALPHA
+const MAP_LINE_DIM_ALPHA := 0.25          # >= 0.15, under which the unwalked map is invisible and
+                                          # "the whole map is always visible" dies; <= 0.45
+
+## The pulse on a node you may step onto. On an otherwise still screen it is the ONLY motion saying
+## "here", which is why it is pinned at both ends: it is never zero, and it never exceeds its radius.
+## ⚠ Xbox Accessibility Guideline 118 forbids flashing above roughly 3 per second; this is 1.1/s.
+const MAP_PULSE_SEC := 0.9                # >= 0.5 or it flickers; <= 1.4 or it is not read as motion
+const MAP_PULSE_R_PX := 4.0               # >= 2.0 (snap floor), and +-4 on a 40 px radius is 10%, the
+                                          # smallest change that reads; <= 8 or a pulsing node reaches
+                                          # its neighbour's hit circle
+
+## The reveal, floor by floor from the bottom. **This is what teaches the map's direction**, and it is
+## what the design uses INSTEAD of a sentence on screen.
+## ⚠⚠ `MAP_REVEAL_STEP_SEC` is deliberately BELOW the five-frame floor and it is not an oversight: it
+## is the offset BETWEEN beats, not a beat. The beat is `MAP_NODE_FADE_SEC`, and that one is above the
+## floor. Total `0.06 * 4 + 0.18 = 0.42 s`.
+const MAP_NODE_FADE_SEC := 0.18           # >= 0.084 (five frames); <= 0.40
+const MAP_REVEAL_STEP_SEC := 0.06         # >= 0.03, under which seven nodes appear in 0.21 s and the
+                                          # direction is not taught; <= 0.12 or the reveal is a wait
+
+## The ring walking the edge to the node just chosen, before the island opens.
+## ⚠ **Cut straight to the island and the map's work is invisible** — the travel IS the progress
+## readout, and the shell holds for exactly this long so that it plays.
+const MAP_TRAVEL_SEC := 0.45              # >= 0.25 or the ring teleports; <= 0.70 or it is a wait
+
+## The node just won filling in, and the army's 「힘」 number climbing after a chest.
+## ⚠ `MAP_HEAL_SEC`'s floor is 0.30 because the number has to be WATCHED climbing: a chest is the only
+## node in this round that changes state without a fight, so without the climb, pressing it and not
+## pressing it look identical on screen.
+const MAP_CLEAR_FILL_SEC := 0.25          # >= 0.084; <= 0.50
+const MAP_HEAL_SEC := 0.60                # >= 0.30; <= 1.00
+
+## The glyph inside a node — what that node PAYS. Without it the two nodes on a floor are identical
+## to the pixel, and the fork has nothing to choose between.
+##
+## ⚠ **RAISED 13 -> 21 because 13 did not work**, and the failure was not subtle: the reward was
+##「a few pixels of line art inside a 40 px circle」 and could not be told apart at all. The three
+## shapes at 21 px, measured rather than estimated (`map_view._glyph_points` builds them):
+##   COUNT (cells)  three squares 11.8 px on a side, 16.8 px apart, spanning 22.7 px out
+##   BEAK           a triangle 36.5 px across the base and 31.5 px tall
+##   HEAL (chest)   a cross 42 px across both ways
+## At 13 those were a 7.3 px square, a 22.6 px triangle and a 26 px cross.
+##
+## ⚠ **It does NOT scale with the node.** A locked node shrinks to `MAP_NODE_LOCKED_SCALE` and its
+## glyph does not, because what a place pays is how you choose the route TO it — shrinking the answer
+## on the nodes you are choosing between is the one place it must not shrink.
+const MAP_GLYPH_R_PX := 21.0              # >= 12 — under it the three COUNT squares fall to 6.7 px
+                                          # and a 3 px stroke fills them solid, which is the defect
+                                          # this number was raised to fix; <= 26, from the widest
+                                          # glyph (1.08 x this, plus half a stroke) having to fit
+                                          # inside the SMALLEST drawn node, 40 x MAP_NODE_LOCKED_SCALE
+const MAP_GLYPH_WIDTH_PX := 3.0           # >= 2.0 (snap floor); <= 5 — half of a COUNT square's
+                                          # 11.8 px side, over which three squares read as three
+                                          # blobs
+
+## **How present the glyph is in each of the four states — the INK's own ladder, not the fill's.**
+##
+## ⚠ **These two are new because reusing the fill's numbers shipped an unreadable glyph.** The ink is
+## `COL_PANEL_BG`, a dark tone drawn ON the node so the reward reads as cut out of it — and the fill
+## it is cut out of gets DIMMER as the state gets colder. So handing the ink the fill's own alpha
+## darkens both sides of the same contrast at once, and the two converge instead of separating.
+## Measured on the shipped frame: a LOCKED glyph at `PRESS_ALPHA_OFF` 0.30 against a fill also at
+## 0.30 came out at **1.3 : 1**, and on the opening frame six of the seven nodes are LOCKED — which
+## is the whole of the user's 「what a node gives cannot be told apart」.
+##
+## HERE and OPEN have no entry here: they are drawn at `PRESS_ALPHA_ON` and the fill under them is
+## opaque, which already measures 5.2 : 1.
+##
+## ⚠ **The ratios these buy are PLAIN Rec.709 luminance ratios and NOT WCAG's offset form**, and
+## that is arithmetic rather than a lowered bar: the ink's own luminance is 0.088 and a LOCKED fill
+## over the clear colour is 0.328, so WCAG's `(L+0.05)` form tops out at **2.7 : 1 with the glyph
+## fully opaque**. 3 : 1 is not reachable on this pair without changing the ink or the fill, and a
+## floor nothing can pass is not a floor. `net_map` pins the plain ratio at 1.8 and measures 2.5
+## (PAST) and 2.0 (LOCKED) at the values below.
+const MAP_GLYPH_PAST_ALPHA := 0.80        # >= 0.70 — under it a walked node's reward drops under the
+                                          # 1.8 ratio; <= 1.0. It is deliberately ABOVE
+                                          # MAP_NODE_PAST_ALPHA 0.62: the node dims, the answer on it
+                                          # does not
+const MAP_GLYPH_LOCKED_ALPHA := 0.75      # >= 0.65 (same floor, against the dimmer LOCKED fill);
+                                          # <= 1.0. ⚠ It does NOT track PRESS_ALPHA_OFF and must not
+                                          # be folded back into it — that sharing is what shipped the
+                                          # defect. What a place PAYS is how the route is chosen
+                                          # BEFORE it can be walked, so it is the one thing on a
+                                          # locked node that stays readable
+
+## The boss, drawn as three nested rings on top of its circle. Their THICKNESS is
+## `MAP_BOSS_RING_WIDTH_PX`, up beside the you-are-here ring it used to share a constant with.
+const MAP_BOSS_RINGS := 3                 # exactly 3 — the design's "three nested circles"
+const MAP_BOSS_RING_STEP_PX := 14.0       # >= 6 or three rings are one thick ring; <= 18, from
+                                          # 56 - 2 * 18 = 20 > 0
+
+## 「병사 %d · 힘 %.0f」, top left. ⚠ **This is the only data on the map screen**, because
+## `hud_view._draw` returns on `battle == null` and draws nothing here at all — without it there is no
+## way to answer "what am I short of" from the screen, which is the whole question the fork asks.
+const MAP_ARMY_POS_PX := Vector2(24.0, 44.0)   # y >= MAP_ARMY_FONT_SIZE_PX (a baseline at 0 is off
+                                          # screen); x + text width <= 470 - 48 = 422, clear of the
+                                          # leftmost node column
+const MAP_ARMY_FONT_SIZE_PX := 26         # > HUD_FONT_SIZE_PX 22 — it is the only readout on this
+                                          # screen; <= 30
+
+## Kind -> how many sides its shape has, indexed by `Rules.NodeKind`: 0 is a circle, 4 a diamond.
+## ⚠ **A TABLE and not a branch in `map_view`.** Adding the elite one day then costs `rules.gd` plus
+## this line and **no view edit**; written as a branch it costs a view edit forever after.
+const MAP_NODE_SIDES := [0, 4, 0]
 
 
 # ---------------------------------------------------------------------------------------------
@@ -348,10 +778,17 @@ const AREA_RING_WIDTH_PX := 3.0
 ## nor Bad North draws any line at all — Riot explicitly deleted its "cloud of visual effects and
 ## particles". Hence two narrowings: one side only, and a hard count above which none are drawn.
 const TARGET_LINE_WIDTH_PX := 1.0
-const TARGET_LINE_MAX_COUNT := 8      # ⚠ THIS NEVER BITES IN PLAY. The three islands hold 4, 6 and 5
-                                      # enemies, so the screen tops out at 6 lines and the net that
-                                      # measures this builds a SYNTHETIC fight. Calling an
-                                      # unreachable guard a guard is how the next person trusts it
+const TARGET_LINE_MAX_COUNT := 14     # ⚠ **RAISED 8 -> 14, and it now bites for the first time.**
+                                      # `plan-then-watch` stage 4 put 8 · 12 · 14 enemies on the
+                                      # three islands; at 8 this guard drew ZERO intent lines until
+                                      # 4 and 6 of them were dead on islands 2 and 3 — the OPENING
+                                      # of the fight, which is exactly the phase where the hand
+                                      # cannot move and reading is the whole activity. 14 is the
+                                      # largest island's count, so every fight opens with its lines
+                                      # on. ⚠ **It is a FIRST value and verify-look scores it**: if
+                                      # 14 lines read as noise it comes back down, and `combat-juice`
+                                      # records the measurement. Floor: the largest island's enemy
+                                      # count, or the guard is back to hiding the opening
 
 ## 7 — one ring under each soldier as it steps off the boat. The five land on ADJACENT tiles, because
 ## the free-tile search is a BFS out of the dock. Radius is pinned to exactly half a tile: 20 * 2 =
@@ -369,18 +806,26 @@ const ROUTE_WIDTH_PX := 3.0
 const TARGET_RING_R_PX := 18.0        # >= 12; <= 20 or two adjacent rings would overlap
 
 ## The fleet as a picture (`boat-and-landing` stage 5). `CLIFF_FACE_WIDTH_PX` is P10's seaward-edge
-## line; at `ZOOM_MIN` it is 2.25 px, so the floor of 3 is what it has to clear to still read zoomed
-## out. `HULL_WAIT_BLINK_SEC` is P7's stalled-boat blink — a full on/off cycle, not a half.
-const CLIFF_FACE_WIDTH_PX := 4.0      # >= 3 (2.25 px at ZOOM_MIN); <= 8
+## line. ⚠ **RE-MEASURED when `ZOOM_MIN` fell to 0.45**: the old 4.0 drew at 2.25 px at the old
+## `ZOOM_MIN` and would draw at **1.8 px** at the new one, under this file's own 2.0 px snap floor.
+## 5.0 puts it back at exactly 2.25 px — the value the old floor was derived from in the first place.
+## `HULL_WAIT_BLINK_SEC` is P7's stalled-boat blink — a full on/off cycle, not a half.
+const CLIFF_FACE_WIDTH_PX := 5.0      # >= 5 (2.25 px at the new ZOOM_MIN); <= 8
 const HULL_WAIT_BLINK_SEC := 0.5      # >= 0.3 (under 5 frames at 60fps is unseen); <= 1.0
 
-## 8 — summon feedback, inside 100 ms because that is Swink's bound on input-to-response in a
+## 8 — press feedback, inside 100 ms because that is Swink's bound on input-to-response in a
 ## real-time game. ⚠ The refusal shake rides BOTH the box rect and the glyph position with the same
 ## offset: shake only the box and the text walks out of it, shake only the text and the box sits
 ## still, which reads as nothing having shaken.
-const KEY_FX_SEC := 0.18
-const KEY_REFUSE_SHAKE_PX := 4.0
-const BERTH_FX_SEC := 0.25
+##
+## ⚠ **Renamed, not re-purposed.** `KEY_FX_SEC` / `KEY_REFUSE_SHAKE_PX` were named for the 1/2 keys
+## `plan-then-watch` deletes; the effect they drive is now the START BUTTON's refusal — pressing
+## start with nothing sent. `BERTH_FX_SEC` is deleted outright with the berths.
+## ⚠ `REFUSE_SHAKE_PX` now has exactly ONE reader (`hud_view._chip_offset`), because `_berth_offset`
+## was the second one and it is gone. Deleting the start-button shake therefore deletes this
+## constant's last reader, which is why the shake is pinned at BOTH ends rather than only above.
+const CHIP_FX_SEC := 0.18
+const REFUSE_SHAKE_PX := 4.0
 
 ## 9 and 10 — the holds, and the panel rising out of nothing rather than snapping to full alpha.
 ## ⚠ HOLD_OUTCOME_SEC IS A PRECONDITION FOR ITEM 4, not a flourish. Today the shell opens the next
@@ -411,13 +856,20 @@ const SHAKE_MAX_PX := 6.0             # also the width of the bare band a shake 
 const SHAKE_A_FREQ := 61.0            # deterministic `sin`: a random shake cannot be measured
 const SHAKE_B_FREQ := 47.0
 
-## At `ZOOM_MIN` the visible world is 2275 px wide against a 1920 px map — 4.45 tiles of bare ground
-## on each side even before any shake. The terrain loop runs this many tiles wider on every side and
-## paints the outside with COL_WATER DIRECTLY — `terrain_colour_of_char` takes a legend character and
-## there is no legend outside the grid, so inventing one would put the island legend in two places.
-## `boat-and-landing` raised this from 1 (which only had to cover the shake on a grid that filled the
-## viewport exactly) to 5, which covers the zoomed-out camera as well.
-const WATER_MARGIN_TILES := 5         # 58 x 42 = 2436 tiles painted, up from the grid's own 1536
+## ⚠ **RE-MEASURED with `ZOOM_MIN`, and the old value was a real defect at the new one.** At
+## `ZOOM_MIN` 0.45 the visible world is 2844.4 px wide against a 1920 px map, so it starts at
+## x = (1920 - 2844.4) / 2 = **-462.2 px** — **11.6 tiles** of bare ground on each side, against a
+## margin of 5. `net_camera::_painted_area_covers_the_viewport` is the row that catches it.
+## The terrain loop runs this many tiles wider on every side and paints the outside with COL_WATER
+## DIRECTLY — `terrain_colour_of_char` takes a legend character and there is no legend outside the
+## grid, so inventing one would put the island legend in two places.
+## ⚠ **Cost, measured rather than assumed**: the loop goes from 58 x 42 = 2436 tiles to 72 x 56 =
+## 4032, and `_paint_tile` is 2 draw calls, so 4872 -> 8064 immediate-mode calls a frame. This repo's
+## "300 Node2Ds cost 0.065 ms" measurement is about NODES and may NOT be cited for this. If the frame
+## time moved, the alternative is one filled rect behind the grid instead of a per-tile loop.
+const WATER_MARGIN_TILES := 12        # >= 12 (11.6 tiles of bare ground at ZOOM_MIN 0.45, plus
+                                      # SHAKE_MAX_PX 6 px = 0.15 tile); <= 16, or 80 x 64 = 5120
+                                      # tiles is 10240 draw calls a frame
 
 ## 12 — gait. Phase turns on DISTANCE TRAVELLED, not on time, and that is the whole of "it must not
 ## slide": a body that does not move does not animate. Squash is a Vector2 and not a scalar —
@@ -551,14 +1003,42 @@ static func hp_bar_size_px() -> Vector2:
 	return Vector2(HP_BAR_W_PX, HP_BAR_H_PX)
 
 
-static func berth_rect_px(berth_index: int) -> Rect2:
-	var y := HUD_BERTH_ORIGIN_PX.y + berth_index * HUD_BERTH_ROW_PX
-	return Rect2(Vector2(HUD_BERTH_ORIGIN_PX.x, y), HUD_BERTH_SIZE_PX)
+## The start button's RESTING rectangle, in viewport px. The refuse shake is applied on top of this
+## by `hud_view`, so the un-shaken button is drawn exactly here and `game.gd` hit-tests exactly here.
+##
+## ⚠ **`button_rect_px()` below is NOT reused for this**, and that is deliberate: `panel_view` already
+## owns that rect for RESTART, and one rectangle answering to two verbs is how a restart gets pressed
+## by someone aiming at start.
+static func start_rect_px() -> Rect2:
+	return Rect2(HUD_START_ORIGIN_PX, HUD_START_SIZE_PX)
 
 
-static func key_rect_px(slot_index: int) -> Rect2:
-	var y := HUD_KEY_ORIGIN_PX.y + slot_index * (HUD_KEY_SIZE_PX.y + HUD_KEY_GAP_PX)
-	return Rect2(Vector2(HUD_KEY_ORIGIN_PX.x, y), HUD_KEY_SIZE_PX)
+## Speed chip `i`'s rectangle, in viewport px. One row, left to right, in `Rules.SPEED_STEPS` order,
+## so slot 0 (the pause) is the leftmost chip and the ladder reads as a ladder.
+static func speed_rect_px(slot_index: int) -> Rect2:
+	var x := HUD_SPEED_ORIGIN_PX.x + slot_index * (HUD_SPEED_SIZE_PX.x + HUD_SPEED_GAP_PX)
+	return Rect2(Vector2(x, HUD_SPEED_ORIGIN_PX.y), HUD_SPEED_SIZE_PX)
+
+
+## `COL_ALLY` at `GHOST_ALPHA` — the same split `sendable_tint()` uses, and for the same reason: the
+## tone and the ratio are re-measured independently, and combining them in one place stops a ghost
+## from becoming a fourth ally colour. **A ghost has no colour of its own on purpose.**
+static func ghost_tint() -> Color:
+	var c := COL_ALLY
+	c.a = GHOST_ALPHA
+	return c
+
+
+## Where soldier `slot_index` stands while it is still in reserve, as an offset from the START
+## HARBOUR's tile centre in world px. The index is the SOLDIER ID, not a position in a list, so
+## dragging one away leaves a hole rather than re-flowing the stack — the emptying is the feedback.
+## Rows go UP (negative y): a harbour is on the bottom row of every island and below it is off-map.
+static func idle_soldier_offset_px(slot_index: int) -> Vector2:
+	var col := slot_index % IDLE_SOLDIER_COLS
+	var row := slot_index / IDLE_SOLDIER_COLS
+	return Vector2(
+		IDLE_SOLDIER_ORIGIN_PX.x + col * IDLE_SOLDIER_PITCH_PX,
+		IDLE_SOLDIER_ORIGIN_PX.y - row * IDLE_SOLDIER_PITCH_PX)
 
 
 static func panel_rect_px() -> Rect2:
@@ -584,3 +1064,98 @@ static func roster_capacity() -> int:
 
 static func button_rect_px() -> Rect2:
 	return Rect2(PANEL_ORIGIN_PX + BUTTON_OFFSET_PX, BUTTON_SIZE_PX)
+
+
+# --- the two new screens ------------------------------------------------------------------------
+
+## Title slot `i`'s RESTING rectangle, in viewport px. The press dip is applied on top of this by
+## `title_view`, so the un-dipped box is drawn exactly here and the hit test below grows exactly this.
+##
+## ⚠ **Neither `start_rect_px()` nor `button_rect_px()` is reused for a title slot**, and that is the
+## same rule those two already carry between themselves: one rectangle answering to two verbs is how a
+## restart gets pressed by someone aiming at start.
+static func title_slot_rect_px(slot_index: int) -> Rect2:
+	var y := TITLE_SLOT_ORIGIN_PX.y + slot_index * (TITLE_SLOT_SIZE_PX.y + TITLE_SLOT_GAP_PX)
+	return Rect2(Vector2(TITLE_SLOT_ORIGIN_PX.x, y), TITLE_SLOT_SIZE_PX)
+
+
+## The same rectangle grown by `PRESS_HIT_PAD_PX` on all four sides. **The pad is added here and
+## nowhere else**: a hit rect re-derived by the shell would be the same geometry written twice, and
+## the day the pad changes only one of them would move.
+static func title_slot_hit_rect_px(slot_index: int) -> Rect2:
+	return title_slot_rect_px(slot_index).grow(PRESS_HIT_PAD_PX)
+
+
+## Node `n`'s centre. A `const` Array loses element typing, so this cast is the same one every read of
+## a const Array in this file makes.
+static func map_node_pos_px(n: int) -> Vector2:
+	return MAP_NODE_POS_PX[n]
+
+
+## Drawn radius by node kind. The boss is bigger; everything else is one size, because "how big" is
+## one of the three axes (shape, colour, size) the kinds are told apart on.
+static func map_node_radius_px(kind: int) -> float:
+	return MAP_BOSS_R_PX if kind == Rules.NodeKind.BOSS else MAP_NODE_R_PX
+
+
+## The pressable radius: the drawn one plus the shared pad. **48 and 64 are written nowhere** — they
+## are this sum, so moving the pad moves both.
+##
+## ⚠ **It is ONE number per kind and does not follow the four states, which is why the two state
+## scales are both below 1.0.** A node on offer is drawn at the full radius and pulses out by
+## `MAP_PULSE_R_PX` on top of that — 40 + 4 = 44 against a hit radius of 48 — so the drawn rim never
+## reaches past the circle you can press. Give HERE or OPEN a scale ABOVE 1.0 and that inverts: the
+## visible edge of a node stops being pressable, silently, with every net still green.
+static func map_node_hit_radius_px(kind: int) -> float:
+	return map_node_radius_px(kind) + PRESS_HIT_PAD_PX
+
+
+static func map_node_sides_of(kind: int) -> int:
+	return int(MAP_NODE_SIDES[kind])
+
+
+static func map_node_colour_of(kind: int) -> Color:
+	match kind:
+		Rules.NodeKind.CHEST:
+			return COL_NODE_CHEST
+		Rules.NodeKind.BOSS:
+			return COL_NODE_BOSS
+		_:
+			return COL_NODE_FIGHT
+
+
+## What a thing that cannot be pressed looks like: **all of its saturation gone and its alpha down to
+## `PRESS_ALPHA_OFF`**, in one place, so the title's dead slot and the map's out-of-reach node say the
+## same thing the same way. Two screens inventing "dimmed" separately is two vocabularies to learn.
+##
+## ⚠ The saturation is dropped as well as the alpha, and that is not decoration: alpha alone leaves a
+## coloured shape that still reads as "this one is the blue kind", so the eye keeps sorting it with
+## the live nodes. Colour is what says WHAT it is; having none says it is not on offer.
+static func dimmed(col: Color) -> Color:
+	var c := col
+	c.s = 0.0
+	c.a = PRESS_ALPHA_OFF
+	return c
+
+
+## The same colour lit by `k` in 0..1 — the hover, and nothing else uses it. `lightened` rather than a
+## hand-rolled add so the channels cannot clip past 1.0 unevenly and shift the hue.
+static func hover_lit(col: Color, k: float) -> Color:
+	return col.lightened(PRESS_HOVER_BRIGHTEN * clampf(k, 0.0, 1.0))
+
+
+## The same colour dipped by the press, `k` in 0..1.
+static func press_dipped(col: Color, k: float) -> Color:
+	return col.darkened(PRESS_DOWN_DIM * clampf(k, 0.0, 1.0))
+
+
+## The scene-change wash, at alpha `p`.
+##
+## ⚠ **The colour is READ from the project's own clear colour rather than written down again here.**
+## The fade's whole claim is "the screen went to background and came back", so a second copy of that
+## background would be free to disagree with the one actually behind the map — and the disagreement
+## would look like a grey rectangle nobody put there.
+static func scene_fade_colour(p: float) -> Color:
+	var c: Color = ProjectSettings.get_setting("rendering/environment/defaults/default_clear_color")
+	c.a = clampf(p, 0.0, 1.0)
+	return c

@@ -1,8 +1,8 @@
 class_name HudView
 extends Node2D
 
-## The heads-up layer: the clock, the two berths, how many are loaded, the 1/2 key roster, and how
-## many enemies are left.
+## The heads-up layer: the clock, how many enemies are left, **the start button** and **the speed
+## ladder**. Four things, and that is the whole of it.
 ##
 ## It READS `battle` and writes nothing back — src/view/ is a reader by contract, and a view that
 ## nudges the sim makes "the screen changed but the sim did not" indistinguishable from its inverse.
@@ -13,53 +13,63 @@ extends Node2D
 ## pins each hook's `draw_*` count exactly AND reddens any function in this file it does not name,
 ## so a helper added tomorrow is red until it is listed — adding names only fixes the day it is done.
 ##
-## The berth box IS half of the resource meter, and `boat-and-landing` stage 5's idle hull (drawn at
-## a harbour only while that boat is NOT at sea, `field_view.idle_hull_rect`) is the other half: a
-## boat at sea leaves both its berth box tinted `COL_BERTH_EMPTY` AND its hull missing from the map,
-## so the restriction is the picture in two places at once rather than a number beside one — see
-## cell-army-gdd, section Screen. Replacing either with a readout deletes the one thing v2-openfield
-## died for the want of: something on screen that visibly goes down.
+## ⚠ **The two berth boxes and the 1/2 key roster are gone, and so is the paragraph that explained
+## them.** `plan-then-watch` reversed 결정 14: boats are unlimited and created by a drag, so there is
+## no fleet to meter and no resource for a berth to draw down. The thing that visibly empties as the
+## player plans is the stack of soldiers standing at the harbour, and `field_view` draws that.
+##
+## ⚠ **The 1/2 keys are gone with them.** The hand does not move during combat: the whole landing is
+## authored before the start button and then watched. This file therefore carries exactly one press
+## that changes the sim (`commit`) and one that changes only the rate the picture is read at.
 ##
 ## Enemies-left is drawn from `battle.enemies_left()` and survives onto the lose screen on purpose:
 ## "the timer ran out with four alive" is a different loss from a wipe, and the player has to be able
 ## to tell which one happened.
 ##
-## Item 8 of combat-juice (summon feedback) lives here, and it is the one effect the sim knows
-## NOTHING about: `battle.load_soldier` and `battle.launch` already return a value the shell can push
-## in rather than poll. `note_key` is wired — the shell calls it on every `1`/`2` press. `note_launch`
-## is wired too, as of `boat-and-landing` stage 4 — `game.gd::_on_left_release` calls it on every drag
-## that ends, whether `battle.launch` accepted the tile or refused it.
+## Item 8 of combat-juice (press feedback) lives here, and it is the one effect the sim knows NOTHING
+## about: `battle.commit()` already returns a bool the shell can push in rather than poll. The shell
+## calls `note_chip` on every start press, whether the commit was accepted or refused.
 ## The clock is this node's own — see combat-juice, section B: `battle.step()` is skipped entirely
 ## while a panel is up, so an effect hung off sim time freezes behind the win screen.
+##
+## ⚠ **`_fx_step` is aged by `delta * _speed_scale`, not by `delta`** — the speed ladder moves the
+## interval every `look.gd` duration was budgeted against, so a view aged by the real frame delta
+## plays a different animation at 6x. `plan-then-watch`, 5.4.
 
 
 ## Display names, indexed by the type id in rules.gd. `Rules.name_of` returns the table's IDENTIFIER
 ## ("CELL_MELEE"), which is not text a player reads, and the user cannot read English at all.
 ## panel_view reads this through `HudView.type_label` rather than keeping a second copy — a table
 ## written down twice diverges.
+##
+## ⚠ **Nothing on the HUD reads it any more** — the roster strip it was written for is deleted. It
+## survives because `panel_view` names soldiers in the reward list, which is the one place in the
+## game a unit still has to be named in words.
 const TYPE_LABELS := ["근접", "원거리", "들소", "까마귀", "사자"]
 
-## The summonable types in hotkey order: slot 0 is key `1`. The shell binds the keys from this same
-## array, so a third soldier type appears on screen and on the keyboard in one edit.
-const KEY_TYPES := [Rules.CELL_MELEE, Rules.CELL_RANGED]
-
-## Display names for `Rules.BOATS`, indexed the same way `TYPE_LABELS` indexes `rules.gd`'s soldier
-## table — `Rules.boat_name_of` returns the table's IDENTIFIER ("BIG", "FAST"), not text the Korean
-## player reads.
-const BOAT_LABELS := ["큰 배", "빠른 배"]
+## The speed chips' labels, one per `Rules.SPEED_STEPS` entry. **One glyph each, and no verb**: the
+## pause is 「0」 and not 「정지」, because a verb on the pause is exactly where 「well, while we're
+## stopped, let it turn one boat around」 walks in — and the moment that lands, 결정 1 is dead.
+## Indexed the same way `Rules.SPEED_STEPS` is, so the label and the multiplier cannot disagree.
+const SPEED_LABELS := ["0", "1", "2", "3", "6"]
 
 var battle: Battle = null
 
-## Item 8's two drawers. `_key_fx` is `slot -> {"sec": float, "ok": bool}`, `_berth_fx` is
-## `berth -> {"sec": float, "ok": bool}`.
+## Item 8's drawer. `slot -> {"sec": float, "ok": bool}`.
 ##
-## Dictionaries keyed by the thing the effect is stuck to, and NOT a flat list of effects: mashing
-## the same key twice can then only reset the age, never stack two stains that multiply into a solid
-## block. combat-juice, section B, picks the same shape for field_view's per-body drawer and for the
-## same reason — stacking is made impossible by the container instead of by code that remembers.
-## Nothing here can grow past the key count or the berth count, so no cap is needed either.
-var _key_fx: Dictionary = {}
-var _berth_fx: Dictionary = {}
+## A Dictionary keyed by the thing the effect is stuck to, and NOT a flat list of effects: mashing
+## the same button twice can then only reset the age, never stack two stains that multiply into a
+## solid block. combat-juice, section B, picks the same shape for field_view's per-body drawer and
+## for the same reason — stacking is made impossible by the container instead of by code that
+## remembers. **Slot 0 is the start button and it is the only slot anything writes today**; the speed
+## chips carry no feedback of their own, because the chip that is lit IS the feedback.
+var _chip_fx: Dictionary = {}
+
+## Which speed chip is lit, and what the drawers above are aged by. **Both come down from the shell
+## in one call** (`set_speed`) on the same frame, because they are one number: splitting them would
+## be two readers of one ladder, and a view must never read `Rules.SPEED_STEPS` itself.
+var _speed_slot := Rules.SPEED_SLOT_DEFAULT
+var _speed_scale := 1.0
 
 ## Resolved once and kept, and STATIC because panel_view needs the same face — the explanation for
 ## picking it lives here only, in one file, rather than in both view files.
@@ -85,88 +95,53 @@ static func type_label(type_id: int) -> String:
 	return str(TYPE_LABELS[type_id])
 
 
-static func boat_label(boat: int) -> String:
-	return str(BOAT_LABELS[boat])
-
-
-static func key_slot_count() -> int:
-	return KEY_TYPES.size()
-
-
-static func key_type_of(slot: int) -> int:
-	return int(KEY_TYPES[slot])
-
-
 func bind(b: Battle) -> void:
 	battle = b
 	# Island 2 must not open still wearing island 1's feedback. combat-juice pins the clearing on
 	# every `setup` / `bind` precisely because nothing else in the frame would ever notice.
-	_key_fx.clear()
-	_berth_fx.clear()
+	_chip_fx.clear()
 	queue_redraw()
 
 
-## Living soldiers of `type_id` that have not been put on a boat yet, i.e. the ones a `1` or `2`
-## press could still load. RESERVE only: a soldier already ashore cannot be re-boarded, so counting
-## it here would advertise a load that `battle.load_soldier` refuses.
-func reserve_count(type_id: int) -> int:
-	if battle == null or battle.army == null:
-		return 0
-	var a := battle.army
-	var n := 0
-	for i in a.type_id.size():
-		if a.alive[i] == 0:
-			continue
-		if a.type_id[i] != type_id:
-			continue
-		if i < battle.soldier_state.size() \
-				and battle.soldier_state[i] == Battle.SoldierState.RESERVE:
-			n += 1
-	return n
+## The shell's one call for the whole ladder: which chip is lit, and what every drawer here is aged
+## by. Called from `game.gd::_process` every frame, before `_fx_step` runs.
+##
+## ⚠ **It takes the multiplier, not the slot's meaning** — a view that looked the float up itself
+## would be a second reader of `Rules.SPEED_STEPS`, and the day the ladder changes one of the two
+## copies starts lying. At scale 0 the picture freezes with the sim: a pause is a still frame, not a
+## still sim under a running animation.
+func set_speed(slot: int, scale: float) -> void:
+	_speed_slot = slot
+	_speed_scale = scale
 
 
 func _process(delta: float) -> void:
-	_fx_step(delta)
+	_fx_step(delta * _speed_scale)
 	queue_redraw()
 
 
-## The shell hands over the bool `battle.load_soldier` already returns. Swink's Game Feel puts the
-## input→response budget for real-time controls under 100ms; this lands on the SAME frame the key was
-## pressed, because Godot runs input before `_process` and `_process` queues the redraw.
-func note_key(slot: int, ok: bool) -> void:
-	if slot < 0 or slot >= KEY_TYPES.size():
+## The shell hands over the bool `battle.commit()` already returns. Swink's Game Feel puts the
+## input→response budget for real-time controls under 100ms; this lands on the SAME frame the press
+## happened, because Godot runs input before `_process` and `_process` queues the redraw.
+##
+## Slot 0 is the start button. The name is generic because the drawer is, not because a second
+## caller exists — and a second caller would need a second rect, which `_chip_offset` reads.
+func note_chip(slot: int, ok: bool) -> void:
+	if slot < 0:
 		return
-	_key_fx[slot] = {"sec": Look.KEY_FX_SEC, "ok": ok}
+	_chip_fx[slot] = {"sec": Look.CHIP_FX_SEC, "ok": ok}
 
 
-## The same, for a launch. `boat` is the boat the shell tried to send — the caller already knows it,
-## since `battle.launch(boat, tile)` takes it as an argument, so there is no berth to guess back from
-## a bool any more. A refusal stains ONLY that boat's berth rectangle now: with per-boat cargo a
-## refusal is a fact about that one boat (empty, at sea, or the tile out of its reach), never about
-## the fleet as a whole the way it was when both berths shared one timer.
-func note_launch(boat: int, ok: bool) -> void:
-	if battle == null or boat < 0 or boat >= Rules.boat_count():
-		return
-	_berth_fx[boat] = {"sec": Look.BERTH_FX_SEC, "ok": ok}
-
-
-## Ages both drawers and drops what has run out. `keys()` hands back a copy, so erasing inside the
+## Ages the drawer and drops what has run out. `keys()` hands back a copy, so erasing inside the
 ## loop is safe; iterating the dictionary itself while erasing is not.
 func _fx_step(delta: float) -> void:
-	for slot in _key_fx.keys():
-		var fx: Dictionary = _key_fx[slot]
+	for slot in _chip_fx.keys():
+		var fx: Dictionary = _chip_fx[slot]
 		var left := float(fx["sec"]) - delta
 		if left <= 0.0:
-			_key_fx.erase(slot)
+			_chip_fx.erase(slot)
 		else:
 			fx["sec"] = left
-	for b in _berth_fx.keys():
-		var bfx: Dictionary = _berth_fx[b]
-		var bleft := float(bfx["sec"]) - delta
-		if bleft <= 0.0:
-			_berth_fx.erase(b)
-		else:
-			bfx["sec"] = bleft
 
 
 ## The refuse shake, in canvas px, along x only. An ACCEPTED press does not move — it only brightens;
@@ -175,43 +150,34 @@ func _fx_step(delta: float) -> void:
 ## A decaying cosine and not a random jitter: random cannot be measured by a net, and this repo has
 ## already paid for that once. It starts at its MAXIMUM rather than at zero, which is the half that
 ## matters — a headless frame is 6.9ms, so a shake shaped like `sin` would be under one canvas pixel
-## on the first frame after the press and read as nothing at all. One full cycle over `KEY_FX_SEC`
-## with a linear decay ends at exactly zero, so the box never stays displaced.
-func _key_offset(slot: int) -> Vector2:
-	if not _key_fx.has(slot):
+## on the first frame after the press and read as nothing at all. One full cycle over `CHIP_FX_SEC`
+## with a linear decay ends at exactly zero, so the button never stays displaced.
+##
+## ⚠ **This is `REFUSE_SHAKE_PX`'s only reader.** `_berth_offset` was the second one and it died with
+## the berths, so deleting this function deletes that constant's last reader — which is why the
+## amplitude is pinned at BOTH ends (it is never 0 on the frame of a refusal, and it never exceeds
+## `REFUSE_SHAKE_PX`) rather than only above.
+func _chip_offset(slot: int) -> Vector2:
+	if not _chip_fx.has(slot):
 		return Vector2.ZERO
-	var fx: Dictionary = _key_fx[slot]
+	var fx: Dictionary = _chip_fx[slot]
 	if bool(fx["ok"]):
 		return Vector2.ZERO
-	var p := clampf(1.0 - float(fx["sec"]) / Look.KEY_FX_SEC, 0.0, 1.0)
-	var amp := Look.KEY_REFUSE_SHAKE_PX * (1.0 - p) * Look.fx_gain_of(8)
+	var p := clampf(1.0 - float(fx["sec"]) / Look.CHIP_FX_SEC, 0.0, 1.0)
+	var amp := Look.REFUSE_SHAKE_PX * (1.0 - p) * Look.fx_gain_of(8)
 	return Vector2(amp * cos(p * TAU), 0.0)
 
 
-## The same shake, for a berth refused a launch — `boat-and-landing`, section 6: "the boat's icon
-## shakes, exactly as a refused key does." Same shape, same constants, so the two effects genuinely
-## read as one rule rather than two effects that happen to look alike today and drift apart later.
-func _berth_offset(boat: int) -> Vector2:
-	if not _berth_fx.has(boat):
-		return Vector2.ZERO
-	var fx: Dictionary = _berth_fx[boat]
-	if bool(fx["ok"]):
-		return Vector2.ZERO
-	var p := clampf(1.0 - float(fx["sec"]) / Look.BERTH_FX_SEC, 0.0, 1.0)
-	var amp := Look.KEY_REFUSE_SHAKE_PX * (1.0 - p) * Look.fx_gain_of(8)
-	return Vector2(amp * cos(p * TAU), 0.0)
-
-
-## The key box's background: `COL_BUTTON` at rest, pulled all the way to `COL_WIN` or `COL_LOSE` on
-## the frame of the press and easing back over `KEY_FX_SEC`. Gain 0 collapses the whole lerp to
-## `COL_BUTTON` — that is what combat-juice's `FX_GAIN[8]` row measures.
-func _key_colour(slot: int) -> Color:
-	if not _key_fx.has(slot):
-		return Look.COL_BUTTON
-	var fx: Dictionary = _key_fx[slot]
-	var p := clampf(1.0 - float(fx["sec"]) / Look.KEY_FX_SEC, 0.0, 1.0)
+## The start button's background: `COL_START` at rest, pulled all the way to `COL_WIN` or `COL_LOSE`
+## on the frame of the press and easing back over `CHIP_FX_SEC`. Gain 0 collapses the whole lerp to
+## `COL_START` — that is what combat-juice's `FX_GAIN[8]` row measures.
+func _chip_colour(slot: int) -> Color:
+	if not _chip_fx.has(slot):
+		return Look.COL_START
+	var fx: Dictionary = _chip_fx[slot]
+	var p := clampf(1.0 - float(fx["sec"]) / Look.CHIP_FX_SEC, 0.0, 1.0)
 	var goal: Color = Look.COL_WIN if bool(fx["ok"]) else Look.COL_LOSE
-	return Look.COL_BUTTON.lerp(goal, (1.0 - p) * Look.fx_gain_of(8))
+	return Look.COL_START.lerp(goal, (1.0 - p) * Look.fx_gain_of(8))
 
 
 func _draw() -> void:
@@ -221,65 +187,53 @@ func _draw() -> void:
 	if face == null:
 		return
 
-	_paint_timer(face, Look.HUD_TIMER_POS_PX, "남은 시간 %.1f" % battle.time_left(),
+	# 「시간 %.1f」 and not 「남은 시간 %.1f」 — one word instead of two. The user's own instruction was
+	# 「글자가 너무 많고 조금 더 단순하게 해줄래? 아니면 좀 UI를 크게 해서」, and this file answers both
+	# halves: three text items during a fight instead of six, each of them drawn bigger.
+	_paint_timer(face, Look.HUD_TIMER_POS_PX, "시간 %.1f" % battle.time_left(),
 		Look.HUD_TIMER_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
-	# The berth's own two states stay the base colour; item 8 only tints on top of whichever one is
-	# showing, so "a boat is at sea" is never overwritten by "that click landed". One rectangle per
-	# boat, stacked (P9, `boat-and-landing` stage 4), each carrying its OWN load and capacity — a
-	# summed total cannot say which of the two boats still has room.
+	# The start button, and ONLY while the plan can still be started. A button that cannot be pressed
+	# and is still drawn is the "well, while we're stopped…" door `plan-then-watch` closes on purpose:
+	# the moment `committed()` is true the only thing left on this layer that answers a press is the
+	# speed row.
 	#
-	# The shake rides on `rect.position`, and the label's `at` is derived FROM the shifted rect,
-	# exactly the way the key box does it below — shake the box alone and the label walks out of it.
-	for b in Rules.boat_count():
-		var free := not battle.boat_busy(b)
-		var berth_col: Color = Look.COL_BOAT if free else Look.COL_BERTH_EMPTY
-		if _berth_fx.has(b):
-			var bfx: Dictionary = _berth_fx[b]
-			var bp := clampf(1.0 - float(bfx["sec"]) / Look.BERTH_FX_SEC, 0.0, 1.0)
-			var bgoal: Color = Look.COL_WIN if bool(bfx["ok"]) else Look.COL_LOSE
-			berth_col = berth_col.lerp(bgoal, (1.0 - bp) * Look.fx_gain_of(8))
-		var rect := Look.berth_rect_px(b)
-		rect.position += _berth_offset(b)
-		_paint_berth(rect, berth_col)
-		var here: PackedInt32Array = battle.pending[b]
-		_paint_load(face, rect.position + Look.HUD_BERTH_LABEL_OFFSET_PX,
-			"%s %d/%d" % [boat_label(b), here.size(), Rules.cap_of(b)],
-			Look.HUD_FONT_SIZE_PX, Look.COL_HUD_TEXT)
-
 	# The shake rides on `rect.position`, and the label's `at` is derived FROM the shifted rect rather
 	# than from the resting one. Shaking the box alone walks the glyphs out of it; shaking the glyphs
 	# alone leaves the box still and reads as nothing moving — combat-juice, item 8.
-	for slot in KEY_TYPES.size():
-		var t := key_type_of(slot)
-		var rect := Look.key_rect_px(slot)
-		rect.position += _key_offset(slot)
-		_paint_key(face, rect, _key_colour(slot),
-			"%d  %s  %d" % [slot + 1, type_label(t), reserve_count(t)],
-			rect.position + Look.HUD_KEY_TEXT_OFFSET_PX,
-			Look.HUD_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+	if not battle.committed():
+		var srect := Look.start_rect_px()
+		srect.position += _chip_offset(0)
+		_paint_button(face, srect, _chip_colour(0), "시작",
+			srect.position + Look.HUD_START_TEXT_OFFSET_PX,
+			Look.HUD_START_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+
+	# The speed ladder. One chip per rung, the lit one being the rate the fight is being read at, and
+	# the same hook the start button uses — they are the same shape (a filled rect with one label in
+	# it) and two leaves would be two copies of one `draw_rect` + `draw_string`.
+	for slot in SPEED_LABELS.size():
+		var chip_bg: Color = Look.COL_SPEED_ON if slot == _speed_slot else Look.COL_BUTTON
+		var crect := Look.speed_rect_px(slot)
+		_paint_button(face, crect, chip_bg, str(SPEED_LABELS[slot]),
+			crect.position + Look.HUD_SPEED_TEXT_OFFSET_PX,
+			Look.HUD_START_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
 	_paint_enemies_left(face, Look.HUD_ENEMIES_LEFT_POS_PX, "적 %d" % battle.enemies_left(),
 		Look.HUD_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
 
-# --- hooks. Each one's draw_* count is pinned by net_draw_leaf; the table is in first-slice, under
-# "The view". Every parameter must be used in the body: a leaf handed a value it drops turned forty
-# rocks invisible with the round green.
+# --- hooks. Each one's draw_* count is pinned by net_draw_leaf; the table is that file's `_table()`.
+# Every parameter must be used in the body: a leaf handed a value it drops turned forty rocks
+# invisible with the round green.
 
 func _paint_timer(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
 
 
-func _paint_berth(rect: Rect2, col: Color) -> void:
-	draw_rect(rect, col, true)
-
-
-func _paint_load(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
-	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
-
-
-func _paint_key(face: Font, rect: Rect2, bg: Color, text: String, at: Vector2, fsize: int,
+## 2 calls: the filled rectangle, then its label. Renamed from `_paint_key` rather than deleted —
+## the 1/2 key boxes are gone but the SHAPE they drew (a pressable box with one word in it) is what
+## the start button and every speed chip are, and a second hook would be a second copy of it.
+func _paint_button(face: Font, rect: Rect2, bg: Color, text: String, at: Vector2, fsize: int,
 		col: Color) -> void:
 	draw_rect(rect, bg, true)
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)

@@ -1,6 +1,6 @@
 # Twelve pieces of combat juice
 
-**Implemented**: full — all twelve, plus the lion's wind-up from section 0. The round is 9 nets / 725 checks green
+**Implemented**: full — all twelve, plus the lion's wind-up from section 0. ⚠ **Item 8 was relocated on 2026-08-18 by `plan-then-watch`**: its key half became the start button's chip family, its berth half is DELETED, and the whole `hud_view.gd` hook table below was re-measured (20 functions / 5 leaves → 13 / 3). Every other item is untouched — they are all view-side and driven by `Battle.events`, so deleting the controls killed none of them. The round is 12 nets / 1328 checks green
 **Accepted**: **pass (2026-08-17)** — the user launched it, looked, and said *"연출은 좋아"* (the presentation is good)
 
 ⚠ **What was accepted is the presentation, not the game.** In the same breath the user went on:
@@ -151,7 +151,7 @@ The general form is `melee attackers × ceil(lifetime ÷ minimum period)`, and r
 | 5 area | `ATTACK`'s `area` | ring time, width | no |
 | 6 target line | **nothing** — `enemy_target` is already public | alpha, width, when to draw none | no |
 | 7 landing | `LAND` | ring time, radius | no |
-| 8 summon feedback | **nothing** — the shell forwards `load_soldier`'s bool | response time, colour | no |
+| 8 press feedback | **nothing** — the shell forwards `commit()`'s bool into `note_chip(0, ok)` | response time, colour | no |
 | 9 beak attach | **nothing** — the shell tells the panel first and calls `apply_beak` after the hold | tint time | no |
 | 10 outcome | **nothing** — a shell hold plus the panel's own age | hold seconds, fade seconds | no |
 | 11 camera | `ATTACK`'s `dmg` | amplitude, decay, frequencies | no |
@@ -328,12 +328,26 @@ So this item is **two layers**, and every line below states both.
 - **Sim emits**: **nothing.** `enemy_target` is already public
 - **Layer**: above the docks, **beneath** the boats and bodies. A line crossing a body is the cloud Riot removed
 - **⚠ This is the only one of the twelve that can be a net loss of readability.** Into the Breach does draw intent, but it is **turn-based with fewer than ten units**, and **neither TFT nor Bad North draws target lines at all.** They are another form of the *"cloud of visual effects and particles"* Riot explicitly removed
-- **So it is narrowed two ways**: ① **enemies only** ② if living enemies exceed `TARGET_LINE_MAX_COUNT` **8**, **draw none.** Alpha in `COL_TARGET_LINE` is 0.12
+- **So it is narrowed two ways**: ① **enemies only** ② if living enemies exceed `TARGET_LINE_MAX_COUNT` ~~**8**~~ **14**, **draw none.** Alpha in `COL_TARGET_LINE` is 0.12
 
 > **Refutation box — "forty lines at once" is impossible in this game, and a cap of 12 could never bite.**
 > Counting `islands.gd`'s `ISLAND_ROWS`: **island 1 = 4 bison, island 2 = 2 crows + 4 bison = 6, island 3 = 2 crows + 2 bison + 1 lion = 5.** The line is drawn **from the enemy side only**, so **the on-screen maximum is 6.** The draft's "forty" was **inflated 6.7×**, and the judgement "this item can be a net loss of readability" was built on top of it. That is the shape this repo recorded as *"a radius of 8 reached the screen at 38px and a design argument was built on a number off by 4.8×."*
 > **At six lines the net-loss judgement is itself in doubt** — the item stays (the user picked it), but **the cap of 12 was an unreachable safety net.** It is 8 now, and **8 does not bite on these three islands either** (max 6).
 > ⇒ **F's check for it is a synthetic battle,** and that row says so. **Calling an unreachable guard a guard means the next person believes it.**
+>
+> ### ⚠ **Refuted 2026-08-18** — the box above's "it never bites" is overturned
+>
+> With the counts raised to **8 · 12 · 14** this constant **bites for the first time.** Islands 2 and 3
+> draw **no** intent lines until 4 and 6 enemies are dead — the phase where the hand cannot move and
+> reading is the whole activity. **Raised to 14.**
+> ✅ **Both landed in code on 2026-08-18.** `islands.gd` now holds **8 · 12 · 14** (measured off the rows by
+> `net_islands`' `EXPECT_SPAWNS`) and `look.gd` holds **`TARGET_LINE_MAX_COUNT := 14`**.
+> ⚠ **14 is the largest island's count, so the guard is once again unreachable in play — deliberately.**
+> Its job was never to fire; it is a ceiling on a screen nobody has yet had to read. `net_fx_view` therefore
+> checks **both ends**: at exactly `TARGET_LINE_MAX_COUNT` enemies all of them draw (**this arm is a real
+> island's opening, not a synthetic one**), and at one over, none do (**that arm is still synthetic and says
+> so**). ⚠ **14 is a FIRST value and verify-look scores it** — if fourteen lines read as noise it comes down,
+> and the measurement is recorded here.
 
 ### 7. Landing
 
@@ -359,11 +373,24 @@ So this item is **two layers**, and every line below states both.
 > floor-and-ceiling pair `CLAUDE.md` earned the hard way. **Deleting `_paint_key` deletes that
 > measurement.** The hook table and constants below are **to be moved, not dropped.**
 
-- **What is seen**: the pressed key box brightens toward `COL_WIN` when it took, and tints toward `COL_LOSE` and shakes sideways when it was refused. A dock click that takes makes the berth icon react the same way
-- **File / hook**: `hud_view.gd` / **the `bg`, `rect` and `at` of the existing `_paint_key`, and `_paint_berth`'s `col`. No new leaf**
+> ### ✅ **Relocated 2026-08-18, and the berth half is DELETED rather than renamed**
+>
+> `plan-then-watch` shipped. **The key boxes and the berths are both gone from `hud_view.gd`** — there
+> are no 1/2 keys and there is no fleet to meter — and the SHAPE they drew (a pressable box with one word
+> in it) survives as the **start button and the five speed chips**, which is why the leaf was renamed
+> instead of deleted. The bullets below are the shipped ones. **`_paint_berth`, `_paint_load`,
+> `note_launch`, `_berth_offset`, `berth_rect_px`, every `HUD_BERTH_*`, `COL_BERTH_EMPTY` and
+> `BERTH_FX_SEC` do not exist.** The `Look.COL_BUTTON` literal and the refusal-shake pair the old box
+> above worried about were **re-pinned in `net_shell`, not lost**: the colour onto `panel_view`'s message
+> and button captures, and the shake onto the start button with **a ceiling added that never existed**
+> (`shift.length() <= Look.REFUSE_SHAKE_PX + 0.01`).
+
+- **What is seen**: the **start button** brightens toward `COL_WIN` when the commit took, and tints toward `COL_LOSE` and shakes sideways when it was refused (`boats` empty). **The speed chips carry no feedback of their own — the chip that is lit IS the feedback**
+- **File / hook**: `hud_view.gd` / **the `bg`, `rect` and `at` of `_paint_button` (renamed from `_paint_key`). No new leaf**, and the same leaf draws the speed chips
 - **⚠ The shake rides on `rect` AND on the text's `at`, with the same offset.** Shake the box alone and the label falls outside it; shake the label alone and the box stands still, which reads as nothing having moved
-- **Seconds**: `KEY_FX_SEC` **0.18**, refusal shake `KEY_REFUSE_SHAKE_PX` **4.0**, berth `BERTH_FX_SEC` **0.25**
-- **Sim emits**: **nothing.** `battle.load_soldier()` and `battle.launch()` already return a bool and **`game.gd` throws both away.** The shell keeps them and calls `hud_view.note_key(slot, ok)` / `hud_view.note_launch(dock, ok)`
+- **Seconds**: `CHIP_FX_SEC` **0.18**, refusal shake `REFUSE_SHAKE_PX` **4.0**. ⚠ **`_chip_offset` is `REFUSE_SHAKE_PX`'s only reader now** that `_berth_offset` is gone, so deleting the shake deletes the constant's last reader — which is why `net_shell` pins the amplitude at **both** ends
+- **Sim emits**: **nothing.** `battle.commit()` already returns a bool; the shell keeps it and calls `hud_view.note_chip(0, ok)` on every start press. **Slot 0 is the start button and it is the only slot anything writes**
+- ⚠ **The drawer is aged by `delta * _speed_scale`, not by `delta`** — the speed ladder moves the interval every duration here was budgeted against. `net_fx_view` drives the HUD at 6× and asserts the shake is back at exactly zero inside `CHIP_FX_SEC / 6` REAL seconds; **without that row the multiplier could be handed down and never used**
 - **The reason for a refusal is not distinguished.** There are three (boat full, no reserve of that type, both docks on water) and one bool cannot separate them. **Turning the return into an enum disturbs existing checks in `net_battle` and `net_boat`** — this doc does not buy that
 - **⚠ This is the one item with an outside number on it.** Swink's *Game Feel* puts real-time control's input-to-response window **under 100ms**. ⇒ **the screen must change on the frame the key is pressed, and that is measurable by a net.** (⚠ the research took that figure from three agreeing secondary sources, not from the book itself)
 
@@ -530,11 +557,18 @@ The computation lives in one place: `_body_offset_of(key) = _lunge_offset(key) +
 > - **Four leaves were added** on top of juice's eleven: `_paint_hull` · `_paint_overlay` ·
 >   `_paint_route` · `_paint_cliff_face`.
 > - **The totals moved from 68 / 20 to 84 functions (43 + 20 + 21) and 23 leaves (14 + 5 + 4).**
+>   ⚠ **And again on 2026-08-18** — `plan-then-watch` cut `hud_view` to 13 and 3, so the totals are
+>   **77 functions (43 + 13 + 21) and 21 leaves (14 + 3 + 4)**. `field_view`'s 43 did not move while
+>   one function was added, one deleted and one renamed, **which is why it is the one to re-derive by
+>   hand.**
 > - Nine pure functions came with the camera and the drag (`_compose_position` · `screen_to_world_px` ·
 >   `world_to_tile` · `pan_by` · `zoom_at` · `_clamp_cam` · `_visible_world_rect` · `set_drag` ·
 >   `idle_hull_rect`), all at 0 draws — **and 0 is as load-bearing as a leaf's count**, because it is
 >   what forbids a draw call leaking out of a hook.
 > - The terrain pass paints **2436 tiles (58 × 42)**: the grid is 48 × 32 and `WATER_MARGIN_TILES` is 5.
+>   ⚠ **Re-measured 2026-08-18**: `plan-then-watch` pulled `ZOOM_MIN` back to 0.45 for the plan screen, which
+>   exposes 11.6 tiles of bare ground on the x axis, so the margin went **5 → 12** and the pass paints
+>   **4032 tiles (72 × 56)** — **8064 draw calls a frame**, up from 4872.
 >
 > ⚠ **The table and the ripple list below are left unedited, and that is deliberate.** They are the
 > record of what *this* feature's build had to do, and they were correct instructions for the build
@@ -572,20 +606,27 @@ The computation lives in one place: `_body_offset_of(key) = _lunge_offset(key) +
 ⇒ **Build the points in `_draw` and hand them to the leaf as an argument.** `_beak_points` → `_paint_beak(tip, left, right, colour)` in the same file is the precedent, and **no name and no count in the hook table moves.** The spy then captures the array itself and really measures **length, distance, fan axis and travel**, and the leaf becomes one line, `draw_multiline(points, colour, width)`, closing the argument chain to its end.
 ⚠ **`SPARK_WIDTH_PX` only becomes measurable then** — the three line leaves (`_paint_shot`, `_paint_ring`, `_paint_target_line`) all take a width argument, and **the draft's `_paint_spark` was the only one that did not, so no row in F bit it.**
 
-### `src/view/hud_view.gd` — 18 functions, 5 leaves
+### `src/view/hud_view.gd` — 13 functions, 3 leaves
+
+⚠ **Re-measured 2026-08-18 for `plan-then-watch`, which cut this file hardest — 20 functions and 5 leaves
+became 13 and 3.** Eight names died with the 1/2 keys and the berths (`key_slot_count`, `key_type_of`,
+`reserve_count`, `boat_label`, `note_launch`, `_berth_offset`, `_paint_berth`, `_paint_load`), one arrived
+(`set_speed`), and four were renamed into the chip family (`note_key`→`note_chip`,
+`_key_offset`→`_chip_offset`, `_key_colour`→`_chip_colour`, `_paint_key`→`_paint_button`).
+**`net_draw_leaf._table()` is the authority and these are its names.**
 
 | function | draw | function | draw |
 |---|---|---|---|
 | `default_font` | 0 | `_paint_timer` | 1 |
-| `type_label` | 0 | `_paint_berth` | 1 |
-| `key_slot_count` | 0 | `_paint_load` | 1 |
-| `key_type_of` | 0 | `_paint_key` | 2 |
+| `type_label` | 0 | **`_paint_button`** | **2** |
 | `bind` | 0 | `_paint_enemies_left` | 1 |
-| `reserve_count` | 0 | **`note_key`** | **0** |
-| `_process` | 0 | **`note_launch`** | **0** |
-| `_draw` | 0 | **`_fx_step`** | **0** |
-| | | **`_key_offset`** | **0** |
-| | | **`_key_colour`** | **0** |
+| **`set_speed`** | **0** | | |
+| `_process` | 0 | | |
+| `_draw` | 0 | | |
+| **`note_chip`** | **0** | | |
+| **`_fx_step`** | **0** | | |
+| **`_chip_offset`** | **0** | | |
+| **`_chip_colour`** | **0** | | |
 
 ### `src/view/panel_view.gd` — 21 functions, 4 leaves
 
@@ -615,7 +656,7 @@ The computation lives in one place: `_body_offset_of(key) = _lunge_offset(key) +
    with it, as `_facing_of(i, false)`
 5. **`net_shell.gd`'s two "576 tiles were all drawn" assertions** (the battle screen and the new island after the beak pick) become `(Look.GRID_W + 2 * Look.WATER_MARGIN_TILES) * (Look.GRID_H + 2 * Look.WATER_MARGIN_TILES)` = **680**
 6. **The margin tiles must NOT go into `net_shell._rects_land_on_screen`.** `Look.tile_rect_px(-1, -1)` is `Rect2(-40, -40, 40, 40)`, so **all 68 margin tiles break "everything lands inside 1280x720."** ⇒ **feed only the 576 inside-grid tiles to that list.** Widening the screen rectangle itself would kill the same check for docks, HP bars and the HUD, and that check is what catches a layout walking off the screen
-7. **All three view files' `_process(_delta)` become `delta`** — not just `field_view` and `panel_view`. This table gives `hud_view` a `_fx_step` too, and item 8 gives it `KEY_FX_SEC` and `BERTH_FX_SEC`. **The function names do not change, so the table does not move**
+7. **All three view files' `_process(_delta)` become `delta`** — not just `field_view` and `panel_view`. This table gives `hud_view` a `_fx_step` too, and item 8 gives it `CHIP_FX_SEC` (⚠ **the draft also named `BERTH_FX_SEC`; it is deleted — see item 8**). **The function names do not change, so the table does not move**
 8. **All three view files' header comments.** In particular `field_view.gd`'s *"every `draw_*` call in the file lives inside one of those **six hooks**"* — with **eleven** leaves that sentence is false. ⚠ **That file's header says "six" in two places** (*"one of those six hooks"* and *"outside the six hooks"*). **Fix one and the other stays a lie into the next round**
 9. **`look.gd`'s own header comment restates the suffix list in full.** F widens that list, so the two diverge. ⇒ **the better fix: delete the list from that comment and point at `net_draw_leaf`'s `_literal_hits` instead.** Never state the same thing twice
 10. **`first-slice`, section 6's hook table.** ⚠ **That table was already rotted independently of this doc** — its `hud_view.gd` row omitted `_paint_load` and its `panel_view.gd` row omitted `_paint_message`. **It was fixed while writing this doc** (2026-08-17). A table in four places diverges four times
@@ -709,7 +750,7 @@ Eight of the draft's names (`BURST_GROWTH` · `TARGET_LINE_MAX` · `SHAKE_FREQ_A
 | `AREA_RING_START_RATIO` | `0.4` | the lion's 60px radius **starts at 24px** |
 | `AREA_RING_WIDTH_PX` | `3.0` | |
 | `TARGET_LINE_WIDTH_PX` | `1.0` | |
-| `TARGET_LINE_MAX_COUNT` | `8` | **unreachable on these three islands (6 enemies max); the check is synthetic** — see C item 6 |
+| `TARGET_LINE_MAX_COUNT` | ~~`8`~~ **`14`** | ~~**unreachable on these three islands (6 enemies max); the check is synthetic**~~ ⚠ **Refuted 2026-08-18** — at 8 the raised counts (8 · 12 · 14) made it bite for the first time, hiding the OPENING of islands 2 and 3. **Raised to 14 in code, and both the counts and the constant have landed.** See C item 6's box |
 | `LAND_RING_SEC` | `0.40` | |
 | `LAND_RING_R_PX` | `20.0` | **50% of a tile. 20 × 2 = 40, so two orthogonally adjacent rings meet exactly and never overlap** |
 | `LAND_RING_WIDTH_PX` | `2.0` | |
@@ -720,13 +761,13 @@ Eight of the draft's names (`BURST_GROWTH` · `TARGET_LINE_MAX` · `SHAKE_FREQ_A
 | `SHAKE_B_FREQ` | `47.0` | |
 | `GAIT_PERIOD_TILES` | `0.7` | one stride per **28px** |
 | `GAIT_SQUASH` | `0.20` | `1−s·sinφ` along travel, `1+s·sinφ` across. Peak displacement **crow 2.0 · ranged 2.2 · melee 2.8 · bison 3.2 · lion 4.4 px** — above the 2.0px floor |
-| `KEY_FX_SEC` | `0.18` | |
-| `KEY_REFUSE_SHAKE_PX` | `4.0` | |
-| `BERTH_FX_SEC` | `0.25` | |
+| `CHIP_FX_SEC` | `0.18` | ~~`KEY_FX_SEC`~~ — **renamed 2026-08-18**: the keys are gone and the shape is the start button |
+| `REFUSE_SHAKE_PX` | `4.0` | ~~`KEY_REFUSE_SHAKE_PX`~~ — **renamed**, and `_chip_offset` is now its ONLY reader |
+| ~~`BERTH_FX_SEC`~~ | — | **DELETED 2026-08-18 with the berths.** There is no fleet to meter |
 | `PANEL_FADE_SEC` | `0.25` | |
 | `HOLD_OUTCOME_SEC` | `0.80` | how long the shell sits still before opening the next island |
 | `HOLD_BEAK_SEC` | `0.50` | **also item 9's tint duration. There is no second constant for it** |
-| `WATER_MARGIN_TILES` | ~~`1`~~ **`5`** | width of `COL_WATER` painted outside the legend ⇒ ~~680~~ **2436 tiles (58 × 42)**. ⚠ **Raised by `boat-and-landing`, and not for the shake**: at `ZOOM_MIN` the visible world is 4.45 tiles wider than the map on each side, so a margin of 1 exposes bare ground the moment you zoom out |
+| `WATER_MARGIN_TILES` | ~~`1`~~ ~~`5`~~ **`12`** | width of `COL_WATER` painted outside the legend ⇒ ~~680~~ ~~2436~~ **4032 tiles (72 × 56)**. ⚠ **Raised twice, and neither time for the shake**: `boat-and-landing` took it to 5 because at the old `ZOOM_MIN` the visible world was 4.45 tiles wider than the map on each side; `plan-then-watch` took it to 12 because `ZOOM_MIN` fell to **0.45** and the gap became **11.6 tiles**. `net_camera`'s `_painted_area_covers_the_viewport` is what reddens if it lags behind `ZOOM_MIN` |
 | `FX_MAX_COUNT` | `256` | **caps the pass-through store only.** Body-attached effects do not live there — see B |
 | `FX_GAIN` | `[1.0] × 12` | **per-item strength.** Below |
 
@@ -849,16 +890,16 @@ The case for it: **every shipped game gives these a toggle.** Vampire Survivors'
 | 4 | open the next island without `_hold_sec` | after the winning frame `battle` is **still the same object**, and after `HOLD_OUTCOME_SEC` it **has changed** (floor) |
 | 5 | hard-code the ring radius | the lion (1.5 tiles = 60px) and the ranged cell (1.0 = 40px) get **different radii** |
 | 5 | draw the area ring above the bodies | every `area ring.seq` is **less than every `body.seq`** |
-| 6 | draw lines with 9 enemies alive | **synthetic battle** — with 9 living enemies `_paint_target_line` is called **zero** times, with 6 it is called **six** (⚠ the current three islands top out at 6, so this cap never bites in play) |
+| 6 | draw lines above the cap | ⚠ **re-measured 2026-08-18 for `TARGET_LINE_MAX_COUNT` 14.** Both ends: at exactly **14** living enemies `_paint_target_line` is called **fourteen** times — **that arm is a real island's opening, not a synthetic one** — and at **15** it is called **zero**, which is still synthetic and says so |
 | 6 | draw the line above the bodies | every `target_line.seq` is **less than every `body.seq`** |
 | 7 | never emit `LAND` | the unloading frame's `events` holds one `LAND` per soldier |
 | 7 | the ring does not grow | the first frame's radius is **near 0** and the last is **at least 90%** of `LAND_RING_R_PX` |
-| 8 | the shell discards `load_soldier`'s bool again | press a refused key, **pump one frame**, `_paint_key`'s `bg` **differs from the accepted case** |
+| 8 | the shell discards `commit()`'s bool again | press start with `boats` empty, **pump one frame**, `_paint_button`'s `bg` **differs from the accepted case**, and the shift is above 0 and at most `REFUSE_SHAKE_PX` |
 | 8 | shake only the `rect` | on the refusal frame `rect.position` and the text `at` moved by **the same offset** |
 | 9 | never call `note_beak` | the picked frame's row `bg` and the frame after `HOLD_BEAK_SEC` **differ**, and removing `note_beak` makes **the two frames equal** |
 | 9 | call `apply_beak` before the hold | on the frame right after the pick, `run.state()` is **still REWARD** and `army.has_beak[picked]` is **still 0** |
 | 10 | skip the fade and open at full alpha | the first frame's `_paint_panel` alpha **<** the last frame's alpha **==** `COL_PANEL_BG.a` |
-| 10 | leave input open during a hold | pressing 1 during an outcome hold does **not** increase `battle.pending.size()` |
+| 10 | leave input open during a hold | ⚠ **re-driven 2026-08-18**: the 1/2 keys are gone, so it presses **start** during an outcome hold and asserts `battle.committed()` is **still false** — a state the sim owns |
 | 11 | accumulate the shake with `+=` | after `SHAKE_SEC`, `field_view.position` is **exactly (0,0)**, and the peak offset is ≤ `SHAKE_MAX_PX` |
 | 11 | **strength does not scale with damage (floor)** | the peak offsets for damage 2 and damage 4 **differ from each other** and each is **at least `dmg × SHAKE_PER_DAMAGE_PX × 0.8`** |
 | 11 | forget to subtract the shake from the dock click | clicking the centre of the dock rectangle **as drawn** on a shaken frame increases `battle.boats.size()` |
@@ -876,7 +917,7 @@ The case for it: **every shipped game gives these a toggle.** Vampire Survivors'
 > ⚠ **The table below is no longer a check list. It is the record of each item's un-juiced value**, i.e. what must disappear from the screen when a slot is edited to 0 by hand in `look.gd`. **No net walks it.**
 
 > **Refutation box — the draft's single line "that item's hook is called never" read as covering twelve and actually covered two.**
-> The same doc pins **"no new leaf" for items 3①③, 8, 9, 10, 11 and 12 — seven of them.** The hooks they ride (`_paint_body` · `_paint_key` · `_paint_berth` · `_paint_roster_entry` · `_paint_panel`) are **called every frame regardless, as long as there are bodies, keys and a panel.** And **items 4, 5 and 7 share one `_paint_ring`**, so `FX_GAIN[4] = 0` leaves 5 and 7 calling it. The ones it actually bites are **1 (`_paint_shot`), 2② (`_paint_spark`) and 6 (`_paint_target_line`) — three.**
+> The same doc pins **"no new leaf" for items 3①③, 8, 9, 10, 11 and 12 — seven of them.** The hooks they ride (`_paint_body` · `_paint_button` · `_paint_roster_entry` · `_paint_panel` — ⚠ `_paint_key` and `_paint_berth` were their names until 2026-08-18) are **called every frame regardless, as long as there are bodies, a button and a panel.** And **items 4, 5 and 7 share one `_paint_ring`**, so `FX_GAIN[4] = 0` leaves 5 and 7 calling it. The ones it actually bites are **1 (`_paint_shot`), 2② (`_paint_spark`) and 6 (`_paint_target_line`) — three.**
 > ⚠ **Item 2 left that list by owning a leaf, and is bitten only halfway** — the shards (②) bite, **the lunge (①) rides `_paint_body` and does not. That is why the item-2 row below states both layers separately.**
 > ⇒ **One line becomes twelve. The rule: not "the hook is not called" but "the value that item puts into the argument becomes exactly the un-juiced value."**
 
@@ -889,7 +930,7 @@ The case for it: **every shipped game gives these a toggle.** Vampire Survivors'
 | 5 | `_paint_ring` calls originating from `AREA` are **0** |
 | 6 | `_paint_target_line` called **0** times |
 | 7 | `_paint_ring` calls originating from `LAND` are **0** |
-| 8 | `_paint_key`'s `bg` == `Look.COL_BUTTON` and `rect` == `Look.key_rect_px(slot)` |
+| 8 | `_paint_button`'s `bg` == `Look.COL_START` and `rect` == `Look.start_rect_px()` |
 | 9 | that row's `bg` == `Look.COL_BUTTON` |
 | 10 | the first frame's `_paint_panel` alpha == `COL_PANEL_BG.a` |
 | 11 | `field_view.position` == `(0, 0)` |

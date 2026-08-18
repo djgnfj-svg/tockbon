@@ -8,8 +8,9 @@ extends RefCounted
 ## all. The view half lives in `net_fx_view`.
 ##
 ## Two step sizes, both deliberate, the same convention `net_battle` uses:
-##  · `TICK_STILL` (1e-5 s) is under `Rules.EPS`, so `_walk`'s loop never turns and **nobody moves** —
-##    an attack measured at that size happened at the distance the fixture wrote.
+##  · `TICK_ONE` is ONE sub-step, the smallest amount of simulated time there is. A unit already inside
+##    its reach does not walk, so an attack measured at that size happened at the distance the fixture
+##    wrote.
 ##  · a real frame (0.02 ~ 0.1 s) wherever the thing being measured is time itself: the wind-up, the
 ##    blow-to-blow period, the per-frame ceiling on `events`.
 ##
@@ -19,8 +20,13 @@ extends RefCounted
 ## below: the per-frame ceiling with `begin_frame`, and the pile-up without it.
 
 
-## Below Rules.EPS on purpose. See the header.
-const TICK_STILL := 1e-5
+## ⚠ **`step` runs whole `Rules.SIM_SUBSTEP_SEC` sub-steps and carries the leftover**
+## (`plan-then-watch`, 5.2), so there is no step too small to do anything any more: a `dt` under one
+## sub-step runs ZERO phases and every column stays at its fixture value — which reads as 「the rule
+## did not fire」 on every check at once. ⇒ **One sub-step is the smallest thing that happens**, and
+## that is what `TICK_ONE` is. A unit already inside its reach still does not walk, so the fixtures
+## that needed 「nobody moves」 keep the property they actually needed.
+const TICK_ONE := Rules.SIM_SUBSTEP_SEC
 
 const ARENA_W := 24
 const ARENA_H := 12
@@ -59,7 +65,7 @@ func _attack_event_shape(t) -> void:
 	_ashore(b, 0, Vector2(3, 9))               # idle: 10.8 tiles away, outside its own 5.5 reach
 	_ashore(b, 1, Vector2(12, 5))
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 
 	t.eq(b.events.size(), 2, "한 프레임에 병사 한 방과 적 한 방, 사건 둘이 나왔다")
 	var mine: Dictionary = b.events[0]
@@ -95,7 +101,7 @@ func _attack_event_shape(t) -> void:
 			[_spawn(ARENA_W, Rules.BISON, 12, 5)], 999.0)
 	_ashore(r, 0, Vector2(8, 5))
 	r.begin_frame()
-	r.step(TICK_STILL)
+	r.step(TICK_ONE)
 	t.eq(r.events.size(), 1, "4칸 떨어진 원거리 병사만 쐈다 (들소는 사거리 밖)")
 	var shot: Dictionary = r.events[0]
 	t.ok(Rules.range_of(int(shooter.type_id[int(shot["from"])])) > 0.0,
@@ -117,7 +123,7 @@ func _splash_carries_only_real_victims(t) -> void:
 	], 999.0)
 	_ashore(b, 0, Vector2(8, 5))
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	var ev: Dictionary = b.events[0]
 	var splash := PackedInt32Array(ev["splash"])
 	t.eq(splash.size(), 1, "광역 하나가 2차 피해자 하나를 실었다")
@@ -140,7 +146,7 @@ func _splash_carries_only_real_victims(t) -> void:
 	c.enemy_alive[1] = 0
 	c.enemy_hp[1] = 0.0
 	c.begin_frame()
-	c.step(TICK_STILL)
+	c.step(TICK_ONE)
 	var dead_ev: Dictionary = c.events[0]
 	t.eq(PackedInt32Array(dead_ev["splash"]).size(), 0, "반경 안이어도 이미 죽은 놈은 splash 에 안 실린다")
 	t.eq(c.enemy_hp[0], Rules.hp_of(Rules.BISON) - Rules.damage_of(Rules.CELL_RANGED),
@@ -162,7 +168,7 @@ func _death_events_come_after_the_attacks_that_caused_them(t) -> void:
 	b.enemy_hp[0] = Rules.damage_of(Rules.CELL_MELEE)
 	_ashore(b, 0, Vector2(12, 5))
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 
 	var attacks := []
 	var deaths := []
@@ -186,7 +192,7 @@ func _death_events_come_after_the_attacks_that_caused_them(t) -> void:
 	# ... and the death is announced exactly once. `alive` is already 0, so a check that only read the
 	# columns could never tell "it died" from "it is still dying every frame".
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	var again := 0
 	for raw in b.events:
 		var ev: Dictionary = raw
@@ -202,11 +208,11 @@ func _death_events_come_after_the_attacks_that_caused_them(t) -> void:
 ## the spot this soldier actually stands on) never enters the event at all.
 func _land_events(t) -> void:
 	var army := _army_of([Rules.CELL_MELEE, Rules.CELL_MELEE])
-	var b := _battle_of(_port(), army, [_spawn(ARENA_W, Rules.LION, 20, 9)], 999.0)
-	t.ok(b.load_soldier(Rules.CELL_MELEE) >= 0, "병사 하나를 태웠다")
-	t.ok(b.load_soldier(Rules.CELL_MELEE) >= 0, "병사 둘을 태웠다")
+	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.LION, 20, 9)], 999.0)
 	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
-	t.ok(b.launch(0, landing), "배가 떴다")
+	t.ok(b.send(0, landing) >= 0, "병사 하나를 배에 실었다")
+	t.ok(b.send(1, landing) >= 0, "병사 둘을 배에 실었다 — 한 명에 한 척이다")
+	t.ok(b.commit(), "시작을 눌러 두 척을 다 띄웠다")
 
 	var lands := []
 	var frames := 0
@@ -240,7 +246,7 @@ func _begin_frame_clears(t) -> void:
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.BISON, 13, 5)], 999.0)
 	_ashore(b, 0, Vector2(12, 5))
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	t.ok(b.events.size() > 0, "비우기 전에는 사건이 있다 (%d개)" % b.events.size())
 	b.begin_frame()
 	t.eq(b.events.size(), 0, "begin_frame 이 지난 프레임치를 비운다")
@@ -304,7 +310,7 @@ func _lion_declares_before_it_lands(t) -> void:
 	# The soldier walks into reach. Under the old rule this frame WAS the blow.
 	_place(b, 0, Vector2(12, 5))
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	t.eq(army.hp[0], Rules.hp_of(Rules.CELL_MELEE),
 			"사거리에 들어온 그 프레임에 피해가 0이다 — 첫 일격도 예고된다")
 	# `enemy_windup` is a PackedFloat32Array, so the 64-bit constant does not survive the store
@@ -359,7 +365,7 @@ func _lion_declares_before_it_lands(t) -> void:
 			[_spawn(ARENA_W, Rules.BISON, 13, 5)], 999.0)
 	_ashore(bb, 0, Vector2(12, 5))
 	bb.begin_frame()
-	bb.step(TICK_STILL)
+	bb.step(TICK_ONE)
 	t.eq(bison_army.hp[0], Rules.hp_of(Rules.CELL_MELEE) - Rules.damage_of(Rules.BISON),
 			"예고가 없는 들소는 첫 프레임에 그냥 때린다")
 	t.eq(bb.enemy_windup[0], 0.0, "들소는 예고를 안 건다")
@@ -378,10 +384,10 @@ func _windup_is_thrown_away_whole(t) -> void:
 	var darmy: Army = dead["army"]
 	darmy.hp[0] = 0.0
 	db.begin_frame()
-	db.step(TICK_STILL)
+	db.step(TICK_ONE)
 	t.eq(darmy.alive[0], 0, "겨눠진 병사가 죽었다")
 	db.begin_frame()
-	db.step(TICK_STILL)
+	db.step(TICK_ONE)
 	t.eq(db.enemy_windup[0], 0.0, "겨눈 병사가 죽으면 예고를 통째로 버린다")
 	t.eq(db.enemy_windup_at[0], -1, "잠근 표적도 버린다")
 
@@ -390,13 +396,13 @@ func _windup_is_thrown_away_whole(t) -> void:
 	var ab: Battle = away["battle"]
 	_place(ab, 0, Vector2(6, 5))
 	ab.begin_frame()
-	ab.step(TICK_STILL)
+	ab.step(TICK_ONE)
 	t.eq(ab.enemy_windup[0], 0.0, "표적이 사거리 밖으로 나가도 예고를 버린다")
 
 	# ... and it starts again from FULL, not from what was left
 	_place(ab, 0, Vector2(12, 5))
 	ab.begin_frame()
-	ab.step(TICK_STILL)
+	ab.step(TICK_ONE)
 	t.ok(_is_full_windup(ab, 0), "다시 들어오면 예고가 처음부터 다시 걸린다 — 잔량이 안 남는다 (%.4f초)"
 			% ab.enemy_windup[0])
 
@@ -405,7 +411,7 @@ func _windup_is_thrown_away_whole(t) -> void:
 	var gb: Battle = gone["battle"]
 	gb.enemy_hp[0] = 0.0
 	gb.begin_frame()
-	gb.step(TICK_STILL)
+	gb.step(TICK_ONE)
 	t.eq(gb.enemy_alive[0], 0, "사자가 죽었다")
 	t.eq(gb.enemy_windup[0], 0.0, "죽은 사자의 예고는 0으로 지워진다 — 시체 위에 링이 남지 않는다")
 	t.eq(gb.enemy_windup_at[0], -1, "겨눈 표적도 지워진다")
@@ -428,7 +434,7 @@ func _events_do_not_move_the_sim(t) -> void:
 	var before_s := b.soldier_pos.duplicate()
 	var before_e := b.enemy_pos.duplicate()
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	t.ok(b.events.size() >= 2, "이 프레임에 사건이 실제로 났다 (%d개) — 빈 프레임을 비교한 게 아니다"
 			% b.events.size())
 	var moved := 0
@@ -467,7 +473,7 @@ func _declared() -> Dictionary:
 	_ashore(b, 0, Vector2(12, 5))
 	_ashore(b, 1, Vector2(6, 8))
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	return {"battle": b, "army": army}
 
 
@@ -554,7 +560,21 @@ func _spawn(w: int, type_id: int, x: int, y: int) -> Dictionary:
 	return {"type_id": type_id, "tile": y * w + x}
 
 
+## An island already under way. ⚠ **The commit flag is set directly, and that matters more here than
+## anywhere else**: `step` refuses everything until the island is committed (`plan-then-watch`, 4.3),
+## and **an uncommitted battle produces no `events` at all** — which is precisely what this whole file
+## reads. A fixture that forgot to commit would run every one of its checks against an empty list and
+## the zero-check rule would not catch it, because the file still runs plenty of checks. The commit
+## gate itself is `net_plan`'s to measure.
+## **A fixture that has to author a plan uses `_planning_battle_of` and calls the real `commit()`.**
 func _battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
+	var b := _planning_battle_of(rows, army, spawns, limit)
+	b._committed = true
+	return b
+
+
+## The same island, left in the planning state, so a check can drive `send` and `commit` for real.
+func _planning_battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
 	var b := Battle.new()
 	# load_rows first, always: setup writes a reservation per enemy and load_rows clears the table.
 	b.setup(_grid_of(rows), army, spawns, limit)

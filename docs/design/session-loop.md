@@ -31,14 +31,14 @@ diverge** — a fact corrected in one and not the other is worse than no English
 > | **The code table's `hud_view` and `game.gd` rows** | **Their meaning changed.** Not "`1`–`5` map to slots" but **the keys die outright.** The file-by-file list belongs to [plan it, then watch it](plan-then-watch.md) |
 > | **Undecided 3, "do cells grow during combat"** | ⚠ **Its stakes are gone.** Its stated grounds were *"yes and the hands keep working"*, and **decided 1 settles that the hand does not move either way** |
 > | **Undecided 9, "per summon or a design-time cap"** | **Half dead.** "Per summon" is gone; **only the design-time cap remains** |
-> | **Undecided 10, "does capacity count bodies or cost"** | ⚠ **Alive and sharper.** Decided 3 says loading is unrestricted before the start, so **what capacity counts sets how free the plan is** |
+> | **Undecided 10, "does capacity count bodies or cost"** | ~~⚠ Alive and sharper~~ ⚠⚠ **VOID as of 결정 14R (2026-08-18, later still).** **Boats are unlimited and free, one soldier each, created by a drag** — there is no capacity to count anything in. `Rules.BOATS`, `boat_count`, `cap_of` and `boat_speed_of` are deleted from the code and `battle.load_soldier` with them. **The scarce thing is the roster, not a seat.** See `plan-then-watch` |
 >
 > **What died and what survived out of the adversarial-review box below:**
 >
 > | Review item | Today |
 > |---|---|
 > | ① **The five slots collapse into one** | **Void.** There is nothing to press repeatedly |
-> | ② **`load_soldier`'s new meaning overlaps its old domain (49 call sites)** | **Void.** The domain is unchanged. ⚠ **A different silent breakage replaced it** — what changes is *when it may be called*, and **`battle` knows nothing about a planning phase.** [Plan it, then watch it](plan-then-watch.md) |
+> | ② **`load_soldier`'s new meaning overlaps its old domain (49 call sites)** | **Void twice over.** The domain was unchanged, and then **`load_soldier` was DELETED outright** — `battle.send(soldier_id, tile)` replaced it, and `battle` now owns the planning phase as a commit gate inside `step()`. [Plan it, then watch it](plan-then-watch.md) |
 > | ② **The five slots have no screen coordinates** · **slot indices leak into the type table** · **`net_shell`'s self-measuring check** | **All void.** There are no slots and no keys |
 > | ② **`panel_view` paints a red 「패배」 over the new screens** | ⚠⚠ **Alive and more important.** The new design also adds a `run` state |
 > | ① **A whole run contains 15 kills** | ⚠ **Alive, and it means something else** — not the grain of the economy but **the number of things there are to plan against.** Four enemies on an island is four |
@@ -389,7 +389,7 @@ If the family ability is worth **much** more than 6.67%, the answer collapses ba
 
 ### ⚠⚠ Two open questions that would invert all of the above
 
-**1. If a boat's capacity counts bodies, none of this holds.**
+**1. ~~If a boat's capacity counts bodies, none of this holds.~~** ⚠⚠ **MOOT — 결정 14R deleted capacity.** Every boat carries exactly one soldier and boats are unlimited, so there is no seat to compete for. **The paragraph below is kept as the record of why it mattered**, and its conclusion inverts: what "everything on one slot" now dominates is not a seat but nothing at all — the shape it warned about moved to the BEACH, and that is `plan-then-watch`'s deferred brake.
 In shipped code a boat carries a number of **soldiers** (big 4, fast 2). If capacity counts bodies, **a
 five-object monster and a bare cell each eat one seat** ⇒ **the scarce resource is a body slot, not cells**,
 and **"everything on slot 1" strictly dominates whatever shape the cost curve has.**
@@ -484,7 +484,7 @@ the planning screen, not to the combat screen.** [Plan it, then watch it](plan-t
 | `src/sim/rules.gd` | Cell costs · the object table · the family table · the family threshold | **Every constant that changes what happens, in one file.** ⚠ A `const` Array loses element typing, so every read casts, and **a `const` packed array is a parse error** |
 | `src/sim/` — one new file | **What each of the five slots holds · a slot's cost · the stats of the soldier it summons.** `RefCounted`, built with `.new()`, never touches the tree. **Per-slot objects in flat arrays** | `sim` uses no `Node`, no `_draw`, no `Input`, no `$` |
 | `src/sim/army.gd` | ⚠ **Undecided 1 (do cells come back on death) decides what this file is for. Do not touch it before that answer** | Today's contract — a row is never removed, which is what makes permadeath structurally true — only survives if the answer is "permanent" |
-| `src/sim/battle.gd` | `load_soldier(type_id)` becomes **a summon that takes a slot index**; it spends from the cell wallet. A dead enemy yields cells, and sometimes an object | **`events` is the only path from sim to view** and carries three kinds today — a kind is added. No clock grows inside `sim` |
+| `src/sim/battle.gd` | ⚠⚠ **`load_soldier` no longer exists** (deleted 2026-08-18 with the summon keys). Whatever spends the cell wallet has to be hung on something else; `send`/`recall`/`commit` are what `battle` offers now | **`events` is the only path from sim to view** and carries three kinds today — a kind is added. No clock grows inside `sim` |
 | `src/sim/run.gd` | **Wallet · inventory · the map graph · the refit state.** `State` gains map and refit; the fixed per-island reward table becomes node kinds | The only state that crosses islands |
 | `src/view/hud_view.gd` | **`KEY_TYPES` dies as a constant** — slots change during a run, so it reads slot state instead. Key boxes go from glyphs to drawings | `view` reads `sim` and never writes it |
 | `src/view/` — two new files | **A map view and a refit view.** `Node2D` with `_paint_*` hooks, **exactly one `draw_*` per leaf** | ⚠ **`net_draw_leaf` reddens any function its per-function table does not name**, so a new file opens its table in the same edit |
@@ -520,13 +520,19 @@ the planning screen, not to the combat screen.** [Plan it, then watch it](plan-t
    recorded as such, not as scope
 7. **What the families are.** No list. **Step 5 of the arithmetic depends directly on family count and
    threshold**
-8. **Map branch count, depth, and node kinds.** Nothing settled beyond reusing the GDD's four. The user's
-   "two rows" reads two ways — see the map section
+8. ~~**Map branch count, depth, and node kinds.**~~ ⚠⚠ **CLOSED (2026-08-18) —
+   [the title and the map](title-and-map.md) answers it: five floors, seven nodes, four routes, four fight
+   islands per run, and three types (fight · chest · boss) with the elite deferred.** ⚠ **One thing is
+   still open**: whether the user's "two rows" is ① or ② — that doc's open 1 carries the quote verbatim
+   and is with the user. An answer of ② rewrites the five floors.
+   ⚠ **And closing this changes one number elsewhere**: [the cell army GDD](cell-army-gdd.md)'s
+   recovery-path section assumes **eight islands** while the real map is **four fight islands**.
+   ~~Original: nothing settled beyond reusing the GDD's four; the user's "two rows" reads two ways.~~
 9. **Is the cost paid per summon, a design-time budget cap, or both?** The user said *"전체 코스트가 있어서"*
    (*"there's a total cost"*), which reads both ways. ~~Decided 3 pins **per-summon spending**;~~
    ⚠ **Half died (2026-08-18, later the same day)** — with summoning deleted, **"per summon" is no longer an
    available answer.** What is left is **one design-time cap**, and it is not decided
-10. ⚠⚠ **Does a boat's capacity count bodies or cost?** **The whole arithmetic section inverts on this.**
+10. ~~⚠⚠ **Does a boat's capacity count bodies or cost?**~~ ⚠⚠ **CLOSED BY DELETION, 결정 14R.** There is no capacity: one boat, one soldier, unlimited boats.
     ~~And **decided 10 (the boat is not fixed) keeps it open alongside the boat itself**~~
     ⚠ **Decided 10 reversed and this item got sharper** — decided 3 says loading is unrestricted before the
     start, so **what capacity counts is exactly how free the plan is**

@@ -18,11 +18,14 @@ turned into 세포 (cells) and objects that you fit together between rounds.**
 ⚠ **Two user reversals landed on 2026-08-18 and both are load-bearing.** ① The part no longer bolts onto the
 soldier who survived — a build made of what you happened to eat cannot be level-designed late (`session-loop`).
 ② **The hand no longer moves during combat**: you plan the whole landing, press start, and watch. The 1~5
-summon keys are **deleted** (`plan-then-watch`). ⇒ **The combat model in the shipped build is the old one.**
+summon keys are **deleted** (`plan-then-watch`). ⇒ **Both are now BUILT and shipped** — the plan is in `3.done`.
 **There is no host.** `F` and `V` are gone. Soldiers carry across islands, **HP included**, and **a dead one
-is dead for good.** ~~Combat is real time, summoned with the **1~5 hotkeys**~~ — **that is the shipped build,
-not the design**: since 2026-08-18 **the whole landing is planned before a start button and the hand does
-nothing during the fight** (`plan-then-watch`). The loss condition is a **time limit**, ⚠ **and the probe
+is dead for good.** ~~Combat is real time, summoned with the **1~5 hotkeys**~~ — **deleted, and the keyboard
+does nothing in this game at all now.** Since 2026-08-18 **the whole landing is planned before a start
+button and the hand does nothing during the fight**, and that is what the tree runs (`plan-then-watch`).
+⚠ **The boats are UNLIMITED and one-seat** — the five-boat cap was reversed by the user the same day, and
+**there is deliberately NO brake on them yet**: 「일단 빼고 만든 이후에 추가하자는 거임」. **Nothing licenses
+writing a cap.** The loss condition is a **time limit**, ⚠ **and the probe
 measured that it has never once bound** — 15 island-runs, worst plan at 49% of the limit. The two reference points are pinned in that doc and **the user asked that they never be
 dropped**: **Bad North** (2 people, ~790k copies) and **Despot's Game** (100k+, units not controlled at all).
 **They answered the same question in opposite directions and both worked** — that is why both are there.
@@ -95,18 +98,30 @@ never that it was used. **See「No fake nets」— those entries were all earned
 ### The state of the tree, right now
 
 - **`src/` is built and the game runs end to end.** `run/main_scene` is `src/shell/game.tscn`.
-  `src/sim/` (rules · grid · islands · army · battle · run) · `src/view/` (field · hud · panel) ·
+  `src/sim/` (rules · grid · islands · army · battle · run · **map**) · `src/view/` (field · hud · panel ·
+  **map · title**) ·
   `src/shell/game.gd` · `src/look.gd` · `tools/probe/run_run.gd`
-- **The round is green: 11 nets, 967 checks, 2.8s.** `net_battle` `net_boat` `net_islands` `net_run`
+- **The round is green: 14 nets, 1933 checks, 6.3s.** `net_battle` `net_boat` `net_islands` `net_run`
   `net_shell` `net_draw_leaf` `net_fx` `net_fx_view` `net_citations` `net_camera` `net_coast`
-- **A run plays**: three islands, boat landings, the beak reward, the lion, restart. **And the twelve
+  `net_plan` `net_map` `net_title`
+- **A run plays end to end from the title**: 시작하기 → a seven-node map → an island you plan, commit and
+  watch → back to the map. Boat landings, the beak reward, the lion, restart. **And the twelve
   presentation items are in** — see `combat-juice-ko.md`
+- **The main loop shipped on 2026-08-19** — a title (시작하기 · 설정하기 · 종료) and a **five-floor /
+  seven-node / four-route fixed map**, no RNG, the reward moved off the island and onto the node.
+  Four node states are told apart at rest by **size AND brightness AND what is drawn on top** — see
+  `title-and-map-ko`. The plan is `title-and-map`, in `2.active`: **step 5, the three extra grids, is
+  NOT built**, so three grids serve six island-opening nodes
 - **The boat round shipped on 2026-08-18** — a **48×32** grid, an **open coastline** (any unblocked beach,
   no docks), **three harbours an island** with a fleet that relocates to the nearest one that can still see
-  where it landed, **two boats** (big 4 @ 3.0 tiles/s · fast 2 @ 5.0), cliffs and ramps, and a **pan/zoom
+  where it landed, ~~**two boats** (big 4 @ 3.0 tiles/s · fast 2 @ 5.0)~~ — **replaced the next day by
+  unlimited one-seat boats**, cliffs and ramps, and a **pan/zoom
   camera** — see `boat-invasion-ko`. The plan is `boat-and-landing`, in `3.done`
-- `tools/look/` — only its `README.md`. Both probes and all three capture scripts drove the deleted shell.
-  ⚠ **Screenshots are not automated right now**; the game is launched and the user looks
+- `tools/look/` — its `README.md` **and `capture_map.gd`, which runs**: ten frames — the title, the map, a
+  walked map, a known-answer calibration shot and six of the island — in about ten seconds, quitting on its
+  own. Windowed, never `--headless` (no swapchain means blank PNGs and a hang), every input through the
+  engine so **nothing is taken from the user**. ⚠ **Take the known-answer shot before trusting any other.**
+  The three older scripts drove the deleted shell and are gone
 - `docs/` — **60-odd docs were deleted on 2026-08-17** because they described the two dead games and a fresh
   session reads them as constraints. **What they measured was distilled into `lessons-from-two-dead-games`
   first.** What is left is small on purpose, and every index lists exactly what is live
@@ -245,11 +260,12 @@ the three README indexes, it does not exist.
 | `lessons-from-two-dead-games` · `-ko` | **What two deleted games measured.** Numbers and repeating failure shapes. ⚠ **Nothing in it is a spec** |
 | `docs/planning-principles-ko.md` | **How to judge a direction.** Survived both resets on purpose — read it first |
 | `docs/decisions/` | **Why something was *not* done.** Six docs; **two are reversed and kept for that reason** |
+| `title-and-map` · `-ko` | **The main loop — the frame around a run: a title screen (시작하기 · 설정하기 · 종료) and a Slay-the-Spire node map.** Five floors, seven nodes, four routes; three of the GDD's four node types, because an elite's rewards do not exist in code. ⚠ **The island shortage is decided by the user** — six grids, three exist, three authored by hand, no generator — **and the cost of adding one more is itself a design goal.** Carries a refutation of its own map, **twice over**: the first draft said islands cost no HP, and the probe re-run on the built tree says they cost **27–91.5 apiece** — but also that the two branches currently differ by which GRID they draw rather than by what they pay, so **the fork is not measured yet.** It also **names every pressable thing's minimum size and contrast as numbers.** ⚠ **The chest pays an artifact, four offered and one taken** (user) — **and that inverts its own HP schedule**: the chest no longer heals, so the two-beak route reaches the boss below the wipe threshold and **the GDD's undecided 14 (recovery) is not closed but newly bitten.** ⚠ **Built and green (14 nets, 1933 checks) EXCEPT the three new grids** — `MAP_NODES`'s island column is still `[0, 1, 2, 1, 2, -1, 2]`, so three grids serve six island-opening nodes and every route replays terrain it has solved; the probe measured that this alone makes the beak branch lose the run on its second node. **The chest in CODE still heals** — the artifact decision is design-only. **Nothing accepted; two open items wait on the user** |
 | `plan-then-watch` · `-ko` | **The part loop, replaced: you plan the whole landing, press start, and watch.** The hand does not move during combat. ⚠ **Newest doc, nothing built, nothing accepted** |
 | `session-loop` · `-ko` | **The run: a node map and the between-round refit.** Carries cost arithmetic that refutes itself twice. ⚠ **Half of it died the same day** — the summon-key half — **and its top box says which half.** Three adversarial reviews are recorded in it; read them before starting anything |
 | `boat-invasion` · `-ko` | **The open coastline, the fleet and the camera.** Why the dock died, what the probe measured about it afterwards, and the `Accepted` line carrying the user's verdict |
 | `combat-juice` · `-ko` | **The twelve presentation items, built and accepted.** How a sim event reaches the view without `sim` growing a clock, the full closed hook table, every `look.gd` constant, and what has to break for each net to redden |
-| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` and `2.active` are empty; `3.done` holds `first-slice` and `boat-and-landing` |
+| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` is empty; `2.active` holds `title-and-map`; `3.done` holds `first-slice`, `boat-and-landing` and `plan-then-watch` |
 | `docs/harness-todo-ko.md` | **Work on the tools, not the game.** Top item is the user's: **parallelise the build** |
 | `docs/how-studios-schedule-art-ko.md` | **When other studios attach the art**, with sources. Written because the user has no data of their own and said so — see the reply rule about recommendations |
 | `docs/gdd-audit-ko.md` | **A six-axis audit of the GDD and the slice plan**, run before the build. ⚠ **Its last section lists the findings that were refuted** — read that before re-raising any of them. Korean only |
@@ -514,6 +530,18 @@ These survive **even after you confirm every mutation goes red**:
 - ⚠ **A `const` Array cannot be mutated at runtime, so "zero this table entry and watch it redden" is not a
   mutation you can write.** Twelve planned net rows died on this. **Drive the accessor instead** — the
   off-by-one in `fx_gain_of` is reachable and the raw table is not
+- ⚠ **A spy that CAPTURES an argument no row ever reads is a hole with a lid on it.** The map's seven
+  leaves captured `col` on four of them and **not one check inspected any of the four** — so the
+  you-are-here ring, the border on every reachable node, all six reward glyphs and the screen's only two
+  numbers could each be drawn at **alpha 0 with 1911 checks green.** The capture *looks* like coverage in
+  a code review, which is why it survived a first adversarial pass. ⇒ **List the keys a spy stores and
+  grep for a reader of each.** And read them as CONTRAST against what they are drawn on, not only as a
+  non-zero alpha: the shipped glyph cleared any alpha floor at **1.3 : 1** and was unreadable
+- ⚠ **A bounding box of zero extent still returns the right centre.** A helper that read each captured
+  ring's centre back — written precisely to prove *a count cannot say WHERE* — could not see
+  `_ring_points(centre, radius * 0.0, …)` collapse every polygon and polyline to a single point.
+  ⇒ **When a check reads geometry back, read the EXTENT beside the position.** This is
+  `draw_circle(p, 0.0, col)` again, arriving at the geometry argument instead of the radius one
 - **Measuring a pure function is not measuring that anything calls it — and the scanner has a hole shaped
   exactly like that.** `net_draw_leaf._scan` skips any function with `draw` count 0, so building geometry
   inside a helper and passing an **empty** array to the leaf reads as *1 draw call, 4/4 arguments used* —
@@ -522,7 +550,7 @@ These survive **even after you confirm every mutation goes red**:
 
 ## Running the nets
 
-**Where it stands: 11 nets, 967 checks, 2.8 seconds, green.** It got there in two days from an empty `src/` —
+**Where it stands: 14 nets, 1933 checks, 6.3 seconds, green.** It got there in two days from an empty `src/` —
 6 nets / 399 checks for the slice, 9 / 725 after the presentation pass, 11 / 967 after the boat round.
 
 **The bar the old game reached: 25 nets, 3541 checks, 4.6 seconds** — `v2-openfield` at its end

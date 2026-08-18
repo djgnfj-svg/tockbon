@@ -1,7 +1,8 @@
 class_name Run
 extends RefCounted
-## Session state: which island the army stands on, which reward is waiting to be taken, and whether the
-## run is still going. One island's fight lives in `battle.gd`; this file is everything between them.
+## Session state: which node of the map the army is standing on, which reward is waiting to be taken,
+## and whether the run is still going. One island's fight lives in `battle.gd`, the map's shape is
+## `rules.gd`'s node table and the walk over it is `map.gd`; this file is everything between them.
 ##
 ## **`army` is built in exactly two places — `_init` and `restart` — and nowhere else.** HP carries
 ## across islands by identity: the same rows, the same ids, the same wounds. So `begin_island` hands
@@ -17,34 +18,33 @@ extends RefCounted
 ## points" for the signatures below.
 
 
-## Where the run is. `BATTLE` means an island is open and `begin_island` will build its fight;
-## `REWARD` means a pick is waiting; `WON` and `LOST` are both terminal until `restart`.
-enum State { BATTLE, REWARD, WON, LOST }
-
-## What an island pays on the way out. `COUNT` has nothing to choose, so it is applied on the win and
-## the run walks straight to the next island — **only `BEAK` opens a `REWARD` state.**
-enum Reward { NONE, COUNT, BEAK }
-
-## The reward each island pays, indexed by the island just cleared. The last island pays nothing:
-## clearing it ends the run.
+## Where the run is. `MAP` means the node map is open and a node is waiting to be pressed; `BATTLE`
+## means an island is open and `begin_island` will build its fight; `REWARD` means a pick is waiting;
+## `WON` and `LOST` are both terminal until `restart`.
 ##
-## This lives here and not in `rules.gd` because it is the shape of the session, not a value that
-## changes what happens inside a fight. A plain `const` Array: `const X := PackedInt32Array([...])` is
-## a parse error in 4.7, and a const Array loses element typing, so the read below casts.
-const _REWARDS := [Reward.COUNT, Reward.BEAK, Reward.NONE]
+## ⚠ **`MAP` is FIRST so it is 0**, and a default-constructed int therefore lands on the map rather
+## than in a battle against an island nobody entered.
+enum State { MAP, BATTLE, REWARD, WON, LOST }
 
 
-## The island the army is on. **It never leaves the range of real islands.** Winning the last one
-## leaves this at the last index and moves `state()` to `WON` instead of stepping to a fourth island
-## that does not exist — an out-of-range index here would read as a real island to every caller that
-## indexes with it and would only fault later, inside whichever of them indexed first.
+## The island the node the army is standing on opened. **It never leaves the range of real islands.**
+## An out-of-range index here would read as a real island to every caller that indexes with it and
+## would only fault later, inside whichever of them indexed first.
+##
+## ⚠ **It is no longer the run's position.** The position is `map.at()`; this is written only by
+## `enter_node`, and `_advance` does not touch it. A `+ 1` put back here walks the run past an island
+## nobody chose, and the map is then a picture the run ignores.
 var island_index := 0
 
 ## The roster that survives islands. Never rebuilt outside `_reset`.
 var army: Army = null
 
-var _state := State.BATTLE
-var _pending := Reward.NONE
+## The route walked so far. Built in `_reset` beside `army` — **the two places a run's state is built
+## stay exactly two.**
+var map: RunMap = null
+
+var _state := State.MAP
+var _pending := Rules.Reward.NONE
 
 
 func _init() -> void:
@@ -62,13 +62,39 @@ func _reset() -> void:
 	island_index = 0
 	army = Army.new()
 	army.add_starting_force()
-	_state = State.BATTLE
-	_pending = Reward.NONE
+	map = RunMap.new()
+	_state = State.MAP
+	_pending = Rules.Reward.NONE
 
 
-## Builds the current island's fight and hands it back. Returns `null` when no island is open — during
-## a reward pick, or once the run is over — so a caller that ignores `state()` gets a null instead of a
-## fight on an island the army has already left.
+## The map screen's ONE verb: step onto a node. Returns false and changes nothing when the run is not
+## on the map or the node is not reachable — the caller validates its own click, matching `RunMap.enter`
+## and `grid.load_rows`.
+##
+## Reachability is asked of `map.enter` and nowhere else here. Testing `is_reachable` first and then
+## calling `enter` would be the same rule written twice, free to disagree the day one of them grows a
+## clause.
+##
+## A node that opens an island hands the run to `BATTLE` and `begin_island` builds the fight. A node
+## that opens none is a chest: **its reward is applied here, on the spot, and the run stays on the
+## map.** There is no `CHEST` state because it would have exactly one frame of life and one caller.
+func enter_node(n: int) -> bool:
+	if _state != State.MAP:
+		return false
+	if not map.enter(n):
+		return false
+	var island := Rules.map_island_of(n)
+	if island >= 0:
+		island_index = island
+		_state = State.BATTLE
+		return true
+	_queue_reward(n)
+	return true
+
+
+## Builds the current island's fight and hands it back. Returns `null` when no island is open — **on
+## the map**, during a reward pick, or once the run is over — so a caller that ignores `state()` gets a
+## null instead of a fight on an island the army has already left or has not chosen yet.
 ##
 ## The `Grid` is new every time. `load_rows` does clear reservations, but a grid built here can never
 ## be one another `Battle` still holds unit ids inside, and that costs 1536 tiles once per island
@@ -83,92 +109,114 @@ func begin_island() -> Battle:
 	return battle
 
 
-## Closes the island. A loss is terminal at once; a win queues that island's reward, and the reward is
-## what decides whether the run stops for a pick or walks on by itself.
+## Closes the island. A loss is terminal at once; a win queues the reward of **the node the run is
+## standing on**, and the reward is what decides whether the run stops for a pick or goes back to the
+## map by itself.
 ##
 ## Ignored unless an island is actually open, so a loss cannot be un-lost, a finished run cannot be
 ## reopened, and a reward waiting to be picked cannot be skipped past.
 ##
-## ⚠ What that does **not** catch is the same island being closed twice in a row: the first call has
-## already opened the next one, so the second closes *that*, and the run walks past an island nobody
-## fought. Distinguishing the two needs `begin_island` to arm this, and arming it would make a caller
-## that closes an island it never began a **silent** no-op instead — worse, because nothing moves and
-## nothing says why. So this is called exactly once per island, by whoever ran the fight.
+## ⚠ **The double-close hole this guard used to leave is now closed by the map, not by this line.**
+## It used to open the next island by itself, so a second call closed *that* one and the run walked
+## past an island nobody fought; now a win lands in `MAP` and the second call falls out on the guard
+## above. ⚠ **That is a property of `_advance` no longer stepping `island_index`** — put the step back
+## and this paragraph becomes a lie again as well.
 func finish_island(won: bool) -> void:
 	if _state != State.BATTLE:
 		return
 	if not won:
 		_state = State.LOST
 		return
-	_pending = _reward_for_island(island_index)
+	_queue_reward(map.at())
+
+
+## Queues the node's reward and resolves it as far as it can go on its own. **One dispatch, shared by
+## the win path and the chest path**, so a reward that needs no fight and a reward that needed one are
+## applied by the same lines — a second `match` here is how `HEAL` would end up silently falling into
+## `_advance()` with nothing healed.
+func _queue_reward(n: int) -> void:
+	_pending = Rules.map_reward_of(n)
 	match _pending:
-		Reward.COUNT:
+		Rules.Reward.COUNT:
 			take_count_reward()
-		Reward.BEAK:
+		Rules.Reward.HEAL:
+			take_heal_reward()
+		Rules.Reward.BEAK:
 			_state = State.REWARD
 		_:
 			_advance()
 
 
-## `Reward.NONE`, `Reward.COUNT` or `Reward.BEAK` — what is waiting to be taken right now.
+## `Rules.Reward.NONE`, `COUNT`, `BEAK` or `HEAL` — what is waiting to be taken right now.
 func pending_reward() -> int:
 	return _pending
 
 
-## Island 1's reward: more soldiers, at full HP, appended to the roster that is already carrying the
-## survivors. `Army.add` is what fills their HP, so no starting value is written twice.
+## A `COUNT` node's reward: more soldiers, at full HP, appended to the roster that is already carrying
+## the survivors. `Army.add` is what fills their HP, so no starting value is written twice.
 ##
-## Called by `finish_island` the moment it is queued, because there is nothing to choose — it is public
-## only so that the applying of the reward and the naming of it are the same function in both cases.
+## Applied the moment it is queued, because there is nothing to choose — it is public only so that the
+## applying of the reward and the naming of it are the same function in all three cases.
 func take_count_reward() -> void:
-	if _pending != Reward.COUNT:
+	if _pending != Rules.Reward.COUNT:
 		return
 	for _i in range(Rules.REWARD_MELEE):
 		army.add(Rules.CELL_MELEE)
 	for _i in range(Rules.REWARD_RANGED):
 		army.add(Rules.CELL_RANGED)
-	_pending = Reward.NONE
+	_pending = Rules.Reward.NONE
 	_advance()
 
 
-## Island 2's reward: the beak onto one **surviving** soldier, then on to the boss.
+## The chest's reward: every LIVING soldier back to full HP. `Army.heal_all` is what refuses to touch a
+## dead row, so the rule that a death is permanent is not restated here.
+##
+## Applied the moment it is queued — a chest has no fight to wait for — and public for the same reason
+## `take_count_reward` is: the applying and the naming are one function.
+func take_heal_reward() -> void:
+	if _pending != Rules.Reward.HEAL:
+		return
+	army.heal_all()
+	_pending = Rules.Reward.NONE
+	_advance()
+
+
+## A `BEAK` node's reward: the beak onto one **surviving** soldier, then back to the map.
 ##
 ## A bad pick — an id off the end of the roster, or a soldier who died on the island that paid for it —
 ## leaves everything where it was: the reward stays pending and `state()` stays `REWARD`, so the caller
 ## can see that nothing happened and ask again. It does not bark, matching `grid.load_rows`: validating
 ## a click is the caller's job, and a bark here would have to be forgiven by every net that pokes at the
-## roster. What it must never do is consume the reward, which is the one beak the whole slice has.
+## roster. What it must never do is consume the reward without applying it.
+##
+## ⚠ **A run may collect more than one beak now** — a route can step on two beak nodes — so nothing
+## downstream may treat a beak already on the roster as proof this reward was spent. `_pending` is.
 func apply_beak(soldier_id: int) -> void:
-	if _pending != Reward.BEAK:
+	if _pending != Rules.Reward.BEAK:
 		return
 	if soldier_id < 0 or soldier_id >= army.alive.size():
 		return
 	if army.alive[soldier_id] == 0:
 		return
 	army.has_beak[soldier_id] = 1
-	_pending = Reward.NONE
+	_pending = Rules.Reward.NONE
 	_advance()
 
 
-## `State.BATTLE`, `State.REWARD`, `State.WON` or `State.LOST`.
+## `State.MAP`, `State.BATTLE`, `State.REWARD`, `State.WON` or `State.LOST`.
 func state() -> int:
 	return _state
 
 
-## Onto the next island, or the run is won. See `island_index` for why this stops rather than counting
-## past the last island.
+## The reward is settled: back to the map, unless the node just settled was the boss, in which case
+## the run is won.
+##
+## ⚠ **It does not touch `island_index`.** Walking to the next island by itself is what the old
+## `island_index + 1` did, and a map added on top of that just gets walked past — the map appears, the
+## run ignores it, and every check that only counts islands stays green. Which node comes next is the
+## player's press, and `enter_node` is the only writer.
 func _advance() -> void:
-	if island_index + 1 < Islands.count():
-		island_index += 1
-		_state = State.BATTLE
-	else:
+	if map.is_finished():
 		_state = State.WON
-
-
-## Anything past the table pays nothing. The table is written for three islands and `islands.gd` owns
-## how many there are, so if the two ever disagree the extra island ends the run quietly instead of
-## indexing off the end of a const Array.
-static func _reward_for_island(i: int) -> int:
-	if i < 0 or i >= _REWARDS.size():
-		return Reward.NONE
-	return int(_REWARDS[i])
+	else:
+		_state = State.MAP

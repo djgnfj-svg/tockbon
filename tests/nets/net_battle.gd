@@ -11,15 +11,23 @@ extends RefCounted
 ## **The grids here are hand-built, not the three real islands.** A fixture that moves when someone edits
 ## an island measures the island; `net_islands` owns the real grids and this net owns the rules.
 ##
-## Two step sizes recur and both are deliberate:
-##  · `TICK_STILL` (1e-5 s) is below `Rules.EPS`, so `_walk`'s `remaining > EPS` loop never turns and
-##    **nobody moves at all** — an attack measured at that step size happened at the distance the fixture
-##    wrote, not at some distance movement produced on the way.
-##  · a real 0.1 s frame is used wherever the thing being measured IS movement.
+## ⚠ **`step` runs whole `Rules.SIM_SUBSTEP_SEC` sub-steps and carries the leftover** (`plan-then-watch`,
+## 5.2), so there is no longer any such thing as a step too small to do anything: `step(1e-5)` runs ZERO
+## phases and every column stays at its fixture value, which reads as "the rule did not fire" on every
+## check in this file at once. That is exactly what the old `TICK_ONE` became the day sub-stepping
+## landed. ⇒ **One sub-step is the smallest thing that happens**, and it is what every "measure the
+## blow at the distance the fixture wrote" row is driven with now.
+##
+## A unit already inside its reach does not walk (`_phase_movement` returns before `_walk` for it), so
+## one sub-step still leaves those fixtures standing exactly where they were written — which is the
+## property those rows actually needed. A unit OUTSIDE its reach closes `speed / 60` of a tile, and no
+## row in this file is bounded tightly enough for that to matter.
+##
+## A real 0.1 s frame (six sub-steps) is used wherever the thing being measured IS movement.
 
 
-## Below Rules.EPS on purpose. See the header.
-const TICK_STILL := 1e-5
+## One whole sub-step — the smallest amount of simulated time that exists. See the header.
+const TICK_ONE := Rules.SIM_SUBSTEP_SEC
 
 const ARENA_W := 24
 const ARENA_H := 12
@@ -111,16 +119,16 @@ func _nearest_first(t) -> void:
 	], 999.0)
 	_ashore(b, 0, Vector2(12, 5))
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	t.eq(b.soldier_target[0], 1, "더 가까운 적을 고른다 (2칸 대 4칸)")
 
 	# The near one dies; the next frame must hand the soldier the far one.
 	b.enemy_hp[1] = 0.0
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	t.eq(b.enemy_alive[1], 0, "가까운 적이 죽었다")
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	t.eq(b.soldier_target[0], 0, "표적이 죽으면 남은 최근접으로 다시 고른다")
 
 	var tie_army := _army_of([Rules.CELL_RANGED])
@@ -130,7 +138,7 @@ func _nearest_first(t) -> void:
 	], 999.0)
 	_ashore(tied, 0, Vector2(12, 5))
 	tied.begin_frame()
-	tied.step(TICK_STILL)
+	tied.step(TICK_ONE)
 	t.eq(tied.soldier_target[0], 0, "거리가 같으면 id 가 작은 쪽을 고른다")
 
 
@@ -141,20 +149,50 @@ func _nearest_first(t) -> void:
 func _reach_is_range_plus_bonus(t) -> void:
 	var full := Rules.hp_of(Rules.BISON)
 	var hit := full - Rules.damage_of(Rules.CELL_MELEE)
-	t.eq(_melee_probe(Vector2(-1, 0), TICK_STILL), hit, "정확히 1.0 칸에서 때린다")
-	t.eq(_melee_probe(Vector2(-1, -1), TICK_STILL), hit, "정확히 1.41421 칸(대각)에서도 때린다")
-	t.eq(_melee_probe(Vector2(-2, 0), TICK_STILL), full, "2.0 칸에서는 못 때린다")
+	t.eq(_melee_probe(Vector2(-1, 0), TICK_ONE), hit, "정확히 1.0 칸에서 때린다")
+	t.eq(_melee_probe(Vector2(-1, -1), TICK_ONE), hit, "정확히 1.41421 칸(대각)에서도 때린다")
+	t.eq(_melee_probe(Vector2(-2, 0), TICK_ONE), full, "2.0 칸에서는 못 때린다")
 
 
-## The comparison is `<=` with `Rules.EPS` of slack, so half an epsilon past the reach still lands and
-## three epsilons past it does not. Without the slack a diagonal — exactly sqrt(2) — is a coin flip.
+## The comparison is `<=` with `Rules.EPS` of slack, so half an epsilon past the reach is inside and
+## three epsilons past it is outside. Without the slack a diagonal — exactly sqrt(2) — is a coin flip.
+##
+## ⚠ **The OUTSIDE half cannot be read off damage any more, and pretending it can is a fake green.**
+## One sub-step is the smallest amount of time there is, and a melee cell walks `4 / 60` = 0.067 tiles
+## in it — three epsilons is 0.0003 — so a soldier outside its reach closes the gap and lands the blow
+## in the very same sub-step, `_phase_movement` running before `_phase_attacks`. ⇒ **`_within` is read
+## through the OTHER decision it makes**: it is also the test that decides whether to walk at all, so
+## the outside case is "it had to walk first" and the inside case is "it never moved."
 func _epsilon_edge(t) -> void:
 	var full := Rules.hp_of(Rules.BISON)
 	var hit := full - Rules.damage_of(Rules.CELL_MELEE)
-	var inside := Rules.REACH_BONUS + 0.5 * Rules.EPS
-	var outside := Rules.REACH_BONUS + 3.0 * Rules.EPS
-	t.eq(_melee_probe(Vector2(-inside, 0), TICK_STILL), hit, "사거리+엡실론 절반 안쪽은 때린다")
-	t.eq(_melee_probe(Vector2(-outside, 0), TICK_STILL), full, "사거리+엡실론 세 배 바깥은 못 때린다")
+	var inside := _reach_probe(Rules.REACH_BONUS + 0.5 * Rules.EPS)
+	t.eq(inside["hp"], hit, "사거리+엡실론 절반 안쪽은 때린다")
+	t.eq(inside["moved"], 0.0, "그리고 한 발짝도 안 걸었다 — 이미 사거리 안이라는 뜻이다")
+
+	var outside := _reach_probe(Rules.REACH_BONUS + 3.0 * Rules.EPS)
+	t.ok(float(outside["moved"]) > 0.0,
+			"사거리+엡실론 세 배 바깥은 사거리 밖이다 — 때리기 전에 걸어야 했다 (%.4f칸)"
+			% float(outside["moved"]))
+	# The ceiling: it walked ONE sub-step's worth and not to the target. Without it, "moved" is also
+	# satisfied by a unit that teleported.
+	t.ok(float(outside["moved"]) <= Rules.speed_of(Rules.CELL_MELEE) * Rules.SIM_SUBSTEP_SEC + Rules.EPS,
+			"그리고 딱 한 서브스텝만큼만 걸었다")
+	t.eq(outside["hp"], hit,
+			"바깥이어도 그 한 발짝이 사거리 안으로 데려다줘서 같은 서브스텝에 때렸다 — 이동이 공격보다 먼저 돈다")
+	t.eq(full - Rules.damage_of(Rules.CELL_MELEE), hit, "때린 값은 근접 한 방이다 (자가 점검)")
+
+
+## One melee soldier `gap` tiles west of one bison, driven exactly one sub-step. Returns the bison's HP
+## and how far the soldier moved — the two halves `_within` decides between.
+func _reach_probe(gap: float) -> Dictionary:
+	var army := _army_of([Rules.CELL_MELEE])
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.BISON, 12, 5)], 999.0)
+	var start := Vector2(12.0 - gap, 5.0)
+	_ashore(b, 0, start)
+	b.begin_frame()
+	b.step(TICK_ONE)
+	return {"hp": b.enemy_hp[0], "moved": start.distance_to(b.soldier_pos[0])}
 
 
 ## Two identical melee soldiers 2.2 tiles from one bison, one of them wearing the beak. Reach without it
@@ -166,7 +204,7 @@ func _beak_adds_one_tile(t) -> void:
 	_ashore(b, 0, Vector2(12.0 - 2.2, 5.0))
 	_ashore(b, 1, Vector2(12.0 + 2.2, 5.0))
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.BISON) - Rules.damage_of(Rules.CELL_MELEE),
 			"2.2 칸에서 부리 단 병사만 때렸다 — 부리는 사거리에 1.0 을 더한다")
 	# Without this the silence of soldier 0 could just as well be "it never picked a target".
@@ -188,7 +226,7 @@ func _area_splash(t) -> void:
 	], 999.0)
 	_ashore(b, 0, Vector2(8, 5))
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	var full := Rules.hp_of(Rules.BISON)
 	var splash := full - Rules.damage_of(Rules.CELL_RANGED)
 	t.eq(b.soldier_target[0], 0, "광역 공격의 주 표적은 최근접이다")
@@ -211,7 +249,7 @@ func _area_splash(t) -> void:
 	_ashore(w, 2, Vector2(13, 6))   # 1.41421 from soldier 0
 	var whole := Rules.hp_of(Rules.CELL_MELEE)
 	w.begin_frame()
-	w.step(TICK_STILL)
+	w.step(TICK_ONE)
 	t.eq(w.enemy_target[0], 0, "사자의 주 표적은 id 가 작은 쪽이다 (1.0 동점)")
 	t.eq(wide.hp[0], whole, "예고 프레임에는 광역이 아직 안 터졌다")
 	# Break on the first blow: the next one is a whole `period + windup` away, and reading after two
@@ -241,7 +279,7 @@ func _no_friendly_fire(t) -> void:
 	_ashore(b, 0, Vector2(8, 5))
 	_ashore(b, 1, Vector2(13, 5))
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	t.eq(b.enemy_hp[0],
 			Rules.hp_of(Rules.BISON) - Rules.damage_of(Rules.CELL_RANGED) - Rules.damage_of(Rules.CELL_MELEE),
 			"원거리와 근접이 둘 다 들소를 때렸다 — 광역이 실제로 터졌다")
@@ -284,19 +322,25 @@ func _death_is_permanent(t) -> void:
 	var b := _battle_of(_lane(), army, [_spawn(LANE_W, Rules.BISON, 13, 2)], 999.0)
 	_ashore(b, 0, Vector2(12, 2))
 	b.begin_frame()
-	b.step(TICK_STILL)
+	b.step(TICK_ONE)
 	t.eq(army.alive[0], 0, "1 HP 병사가 들소의 3 을 맞고 죽었다")
 	t.eq(army.hp[0], 0.0, "죽은 병사의 HP 는 0 으로 잘린다 — 음수 잔액이 남지 않는다")
 	t.eq(army.type_id.size(), 2, "죽어도 명부의 줄은 남는다")
 	t.eq(b.soldier_state[0], Battle.SoldierState.DEAD, "이번 섬에서 DEAD 로 바뀌었다")
 	t.eq(army.living_count(), 1, "살아 있는 병사는 한 명이다")
 
-	var next_island := _battle_of(_lane(), army, [_spawn(LANE_W, Rules.BISON, 18, 2)], 999.0)
+	# The next island is left in the PLANNING state on purpose: 「a dead soldier never boards again」 is
+	# a `send` refusal now, and `send` is the only call that can be asked it. It is also `_port()` and
+	# not `_lane()`, because `_lane()` has no harbour and `send` would refuse both soldiers for a
+	# reason that has nothing to do with death — a check that passes for the wrong reason.
+	var next_island := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.BISON, 18, 9)], 999.0)
+	var next_landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
 	t.eq(next_island.soldier_state[0], Battle.SoldierState.DEAD, "다음 섬에서도 예비가 아니라 DEAD 로 선다")
-	t.ok(next_island.load_soldier(Rules.CELL_MELEE) >= 0, "살아남은 병사는 태워진다")
-	var boarded: PackedInt32Array = next_island.pending[0]
-	t.eq(int(boarded[0]), 1, "태워진 것은 살아남은 1번이다")
-	t.ok(next_island.load_soldier(Rules.CELL_MELEE) < 0, "죽은 병사는 다시 태워지지 않는다")
+	t.ok(next_island.send(1, next_landing) >= 0, "살아남은 병사는 보낼 수 있다")
+	var aboard: Array = (next_island.boats[0] as Dictionary)["soldiers"]
+	t.eq(int(aboard[0]), 1, "배에 탄 것은 살아남은 1번이다")
+	t.eq(next_island.send(0, next_landing), -1, "죽은 병사는 다시 못 보낸다")
+	t.eq(next_island.boats.size(), 1, "그 거절은 배를 한 척도 안 늘렸다")
 
 
 # -- the phase order is a contract -----------------------------------------------------------------
@@ -306,17 +350,25 @@ func _death_is_permanent(t) -> void:
 func _phase_order(t) -> void:
 	# boats BEFORE landings: a crossing that completes this frame unloads this frame, not next.
 	var ferry_army := _army_of([Rules.CELL_MELEE])
-	var ferry := _battle_of(_port(), ferry_army, [_spawn(ARENA_W, Rules.LION, 20, 9)], 999.0)
-	ferry.load_soldier(Rules.CELL_MELEE)
+	var ferry := _planning_battle_of(_port(), ferry_army, [_spawn(ARENA_W, Rules.LION, 20, 9)], 999.0)
 	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
-	t.ok(ferry.launch(0, landing), "부두 없는 항구에서도 배가 뜬다")
-	# `Rules.CROSSING` is gone — a crossing's length is `boat.dist / boat.speed` now, read back off
-	# the boat that was just launched rather than assumed.
-	var cross_t: float = float(ferry.boats[0]["dist"]) / float(ferry.boats[0]["speed"])
+	t.ok(ferry.send(0, landing) >= 0, "부두 없는 항구에서도 배가 뜬다")
+	t.ok(ferry.commit(), "그리고 시작 버튼이 그 배를 실제로 출발시킨다 (자가 점검)")
+	# ⚠ **Driven one sub-step at a time, never as one `step(dist / speed)`.** `_port()`'s crossing is
+	# 4.0 tiles at 4.0 tiles/s = exactly 60 sub-steps, but `step(1.0)` runs **59** of them: `_substep_acc`
+	# subtracts `1.0/60.0` sixty times and the last residue lands a hair under the sub-step in IEEE
+	# double, so the coarse call stops one sub-step short and this row would read as "it did not unload"
+	# when what it measured was floating point.
+	t.eq(float(ferry.boats[0]["dist"]) / float(ferry.boats[0]["speed"]) * 60.0, 60.0,
+			"이 항로는 정확히 60 서브스텝이다 (자가 점검)")
+	for _i in 59:
+		ferry.begin_frame()
+		ferry.step(TICK_ONE)
+	t.eq(ferry.soldier_state[0], Battle.SoldierState.TRANSIT, "59 서브스텝에는 아직 배 위다 (자가 점검)")
 	ferry.begin_frame()
-	ferry.step(cross_t)
+	ferry.step(TICK_ONE)
 	t.eq(ferry.soldier_state[0], Battle.SoldierState.ASHORE,
-			"배가 도착한 그 프레임에 내린다 — 보트가 상륙보다 먼저 돈다")
+			"배가 도착한 그 서브스텝에 내린다 — 보트가 상륙보다 먼저 돈다")
 
 	# targeting BEFORE movement: a soldier picks a target and walks on its very first frame.
 	var first_army := _army_of([Rules.CELL_RANGED])
@@ -329,7 +381,7 @@ func _phase_order(t) -> void:
 
 	# movement BEFORE attacks: the first blow lands the instant movement brings the target into reach.
 	var full := Rules.hp_of(Rules.LION)
-	t.eq(_lane_march(TICK_STILL), full, "처음엔 4.0 칸이라 못 때린다")
+	t.eq(_lane_march(TICK_ONE), full, "처음엔 4.0 칸이라 못 때린다")
 	t.eq(_lane_march(0.7), full - Rules.damage_of(Rules.CELL_MELEE),
 			"걸어 들어간 그 프레임에 첫 발이 나간다 — 이동이 공격보다 먼저 돈다")
 
@@ -340,7 +392,7 @@ func _phase_order(t) -> void:
 	trade.enemy_hp[0] = Rules.damage_of(Rules.CELL_MELEE)
 	_ashore(trade, 0, Vector2(12, 2))
 	trade.begin_frame()
-	trade.step(TICK_STILL)
+	trade.step(TICK_ONE)
 	t.eq(trade.enemy_alive[0], 0, "동시에 끝난 교환 — 들소가 죽었다")
 	t.eq(trade_army.alive[0], 0, "그리고 들소도 마지막 한 방을 쳤다 — 공격이 사망보다 먼저 돈다")
 
@@ -393,7 +445,7 @@ func _phase_order(t) -> void:
 ## moves at all — the fixed point the rest of this test needs.
 func _in_transit_is_hit_but_cannot_hit(t) -> void:
 	var army := _army_of([Rules.CELL_RANGED, Rules.CELL_RANGED])
-	var b := _battle_of(_port(), army, [
+	var b := _planning_battle_of(_port(), army, [
 		_spawn(ARENA_W, Rules.CROW, 3, 2),    # ~3.0 tiles from the boat 0.3s into a 1.33s crossing
 		_spawn(ARENA_W, Rules.BISON, 7, 4),   # sees BOTH the boat and the ashore soldier below
 	], 999.0)
@@ -401,9 +453,9 @@ func _in_transit_is_hit_but_cannot_hit(t) -> void:
 	                                      # ranged soldier's own 5.5-tile reach of the bison — it stops
 	_ashore(b, 1, ashore_target)
 	var bison_start: Vector2 = b.enemy_pos[1]
-	b.load_soldier(Rules.CELL_RANGED)
 	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
-	b.launch(0, landing)
+	b.send(0, landing)
+	b.commit()
 	for _f in 3:
 		b.begin_frame()
 		b.step(0.1)
@@ -527,7 +579,21 @@ func _spawn(w: int, type_id: int, x: int, y: int) -> Dictionary:
 	return {"type_id": type_id, "tile": y * w + x}
 
 
+## An island already under way. ⚠ **The commit flag is set directly, and that is deliberate.** `step`
+## refuses everything until the island is committed (`plan-then-watch`, 4.3) — which is a RULE, and it
+## is measured thoroughly by `net_plan`. Calling `commit()` here is not possible anyway: it refuses a
+## plan with no boats, and almost every fixture in this file puts its soldiers ashore by hand rather
+## than sailing them. This file owns the combat rules, so it starts from an island already under way,
+## the same way `_ashore` below starts from a soldier who has already landed.
+## **A fixture that has to author a plan uses `_planning_battle_of` and calls the real `commit()`.**
 func _battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
+	var b := _planning_battle_of(rows, army, spawns, limit)
+	b._committed = true
+	return b
+
+
+## The same island, left in the planning state, so a check can drive `send` and `commit` for real.
+func _planning_battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
 	var b := Battle.new()
 	# load_rows first, always: setup writes a reservation per enemy and load_rows clears the table.
 	b.setup(_grid_of(rows), army, spawns, limit)

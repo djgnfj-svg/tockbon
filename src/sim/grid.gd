@@ -12,8 +12,9 @@ extends RefCounted
 ## **The coastline is open, not docked.** `boat-and-landing`, section 3, replaces the old fixed-dock
 ## legend with harbours (`H`, plural, water tiles a boat sails from and returns to) and a `landable`
 ## predicate any passable shore tile can satisfy. `can_land_at(harbour, tile)` is the one rule that
-## drives both the drag overlay and `launch` — the screen cannot disagree with what the boat is allowed
-## to do.
+## decides where a boat may go, and `home_harbour_for` — which is `can_land_at` filtered and then
+## nearest — is what both the droppable overlay and `Battle.send` answer to, so the screen cannot
+## promise a tile the sim refuses.
 
 
 ## Unreachable tiles carry this instead of a sentinel like -1, so a caller comparing field values with

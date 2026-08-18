@@ -1,9 +1,16 @@
 # Plan it, then watch it — the hand only moves before the start
 
-**Implemented**: none. **Not one line in `src/` was written for this document.**
+**Implemented**: **all four stages of the plan `plan-then-watch` are in `src/`** — the planning state and
+the commit gate inside `step()`, unlimited boats created by a drag, `recall`, the sub-step and the
+0/1/2/3/6× ladder, the plan drawn as ghosts · routes · rings · the army standing at the harbour, the
+camera pulled back to `ZOOM_MIN` 0.45, and the enemy counts raised to **8 · 12 · 14** with
+`TARGET_LINE_MAX_COUNT` at 14. The 1/2 keys are deleted. The round is **12 nets / 1328 checks**, and
+`tools/probe/run_run.gd` plans-commits-watches. ⚠ **Not built, on purpose**: any brake on the boats
+(「infinite is free」 at the top) and any mother ship (undecided 14).
 **Accepted**: the ten rules under "What is decided" were **said by the user directly, 2026-08-18, and all
 ten carry a quotation.** Nothing else is confirmed — **nobody has seen a screen or checked a number,
-`unseen`.**
+`unseen`.** ⚠ **Being built is not being accepted**: every row of the plan's acceptance table that is
+scored 「user only」 is still open, including the final one (the user does not say 「애매하다」 again).
 
 **This is the English counterpart of `plan-then-watch-ko.md`. The two must be edited together or they will
 diverge** — a fact corrected in one and not the other is worse than no English file at all.
@@ -15,6 +22,44 @@ diverge** — a fact corrected in one and not the other is worse than no English
 ⚠ **This line is derived.** The user did not say it; it joins two things they did say —
 *"이렇게 이렇게 시작합니다"* (*"we start like this, and like this"*) and *"쫙 움직이면서 점령을 하는
 느낌"* (*"the feeling of everything sweeping out and taking the place"*).
+
+---
+
+## ⚠⚠ A named hole, left open on purpose — **"infinite is free"** (deferred by the user, 2026-08-18)
+
+**It sits at the very top so it cannot be walked past. Nothing below fills it.**
+
+**Boats are unlimited.** You put your monsters on the green water region and boats sail without limit —
+*"배는 너무 곁다리 느낌이다 그냥 바다위에 초록색 지역에 내가 설계한 몬스터들을 무한으로 배를 띄워서
+보낼 수 있는걸로하고 싶어"* (*"the boat feels like a side-show; I want to just send my designed monsters
+from the green area on the sea, on infinitely many boats"*). ⇒ **the cap is not the boats. It is how many
+monsters you own.**
+
+⚠ **And apart from that cap there is no brake at all.** Infinite plus free freezes one dominant line:
+**send everything at once to the nearest beach.** That is **the exact shape that killed the second game** —
+[what two dead games left behind](../lessons-from-two-dead-games.md): *an advantage with no cost is not a
+decision, and a mechanic that is not a decision is not fun.* And the probe section below has **already
+measured that domination in the current tree** (item 1).
+
+**The main session put that arithmetic to the user and offered three brakes with it:**
+
+| Candidate brake | What it bites |
+|---|---|
+| **Sail time** | A far beach lands later ⇒ "everything at the nearest one" starts paying in seconds |
+| **Landing-tile capacity** | Caps how many bodies one beach can take at once ⇒ piling onto one point stops being physically possible |
+| **Permanent death** | **Already structurally true** (`Army` never compacts a dead row). Once bodies are a finite resource, over-sending costs something |
+
+**The user's answer**: ***"일단 빼고 만든 이후에 추가하자는 거임"*** (*"leave it out, build it, add it
+after"*) ⇒ **build with no brake.**
+
+⚠⚠ **So this is deferred, not forgotten, and the next session must not read its absence as a decision.**
+
+- **A builder does not quietly add a brake because "the arithmetic does not work."** Doing so decides, on
+  the user's behalf, the thing they deliberately postponed
+- **This repo's own rule binds here**: *deleting a metric without standing one up in its place is how a
+  repo starts lying to itself.* **A deleted cap is the same.** So the **cap that was deleted (the boat
+  count)** and the fact that **nothing stands in its place today** are written down right here
+- **Closing condition**: the user picks one of the three above. Until then this section stays open
 
 ---
 
@@ -79,6 +124,40 @@ main session ran it a second time to confirm.** None of it is derived.
   has already solved it.**
 - **Clearing island 3 ends the run as `WON`, so leftover HP has nothing to spend itself on** — finishing on
   a pool of 28.5 scores the same as 45.0. **Both currencies are dead.**
+
+> ### ⚠⚠ Update box — **this section's "fifteen wins" predates the enemy raise (2026-08-18, later the same day)**
+>
+> The table above was measured at **4 · 6 · 5** enemies; this doc's stage 4 raised them to
+> **8 · 12 · 14**, and the sub-step landed after that. ⇒ **Read the table and the four lines below it as
+> a record of what things looked like BEFORE the fix.**
+>
+> **The same probe was re-run on today's tree while writing [the title and the map](title-and-map.md):**
+>
+> | Policy | Island 1 dmg | Island 2 | Island 3 | Run |
+> |---|---|---|---|---|
+> | nearest coast (baseline) | 27.0 | 41.0 | 77.0 | cleared · 2 soldiers · **7.0** pool left |
+> | nearest coast, drop order reversed | 27.0 | 47.0 | 47.5 | cleared · 4 soldiers · 30.5 |
+> | coast farthest from enemies | 30.0 | 37.0 | 60.0 | cleared · 5 soldiers · 25.0 |
+> | farthest coast | 36.0 | 54.5 | 61.5 | ⚠ **lost — wiped on island 3** |
+> | half onto each of two coasts | 41.0 | 65.0 | 46.0 | ⚠ **lost — wiped on island 3** |
+>
+> ⇒ **It is not fifteen wins out of fifteen. Two of five policies lose the run.**
+> ⇒ **"Both currencies are dead" is no longer true either** — enter island 3 with a pool of 84 and you
+> come out alive; **enter with 61.5 and you are wiped.** Leftover HP is now **the scarcest thing in this
+> game.**
+> ⚠ **The baseline worst is 61.8%, not 49%** (this section itself says "not directly comparable to the
+> old 49%").
+> ⇒ **Line 1 above (over-boarding is free) still stands** — the dominant plan is still dominant.
+> **What died is the other half: "an island takes nothing away."**
+>
+> ### ⚠⚠ And that table is itself superseded — **the map changed what a run IS (2026-08-19)**
+>
+> The rows above were produced by a driver that walked **island indices**. `Run` now starts in
+> `State.MAP` and `_advance()` lands back in `MAP`, so that driver played **zero islands** and the
+> table cannot be reproduced on this tree at all. The probe was repaired to walk a ROUTE, and **a run
+> is now five nodes and four islands** — nothing above is comparable with anything below.
+> ⇒ **The live numbers are in [the title and the map](title-and-map.md)'s probe box.** What survives
+> from here unchanged: over-boarding is still free, and HP is still the scarcest thing.
 
 ### ⇒ What that breaks — four items
 
@@ -153,6 +232,33 @@ because there are five fingers, and there is no finger left to press.** What sur
 
 ⚠ **Rules 1, 4 and 5 are one block that props itself up.** All three say *nothing exists after the commit*.
 Soften any one of them and the other two collapse — which is what the counter-case box below is about.
+
+### ⇒ A second conversation the same day settled six more — **all of them the user's own words**
+
+| # | Rule | The user's words |
+|---|---|---|
+| 15 | **Boats round-trip.** Drop the cargo, come back, take the next | *"배는 왕복"* (*"the boat goes and comes back"*) |
+| 16 | **There is no queue widget.** The monsters stand at the launch point, and **you drag one onto a landing spot and that boat departs from that moment** | *"대기열은 없고 ... 내가 내릴 수 있는 곳 위치에 딱 나서 ... 그걸 누가 늘어서 끌어서 탁 놓으면은 그때부터 출발하는 거지. 대기열이라는 게 사실 좀 애매해."* (*"no queue … they stand right at the place I can land … you line them up, drag one and drop it, and from then it departs. A queue is honestly a bit ambiguous."*) |
+| 17 | **The order you drop them IS the order.** There is no separate handle for it | The same sentence — *"끌어서 탁 놓으면은 그때부터 출발하는 거지"* |
+| 18 | ⚠⚠ **The boat is plumbing, not a resource, and it is unlimited.** The cap moves off the boat count and onto **how many monsters you own** | *"배는 너무 곁다리 느낌이다 그냥 바다위에 초록색 지역에 내가 설계한 몬스터들을 무한으로 배를 띄워서 보낼 수 있는걸로하고 싶어"* |
+| 19 | **The brake is left out on purpose.** It gets added after the thing is built | *"일단 빼고 만든 이후에 추가하자는 거임"* — the "infinite is free" section at the top |
+| 20 | **The planning camera pulls further back.** The whole island in one frame | *"조금 더 카메라를 뒤로 빼야 될"* (*"the camera has to pull back a bit more"*) |
+
+⚠ **Watch the word 「곁다리」 in rule 18 — it has come back a third time, pointed somewhere else.**
+The user said *"배가 곁다리다"* (*"the boat is a side-show"*) **twice**, and the
+[boat and landing](boat-invasion.md) round stopped it — that document's `Accepted` line records it, and
+**it did not come back this time either.** **What came back is "the boat *being a resource* is the
+side-show."** ⇒ **Opening the coastline and the fleet was not the wrong move; making the boat the object
+of the plan was. The object of the plan is the monsters.**
+
+⚠ **Rules 16 and 17 close undecided 11.** *How is the order assigned* is no longer a question —
+**the sequence of drops is the order, and a drop departs.** ⇒ **no order widget and no queue widget
+get built.**
+
+⚠ **The mother ship is NOT settled — undecided 14.** Four mockups were drawn; the user liked **variant 2's
+size** but said it was **too close**, said **a big boat from the start is not fun**, and then moved
+straight to rule 18 without settling it. ⇒ **Do not invent a mother ship.** This round builds on the
+**harbours already in the code** — **zero new rules.**
 
 ---
 
@@ -285,17 +391,23 @@ to go back to (decided 4).
 
 | What | How |
 |---|---|
-| **The whole island** | Fits one screen. **The camera already exists** — [the boat and landing](boat-invasion.md)'s zoom-out holds all of 48×32 |
+| **The whole island** | Fits one screen. **The camera already exists** — [the boat and landing](boat-invasion.md)'s zoom-out holds all of 48×32. ⚠ **It still pulls further back** (decided 20): *"조금 더 카메라를 뒤로 빼야 될"*. The mockups stood on a slice of coast, not on the island |
 | **The enemies** | **Visible.** The GDD already decided 「첫 초원은 처음부터 다 보인다」, and its reason — an autobattler with no information makes the loss unreadable — is at its maximum here. ⚠ **Fog is a later node property** and not this round |
 | **The placeable region** | Where a boat may be put shows **before** you put it. ⚠ **Where and how large is undecided 7** |
-| **Boats** | Dragged into place. **The drag is already built**, so nothing new is learned |
-| **Who is aboard** | Each boat's cargo is visible. Loading is unrestricted (decided 3) |
-| **Order** | **One large number per placed boat** — first, second, third. ⚠ **How it is assigned is undecided 11** |
-| **Routes** | One line per boat, harbour to landing. **The whole plan on one page** |
+| **The monsters at the launch point** | ⚠ **Bodies, not a widget.** The monsters you own **stand lined up** at the launch point — *"내가 내릴 수 있는 곳 위치에 딱 나서"*. **No queue box, no slots, no count** (decided 16) |
+| **Boats** | ⚠ **What you drag is a monster, not a boat.** Drag one onto a landing spot and **the boat carrying that body departs from that moment** — *"끌어서 탁 놓으면은 그때부터 출발하는 거지"*. Boats are unlimited, so they are **not a thing to choose** (decided 18) |
+| **Order** | ⚠ **No widget. The sequence of drops IS the order** (decided 17). Whether the screen needs to show it back is open — **the only person who knows the drop order is the one who dropped**, and during execution it reads as *the bodies still standing at the launch point* |
+| **Routes** | One line per crossing, launch point to landing. **The whole plan on one page** |
 | **Start** | **One large button.** From the moment it is pressed there is nothing to press |
 
-**On screen at the moment of commit**: the island · every enemy · every landing point · every order number ·
-every boat's cargo. **And that is all of it.**
+**On screen at the moment of commit**: the island · every enemy · a landing point for every body dropped ·
+the bodies still standing at the launch point. **And that is all of it.**
+
+⚠⚠ **Decided 16's "a drop departs from that moment" and decided 2's start button do not join into one
+sentence — and nothing is invented to make them.** Both readings survive it: ① **a drop IS that boat's
+commit** and the start button only starts the clock · ② everything dropped **leaves on the start button, in
+that order**. **Decided 1 (the hand does not move during combat) survives either way** — all it needs is
+that nothing can be dropped while the clock runs. ⇒ **undecided 16.**
 
 ⚠ **What is *not* there is this design's core risk**: no projected outcome, no projected engagements, no
 signal at all about whether the plan is any good.
@@ -305,7 +417,7 @@ signal at all about whether the plan is any good.
 | What | How |
 |---|---|
 | **The plan runs as drawn** | The lines drawn while planning become the actual crossings. **A different picture means the plan lied** |
-| **Boats that have not gone yet** | ⚠ **The unspent part of the plan has to stay on screen.** Without it "why has the third boat not left" is nowhere, and **decided 6's loss becomes an unreadable loss** |
+| **Bodies that have not gone yet** | ⚠ **The unspent part of the plan has to stay on screen** — it is exactly the bodies still standing at the launch point. Without it "why has that one not left" is nowhere, and **decided 6's loss becomes an unreadable loss** |
 | **What can be pressed** | **The speed control and the pause. Nothing else** (decided 1 · 4 · 8) |
 | **The clock** | As today |
 | **The twelve pieces of [combat juice](combat-juice.md)** | **All of them live.** Every one is view-side and driven by `Battle.events`, so removing the controls kills none of them |
@@ -385,7 +497,7 @@ the subject*.
 |---|---|---|
 | `src/sim/` | **One planning state** — which boat goes where, in what order. **Flat arrays**, `RefCounted`, built with `.new()` | no `Node` · no `_draw` · no `Input` · no `$` |
 | `src/sim/rules.gd` | Speed-up steps, and any constant the placement region needs | **Every constant that changes what happens, in one file** |
-| `src/view/` | The planning overlay — routes, order numbers, the placeable region | ⚠ **`net_draw_leaf` reddens any function its per-function table does not name.** A new function opens the table in the same edit |
+| `src/view/` | The planning overlay — routes, the bodies at the launch point, the placeable region. ⚠ **No order number is drawn** (the measurement under the acceptance table) | ⚠ **`net_draw_leaf` reddens any function its per-function table does not name.** A new function opens the table in the same edit |
 | `src/look.gd` | Every size and colour of the overlay, the start button, the speed widget | **Every presentation constant, one file** |
 | `tests/nets/` | The planning state · `step` doing nothing before the commit · the order being honoured · a 1× control for the speed-up · the new leaves | **Under five nets the wrapper refuses the round.** ⚠ **Every row gets a floor as well as a ceiling** |
 
@@ -421,6 +533,76 @@ the three candidates is proven.**
 
 ---
 
+## ⇒ The user answered "how does it become losable" (2026-08-18)
+
+**That was the only question the probe section raised, and the answer is three things. The order is part of
+the answer.**
+
+| # | Rule | When |
+|---|---|---|
+| 11 | **More enemies** | **Now.** No rule changes at all — only the rows in `islands.gd` |
+| ~~14~~ | ~~**One soldier per boat. Five boats to start**~~ ⚠⚠ **DEAD** — the user reversed it the same day | **Never.** `Rules.BOATS` is not a cap any more — see the box below |
+| 12 | **More enemy types** | **Gradually.** Not all at once |
+| 13 | **Terrain gets harder** | **Gradually.** Cliffs and ramps already exist; what grows is the use made of them |
+
+### ⚠⚠ Rule 14 is **struck** — the same user reversed it the same day (2026-08-18)
+
+**It is left struck through rather than deleted.** This repo would rather have a document that records its
+own reversal than one that reads as if it had always been right.
+
+**Rule 14's whole argument was one line**: **"the boat count becomes the cap on bodies per wave"** ⇒ buying
+more bodies cannot land more of them at once, so "wider or stronger" finally becomes an axis, and the
+boarding gesture disappears.
+
+**Why it no longer holds — the premise was deleted, not the reasoning.** That line hung entirely on
+**boats being finite**, and the user made them **infinite**:
+*"배는 너무 곁다리 느낌이다 그냥 바다위에 초록색 지역에 내가 설계한 몬스터들을 무한으로 배를 띄워서
+보낼 수 있는걸로하고 싶어"*
+⇒ **If the boat count is not the cap, "five boats" stops blocking anything.** Capacity 1 loses its meaning
+with it — **whether a hull carries one body or four, an unlimited number of hulls lands the whole roster at
+once anyway.**
+⇒ **The cap moved off the boat and onto the monsters.** What the player plans is not boats but **the bodies
+they own**, and **the boat is plumbing** (decided 18).
+
+⚠ **Rule 14's own problem died with it.** *"Flattening capacity to 1 kills the axis that separated the two
+boats (capacity 4/2 at speeds 3.0/5.0, held by the throughput inequality `2×5 = 10 < 4×3 = 12`), so a new
+axis is needed"* — **no new axis is needed. Boats no longer have to differ from one another.** The whole
+rejected branch is held by
+[unlimited boats, not a five-boat cap](../decisions/unlimited-boats-not-a-five-boat-cap.md).
+
+⚠ **Arithmetic that died with it**: *bare cells need `N ≥ 5` to take island 1 (four bison, 6.0 enemy DPS),
+so five boats is exactly the minimum that wins and calling a second wave becomes a real choice.*
+**There are no waves any more** — infinite means it all goes at once. That `N ≥ 5` **comes back the day an
+economy lands**, as *"how few bodies can you own and still win"*.
+
+> ### ⚠ Measured — the reinforcement period the dead branch carried (kept for the record only)
+>
+> **A wave was five, and the next landed `2 × steady / boat_speed` later — 3.50 s to 7.28 s on island 1.**
+> So under that branch **the ten-body state never existed**, and enemy counts had to be measured against
+> *"five now, five more every `2 × steady / boat_speed`"*, never against the roster total.
+> ⚠ **Infinite boats deleted that premise.** The round-trip period still exists, because boats still
+> round-trip — but **the player can send everything at once, so it is no longer a cap.** This number is
+> needed again the day **landing-tile capacity** or **sail time** is picked as the brake.
+
+⚠⚠ **And what rule 14 was buying has still not been bought.** It was **the only item that put a price on
+over-sending**, and that place is **empty right now** — "infinite is free" at the top of this document is
+that empty place, and **the user deferred it knowingly.**
+
+⚠ **Rule 11 runs straight into the review's arithmetic, and the user chose it knowing that.** The review
+measured that *"more of the same enemy adds kills, not plans"* — what adds plans is types whose `range`,
+`area` and `detect` differ. **The user's answer does not overturn that arithmetic; it sets an order**:
+count first, then types and terrain on top of it.
+⇒ **So rule 11 is not "this makes the plan a decision" but "this makes losing possible first."** They are
+different claims, and **whether count alone turns the plan into a decision is for the probe to answer** —
+what 15/15 becomes is that measurement.
+
+**Rejected branch**: **cut our own side** (a smaller starting roster, or smaller boat capacity).
+The cheapest option, but **it does not close the hole where ranged units at reach 5.5 beat the lion from
+outside its detect 2.0** — shrinking the roster leaves that intact and just moves the optimum toward
+"bring fewer and still win."
+
+---
+
 ## Undecided — **cannot be built without picking**
 
 1. ⚠⚠ **What does an object bolt onto now.** Decided 9 **deleted the grounds for five slots** — there were
@@ -430,8 +612,10 @@ the three candidates is proven.**
    **onto some slot still.** **The whole of [the session loop](session-loop.md)'s arithmetic hangs on this**
 2. **What cells buy, and whether the session loop's cost curve survives at all.** With no summon there is
    no summon cost
-3. **How many boats, and whether they still differ in capacity and speed.** Decided 3 (unrestricted loading)
-   changes what capacity means
+3. ~~**How many boats, and whether they still differ in capacity and speed.**~~ ✅ **Closed 2026-08-18 by
+   decided 18. Unlimited, and identical.** The boat is plumbing, so neither count nor capacity nor speed is
+   an object of the plan. ⚠ **What closed is the question, not what the question was holding up** — the cap
+   the boat count used to carry moved to "infinite is free" at the top and **is still open there**
 4. **Whether pause is a separate widget or the same one at 0×**
 5. **Node count, branch shape, and whether there are node kinds beyond the GDD's four**
 6. **How much of the enemy is visible while planning.** ✅ The GDD already decided 「첫 초원은 처음부터 다
@@ -440,15 +624,15 @@ the three candidates is proven.**
 7. **Where the placement region is and how large.** ⚠ **One already exists in shipped code** —
    `grid.can_land_at(harbour, tile)` picks **38–47** of an island's 76–82 landable tiles. Whether the new
    region is that one or something else is unsettled
-8. ⚠⚠ **Whether the order carries timing.** **Decided 2 settled *in what order* and left *when the next boat
-   leaves* alone.** As soon as the one in front unloads? Only once a boat is back at a harbour? At a fixed
-   time? **In shipped code a boat must physically return before it can carry again** ⇒ left as is, **the
-   order is whatever the round trip produces**, not something the player set
+8. ~~**Whether the order carries timing.**~~ ✅ **Closed 2026-08-18 by decided 16 and 17.**
+   **A drop departs** — *"끌어서 탁 놓으면은 그때부터 출발하는 거지"*. ⇒ the spacing is **made by the hand
+   that drops**, not by a rule. And **boats still round-trip** (decided 15), unchanged
 9. **When the clock starts** — when the island opens, or when start is pressed. `islands.gd`'s comment says
    the former today and its grounds are gone (see the code table)
 10. **The speed-up's multipliers and steps.** The section above derives a **ceiling of 7×**; the steps are
     unsettled
-11. **How the order is assigned** — is the placing sequence the order, or is there a separate handle
+11. ~~**How the order is assigned**~~ ✅ **Closed 2026-08-18 by decided 17. The placing sequence IS the
+    order.** No separate handle, and no queue widget — *"대기열이라는 게 사실 좀 애매해."*
 12. **Whether a plan can be undone before the commit.** Decided 3 only says you may *put things in* any
     time. **It never says you may take them out or move them.** ⚠ A trap this repo has already named lands
     here — *if undo is free, the choice before it was free too*
@@ -456,6 +640,20 @@ the three candidates is proven.**
     death · do levels attach to the individual or the slot · what the families are · drop frequency · the
     ratio of cells to cost · what a run starts with. **That document holds them and they are not copied
     here**
+14. ⚠⚠ **Whether there is a mother ship and what it looks like.** Four mockups were drawn; **variant 2's
+    size** was liked but called **too close**, **a big boat from the start is not fun**, and the
+    conversation moved to decided 18 without settling it. ⇒ **This round builds on the harbours that
+    already exist. Do not invent a mother ship**
+15. ⚠⚠ **What the brake is** — "infinite is free" at the top. **Three candidates, and the user deferred it
+    until after the thing is built.** ⚠ **This is the only undecided item the user deferred knowingly**;
+    the rest are simply unasked
+16. **Whether a drop IS the commit, or whether everything dropped leaves together on the start button** —
+    the box in the planning-screen section. Decided 16's single sentence does not separate them.
+    ⚠ **What was BUILT is ②** (2026-08-18): the drop **creates** the boat, it sits at `t == 0.0`, and
+    every boat departs on the **same frame** at the start button. There is no departure-time field at
+    all. **That is an assumption, not a choice** — decision 1 survives under both readings and ② needs
+    no per-boat state. **If the user picks ①, `send` grows a per-boat departure time — which is the
+    same lever the deferred brake would be built from** (「infinite is free」 at the top)
 
 ---
 
@@ -489,6 +687,15 @@ the three candidates is proven.**
 | **Order is a decision** | The user **plans the same island twice in different orders and says why** | The probe producing two different orders — a proxy. ⚠⚠ **And as of today this row cannot pass** — order is inert in the sim (probe section, item 2), so there is no reason to plan it differently. **Order needs a referent before this row can be scored at all** |
 | **Glyph count fell** | **Count the glyphs per screen and write the number** | "It looks simpler" |
 | **⚠ Final verdict** | **The user does not say "ambiguous" again** (GDD undecided 18) | All seven rows above are proxies |
+
+⚠ **Why the order row cannot pass, measured**: every island is **ONE passable component** (744 · 760 · 716
+tiles), so a boat dropping one or two bodies **always** finds a free tile to unload onto. ⇒ landing order
+cannot decide *who waits*; it only decides *which of two boats aiming at one tile stands on it* — **at most
+1.41 tiles**.
+⚠ **That measurement was taken assuming capacity 1, and decided 14's death took the assumption with it.**
+**The conclusion gets stronger, not weaker**: on an island with 700-odd free tiles no cargo size the game
+can hold makes an unload refuse.
+⇒ **Drawing a big order number on screen would be exactly "screen changes but sim doesn't".**
 
 ---
 

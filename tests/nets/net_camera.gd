@@ -53,14 +53,15 @@ func _setup_opens_at_zoom_min(t) -> void:
 	# ⚠ **A literal, not `_clamp_cam()` called again here to check against.** `setup()` sets
 	# `cam_px = Vector2.ZERO` and then calls `_clamp_cam()` once — deleting that call is a real,
 	# measured mutation that stays green if this only re-derives the expected value the same way
-	# `setup()` does, since it would reproduce the SAME bug. At ZOOM_MIN the visible world (2275.56 px
-	# wide) is wider than the map (1920 px), so the clamp CENTRES the x axis: (1920 - 2275.56) / 2 =
-	# -177.78. Without the clamp call, `cam_px` would still be sitting at the (0, 0) this function set
-	# it to above (real bug window: an island opens with ~178 px of the right edge of the map cut off
-	# on screen at zoom-out, correcting itself the instant the player first pans — section 9's Survey
-	# acceptance row is exactly this frame).
-	t.ok(fv.cam_px.distance_to(Vector2(-177.78, 0.0)) < 0.1,
-		"setup 뒤 cam_px 가 정확히 (-177.78, 0.0) 이다 — 리터럴로 확인한다 (%.2f, %.2f)"
+	# `setup()` does, since it would reproduce the SAME bug.
+	# ⚠ **Re-measured for `ZOOM_MIN` 0.45** (`plan-then-watch`, 6.3 — the user asked for the camera
+	# further back: 「조금 더 카메라를 뒤로 빼야 될」). The visible world is now 1280/0.45 = **2844.44** px
+	# wide and 720/0.45 = **1600.00** px tall, and BOTH are bigger than the map's 1920 x 1280 — so the
+	# clamp centres BOTH axes: (1920 - 2844.44)/2 = **-462.22** and (1280 - 1600)/2 = **-160.00**. At the
+	# old 0.5625 the y band was exactly 720 px and the island touched both screen edges, which is the
+	# framing that moved. Without the clamp call `cam_px` would still be the (0, 0) set above.
+	t.ok(fv.cam_px.distance_to(Vector2(-462.22, -160.0)) < 0.1,
+		"setup 뒤 cam_px 가 정확히 (-462.22, -160.00) 이다 — 리터럴로 확인한다 (%.2f, %.2f)"
 		% [fv.cam_px.x, fv.cam_px.y])
 	# ⚠ Read directly off `fv` right after `setup()` — NOT after calling `_clamp_cam()` a second time
 	# here, which would measure the function again instead of the state `setup()` actually left.
@@ -314,7 +315,11 @@ func _the_clamp_holds_and_the_camera_really_moves(t) -> void:
 ## Both ends of `ZOOM_MIN`, `ZOOM_MAX` and `ZOOM_STEP` — six labels, each a direction that must not
 ## be crossed, per `boat-and-landing` 7.1's own table.
 func _both_ends_of_the_three_constants(t) -> void:
-	t.ok(Look.ZOOM_MIN <= 0.5625 + 1e-6, "ZOOM_MIN 은 0.5625 이하다 — 넘으면 섬 전체가 안 보인다")
+	# ⚠ **The ceiling moved from 0.5625 to 0.50 and the REASON moved with it.** 0.5625 was 「the island
+	# still fits」; at that value the island is 1080 x 720 on a 1280 x 720 viewport, i.e. it touches both
+	# screen edges with ZERO vertical margin — which is the framing the user asked to move back from.
+	# 0.50 is the loosest value that still leaves a tile of margin top and bottom.
+	t.ok(Look.ZOOM_MIN <= 0.50 + 1e-6, "ZOOM_MIN 은 0.50 이하다 — 넘으면 섬 위아래 여백이 사라진다")
 	t.ok(Look.ZOOM_MIN >= 0.4 - 1e-6, "ZOOM_MIN 은 0.4 이상이다 — 못 미치면 14px 몸이 6px 밑으로 준다")
 	t.ok(Look.ZOOM_MAX >= 1.0 - 1e-6, "ZOOM_MAX 는 1.0 이상이다 — 오늘의 스케일을 잃으면 안 된다")
 	t.ok(Look.ZOOM_MAX <= 1.5 + 1e-6, "ZOOM_MAX 는 1.5 이하다")
