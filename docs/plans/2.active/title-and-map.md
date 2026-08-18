@@ -5,7 +5,7 @@ Step 5 — the three new grids — is NOT done, and step 7's instrument had to b
 `1.ready` on 2026-08-19 because it is part-built, not startable-from-scratch. ⚠ **A SECOND adversarial
 pass ran after the first one's fixes landed and found six more fake greens** — findings 16–21 below, all
 of them the same shape: *the value was computed and handed to a leaf, and nothing measured that it was
-visible.* Design: `title-and-map` (Korean twin `title-and-map-ko`, and the Korean is authoritative).
+visible.* Design: `title-and-map`.
 
 ⚠ **What the user has and has not seen.** They looked at the title and the map, judged both readable, and
 named two defects — reachable nodes indistinguishable at rest, and reward glyphs too small. **Both are now

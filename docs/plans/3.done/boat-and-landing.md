@@ -12,9 +12,9 @@ doc's `Accepted` line**, which now carries the user's words: *"참 애매하네.
 did not land.** Do not read this folder move as acceptance.
 
 ⚠ **What the build measured is NOT in this file.** The probe's numbers live in
-`boat-invasion` / `-ko`, section 1-A — that is the doc whose own question they answer, and a figure
+`boat-invasion`, section 1-A — that is the doc whose own question they answer, and a figure
 written in two places diverges. **What is here is only what this plan got wrong or cut.**
-**Design**: [the boat and the landing](../../design/boat-invasion.md) (Korean: `boat-invasion-ko`).
+**Design**: [the boat and the landing](../../design/boat-invasion.md).
 **Rejected fork**: [open coastline over fixed docks](../../decisions/open-coastline-over-fixed-docks.md).
 **Presentation contract**: [combat juice](../../design/combat-juice.md) — its hook table and
 `net_draw_leaf._table()` are the authority for every `draw_*` count named here.
@@ -440,7 +440,7 @@ the big boat feeds one that is already open.** The throughput inequality is unto
 >
 > **It dominates 3 of 3 islands.** The reach cost above is real and it is not enough. **The cause is not
 > in this section** — the landing point does move casualties, by up to 49%, and the clock does not bind,
-> so those casualties stop nothing. **Numbers in `boat-invasion` / `-ko`, section 1-A; consequences in
+> so those casualties stop nothing. **Numbers in `boat-invasion`, section 1-A; consequences in
 > 11-A below.** ⚠ **The arithmetic in this section was right and its conclusion was still wrong**, which
 > is exactly why the caveat was written.
 
@@ -920,7 +920,7 @@ and widening it kills it for the HUD, which is what it was written for.
 | ⚠ **The verdict** | **The user does not say 「배가 곁다리다」 again.** Everything above is a proxy |
 
 ⚠ **None of these is accepted by an agent having walked through it, and none by a video existing.**
-Acceptance is the user saying they saw it, written into `boat-invasion-ko.md` **and**
+Acceptance is the user saying they saw it, written into `boat-invasion.md` **and**
 `boat-invasion.md` the moment it is heard.
 
 ---
@@ -973,7 +973,7 @@ it goes.
 
 ### 11-A. What stage 6 actually produced, and what it cut (2026-08-18)
 
-**The five rows above were all produced. The numbers are in `boat-invasion` / `-ko`, section 1-A** —
+**The five rows above were all produced. The numbers are in `boat-invasion`, section 1-A** —
 they are not repeated here. Three things belong in this file rather than that one:
 
 **① Three pre-boat probe policies were dropped, and it was the builder's call, flagged rather than
@@ -1019,11 +1019,11 @@ and not the other means the next agent builds the old design.
 | `look.gd` header | *"no camera zoom"*, and **every px comment is now "at zoom 1.0"** |
 | `look.gd` shake section | *"THERE IS NO `Camera2D` … CAMERA_ZOOM stays unread"* — still no `Camera2D`, but the reason given (absolute dock rectangles) is dead |
 | `game.gd` `_click_dock` | the whole function, and the comment that predicted this change |
-| `boat-invasion.md` · `-ko` | `**Implemented**:`, the *"지금 돌아가는 것"* snapshot table (**the doc says itself it is deleted the day this is implemented**), and 미정 1–12, which this plan answers |
-| `cell-army-gdd.md` · `-ko` | 미정 15 and 16 close; 미정 17 (2D or 3D) is re-judged on the new screen |
-| `cell-army-gdd.md` · `-ko`, 「투입」 | *"2척 × 정원 5 = 10 = 시작 병력 전부다"*. **A wave is 4 + 2 = 6 now, so the starting roster takes two.** ⚠ **It appears TWICE in each twin** — once in 「투입」 and once inside a later refutation box — and re-measuring only the row someone is arguing about is this repo's named failure. ⚠ The design doc's section 6 already refuted it: **go and edit the GDD, not the doc you are standing in** |
-| `cell-army-gdd.md` · `-ko`, 「화면 — 첫 판에 필요한 만큼만」 | the row *"선착장 — 해안의 특정 칸에 표시"* |
-| `combat-juice.md` · `-ko` | its hook table, which restates `net_draw_leaf._table()` |
+| `boat-invasion.md` | `**Implemented**:`, the *"지금 돌아가는 것"* snapshot table (**the doc says itself it is deleted the day this is implemented**), and 미정 1–12, which this plan answers |
+| `cell-army-gdd.md` | 미정 15 and 16 close; 미정 17 (2D or 3D) is re-judged on the new screen |
+| `cell-army-gdd.md`, 「투입」 | *"2척 × 정원 5 = 10 = 시작 병력 전부다"*. **A wave is 4 + 2 = 6 now, so the starting roster takes two.** ⚠ **It appears TWICE in each twin** — once in 「투입」 and once inside a later refutation box — and re-measuring only the row someone is arguing about is this repo's named failure. ⚠ The design doc's section 6 already refuted it: **go and edit the GDD, not the doc you are standing in** |
+| `cell-army-gdd.md`, 「화면 — 첫 판에 필요한 만큼만」 | the row *"선착장 — 해안의 특정 칸에 표시"* |
+| `combat-juice.md` | its hook table, which restates `net_draw_leaf._table()` |
 
 ⚠ **`docs/plans/README.md` and `CLAUDE.md` are already updated** — do not edit them again for this.
 

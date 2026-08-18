@@ -3,9 +3,6 @@
 **Implemented**: none — `src/` is empty
 **Accepted**: none. **Nothing has been picked yet**
 
-**This is the English counterpart of `what-makes-placement-a-decision-ko.md`. The two must be edited together
-or they will diverge** — a source corrected in one and not the other is worse than no English file at all.
-
 The problem the user raised: *"특정 위치로 특정 부대를 이렇게 보낸다거나 내가 이렇게 한쪽으로 쭉 보내면
 재미가 없을 거 같아. 뭔가 좀 더 전투적인, 전략적인 면이 있어야 될 듯?"* (*"Sending a particular squad to a
 particular spot, or just sending everyone down one side — I don't think that would be fun. It needs

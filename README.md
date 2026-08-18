@@ -15,8 +15,8 @@
 - 보상 축이 셋이고 섬 하나는 하나만 준다 — **수** · **특산물**(한 병사) · **아티팩트**(군대 전체)
 - 패배 조건은 **제한 시간**
 
-설계는 [docs/design/cell-army-gdd-ko.md](docs/design/cell-army-gdd-ko.md)에 있다
-(영문판 [cell-army-gdd.md](docs/design/cell-army-gdd.md)). **미정은 그 문서의 「미정」 절에 모여 있다.**
+설계는 [docs/design/cell-army-gdd.md](docs/design/cell-army-gdd.md)에 있다.
+**미정은 그 문서의 「미정」 절에 모여 있다.**
 **하지 않기로 한 것과 이유**는 [docs/decisions/](docs/decisions/)에 있다.
 
 ## 지운 것 둘
@@ -33,7 +33,7 @@
 쪼개기가 아무 대가도 없었고 흡수가 그것을 공짜로 되돌렸으므로, **쪼개는 것은 한 번도 결정이 아니었다.**
 
 두 게임에서 **측정된 숫자와 반복되는 실패의 형태**만
-[docs/lessons-from-two-dead-games-ko.md](docs/lessons-from-two-dead-games-ko.md)에 남겼다.
+[docs/lessons-from-two-dead-games.md](docs/lessons-from-two-dead-games.md)에 남겼다.
 **그중 어느 것도 스펙이 아니다.**
 
 ## 남긴 것
@@ -41,9 +41,9 @@
 | | |
 |---|---|
 | `CLAUDE.md` · `.claude/` | AI 하네스 — 에이전트 정의, 스킬, 세션 규칙 |
-| `tests/run_nets.ps1` | 검증 러너. ⚠ **지금은 그물이 하나뿐이라 라운드가 안 돈다** — 새 게임의 그물이 다섯 장 묶음으로 들어오면 다시 돈다 |
+| `tests/run_nets.ps1` | 검증 러너. 지금 **그물 14장 · 검사 1933개 · 6.7초**로 돈다 |
 | `tools/pixel/` | 로컬 ComfyUI 픽셀아트 생성. 크레딧이 안 든다 |
-| `docs/planning-principles-ko.md` | 두 번의 리셋을 의도적으로 살아남은 유일한 문서 |
+| `docs/planning-principles.md` | 두 번의 리셋을 의도적으로 살아남은 유일한 문서 |
 
 외부 에셋은 폰트 하나뿐이다: Noto Sans KR (SIL OFL 1.1, `assets/font/OFL.txt` 동봉).
 엔진은 Godot Engine 4.7.1 (MIT).

@@ -8,7 +8,7 @@ extends RefCounted
 ## `net_boat` owns what a boat does once it is sailing; `net_battle` owns the phase order and the
 ## combat rules; `net_shell` owns the gestures that call into here. This file owns the plan itself.
 ##
-## The design is `plan-then-watch` (Korean: `plan-then-watch-ko`, and the Korean is authoritative).
+## The design is `plan-then-watch`.
 ##
 ## ⚠ **Every equivalence row below carries a FLOOR as well as a ceiling.** Two runs that both did
 ## nothing at all compare equal on every column, so each arm asserts that it really advanced before

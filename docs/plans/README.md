@@ -31,8 +31,7 @@ all three folders. **Links leak every single time** — `net_citations` catches 
 and said *"게임이 좀 애매하네. 뭔가 침공하는 느낌이 전혀 없어서"* and *"배가 곁다리인 게 여전히 별로네."*
 **The boat plan answered the second sentence and not the first**: the user launched the finished build on
 2026-08-18 and said *"참 애매하네. 그래도 그동안 중에서 제일 평범하네."* — 「곁다리」 is gone, 「애매하다」
-is not. Both design docs carry it, [the boat and the landing](../design/boat-invasion.md)
-(Korean: `boat-invasion-ko`) in its `Accepted` line; the GDD carries what is left as **Undecided 18**.
+is not. Both design docs carry it, [the boat and the landing](../design/boat-invasion.md) in its `Accepted` line; the GDD carries what is left as **Undecided 18**.
 
 **Every earlier plan this repo had was deleted on 2026-08-17**, together with the design docs describing the two
 games those plans built. Nothing was lost that mattered: what the plans *measured* is distilled into
@@ -55,5 +54,5 @@ design docs whose own *Open* lists were twenty items long.
 ⇒ **A plan carries data shapes, function names, key bindings, literal numbers, and per-piece acceptance.**
 What is genuinely undecided goes in one place, where it can be seen not to block the build.
 
-**The live design is [the cell army GDD](../design/cell-army-gdd.md)** (Korean: `cell-army-gdd-ko`).
+**The live design is [the cell army GDD](../design/cell-army-gdd.md)**.
 The next plan comes from there.

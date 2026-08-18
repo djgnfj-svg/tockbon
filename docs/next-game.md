@@ -3,7 +3,7 @@
 **Status**: **a cell autobattler.** Islands on a node map, a squad of square cells landed by boat, and an
 army built out of what you ate. **Target: end of August 2026** — a finished thing, not a shippable product.
 
-⇒ **The design lives in [the cell army GDD](design/cell-army-gdd.md)** (Korean: `cell-army-gdd-ko`).
+⇒ **The design lives in [the cell army GDD](design/cell-army-gdd.md)**.
 ⚠ **This file was three sentences out of date until 2026-08-18** — it said the 특산물 bolts onto the
 soldiers who survived (**overturned by the user**) and that **nothing is built yet** (`src/` has run end to
 end since 2026-08-17: **11 nets, 967 checks**, three islands, boats, a camera). `src/` *was* emptied on
@@ -38,7 +38,7 @@ swarm the player steers.
 
 | | |
 |---|---|
-| **[The planning principles](planning-principles-ko.md)** | The only file kept through both resets on purpose. Its second line — **planning cannot decide whether something is fun** — is what both resets proved |
+| **[The planning principles](planning-principles.md)** | The only file kept through both resets on purpose. Its second line — **planning cannot decide whether something is fun** — is what both resets proved |
 | **[What two dead games left behind](lessons-from-two-dead-games.md)** | Measured numbers and repeating failure shapes. ⚠ **Nothing in it is a spec** |
 | The harness | `CLAUDE.md`, `.claude/`, the net runner, `tools/pixel/`, the Korean font |
 

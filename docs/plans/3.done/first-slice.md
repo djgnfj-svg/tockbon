@@ -3,8 +3,8 @@
 **Status**: `3.done` — built, and the round is green (9 nets / 725 checks).
 ⚠ **`3.done` is implementation, not acceptance.** What the user has and has not confirmed on screen lives in
 the design headers: the slice itself was played, and the twelve presentation items were accepted separately.
-**Design**: [the cell army GDD](../../design/cell-army-gdd.md) (Korean: `cell-army-gdd-ko`).
-**Presentation shipped on top of this**: [combat juice](../../design/combat-juice.md) (Korean: `combat-juice-ko`).
+**Design**: [the cell army GDD](../../design/cell-army-gdd.md).
+**Presentation shipped on top of this**: [combat juice](../../design/combat-juice.md).
 ⚠ **That doc's hook table supersedes section 6 here.** The authority is `net_draw_leaf._table()`.
 
 ⚠ **Read the GDD section *"The remaining rules, filled in so the first slice can be built"* first.**

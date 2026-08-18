@@ -4,9 +4,6 @@
 **Accepted**: the direction and everything under "What is decided" was said by the user directly, in one
 conversation. **"Undecided" means nothing was picked.**
 
-**This is the English counterpart of `cell-army-gdd-ko.md`. The two must be edited together or they will
-diverge** — a fact corrected in one and not the other is worse than no English file at all.
-
 ⚠ **This document replaces the cell-game GDD (deleted, tag `v2-openfield`).** The open field, the host,
 `F`/`V` and the eleven slots all belong to that document and are all gone.
 **Where the two disagree, this one is right.**
@@ -1177,7 +1174,7 @@ were loaded.
 
 ### ⚠ Two tensions this document does not resolve, recorded so the first playtest knows to look
 
-**1. An autobattler is what [planning principle 1](../planning-principles-ko.md) forbids.** That line reads
+**1. An autobattler is what [planning principle 1](../planning-principles.md) forbids.** That line reads
 *"the hands must not idle"*, and it is the single reason a whole defence game was scrapped. **This genre is
 defined by watching.**
 ⚠⚠ **And on 2026-08-18 the user answered this tension by maximising it rather than resolving it** — with
@@ -1193,7 +1190,7 @@ boats is **3.8 s of hand time for the entire starting force**, and an island tha
 this direction survives, and no amount of design writing can settle it.
 
 **2. Every reward in the first slice is a flat stat boost**, which is what
-[planning principle 8](../planning-principles-ko.md) says is not a combination: *"order has to change the
+[planning principle 8](../planning-principles.md) says is not a combination: *"order has to change the
 outcome."* Range +1 and army-wide +HP are both pure increments. **The slice cannot demonstrate principle 8
 and is not trying to** — but nobody should read a successful slice as evidence that the build axis works.
 
@@ -1235,7 +1232,7 @@ of them was missing from the list entirely.** They are now written separately:
    *"이시정지 한다고 해서 내가 또 뭔가를 해줄 수는 없어."*
    ⚠ **So the worry originally written here comes true: at exactly zero it is a game you only watch.**
    Despot's Game kept potions and formation adjustment; **this game keeps nothing.**
-   The first line of [planning principles](../planning-principles-ko.md), *"the hands must not idle"*, is
+   The first line of [planning principles](../planning-principles.md), *"the hands must not idle"*, is
    **broken on purpose** — what pays for it is the section of that name in
    [plan it, then watch it](plan-then-watch.md), and **not one of its three candidates is proven**
 3. **Is a specialty fixed per island, or one of three at random.** ~~Fixed makes route choice into build
@@ -1491,7 +1488,7 @@ as `v1-sim`, and the current prototype was already written down as *"a reference
 
    ⚠ **One worry the user left on the record**: *"I don't know whether this will come out juicy in 2D."*
    **Planning cannot judge that.** It gets judged by running the first slice — the second line of
-   [planning principles](../planning-principles-ko.md).
+   [planning principles](../planning-principles.md).
 
    ⚠ **Still undecided**: whether a specialty also gives **+1 HP**. The adversarial review wrote that down as
    a candidate — *without it, "who do I bolt it onto" is not a decision* — and it has not been adopted.
@@ -1559,6 +1556,6 @@ which one is right has to be asked again once the presentation is in.**
 
 ## What this document cannot answer
 
-**Whether it is fun.** That is the second line of [planning principles](../planning-principles-ko.md), and it
+**Whether it is fun.** That is the second line of [planning principles](../planning-principles.md), and it
 is also why one conversation went six rounds before this direction appeared. **The last line of the
 reference-points section is the only prescription for it.**

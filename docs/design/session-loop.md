@@ -4,9 +4,6 @@
 **Accepted**: the ten rules under "What is decided" were **said by the user directly, 2026-08-18.**
 **Nobody has seen a screen or checked a number — `unseen`.**
 
-**This is the English counterpart of `session-loop-ko.md`. The two must be edited together or they will
-diverge** — a fact corrected in one and not the other is worse than no English file at all.
-
 > ## ⚠⚠ **Half of this document is dead — the part loop was replaced** (user, 2026-08-18, later the same day)
 >
 > **This document left the part loop as built and tried to build what sits above and below it. Later that
@@ -189,7 +186,7 @@ the [cell army GDD](cell-army-gdd.md) had was *who to bolt a specialty onto*, an
 adversarial review already refuted it as a decision.**
 
 ⇒ **This document is an attempt at GDD undecided 18 ("ambiguous").** ⚠ **An attempt, not an answer** —
-[planning principles](../planning-principles-ko.md), line two, still binds.
+[planning principles](../planning-principles.md), line two, still binds.
 
 ---
 
@@ -594,6 +591,6 @@ the planning screen, not to the combat screen.** [Plan it, then watch it](plan-t
 
 ## What this document cannot answer
 
-**Whether any of it is fun.** [Planning principles](../planning-principles-ko.md), line two.
+**Whether any of it is fun.** [Planning principles](../planning-principles.md), line two.
 ⚠ **And every number here is derived, none of it measured.** The second game died with **25 nets and 3541
 green checks**, and the tables above are weaker evidence than that. **Nothing here is true until it runs.**

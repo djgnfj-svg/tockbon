@@ -2,7 +2,7 @@
 
 **Status**: ⚠ **REVERSED on 2026-08-16 by the user. Both are in: unlocks AND stat boosts.**
 The reasoning below is kept because **the trap it names did not go away** — see 「뒤집은 뒤」 at the bottom.
-It was decided for the open-field cell game, which no longer exists; the live design is `cell-army-gdd-ko`.
+It was decided for the open-field cell game, which no longer exists; the live design is `cell-army-gdd`.
 
 ## What was decided
 

@@ -37,7 +37,7 @@ the subject applies to it too.** Take one shot you already know the answer to be
 ## `capture_bodies.gd` — the second one, and why it is a second one
 
 `capture.gd`'s seven shots are one body: bare, worn, close, its internal slots, the panel, a card, the
-ending. **Not one of them is a crowd**, and a crowd is the whole subject of `melee-legibility-ko`'s fork —
+ending. **Not one of them is a crowd**, and a crowd is the whole subject of `melee-legibility`'s fork —
 so that file was left alone and this one joins it.
 
 ```

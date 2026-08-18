@@ -500,7 +500,7 @@ probe measurements after the build. The measurement is done; the decision is not
 | **The two boats are genuinely different** | `cap_fast × speed_fast < cap_big × speed_big` (section 8) | ✅ **2 × 5 = 10 < 4 × 3 = 12**, a 20% margin, with both sides written out as literals in the net |
 | ⚠ **The real verdict** | **The user does not say "the boat is a side dish" again.** Everything above is a proxy | ✅ **That sentence did not come back.** What came instead: *"참 애매하네. 그래도 그동안 중에서 제일 평범하네."* ⇒ **this doc hit what it aimed at, and the game still has not landed** |
 
-⚠ **This doc cannot judge whether it is fun** — [planning principles](../planning-principles-ko.md), line two.
+⚠ **This doc cannot judge whether it is fun** — [planning principles](../planning-principles.md), line two.
 ⚠⚠ **And re-read 1-A.** "An open coastline has a cost" is no longer *unproven* — it is **measured as half
 true**: the landing point moves casualties by up to 49%, and **the clock does not bind, so those casualties
 stop nothing.** Reading 967 green checks as "so it works" is the failure this repo has lived through twice.

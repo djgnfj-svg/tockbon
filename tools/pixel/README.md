@@ -141,3 +141,36 @@ This is the same point as "terrain is not here" in the Sizes section above.
 - **Stretching with 9-slice misaligns the corners.** The four corner ornaments are all different
 - **A reference image nearly replicates the art itself.** Do not feed someone else's art in as a style reference
 - **Icons need `no slots no frames` and `evenly spaced apart`** to come out as separate pieces
+
+---
+
+# What generating for two games measured — moved here from `CLAUDE.md` on 2026-08-19
+
+`tools/pixel/` runs a local ComfyUI (FLUX.2 klein) — **no credits, 6-25 seconds an image.** It survived the
+reset because it is the one asset from the old project that knows nothing about the game.
+
+**The user decides art by looking at real candidates, never by discussion.** Every settled art decision in
+the old project came from generating a board and pointing at one. **Paid generation only when the user asks
+for it.**
+
+Two things it measured that outlive the old game:
+
+- **Generate at the size you will use.** Upscaling cannot invent pixels; a ring made at 448 and stretched to
+  896 was judged "low pixel", and generating at 896 directly fixed it
+- **Texture comes from the preset, not the seed.** Six seeds on one preset gave six compositions with
+  identical texture; five prompts on one seed gave five pictures that matched. Parts drawn from *different*
+  presets can never be made to match, however the prompt is tuned.
+  ⚠ **This is the constraint the cell game escaped, and it is worth knowing how**: a part is worn **in the
+  host's own colour**, so there is only ever one tone and nothing has to match. **It bought back the cap on
+  how many species a habitat can have** — see [the body is a line](../../docs/decisions/the-body-is-a-line-drawn-by-code.md).
+  The rule still binds anything that keeps its own colours
+
+**And three things measured on 2026-08-13, generating for the cell game:**
+
+- **Naming an animal overrides the view.** Six species asked for top-down came out in front view. Forcing
+  the view back made the animal leave — a top-down lion is an orange square, because **a mane is surface and
+  surface does not show from above.** ⇒ On a top-down body, **only what sticks out reads**
+- **A part generates well only if it survives being cut off a body.** Jaws do. **A leg does not** — detached
+  it is a brown stick
+- **Do not generate what is a shape.** An outline, a dot and a limb are a radius, a thickness and a length;
+  code draws them, squash and stretch are free on numbers and destructive on pixels

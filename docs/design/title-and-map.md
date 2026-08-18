@@ -15,9 +15,6 @@ the 21px glyph below. The user's sentence was *"기능은 확실하게 내가 �
 현재 위치 제대로 표현해야 되고"*. **That is still not acceptance** — it is the correction, and nobody
 has said the corrected screen reads either.
 
-**This is the English twin of `title-and-map-ko.md`. The two must be edited together or they diverge** —
-a fact changed on one side only is worse than the English file not existing at all.
-
 **One line**
 
 > **Launching the game opens a title, and a run starts on a map — an island is chosen, not handed to you.**
@@ -1013,7 +1010,7 @@ rework · Ludo's standing rules). **That is the only evidence this table is hone
 
 ## What this doc cannot answer
 
-**Whether it is fun.** That is line two of [the planning principles](../planning-principles-ko.md).
+**Whether it is fun.** That is line two of [the planning principles](../planning-principles.md).
 
 ⚠ **And it cannot prove half of itself:**
 

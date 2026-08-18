@@ -22,9 +22,6 @@ parked is not answered.**
 The ten 「decided」 lines below are still the user's own words from 2026-08-18 and each carries its quote.
 Nothing else is confirmed.
 
-**This is the English counterpart of `plan-then-watch-ko.md`. The two must be edited together or they will
-diverge** — a fact corrected in one and not the other is worse than no English file at all.
-
 **One line**
 
 > **You lay out the whole landing, press start, and watch the island get taken.**
@@ -334,7 +331,7 @@ costs nothing; pressed constantly, it is not a comfort feature but **a measureme
 
 ---
 
-## ⚠ This design breaks [planning principle](../planning-principles-ko.md) 1 **on purpose**
+## ⚠ This design breaks [planning principle](../planning-principles.md) 1 **on purpose**
 
 > **1. The hand must not idle** — *"time spent watching something roll on automatically makes a game
 > frustrating. That one line is the whole reason defence was scrapped."*
@@ -376,7 +373,7 @@ section exists.**
 | **Pause press count** | The pause section above — a legibility instrument | A person |
 
 ⚠ **All three are human numbers.** ⇒ **This design is not verifiable by probe.** That is a weakness of the
-document, not of the probe, and it is the place [planning principles](../planning-principles-ko.md) line two
+document, not of the probe, and it is the place [planning principles](../planning-principles.md) line two
 predicted.
 
 ---
@@ -729,7 +726,7 @@ your own recommendation.*
 
 ## What this document cannot answer
 
-**Whether any of it is fun.** [Planning principles](../planning-principles-ko.md), line two.
+**Whether any of it is fun.** [Planning principles](../planning-principles.md), line two.
 
 ⚠ **And one thing on top of that: this design is not verifiable by probe.** All three replacement metrics
 are human numbers, and the decisive one — **whether watching your own plan execute is frustrating** — has

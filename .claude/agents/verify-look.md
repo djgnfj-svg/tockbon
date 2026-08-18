@@ -96,3 +96,56 @@ This isolation is why this agent exists separately. Expensive observation is dig
 - Pass: which line of the design was confirmed by what on screen
 - Fail: what you expected and what you actually saw. Both
 - Ambiguous: what needs to go to the user
+
+---
+
+# The godot MCP bridge — moved here from `CLAUDE.md` on 2026-08-19
+
+**You are the only agent that uses it**, so it is documented on you rather than on everybody.
+
+
+The bridge (`127.0.0.1:6550`) accepts one client. **`godot_*` is verify-look only.** Everything else is headless.
+The server reconnects on its own even if no tool is called — resolve is not a mechanism.
+
+**Never take the user's mouse or keyboard.** No window focus, key injection, or OS screen capture.
+The user is on the same machine.
+**`godot_*` screenshots are the exception** — the editor captures its viewport directly and steals no input.
+
+Check three things before launching:
+
+1. Is the editor already up
+2. The game window steals focus. If the user is working, ask
+3. **Is there a path for the thing you want to see to reach the screen** — the most common miss.
+   Water material and colour were both in, but nothing called `set_water`, so not one cell appeared.
+   If the path is missing, wire it into the shell first
+
+**If you can't grab the bridge, stop and report.** Killing someone else's idle `godot-mcp` is not the answer —
+it once killed this session's server too and the tools vanished entirely.
+**Close any editor you launched when the session ends.**
+
+⇒ **Without the bridge the game screenshots itself, and that is now built: `tools/look/`.** Windowed, seven
+frames, quits on its own, every input through `root.push_input()` so nothing is taken from the user.
+**`--headless` cannot capture** — no swapchain, `root.get_texture()` comes back blank, and every PNG is a
+black rectangle **with no error anywhere.** (Headless still turns real frames and really runs `_draw()`;
+what it cannot do is hand back pixels.) Read that folder's README before writing another one: its first
+close-up came back **at play scale** because `_apply_zoom()` rewrote the camera before the shot, silently —
+**a capture harness is an instrument, so take one frame you already know the answer to before trusting any
+of the others.**
+
+### Closing the editor is not enough — `godot-mcp` (node) survives
+
+**Agents do not launch that node.** Claude Code starts it automatically when a session opens,
+and **it does not die when the session ends.** Measured: no editor running, **6 node processes** alive.
+
+**The symptom is not "can't grab the bridge" — it is "the user can't see the screen".**
+The moment an editor launches, all of them grab 6550, and the losers **retry forever**,
+flooding the editor output panel with `Another client is already connected` until nothing else is readable.
+
+**Count the competitors before launching verify-look:**
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match 'godot' }
+```
+**More than one: tell the user before launching the editor.** Finding out afterwards is finding out too late.
+
+Killing them stays the user's call — it also cuts this session's server (`godot_*` disappears
+entirely) and new nodes restart immediately (killed 6, 2 came back). **It does not get clean.**
