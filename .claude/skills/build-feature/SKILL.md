@@ -303,7 +303,9 @@ Not at the end. Not by the builder. **Append one block to the plan doc's `## Rou
 to `3.done`.** Columns and their sources are `parallel-build` section 4; the shape is:
 
 ```
-## Round 3 — builder-A
+## Round log
+
+### Round 3 — builder-A
 
 changed     src/sim/battle.gd +48 -12 · src/look.gd +9 -0        <- git show --numstat
 why         red in round 2: `연출: 돌진이 항상 0이 아니다`         <- .rounds/r2.txt
@@ -311,6 +313,11 @@ closed      that label green in round 3
 not closed  none
 nets        1948 checks · 6.9s · fingerprint A31F...
 ```
+
+⚠ **`net_process` reads this shape literally**: the section heading is `## Round log`, each block is
+`### Round N — who`, and **all five field names must appear in every block.** It also reddens on a plan
+that carries an `OPEN questions` section without a `**Sent to the user**:` line. **Four plans are
+grandfathered and that list is pinned at four — plan number five is checked.**
 
 ⚠ **Print `not closed` even when it is empty.** An absent line reads as an absent problem.
 ⚠ **Never write it from your own recollection of what the agents said.** Measuring your own work reads

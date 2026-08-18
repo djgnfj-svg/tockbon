@@ -28,7 +28,7 @@ an open coastline**, and **what you eat turned into 세포 and objects you fit t
 **The tree**: `src/sim/` (rules · grid · islands · army · battle · run · map) · `src/view/` (field · hud ·
 panel · map · title) · `src/shell/game.gd` · `src/look.gd` · `tools/probe/run_run.gd`. `run/main_scene` is
 `src/shell/game.tscn`. **A run plays end to end from the title.**
-**Round: 14 nets, 1933 checks, 6.5s, green.**
+**Round: 15 nets, 1953 checks, 6.3s, green.**
 
 ⚠ **`title-and-map` step 5 is NOT built** — `MAP_NODES`'s island column is `[0, 1, 2, 1, 2, -1, 2]`, so
 **three grids serve six island-opening nodes** and every route replays terrain it has solved. The user
@@ -193,7 +193,13 @@ the loud one was re-measured and the quiet one beside it — **off by a factor o
 through **because it was not making a dramatic claim.** ⇒ **Re-measure the whole table.**
 
 **When the user says something in passing, it goes into `idea-inbox` as one row, that turn.** Verbatim,
-dated, with a state. **Nothing is deleted from it.** ⚠ **This exists because the heavier rule below was never
+dated, with a state. **Nothing is deleted from it.**
+
+⚠ **Two process rules are now forced by `net_process` rather than by good faith**, because both were
+written in two places each and skipped both times: **a plan carrying an `OPEN questions` section must
+declare whether they were sent**, and **a plan must carry a `## Round log` with all five fields per block.**
+Four plans predate it and the exemption list **is pinned at four — plan number five is checked.**
+⚠ **It forces the shape, never the truth**: a `Sent to the user: yes` on a message nobody sent passes. ⚠ **This exists because the heavier rule below was never
 followed** — *"내가 그냥 대화를 하고 있지만 사실 항상 아이디어를 내는 거거든? 근데 니가 그냥 지워버림."* A
 design doc costs more than a remark, so the remark was dropped instead.
 
@@ -322,7 +328,7 @@ an effect that never happens.**
 
 ## Running the nets
 
-**14 nets, 1933 checks, 6.5 seconds, green.** The old game reached 25 / 3541 / 4.6s — ⚠ **a scale marker,
+**15 nets, 1953 checks, 6.3 seconds, green.** The old game reached 25 / 3541 / 4.6s — ⚠ **a scale marker,
 not a target.** Those nets drove a game deleted for not being fun.
 
 A net is `tests/nets/net_*.gd` with one method, `func run(t)`; `t` gives `ok` · `eq` · `pump_frames` ·

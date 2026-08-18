@@ -93,6 +93,10 @@ round is aimed at, which the boat round did not move: *"참 애매하네. 그래
 **Both carry the default this plan builds, so a builder is never stuck.** If an answer comes back
 different, only the named section moves.
 
+**Sent to the user**: NO. ⚠ **Never sent.** Both defaults shipped and the plan reached `3.done` anyway —
+recorded 2026-08-19, when `net_process` was written. This plan is grandfathered by that net; **nothing
+after it is.**
+
 | # | Question | **Default this plan builds** | Where it lands |
 |---|---|---|---|
 | **A** | Pre-commit, is the un-sent army drawn on the MAP at the harbour, or in a HUD strip? | **On the map, as bodies standing at `grid.start_harbour`.** The user's sentence is *"내가 내릴 수 있는 곳 위치에 딱 나서 … 끌어서 탁 놓으면"* — they stand somewhere and you drag one. A HUD strip would be a second place the same fact lives, and it would eat the chrome budget the camera pull-back just bought | 6.1 · 6.4 |

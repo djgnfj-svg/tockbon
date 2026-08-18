@@ -45,6 +45,11 @@ side of each.
 
 **These go to the user in ONE message.** If no answer comes back, the default is what gets built.
 
+**Sent to the user**: NO. ⚠ **Never sent, and found on 2026-08-19.** All five defaults shipped silently.
+**A gated step 5** (the three grids) and it was descoped; **C shipped as a heal while the user had already
+decided the chest pays an artifact.** ⇒ `net_process` now reddens on a plan that carries this section
+without this line, because two written rules to relay these were both skipped.
+
 | # | Question | Default this plan assumes | What changes if the answer differs |
 |---|---|---|---|
 | **A** | ⚠⚠ **「두 줄」 is ① (one of two per floor) or ② (two columns, one from each)?** The user's own sentence — ***"두 줄로 떠서 양쪽에서 하나씩 선택하는"*** — reads as **②**; the only thing pointing at ① is today's word ***"슬더슬식"*** | **①** | ⚠⚠ **Step 1's `MAP_NODES` / `MAP_EDGES`, step 2's coordinate table and step 5's three grids are ALL re-derived.** ⇒ **Ask before step 5 starts.** Steps 1–4 are cheap to redo; three hand-authored grids are not |
