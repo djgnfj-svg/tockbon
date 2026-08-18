@@ -88,7 +88,13 @@ Skip it and builder finishes the whole implementation with no report reaching me
                    workflow: fan out, one worktree per mutation (below)
 6. Judgment        all pass → 3.done/
                    any fail → batch the findings into ONE message to builder (back to 4)
+7. Round report    ONE block per round, appended to the plan doc. NOT optional (below)
 ```
+
+⚠ **Steps 0 and 7 are the two the user has actually complained about, and both are about them, not the
+code.** Step 0 is the permission to spend; step 7 is *"여러 번 빌더가 도는데 각각 무엇을 개발하고 무엇을
+수정하는지 말하지 않음. 그냥 여러 번 돌기만 함."* **The protocol behind step 7 is `parallel-build`,
+section 4 — read it before the first round, not after the last.**
 
 ## Running the mutation sweep as a workflow
 
@@ -196,6 +202,14 @@ the plans that named the mutation got them run.
 
 Hand over the plan. Remember where builder said "unsure". Tell the verifiers those spots.
 
+**Two things builder does every round, for step 7's sake — say both in the spawn message:**
+
+- **Capture the round.** `powershell -NoProfile -File tests/run_nets.ps1 2>&1 | Tee-Object .rounds/r<N>.txt`
+  ⚠ **Without this there is no "closed?" column** — nothing else persists the failing check labels, so
+  round N cannot be compared to round N+1 and the report becomes an agent's memory in a table's clothes
+- **Commit at the end of its round**, one Korean sentence. ⚠ **In a worktree this is the ONLY thing that
+  survives** — its doc edits never leave the copy, so the commit is the report's raw material
+
 **4. The verifiers**
 
 Spawn them **at once.** They look at different things, so there is no order.
@@ -282,6 +296,26 @@ causes the "editing during verification" problem above.
 - **All pass** → move the doc to `3.done/` and fix `**Status**:`. Report to the user.
 - **Fail** → summarize the failures and `SendMessage(to: "builder")`. Back to 4.
 - **Cannot judge** (criteria empty or ambiguous) → return to spec, or ask the user.
+
+**6. The round report — you write it, in the main tree, after every round**
+
+Not at the end. Not by the builder. **Append one block to the plan doc's `## Round log` and travel with it
+to `3.done`.** Columns and their sources are `parallel-build` section 4; the shape is:
+
+```
+## Round 3 — builder-A
+
+changed     src/sim/battle.gd +48 -12 · src/look.gd +9 -0        <- git show --numstat
+why         red in round 2: `연출: 돌진이 항상 0이 아니다`         <- .rounds/r2.txt
+closed      that label green in round 3
+not closed  none
+nets        1948 checks · 6.9s · fingerprint A31F...
+```
+
+⚠ **Print `not closed` even when it is empty.** An absent line reads as an absent problem.
+⚠ **Never write it from your own recollection of what the agents said.** Measuring your own work reads
+favourably; file names, line counts and check labels do not. If `.rounds/r<N>.txt` is missing, **say the
+column is missing** — do not fill it in from memory.
 
 ## Rollback limit
 
