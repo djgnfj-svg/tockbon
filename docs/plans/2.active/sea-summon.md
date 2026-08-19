@@ -1012,3 +1012,107 @@ round-half-away-from-zero — the same discipline `net_summon`'s own header alre
 | 1 | `can_summon_at` back to `>= 1 and <= 2` | **red** — summon, 14 checks |
 | 2 | the `UNREACHABLE` guard dropped | **red** — summon, 3 checks ⚠ **green before the lake fixture existed** |
 | 3 | `SUMMON_BAND_MIN_TILES` 4 -> 3 | **red** — summon, 14 checks (band, landings, near-water, the long map) |
+
+---
+
+### Round 4 — fixer
+
+changed   **The drag is deleted**: `src/shell/game.gd` (the press branch, the release block, the motion
+branch, `_drag_soldier`, `_soldier_hit_at`, and `_arm`'s drag-cancel) · `src/view/field_view.gd` (the
+harbour markers and `_paint_dock`, the candidate ring, the route preview, the reserve stack,
+`idle_soldier_rect`, `set_drag`, `_drag_soldier`/`_drag_tile`) · `src/look.gd` (`IDLE_SOLDIER_*` and
+`idle_soldier_offset_px`) · `src/sim/battle.gd` (`boat["home"]`, both writers) ·
+**`tools/look/capture_landing.gd` deleted whole** · six nets · `src/sim/rules.gd`
+(`SUMMON_BAND_MIN_TILES` 4 -> 6) · `docs/design/sea-summon.md` §3.2 · §3.3 · §5.3.
+
+why       ***"ㅇㅇ 지워줘 그리고 그냥 섬 이랑 더 거리를 더줘"*** — pointing at the yellow harbour
+markers and the reserve stack. Both belong to the drag, and the drag is what they had already called
+not fun (`idea-inbox` row 26). The summon replaced it and the gesture is accepted (*"동작방식은 맞음"*).
+
+closed    **THE THREE FACTS, ESTABLISHED BEFORE ANYTHING WAS CUT:**
+1. **`_summon_field` seeds from the COAST, not from harbours** — a seed is a water tile 8-adjacent to a
+   PASSABLE land tile, and there is no harbour anywhere in it. `net_summon._a_grid_with_no_harbours`
+   already proved a zero-harbour grid has a band. ⇒ **deleting harbours does not touch the feature**,
+   and no seed had to move.
+2. **A landing with no harbour is `summon_landing_of(t)`** — derived from the press by the summon BFS.
+   `sendable` / `can_land_at` / `home_harbour_for` / `water_route` are `Battle.send`'s machinery and
+   nothing else's. **No hidden harbour was kept.**
+3. **The return leg needed no change** — a summoned boat's path is `summon_route` and `_phase_landings`
+   REVERSES it, so it sails back to the sea tile it was summoned at and vanishes there. Confirmed by
+   reading, and `boat["home"]` was already -1 for a summon before it was deleted.
+
+**The band: `>= 4` -> `>= 6`.** Band 470/460/478 -> **360/360/366**, landings 42/38/40 ->
+**34/35/34**, crossing 1.10/2.47/5.96 -> **1.60/2.83/5.96**, spread 4.86 -> **4.36 s**. Long map:
+**1128 tiles · 138 of 174 landings · 1.60/3.18/17.96 s**, all 1128 producing a route.
+⚠⚠ **AND THE CEILING IS A CLIFF: at `>= 12` the band is 48 tiles and resolves to TWO landings on every
+island and on the long map.** 10 is the last usable value. `rules.gd` carries the whole sweep.
+
+**Checks DELETED, subject and all** — never repaired to pass:
+- `net_slots._arming_mid_drag_cancels_the_drag` (round 2's signature-fake fix — no drag to collide with)
+  and the slot-boxes-vs-harbour-stack overlap half of `_the_boxes_clear_the_army`;
+- `net_shell`: the dock rows, the whole reserve-stack pass, **the entire drag suite (~320 lines)**, the
+  post-commit body/release branches, the panel release guard, the five `IDLE_SOLDIER_*` bound rows and
+  two layer-order rows;
+- `net_summon._the_boat_has_no_harbour`'s two `boat["home"]` rows — **rewritten onto the PATH**, which
+  is a stronger claim (a `send` boat starts on a harbour tile, a summoned one on the pressed sea tile);
+- `net_boat` / `net_plan`'s `boat["home"]` rows — same rewrite onto `path[0]`.
+
+**What replaced them measures the summon and not nothing.** `net_shell`'s plan is authored with
+`battle.summon` now (two derived landings, then both slots emptied to ten boats), so every downstream
+row — ghosts, the fan rank, the routes, the commit, the hulls, the crossing, the verdict — still runs.
+`net_slots` (158 checks) owns the summon's INPUT path end to end.
+
+not closed  ⚠⚠ **`H`, `start_harbour`, `sendable`, `home_harbour_for` and `Battle.send` ARE STILL IN
+THE TREE, and the reason is one file.** Nothing in `src/` reads any of them any more. **Their last
+reader is `tools/probe/run_run.gd`** — the instrument that grades every design decision in this repo
+and that `plan-then-watch` 8.2's stop condition is measured with. Removing `H` from the legend makes
+`send` return -1 forever, which does not break the game and **silently kills the probe**. Porting the
+probe onto `summon` is a rewrite of the measuring instrument, and doing it in the same round that
+deletes what it measures is how a measurement quietly stops meaning anything. ⇒ **Decision needed;
+not a builder's.**
+
+⚠⚠ **THE BAND/BOX TIE IS NOW BLOCKING, NOT OPEN.** Nothing ties the green band to the five slot boxes,
+so 1~5 is undiscoverable until pressed — and **the band is now the ONLY control in the game.** There is
+no drag to fall back on and the band sits six tiles off the shore, further from anything that could
+explain it. Still no fix invented (the shared-tone answer is refused by `COL_SUMMON_BAND`'s own
+decision in `look.gd`; an arrow or a label is unspecified presentation).
+
+⚠⚠ **`tools/look/capture_landing.gd` IS DELETED and its capability is gone with it.** Every gesture in
+it called `idle_soldier_rect` / `_soldier_hit_at`, so it would have crashed on its first shot. **What
+it uniquely photographed and nothing replaces**: the route line compared on screen against the sim's
+route, the refusal mark at the cursor, and the zoom sweep that found `ROUTE_WIDTH_PX` at 1.35 px.
+`capture_summon.gd` is verify-look's to write.
+
+⚠⚠ **THREE THINGS THE DRAG SUITE MEASURED HAVE NO REPLACEMENT ANYWHERE**, named in the net where they
+stood: (1) the route preview compared **point for point** with the sim's own route — the only runtime
+catch for `_paint_route` cutting a corner; (2) the refusal mark's whole life, including that it is
+ABSENT on an accepted press; (3) hit-test precedence, which is gone rather than unmeasured.
+⚠ **And one more hole**: 6.3's row — the HUD chrome never sits on top of what the hand reaches for —
+died with the stack. The five slot boxes are what the hand reaches for now and **nothing checks the
+start button against them.**
+
+⚠ **Per-soldier HP has no home.** The stack drew a bar under every reserve body because 「which of
+these thirteen is nearly gone」 is a planning fact. **A slot bar is a COUNT, not a health readout.**
+`sea-summon` §6 raised this as Open 4 and it is still unanswered.
+⚠ **`net_shell`'s bottom-right corner argument is now unforced**: the boxes were put there to clear the
+harbour stack, and the stack is gone.
+⚠ **Carried**: `flow_field`/`step_toward` have no diagonal-shoulder guard · `SPARK_LEN_PX` is under the
+snap floor at `ZOOM_MIN` · `TARGET_LINE`, `SPARK`, the `CLIFF_FACE` line · the probe has not been re-run.
+
+nets      **17 nets · 2473 checks · 4.6 s · green**, stderr clean. Was 17 / 2576 / 4.5 s.
+⚠ **The count went DOWN by 103 and that is the point of the round** — a deletion that left the number
+alone would mean the checks had been repaired instead of removed.
+
+**Three mutations, each edited and re-run in ONE command, replacement asserted before running:**
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | `SUMMON_BAND_MIN_TILES` 6 -> 4 | **red** — summon, 13 checks (band · landings · near-water · long map) |
+| 2 | the harbour markers drawn again | **red** — shell (an idle frame draws nothing extra) |
+| 3 | the reserve stack drawn again | **red** — shell, 3 checks (body count · centres · HP bars) |
+
+⚠ **Two fixtures in `net_summon` had to GROW rather than be re-valued**, for the second round running:
+a minimum distance empties any fixture whose sea is shallower than the constant. Both are sized for the
+**ceiling** now (24x24 and 24x20, holding a band at `>= 10`) so the next distance change does not empty
+them again. Every hand-derived literal in the tie-break fixture survived the growth, and the comment
+says which indices moved with the width.

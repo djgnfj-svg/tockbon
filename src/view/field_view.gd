@@ -110,16 +110,6 @@ var _shake_left := 0.0
 var cam_px := Vector2.ZERO
 var zoom := 1.0
 
-## The drag (`plan-then-watch`, section 7). `_drag_soldier` is -1 while nothing is being dragged;
-## `_drag_tile` is the tile under the cursor while one is. Both are set by `game.gd` through
-## `set_drag`, the one call site "a drag started", "a drag moved" and "a drag ended" all go through —
-## the two states can never disagree about whether the overlay should be showing.
-##
-## ⚠ **It is a SOLDIER now, not a boat.** The reversal made the boat plumbing: you drag a body off the
-## harbour onto a beach and a boat is created by the drop. There is no fleet slot to name.
-var _drag_soldier := -1
-var _drag_tile := -1
-
 ## The summon aim (`sea-summon`). `_summon_slot` is the slot a number key has armed, or -1;
 ## `_summon_aim` is the tile under the cursor, or -1. **Both are set by `game.gd` through one call**,
 ## `set_summon_aim`, exactly as the drag's two fields are — "armed", "moved" and "cleared" all go
@@ -150,8 +140,6 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	_shake_left = 0.0
 	# A drag in flight on the island that just ended must not survive onto the one that just opened —
 	# its soldier id would now name a stranger standing at a different harbour.
-	_drag_soldier = -1
-	_drag_tile = -1
 	# Same argument as the drag one line up: a slot armed on island 1 must not survive onto island 2,
 	# and the tile index it was aiming at would name a different piece of water there.
 	_summon_slot = -1
@@ -289,17 +277,9 @@ func _visible_tile_rect(margin: int) -> Rect2i:
 	return Rect2i(Vector2i(x0, y0), Vector2i(maxi(0, x1 - x0), maxi(0, y1 - y0)))
 
 
-## Called by `game.gd` on every press, motion and release of a drag. `soldier == -1` clears the
-## candidate outright — the SAME call a press starts a drag with is the one a release ends it with,
-## so "a drag is showing" and "`_drag_soldier >= 0`" can never read two different answers.
-func set_drag(soldier: int, tile: int) -> void:
-	_drag_soldier = soldier
-	_drag_tile = tile
-
-
 ## Called by `game.gd` whenever a slot is armed or disarmed, whenever the cursor moves with one armed,
-## and on the release. `slot == -1` clears the whole aim. **0 draw calls** — the same shape `set_drag`
-## above is, and for the same reason: one call site for three events means the two fields cannot
+## and on the release. `slot == -1` clears the whole aim. **0 draw calls** — the same shape the
+## deleted `set_drag` had, and for the same reason: one call site for three events means the two fields cannot
 ## disagree.
 func set_summon_aim(slot: int, tile: int) -> void:
 	_summon_slot = slot
@@ -442,50 +422,26 @@ func _draw() -> void:
 	if not cliff_points.is_empty():
 		_paint_cliff_face(cliff_points, Look.COL_CLIFF_FACE, Look.CLIFF_FACE_WIDTH_PX)
 
-	# --- 2. harbours -----------------------------------------------------------------------------
-	# The tile under a harbour is already water-coloured by the terrain pass, so the marker is an
-	# outline rather than a fill: it has to still say "a boat may be sent from here" against open
-	# water, whether or not a hull happens to be sitting there right now (both boats can be at sea
-	# at once, leaving every harbour on the island empty). It is drawn in the boat's colour on
-	# purpose, exactly as the old dock outline was.
-	for h in battle.harbour_count():
-		var harbour := battle.harbour_tile(h)
-		if harbour < 0:
-			continue
-		var at := _tile_xy(harbour)
-		_paint_dock(Look.tile_rect_px(at.x, at.y), Look.COL_BOAT, Look.BODY_OUTLINE_WIDTH_PX)
-
-	# --- 2b. the drag candidate (P3, plan-then-watch) --------------------------------------------
-	# ⚠⚠ **THE GREEN COAST IS DELETED.** It washed every sendable tile at alpha 0.18 from the moment
-	# the island opened; `speed-off-open-landing`'s question C replaced it on the user's own sentence
-	# 「못내림만 표시하면 됨 ㅇㅇ」 — the screen marks what is BLOCKED and nothing else. What carries
-	# 「여긴 못 내린다」 now is the cliff-face pass above (a standing mark on the terrain itself) plus
-	# the refusal mark below, which fires on the frame the sim actually refuses a drop.
+	# --- 2. ⚠⚠ THE HARBOUR MARKERS AND THE DRAG CANDIDATE ARE BOTH DELETED ------------------------
+	# The user pointed at a screenshot of the yellow harbour outlines and the stack of reserve bodies
+	# on the shore and said ***"ㅇㅇ 지워줘"***. Both belong to the DRAG, and the drag is what they said
+	# was not fun (*"이걸 드래그해서 저기까지 이렇게 끌고 가는 게 그렇게 play가 재밌진 않아"*,
+	# `idea-inbox` row 26). The sea summon replaced it and **they accepted the gesture**
+	# (*"동작방식은 맞음"*), so the whole gesture and everything drawn for it goes.
 	#
-	# ⚠ **The wash was also what made the promise honest** — its predicate was
-	# `grid.home_harbour_for(t) >= 0`, the exact call `Battle.send` refuses on, so the green could never
-	# promise a tile the sim then denied. The refusal mark inherits that guarantee from the OTHER end:
-	# it is pushed by the shell off `send`'s own -1, so it cannot deny anything the sim allows.
-	if not battle.committed():
-		if _drag_soldier >= 0 and _drag_tile >= 0:
-			# The ring under the cursor answers the SAME predicate the release will, so the refusal is
-			# readable before the release rather than after it.
-			var drag_hb := battle.grid.home_harbour_for(_drag_tile)
-			var ring_col := Look.COL_WIN if drag_hb >= 0 else Look.COL_LOSE
-			var candidate_px := Look.tile_point_px(battle.grid.tile_point(_drag_tile))
-			_paint_ring(candidate_px, Look.TARGET_RING_R_PX, ring_col, Look.AREA_RING_WIDTH_PX)
-			if drag_hb >= 0:
-				# ⚠ **Built from `grid.water_route` and not from two endpoints.** Which harbour it
-				# would sail from is decided by the LANDING, and since
-				# `speed-off-open-landing` the crossing bends around headlands — so a straight line
-				# drawn here would promise a sail the boat does not make, and it would promise it
-				# over LAND. `send` builds its boat off this same call, so the line the player sees
-				# while dragging is point for point the line the boat will really take.
-				var plan_px := PackedVector2Array()
-				for wp in battle.grid.water_route(drag_hb, _drag_tile):
-					plan_px.append(Look.tile_point_px(wp))
-				_paint_route(plan_px, Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
+	# What went from this file with it: `_paint_dock` (the harbour outline), `set_drag` /
+	# `_drag_soldier` / `_drag_tile`, the candidate ring, the `water_route` preview line, the reserve
+	# stack in pass 6b, and `idle_soldier_rect`.
+	#
+	# ⚠ **`Grid.start_harbour`, `home_harbour_for`, `sendable` and `Battle.send` are NOT deleted**, and
+	# that is not an oversight — see `Battle.send`'s own comment. Nothing in `src/` reads them any more;
+	# `tools/probe/run_run.gd` is their last reader and it is the instrument that grades every design
+	# decision in this repo.
+	#
+	# ⚠ The `Look.COL_WIN` / `COL_LOSE` candidate-ring pair went with the drag. The summon aim below
+	# draws its own ring in the same two tones, so the concept survives where the gesture does.
 
+	if not battle.committed():
 		# --- 2c. the summon aim (sea-summon) -------------------------------------------------------
 		# The same two leaves the drag uses, and nothing new. **A dry slot draws NEITHER** — the absence
 		# is the answer, and it arrives before the press instead of after it.
@@ -747,43 +703,19 @@ func _draw() -> void:
 			var tbars := _hp_rects(scentre, st, army.hp[i] / Rules.hp_of(st))
 			_paint_hp(tbars[0], Look.hp_bar_colour(false), tbars[1], Look.hp_bar_colour(true))
 
-	# --- 6b. the army still standing at the harbour (P4, plan-then-watch) --------------------------
-	# **This is the thing the player drags**, and it is on the map rather than in a HUD strip because
-	# the user's own sentence is 「내가 내릴 수 있는 곳 위치에 딱 나서 … 끌어서 탁 놓으면」. Drawing it in a
-	# strip as well would be one fact under two names, which `look.gd`'s header forbids.
+	# --- 6b. ⚠⚠ THE RESERVE STACK IS DELETED ------------------------------------------------------
+	# Thirteen bodies stood on the water at the start harbour and the player dragged them off one at a
+	# time. The user pointed at them and said ***"ㅇㅇ 지워줘"*** — see pass 2. **Where the roster shows
+	# now is the five slot boxes**: each draws a bar of how many bodies it can still send, so the number
+	# goes down as you hold, which is `sea-summon`'s own recommendation.
 	#
-	# ⚠ **It is drawn during the fight too, and that is deliberate.** A soldier you never sent stays
-	# RESERVE for the whole island, alive, and carries to the next one — so 「I lost with eight still
-	# at home」 has to be readable, and a stack that vanished at the start button would hide it.
-	#
-	# The rect comes from `idle_soldier_rect`, never from re-deriving the anchor here: `game.gd`'s hit
-	# test needs the EXACT rect that reaches the screen. A hand-rolled hit test that tested a tile
-	# index instead of the drawn rect once left ~70% of a hull dead to a press.
-	for ii in battle.soldier_state.size():
-		var irect := idle_soldier_rect(ii)
-		if irect.size == Vector2.ZERO:
-			continue
-		var itype := int(army.type_id[ii])
-		var icentre := irect.position + irect.size * 0.5
-		_paint_body(
-			icentre,
-			Look.body_radius_of(itype),
-			Look.body_corner_radius_of(itype),
-			Look.body_colour_of(false),
-			Look.BODY_OUTLINE_WIDTH_PX,
-			Look.BODY_DOT_RADIUS_PX,
-			Vector2.ONE)
-		if army.has_beak[ii] != 0:
-			# Facing RIGHT and not `_facing_of`: a soldier in reserve has no target, and `_facing_of`
-			# would answer RIGHT anyway — asking it here would only invite someone to "fix" it into
-			# aiming at an enemy the soldier cannot reach and has not been sent at.
-			var itri := _beak_points(icentre, Look.body_radius_of(itype), Vector2.RIGHT)
-			_paint_beak(itri[0], itri[1], itri[2], Look.COL_BEAK)
-		# The HP bar is not decoration on this pass. Soldiers carry their damage between islands and a
-		# dead one is dead for good, so 「which of these thirteen is nearly gone」 is a planning fact,
-		# and it is only readable before anything is dropped.
-		var ibars := _hp_rects(icentre, itype, army.hp[ii] / Rules.hp_of(itype))
-		_paint_hp(ibars[0], Look.hp_bar_colour(false), ibars[1], Look.hp_bar_colour(true))
+	# ⚠⚠ **ONE THING WENT WITH IT AND HAS NO HOME: per-soldier HP.** The stack drew an HP bar under
+	# every reserve body, and its comment said why — *「which of these thirteen is nearly gone」 is a
+	# planning fact, and it is only readable before anything is dropped* — because soldiers carry damage
+	# between islands and a dead one is dead for good. **The slot bar is a COUNT, not a health readout.**
+	# `sea-summon` §6 raised this as its Open 4 and did not answer it; it is unanswered here too, and it
+	# is a real loss rather than a tidy deletion.
+	
 
 	# --- 7. enemies ------------------------------------------------------------------------------
 	# Drawn before the soldiers so an ally on the same tile reads on top of what it is fighting.
@@ -901,13 +833,6 @@ func _draw() -> void:
 func _paint_tile(rect: Rect2, fill: Color, line_colour: Color, line_width: float) -> void:
 	draw_rect(rect, fill)
 	draw_rect(rect, line_colour, false, line_width)
-
-
-## 1 call. An outline, not a fill — see the harbour comment in `_draw`. The name is unchanged from
-## the old dock hook even though the concept moved to a harbour in `boat-and-landing`; stage 5 draws
-## a hull with `_paint_hull` on top of this marker when a boat is actually sitting there.
-func _paint_dock(rect: Rect2, colour: Color, outline_width: float) -> void:
-	draw_rect(rect, colour, false, outline_width)
 
 
 ## 2 calls: the rounded-square outline, then the centre dot.
@@ -1041,36 +966,6 @@ func _hull_rect(at: Vector2) -> Rect2:
 	var w := Look.BOAT_SLOT_PX + 2.0 * Look.BOAT_HULL_PAD_PX
 	var h := Look.BOAT_HULL_H_PX
 	return Rect2(at - Vector2(w, h) * 0.5, Vector2(w, h))
-
-
-## Where soldier `i` is drawn while it is still in reserve, standing at the START HARBOUR — the body
-## the player presses to begin a drag (P4). `Rect2()` (zero size) for anything that is not RESERVE:
-## dead, already sent, or already ashore. **That zero is what makes the stack visibly empty as the
-## plan fills**, and it is also what stops a corpse being draggable, which `Battle.send` would refuse
-## anyway.
-##
-## ⚠ **The slot is the SOLDIER ID and not a position in a list.** Re-flowing the stack every time one
-## is dragged away would move every body under the cursor mid-plan; a hole stays where the soldier
-## was, and the hole is the feedback.
-##
-## ⚠ **`_draw()`'s idle pass and `game.gd::_soldier_hit_at` BOTH call this**, rather than either one
-## re-deriving the anchor: the hit test has to answer to the EXACT rect that reaches the screen. A
-## hand-rolled hit test that tested a tile index instead of the drawn rect once left ~70% of a hull
-## dead to a press, with a camera pan starting silently in its place.
-func idle_soldier_rect(i: int) -> Rect2:
-	if battle == null or battle.grid == null or army == null:
-		return Rect2()
-	if i < 0 or i >= battle.soldier_state.size():
-		return Rect2()
-	if battle.soldier_state[i] != Battle.SoldierState.RESERVE:
-		return Rect2()
-	var harbour_tile := battle.harbour_tile(battle.grid.start_harbour)
-	if harbour_tile < 0:
-		return Rect2()
-	var centre := Look.tile_point_px(battle.grid.tile_point(harbour_tile)) \
-		+ Look.idle_soldier_offset_px(i)
-	var r := Look.body_radius_of(int(army.type_id[i]))
-	return Rect2(centre - Vector2(r, r), Vector2(r, r) * 2.0)
 
 
 ## Back rectangle first, filled rectangle second. The fill shrinks from the right, so the bar's left

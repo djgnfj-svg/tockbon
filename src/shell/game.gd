@@ -51,23 +51,15 @@ var map_view: MapView = null
 var title_view: TitleView = null
 var panel_view: PanelView = null
 
-## True while a left-button drag on the FIELD (not the panel, not a soldier) is moving the camera.
-## Mutually exclusive with `_drag_soldier` below — a press grabs a soldier XOR begins a pan, never
-## both (`boat-and-landing`, section 6).
+## True while a left-button drag on the FIELD is moving the camera. ⚠ **It used to be mutually
+## exclusive with `_drag_soldier`** — a press grabbed a soldier XOR began a pan — and the soldier drag
+## is deleted, so a press that is not a summon and not HUD chrome is now always a pan.
 ##
 ## ⚠ **The pan is NOT gated on the commit.** Camera pan and zoom stay live for the whole fight on
 ## purpose: they change nothing about what happens, and watching is the entire activity — removing
 ## them would turn 결정 4's 「pausing doesn't let me do anything more」 into 「and you cannot even
 ## look」. It is also the row that stops the post-commit checks from being satisfied by a dead screen.
 var _panning := false
-
-## The soldier a left-drag is currently placing, or -1. Set by `_on_left_press` when the press landed
-## on a body still standing at the harbour (`field_view.idle_soldier_rect`), cleared by
-## `_on_left_release` or by the hold guard below.
-##
-## ⚠ **It is a soldier, not a boat** (`plan-then-watch`, 결정 14R). Boats are unlimited and one is
-## created BY the drop, so there is nothing to pick up and nothing to run out of.
-var _drag_soldier := -1
 
 ## Seconds the shell is standing still, holding a moment on screen before it walks the run forward.
 ## Two things ride it — the verdict pause and the beak stain — and they never overlap, because a hold
@@ -146,14 +138,10 @@ func _ready() -> void:
 ## to stay drawable. The views are still re-bound, because the panel reads `run.state()` and has to
 ## learn that the island it is sitting on top of is finished.
 func _open_island() -> void:
-	# A drag in flight on the island that just ended must not survive onto the one that just opened —
-	# its soldier id would now name a body standing at a different harbour. Cleared unconditionally,
-	# not only when a new island actually opens: a REWARD transition (`opened == null`) still has to
-	# drop a drag that was in flight when the panel came up.
-	_drag_soldier = -1
-	field_view.set_drag(-1, -1)
-	# Same argument, one gesture over: a slot armed on island 1 must not survive onto island 2, and the
-	# tile it was aiming at would name a different piece of water there.
+	# A slot armed on island 1 must not survive onto island 2, and the tile it was aiming at would name
+	# a different piece of water there. Cleared unconditionally, not only when a new island actually
+	# opens: a REWARD transition (`opened == null`) still has to drop an aim that was live when the
+	# panel came up.
 	_disarm()
 	var opened := run.begin_island()
 	if opened != null:
@@ -321,15 +309,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	# path to `run == null` is the restart button inside `_click_panel`, and `_hold_sec` is 0 there.
 	# The next reader will otherwise "fix" this order.
 	#
-	# ⚠ A drag in flight is CANCELLED here, not merely suppressed: `_panning` and `_drag_soldier` are
+	# ⚠ A gesture in flight is CANCELLED here, not merely suppressed: `_panning` and `_summon_down` are
 	# cleared on every event that arrives while a hold is active, not just left alone. Without this
-	# line the hold only blocks the MOTION events that would have kept panning or dragging — the flag
+	# the hold only blocks the MOTION events that would have kept panning or summoning — the flag
 	# itself survives the hold, and once it ends with the mouse button still down, the very next
 	# motion resumes the gesture the plan says must have been cancelled.
 	if _hold_sec > 0.0:
 		_panning = false
-		_drag_soldier = -1
-		field_view.set_drag(-1, -1)
 		# The held summon is cancelled here for exactly the reason the drag is: suppressing only the
 		# MOTION events leaves the flag alive, and the very next motion after the hold ends resumes a
 		# gesture the plan says must have been cancelled. The slot stays ARMED — arming is a mode, not
@@ -382,10 +368,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			_summon_cursor = motion.position
 			_summon_at = _tile_at(motion.position)
 			field_view.set_summon_aim(_armed_slot, _summon_at)
-		elif _drag_soldier >= 0 and battle != null and not battle.committed():
-			# The candidate tile tracks the cursor; `battle.send` is not called until the release, so a
-			# drag that never releases over a droppable tile never touches the sim at all.
-			field_view.set_drag(_drag_soldier, _tile_at(motion.position))
 		elif _panning:
 			field_view.pan_by(motion.relative)
 
@@ -488,9 +470,7 @@ func _enter_node(n: int) -> void:
 ## file's field were cleared.
 func _enter_map_screen() -> void:
 	battle = null
-	_drag_soldier = -1
 	field_view.setup(null, null, [])
-	field_view.set_drag(-1, -1)
 	_disarm()
 	hud_view.bind(null)
 	map_view.bind(run)
@@ -512,8 +492,11 @@ func _enter_map_screen() -> void:
 ##     `ZOOM_MIN` the island band and the button's rectangle overlap in one corner, and chrome that
 ##     loses to what it is drawn over is chrome that cannot be pressed;
 ##  2. **a placed boat's landing ring** (`_ring_hit_at`), which undoes that drop;
-##  3. **a soldier still standing at the harbour** (`_soldier_hit_at`), which begins a drag;
-##  4. otherwise a camera pan.
+##  3. otherwise a camera pan.
+##
+## ⚠ **There used to be a fourth: a soldier still standing at the harbour, which began a drag.** The
+## drag is deleted (*"ㅇㅇ 지워줘"*) and `_soldier_hit_at` with it. The summon consumes the press when a
+## slot is armed, so a press that reaches the bottom of this list is always a pan now.
 ##
 ## ⚠ **There is no post-commit branch left at all.** The speed chips used to sit between 1 and 2 as
 ## the one thing pressable after the commit; `speed-off-open-landing` deleted them, so every branch
@@ -565,11 +548,6 @@ func _on_left_press(at: Vector2) -> void:
 			if _armed_slot >= 0:
 				_begin_summon(at)
 				return
-			var soldier := _soldier_hit_at(at)
-			if soldier >= 0:
-				_drag_soldier = soldier
-				field_view.set_drag(soldier, _tile_at(at))
-				return
 	_panning = true
 
 
@@ -589,8 +567,9 @@ func _on_left_press(at: Vector2) -> void:
 ## no, never from a predicate this file evaluates for itself. A release off the grid (`tile < 0`)
 ## marks too — from the player's hand that is the same gesture and the same answer.
 ##
-## ⚠ **The `_drag_soldier` branch is the third PLAN BRANCH the commit gate lives on.** Without it a
-## press that started before the commit and released after it would still author a landing.
+## ⚠ **This used to hold the drag's release — the third PLAN BRANCH the commit gate lived on.** With
+## the drag deleted the only thing left here is ending the summon press and dropping the pan, and both
+## are unconditional: there is nothing left that could author a landing on a release.
 func _on_left_release(at: Vector2) -> void:
 	if _summon_down:
 		# **The slot stays ARMED**, so the next press streams again with no key press in between. Only
@@ -598,14 +577,6 @@ func _on_left_release(at: Vector2) -> void:
 		_summon_down = false
 		_summon_at = -1
 		field_view.set_summon_aim(_armed_slot, -1)
-	if _drag_soldier >= 0:
-		var soldier := _drag_soldier
-		_drag_soldier = -1
-		field_view.set_drag(-1, -1)
-		if not panel_view.panel_active() and battle != null and not battle.committed():
-			var tile := _tile_at(at)
-			if tile < 0 or battle.send(soldier, tile) < 0:
-				field_view.note_refusal(field_view.screen_to_world_px(at))
 	_panning = false
 
 
@@ -664,20 +635,12 @@ func _slot_of_keycode(code: int) -> int:
 ## field in the same breath — so the box that is drawn green and the band that answers a press can
 ## never name two different slots.
 func _arm(slot: int) -> void:
-	# ⚠⚠ **A DRAG IN FLIGHT IS CANCELLED HERE, and without these two lines this is the signature fake
-	# `CLAUDE.md` names: the screen promises one landing and the sim authors another.** `_on_motion`
-	# reads `if _armed_slot >= 0 … elif _drag_soldier >= 0`, so the moment a key arms a slot mid-drag
-	# the drag's `set_drag` is never called again and **the candidate ring freezes on the tile the key
-	# was pressed over** — while `_on_left_release` still runs its own `_drag_soldier >= 0` block and
-	# hands `battle.send` the tile the cursor ended on. Measured: the screen said tile 1461 and the sim
-	# was handed 146.
-	# ⚠ It is CANCELLED and not merely suppressed, the same shape and the same reason as the `_hold_sec`
-	# gate in `_unhandled_input`: leaving the flag alive means the very next motion after a disarm
-	# resumes a gesture that has had no ring on screen for the whole time it was armed.
-	# ⚠ **`_disarm` deliberately does NOT do this.** There is no drag to cancel there — arming is what
-	# takes the field press over, and by the time anything can disarm, this line has already run.
-	_drag_soldier = -1
-	field_view.set_drag(-1, -1)
+	# ⚠⚠ **THE DRAG-CANCEL THAT USED TO BE HERE IS GONE WITH THE DRAG ITSELF.** It read
+	# `_drag_soldier = -1; field_view.set_drag(-1, -1)`, and it was the fix for a measured signature
+	# fake: arming mid-drag froze the candidate ring on one tile while `_on_left_release` handed
+	# `battle.send` another (screen 1461, sim 146). **There is no drag to cancel now** — the gesture,
+	# its state and its ring are all deleted — so the two lines are removed rather than left as a
+	# no-op on a field that no longer exists.
 	_armed_slot = slot
 	hud_view.set_armed(_armed_slot)
 	field_view.set_summon_aim(_armed_slot, _summon_at)
@@ -718,29 +681,6 @@ func _fire_one_summon() -> void:
 	if battle.summon(_armed_slot, _summon_at) >= 0:
 		return
 	field_view.note_refusal(field_view.screen_to_world_px(_summon_cursor))
-
-
-## Which soldier still standing at the harbour a press at `at` grabs, or -1.
-##
-## ⚠ **`field_view.idle_soldier_rect` is the SAME rect `_draw()` just painted**, converted through the
-## camera the way every click is (`screen_to_world_px`). Testing the tile index instead once left ~70%
-## of a hull dead to a press in this repo — the drawn rects are disjoint even where the tiles beneath
-## them are not, and re-deriving the anchor here would be the geometry written down twice.
-##
-## Descending, so the body drawn LAST wins an overlap. `IDLE_SOLDIER_PITCH_PX` is bounded below by the
-## widest body so they should never overlap at all; this only decides which one answers if that bound
-## is ever loosened.
-func _soldier_hit_at(at: Vector2) -> int:
-	if battle == null:
-		return -1
-	var world := field_view.screen_to_world_px(at)
-	var i := battle.soldier_state.size() - 1
-	while i >= 0:
-		var rect := field_view.idle_soldier_rect(i)
-		if rect.size != Vector2.ZERO and rect.has_point(world):
-			return i
-		i -= 1
-	return -1
 
 
 ## Which placed boat's landing ring a press at `at` is on, as that boat's **uid**, or -1.
@@ -844,5 +784,7 @@ func _click_panel(at: Vector2) -> void:
 #    that handler did not**: `_on_summon_key` above arms a slot, where `_on_key` put a body straight
 #    onto a boat. A key that selects and a key that spawns are not the same handler restored;
 #  - `_boat_hit_at` / `_boat_grabbable` — they tested a HUD berth rect and an idle hull rect for a
-#    FLEET SLOT, and there is no fleet. `_soldier_hit_at` and `_ring_hit_at` above are what a press
-#    is asked instead, and neither one names a boat that already exists.
+#    FLEET SLOT, and there is no fleet;
+#  - `_soldier_hit_at` — it tested the reserve stack for a DRAG, and the drag is deleted
+#    (*"ㅇㅇ 지워줘"*). `_ring_hit_at` above is the only hit test a field press still gets, and the
+#    summon consumes the press before it whenever a slot is armed.

@@ -385,7 +385,8 @@ func _relocation_sends_the_boat_to_the_right_harbour(t) -> void:
 	t.eq(straight_best, 1, "직선으로는 1번이 더 가깝다 — 픽스처가 실제로 갈린다 (자가 점검)")
 
 	t.ok(b.send(0, landing) >= 0 and b.commit(), "보내고 확정했다 (자가 점검)")
-	t.eq(int(b.boats[0]["home"]), home, "출항할 때 이미 돌아갈 항구가 적혀 있다")
+	# ⚠ `boat["home"]` is deleted with the drag. The line under this one already made the same
+	# claim off the ROUTE — `path[0]` IS the harbour the boat left from — so nothing is lost.
 	var out_first: Vector2 = (b.boats[0]["path"] as PackedVector2Array)[0]
 	t.eq(out_first, b.grid.tile_point(int(b.grid.harbour_tiles[home])), "그 항구에서 출항했다")
 	_drive_until_ashore(t, b, 0, "육지 둑 너머 상륙")
@@ -472,10 +473,14 @@ func _reach_is_per_harbour(t) -> void:
 
 	t.ok(b.send(0, west) >= 0, "서쪽 해안은 보낼 수 있다")
 	t.ok(b.send(1, east) >= 0, "동쪽 해안도 보낼 수 있다")
-	t.eq(int(b.boats[0]["home"]), 0,
+	# ⚠⚠ **THESE THREE ROWS READ `boat["home"]` AND IT IS DELETED** with the drag it belonged
+	# to. They read the same fact off the ROUTE instead: a boat's `path[0]` IS the harbour it
+	# left from, which is the same claim without a field kept alive only to be asserted.
+	t.eq(Vector2(b.boats[0]["path"][0]), b.grid.tile_point(int(b.grid.harbour_tiles[0])),
 			"서쪽으로 간 배는 서쪽 항구에서 뜬다 — 둘 다 닿지만 물길이 짧은 쪽이 고른다")
-	t.eq(int(b.boats[1]["home"]), 1, "동쪽으로 간 배는 동쪽 항구에서 뜬다")
-	t.ok(int(b.boats[0]["home"]) != int(b.boats[1]["home"]),
+	t.eq(Vector2(b.boats[1]["path"][0]), b.grid.tile_point(int(b.grid.harbour_tiles[1])),
+			"동쪽으로 간 배는 동쪽 항구에서 뜬다")
+	t.ok(Vector2(b.boats[0]["path"][0]) != Vector2(b.boats[1]["path"][0]),
 			"두 상륙지가 서로 다른 항구를 골랐다 — home_harbour_for 를 상수로 만들면 문다")
 
 

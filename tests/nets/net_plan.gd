@@ -220,7 +220,9 @@ func _a_boat_leaves_from_its_own_harbour(t) -> void:
 	t.eq(from, b.grid.tile_point(int(b.grid.harbour_tiles[hb])),
 			"배는 물길이 가장 짧은 항구에서 뜬다 — 시작 항구가 아니다")
 	t.eq(path[path.size() - 1], b.grid.tile_point(landing), "그리고 항로의 끝은 그 상륙지다")
-	t.eq(int(b.boats[0]["home"]), hb, "돌아갈 항구도 같은 한 번의 판정에서 적힌다")
+	# ⚠ `boat["home"]` is deleted with the drag; the departure harbour is read off the ROUTE now.
+	t.eq(Vector2(b.boats[0]["path"][0]), b.grid.tile_point(int(b.grid.harbour_tiles[hb])),
+		"출항 항구도 같은 한 번의 판정에서 정해진다 — 항로의 0번이 그 사실이다")
 	t.eq(b.soldier_pos[0], from, "그리고 병사도 그 항구에 서 있다")
 
 

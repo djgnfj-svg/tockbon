@@ -663,7 +663,7 @@ func _destination_marker_both_legs(t) -> void:
 	# `_port()` has only ONE harbour, so leaving `pos` near the harbour would make "home" and "here"
 	# nearly the same point and the two-ends-apart check below could not tell a real line from a
 	# collapsed one — the fixture's own fault, not a control worth keeping.
-	var home_hb := b.grid.start_harbour
+	var home_hb := b.grid.start_harbour   # this fixture still reads it; nothing in `src/` does
 	var boat: Dictionary = b.boats[0]
 	var back_path := PackedVector2Array(boat["path"])
 	back_path.reverse()
@@ -674,7 +674,8 @@ func _destination_marker_both_legs(t) -> void:
 		back_cum[ci] = back_cum[ci - 1] + back_path[ci - 1].distance_to(back_path[ci])
 	boat["phase"] = Battle.Phase.RETURNING
 	boat["soldiers"] = []
-	boat["home"] = home_hb
+	# ⚠ `boat["home"]` is deleted from the sim with the drag, so the forged RETURNING shape does not
+	# set it any more. `home_hb` below is only this fixture's own idea of where the line should end.
 	boat["path"] = back_path
 	boat["cum"] = back_cum
 	boat["leg"] = 0

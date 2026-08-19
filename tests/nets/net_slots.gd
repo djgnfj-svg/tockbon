@@ -112,7 +112,6 @@ func run(t) -> void:
 	await _the_aim_marks(t, game, fs)
 	await _the_slot_row(t, game, fs, hs)
 	_the_boxes_clear_the_army(t, game, fs)
-	_arming_mid_drag_cancels_the_drag(t, game, fs)
 	await _the_band_goes_with_the_boxes(t, game, fs, hs)
 	await _the_three_lines_that_claimed_to_be_load_bearing(t, game, fs, hs)
 	await _a_refused_key_flashes_as_well_as_shakes(t, game, hs)
@@ -558,20 +557,13 @@ func _the_boxes_clear_the_army(t, game: Game, fs: FieldSpy) -> void:
 	t.eq(boxes[4].end.x, Look.VIEWPORT_W_PX - Look.HUD_MARGIN_PX,
 		"마지막 상자의 오른쪽 끝이 HUD 여백에 정확히 닿는다 (1268)")
 
-	var stacked := 0
-	var overlaps := 0
-	for i in game.battle.soldier_state.size():
-		var world := fs.idle_soldier_rect(i)
-		if world.size == Vector2.ZERO:
-			continue
-		stacked += 1
-		var on_screen := Rect2(world.position * fs.zoom + fs.position, world.size * fs.zoom)
-		for b in boxes:
-			if b.intersects(on_screen):
-				overlaps += 1
-	t.eq(stacked, Rules.START_MELEE + Rules.START_RANGED,
-		"항구에 병사 열이 서 있다 (자가 점검 — 0명이면 겹칠 것이 없어서 아래가 공허하다)")
-	t.eq(overlaps, 0, "다섯 상자가 항구에 선 병사 더미와 한 칸도 안 겹친다")
+	# ⚠⚠ **THE HALF THAT COMPARED THE BOXES WITH THE HARBOUR STACK IS DELETED, SUBJECT AND ALL.**
+	# It read `fs.idle_soldier_rect(i)` for every reserve body and asserted no slot box overlapped the
+	# stack — the reason `HUD_SLOT_ORIGIN_PX` sits in the bottom-RIGHT corner at all. **The stack is
+	# deleted** (*"ㅇㅇ 지워줘"*) and `idle_soldier_rect` with it, so there is nothing left to overlap.
+	# ⚠ **The corner choice is now unforced and nothing measures it.** Bottom-right was picked to clear
+	# a thing that no longer exists; the boxes stay there because moving them is a decision nobody has
+	# made, not because a check still holds them.
 
 
 # -- helpers ---------------------------------------------------------------------------------------
@@ -580,52 +572,16 @@ func _the_boxes_clear_the_army(t, game: Game, fs: FieldSpy) -> void:
 ## index, so a fixture stays valid if the rows are ever edited.
 # -- the bounce -------------------------------------------------------------------------------------
 
-## ⚠⚠ **THE SIGNATURE FAKE: THE SCREEN PROMISED ONE LANDING AND THE SIM AUTHORED ANOTHER.** `_arm`
-## set `_armed_slot` and left `_drag_soldier` alone, and the motion branch is
-## `if _armed_slot >= 0 … elif _drag_soldier >= 0` — so arming mid-drag stopped `set_drag` from ever
-## being called again and **froze the candidate ring on the tile the key was pressed over**, while
-## `_on_left_release` went on handing `battle.send` the tile the cursor ended on. Measured before the
-## fix: the ring said 1461 and the sim was handed 146.
+## ⚠⚠ **`_arming_mid_drag_cancels_the_drag` IS DELETED, SUBJECT AND ALL.** It measured the collision
+## between arming a slot and a soldier drag in flight — the signature fake round 2 fixed, where the
+## ring froze on one tile (1461) while `battle.send` was handed another (146). **The drag is deleted**
+## (the user, pointing at the harbour markers and the reserve stack: *"ㅇㅇ 지워줘"*), so there is no
+## gesture left to collide with and no `_drag_soldier` to cancel. `game.gd::_arm` lost those two lines
+## in the same edit and says so on the spot.
 ##
-## ⚠ **This file pressed `KEY_1` twelve times and never touched `_drag_soldier` once.** The two
-## gestures were each measured alone and their collision was measured nowhere.
-func _arming_mid_drag_cancels_the_drag(t, game: Game, fs: FieldSpy) -> void:
-	game._open_island()
-	var g: Grid = game.battle.grid
-	# Park on the start harbour so the reserve stack is on screen, then read the body's own drawn rect
-	# — the same rect `_soldier_hit_at` tests, never a second copy of the anchor.
-	_park_on(fs, g, game.battle.harbour_tile(g.start_harbour))
-	var body := fs.idle_soldier_rect(0)
-	t.ok(body.size != Vector2.ZERO, "0번 병사가 항구에 서 있다 (자가 점검)")
-	var body_at := body.get_center() - fs.cam_px
-	t.eq(game._soldier_hit_at(body_at), 0, "그 화면 점이 0번 병사를 짚는다 (자가 점검)")
-
-	game._unhandled_input(_press(body_at))
-	t.eq(game._drag_soldier, 0, "병사를 붙잡았다 (자가 점검)")
-	t.eq(fs._drag_soldier, 0, "그리고 화면도 그 병사를 끌고 있다 (자가 점검)")
-
-	# The key arrives mid-drag.
-	game._unhandled_input(_key(KEY_1))
-	t.eq(game._armed_slot, 0, "1번 슬롯이 켜졌다 (자가 점검)")
-	t.eq(game._drag_soldier, -1, "그 순간 끌던 병사를 놓는다 — 켜는 것이 필드 누름을 가져간다")
-	t.eq(fs._drag_soldier, -1, "화면의 드래그도 같이 지워진다 — 후보 링이 얼어붙지 않는다")
-	t.eq(fs._drag_tile, -1, "얼어붙을 칸 자체가 없다")
-
-	# Move somewhere else entirely, then release. The old build sent a boat to THIS tile while the
-	# ring still sat on the harbour.
-	var far := _a_band_tile(g, 40)
-	var far_at := _park_on(fs, g, far)
-	game._unhandled_input(_motion(far_at, Vector2(4.0, 4.0)))
-	t.eq(fs._drag_tile, -1, "커서를 옮겨도 드래그 칸은 여전히 없다")
-
-	var boats := game.battle.boats.size()
-	var state := game.battle.soldier_state[0]
-	t.eq(state, Battle.SoldierState.RESERVE, "0번은 아직 항구에 있다 (자가 점검)")
-	game._unhandled_input(_release(far_at))
-	t.eq(game.battle.boats.size(), boats, "떼도 배가 안 생긴다 — 화면이 약속하지 않은 상륙을 sim 이 쓰지 않는다")
-	t.eq(game.battle.soldier_state[0], Battle.SoldierState.RESERVE, "그리고 0번은 그대로 항구에 있다")
-	game._unhandled_input(_key(KEY_1))
-	t.eq(game._armed_slot, -1, "슬롯을 다시 껐다 (뒷정리)")
+## ⚠ **It is deleted rather than repaired.** A check rewritten to survive the deletion of its own
+## subject is how coverage drops without anybody noticing — the row would have gone on passing while
+## measuring nothing at all.
 
 
 ## ⚠⚠ **THE BAND SURVIVED THE COMMIT UNDER A COMMENT SAYING IT COULD NOT.** `field_view`'s blend is

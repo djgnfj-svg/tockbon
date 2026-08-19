@@ -170,21 +170,31 @@ const SUMMON_SLOTS := [CELL_MELEE, CELL_RANGED, SUMMON_UNBOUND, SUMMON_UNBOUND, 
 ##
 ##   shipped `<= 2`   190/174/186 · 82/75/80 · **0.25 / 0.60 / 0.71**  (spread 0.46 s)
 ##   `>= 3`           534/516/540 · 45/40/43 · **0.85 / 2.47 / 5.96**  (spread 5.11 s)
-##   `>= 4`  <- this  470/460/478 · 42/38/40 · **1.10 / 2.47 / 5.96**  (spread 4.86 s)
-##   `>= 6`           360/360/366 · 34/35/34 · **1.60 / 2.83 / 5.96**  (spread 4.36 s)
+##   `>= 4`           470/460/478 · 42/38/40 · **1.10 / 2.47 / 5.96**  (spread 4.86 s)
+##   `>= 6`  <- this  360/360/366 · 34/35/34 · **1.60 / 2.83 / 5.96**  (spread 4.36 s)
+##   `>= 8`           256/256/256 · 32/33/27 · **2.10 / 3.18 / 5.96**  (spread 3.86 s)
+##   `>= 10`          152/152/152 · 30/31/25 · **2.60 / 3.54 / 5.96**  (spread 3.36 s)
+##   `>= 12`          **48/48/48 · 2/2/2** — see the cliff below
 ##
 ## ⚠ **The MAXIMUM crossing is 5.96 s at every value, because the water is finite** — so raising this
-## number lifts the floor and SHRINKS the spread. The spread peaks at 3 and decays from there; 4 is one
-## step past the peak, bought for a guaranteed **1.10 s** minimum crossing so that no summon is ever
-## instant. That is the trade, written out: 3 landings and 0.25 s of spread for a visible crossing on
-## every press.
-## ⚠ **It restores the term `sea-summon` §5.2 measured and §5.3 flattened**: the drag's crossing spread
-## was 4.50–4.75 s, and 4.86 s is that term back.
+## number lifts the floor and SHRINKS the spread. The spread peaks at 3 and decays from there. **This
+## number does not buy a longer crossing; it buys a longer SHORTEST one.**
+##
+## ⚠⚠ **THERE IS A CLIFF BETWEEN 10 AND 12, AND IT IS THE CEILING.** At 12 the band is 48 tiles and
+## resolves to **2 distinct landings on all three islands** (and on the 144-column map) — the four
+## corners of the sea, and nothing else. Every press on the island would produce one of two beaches.
+## **10 is the last usable value**; 8 is the last comfortable one.
+##
+## 4 was adopted first and **6 came from the user after playing it**: *"그냥 섬 이랑 더 거리를 더줘"*.
+## The price is stated rather than argued down: **6–8 more coast tiles stop being individually
+## addressable** (42/38/40 -> 34/35/34 of 84/76/82), the minimum crossing rises 1.10 -> 1.60 s, and the
+## spread NARROWS 4.86 -> 4.36 s.
+## ⚠ **It still restores the term `sea-summon` §5.2 measured and §5.3 flattened**: the drag's crossing
+## spread was 4.50–4.75 s, and 4.36 s is within that band.
 ##
 ## Floor 3 — under it the minimum crossing drops below 0.85 s and the band starts touching the shore
-## again, which is what the user asked to end. Ceiling 8: at `>= 10` the band is 152 tiles, UNDER the
-## 190 it replaced, and 「많이 줘도됨」 has turned into a ribbon in the middle of the ocean.
-const SUMMON_BAND_MIN_TILES := 4
+## again, which is what the user asked to end. **Ceiling 10, from the cliff above** — not from taste.
+const SUMMON_BAND_MIN_TILES := 6
 
 
 static func summon_slot_count() -> int:

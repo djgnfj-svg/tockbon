@@ -98,9 +98,6 @@ func _table() -> Dictionary:
 			# else — and `_visible_tile_rect` is the culled span the terrain loop walks. Both pure.
 			"_map_tiles": 0,
 			"_visible_tile_rect": 0,
-			# boat-and-landing stage 4 drag (P8): set_drag is the one state setter a press-start and
-			# a release-end both go through, so it is pure, like the camera functions above it.
-			"set_drag": 0,
 			# `sea-summon`: the one call site "a slot was armed", "the cursor moved" and "the press
 			# ended" all go through, so the two aim fields cannot disagree. 0 draws — the band is a
 			# BLEND into the existing `_paint_tile` fill and adds no leaf and no draw call, which is
@@ -115,7 +112,6 @@ func _table() -> Dictionary:
 			"note_refusal": 0,
 			"_draw": 0,
 			"_paint_tile": 2,
-			"_paint_dock": 1,
 			"_paint_body": 2,
 			"_paint_beak": 1,
 			"_paint_hp": 2,
@@ -144,7 +140,6 @@ func _table() -> Dictionary:
 			# `_paint_overlay` and added `note_refusal` and `_route_ahead` — 43 -> 43 once more, while
 			# the LEAF count went 14 -> 13. Two files' totals were re-derived by hand from the five
 			# tables below rather than nudged by whatever the last edit happened to be.
-			"idle_soldier_rect": 0,
 			"_hp_rects": 0,
 			"_beak_points": 0,
 			"_facing_of": 0,
@@ -359,11 +354,15 @@ func run(t) -> void:
 	# land on 132; the table has held **12** since the speed chips died, so the answer is **131**. A
 	# literal that moves by whatever the last edit happened to be is a literal nobody re-derives — and
 	# this table has already been nudged once in this repo.
+	# ⚠⚠ **Round 4 of `sea-summon` DELETED the drag**, and `field_view` lost three names with it
+	# (46 -> 43): `set_drag`, `_paint_dock` (the harbour marker) and `idle_soldier_rect`. One of the
+	# three was a LEAF, so the leaf count moves too (34 -> 33) — the first time that number has ever
+	# gone DOWN, and it is re-derived from the five per-file tables rather than decremented.
 	# Round 2 of `sea-summon` added `_chip_tint` to `hud_view` (17 -> 18) — the tint half of item 8,
 	# which had been written inline in `_chip_colour` and so reached the start button alone while
 	# `_chip_offset` already served both. Pure, so the leaf count does not move.
-	t.eq(total_funcs, 132, "다섯 파일의 함수는 모두 132개다 (46 + 18 + 21 + 18 + 29)")
-	t.eq(total_leaves, 34, "그중 draw 를 실제로 부르는 잎은 34개다 (13 + 6 + 4 + 4 + 7)")
+	t.eq(total_funcs, 129, "다섯 파일의 함수는 모두 129개다 (43 + 18 + 21 + 18 + 29)")
+	t.eq(total_leaves, 33, "그중 draw 를 실제로 부르는 잎은 33개다 (12 + 6 + 4 + 4 + 7)")
 
 	# -- 3b. the array leaves hand their array WHOLE to one native call -----------------------------
 	# ⚠⚠ **THIS SECTION EXISTS BECAUSE THE COUNT ABOVE CANNOT SEE THE DIFFERENCE, AND THAT WAS

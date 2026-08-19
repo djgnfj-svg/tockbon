@@ -528,94 +528,26 @@ func run(t) -> void:
 		"격자 첫 칸의 색은 그 칸의 범례 문자에서 나왔다")
 	t.eq(float(fs.tiles[0]["width"]), Look.GRID_LINE_WIDTH_PX, "격자선 굵기가 look.gd 값이다")
 
-	t.eq(fs.docks.size(), b.harbour_count(), "항구를 sim 이 가진 수만큼 그렸다 (%d개)" % b.harbour_count())
-	var dock_bad := 0
-	for d in b.harbour_count():
-		var tile := b.harbour_tile(d)
-		var want := Look.tile_rect_px(tile % b.grid.w, tile / b.grid.w)
-		if fs.docks[d]["rect"] != want:
-			dock_bad += 1
-	t.eq(dock_bad, 0, "항구 사각형이 sim 의 항구 타일과 같은 자리다")
+	# -- ⚠⚠ THE HARBOUR MARKERS AND THE RESERVE STACK ARE DELETED, AND SO ARE THEIR ROWS -----------
+	# What stood here: `fs.docks.size() == b.harbour_count()` with a rect-per-harbour check, then the
+	# whole idle-stack pass — one body per RESERVE soldier at `idle_soldier_rect(i)`, the radius read
+	# back off the captured argument, the three-tile bound off `IDLE_SOLDIER_ORIGIN_PX`, the
+	# distance-from-anchor row, and 6.3's 「the thing you drag is never under the chrome you press」.
+	#
+	# **Every one of those subjects is deleted** — the user, pointing at a screenshot of the yellow
+	# harbour outlines and the stack: ***"ㅇㅇ 지워줘"***. `_paint_dock`, `idle_soldier_rect`,
+	# `Look.IDLE_SOLDIER_*` and `idle_soldier_offset_px` are gone from the tree with them.
+	#
+	# ⚠ **Deleted rather than repaired.** A row rewritten to survive the deletion of its own subject is
+	# how coverage drops with nobody noticing.
+	# ⚠⚠ **AND ONE THING WENT WITH THEM THAT NOTHING REPLACES**: 6.3's row was the only check that the
+	# HUD chrome never sits on top of what the hand reaches for. The five slot boxes are what the hand
+	# reaches for now, and **nothing measures whether the start button overlaps them** — `net_slots`
+	# only checks the boxes against each other and against the viewport. That is a real hole, not a
+	# tidy deletion.
+	t.eq(fs.hulls.size(), 0, "커밋 전에는 선체가 하나도 없다 — 배는 눌러야 생긴다")
+	t.eq(fs.zoom, Look.ZOOM_MIN, "섬이 ZOOM_MIN 으로 열려 있다 (자가 점검)")
 
-	# ⚠⚠ **The idle-hull rows are DELETED with the fleet they measured** (`plan-then-watch`, 결정 14R).
-	# Before the start button there are no boats at all — a boat is created BY a drop — so what stands
-	# at the harbour is the ARMY, one body per RESERVE soldier at `idle_soldier_rect(i)`. That is the
-	# thing the player drags, and it is what replaces them.
-	t.eq(fs.hulls.size(), 0, "커밋 전에는 선체가 하나도 없다 — 배는 놓아야 생긴다")
-	var start_anchor := Look.tile_point_px(b.grid.tile_point(int(b.grid.harbour_tiles[b.grid.start_harbour])))
-	var reserve_ids := []
-	for si in b.soldier_state.size():
-		if b.soldier_state[si] == Battle.SoldierState.RESERVE:
-			reserve_ids.append(si)
-	t.eq(reserve_ids.size(), Rules.START_MELEE + Rules.START_RANGED,
-		"열 명 전부 예비다 (자가 점검)")
-	var idle_bad := 0
-	var idle_rects: Array[Rect2] = []
-	for si2 in reserve_ids:
-		var want_rect: Rect2 = fs.idle_soldier_rect(int(si2))
-		if want_rect.size == Vector2.ZERO:
-			idle_bad += 1
-			continue
-		idle_rects.append(want_rect)
-		var found := false
-		for braw: Dictionary in fs.bodies:
-			if (braw["centre"] as Vector2).distance_to(want_rect.get_center()) < 0.01:
-				found = true
-				# ⚠⚠ **The picture and the hit target have to be ONE fact, and they are computed
-				# twice from the same source.** `idle_soldier_rect` derives its size from
-				# `Look.body_radius_of` and `field_view._draw` hands the same call to `_paint_body`
-				# independently, so a zero radius at the draw call leaves `game._soldier_hit_at`
-				# answering over a full ~28 px box while only the 3 px dot reaches the screen — the
-				# player drags soldiers that are not visibly there. **Measured: `0.0` at that one
-				# argument passed the whole round before this line.** Both ends: it is above zero,
-				# and doubled it IS the rect the hit test uses.
-				if float(braw["radius"]) <= 0.0:
-					idle_bad += 1
-				elif absf(2.0 * float(braw["radius"]) - want_rect.size.x) > 0.001:
-					idle_bad += 1
-				break
-		if not found:
-			idle_bad += 1
-	t.eq(idle_bad, 0,
-		"예비 병사마다 몸 하나가 idle_soldier_rect 자리에 그 사각형 크기로 그려졌다 — 그린 것과 누를 것이 한 사실이다")
-	t.eq(idle_rects.size(), reserve_ids.size(), "빈 사각형을 돌려준 자리가 없다 (자가 점검)")
-	# ⚠⚠ **`look.gd`'s own stated ceiling for the stack, read back as a number.** Its comment on
-	# `IDLE_SOLDIER_ORIGIN_PX` writes the bound as three tiles on each axis — the stack has to read as
-	# *at* the harbour rather than somewhere else on the map. It is checked for all THIRTEEN slots and
-	# not only the ten standing here, because islands 2 and 3 field thirteen and the slot is the
-	# soldier ID rather than a position in a list.
-	# **Measured: `IDLE_SOLDIER_COLS := 2` puts slot 12 six rows up (252 px) and this is the row that
-	# catches it.** A bound against the painted map does NOT — the stack grows UPWARD and the water
-	# margin is twelve tiles deep, so it never leaves the picture at all, and the plan's predicted
-	# 「the stack walks off the bottom edge」 is the wrong direction.
-	var too_far := 0
-	for slot in 13:
-		var off := Look.idle_soldier_offset_px(slot)
-		if absf(off.x) > Look.TILE_PX * 3.0 or absf(off.y) > Look.TILE_PX * 3.0:
-			too_far += 1
-	t.eq(too_far, 0, "열세 칸 전부가 항구에서 3타일 안에 있다 — 무더기가 항구에 선 것으로 읽힌다")
-	t.ok(Look.idle_soldier_offset_px(1) != Look.idle_soldier_offset_px(0),
-		"그리고 칸마다 자리가 다르다 (바닥 — 전부 같으면 열 몸이 한 덩어리다)")
-	var far := 0
-	for r: Rect2 in idle_rects:
-		if r.get_center().distance_to(start_anchor) > Look.TILE_PX * 6.0:
-			far += 1
-	t.eq(far, 0, "그리고 그려진 무더기도 시작 항구 근처다 — 지도 딴 곳이 아니다")
-	# ⚠⚠ **This is 6.3's own row**: the thing you drag must never be under the chrome you press. At
-	# `ZOOM_MIN` the island band and the HUD's two corners both exist, so the two rectangles are
-	# compared for real — `HUD_START_ORIGIN_PX` moved to the bottom CENTRE is the mutation.
-	t.eq(fs.zoom, Look.ZOOM_MIN, "섬이 ZOOM_MIN 으로 열려 있다 (자가 점검 — 이 절의 좌표 변환이 그 값을 쓴다)")
-	# ⚠ **The chip row is gone, so the start button is the whole of the chrome now.** The bottom right
-	# is deliberately empty — see `HUD_START_ORIGIN_PX`'s own comment, whose 「the chips hold that
-	# corner」 half was deleted in the same edit rather than left standing and false.
-	var chrome: Array[Rect2] = [Look.start_rect_px()]
-	var overlap := 0
-	for r2: Rect2 in idle_rects:
-		var screen_rect := Rect2(r2.position * fs.zoom + fs.position, r2.size * fs.zoom)
-		for c: Rect2 in chrome:
-			if screen_rect.intersects(c):
-				overlap += 1
-	t.eq(overlap, 0, "항구에 선 병사는 시작 버튼 밑에 안 깔린다 (ZOOM_MIN 에서)")
 
 	# P10: `_paint_cliff_face` is called every frame regardless (so the seq-order check above always
 	# has something to compare against), but that alone proves nothing was thrown away INSIDE it —
@@ -656,12 +588,11 @@ func run(t) -> void:
 			live_enemies.append(e)
 	t.ok(live_enemies.size() > 0, "섬 0에 살아 있는 적이 있다 (%d마리)" % live_enemies.size())
 	t.eq(b.ashore_ids().size(), 0, "아직 상륙한 병사는 없다")
-	# ⚠ **The idle army is on this layer too now.** The enemies are drawn AFTER it (layer 7 against
-	# layer 6b), so the enemy bodies are the LAST `reserve_ids.size()` entries — the offset is written
-	# out rather than assumed, and the row above already pinned how many idle bodies there are.
-	t.eq(fs.bodies.size(), live_enemies.size() + reserve_ids.size(),
-		"몸통 수 = 살아 있는 적 수 + 항구에 선 예비 병사 수")
-	var enemy_base := reserve_ids.size()
+	# ⚠ **The idle army used to be on this layer too and is deleted**, so the bodies on screen before
+	# the commit are the enemies and nothing else. The offset that skipped past the stack goes with it.
+	t.eq(fs.bodies.size(), live_enemies.size(),
+		"몸통 수 = 살아 있는 적 수 — 항구에 선 예비 병사 무더기가 사라졌다")
+	var enemy_base := 0
 	var body_bad := 0
 	for k in live_enemies.size():
 		var e: int = live_enemies[k]
@@ -692,7 +623,7 @@ func run(t) -> void:
 	# the only thing here that measures the PROCESS rather than the final state.
 	var seen_seq := {}
 	var call_total := 0
-	for arr: Array in [fs.tiles, fs.docks, fs.hulls, fs.cliff_faces, fs.bodies, fs.beaks, fs.hps,
+	for arr: Array in [fs.tiles, fs.hulls, fs.cliff_faces, fs.bodies, fs.beaks, fs.hps,
 			fs.shots, fs.halos, fs.rings, fs.target_lines, fs.sparks]:
 		for it: Dictionary in arr:
 			seen_seq[int(it["seq"])] = true
@@ -702,11 +633,12 @@ func run(t) -> void:
 	t.ok(seen_seq.has(0) and seen_seq.has(call_total - 1),
 		"순번이 0에서 시작해 빈칸 없이 끝까지 간다 — _draw 머리에서 되감긴다")
 	t.ok(_seq_max(fs.tiles) < _seq_min(fs.cliff_faces), "층 1 지형이 층 1b 절벽 단면보다 먼저 그려졌다")
-	t.ok(_seq_max(fs.cliff_faces) < _seq_min(fs.docks), "절벽 단면이 층 2 항구보다 먼저 그려졌다")
 	# ⚠ **There are no hulls on this frame at all** — nothing has been dropped, so `fs.hulls` is empty
 	# and the old 「항구 -> 선체 -> 몸」 pair would be comparing sentinels. The hull's own layer is
 	# re-pinned after the commit, further down, where a hull actually exists.
-	t.ok(_seq_max(fs.docks) < _seq_min(fs.bodies), "층 2 항구가 층 6b/7 몸보다 먼저 그려졌다")
+	# ⚠ The two rows that ordered the HARBOUR MARKERS between the cliff faces and the bodies are
+	# deleted with the markers themselves.
+	t.ok(_seq_max(fs.cliff_faces) < _seq_min(fs.bodies), "절벽 단면이 층 6b/7 몸보다 먼저 그려졌다")
 	t.ok(_seq_max(fs.bodies) < _seq_max(fs.hps) or fs.hps.is_empty(),
 		"몸과 HP 막대가 같은 층에서 함께 나온다 (자가 점검)")
 
@@ -774,15 +706,9 @@ func run(t) -> void:
 	var field_rects: Array[Rect2] = []
 	for r: Rect2 in inner_rects:
 		field_rects.append(r)
-	for it: Dictionary in fs.docks:
-		field_rects.append(it["rect"])
 	for it: Dictionary in fs.hps:
 		field_rects.append(it["back"])
-	# ⚠ **The idle stack is in here on purpose.** It is laid out from `Look.IDLE_SOLDIER_*` and nothing
-	# else bounds it: `IDLE_SOLDIER_COLS := 2` puts thirteen bodies in seven rows and the stack walks
-	# off the bottom of the painted map, with every other check about it green.
-	for r3: Rect2 in idle_rects:
-		field_rects.append(r3)
+	# ⚠ The idle stack used to be added here too, for a bound nothing else gave it. It is deleted.
 	_rects_land_in_world(t, "전투 화면 — 필드", field_rects)
 
 	var hud_rects: Array[Rect2] = []
@@ -802,44 +728,9 @@ func run(t) -> void:
 	await t.pump_frames(1)
 	t.eq(fs.position, Vector2.ZERO, "카메라를 원점에 세웠다 — 화면 좌표와 세계 좌표가 같다 (자가 점검)")
 
-	var start_hb := b.grid.start_harbour
-	var send: PackedByteArray = b.grid.sendable[start_hb]
-	var droppable_tiles := []
-	for tt in b.grid.passable.size():
-		if b.grid.home_harbour_for(tt) >= 0:
-			droppable_tiles.append(tt)
-	t.ok(droppable_tiles.size() > 0, "이 섬에 배를 보낼 수 있는 칸이 있다 (자가 점검)")
-	var sendable_tile: int = int(droppable_tiles[0])
-	var second_tile: int = int(droppable_tiles[droppable_tiles.size() - 1])
-	t.ok(sendable_tile != second_tile, "서로 다른 상륙지 둘을 골랐다 (자가 점검)")
-	var sendable_px := Look.tile_point_px(b.grid.tile_point(sendable_tile))
-	var second_px := Look.tile_point_px(b.grid.tile_point(second_tile))
-	var refuse_tile := int(b.grid.harbour_tiles[start_hb])   # water — never landable
-	var refuse_px := Look.tile_point_px(b.grid.tile_point(refuse_tile))
-	# ⚠ **An INLAND tile with no water 8-neighbour at all** — the denylist's own refusal case, and the
-	# one `speed-off-open-landing` 2.5 names for the acceptance row (「drag a boat to the middle of the
-	# island and the screen says no」). A water tile is refused too, but for a different reason, and the
-	# mark has to fire on the one a player will actually aim at by mistake.
-	var inland_tile := -1
-	for tt2 in b.grid.passable.size():
-		if b.grid.passable[tt2] == 0 or b.grid.home_harbour_for(tt2) >= 0:
-			continue
-		var itx := tt2 % b.grid.w
-		var ity := tt2 / b.grid.w
-		var wet := false
-		for k2 in Grid.NEIGHBOURS.size():
-			var nx2 := itx + int(Grid.NEIGHBOURS[k2][0])
-			var ny2 := ity + int(Grid.NEIGHBOURS[k2][1])
-			if nx2 < 0 or ny2 < 0 or nx2 >= b.grid.w or ny2 >= b.grid.h:
-				continue
-			if b.grid.water[ny2 * b.grid.w + nx2] != 0:
-				wet = true
-		if not wet:
-			inland_tile = tt2
-			break
-	t.ok(inland_tile >= 0, "섬 한가운데에 물에 안 닿은 내륙 칸이 있다 (자가 점검)")
-	t.eq(b.grid.home_harbour_for(inland_tile), -1, "그 칸은 어느 항구도 못 간다 (자가 점검)")
-	var inland_px := Look.tile_point_px(b.grid.tile_point(inland_tile))
+	# ⚠ The drag's own tile picks (`sendable_tile` / `second_tile` / `refuse_tile`) went with the drag.
+	# What the rows below still need is picked from the SUMMON band, further down.
+	# ⚠ The inland-refusal fixture went with the drag's release, which is what marked a refusal there.
 
 	# ⚠⚠ **초록색 해안이 사라졌다.** The wash used to be drawn from the moment the island opened and
 	# the user asked for its inverse (「못내림만 표시하면 됨 ㅇㅇ」). The hook it went through is gone,
@@ -863,11 +754,9 @@ func run(t) -> void:
 	t.ok(fs.tiles.size() > 0, "지형 칸을 실제로 그렸다 (%d칸 — 0이면 깨끗한 게 아니라 안 돈 것이다)"
 		% fs.tiles.size())
 	t.eq(repainted, 0, "타일은 지형 한 벌만 그린다 — 같은 칸을 두 번 칠하지 않는다 (상륙 구역 덧칠 없음)")
-	# The union is still the domain `send` answers to, and it is still wider than one harbour's reach —
-	# that claim lost its picture, not its truth, so it is measured off the sim directly.
-	t.ok(droppable_tiles.size() >= _count_set(send),
-		"보낼 수 있는 칸(%d)이 시작 항구 혼자 닿는 칸(%d)보다 좁지 않다"
-			% [droppable_tiles.size(), _count_set(send)])
+	# ⚠ The row comparing `send`'s whole domain with one harbour's reach went with the drag. `send` is
+	# still in the sim — `tools/probe/run_run.gd` is its last reader — but nothing on screen answers to
+	# it any more, so a SHELL net is the wrong place to keep measuring it.
 
 	# -- item 8: a refused START shakes the button, and an accepted one does not ---------------------
 	# ⚠ **This runs FIRST, while `boats` is still empty**, because an empty plan is the only thing that
@@ -894,323 +783,79 @@ func run(t) -> void:
 	t.ok(label_shift.distance_to(key_shift) < 0.01,
 		"글자도 상자와 같은 오프셋만큼 움직였다 (상자 %.3f · 글자 %.3f)" % [key_shift.x, label_shift.x])
 
-	# -- the drag: press a body standing at the harbour, release on a coast -------------------------
-	var idle0 := fs.idle_soldier_rect(0)
-	var idle1 := fs.idle_soldier_rect(1)
-	t.ok(idle0.size != Vector2.ZERO and idle1.size != Vector2.ZERO,
-		"0번과 1번 병사가 항구에 서 있다 (자가 점검)")
-	t.ok(not idle0.intersects(idle1), "그 둘의 사각형이 겹치지 않는다 — 눌러서 구별할 수 있다 (자가 점검)")
+	# -- ⚠⚠ THE ENTIRE DRAG SUITE IS DELETED — ~320 LINES, SUBJECT AND ALL --------------------------
+	# What stood here: press a body at the harbour, watch the candidate ring follow the cursor and turn
+	# `COL_WIN`/`COL_LOSE`, read the drag's route preview point-for-point against `grid.water_route`,
+	# release over water and over inland and count the refusal marks, undo with the landing ring, prove
+	# the ring beats the body in the hit test, and author the whole ten-boat plan by dragging.
+	#
+	# **The gesture is deleted.** The user pointed at the harbour markers and the reserve stack and said
+	# ***"ㅇㅇ 지워줘"***, and the drag is what they had already called not fun (`idea-inbox` row 26).
+	# `_soldier_hit_at`, `field_view.set_drag`, `_drag_soldier` and `idle_soldier_rect` are gone.
+	#
+	# ⚠ **Deleted rather than repaired**, and what replaced it is not nothing: `net_slots` drives the
+	# summon through the INPUT path end to end — the band, the keys, the press, the beat, the sweep, the
+	# release, a dry slot, outside the band, after the commit, the aim marks and the slot row. This file
+	# needs a PLAN so the rows below it have boats on screen, so it calls the sim directly rather than
+	# re-driving a gesture another net already owns.
+	#
+	# ⚠⚠ **THREE THINGS THE DRAG SUITE MEASURED HAVE NO REPLACEMENT ANYWHERE**, and they are named here
+	# rather than quietly dropped:
+	#   1. **the route preview compared point-for-point with the sim's own route** — the only runtime
+	#      catch for `_paint_route` cutting a corner over the island (`net_draw_leaf` counts call sites
+	#      and cannot tell a polyline from a straight line). The summon draws its own route line and
+	#      `net_slots` reads it, but not against `grid.summon_route` point for point;
+	#   2. **the refusal mark's whole life** — that it fires on a refused release, at the cursor, once,
+	#      and NOT on an accepted one. `net_slots` counts refusals per beat; it does not check the mark
+	#      is absent on success;
+	#   3. **hit-test precedence** — a landing ring on top of a body. There is no body any more, so the
+	#      precedence itself is gone, not merely unmeasured.
+	#
+	# The plan below is authored with `battle.summon`, aimed at two different derived landings so the
+	# ghost-fan rows underneath still have two beaches to tell apart.
+	var band_tiles := []
+	for bt in b.grid.summon_hops.size():
+		if b.grid.can_summon_at(bt):
+			band_tiles.append(bt)
+	t.ok(band_tiles.size() > 0, "이 섬에 소환할 수 있는 바다 칸이 있다 (%d칸 — 자가 점검)" % band_tiles.size())
+	var tile_a := int(band_tiles[0])
+	var tile_b := -1
+	for raw_bt in band_tiles:
+		if b.grid.summon_landing_of(int(raw_bt)) != b.grid.summon_landing_of(tile_a):
+			tile_b = int(raw_bt)
+			break
+	t.ok(tile_b >= 0, "상륙지가 서로 다른 바다 칸 둘을 골랐다 (자가 점검)")
+	var sendable_px := Look.tile_point_px(b.grid.tile_point(b.grid.summon_landing_of(tile_a)))
+	var second_px := Look.tile_point_px(b.grid.tile_point(b.grid.summon_landing_of(tile_b)))
 
-	# A refusal first: released over water, nothing at all is created.
-	t.root.push_input(_press(idle0.get_center()), true)
+	# Two at one beach and one at the other — the fan rank has to be counted among the boats sharing a
+	# LANDING, not among all boats, and one beach cannot tell those two indices apart.
+	for press_tile in [tile_b, tile_b, tile_a]:
+		t.ok(b.summon(0, press_tile) >= 0, "바다를 눌러 한 척 띄웠다 (자가 점검)")
 	await t.pump_frames(1)
-	t.eq(game._drag_soldier, 0, "항구에 선 병사를 누르면 그 병사를 붙잡는다")
-	t.ok(not game._panning, "그리고 카메라는 안 끌린다 — 병사를 눌렀지 필드를 누른 게 아니다")
-	t.root.push_input(_motion(refuse_px, Vector2.ZERO), true)
-	await t.pump_frames(1)
-	t.eq(fs.rings.size(), 1, "후보 링이 정확히 하나 떴다")
-	t.eq(Vector2(fs.rings[0]["centre"]), refuse_px, "커서를 따라 그 칸에 링이 떴다")
-	t.eq(fs.rings[0]["colour"], Look.COL_LOSE, "거절되는 칸이면 링이 거절(COL_LOSE) 색이다")
-	t.root.push_input(_motion(sendable_px, Vector2.ZERO), true)
-	await t.pump_frames(1)
-	t.eq(Vector2(fs.rings[0]["centre"]), sendable_px, "커서를 옮기면 링도 따라온다")
-	t.eq(fs.rings[0]["colour"], Look.COL_WIN, "받아주는 칸이면 링이 수락(COL_WIN) 색이다")
-	# ⚠⚠ **끄는 중에 보이는 선이 배가 실제로 갈 길이다.** `net_draw_leaf` pins `_paint_route` at one
-	# call and cannot tell a polyline from a straight line, so this is the ONLY place a corner cut over
-	# the island is catchable — S4's row, caught at runtime.
-	t.eq(fs.routes.size(), 1, "항로 선도 하나 그렸다")
-	var drag_pts: PackedVector2Array = fs.routes[0]["points"]
-	t.ok(drag_pts.size() >= 3,
-		"그 선은 %d점짜리 폴리라인이다 (바닥 3 — 2점이면 그건 예전 직선 그대로다)" % drag_pts.size())
-	t.eq(drag_pts[drag_pts.size() - 1], sendable_px, "그 선이 커서 칸에서 끝난다")
-	var drag_hb := b.grid.home_harbour_for(sendable_tile)
-	t.ok(drag_hb >= 0, "그 칸을 받아주는 항구가 있다 (자가 점검)")
-	t.eq(drag_pts[0], Look.tile_point_px(b.grid.tile_point(int(b.grid.harbour_tiles[drag_hb]))),
-		"그리고 home_harbour_for 가 고른 그 항구에서 시작한다")
-	# Point for point against the sim's own route — the line the player sees IS the line the boat will
-	# sail, because `send` builds its boat off this same call.
-	var want_pts := PackedVector2Array()
-	for wp in b.grid.water_route(drag_hb, sendable_tile):
-		want_pts.append(Look.tile_point_px(wp))
-	t.eq(drag_pts, want_pts, "그리고 grid.water_route 와 점 하나까지 똑같다")
-	var dry_drag := 0
-	for di in drag_pts.size() - 1:
-		var wt2 := b.grid.tile_index(int(round(drag_pts[di].x / Look.TILE_PX - 0.5)),
-			int(round(drag_pts[di].y / Look.TILE_PX - 0.5)))
-		if b.grid.water[wt2] == 0:
-			dry_drag += 1
-	t.eq(dry_drag, 0, "마지막 점을 뺀 모든 점이 물 위다 — 섬을 가로지르는 선이 아니다")
-	t.root.push_input(_motion(refuse_px, Vector2.ZERO), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(refuse_px), true)
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), 0, "물 위에 놓으면 아무 배도 안 생긴다")
-	t.eq(b.soldier_state[0], Battle.SoldierState.RESERVE, "그 병사는 항구에 그대로 남는다")
-	t.eq(game._drag_soldier, -1, "드래그가 끝났다 (자가 점검)")
-	# A refusal over WATER says no too — same call, same -1.
-	var wet_marks := _refusal_marks(fs)
-	t.eq(wet_marks.size(), 1, "물 위에 놓아도 거절 표시가 하나 뜬다")
-	t.ok(Vector2(wet_marks[0]["centre"]).distance_to(refuse_px) <= 1.0, "그 표시가 놓은 자리에 있다")
+	t.eq(b.boats.size(), 3, "셋을 순서대로 띄웠다 — 둘은 같은 해변, 하나는 다른 해변")
 
-	# ⚠ **It has to GO AWAY, and that is `REFUSE_MARK_SEC`'s own ceiling measured rather than asserted
-	# in prose.** It is also what makes the inland row below able to say 「exactly one」 — a mark that
-	# never expired would make every later refusal count two.
-	var fade := 0
-	while fade < 400 and not _refusal_marks(fs).is_empty():
-		await t.pump_frames(1)
-		fade += 1
-	t.ok(fade > 0 and fade < 400, "%d 프레임 만에 그 표시가 사라진다 — 다음 끌기까지 안 남는다" % fade)
-
-	# -- ⚠⚠ 내륙에 놓으면 화면이 거절했다고 말한다 (2.5) ------------------------------------------------
-	# The green coast wash used to make the screen's promise honest — its predicate was
-	# `home_harbour_for(t) >= 0`, the exact call `send` refuses on. Question C deleted it, and the mark
-	# inherits that guarantee from the other end: `game._on_left_release` draws it off `send`'s OWN -1,
-	# never off a predicate the view evaluates for itself.
-	t.root.push_input(_press(idle0.get_center()), true)
+	# ⚠⚠ **OPEN 0 as a shell check, and it is the same claim the drag version made.** The brake is
+	# deliberately absent (the user: 「일단 빼고 만든 이후에 추가하자는 거임」), so every remaining body
+	# has to be placeable. **This also makes the crossing rows below mean something**: three boats at
+	# one distance cannot show a route shrinking or a fleet in motion, and ten at two distances can.
+	var before_fill := b.boats.size()
+	for slot_i in Rules.summon_slot_count():
+		var guard := 0
+		while not b.slot_reserve_ids(slot_i).is_empty() and guard < 40:
+			t.ok(b.summon(slot_i, tile_a if guard % 2 == 0 else tile_b) >= 0,
+				"%d번 슬롯에서 한 명 더 내보냈다 (자가 점검)" % slot_i)
+			guard += 1
 	await t.pump_frames(1)
-	t.eq(game._drag_soldier, 0, "다시 그 병사를 잡았다 (자가 점검)")
-	t.root.push_input(_motion(inland_px, Vector2.ZERO), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(inland_px), true)
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), 0, "내륙에 놓으면 배가 안 생긴다")
-	t.eq(b.soldier_state[0], Battle.SoldierState.RESERVE, "병사도 항구에 그대로다")
-	var marks := _refusal_marks(fs)
-	t.eq(marks.size(), 1, "그리고 그 프레임에 거절 표시가 정확히 하나 뜬다")
-	t.ok(Vector2(marks[0]["centre"]).distance_to(inland_px) <= 1.0,
-		"그 표시가 놓은 커서 자리에 있다 (%.2f px 차이)"
-			% Vector2(marks[0]["centre"]).distance_to(inland_px))
-	t.eq(float(marks[0]["width"]), Look.REFUSE_MARK_WIDTH_PX, "굵기가 look.gd 값이다")
-	var mark_col: Color = marks[0]["colour"]
-	t.ok(mark_col.r == Look.COL_LOSE.r and mark_col.g == Look.COL_LOSE.g
-			and mark_col.b == Look.COL_LOSE.b,
-		"색이 COL_LOSE 다 — 후보 링이 거절될 때 쓰는 그 색과 한 값이다")
-	t.ok(mark_col.a > Look.COL_LOSE.a * 0.5,
-		"그리고 갓 태어나 아직 거의 안 흐려졌다 (알파 %.3f, 바닥)" % mark_col.a)
-
-	# ⚠ **The ceiling, and it is the half that matters**: a mark drawn on EVERY release would pass
-	# every line above. An accepted drop must produce none — so the inland one is waited out first,
-	# or this row would be reading the previous refusal and could never redden.
-	var fade2 := 0
-	while fade2 < 400 and not _refusal_marks(fs).is_empty():
-		await t.pump_frames(1)
-		fade2 += 1
-	t.ok(fade2 > 0 and fade2 < 400, "내륙 표시도 %d 프레임 만에 사라진다 (자가 점검)" % fade2)
-	t.root.push_input(_press(idle1.get_center()), true)
-	await t.pump_frames(1)
-	t.root.push_input(_motion(sendable_px, Vector2.ZERO), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(sendable_px), true)
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), 1, "받아주는 칸에 놓으면 배가 생긴다 (자가 점검)")
-	t.eq(_refusal_marks(fs).size(), 0,
-		"그리고 성공한 놓기에는 거절 표시가 안 뜬다 — 매번 뜨면 아무 뜻도 없다 (천장)")
-	# Wound back: the accepted drop above exists only to be the ceiling's control, and every row after
-	# this one was written against an empty plan.
-	t.ok(b.recall(int((b.boats[0] as Dictionary)["uid"])), "그 배를 도로 물린다 (자가 점검)")
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), 0, "다시 아무 배도 없다 (자가 점검)")
-
-	# The accepted drop: one boat, carrying THAT soldier, and the clock still exactly stopped.
-	t.root.push_input(_press(idle0.get_center()), true)
-	await t.pump_frames(1)
-	t.root.push_input(_motion(sendable_px, Vector2.ZERO), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(sendable_px), true)
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), 1, "받아주는 칸에 놓자 배가 하나 생겼다")
-	var aboard0: Array = (b.boats[0] as Dictionary)["soldiers"]
-	t.eq(aboard0.size(), 1, "그 배에 한 명이 탔다")
-	t.eq(int(aboard0[0]), 0, "끌어 놓은 그 병사가 탄다 — 항상 0번을 태우는 게 아니다")
-	t.eq(int((b.boats[0] as Dictionary)["target"]), sendable_tile, "놓은 바로 그 칸으로 간다")
-	t.eq(b.soldier_state[0], Battle.SoldierState.TRANSIT, "그 병사는 이제 배 위다")
-	# ⚠⚠ **결정 1 as a check**: dropping is planning, not starting.
-	t.eq(b.elapsed, 0.0, "놓기는 계획일 뿐 시작이 아니다 — 시계가 여전히 정확히 0이다")
-	t.eq(float((b.boats[0] as Dictionary)["t"]), 0.0, "그 배의 항해 시간도 여전히 정확히 0이다")
-	t.ok(not b.committed(), "그리고 판은 아직 확정되지 않았다")
-
-	# The soldier that was sent is no longer standing at the harbour to be grabbed again.
-	t.eq(fs.idle_soldier_rect(0), Rect2(), "보낸 병사는 항구에서 사라진다 — 다시 못 잡는다")
-	t.eq(game._soldier_hit_at(idle0.get_center()), -1, "그 자리를 눌러도 아무도 안 잡힌다")
-
-	# -- the ring undoes the drop, and it beats the body in the hit test ----------------------------
-	var uid0 := int((b.boats[0] as Dictionary)["uid"])
-	t.root.push_input(_press(sendable_px), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(sendable_px), true)
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), 0, "고리를 누르면 무른다")
-	t.eq(b.soldier_state[0], Battle.SoldierState.RESERVE, "무른 병사가 항구로 돌아온다")
-	t.ok(fs.idle_soldier_rect(0).size != Vector2.ZERO, "그리고 다시 항구에 그려진다")
-	t.eq(game._ring_hit_at(sendable_px), -1, "그 번호는 이제 화면에 없다 (uid %d)" % uid0)
-
-	# ⚠⚠ **The precedence itself, and it has to be BUILT.** A landing ring can sit on top of a body
-	# standing at the harbour when a player drops a boat onto the beach beside it — but on all three
-	# shipped islands every harbour is on the bottom row and every landable tile is far north, so the
-	# overlap never happens by itself and a check that waited for it would measure nothing. **Measured:
-	# swapping the two hit tests in `_on_left_press` left this net entirely green until this fixture
-	# existed.** ⇒ the boat's `target` is poked onto the tile the idle stack is drawn over, the same
-	# technique `net_fx_view` uses to force a RETURNING boat, and then a real press is driven at it.
-	t.root.push_input(_press(idle0.get_center()), true)
-	await t.pump_frames(1)
-	t.root.push_input(_motion(sendable_px, Vector2.ZERO), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(sendable_px), true)
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), 1, "겹침 시험용으로 한 척을 놓았다 (자가 점검)")
-	var over_world := idle1.get_center()
-	var over_tv := fs.world_to_tile(over_world)
-	var over_tile := b.grid.tile_index(over_tv.x, over_tv.y)
-	var forced: Dictionary = b.boats[0]
-	forced["target"] = over_tile
-	b.boats[0] = forced
-	await t.pump_frames(1)
-	var over_px := Look.tile_point_px(b.grid.tile_point(over_tile))
-	t.ok(over_px.distance_to(over_world) <= Look.TARGET_RING_R_PX,
-		"그 고리의 중심이 병사 몸 안에 든다 (자가 점검 — 두 판정이 실제로 겹친다)")
-	t.ok(idle1.has_point(over_px), "그리고 그 점은 병사 사각형 안이기도 하다 (자가 점검)")
-	t.eq(game._soldier_hit_at(over_px), 1, "몸 판정만 물으면 그 병사를 잡는다 (자가 점검)")
-	t.ok(game._ring_hit_at(over_px) >= 0, "고리 판정만 물어도 그 배를 잡는다 (자가 점검)")
-	t.root.push_input(_press(over_px), true)
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), 0, "고리가 병사보다 먼저 잡힌다 — 그 자리는 무르기다")
-	t.eq(game._drag_soldier, -1, "그리고 드래그가 시작되지 않았다")
-	t.root.push_input(_release(over_px), true)
-	await t.pump_frames(1)
-
-	# -- ghosts stand in DROP ORDER, and there is no cap on how many boats ---------------------------
-	# ⚠⚠ **Two of the three go to ONE beach and the third to a DIFFERENT one, and that is the whole
-	# point of the fixture.** The fan rank has to be counted among the boats sharing a landing, not
-	# among all boats: fanning by the `boats` index puts the third ghost 25.5 px from a ring of radius
-	# 18 even in this three-boat plan, and 3.8 tiles away in a thirteen-boat one — a ghost standing
-	# over other terrain, which is the plan lying. **Measured: with every drop aimed at one tile the
-	# two indices coincide and this row cannot tell them apart.**
-	var order := [3, 1, 2]
-	var order_px := [second_px, second_px, sendable_px]
-	var order_tile := [second_tile, second_tile, sendable_tile]
-	for oi in order.size():
-		var sid := int(order[oi])
-		var irect2 := fs.idle_soldier_rect(sid)
-		t.ok(irect2.size != Vector2.ZERO, "%d번 병사가 항구에 서 있다 (자가 점검)" % sid)
-		t.root.push_input(_press(irect2.get_center()), true)
-		await t.pump_frames(1)
-		t.root.push_input(_motion(order_px[oi], Vector2.ZERO), true)
-		await t.pump_frames(1)
-		t.root.push_input(_release(order_px[oi]), true)
-		await t.pump_frames(1)
-	t.eq(b.boats.size(), order.size(), "셋을 순서대로 놓았다 — 둘은 같은 해변, 하나는 다른 해변")
-	var order_bad := 0
-	var target_bad := 0
-	for oi2 in order.size():
-		var carried: Array = (b.boats[oi2] as Dictionary)["soldiers"]
-		if int(carried[0]) != int(order[oi2]):
-			order_bad += 1
-		if int((b.boats[oi2] as Dictionary)["target"]) != int(order_tile[oi2]):
-			target_bad += 1
-	t.eq(order_bad, 0, "boats 의 순서가 놓은 순서 그대로다 — 이것이 앞자리를 정한다")
-	t.eq(target_bad, 0, "그리고 배마다 제가 노린 칸을 들고 있다 (자가 점검 — 해변이 실제로 둘이다)")
-
-	# The ghost fan. The rank is how many EARLIER boats aim at the SAME tile, so the offsets have to
-	# be strictly increasing within a beach — a constant fan (`rank * 0`) is the fake this row exists
-	# to make impossible — and every ghost has to land inside its own landing ring.
-	var ghosts := []
-	for braw2: Dictionary in fs.bodies:
-		if braw2["colour"] == Look.ghost_tint():
-			ghosts.append(braw2)
-	t.eq(ghosts.size(), b.boats.size(), "놓은 배마다 유령이 하나씩 서 있다")
-	# ⚠⚠ **The floor is `plan-then-watch` 6.4's own number, not a bare `> 0`.** At alpha 0.02 the fan
-	# is invisible on screen and the only picture carrying drop order stops existing — which deletes
-	# this design's stated survival condition — while a `> 0.0` floor stays green. **Measured: with
-	# the floor at 0.0, `GHOST_ALPHA := 0.02` passed the whole round.**
-	t.ok((Look.ghost_tint() as Color).a >= 0.35 - 1e-6,
-		"유령이 계획을 읽을 만큼 진하다 (바닥 0.35 — 더 옅으면 계획이 화면에 없는 것과 같다)")
-	t.ok((Look.ghost_tint() as Color).a < 1.0, "그리고 상륙한 몸과 구별된다 (천장)")
-	var fan_bad := 0
-	var ring_bad := 0
-	var ghost_size_bad := 0
-	var rank_seen := {}
-	for gi in ghosts.size():
-		var gboat: Dictionary = b.boats[gi]
-		var gtile := int(gboat["target"])
-		var grank := int(rank_seen.get(gtile, 0))
-		rank_seen[gtile] = grank + 1
-		var gtarget_px := Look.tile_point_px(b.grid.tile_point(gtile))
-		var want_c := gtarget_px + Look.GHOST_FAN_PX * float(grank)
-		var got_c := ghosts[gi]["centre"] as Vector2
-		if got_c.distance_to(want_c) > 0.01:
-			fan_bad += 1
-		# The ceiling that catches a fan ranked by the wrong index: a ghost that is not on its own
-		# landing is not a picture of that landing.
-		if got_c.distance_to(gtarget_px) > Look.TARGET_RING_R_PX:
-			ring_bad += 1
-		# ⚠⚠ **The radius, read off the captured argument.** `_paint_body` handed 0.0 collapses the
-		# rounded square to the 3 px `BODY_DOT_RADIUS_PX` dot: thirteen identical dots, melee and
-		# ranged indistinguishable, with the fan offsets above still perfect. **Measured: it passed
-		# the whole round before this line.** Both ends — it is not zero, and it is the size the type
-		# says.
-		var gsid := int((gboat["soldiers"] as Array)[0])
-		var gwant_r := Look.body_radius_of(int(b.army.type_id[gsid]))
-		if float(ghosts[gi]["radius"]) <= 0.0 or absf(float(ghosts[gi]["radius"]) - gwant_r) > 0.001:
-			ghost_size_bad += 1
-	t.eq(fan_bad, 0, "유령이 놓은 순서대로 늘어선다 — 같은 해변의 k번째가 상륙지 + k × GHOST_FAN_PX 다")
-	t.eq(ring_bad, 0, "그리고 유령마다 제 상륙 고리 안에 선다 — 부채가 다른 해변까지 흘러나가지 않는다")
-	t.eq(ghost_size_bad, 0,
-		"유령마다 반지름이 그 병종의 몸 크기다 (바닥 0 초과 — 0이면 점 하나만 남고 근접·원거리가 같아진다)")
-	t.ok((ghosts[1]["centre"] as Vector2).distance_to(ghosts[0]["centre"] as Vector2) > 0.0,
-		"그리고 부채가 실제로 벌어져 있다 (바닥 — 고정 오프셋이면 여기가 문다)")
-
-	# One route and one ring per boat, all of them at once: this is 「the whole plan on one page」.
-	t.eq(fs.routes.size(), b.boats.size(), "계획한 항로가 배마다 하나씩, 전부 그려진다")
-	var route_bad := 0
-	var route_short := 0
-	for ri in b.boats.size():
-		var want_to := Look.tile_point_px(b.grid.tile_point(int((b.boats[ri] as Dictionary)["target"])))
-		var pts: PackedVector2Array = fs.routes[ri]["points"]
-		if pts.size() < 3:
-			route_short += 1
-		if pts[pts.size() - 1].distance_to(want_to) > 0.01:
-			route_bad += 1
-	t.eq(route_bad, 0, "항로마다 마지막 점이 그 배가 노리는 칸이다")
-	t.eq(route_short, 0, "그리고 전부 3점 이상짜리 폴리라인이다 — 2점이면 예전 직선이다")
-
-	# ⚠⚠ **OPEN 0 as a shell check.** The brake is deliberately absent (the user: 「일단 빼고 만든 이후에
-	# 추가하자는 거임」), so every remaining soldier has to be sendable. A cap appearing here is not a
-	# fix — it is a decision nobody made.
-	var still_reserve := []
-	for si3 in b.soldier_state.size():
-		if b.soldier_state[si3] == Battle.SoldierState.RESERVE:
-			still_reserve.append(si3)
-	t.ok(still_reserve.size() > 0, "아직 항구에 남은 병사가 있다 (자가 점검)")
-	for si4 in still_reserve:
-		var irect3 := fs.idle_soldier_rect(int(si4))
-		t.root.push_input(_press(irect3.get_center()), true)
-		await t.pump_frames(1)
-		t.root.push_input(_motion(sendable_px, Vector2.ZERO), true)
-		await t.pump_frames(1)
-		t.root.push_input(_release(sendable_px), true)
-		await t.pump_frames(1)
 	t.eq(b.boats.size(), Rules.START_MELEE + Rules.START_RANGED,
-		"명단 전부를 보낼 수 있다 — 배 수에 상한이 없다")
+		"명단 전부를 내보낼 수 있다 — 배 수에 상한이 없다")
+	t.ok(b.boats.size() > before_fill, "그리고 실제로 늘었다 (자가 점검)")
 	var all_transit := 0
 	for si5 in b.soldier_state.size():
 		if b.soldier_state[si5] == Battle.SoldierState.TRANSIT:
 			all_transit += 1
 	t.eq(all_transit, Rules.START_MELEE + Rules.START_RANGED, "열 명 전부 배에 탔다")
-	t.eq(b.elapsed, 0.0, "열 척을 놓는 동안에도 시계는 정확히 0이다")
-
-	# ⚠ **One is pulled back out again, and the island is committed with nine.** That spare soldier is
-	# what the post-commit rows below are driven against: with every soldier already at sea, 「a press
-	# on a body does nothing」 and 「a release with a soldier in hand does nothing」 would both be
-	# satisfied by there being no body and no soldier to send — a check passing for the wrong reason.
-	# **Measured: deleting the gate on `_on_left_release` left this whole net green until this line
-	# existed.**
-	var spare := int(((b.boats[b.boats.size() - 1]) as Dictionary)["soldiers"][0])
-	t.ok(b.recall(int(((b.boats[b.boats.size() - 1]) as Dictionary)["uid"])),
-		"마지막 한 척을 무른다 (자가 점검)")
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), Rules.START_MELEE + Rules.START_RANGED - 1, "아홉 척이 남았다")
-	t.eq(b.soldier_state[spare], Battle.SoldierState.RESERVE, "그 병사는 항구에 남는다 (자가 점검)")
-	t.ok(fs.idle_soldier_rect(spare).size != Vector2.ZERO, "그리고 다시 그려진다 (자가 점검)")
+	t.eq(b.elapsed, 0.0, "열 척을 내보내는 동안에도 시계는 정확히 0이다")
 
 	# -- the start button commits, and the screen changes with it --------------------------------------
 	t.root.push_input(_press(Look.start_rect_px().get_center()), true)
@@ -1243,13 +888,14 @@ func run(t) -> void:
 	var shrank := false
 	var tail_bad := 0
 	var head_bad := 0
-	# ⚠ **0.15 s a step and not 0.05, and the reason is the route smoother.** The drawn line shrinks
-	# when the sim's `leg` advances, and string-pulling left this crossing with ONE long first segment
-	# instead of a row of one-tile hops — so `leg` does not move until the boat is most of the way
-	# across, and 24 x 0.05 = 1.2 s of sim was no longer enough to reach it. The loop still breaks the
-	# moment the boat stops being OUTBOUND, so a shorter crossing costs nothing.
-	for _cn2 in 24:
-		game._process(0.15)
+	# ⚠ **80 steps of 0.05 s, and BOTH numbers have a reason.** The drawn line shrinks when the sim's
+	# `leg` advances, and string-pulling leaves a crossing with one long first segment instead of a row
+	# of one-tile hops — so the step has to be small enough that a frame is drawn BETWEEN the leg
+	# advancing and the boat landing, and the loop long enough to reach the advance at all. At 0.15 s
+	# the summon's crossing went from leg 0 to landed inside one step and this row could not see it.
+	# The loop still breaks the moment the boat stops being OUTBOUND, so a short crossing costs nothing.
+	for _cn2 in 160:
+		game._process(0.05)
 		await t.pump_frames(1)
 		if b.boats.is_empty() or fs.routes.is_empty():
 			break
@@ -1273,18 +919,10 @@ func run(t) -> void:
 
 	# ⚠⚠ **결정 1 as a check.** All three plan branches are gated, and the three of them are pressed.
 	var boats_snapshot := b.boats.size()
-	var idle_after := fs.idle_soldier_rect(spare)
-	t.ok(idle_after.size != Vector2.ZERO,
-		"확정 뒤에도 안 보낸 병사 하나는 항구에 그대로 서 있다 — 진짜 누를 몸이 있다 (자가 점검)")
-	t.root.push_input(_press(idle_after.get_center()), true)
-	await t.pump_frames(1)
-	t.eq(game._drag_soldier, -1, "확정 뒤에는 몸을 눌러도 안 잡힌다")
-	t.root.push_input(_motion(sendable_px, Vector2.ZERO), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(sendable_px), true)
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), boats_snapshot, "확정 뒤에는 놓아도 배가 안 생긴다")
-	t.eq(b.soldier_state[spare], Battle.SoldierState.RESERVE, "그 병사는 여전히 예비다 — 안 보내졌다")
+	# ⚠ The two branches that pressed a BODY and released a held soldier are deleted with the drag.
+	# What is left after the commit is the ring undo and the summon, and both are pressed below.
+	# ⚠⚠ **The summon's own post-commit gate is `net_slots`' `_after_the_commit`**, which presses a
+	# band tile with a slot still armed and reads the boat count AND the refusal count.
 	# ⚠ **The gate is on the BRANCH, not on the hit test.** `_ring_hit_at` still answers — it is a pure
 	# geometry lookup — so the row that matters is that pressing there changes nothing.
 	t.ok(game._ring_hit_at(second_px) >= 0, "고리 자체는 여전히 그 자리에 있다 (자가 점검)")
@@ -1293,20 +931,9 @@ func run(t) -> void:
 	t.root.push_input(_release(second_px), true)
 	await t.pump_frames(1)
 	t.eq(b.boats.size(), boats_snapshot, "확정 뒤에는 고리를 눌러도 안 무른다")
-	# ⚠⚠ **The RELEASE branch's own gate, reached by hand** — and it is honestly labelled: **this row
-	# cannot redden on that gate alone, and it was measured trying.** With the press branch gated,
-	# `_drag_soldier` can never be set after the commit through the input path, so the handler is
-	# called directly; and even then, deleting `not battle.committed()` from `_on_left_release` leaves
-	# this net entirely green, because **`Battle.send` refuses a committed island on its own** (that
-	# rule is `net_plan`'s 「커밋 뒤에는 계획을 못 바꾼다」). ⇒ the shell's third gate is defence in
-	# depth with no observable consequence while the sim's rule holds. What this row DOES measure is
-	# the consequence itself — nothing is created and the hand is emptied — which is the claim
-	# 결정 1 actually makes, and it reddens the moment either layer stops refusing.
-	game._drag_soldier = spare
-	game._on_left_release(sendable_px)
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), boats_snapshot, "확정 뒤에는 손에 든 병사를 놓아도 배가 안 생긴다")
-	t.eq(game._drag_soldier, -1, "그리고 손은 비워진다")
+	# ⚠⚠ **THE RELEASE BRANCH'S OWN GATE IS DELETED WITH THE DRAG, and so is the row that reached it
+	# by hand.** That row was already labelled as unable to redden on its own — `Battle.send` refuses a
+	# committed island by itself — and `_on_left_release` now holds nothing that could author anything.
 
 	# -- the clock runs with nothing pressed at all ----------------------------------------------------
 	var elapsed_before := b.elapsed
@@ -1350,13 +977,23 @@ func run(t) -> void:
 		"옛 배속 줄 네 귀퉁이를 눌러도 시계가 아무것도 안 누른 판과 똑같이 간다")
 	t.eq(b.substeps - pressed_substeps, control_after_substeps,
 		"서브스텝 수도 똑같다 — 누름이 시뮬레이션을 한 번도 안 건드렸다")
-	var moved_same := true
+	# ⚠ **AT LEAST ONE, and it used to be ALL.** Under the drag every boat left from one harbour and
+	# every soldier was still at sea at this point, so "all of them moved" happened to hold. A summoned
+	# boat lands sooner and a soldier ASHORE that is blocked or already in reach stands still — which
+	# is correct behaviour, not a dead screen. The floor this row is (**the sim is not frozen**) is
+	# carried by one body in motion; that the sim advanced at all is pinned two lines up on `substeps`.
+	var moved := 0
+	var counted := 0
 	for i6 in b.soldier_state.size():
 		if b.soldier_state[i6] == Battle.SoldierState.RESERVE:
 			continue
-		if Vector2(pressed_positions[i6]).distance_to(Vector2(b.soldier_pos[i6])) <= Rules.EPS:
-			moved_same = false
-	t.ok(moved_same, "그 사이 병사들은 실제로 움직이고 있었다 (바닥 — 죽은 화면이라 안 바뀐 게 아니다)")
+		counted += 1
+		if Vector2(pressed_positions[i6]).distance_to(Vector2(b.soldier_pos[i6])) > Rules.EPS:
+			moved += 1
+	t.ok(counted > 0, "셀 병사가 있다 (자가 점검 — 0명이면 아래가 공허하다)")
+	t.ok(moved > 0,
+		"그 사이 병사들은 실제로 움직이고 있었다 (%d/%d — 바닥, 죽은 화면이라 안 바뀐 게 아니다)"
+			% [moved, counted])
 	# And the camera still answers, which is what stops the row above being green because the screen
 	# is dead. Driven downward: `ZOOM_MAX` is 1.0 and the camera can be parked there.
 	var ghost_zoom := fs.zoom
@@ -1387,10 +1024,10 @@ func run(t) -> void:
 	game._unhandled_input(_release(Vector2(840.0, 480.0)))
 	t.ok(fs.cam_px != cam_before, "전투 중에도 화면은 끌린다 — 손이 멈춘 것이지 화면이 죽은 게 아니다")
 
-	fs.set_drag(-1, -1)
 	# Left at ZOOM_MIN, the state `setup()` actually produced, so the wheel test right after this
 	# section still measures "zoomed IN from where the island opened" rather than from wherever this
-	# drag suite happened to leave the camera.
+	# section happened to leave the camera. (`fs.set_drag(-1, -1)` stood here and is deleted with the
+	# gesture it cleared.)
 	fs.zoom = Look.ZOOM_MIN
 	fs.cam_px = Vector2.ZERO
 	await t.pump_frames(1)
@@ -1519,16 +1156,14 @@ func run(t) -> void:
 	# `_on_left_press` / `_hold_sec`'s own comment names and nothing here drove: a drag begun on the
 	# field before the panel opened must not keep panning once it does. Begin one now, before the panel
 	# exists, and leave it in flight (no release) across the panel opening below.
-	t.ok(not game.panel_view.panel_active(), "드래그를 시작하기 전, 패널은 아직 안 떠 있다 (자가 점검)")
+	t.ok(not game.panel_view.panel_active(), "패널은 아직 안 떠 있다 (자가 점검)")
 
-	# H: the release-time panel guard. `_on_left_release` refuses to call `battle.send` while the panel
-	# is up. Reaching that guard through the NORMAL flow is narrow: `_open_island` (the only caller of
-	# `panel_view.bind`, which is what actually flips `panel_active()`) clears `_drag_soldier` as the
-	# very first thing it does, unconditionally — a defence this file's own earlier round already
-	# added — so a drag genuinely cannot survive INTO the moment the panel opens through that path.
-	# This checks the guard line itself rather than that narrow path: `_drag_soldier` is set BY HAND
-	# after the panel is already up, the same "call the handler, not the input path" technique
-	# `_click_panel`'s own hold guard already uses, for the same reason its own comment gives.
+	# ⚠⚠ **H — the release-time panel guard — IS DELETED WITH THE DRAG.** `_on_left_release` used to
+	# refuse `battle.send` while the panel was up, and the row that reached that guard had to set
+	# `_drag_soldier` by hand because the normal flow could not produce the state. There is no
+	# `battle.send` on any release path any more, so there is no guard and nothing to reach.
+	# ⚠ **The PAN half of this block survives and is what the rows below still measure**: a press that
+	# starts a pan, a panel that comes up, and motion that must no longer move the camera.
 	var boats_before_isle1 := b.boats.size()
 	# ⚠ The island transition just above (the verdict hold completing) opened a REAL new island, which
 	# DID call `field_view.setup()` and reset the camera to ZOOM_MIN — where `_clamp_cam()` pins BOTH
@@ -1547,14 +1182,11 @@ func run(t) -> void:
 	await t.pump_frames(2)
 	t.eq(ps.panels.size(), 1, "보상 화면에서 패널이 그려졌다")
 
-	# The panel is now up. `_drag_soldier` is set BY HAND here, after the fact — see the note above
-	# this block for why the normal path cannot produce this state on its own.
 	t.ok(game.panel_view.panel_active(), "패널이 실제로 떠 있다 (자가 점검)")
-	game._drag_soldier = 0
 	game._on_left_release(Vector2(700.0, 300.0))
 	await t.pump_frames(1)
-	t.eq(b.boats.size(), boats_before_isle1, "패널이 뜬 뒤 놓아도 배가 안 생긴다 — 조용히 취소된다")
-	t.eq(game._drag_soldier, -1, "드래그 상태는 정리됐다")
+	t.eq(b.boats.size(), boats_before_isle1, "패널이 뜬 뒤 떼어도 배가 안 생긴다")
+	t.ok(not game._panning, "그리고 끌기 상태가 정리된다")
 
 	var cam_before_motion: Vector2 = fs.cam_px
 	game._unhandled_input(_motion(Vector2(700.0, 300.0), Vector2(-80.0, -80.0)))
@@ -1876,21 +1508,11 @@ func _the_plan_constants_have_both_ends(t) -> void:
 	t.ok(Look.REFUSE_MARK_WIDTH_PX * Look.ZOOM_MIN >= 2.0,
 		"그 산술이 실제로 성립한다 (자가 점검 — 바닥이 도출된 부등식 자체를 잰다)")
 	t.ok(Look.REFUSE_MARK_WIDTH_PX <= 8.0, "그리고 8 을 안 넘는다 (천장 — 가리키는 칸을 삼킨다)")
-	# A melee body is `BODY_RADIUS_RATIO_MELEE * TILE_PX * 2` across; the pitch has to clear it or two
-	# soldiers standing side by side are one blob and the thing you drag has no edges.
-	var melee_across := Look.body_radius_of(Rules.CELL_MELEE) * 2.0
-	t.ok(Look.IDLE_SOLDIER_PITCH_PX >= melee_across,
-		"항구 무더기의 간격이 근접 몸 폭(%.1fpx)보다 넓다 (바닥 — 좁으면 이웃과 겹친다)" % melee_across)
-	t.ok(Look.IDLE_SOLDIER_PITCH_PX <= 48.0,
-		"그리고 48 을 안 넘는다 (천장 — 일곱이 늘어서면 항구 앞을 다 덮는다)")
-	t.ok(Look.IDLE_SOLDIER_COLS >= 5,
-		"한 줄에 다섯 이상 선다 (바닥 — 열셋이 다섯 미만이면 세 줄이 되고 무더기가 항구를 벗어난다)")
-	t.ok(Look.IDLE_SOLDIER_COLS <= 9, "그리고 아홉을 안 넘는다 (천장 — 8타일보다 넓어진다)")
-	# The stack sits ABOVE the harbour tile, because every harbour on all three islands is on the
-	# bottom row and below it is off the map. The ceiling (three tiles on each axis) is the
-	# `too_far` row up in the field section; this is the floor it was missing.
-	t.ok(Look.IDLE_SOLDIER_ORIGIN_PX.y <= -40.0,
-		"무더기가 항구 위쪽에 선다 (바닥 y<=-40 — 항구는 맨 아랫줄이고 그 아래는 지도 밖이다)")
+	# ⚠⚠ **THE FIVE `IDLE_SOLDIER_*` ROWS ARE DELETED WITH THE CONSTANTS.** They bounded the reserve
+	# stack's pitch, its column count and its origin, and the stack is gone (*"ㅇㅇ 지워줘"*).
+	# ⚠ The ghost rows below SURVIVE, and that is not an oversight: a summoned boat is drawn as a ghost
+	# at its derived landing before the commit exactly as a dropped one was, so `GHOST_FAN_PX` still
+	# has a picture to bound.
 	t.ok(Look.GHOST_FAN_PX.x >= 6.0 and Look.GHOST_FAN_PX.y >= 6.0,
 		"유령 부채가 벌어진다 (바닥 6 — 못 미치면 두 유령이 한 덩어리이고 놓은 순서에 그림이 없다)")
 	t.ok(Look.GHOST_FAN_PX.x <= 14.0 and Look.GHOST_FAN_PX.y <= 14.0,
@@ -2127,7 +1749,9 @@ func _the_speed_ladder_is_gone(t) -> void:
 	for raw in gm.get_property_list():
 		game_props.append(str((raw as Dictionary)["name"]))
 	t.ok(not game_props.has("_speed_slot"), "game 에 _speed_slot 필드도 없다")
-	t.ok(game_props.has("_drag_soldier"), "_drag_soldier 는 그대로 있다 (자가 점검)")
+	t.ok(not game_props.has("_drag_soldier"),
+		"game 에 _drag_soldier 필드도 없다 — 드래그가 통째로 지워졌다")
+	t.ok(game_props.has("_armed_slot"), "_armed_slot 은 그대로 있다 (자가 점검 — 속성 목록을 실제로 읽고 있다)")
 
 	var fv_props: Array = []
 	for raw2 in fv.get_property_list():

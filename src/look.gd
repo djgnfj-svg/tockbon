@@ -148,7 +148,8 @@ const COL_HP_EMPTY := Color(0.118, 0.141, 0.141, 0.851)
 # two boats: a boat exists between one drag and one round trip, and there is no fleet to tell apart.
 # ⚠ `COL_BERTH_EMPTY` died with the berths — there is no resource meter to empty, because the boat
 # stopped being a resource. The thing that visibly goes down is now the stack of soldiers standing at
-# the harbour: every one you drag away leaves its slot empty (`idle_soldier_offset_px`).
+# the harbour — ⚠ **and that stack is deleted too** (`sea-summon`, the user's *"ㅇㅇ 지워줘"*). What
+# visibly goes down now is a slot's own bar in `hud_view`, which is a COUNT of bodies still in it.
 const COL_BOAT := Color(0.851, 0.780, 0.600)
 
 # P7 — a boat that has arrived and cannot unload is drawn waiting, blended toward this on a blink
@@ -417,27 +418,16 @@ const SLOT_HOLD_SEC := 0.20
 ## see WHY they lost, and "the timer ran out with four alive" is a different loss to a wipe.
 const HUD_ENEMIES_LEFT_POS_PX := Vector2(1060.0, 38.0)
 
-## **The army standing at the harbour, before anything is sent** (`plan-then-watch`, P4) — this is
-## what the player drags, and it is drawn ON THE MAP rather than in a HUD strip because the user's
-## sentence is 「내가 내릴 수 있는 곳 위치에 딱 나서 … 끌어서 탁 놓으면」. Drawing it in a strip as well
-## would be the same fact under two names, which this file's own header forbids.
+## ⚠⚠ **`IDLE_SOLDIER_PITCH_PX` / `_COLS` / `_ORIGIN_PX` AND `idle_soldier_offset_px()` ARE DELETED**
+## with the thing they laid out: the stack of reserve bodies standing on the water at the start
+## harbour. The user pointed at it in a screenshot and said ***"ㅇㅇ 지워줘"*** — it was the DRAG's
+## source, and the drag is what they said was not fun. `sea-summon`'s five slot boxes are where the
+## roster shows now, and `hud_view` owns their geometry.
 ##
-## The offsets are from the START HARBOUR's tile centre and they go UP, because a harbour sits on the
-## bottom row of all three islands and below it is off-map. Slot index is the SOLDIER ID, so a
-## soldier you drag away leaves its slot empty and the stack visibly shortens as the plan fills —
-## that is the "something on screen goes down" the last game died for the want of.
-## Geometry check with 13 soldiers: 7 columns spanning 6 * 34 = 204 px, centred by an origin.x of
-## -102, two rows at y -48 and -82. Against a start harbour at (24, 31) that is world x 878..1082,
-## y 1178..1212 — inside the 1920 x 1280 map with a body radius to spare.
-const IDLE_SOLDIER_PITCH_PX := 34.0   # >= 30 (a melee body is 0.35 * 40 * 2 = 28 px across, so
-                                      # anything smaller overlaps its neighbour); <= 48 or seven
-                                      # across is seven tiles wide and covers the harbour approach
-const IDLE_SOLDIER_COLS := 7          # >= 5 — thirteen soldiers in fewer than five columns is three
-                                      # rows and the stack walks off the bottom edge; <= 9 or the row
-                                      # is wider than eight tiles and reaches the neighbouring coast
-const IDLE_SOLDIER_ORIGIN_PX := Vector2(-102.0, -48.0)  # y <= -40, the stack sits ABOVE the harbour;
-                                      # abs(x) and abs(y) <= 3 * TILE_PX or it stops reading as *at*
-                                      # the harbour at all
+## ⚠ **One thing went with it and has no home: per-soldier HP.** The stack drew a bar under every
+## reserve body because 「which of these thirteen is nearly gone」 is a planning fact — soldiers carry
+## damage between islands and a dead one is dead for good. **A slot bar is a COUNT, not a health
+## readout.** `sea-summon` §6 raised this as its Open 4 and did not answer it.
 
 ## **The ghost of a soldier that has been sent but has not left yet** (P7), drawn at its LANDING and
 ## fanned by its index in `battle.boats` — which is the drop order. That fan is the only picture the
@@ -1260,17 +1250,6 @@ static func ghost_tint() -> Color:
 	c.a = GHOST_ALPHA
 	return c
 
-
-## Where soldier `slot_index` stands while it is still in reserve, as an offset from the START
-## HARBOUR's tile centre in world px. The index is the SOLDIER ID, not a position in a list, so
-## dragging one away leaves a hole rather than re-flowing the stack — the emptying is the feedback.
-## Rows go UP (negative y): a harbour is on the bottom row of every island and below it is off-map.
-static func idle_soldier_offset_px(slot_index: int) -> Vector2:
-	var col := slot_index % IDLE_SOLDIER_COLS
-	var row := slot_index / IDLE_SOLDIER_COLS
-	return Vector2(
-		IDLE_SOLDIER_ORIGIN_PX.x + col * IDLE_SOLDIER_PITCH_PX,
-		IDLE_SOLDIER_ORIGIN_PX.y - row * IDLE_SOLDIER_PITCH_PX)
 
 
 static func panel_rect_px() -> Rect2:

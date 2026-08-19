@@ -361,20 +361,6 @@ func send(soldier_id: int, tile: int) -> int:
 		"pos": path[0],
 		"soldiers": [soldier_id],
 		"target": tile,
-		# ⚠ **`home` is KEPT and it is not dead, though it very nearly reads that way.** Nothing in
-		# `src/` reads it: the return leg is the outbound `path` REVERSED, so its last waypoint already
-		# IS the home harbour and asking `harbour_tile(boat["home"])` for it again would be one fact
-		# read from two places — which is the whole reason `_phase_landings` reverses rather than
-		# recomputes. Its one live reader is `tools/look/capture_landing.gd`, which prints it beside
-		# `pos`, `leg` and `dist` so a captured frame can be argued with; deleting it would take a
-		# diagnostic away and put nothing in its place.
-		# ⚠ It is also the only record of WHICH harbour this boat was judged against, kept at the
-		# moment of the judgement — three nets read it back to assert `send` and `home_harbour_for`
-		# answered as one. Same shape as `Rules.SPEED_STEPS`: a value with no reader inside `src/`
-		# needs a line saying why, or the next person deletes it as rot.
-		# ⚠⚠ **`summon` writes -1 here and that is the HONEST value, not a sentinel to be clamped.**
-		# A summoned boat was judged against no harbour at all — see that function.
-		"home": hb,
 	})
 	return uid
 
@@ -470,12 +456,6 @@ func summon(slot: int, tile: int) -> int:
 		"pos": path[0],
 		"soldiers": [sid],
 		"target": grid.summon_landing_of(tile),
-		# ⚠⚠ **-1 is the honest value.** `home`'s two jobs are a diagnostic in
-		# `tools/look/capture_landing.gd` and *the record of which harbour this boat was judged
-		# against* — and this one was judged against none. Nothing in `src/` reads it, and
-		# `_phase_landings` sails the return leg by REVERSING this boat's own path, so it goes back to
-		# the sea tile it was summoned at and vanishes there. **Do not add a return-to-harbour branch.**
-		"home": -1,
 	})
 	return uid
 

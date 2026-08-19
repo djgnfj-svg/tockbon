@@ -191,9 +191,21 @@ distinct reachable landings · crossing min/median/max at `BOAT_SPEED` 4.0:
 |---|---|---|---|---|
 | B `≤ 2` (shipped, replaced) | 190 / 174 / 186 | **82 / 75 / 80** | 0.25 / 0.60 / 0.71 | 0.46 s |
 | B `≥ 3` | 534 / 516 / 540 | 45 / 40 / 43 | 0.85 / 2.47 / 5.96 | **5.11 s** |
-| **B `≥ 4` — adopted** | **470 / 460 / 478** | **42 / 38 / 40** | **1.10 / 2.47 / 5.96** | **4.86 s** |
-| B `≥ 6` | 360 / 360 / 366 | 34 / 35 / 34 | 1.60 / 2.83 / 5.96 | 4.36 s |
+| B `≥ 4` (adopted, then replaced) | 470 / 460 / 478 | 42 / 38 / 40 | 1.10 / 2.47 / 5.96 | **4.86 s** |
+| **B `≥ 6` — adopted** | **360 / 360 / 366** | **34 / 35 / 34** | **1.60 / 2.83 / 5.96** | **4.36 s** |
+| B `≥ 8` | 256 / 256 / 256 | 32 / 33 / 27 | 2.10 / 3.18 / 5.96 | 3.86 s |
 | B `≥ 10` | 152 / 152 / 152 | 30 / 31 / 25 | 2.60 / 3.54 / 5.96 | 3.36 s |
+| ⚠⚠ B `≥ 12` | **48 / 48 / 48** | **2 / 2 / 2** | 3.21 / 4.59 / 5.96 | 2.76 s |
+
+⚠⚠ **THE CEILING IS 10 AND IT IS A CLIFF, not taste.** At `≥ 12` the band resolves to **two distinct
+landings on every island** and on the 144-column map — the corners of the sea, and nothing else. Every
+press anywhere would produce one of two beaches. 10 is the last usable value; 8 the last comfortable one.
+
+⚠ **4 was adopted, played, and replaced by 6 on the user's own sentence** — *"그냥 섬 이랑 더 거리를
+더줘"*. The price, stated rather than argued down: **6–8 more coast tiles stop being individually
+addressable** (42/38/40 → 34/35/34 of 84/76/82), the minimum crossing rises 1.10 → 1.60 s, and the
+spread NARROWS 4.86 → 4.36 s. The long map at 6: **1128 band tiles · 138 of 174 landings ·
+1.60 / 3.18 / 17.96 s**.
 
 ⚠⚠ **The MAXIMUM crossing is 5.96 s at every value, because the water is finite.** So distance lifts the
 FLOOR and shrinks the SPREAD — the spread peaks at `≥ 3` and decays from there. **4 is one step past the
@@ -255,13 +267,14 @@ the thing worth watching — so **precision at the shore was never the thing bei
 | | median catchment | four biggest | landings reachable |
 |---|---|---|---|
 | `≤ 2` (replaced) | **2 tiles** | 8 / 8 / 10 / 10 | 82 / 75 / 80 |
-| **`≥ 4` (adopted)** | **8 tiles** | **40 / 40 / 72 / 84** | **42 / 38 / 40** |
+| `≥ 4` (adopted, then replaced) | 8 tiles | 40 / 40 / 72 / 84 | 42 / 38 / 40 |
+| **`≥ 6` (adopted)** | **6 tiles** | **36 / 36 / 54 / 69** | **34 / 35 / 34** |
 
 ⇒ **§3.3's shape was exactly right** — the four biggest catchments really are the corner landings, and
 they really do swallow 40–84 tiles each. ⚠ **But "the same four corner landings" overstates it**: the
-MEDIAN catchment is 8 tiles and **42 of 84 coast tiles stay individually addressable on island 1**. The
-collapse is a halving, not a collapse to four. **Half the coastline is the price**, and it is written
-here as a number so a later round prices it rather than re-deriving the argument.
+MEDIAN catchment is 6 tiles and **34 of 84 coast tiles stay individually addressable on island 1**. The
+collapse is a 60% loss, not a collapse to four. **That is the price**, and it is written here as a number
+so a later round prices it rather than re-deriving the argument.
 
 ### 3.4 What the derived landing actually is
 
@@ -388,11 +401,12 @@ this repo has paid for four times.**
 #### ⚠⚠ AND THEN THE USER PUT THE TERM BACK — the spread is **4.86 s**
 
 **5.3, 5.4 and 5.5b were all arguing about a term this gesture had flattened.** The user played the build
-and moved the band away from the shore (§3.2), and the crossing came back with it: **1.10 / 2.47 /
-5.96 s, a spread of 4.86 s** at the adopted `≥ 4`.
+and moved the band away from the shore (§3.2), and the crossing came back with it: **1.60 / 2.83 /
+5.96 s, a spread of 4.36 s** at the adopted `≥ 6`.
 
-⇒ **That is §5.2's own drag figure restored.** The drag's crossing spread was **4.50–4.75 s**, and 4.86 s
-is that number, reached by a gesture that costs one press instead of 10–13.
+⇒ **That is §5.2's own drag figure restored.** The drag's crossing spread was **4.50–4.75 s**, and 4.36 s
+is within that band, reached by a gesture that costs one press instead of 10–13.
+⚠⚠ **And the drag it is compared against no longer exists**: round 4 deleted it outright.
 
 ⚠ **So 5.4's worry is answered by the same edit, and not by an argument.** 5.4 said flattening term 2
 removed the cost that pulled toward the harbour-adjacent beach, leaving casualties as the only axis.

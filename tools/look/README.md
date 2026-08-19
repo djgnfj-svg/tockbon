@@ -184,37 +184,21 @@ was written. `boat-and-landing` stage 4's boat-drag suite in `net_shell` since s
 `root.push_input(ev, true)` for that specific gesture (its own correction, section 6) — nothing here
 drags a boat, so this file's simpler direct call still proves what it always proved.
 
-## `capture_landing.gd` — the fifth one, and the first that puts a hand on the game
+## ⚠⚠ `capture_landing.gd` IS DELETED — its whole subject was the drag
 
-```
-.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_landing.gd -- <output-dir>
-```
+It dragged a soldier off the harbour stack, got a drop refused, and photographed a boat crossing.
+**The drag is deleted** (`sea-summon` round 4, the user pointing at the harbour markers and the reserve
+stack: *"ㅇㅇ 지워줘"*), and `idle_soldier_rect` / `_soldier_hit_at` / `set_drag` went with it — so every
+gesture in that file called a function that no longer exists. **A capture tool that crashes on its first
+gesture is worse than no capture tool**, and this repo's own rule for a thing whose subject is dead is
+distil and delete rather than archive in place.
 
-Written 2026-08-19 for `speed-off-open-landing`'s Screen rows. `capture_map.gd` photographs the title,
-the node map and three island openings and **never drags a soldier, never gets a drop refused and
-never watches a boat cross**, which is three of that plan's five rows. This one does all three, and
-every gesture is still an `InputEvent` built in the file and handed to `game._unhandled_input`.
-
-All three rules at the top of this file held unchanged. Two things it added:
-
-- **The staging tiles are named as constants with the measurement beside them, not searched for.** The
-  first draft picked its landing by scoring `(route - straight) * route` over every sendable tile and
-  chose a beach whose route was almost the straight line anyway — a staging that photographs the
-  wrong thing reads exactly like a feature that works. The two tiles now named are the far north-west
-  shore (the straight line to it crosses the island) and the bay head (the straight line to it is open
-  water and the route still is not).
-- ⚠ **A zoom SWEEP, not a zoom.** The route line is `ROUTE_WIDTH_PX` in **world** px, so at `ZOOM_MIN`
-  it reaches the canvas at 0.45x whatever that constant says. **Measured at 3.0: 1.35 px — under the
-  2.0 px floor `look.gd` re-measures its other line widths against.** At 0.45 only the axis-aligned
-  part of a route rasterised and every diagonal segment was missing; at 0.675 and above the whole line
-  was there. **One zoom would have answered "the route draws" or "the route does not draw" and both
-  would have been wrong**, which is this file's own known-answer rule pointed at a constant instead of
-  at the camera.
-  ⇒ ✅ **Fixed**: `ROUTE_WIDTH_PX` is **5.0** (2.25 px at `ZOOM_MIN`), and `look.gd` grew a
-  **world-width table** off this finding — nine widths above the floor, three declared deliberately
-  below with the reason on each line, closed by `net_draw_leaf` against `field_view.gd`'s own text.
-  **The sweep stays**: whether the whole line reaches the canvas is a question about the camera, and
-  it outlives whichever value the constant currently holds.
+⚠ **What it uniquely proved and nothing replaces**: the route line compared on screen against the sim's
+own route, the refusal mark photographed at the cursor, and the zoom sweep that found
+`ROUTE_WIDTH_PX` reaching the glass at 1.35 px. Two of those findings are recorded above and in
+`look.gd`'s world-width table; **the capability to take those shots again is gone until somebody
+writes `capture_summon.gd` against the gesture that replaced it.** That is verify-look's call, not a
+builder's.
 
 ## What it is not
 
