@@ -185,12 +185,26 @@ func _chip_offset(slot: int) -> Vector2:
 ## on the frame of the press and easing back over `CHIP_FX_SEC`. Gain 0 collapses the whole lerp to
 ## `COL_START` — that is what combat-juice's `FX_GAIN[8]` row measures.
 func _chip_colour(slot: int) -> Color:
+	return _chip_tint(Look.COL_START, slot)
+
+
+## ⚠⚠ **THE COLOUR HALF OF ITEM 8, AND IT WAS ONLY WIRED TO THE START BUTTON.** `_chip_offset` served
+## both the start button and the five slot boxes from the day the slots shipped — one shake, one
+## concept, one value — while the tint was written inline in `_chip_colour` and reached nothing else.
+## So **a refused number key shook and never flashed**: one channel where the design asked for two,
+## and the box that barked looked exactly like the box that did not.
+##
+## Pulled out here so both callers read the same lerp off the same drawer. `rest` is the caller's own
+## resting tone, because the start button rests on `COL_START` and a slot rests on one of three tones —
+## folding that choice in here would put `_slot_colour`'s table in two places.
+## Gain 0 collapses the lerp to `rest`, which is what `combat-juice`'s `FX_GAIN[8]` row measures.
+func _chip_tint(rest: Color, slot: int) -> Color:
 	if not _chip_fx.has(slot):
-		return Look.COL_START
+		return rest
 	var fx: Dictionary = _chip_fx[slot]
 	var p := clampf(1.0 - float(fx["sec"]) / Look.CHIP_FX_SEC, 0.0, 1.0)
 	var goal: Color = Look.COL_WIN if bool(fx["ok"]) else Look.COL_LOSE
-	return Look.COL_START.lerp(goal, (1.0 - p) * Look.fx_gain_of(8))
+	return rest.lerp(goal, (1.0 - p) * Look.fx_gain_of(8))
 
 
 func _draw() -> void:
@@ -289,12 +303,24 @@ func _paint_enemies_left(face: Font, at: Vector2, text: String, fsize: int, col:
 ## ⚠ Unbound and exhausted are ONE tone on purpose. They are the same sentence to the player — 「지금
 ## 여기서는 아무것도 안 나온다」 — and what tells them apart is the bar underneath: an exhausted slot
 ## has an empty rail and an unbound one has no rail at all.
+##
+## ⚠⚠ **EMPTY IS TESTED BEFORE ARMED, and the order was the other way round.** A slot armed with one
+## body left goes dry the moment that body is summoned, and while `armed` won the box **stayed
+## `COL_START` — reading 「ready」 for a key that will now bark.** The fill says what will come out; the
+## BORDER says which slot the key is on (`PRESS_HOVER_BORDER_WIDTH_PX` in `_draw`), and this file's own
+## paragraph up there already says neither channel carries that read alone. So an armed dry slot is
+## grey with a thick border, which is both facts at once.
+##
+## ⚠ **The tint rides on top of whichever tone was chosen.** A refused key flashes toward `COL_LOSE`
+## from its own resting colour — see `_chip_tint`, which the start button has used since item 8 shipped
+## and the slot boxes did not.
 func _slot_colour(slot: int) -> Color:
-	if slot == _armed:
-		return Look.COL_START
+	var rest := Look.COL_BUTTON
 	if battle == null or battle.slot_reserve_ids(slot).is_empty():
-		return Look.COL_SLOT_OFF
-	return Look.COL_BUTTON
+		rest = Look.COL_SLOT_OFF
+	elif slot == _armed:
+		rest = Look.COL_START
+	return _chip_tint(rest, CHIP_SLOT_BASE + slot)
 
 
 ## 2 calls: the fill, then the border that says which slot is live. One hook and not two — a box

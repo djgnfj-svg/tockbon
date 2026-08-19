@@ -310,6 +310,29 @@ every landing on the island. The spread goes from 4.50–4.75 s to 0.00 s.**
 > **The one term that ranked plans is set to a constant, and the term that was already constant is
 > deleted. There is no cost left in the game that depends on what you decided.**
 
+#### ⚠⚠ REFUTED BY MEASUREMENT — the spread is **0.46 s**, not 0.00
+
+**Struck rather than edited**, because the arithmetic above is the reasoning that produced the design and
+the correction is worth more than a tidy number.
+
+**The band shipped at `d = 2`, not `d ≤ 1`**, and the crossing off a `d = 2` tile is not one hop. Measured
+on the shipped build, min / median / max seconds per island:
+
+| Island | measured crossing | 
+|---|---|
+| 0 | **0.25 / … / 0.71** |
+| 1 | **0.25 / … / 0.60** |
+| 2 | **0.25 / … / 0.71** |
+
+⇒ **spread 0.46 s at the adopted `d`.**
+
+⚠ **The paragraph's DIRECTION survives and its headline does not.** 0.46 s against a 30.30–31.80 s fight
+is **1.4–1.5%**, down from 14.5–15.3% — so term 2 really has stopped ranking plans in any way a player
+could feel, which is what 5.4 and 5.5b are arguing about. But it is a **flattening, not a collapse**, and
+"identical" is a word this doc may not use: a later round pricing plans off this line would build on a
+zero that does not exist. **A number cited as exact and reaching the build as something else is the shape
+this repo has paid for four times.**
+
 ### 5.4 ⚠ And that paragraph is half wrong — the deleted cost was pointing the wrong way
 
 **Term 2 was a cost, and it was a cost that pushed toward the plan the probe already measured as

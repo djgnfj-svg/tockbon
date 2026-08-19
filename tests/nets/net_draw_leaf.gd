@@ -189,6 +189,10 @@ func _table() -> Dictionary:
 			"_fx_step": 0,
 			"_chip_offset": 0,
 			"_chip_colour": 0,
+			# Item 8's tint, pulled out of `_chip_colour` so the five slot boxes get the flash the
+			# start button has had since it shipped — one shake AND one tint, both shared, which is
+			# the two channels `combat-juice` asked for. Pure.
+			"_chip_tint": 0,
 			"_paint_timer": 1,
 			# 2 calls. ⚠ **The start button is its ONLY call site now** — the five speed chips were the
 			# other five and they are deleted. It stays a hook rather than being inlined into `_draw`,
@@ -355,7 +359,10 @@ func run(t) -> void:
 	# land on 132; the table has held **12** since the speed chips died, so the answer is **131**. A
 	# literal that moves by whatever the last edit happened to be is a literal nobody re-derives — and
 	# this table has already been nudged once in this repo.
-	t.eq(total_funcs, 131, "다섯 파일의 함수는 모두 131개다 (46 + 17 + 21 + 18 + 29)")
+	# Round 2 of `sea-summon` added `_chip_tint` to `hud_view` (17 -> 18) — the tint half of item 8,
+	# which had been written inline in `_chip_colour` and so reached the start button alone while
+	# `_chip_offset` already served both. Pure, so the leaf count does not move.
+	t.eq(total_funcs, 132, "다섯 파일의 함수는 모두 132개다 (46 + 18 + 21 + 18 + 29)")
 	t.eq(total_leaves, 34, "그중 draw 를 실제로 부르는 잎은 34개다 (13 + 6 + 4 + 4 + 7)")
 
 	# -- 3b. the array leaves hand their array WHOLE to one native call -----------------------------

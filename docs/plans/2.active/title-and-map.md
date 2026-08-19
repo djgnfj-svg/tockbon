@@ -414,7 +414,15 @@ fields added to one path and not the other.
 ### 5.5 `project.godot`
 
 **Unchanged.** `run/main_scene` stays `res://src/shell/game.tscn`; there is no `[input]` section and
-none is added; **the keyboard still does nothing in this game.**
+none is added.
+
+⚠⚠ **THE SECOND HALF OF THIS LINE IS DEAD AND IS STRUCK RATHER THAN QUIETLY EDITED.** It read *"the
+keyboard still does nothing in this game"*, and it was true when this plan was written. `sea-summon`
+reversed it on the user's own correction — *"정확히는 배 속이 별로여서 뺀거임 1~5번키"* — and **1~5
+arm a summon slot today**, read by `game.gd::_on_summon_key`. What survives is the `project.godot`
+claim above it: the keys are read through `_unhandled_input` and there is still no `[input]` section.
+⚠ This was **the fourth stale site** for that sentence, and the only one sitting in an ACTIVE plan —
+which is the one place a reader takes a claim as current.
 
 ---
 

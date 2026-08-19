@@ -112,6 +112,11 @@ func run(t) -> void:
 	await _the_aim_marks(t, game, fs)
 	await _the_slot_row(t, game, fs, hs)
 	_the_boxes_clear_the_army(t, game, fs)
+	_arming_mid_drag_cancels_the_drag(t, game, fs)
+	await _the_band_goes_with_the_boxes(t, game, fs, hs)
+	await _the_three_lines_that_claimed_to_be_load_bearing(t, game, fs, hs)
+	await _a_refused_key_flashes_as_well_as_shakes(t, game, hs)
+	await _an_armed_slot_that_has_run_dry_is_not_green(t, game, fs, hs)
 
 	# ⚠ **The swapped-in spies are NOT removed here.** `queue_free` on the parent takes its children
 	# with it; pulling them out first leaves two orphaned `Node2D`s nothing owns, and the round reports
@@ -573,6 +578,255 @@ func _the_boxes_clear_the_army(t, game: Game, fs: FieldSpy) -> void:
 
 ## The `n`-th summonable tile on this grid, in row-major order. A stable pick rather than a hand-typed
 ## index, so a fixture stays valid if the rows are ever edited.
+# -- the bounce -------------------------------------------------------------------------------------
+
+## ⚠⚠ **THE SIGNATURE FAKE: THE SCREEN PROMISED ONE LANDING AND THE SIM AUTHORED ANOTHER.** `_arm`
+## set `_armed_slot` and left `_drag_soldier` alone, and the motion branch is
+## `if _armed_slot >= 0 … elif _drag_soldier >= 0` — so arming mid-drag stopped `set_drag` from ever
+## being called again and **froze the candidate ring on the tile the key was pressed over**, while
+## `_on_left_release` went on handing `battle.send` the tile the cursor ended on. Measured before the
+## fix: the ring said 1461 and the sim was handed 146.
+##
+## ⚠ **This file pressed `KEY_1` twelve times and never touched `_drag_soldier` once.** The two
+## gestures were each measured alone and their collision was measured nowhere.
+func _arming_mid_drag_cancels_the_drag(t, game: Game, fs: FieldSpy) -> void:
+	game._open_island()
+	var g: Grid = game.battle.grid
+	# Park on the start harbour so the reserve stack is on screen, then read the body's own drawn rect
+	# — the same rect `_soldier_hit_at` tests, never a second copy of the anchor.
+	_park_on(fs, g, game.battle.harbour_tile(g.start_harbour))
+	var body := fs.idle_soldier_rect(0)
+	t.ok(body.size != Vector2.ZERO, "0번 병사가 항구에 서 있다 (자가 점검)")
+	var body_at := body.get_center() - fs.cam_px
+	t.eq(game._soldier_hit_at(body_at), 0, "그 화면 점이 0번 병사를 짚는다 (자가 점검)")
+
+	game._unhandled_input(_press(body_at))
+	t.eq(game._drag_soldier, 0, "병사를 붙잡았다 (자가 점검)")
+	t.eq(fs._drag_soldier, 0, "그리고 화면도 그 병사를 끌고 있다 (자가 점검)")
+
+	# The key arrives mid-drag.
+	game._unhandled_input(_key(KEY_1))
+	t.eq(game._armed_slot, 0, "1번 슬롯이 켜졌다 (자가 점검)")
+	t.eq(game._drag_soldier, -1, "그 순간 끌던 병사를 놓는다 — 켜는 것이 필드 누름을 가져간다")
+	t.eq(fs._drag_soldier, -1, "화면의 드래그도 같이 지워진다 — 후보 링이 얼어붙지 않는다")
+	t.eq(fs._drag_tile, -1, "얼어붙을 칸 자체가 없다")
+
+	# Move somewhere else entirely, then release. The old build sent a boat to THIS tile while the
+	# ring still sat on the harbour.
+	var far := _a_band_tile(g, 40)
+	var far_at := _park_on(fs, g, far)
+	game._unhandled_input(_motion(far_at, Vector2(4.0, 4.0)))
+	t.eq(fs._drag_tile, -1, "커서를 옮겨도 드래그 칸은 여전히 없다")
+
+	var boats := game.battle.boats.size()
+	var state := game.battle.soldier_state[0]
+	t.eq(state, Battle.SoldierState.RESERVE, "0번은 아직 항구에 있다 (자가 점검)")
+	game._unhandled_input(_release(far_at))
+	t.eq(game.battle.boats.size(), boats, "떼도 배가 안 생긴다 — 화면이 약속하지 않은 상륙을 sim 이 쓰지 않는다")
+	t.eq(game.battle.soldier_state[0], Battle.SoldierState.RESERVE, "그리고 0번은 그대로 항구에 있다")
+	game._unhandled_input(_key(KEY_1))
+	t.eq(game._armed_slot, -1, "슬롯을 다시 껐다 (뒷정리)")
+
+
+## ⚠⚠ **THE BAND SURVIVED THE COMMIT UNDER A COMMENT SAYING IT COULD NOT.** `field_view`'s blend is
+## gated on `can_summon_at` and had no `battle.committed()` test, directly under a paragraph reading
+## *"the green cannot promise a tile the sim then denies"*. After the commit `Battle.summon` refuses
+## everything and `hud_view` stops drawing the five boxes — and the sea went on wearing **the only mark
+## on the field that says 「your hand goes here」** for the rest of the fight.
+##
+## ⚠⚠ **The damning half: adding the test ran the whole round GREEN at 17 nets / 2508 checks.** Not one
+## check could tell the two behaviours apart. **The band goes with the boxes** — the same rule the
+## deleted coast wash was trusted for, applied on the other side of the commit — and this is the row
+## that makes the choice a fact instead of a preference.
+func _the_band_goes_with_the_boxes(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
+	game._open_island()
+	var g: Grid = game.battle.grid
+	fs.zoom = Look.ZOOM_MIN
+	fs.cam_px = Vector2.ZERO
+	fs._clamp_cam()
+	fs.position = fs._compose_position()
+	fs.scale = Vector2(fs.zoom, fs.zoom)
+
+	await t.pump_frames(2)
+	var before := _band_fills(fs, g)
+	t.ok(before > 0, "확정 전에는 띠가 실제로 칠해져 있다 (%d칸 — 자가 점검)" % before)
+	t.eq(hs.boxes.size() > 0, true, "그리고 슬롯 상자도 그려진다 (자가 점검)")
+
+	t.ok(game.battle.send(0, int(_sendable_tile(g))) >= 0, "확정할 배를 하나 놓았다 (자가 점검)")
+	t.ok(game.battle.commit(), "확정했다 (자가 점검)")
+	hs.boxes.clear()
+	await t.pump_frames(2)
+	t.eq(hs.boxes.size(), 0, "확정 뒤 슬롯 상자가 사라진다 (자가 점검 — 비교 상대다)")
+	t.eq(_band_fills(fs, g), 0,
+		"그리고 띠도 같이 사라진다 — 손이 갈 데가 없어진 뒤에도 바다에 표시가 남으면 그게 거짓말이다")
+	# The floor: the water is still being drawn, so the zero above is "the blend went" and not "the
+	# terrain pass stopped".
+	var water := 0
+	for raw: Dictionary in fs.tiles:
+		if Color(raw["fill"]) == Look.COL_WATER:
+			water += 1
+	t.ok(water > 0, "물칸 자체는 여전히 그려진다 (%d칸) — 사라진 것은 덧칠뿐이다" % water)
+
+
+## ⚠⚠ **THREE LINES CLAIMED TO BE LOAD-BEARING AND WERE GREEN WHEN DELETED.** A comment asserting a
+## line matters when nothing measures it is the same class of lie as a fake net — and the control says
+## this is not blanket blindness: deleting `_disarm()` from `_open_island` reddens 23 checks. So each
+## of the three is driven here rather than argued about.
+func _the_three_lines_that_claimed_to_be_load_bearing(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
+	# (1) `_summon_down = false` inside the `_hold_sec` gate in `game.gd::_unhandled_input`. Its own
+	# comment says suppressing only the MOTION events leaves the flag alive, so the very next motion
+	# after the hold ends resumes a gesture the plan says was cancelled. Driven: hold, deliver an
+	# event, end the hold, and beat.
+	game._open_island()
+	var g: Grid = game.battle.grid
+	var tile := _a_band_tile(g, 0)
+	var at := _park_on(fs, g, tile)
+	game._unhandled_input(_key(KEY_1))
+	game._unhandled_input(_press(at))
+	t.ok(game._summon_down, "누른 채다 (자가 점검)")
+	var made := game.battle.boats.size()
+
+	game._hold_sec = 1.0
+	game._unhandled_input(_motion(at, Vector2(2.0, 2.0)))
+	t.ok(not game._summon_down, "붙들려 있는 동안 도착한 사건 하나가 누름을 취소한다")
+	game._hold_sec = 0.0
+	for _k in 5:
+		game._process(0.20)
+	t.eq(game.battle.boats.size(), made,
+		"그래서 붙듦이 끝난 뒤 다섯 박자가 지나도 더 안 나온다 — 억누른 게 아니라 취소한 것이다")
+	t.eq(game._armed_slot, 0, "슬롯은 켜진 채로 남는다 — 켜는 건 모드고 누름이 몸짓이다")
+
+	# (2) `_summon_slot` / `_summon_aim = -1` in `field_view.setup`. Without it the island that just
+	# closed leaves its aim behind, and the slot id names a body in a roster that has moved on.
+	game._unhandled_input(_press(at))
+	t.ok(fs._summon_slot >= 0 and fs._summon_aim >= 0,
+		"화면이 슬롯 %d 로 칸 %d 를 조준하고 있다 (자가 점검)" % [fs._summon_slot, fs._summon_aim])
+	fs.setup(game.battle, game.battle.army, Islands.rows_of(0))
+	t.eq(fs._summon_slot, -1, "setup 이 조준한 슬롯을 지운다 — 섬이 바뀌면 조준도 같이 간다")
+	t.eq(fs._summon_aim, -1, "조준하던 칸도 지운다")
+
+	# (3) `_armed = -1` in `hud_view.bind`. Same shape one view over: a box left green on the new
+	# island would say a key is armed that the shell has already forgotten.
+	hs.set_armed(2)
+	t.eq(hs._armed, 2, "HUD 가 2번을 켠 채다 (자가 점검)")
+	hs.bind(game.battle)
+	t.eq(hs._armed, -1, "bind 가 켜진 슬롯을 지운다 — 새 섬은 아무것도 안 켜진 채로 열린다")
+	# The floor under all three: the shell itself is still armed, so none of the three zeroes above is
+	# 「everything is -1 anyway」.
+	t.eq(game._armed_slot, 0, "그동안 셸의 팔은 여전히 켜져 있다 — 위의 세 -1 이 전부 같은 사실이 아니다")
+	game._unhandled_input(_key(KEY_1))
+
+
+## ⚠⚠ **A REFUSED KEY SHOOK AND NEVER FLASHED — one channel where the design asked for two.**
+## `_chip_offset` served the start button AND the five slot boxes from the day the slots shipped, while
+## the TINT was written inline in `_chip_colour` and reached the start button alone. So the box that
+## barked looked exactly like the box that did not, and only its position said otherwise.
+##
+## ⚠ **Both channels are read in the same frame**, because that is the pair `combat-juice` item 8 is: a
+## box that only moves reads as a wobble and a box that only changes colour reads as a state.
+func _a_refused_key_flashes_as_well_as_shakes(t, game: Game, hs: HudSpy) -> void:
+	game._open_island()
+	# Slot 2 is unbound — `Rules.summon_type_of(2) < 0` — which is one of the two things `_on_summon_key`
+	# refuses on, and to the player they are one sentence.
+	t.ok(Rules.summon_type_of(2) < 0, "슬롯 3 은 아무것도 안 물려 있다 (자가 점검)")
+	await t.pump_frames(2)
+	t.eq(hs.boxes.size(), 5, "상자 다섯이 그려진다 (자가 점검)")
+	var rest_bg := Color(hs.boxes[2]["bg"])
+	var rest_pos: Vector2 = (hs.boxes[2]["rect"] as Rect2).position
+	t.eq(rest_bg, Look.COL_SLOT_OFF, "쉴 때 그 상자는 안 눌리는 색이다 (자가 점검)")
+	t.eq(rest_pos, Look.slot_rect_px(2).position, "그리고 제자리에 있다 (자가 점검)")
+
+	game._unhandled_input(_key(KEY_3))
+	t.eq(game._armed_slot, -1, "빈 슬롯은 안 켜진다 (자가 점검)")
+	await t.pump_frames(1)
+	t.eq(hs.boxes.size(), 5, "거절한 프레임에도 다섯이 그려진다 (자가 점검)")
+	var hit_bg := Color(hs.boxes[2]["bg"])
+	var hit_pos: Vector2 = (hs.boxes[2]["rect"] as Rect2).position
+
+	# Channel 1 — it moved, and by no more than the constant that owns the amplitude.
+	var shift := hit_pos.distance_to(rest_pos)
+	t.ok(shift > 0.0, "거절한 상자가 흔들렸다 (%.3f px)" % shift)
+	t.ok(shift <= Look.REFUSE_SHAKE_PX + 0.01,
+		"그리고 REFUSE_SHAKE_PX 를 안 넘는다 (%.3f <= %.1f)" % [shift, Look.REFUSE_SHAKE_PX])
+
+	# Channel 2 — it also changed colour, toward COL_LOSE and away from where it was resting.
+	t.ok(hit_bg != rest_bg, "그리고 색도 바뀌었다 — 흔들리기만 하면 채널이 하나뿐이다 (%s -> %s)"
+		% [str(rest_bg), str(hit_bg)])
+	t.ok(hit_bg.r > rest_bg.r,
+		"거절 색(COL_LOSE) 쪽으로 갔다 (r %.3f > %.3f)" % [hit_bg.r, rest_bg.r])
+	# The floor: an ACCEPTED press must NOT do this, or "it flashed" would be true of everything.
+	game._unhandled_input(_key(KEY_1))
+	await t.pump_frames(1)
+	t.eq(game._armed_slot, 0, "1번은 받아들여졌다 (자가 점검)")
+	t.eq((hs.boxes[0]["rect"] as Rect2).position, Look.slot_rect_px(0).position,
+		"받아들여진 상자는 안 흔들린다 — 두 답이 같은 말을 하지 않는다")
+	game._unhandled_input(_key(KEY_1))
+
+
+## ⚠⚠ **AN ARMED SLOT THAT HAS RUN DRY STAYED GREEN.** `_slot_colour` tested `armed` before `empty`,
+## so a slot armed with one body left kept `COL_START` the moment that body went out — **the box read
+## 「ready」 for a key that will now bark.** It is the only way a slot can be armed AND dry, because the
+## key refuses to arm a dry one, and it is exactly the state a player reaches by holding the button.
+##
+## ⚠ **The BORDER still says armed, and that is the point of the reorder rather than a consolation.**
+## `hud_view`'s own paragraph says neither channel carries the read alone: the fill says what will come
+## out, the border says which slot the key is on. Both are asserted here.
+func _an_armed_slot_that_has_run_dry_is_not_green(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
+	game._open_island()
+	var g: Grid = game.battle.grid
+	var tile := _a_band_tile(g, 0)
+	var at := _park_on(fs, g, tile)
+	game._unhandled_input(_key(KEY_1))
+	await t.pump_frames(2)
+	t.eq(Color(hs.boxes[0]["bg"]), Look.COL_START, "켜자마자 상자가 초록이다 (자가 점검)")
+
+	game._unhandled_input(_press(at))
+	for _k in 5:
+		game._process(0.20)
+	t.eq(game.battle.slot_reserve_ids(0).size(), 0, "여섯이 다 나가 슬롯이 말랐다 (자가 점검)")
+	t.eq(game._armed_slot, 0, "그런데 슬롯은 여전히 켜져 있다 — 마른 채 켜진 그 상태다 (자가 점검)")
+	game._unhandled_input(_release(at))
+	await t.pump_frames(2)
+
+	t.eq(Color(hs.boxes[0]["bg"]), Look.COL_SLOT_OFF,
+		"마른 슬롯은 켜져 있어도 초록이 아니다 — 채움은 「무엇이 나오나」를 말한다")
+	t.eq(float(hs.boxes[0]["width"]), Look.PRESS_HOVER_BORDER_WIDTH_PX,
+		"그래도 테두리는 켜진 두께다 — 테두리는 「어느 키인가」를 말한다")
+	# The floor: a slot that is neither armed nor dry still reads as the third tone, so the grey above
+	# is not "every box is grey now".
+	t.ok(Rules.summon_type_of(1) >= 0 and not game.battle.slot_reserve_ids(1).is_empty(),
+		"2번 슬롯은 물려 있고 몸도 남아 있다 (자가 점검)")
+	t.eq(Color(hs.boxes[1]["bg"]), Look.COL_BUTTON, "그 상자는 세 번째 색 그대로다")
+	t.eq(float(hs.boxes[1]["width"]), Look.PRESS_BORDER_WIDTH_PX, "테두리도 쉬는 두께다")
+	game._unhandled_input(_key(KEY_1))
+
+
+## How many tiles in the last captured frame wear the band's blend. Read off the FILL rather than off
+## `can_summon_at`, because what is under test is whether the blend reached the leaf at all.
+func _band_fills(fs: FieldSpy, g: Grid) -> int:
+	var n := 0
+	for raw: Dictionary in fs.tiles:
+		var rect: Rect2 = raw["rect"]
+		var tx := int(round(rect.position.x / Look.TILE_PX))
+		var ty := int(round(rect.position.y / Look.TILE_PX))
+		if tx < 0 or ty < 0 or tx >= g.w or ty >= g.h:
+			continue
+		if g.water[g.tile_index(tx, ty)] == 0:
+			continue
+		if Color(raw["fill"]) != Look.COL_WATER:
+			n += 1
+	return n
+
+
+## Any tile a boat may be sent to, so a plan can be committed. The band rows need a committed fight
+## and `commit()` refuses an empty plan.
+func _sendable_tile(g: Grid) -> int:
+	for tile in g.w * g.h:
+		if g.home_harbour_for(tile) >= 0:
+			return tile
+	return -1
+
+
 func _a_band_tile(g: Grid, n: int) -> int:
 	var seen := 0
 	for tile in g.w * g.h:

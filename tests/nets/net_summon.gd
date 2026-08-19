@@ -394,17 +394,17 @@ func _seven_refusals(t) -> void:
 	var good := int(band[0])
 
 	# 1 — committed.
-	var a := _fresh(g)
+	var a := _fresh(0)
 	t.ok(a.send(0, int(_sendable_union(g)[0])) >= 0, "확정하려면 배가 한 척은 있어야 한다 (자가 점검)")
 	t.ok(a.commit(), "확정했다 (자가 점검)")
 	_refuses(t, a, 0, good, "확정한 뒤에는 거절한다")
 
 	# 2 — slot below range.
-	_refuses(t, _fresh(g), -1, good, "슬롯 -1 은 거절한다")
+	_refuses(t, _fresh(0), -1, good, "슬롯 -1 은 거절한다")
 	# 3 — slot above range.
-	_refuses(t, _fresh(g), 5, good, "슬롯 5 는 거절한다 (칸이 다섯이므로 마지막 색인은 4다)")
+	_refuses(t, _fresh(0), 5, good, "슬롯 5 는 거절한다 (칸이 다섯이므로 마지막 색인은 4다)")
 	# 4 — the slot is unbound. ⚠ The `< 0` / `<= 0` arm.
-	_refuses(t, _fresh(g), 2, good, "비어 있는 슬롯 3 은 거절한다")
+	_refuses(t, _fresh(0), 2, good, "비어 있는 슬롯 3 은 거절한다")
 	t.eq(Rules.summon_type_of(2), Rules.SUMMON_UNBOUND, "그 슬롯이 실제로 비어 있다 (자가 점검)")
 	t.eq(Rules.CELL_MELEE, 0,
 		"그리고 근접 세포의 번호는 0 이다 — 이 줄이 `<= 0` 이 왜 슬롯 1을 죽이는지의 전부다 (자가 점검)")
@@ -416,7 +416,7 @@ func _seven_refusals(t) -> void:
 			land = tile
 			break
 	t.ok(land >= 0, "육지 칸을 하나 찾았다 (자가 점검)")
-	_refuses(t, _fresh(g), 0, land, "육지를 누르면 거절한다")
+	_refuses(t, _fresh(0), 0, land, "육지를 누르면 거절한다")
 
 	# 6 — water more than two hops out. The self-check is what stops this arm being vacuous.
 	var far := -1
@@ -428,10 +428,10 @@ func _seven_refusals(t) -> void:
 				far = tile
 	t.eq(far_count, FAR_WATER_ISLAND_0,
 		"섬 0 에서 띠 밖의 물이 %d 칸이다 (자가 점검 — 0개면 이 팔은 공허하다)" % FAR_WATER_ISLAND_0)
-	_refuses(t, _fresh(g), 0, far, "먼바다를 누르면 거절한다")
+	_refuses(t, _fresh(0), 0, far, "먼바다를 누르면 거절한다")
 
 	# 7 — the slot is dry.
-	var dry := _fresh(g)
+	var dry := _fresh(0)
 	for k in 6:
 		t.ok(dry.summon(0, int(band[k])) >= 0, "마르기 전에는 %d번째도 나간다 (자가 점검)" % k)
 	t.eq(dry.slot_reserve_ids(0).size(), 0, "슬롯 1 이 실제로 말랐다 (자가 점검)")
@@ -545,15 +545,21 @@ func _island(i: int) -> Grid:
 	return g
 
 
-## A fresh `Battle` on `g` with the starting force. **A new `Army` every time** — the refusal rows
-## board and un-board bodies, and a shared roster would let one arm's state leak into the next.
-func _fresh(g: Grid) -> Battle:
+## A fresh `Battle` on island `i` with the starting force. **A new `Army` every time** — the refusal
+## rows board and un-board bodies, and a shared roster would let one arm's state leak into the next.
+##
+## ⚠⚠ **THIS TOOK A `Grid` AND IGNORED IT.** It was `_fresh(g: Grid)` and built island 0 internally
+## whatever it was handed, which was green only because every caller happens to pass island 0's grid:
+## a row written tomorrow with `_fresh(_island(1))` would have measured island 0 and passed for the
+## wrong reason, silently. The argument is the island INDEX now, so the rows, the spawns and the limit
+## all come out of ONE number and cannot name different islands.
+func _fresh(i: int) -> Battle:
 	var grid := Grid.new()
-	grid.load_rows(Islands.rows_of(0))
+	grid.load_rows(Islands.rows_of(i))
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
-	b.setup(grid, army, Islands.spawns_of(0), Islands.time_limit_of(0))
+	b.setup(grid, army, Islands.spawns_of(i), Islands.time_limit_of(i))
 	return b
 
 

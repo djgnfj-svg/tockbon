@@ -89,7 +89,7 @@ the two options that had been on the table.**
 | `docs/decisions/` | **Why something was *not* done.** Seven docs; **two are reversed and kept for that reason** |
 | `push-inland` | ⚠⚠ **The newest and the biggest — one combat node becomes a continent you land on and push through for 10–15 minutes, with the boat as the only live control.** Nothing built, nothing accepted. **Read its retraction boxes**: six of its own numbers were refuted by an independent re-measure, one "cross-check" turned out to be an algebraic identity, and **every remaining question lands on R, the roster size, which nobody has decided** |
 | `title-and-map` · `plan-then-watch` · `session-loop` · `boat-invasion` · `combat-juice` | The design docs. Each header carries `Implemented` and `Accepted` as **two separate axes**, and several carry refutations of their own earlier drafts |
-| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` empty; `2.active` holds `title-and-map` (**paused, step 5 being replaced**); `3.done` holds four |
+| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` empty; `2.active` holds **two** — `sea-summon` (running) and `title-and-map` (**paused, step 5 being replaced**); `3.done` holds four |
 | `docs/next-game.md` | The two resets and what carried across |
 
 **Moved out of this file on 2026-08-19, unedited**: the fake-green casebook → `how-nets-lie`; the godot MCP
@@ -245,7 +245,7 @@ an effect that never happens.**
 
 ## Running the nets
 
-**15 nets, 2216 checks, 4.5 seconds, green.** The old game reached 25 / 3541 / 4.6s — ⚠ **a scale marker,
+**17 nets, 2558 checks, 5.2 seconds, green.** The old game reached 25 / 3541 / 4.6s — ⚠ **a scale marker,
 not a target.** Those nets drove a game deleted for not being fun.
 
 A net is `tests/nets/net_*.gd` with one method, `func run(t)`; `t` gives `ok` · `eq` · `pump_frames` ·

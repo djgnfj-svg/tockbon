@@ -545,11 +545,20 @@ func _on_left_press(at: Vector2) -> void:
 			if uid >= 0:
 				battle.recall(uid)
 				return
-			# ⚠ **The summon sits between the ring and the soldier, and BOTH sides of that are
-			# measured.** Above the ring it would eat an undo — a landing ring is 18 px around a LAND
-			# tile and can overlap the water beside it, and losing undo is the worse failure, which is
-			# the same argument this file already makes for "2 before 3". Below the harbour stack it
-			# would be unreachable wherever the stack sits over the band.
+			# ⚠ **The summon sits between the ring and the soldier because it CONSUMES the press.**
+			# With a slot armed, `_begin_summon` answers every press on the field — so anything with a
+			# specific target has to be asked first or it can never be reached, and losing an undo is
+			# the worse failure, the same argument this file already makes for "2 before 3". Below the
+			# harbour stack it would be unreachable wherever the stack sits over the band.
+			#
+			# ⚠⚠ **The geometric argument that used to stand here was FALSE and is corrected rather
+			# than deleted**, because the false number is the shape that has bitten this repo four
+			# times (a radius of 8 cited as 8 px, reaching the screen at 38). It read *"a landing ring
+			# is 18 px around a LAND tile and can overlap the water beside it"*. It cannot:
+			# `_ring_hit_at` converts the press to WORLD px first, `TARGET_RING_R_PX` is 18.0 and
+			# `TILE_PX` is 40.0, so the hit circle is **strictly inside its own land tile** (half-width
+			# 20) and is disjoint from the nearest water tile by 2 px. The ring and the band cannot
+			# overlap at all — the ordering is right, and it was right for a different reason.
 			# ⚠ **It CONSUMES the press** (`sea-summon`, question 8): with a slot armed, a press outside
 			# the band marks a refusal instead of silently starting a pan. The wheel stays ungated and
 			# the same number key disarms, which is what that costs and what pays for it.
@@ -655,6 +664,20 @@ func _slot_of_keycode(code: int) -> int:
 ## field in the same breath — so the box that is drawn green and the band that answers a press can
 ## never name two different slots.
 func _arm(slot: int) -> void:
+	# ⚠⚠ **A DRAG IN FLIGHT IS CANCELLED HERE, and without these two lines this is the signature fake
+	# `CLAUDE.md` names: the screen promises one landing and the sim authors another.** `_on_motion`
+	# reads `if _armed_slot >= 0 … elif _drag_soldier >= 0`, so the moment a key arms a slot mid-drag
+	# the drag's `set_drag` is never called again and **the candidate ring freezes on the tile the key
+	# was pressed over** — while `_on_left_release` still runs its own `_drag_soldier >= 0` block and
+	# hands `battle.send` the tile the cursor ended on. Measured: the screen said tile 1461 and the sim
+	# was handed 146.
+	# ⚠ It is CANCELLED and not merely suppressed, the same shape and the same reason as the `_hold_sec`
+	# gate in `_unhandled_input`: leaving the flag alive means the very next motion after a disarm
+	# resumes a gesture that has had no ring on screen for the whole time it was armed.
+	# ⚠ **`_disarm` deliberately does NOT do this.** There is no drag to cancel there — arming is what
+	# takes the field press over, and by the time anything can disarm, this line has already run.
+	_drag_soldier = -1
+	field_view.set_drag(-1, -1)
 	_armed_slot = slot
 	hud_view.set_armed(_armed_slot)
 	field_view.set_summon_aim(_armed_slot, _summon_at)

@@ -347,6 +347,10 @@ func _draw() -> void:
 	# paint one map size; painted whole it was 4,032 tiles a frame at 48 x 32 and would be 9,408 at 144.
 	var margin := Look.WATER_MARGIN_TILES
 	var tile_span := _visible_tile_rect(margin)
+	# Answered ONCE for the whole pass rather than per tile: it is a fact about the fight, not about
+	# a tile, and asking it 3168 times would invite the next reader to fold it into the tile predicate
+	# where it would read as part of `can_summon_at`. See the band block inside the loop.
+	var band_on := not battle.committed()
 	for ty in range(tile_span.position.y, tile_span.end.y):
 		for tx in range(tile_span.position.x, tile_span.end.x):
 			var fill := Look.COL_WATER
@@ -365,7 +369,15 @@ func _draw() -> void:
 			# is the guarantee the deleted coast wash carried and the reason it was trusted at all.
 			# The bounds test is here because this loop runs `WATER_MARGIN_TILES` wider than the grid
 			# and `tile_index` off the map would compute an in-range index for a tile that is not there.
-			if tx >= 0 and ty >= 0 and tx < battle.grid.w and ty < battle.grid.h:
+			# ⚠⚠ **AND IT GOES WITH THE BOXES AT THE COMMIT.** The paragraph above says the green
+			# cannot promise a tile the sim then denies, and without `band_on` it did exactly that for
+			# the whole fight: after the commit `Battle.summon` refuses everything, `hud_view` stops
+			# drawing the five slot boxes, and the sea went on wearing **the only mark on the field
+			# that says 「your hand goes here」**. That is the deleted coast wash's failure with the
+			# tint on the other side of the commit. ⚠ Measured before it was fixed: adding this test
+			# ran the whole round GREEN — no check could tell the two behaviours apart, which is why
+			# `net_slots` now reads the band's tile count on both sides of `commit()`.
+			if band_on and tx >= 0 and ty >= 0 and tx < battle.grid.w and ty < battle.grid.h:
 				if battle.grid.can_summon_at(battle.grid.tile_index(tx, ty)):
 					fill = fill.blend(Look.COL_SUMMON_BAND)
 			_paint_tile(

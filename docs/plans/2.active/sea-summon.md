@@ -827,3 +827,93 @@ per-file tables. **This is exactly the failure the plan warned about, caught by 
 
 **A1–A7 are verify-run's, A8–A9 are verify-look's, and A10–A13 are the user's.** Nothing here closes
 any of them: a green round is not acceptance, and **question 1 is still a bet.**
+
+---
+
+### Round 2 — fixer
+
+changed   `src/shell/game.gd` (`_arm` cancels a drag in flight; the false ring/band geometry in
+`_on_left_press` corrected) · `src/view/field_view.gd` (`band_on` — the band goes with the boxes) ·
+`src/view/hud_view.gd` (`_chip_tint` pulled out of `_chip_colour`; `_slot_colour` tests empty before
+armed and now carries the tint) · `tests/nets/net_slots.gd` (five new rows and two helpers) ·
+`tests/nets/net_summon.gd` (`_fresh` uses its argument) · `tests/nets/net_draw_leaf.gd` (the table) ·
+`CLAUDE.md`, `docs/plans/2.active/title-and-map.md`, `docs/design/sea-summon.md` (doc rot).
+
+why       An adversarial judge bounced round 1 on eight findings. **The sim half was measured and
+closed** — the band, the routes, the one-pass BFS, the beat. **Every defect was in the shell, the view
+and the docs.**
+
+closed    **F1 — the signature fake, and it was one missing line.** `_arm` set `_armed_slot` and left
+`_drag_soldier` alone; the motion branch is `if _armed_slot >= 0 … elif _drag_soldier >= 0`, so arming
+mid-drag froze the candidate ring on the tile the key was pressed over while `_on_left_release` went on
+handing `battle.send` the tile the cursor ended on — **screen 1461, sim 146.** `_arm` now cancels the
+drag the same way the `_hold_sec` gate does, and `net_slots._arming_mid_drag_cancels_the_drag` presses
+the harbour stack, arms, moves, releases and asserts the sim did nothing. ⚠ This file had pressed
+`KEY_1` twelve times and **never touched `_drag_soldier` once**: the two gestures were each measured
+alone and their collision was measured nowhere.
+**F2 — the band goes with the boxes.** ⚠ **The choice and what pins it**: after the commit
+`Battle.summon` refuses everything and `hud_view` stops drawing the slot row, so the sea was left
+wearing the only mark on the field that says 「your hand goes here」 — the deleted coast wash's failure
+on the other side of the commit, under a paragraph promising it could not happen. `_band_fills` is read
+**on both sides of `commit()`** (190 → 0) with a floor that the water is still being drawn at all, so
+the zero is 「the blend went」 and not 「the terrain pass stopped」.
+**F3 — the three lines are driven now, not claimed.** The `_hold_sec` gate's `_summon_down = false`
+(hold, deliver one event, end the hold, beat five times), `field_view.setup`'s two `-1`s, and
+`hud_view.bind`'s `_armed = -1` — each with the floor that the shell's own arm is still live, so none
+of the three zeroes is 「everything is -1 anyway」.
+**F5 — the false measurement is corrected in place and marked as false.** It read *"a landing ring is
+18 px around a LAND tile and can overlap the water beside it"*. `_ring_hit_at` converts to WORLD px
+first, `TARGET_RING_R_PX` is 18.0 against `TILE_PX` 40.0, so the hit circle is **strictly inside its own
+land tile** and disjoint from the nearest water by 2 px. The ORDERING is unchanged and its real reason
+is written down instead: the summon **consumes** the press, so anything with a specific target has to
+be asked first or it can never be reached.
+**F6 — `_fresh(g: Grid)` took a grid and ignored it.** It takes the island INDEX now, so the rows, the
+spawns and the limit all come out of one number and cannot name different islands.
+**F7 (two of three)** — a refused key **flashes as well as shakes**: `_chip_tint` is pulled out of
+`_chip_colour`, so the five boxes get the tint the start button has had since item 8 shipped while
+`_chip_offset` already served both. And **an armed slot that has run dry is no longer green**:
+`_slot_colour` tested `armed` before `empty`, so the box read 「ready」 for a key that would bark. The
+fill says what comes out, the border still says which key — both asserted.
+**F8 — four doc sites.** `title-and-map` §5.5's *"the keyboard still does nothing in this game"* is
+**struck rather than edited** (fourth stale site, and the only one in an ACTIVE plan). `CLAUDE.md` is
+17 / 2558 / 5.2 s and its `docs/plans/` row says `2.active` holds two. `sea-summon` §5.3's collapse to
+**0.00 s is marked REFUTED**: the band shipped at `d = 2`, not `d ≤ 1`, and the measured spread is
+**0.46 s** (0.25 / 0.60 / 0.71). The direction survives — 1.4–1.5% of a fight instead of 14.5–15.3% —
+but 「identical」 is a word this doc may not use.
+
+not closed  ⚠⚠ **F7's third item is NOT built and I am pushing back on it with the measurement.**
+*"nothing ties the band to the five boxes — no arrow, no label, no shared tone"*. The shared-tone answer
+is **refused by a decision already written in `look.gd`**: `COL_SUMMON_BAND`'s own paragraph says it is
+*"deliberately NOT `COL_START` / `COL_WIN` / `COL_NODE_CHEST` re-typed — a value shared by two concepts
+diverges the first time one of them is tuned."* Overriding that is a design call, not a fix. An arrow or
+a label is **new presentation nobody has specified and verify-look has not scored** — and this plan's
+own rule is that presentation ships with its design, not invented by the builder. ⇒ **The
+discoverability of 1~5 is a question for the user or for a design round**, and it is the one finding of
+the eight left standing.
+⚠ **Independent mutation coverage for this feature remains ZERO.** All 8 dispatched worktrees were at
+`20ff378` — a tree with no `grid.gd` and no `battle.gd` — so they measured nothing and reported cleanly.
+**Second time.** Everything below was run by hand in the main tree.
+⚠ **A11–A13 are the user's and A8–A9 are verify-look's**; nothing here closes any of them, and F7's
+three items were verify-look's photographs, so **two of the three are fixed unseen**.
+⚠ **Carried**: `flow_field`/`step_toward` have no diagonal-shoulder guard · `SPARK_LEN_PX` is under the
+snap floor at `ZOOM_MIN` · `TARGET_LINE`, `SPARK` and the `CLIFF_FACE` line are `speed-off-open-landing`
+round 3's three recorded-not-fixed findings · the probe has not been re-run since the loss rule changed.
+
+nets      **17 nets · 2558 checks · 5.1 s · green**, stderr clean. Was 17 / 2508 / 5.4 s. Fingerprint
+`3F6D9170B420`.
+
+⚠⚠ **The round was green at 2508 with F1, F2 and F3 all present** — the fixes moved the count by 50
+because the checks did not exist, not because the behaviour was covered.
+
+**Seven mutations, each edited and re-run in ONE command, each asserting the replacement landed
+before running:**
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | `_arm` stops cancelling the drag | **red** — slots, 4 rows, printing 1461 against -1 |
+| 2 | the band's `band_on` test removed | **red** — slots (190 band tiles after the commit) |
+| 3 | `_slot_colour` tests armed before empty again | **red** — slots (`COL_START` on a dry slot) |
+| 4 | `_slot_colour` returns `rest` without `_chip_tint` | **red** — slots, both colour rows |
+| 5 | the `_hold_sec` gate stops clearing `_summon_down` | **red** — slots (6 boats where 1 was expected) |
+| 6 | `field_view.setup` stops clearing the aim | **red** — slots, 2 rows |
+| 7 | `hud_view.bind` stops clearing `_armed` | **red** — slots |
