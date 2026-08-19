@@ -371,11 +371,18 @@ const HUD_START_FONT_SIZE_PX := 28    # > HUD_FONT_SIZE_PX; <= HUD_TIMER_FONT_SI
 ## 「one rectangle must not answer to two verbs」 does not bite an armed box being green, because that
 ## rule is about a press landing on the wrong thing. 설정하기 set the precedent — *a slot drawn as
 ## unpressable behaves as unpressable, and those two are the same claim.*
-const HUD_SLOT_ORIGIN_PX := Vector2(956.0, 632.0)   # **Measured, not chosen.** 956 + 5*56 + 4*8 =
-                                      # 1268 = 1280 - HUD_MARGIN_PX, so the row ends on the same right
-                                      # margin every other HUD item does; y shares HUD_START_ORIGIN_PX's
-                                      # own 632 so the two bottom widgets sit on one baseline, and
-                                      # 632 + 64 = 696 <= 720
+## ⚠⚠ **THE X IS DERIVED FROM THE SLOT COUNT NOW AND IS NOT A CONSTANT ANY MORE.** It was
+## `Vector2(956, 632)`, measured so that `956 + 5*56 + 4*8 = 1268 = 1280 - HUD_MARGIN_PX` — the row
+## ended on the same right margin every other HUD item does. **The user cut the table to two**
+## (*"슬럿 2개로 시작 확장가능"*) and that arithmetic put the last box at 1076, leaving a 192 px hole
+## between the row and the corner.
+## ⇒ **The row is RIGHT-ANCHORED**: `slot_rect_px` computes the origin backwards from the margin using
+## `Rules.summon_slot_count()`, so the last box touches 1268 at two slots, at five, and at whatever the
+## table says next. **"확장가능" has to be true of the layout and not only of the table** — otherwise a
+## third binding is a `look.gd` edit, which is exactly what the user asked not to happen.
+## Only the Y survives as a constant: it shares `HUD_START_ORIGIN_PX`'s own 632 so the two bottom
+## widgets sit on one baseline, and 632 + 64 = 696 <= 720.
+const HUD_SLOT_ROW_Y_PX := 632.0
 const HUD_SLOT_SIZE_PX := Vector2(56.0, 64.0)       # y equals HUD_START_SIZE_PX.y — no new press
                                       # height enters the game. x >= 44 or a 34 px digit plus the bar's
                                       # two 6 px insets does not fit; x <= 72 or five boxes run past 1268
@@ -1224,9 +1231,18 @@ static func start_rect_px() -> Rect2:
 ## ⚠ **There is no `slot_hit_rect_px` and there must not be.** The boxes are not clickable at all — the
 ## keyboard arms them — so a hit rect would be geometry nothing tests against, and the next reader
 ## would wire a press to it.
+## ⚠ **The row's left edge is derived, never stored.** `right - n*w - (n-1)*gap` where `right` is the
+## HUD's own margin — so the LAST box always ends at 1268 whatever `Rules.SUMMON_SLOTS` holds. Stored
+## as a constant it was correct at five and wrong at two, and it would be wrong again at three.
+static func slot_row_origin_x_px() -> float:
+	var n := Rules.summon_slot_count()
+	var span := n * HUD_SLOT_SIZE_PX.x + maxf(0.0, float(n - 1)) * HUD_SLOT_GAP_PX
+	return VIEWPORT_W_PX - HUD_MARGIN_PX - span
+
+
 static func slot_rect_px(i: int) -> Rect2:
-	var x := HUD_SLOT_ORIGIN_PX.x + i * (HUD_SLOT_SIZE_PX.x + HUD_SLOT_GAP_PX)
-	return Rect2(Vector2(x, HUD_SLOT_ORIGIN_PX.y), HUD_SLOT_SIZE_PX)
+	var x := slot_row_origin_x_px() + i * (HUD_SLOT_SIZE_PX.x + HUD_SLOT_GAP_PX)
+	return Rect2(Vector2(x, HUD_SLOT_ROW_Y_PX), HUD_SLOT_SIZE_PX)
 
 
 ## The roster bar under slot `i`'s digit: 44 x 8 px, inset 6 either side and 6 up from the bottom.

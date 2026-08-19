@@ -102,6 +102,30 @@ types. `Army` is a flat roster with no template, no currency and no construction
 
 ⇒ **Build (a). Say out loud that it is (a).**
 
+### ⚠⚠ The user answered (b) at wrap-up, and the answer is a THIRD option nobody had written
+
+> ***"슬롯에 세포를 넣음 대신 슬롯자체를 강화하는거임"***
+
+**A cell goes into a slot, and what you upgrade is the SLOT — not the cell.** Deferred by the user to a
+refit screen that does not exist, so **nothing in code changes**: `Rules.SUMMON_SLOTS` still binds types
+and the table above still describes what shipped.
+
+⚠⚠ **AND `session-loop`'s two refutations DO NOT CARRY OVER — they must be re-derived, not reused.**
+Both were derived over **a body**: `c(k)` is the cost of bolting `k` objects onto one soldier and `p(k)`
+its power. **A slot is not a body**, and three things differ enough that the sign of every result is
+open:
+
+- **A slot's upgrade is amortised over every body that ever comes out of it**, so `p` is not a
+  per-object power but a per-summon multiplier times an unknown number of summons. The dominance
+  argument's `Δp·c₀ − Δc·p₀` has no `Δp` until somebody says what a slot upgrade pays.
+- **There are two slots, not thirteen bodies.** The 「five slots collapse into one」 finding was about
+  five quotas competing for one 세포 pool; two competing is a different table and nobody has drawn it.
+- **A body's upgrade dies with the body** (death is permanent) and **a slot's upgrade does not** — which
+  is the axis that made the object economy interesting and is exactly what a slot removes.
+
+⇒ **Anyone who quotes `session-loop`'s `k = 2` at a slot is quoting arithmetic about a different
+object.** The block on (b) stands; what it blocks is now a different shape.
+
 ⚠ **(b) is not merely unbuilt — it is blocked twice, and this document must not step over the block.**
 `session-loop` derived the economy and **refuted itself twice on the way**:
 

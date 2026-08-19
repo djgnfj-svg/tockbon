@@ -366,9 +366,31 @@ func send(soldier_id: int, tile: int) -> int:
 
 
 ## The bodies slot `slot` may still put on a boat: living, of that slot's type, and still RESERVE.
-## **Highest HP first, ties to the lower id** — that is `army.living_ids_of_type`'s already-documented
-## order, inherited rather than re-derived. Empty for an unbound or out-of-range slot, which is what
-## lets the shell test "unbound OR dry" with one call.
+## Empty for an unbound or out-of-range slot, which is what lets the shell test "unbound OR dry" with
+## one call.
+##
+## ⚠⚠ **MOST HURT FIRST, and it used to be healthiest first.** The user, asked which body a slot spends
+## when a key is pressed: ***"다친놈부터"***. **It is a rule and not a preference**, and what it does is
+## bigger than an ordering: a slot spends damaged bodies first, so **「which of these is nearly gone」
+## stops being something the player has to read** — which is exactly the picture that died with the
+## reserve stack (`sea-summon` §6, Open 4: per-soldier HP has no home).
+## ⚠ **It MAY close that hole by removing the need for it. Nobody has measured whether it does**, and
+## this comment does not claim it — a rule that makes a readout unnecessary and a rule that makes it
+## invisible look identical until somebody plays it.
+##
+## ⚠⚠ **`army.living_ids_of_type` IS NOT REORDERED, and that was checked rather than assumed.** It has
+## three other readers: `hud_view` and `net_run` take only `.size()` (order-blind), but
+## **`tools/probe/run_run.gd` reads `ids[0]` to put the beak on the HEALTHIEST living body** — its own
+## comment says so. Flipping that function would silently invert the probe's reward policy, which is a
+## design instrument, not a caller. So the summon gets its own ordering here and `army` keeps its
+## documented one.
+##
+## ⚠ **Ties break on the LOWER ID**, the same tie-break `army._hp_desc` already carries and for the
+## same reason: `sort_custom` is not stable, so two bodies on equal HP would otherwise board in
+## whatever order the sort happened to produce and two runs from identical state would diverge with
+## every check about them green. The tie is exact `==` and not `is_equal_approx` — an approximate tie
+## is not transitive, and a comparator that is not a strict weak ordering lets `sort_custom` return
+## anything at all.
 ##
 ## **There is deliberately no second `slot_reserve_count`.** The HUD calls `.size()`; a count written
 ## twice diverges.
@@ -388,7 +410,18 @@ func slot_reserve_ids(slot: int) -> Array:
 		if soldier_state[i] != SoldierState.RESERVE:
 			continue
 		out.append(i)
+	# Re-sorted rather than filtered in a different order: `living_ids_of_type` is the one place that
+	# knows what "living, of this type" means, and re-deriving that here would be the same rule twice.
+	out.sort_custom(_hp_asc)
 	return out
+
+
+## Ascending HP, ties to the lower id. **A strict weak ordering** — see `army._hp_desc`, which is this
+## function's mirror and carries the same warning for the same reason.
+func _hp_asc(a: int, b: int) -> bool:
+	if army.hp[a] == army.hp[b]:
+		return a < b
+	return army.hp[a] < army.hp[b]
 
 
 ## Puts one body of slot `slot`'s type on a boat **at the sea tile `tile`**, aimed at the landing the

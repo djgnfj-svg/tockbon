@@ -43,6 +43,22 @@ an answer to a question nobody put:
 - **3 (band width)** — **superseded.** The band became a *minimum distance* (`SUMMON_BAND_MIN_TILES` 6) at
   the user's own instruction, so `d` no longer exists as a question.
 
+### ✅ The answers (user, 2026-08-19, minutes after they were sent)
+
+**All five came back.** Two confirm what shipped, two change it, one becomes a TODO on a screen that does
+not exist yet.
+
+| # | Answer | What it does |
+|---|---|---|
+| **1** | ***"시작전"*** | ✅ **The build's assumption was right.** The hold is planning-time, `SLOT_HOLD_SEC` stays a `look.gd` constant, and 「손은 전투 중에 움직이지 않는다」 is not overturned by this feature. ⚠ **`push-inland`'s 「저 배만 참여」 is a SEPARATE, still-unbuilt decision** and this answer does not close it — §8's four seams stay visible |
+| **5** | ***"슬롯에 세포를 넣음 대신 슬롯자체를 강화하는거임 이건 정비창만들때 todo로 넣어두규"*** | ⚠⚠ **A new rule, and it is not what either side assumed.** A cell goes INTO a slot; **what you upgrade is the SLOT, not the cell in it.** ⇒ `session-loop`'s twice-refuted object-cost arithmetic was about upgrading a body — **this moves the axis onto the slot and that arithmetic must be re-derived, not reused.** **Deferred by the user to the refit screen**, which does not exist. **Nothing changes in code this round**; slots stay bound to types |
+| **7** | ***"슬럿 2개로 시작 확장가능"*** | ❌ **Changes what shipped.** Five boxes → **two**, and the row must grow later without a rewrite. ✅ Glyph count on the planning screen goes 3 → **5** instead of 3 → 8, which answers 「글자가 너무 많고」 rather than adding to it |
+| **8** | ***"화면끌기 안함"*** | ✅ **The build's assumption was right.** An armed slot consumes every field press; a press outside the band marks a refusal instead of silently panning. The wheel stays ungated and the same key disarms |
+| **6** | ***"다친놀부터"*** | ❌ **Changes what shipped.** Healthiest-first → **most-hurt-first.** ⚠ This is a **rule**, not a preference: it means a slot spends its damaged bodies first, so 「which of these is nearly gone」 stops being something the player has to read — which is the picture that died with the reserve stack (§6 Open 4). **It may close that hole by removing the need for it. Nobody has measured whether it does** |
+
+⚠ **Question 9 (`CLAUDE.md`'s two false sentences) was sent and NOT answered.** Both are still in that
+file and still false. It stays open.
+
 **Sent at wrap-up and still open**: **1** (before 시작 or during the fight — the one this build assumed) ·
 **5** (a type or a designed cell) · **6** (healthiest or most hurt first) · **7** (five boxes or two) ·
 **8** (does an armed slot still pan) · **9** (`CLAUDE.md`'s two false sentences) · **10** (a hull on the
@@ -1139,3 +1155,87 @@ a minimum distance empties any fixture whose sea is shallower than the constant.
 **ceiling** now (24x24 and 24x20, holding a band at `>= 10`) so the next distance change does not empty
 them again. Every hand-derived literal in the tie-break fixture survived the growth, and the comment
 says which indices moved with the width.
+
+---
+
+### Round 5 — fixer
+
+changed   `src/sim/rules.gd` (`SUMMON_SLOTS` five entries -> two) · `src/sim/battle.gd`
+(`slot_reserve_ids` sorts MOST HURT first, plus its own `_hp_asc`) · `src/look.gd`
+(`HUD_SLOT_ORIGIN_PX` -> `HUD_SLOT_ROW_Y_PX` + a derived `slot_row_origin_x_px()`) ·
+`tests/nets/net_summon.gd` · `tests/nets/net_slots.gd` · `docs/design/sea-summon.md` §2.
+
+why       Five of the ten wrap-up questions came back. Two confirm what shipped and need no work (the
+hold is planning-time; an armed slot does not pan). Two change it:
+***"슬럿 2개로 시작 확장가능"*** and ***"다친놈부터"***. One is recorded only.
+
+closed    **1. Two slot boxes, and the row grows without a rewrite.**
+`Rules.SUMMON_SLOTS` is `[CELL_MELEE, CELL_RANGED]`. **Nothing counts to two.**
+`summon_slot_count()` is `SUMMON_SLOTS.size()`, `hud_view` loops over it, and every net now pins the
+count **against the table** with the table's own size as the only literal.
+⚠ **The layout had to follow too.** `HUD_SLOT_ORIGIN_PX.x` was 956, measured so
+`956 + 5*56 + 4*8 = 1268 = 1280 - HUD_MARGIN_PX`. At two slots that left the last box at 1076 and a
+192 px hole to the corner. ⇒ **the row is RIGHT-ANCHORED** — `slot_row_origin_x_px()` computes the left
+edge backwards from the margin using the slot count. **「확장가능」 has to be true of the layout and not
+only of the table**, or a third binding is a `look.gd` edit, which is what the user asked not to happen.
+⚠ The formula is cross-checked rather than asserted tautologically: **the same arithmetic at five slots
+reproduces 956.0**, the number that was measured by hand when the row was five long. A formula that
+could not re-derive the old layout would be a different layout wearing the same claim.
+✅ **Side effect**: planning-screen glyphs go **3 -> 5**, not 3 -> 8 — it answers 「글자가 너무 많고」
+instead of adding to it.
+
+**2. A slot spends the MOST HURT body first.**
+⚠⚠ **`army.living_ids_of_type` is NOT reordered, and that was checked rather than assumed.** It has
+three other readers: `hud_view` and `net_run` take only `.size()` (order-blind), but
+**`tools/probe/run_run.gd` reads `ids[0]` to put the beak on the HEALTHIEST living body** — its own
+comment says so. Flipping that function would silently invert the probe's reward policy. ⇒ **the summon
+sorts in `Battle.slot_reserve_ids` and `army` keeps its documented order**, with both stated on the
+function.
+⚠ **Ties break on the LOWER ID**, exact `==` and not `is_equal_approx` — the same tie-break and the same
+reason `army._hp_desc` already carries: `sort_custom` is not stable, and an approximate tie is not
+transitive, which makes the comparator not a strict weak ordering and lets the sort return anything.
+⚠ **The check fails the OLD order.** The fixture has 2..5 full, 0 hurt and 1 nearly gone, so
+healthiest-first gives `[2,3,4,5,0,1]` and most-hurt-first `[1,0,2,3,4,5]` — **no shared first element**.
+The old answer is written out beside the new one so the row cannot be read as agreeing with it.
+
+**3. Recorded, no code**: ***"슬롯에 세포를 넣음 대신 슬롯자체를 강화하는거임"*** — a cell goes into a
+slot and **what you upgrade is the SLOT.** Deferred to a refit screen that does not exist.
+`sea-summon` §2 now says why **`session-loop`'s twice-refuted object-cost arithmetic cannot be reused**:
+both refutations were derived over **a body**, and a slot differs in three ways that leave the sign of
+every result open — the upgrade is amortised over every body that ever leaves the slot, two slots
+compete rather than five, and **a body's upgrade dies with the body while a slot's does not**, which is
+the axis that made the object economy interesting in the first place.
+
+not closed  ⚠⚠ **WHETHER 「다친놈부터」 CLOSES THE HP-READOUT HOLE IS UNMEASURED, AND I HAVE NOT
+CLAIMED IT.** `sea-summon` §6 Open 4 says per-soldier HP lost its home when the reserve stack was
+deleted. Spending damaged bodies first means the player no longer has to READ 「which of these is nearly
+gone」 — the rule does the sorting for them. **That may remove the need for the readout, or it may make
+a fact they still want invisible; the two look identical until somebody plays it.** The comment on
+`slot_reserve_ids` says exactly that and claims nothing more.
+⚠ **The unbound-slot arm of `net_summon`'s refusal row lost its subject.** Slots 3–5 were
+`SUMMON_UNBOUND` and every slot in the table is bound now. The `< 0` vs `<= 0` rule it guarded is
+unchanged and still reachable — `summon_type_of` answers `SUMMON_UNBOUND` for any out-of-range slot —
+so the arm is driven through that door instead, and the row says so.
+⚠ **`net_slots`'s refused-key fixture changed doors** for the same reason: it pressed `KEY_3` on an
+unbound slot and now drains slot 2 and presses its key. **「unbound OR dry」 is one call and one sentence
+to the player**, so the refusal is the same refusal — but it is a different arm and that is stated.
+⚠ **Carried**: `H` / `start_harbour` / `sendable` / `send` still exist for `tools/probe/run_run.gd`
+alone · the band/box tie is still blocking · `capture_landing.gd`'s three unreplaced measurements ·
+`flow_field`/`step_toward` have no diagonal-shoulder guard · `SPARK_LEN_PX` under the snap floor ·
+`TARGET_LINE`, `SPARK`, the `CLIFF_FACE` line · the probe has not been re-run.
+
+nets      **17 nets · 2465 checks · 4.3 s · green**, stderr clean. Was 17 / 2473 / 4.5 s.
+
+**Three mutations, each edited and re-run in ONE command, replacement asserted before running:**
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | `slot_reserve_ids` drops its sort (back to healthiest-first) | **red** — summon, 2 checks, on both the order and the 「not the old first answer」 self-check |
+| 2 | a third `SUMMON_UNBOUND` entry added to the table | **red** — 4 checks, **and every one of them is a literal-carrying row** |
+| 3 | `slot_row_origin_x_px` frozen back to 956.0 | **red** — slots, 3 checks |
+
+⚠⚠ **MUTATION 2 IS THE ONE THAT MEASURES 「확장가능」.** A third binding reddened **four** rows and all
+four are the ones that deliberately hold a literal (the table's size, twice; the row's left edge; and
+「every slot is bound」). **Every count-against-the-table row and every box-drawing row stayed green.**
+⇒ adding a slot costs **three literals and no code** — which is the property the user asked for, stated
+as a measurement rather than as an intention.

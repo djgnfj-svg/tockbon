@@ -140,18 +140,38 @@ const REWARD_MELEE := 2
 const REWARD_RANGED := 1
 
 # --- The summon slots ------------------------------------------------------------------------------
-## What the five number keys hold, and how far out to sea a summon may be pressed. See `sea-summon`.
+## What the number keys hold, and how far out to sea a summon may be pressed. See `sea-summon`.
+##
+## ⚠⚠ **THIS TABLE IS THE ROW.** It held five entries — two bound and three `SUMMON_UNBOUND` — and the
+## user cut it after playing: ***"슬럿 2개로 시작 확장가능"***. **The row is two boxes because the table
+## has two rows, not because anything counts to two.** `summon_slot_count()` is `SUMMON_SLOTS.size()`
+## and `hud_view` loops over it; **a third binding is one line here and no other edit anywhere.**
+## ⇒ **Nothing may write 2 as a literal.** A check that pins the count against a number is what turns
+## the next binding into a rewrite, and this repo has measured that shape — both sides of an assertion
+## moving together and passing at any value. Pin the count against the TABLE; pin the table's own size
+## as the literal.
+##
+## ⚠ **`SUMMON_UNBOUND` survives with no entry using it**, and that is deliberate: `summon_type_of`
+## returns it for an out-of-range slot, which is the answer `slot_reserve_ids` and `Battle.summon` both
+## refuse on. Delete it and an out-of-range slot answers `CELL_MELEE` — 0 — with every bounds check
+## downstream still passing while the wrong body is summoned.
 ##
 ## ⚠⚠ **`CELL_MELEE` IS 0, so the "nothing is bound here" test is `< 0` and NEVER `<= 0`.** A `<= 0`
 ## refuses slot 1 forever, and every count check downstream still passes — a slot that refuses looks
 ## exactly like an empty roster.
 ##
-## ⚠ **Slots 3, 4 and 5 are `SUMMON_UNBOUND` and are deliberately NOT `BISON` / `CROW` / `LION`.**
-## `TYPE_LABELS` has five entries and nothing range-checks it, so filling them reads as done and ships
-## three enemy bodies as the player's army. Re-binding a slot at runtime IS the 세포 economy, which is
-## blocked twice in `session-loop` and is not this table's business.
+## ⚠ **The unbound slots were deliberately NOT `BISON` / `CROW` / `LION`** and deleting them does not
+## change that: `TYPE_LABELS` has five entries and nothing range-checks it, so binding a slot to an
+## enemy type reads as done and ships enemy bodies as the player's army. **Re-binding a slot at runtime
+## IS the 세포 economy**, blocked twice in `session-loop`, and it is not this table's business.
+##
+## ⚠⚠ **AND WHAT THE USER DECIDED THAT ECONOMY WILL BE IS RECORDED HERE, because it lands on this
+## table**: ***"슬롯에 세포를 넣음 대신 슬롯자체를 강화하는거임"*** — a cell goes into a slot and **what
+## you upgrade is the SLOT, not the cell.** Deferred to a refit screen that does not exist, so
+## **nothing in code changes**: slots stay bound to types. `sea-summon`'s design doc records why
+## `session-loop`'s object-cost arithmetic cannot be reused for it.
 const SUMMON_UNBOUND := -1
-const SUMMON_SLOTS := [CELL_MELEE, CELL_RANGED, SUMMON_UNBOUND, SUMMON_UNBOUND, SUMMON_UNBOUND]
+const SUMMON_SLOTS := [CELL_MELEE, CELL_RANGED]
 
 ## ⚠⚠ **THE BAND IS A MINIMUM DISTANCE FROM LAND, AND IT USED TO BE A MAXIMUM.** It was
 ## `SUMMON_BAND_TILES := 2` — *within 2 hops of the coast* — and the user inverted it after playing:

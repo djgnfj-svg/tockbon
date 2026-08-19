@@ -358,7 +358,9 @@ func _after_the_commit(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
 	t.eq(game.battle.boats.size(), 1, "확정할 배가 하나 있다 (자가 점검)")
 
 	await t.pump_frames(2)
-	t.eq(hs.boxes.size(), 5, "슬롯 줄은 확정 전에 다섯 번 그려진다")
+	# ⚠ Against the TABLE, never against a number. A third binding is one line in `rules.gd`.
+	t.eq(hs.boxes.size(), Rules.summon_slot_count(),
+		"슬롯 줄은 확정 전에 표가 정한 만큼 그려진다 (%d칸)" % Rules.summon_slot_count())
 
 	# ⚠⚠ **The press is deliberately NOT released before the commit.** Released first, `_summon_down`
 	# is already false and the beat's own commit gate is never reached at all — measured: with the
@@ -490,7 +492,10 @@ func _the_slot_row(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
 	await t.pump_frames(2)
 
 	# V8 — two channels, and the border difference clears the snap floor.
-	t.eq(hs.boxes.size(), 5, "슬롯 상자가 다섯 개 그려진다")
+	t.eq(hs.boxes.size(), Rules.summon_slot_count(),
+		"슬롯 상자가 표가 정한 수만큼 그려진다 (%d개)" % Rules.summon_slot_count())
+	# The literal, once and on the TABLE itself, so the row above cannot move both sides together.
+	t.eq(Rules.SUMMON_SLOTS.size(), 2, "그리고 표에는 두 줄이 있다 (리터럴 — 사용자의 「슬럿 2개로 시작」)")
 	var armed := _box_at(hs, 0)
 	var resting := _box_at(hs, 1)
 	t.eq(float(armed["width"]), Look.PRESS_HOVER_BORDER_WIDTH_PX, "켜진 상자의 테두리가 두꺼운 쪽이다")
@@ -499,9 +504,10 @@ func _the_slot_row(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
 		"둘의 차이가 스냅 바닥 2.0 보다 크다 — 안 그러면 켠 것이 화면에 안 닿는다")
 	t.eq(Color(armed["bg"]), Look.COL_START, "그리고 채움 색도 다르다 — 두 갈래로 말한다")
 	t.ok(Color(resting["bg"]) != Look.COL_START, "안 켜진 상자는 그 색이 아니다")
-	t.eq(hs.digits.size(), 5, "숫자도 다섯 개 그려진다")
+	t.eq(hs.digits.size(), Rules.summon_slot_count(), "숫자도 상자마다 하나씩 그려진다")
 	t.eq(str(hs.digits[0]["text"]), "1", "첫 상자에 1 이 적혀 있다")
-	t.eq(str(hs.digits[4]["text"]), "5", "다섯째 상자에 5 가 적혀 있다")
+	t.eq(str(hs.digits[Rules.summon_slot_count() - 1]["text"]),
+		str(Rules.summon_slot_count()), "마지막 상자에 그 번호가 적혀 있다")
 	# The glyph rides the box: a rect origin plus a non-zero offset, never the rect's own corner.
 	t.eq(Vector2(hs.digits[0]["at"]), Look.slot_rect_px(0).position + Look.HUD_SLOT_TEXT_OFFSET_PX,
 		"숫자가 상자 안에 놓였다 — 상자의 원점에 그린 글자는 놓인 적이 없는 글자다")
@@ -534,8 +540,8 @@ func _the_slot_row(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
 
 
 # -- L12 -------------------------------------------------------------------------------------------
-## ⚠ Mutation: `HUD_SLOT_ORIGIN_PX.x` 956 -> 600 ⇒ the boxes land on top of the army stack at the
-## harbour, which is the one thing the bottom-right corner was chosen to clear.
+## ⚠ Mutation: make `slot_row_origin_x_px` a constant again ⇒ the row stops touching the margin the
+## moment the slot table changes length, which is the half of 「확장가능」 the layout owns.
 func _the_boxes_clear_the_army(t, game: Game, fs: FieldSpy) -> void:
 	game._open_island()
 	fs.zoom = Look.ZOOM_MIN
@@ -554,12 +560,27 @@ func _the_boxes_clear_the_army(t, game: Game, fs: FieldSpy) -> void:
 		t.ok(screen.encloses(boxes[i]), "%d번 상자가 화면 안에 든다" % i)
 		for j in range(i + 1, boxes.size()):
 			t.ok(not boxes[i].intersects(boxes[j]), "%d번과 %d번 상자가 안 겹친다" % [i, j])
-	t.eq(boxes[4].end.x, Look.VIEWPORT_W_PX - Look.HUD_MARGIN_PX,
+	# ⚠ `boxes[4]` was written when the row was five long. Derived from the table's own size now, so a
+	# third binding does not turn this into an index error.
+	t.eq(boxes[boxes.size() - 1].end.x, Look.VIEWPORT_W_PX - Look.HUD_MARGIN_PX,
 		"마지막 상자의 오른쪽 끝이 HUD 여백에 정확히 닿는다 (1268)")
+	# ⚠⚠ **THE 「확장가능」 HALF THE LAYOUT OWNS, and it needs a cross-check rather than a tautology.**
+	# `slot_row_origin_x_px()` is right-anchored, so "the last box touches the margin" is true by
+	# construction and proves nothing on its own. What DOES prove the formula is that the same
+	# arithmetic at FIVE slots reproduces **956.0** — the number that was measured by hand and stored as
+	# a constant back when the row was five long. A formula that could not re-derive the old layout
+	# would be a different layout wearing the same claim.
+	t.eq(Look.VIEWPORT_W_PX - Look.HUD_MARGIN_PX
+			- (5.0 * Look.HUD_SLOT_SIZE_PX.x + 4.0 * Look.HUD_SLOT_GAP_PX), 956.0,
+		"같은 식이 다섯 칸에서는 옛 상수 956 을 그대로 내놓는다 — 식이 옛 배치를 재현한다")
+	t.eq(boxes[0].position.x, 1148.0,
+		"두 칸에서는 1148 에서 시작한다 (1280 - 12 - (2*56 + 8) — 손으로 센 리터럴)")
+	t.ok(boxes[0].position.x != 956.0,
+		"그리고 옛 상수 자리가 아니다 — 표가 줄자 줄이 실제로 움직였다 (자가 점검)")
 
 	# ⚠⚠ **THE HALF THAT COMPARED THE BOXES WITH THE HARBOUR STACK IS DELETED, SUBJECT AND ALL.**
 	# It read `fs.idle_soldier_rect(i)` for every reserve body and asserted no slot box overlapped the
-	# stack — the reason `HUD_SLOT_ORIGIN_PX` sits in the bottom-RIGHT corner at all. **The stack is
+	# stack — the reason the row sits in the bottom-RIGHT corner at all. **The stack is
 	# deleted** (*"ㅇㅇ 지워줘"*) and `idle_soldier_rect` with it, so there is nothing left to overlap.
 	# ⚠ **The corner choice is now unforced and nothing measures it.** Bottom-right was picked to clear
 	# a thing that no longer exists; the boxes stay there because moving them is a decision nobody has
@@ -674,30 +695,42 @@ func _the_three_lines_that_claimed_to_be_load_bearing(t, game: Game, fs: FieldSp
 
 
 ## ⚠⚠ **A REFUSED KEY SHOOK AND NEVER FLASHED — one channel where the design asked for two.**
-## `_chip_offset` served the start button AND the five slot boxes from the day the slots shipped, while
-## the TINT was written inline in `_chip_colour` and reached the start button alone. So the box that
-## barked looked exactly like the box that did not, and only its position said otherwise.
+## `_chip_offset` served the start button AND the slot boxes from the day the slots shipped, while the
+## TINT was written inline in `_chip_colour` and reached the start button alone. So the box that barked
+## looked exactly like the box that did not, and only its position said otherwise.
 ##
 ## ⚠ **Both channels are read in the same frame**, because that is the pair `combat-juice` item 8 is: a
 ## box that only moves reads as a wobble and a box that only changes colour reads as a state.
+##
+## ⚠⚠ **THE FIXTURE CHANGED WITH THE TABLE.** It used to press `KEY_3` on slot 2, which was
+## `SUMMON_UNBOUND` — and the user cut the three unbound slots (*"슬럿 2개로 시작 확장가능"*), so every
+## slot in the table is bound now. `_on_summon_key` refuses on **「unbound OR dry」**, which is one
+## sentence to the player and one call (`slot_reserve_ids(slot).is_empty()`), so the DRY arm is what
+## the refusal is driven through: slot 1 is drained first and then its key is pressed.
 func _a_refused_key_flashes_as_well_as_shakes(t, game: Game, hs: HudSpy) -> void:
 	game._open_island()
-	# Slot 2 is unbound — `Rules.summon_type_of(2) < 0` — which is one of the two things `_on_summon_key`
-	# refuses on, and to the player they are one sentence.
-	t.ok(Rules.summon_type_of(2) < 0, "슬롯 3 은 아무것도 안 물려 있다 (자가 점검)")
+	var g: Grid = game.battle.grid
+	var drain := _a_band_tile(g, 0)
+	# Slot 1 (ranged) is drained rather than slot 0, so the accepted-press control at the bottom of this
+	# row still has a wet slot to arm.
+	var spent := 0
+	while not game.battle.slot_reserve_ids(1).is_empty() and spent < 40:
+		t.ok(game.battle.summon(1, drain) >= 0, "말리기 전에는 나간다 (자가 점검)")
+		spent += 1
+	t.ok(game.battle.slot_reserve_ids(1).is_empty(), "2번 슬롯이 말랐다 (자가 점검)")
 	await t.pump_frames(2)
-	t.eq(hs.boxes.size(), 5, "상자 다섯이 그려진다 (자가 점검)")
-	var rest_bg := Color(hs.boxes[2]["bg"])
-	var rest_pos: Vector2 = (hs.boxes[2]["rect"] as Rect2).position
+	t.eq(hs.boxes.size(), Rules.summon_slot_count(), "상자가 표가 정한 수만큼 그려진다 (자가 점검)")
+	var rest_bg := Color(hs.boxes[1]["bg"])
+	var rest_pos: Vector2 = (hs.boxes[1]["rect"] as Rect2).position
 	t.eq(rest_bg, Look.COL_SLOT_OFF, "쉴 때 그 상자는 안 눌리는 색이다 (자가 점검)")
-	t.eq(rest_pos, Look.slot_rect_px(2).position, "그리고 제자리에 있다 (자가 점검)")
+	t.eq(rest_pos, Look.slot_rect_px(1).position, "그리고 제자리에 있다 (자가 점검)")
 
-	game._unhandled_input(_key(KEY_3))
-	t.eq(game._armed_slot, -1, "빈 슬롯은 안 켜진다 (자가 점검)")
+	game._unhandled_input(_key(KEY_2))
+	t.eq(game._armed_slot, -1, "마른 슬롯은 안 켜진다 (자가 점검)")
 	await t.pump_frames(1)
-	t.eq(hs.boxes.size(), 5, "거절한 프레임에도 다섯이 그려진다 (자가 점검)")
-	var hit_bg := Color(hs.boxes[2]["bg"])
-	var hit_pos: Vector2 = (hs.boxes[2]["rect"] as Rect2).position
+	t.eq(hs.boxes.size(), Rules.summon_slot_count(), "거절한 프레임에도 같은 수가 그려진다 (자가 점검)")
+	var hit_bg := Color(hs.boxes[1]["bg"])
+	var hit_pos: Vector2 = (hs.boxes[1]["rect"] as Rect2).position
 
 	# Channel 1 — it moved, and by no more than the constant that owns the amplitude.
 	var shift := hit_pos.distance_to(rest_pos)

@@ -61,7 +61,7 @@ func run(t) -> void:
 	_the_field_is_built_once(t)
 	_the_tie_break(t)
 	_the_boat_has_no_harbour(t)
-	_highest_hp_first(t)
+	_most_hurt_first(t)
 	_a_pinned_hold_does_not_grow_the_army(t)
 	_seven_refusals(t)
 	_a_summoned_boat_goes_home_to_the_sea(t)
@@ -551,8 +551,13 @@ func _the_boat_has_no_harbour(t) -> void:
 
 
 # -- B3 --------------------------------------------------------------------------------------------
-## ⚠ Mutation: `slot_reserve_ids` returns them in id order instead of `living_ids_of_type`'s order.
-func _highest_hp_first(t) -> void:
+## ⚠⚠ **MOST HURT FIRST, and it used to be HEALTHIEST first.** The user, asked which body a slot
+## spends: ***"다친놈부터"***. **The fixture is what makes this row bite**: 2..5 are full, 0 is hurt and
+## 1 is nearly gone, so the two orders pick DIFFERENT ids — the old rule gives `[2,3,4,5,0,1]` and the
+## new one `[1,0,2,3,4,5]`. A fixture where the two agree would measure nothing at all.
+## ⚠ Mutation: `slot_reserve_ids` returns them in id order, or in `living_ids_of_type`'s own
+## healthiest-first order — the second is the OLD behaviour and this row is written to fail it.
+func _most_hurt_first(t) -> void:
 	var g := _island(0)
 	var army := Army.new()
 	army.add_starting_force()
@@ -571,8 +576,16 @@ func _highest_hp_first(t) -> void:
 		t.ok(uid >= 0, "%d번째 소환이 됐다" % k)
 		var boat: Dictionary = b.boats[b.boats.size() - 1]
 		order.append(int((boat["soldiers"] as Array)[0]))
-	t.eq(order, [2, 3, 4, 5, 0, 1],
-		"멀쩡한 몸부터 나간다 — 같은 HP 는 낮은 아이디부터다 %s" % str(order))
+	t.eq(order, [1, 0, 2, 3, 4, 5],
+		"다친 몸부터 나간다 — 같은 HP 는 낮은 아이디부터다 %s" % str(order))
+	# ⚠ **The OLD answer written out, so this row cannot be read as agreeing with it.** Healthiest-first
+	# on this fixture is `[2,3,4,5,0,1]`; the two share no first element, which is what makes the
+	# assertion above a measurement rather than a restatement.
+	t.ok(order[0] != 2, "그리고 옛 규칙(멀쩡한 몸부터)의 첫 답 2번이 아니다 (자가 점검)")
+	# `army.living_ids_of_type` keeps its documented healthiest-first order, because the probe reads
+	# `ids[0]` from it to put the beak on the healthiest body. Asserted here so the split is visible.
+	t.eq(int(army.living_ids_of_type(Rules.CELL_MELEE)[0]), 2,
+		"army.living_ids_of_type 는 여전히 멀쩡한 몸부터다 — 프로브가 부리를 그 순서로 단다")
 
 
 # -- B4 --------------------------------------------------------------------------------------------
@@ -623,10 +636,15 @@ func _seven_refusals(t) -> void:
 	# 2 — slot below range.
 	_refuses(t, _fresh(0), -1, good, "슬롯 -1 은 거절한다")
 	# 3 — slot above range.
-	_refuses(t, _fresh(0), 5, good, "슬롯 5 는 거절한다 (칸이 다섯이므로 마지막 색인은 4다)")
-	# 4 — the slot is unbound. ⚠ The `< 0` / `<= 0` arm.
-	_refuses(t, _fresh(0), 2, good, "비어 있는 슬롯 3 은 거절한다")
-	t.eq(Rules.summon_type_of(2), Rules.SUMMON_UNBOUND, "그 슬롯이 실제로 비어 있다 (자가 점검)")
+	# ⚠ Off the END of the table, whatever the table's length is — the index is derived so a third
+	# binding does not turn this row into a rewrite.
+	_refuses(t, _fresh(0), Rules.SUMMON_SLOTS.size(), good, "표 끝을 넘는 슬롯은 거절한다")
+	# 4 — ⚠⚠ **THE UNBOUND ARM NO LONGER HAS A SLOT TO STAND ON.** Slots 3–5 were `SUMMON_UNBOUND` and
+	# the user cut them (*"슬럿 2개로 시작 확장가능"*), so every slot in the table is bound. The `< 0`
+	# vs `<= 0` rule it guarded is unchanged and still reachable — `summon_type_of` answers
+	# `SUMMON_UNBOUND` for any out-of-range slot — so the arm is driven through THAT door instead.
+	t.eq(Rules.summon_type_of(Rules.SUMMON_SLOTS.size()), Rules.SUMMON_UNBOUND,
+		"표 끝 너머는 비어 있다고 답한다 (자가 점검 — 위 줄이 거절하는 이유가 이것이다)")
 	t.eq(Rules.CELL_MELEE, 0,
 		"그리고 근접 세포의 번호는 0 이다 — 이 줄이 `<= 0` 이 왜 슬롯 1을 죽이는지의 전부다 (자가 점검)")
 
@@ -742,8 +760,13 @@ func _a_mixed_plan_unloads_on_two_tiles(t) -> void:
 ## ⚠ Mutation: put `BISON` in slot 2. `session-loop`'s buildability review measured a previous attempt
 ## shipping *"bison, crow and lion with correct names and correct bodies"* as the player's army.
 func _the_slot_table(t) -> void:
-	t.eq(Rules.summon_slot_count(), 5, "슬롯이 다섯이다")
-	t.eq(Rules.SUMMON_SLOTS.size(), 5, "표에도 다섯 줄이다")
+	# ⚠⚠ **THE TABLE'S SIZE IS THE LITERAL AND THE COUNT IS PINNED AGAINST THE TABLE**, never the other
+	# way round. `summon_slot_count()` is `SUMMON_SLOTS.size()`, so pinning both to the same number
+	# would move together and pass at any value — the shape this repo has already measured. A third
+	# binding must be ONE line in `rules.gd`, and only the literal below may have to move with it.
+	t.eq(Rules.SUMMON_SLOTS.size(), 2, "표에 두 줄이 있다 (리터럴)")
+	t.eq(Rules.summon_slot_count(), Rules.SUMMON_SLOTS.size(),
+		"그리고 슬롯 수는 표에서 나온다 — 세는 게 아니라 표가 정한다")
 	var bound := 0
 	var enemy_typed := 0
 	for i in Rules.summon_slot_count():
@@ -752,7 +775,7 @@ func _the_slot_table(t) -> void:
 			bound += 1
 		if want >= 2:
 			enemy_typed += 1
-	t.eq(bound, 2, "그중 둘만 채워져 있다")
+	t.eq(bound, Rules.SUMMON_SLOTS.size(), "그리고 그 두 줄이 전부 채워져 있다 — 빈 슬롯이 없다")
 	t.eq(enemy_typed, 0, "들소·까마귀·사자가 들어간 슬롯은 하나도 없다 — 세포 경제는 아직 안 열렸다")
 	t.eq(Rules.summon_type_of(0), Rules.CELL_MELEE, "1번은 근접 세포다")
 	t.eq(Rules.summon_type_of(1), Rules.CELL_RANGED, "2번은 원거리 세포다")
