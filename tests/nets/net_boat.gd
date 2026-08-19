@@ -17,10 +17,14 @@ extends RefCounted
 ##
 ## ⚠⚠ **A BOAT IS A POLYLINE NOW** (`speed-off-open-landing`, 2.3). `from` / `to` are deleted keys;
 ## the crossing is `path` + `cum` + `leg`, and `dist` is the path's total length rather than a
-## straight-line distance. **Every literal below was re-measured against the new geometry, including
-## the ones on fixtures whose bays are open water** — a hop-count BFS does not produce the straight
-## line even where one exists, so `_bay()`'s 4.0-tile crossing became 4 x sqrt(2) = 5.656854.
-## Re-measured, never relaxed: the literals are still literals.
+## straight-line distance.
+##
+## ⚠⚠ **EVERY CROSSING LITERAL IN THIS FILE HAS BEEN RE-MEASURED TWICE**, and the second time is the
+## one worth reading. A hop-count BFS does not produce the straight line even where one exists, so
+## `_bay()`'s 4.0-tile crossing first became `4 x sqrt(2) = 5.656854`. Verify-look then photographed
+## the same shape on a real island and named it: **a boat that does not know the way.** `water_route`
+## string-pulls its waypoints now, and `_bay()` is **4.576491** over 3 points.
+## Re-measured both times, never relaxed: the literals are still literals.
 
 const ARENA_W := 24
 const ARENA_H := 12
@@ -30,23 +34,31 @@ const ARENA_H := 12
 const COVE_W := 10
 const COVE_H := 7
 
-## ⚠⚠ **`_bay()`'s crossing is NOT 4.0 tiles any more and the reason is worth reading.** Harbour (2,5)
-## to landing (6,5) is 4.0 tiles as the crow flies, and the whole bay between them is OPEN WATER — but
-## `water_route` walks down a hop-count BFS, where a diagonal step and an orthogonal step both cost 1,
-## so among the many equal-hop paths the fixed `NEIGHBOURS` tie-break picks one that is not the
-## straight one. The route it produces is `(2,5) (3,4) (4,3) (5,4) (6,5)` — four DIAGONAL steps —
-## which is `4 x sqrt(2) = 5.656854` tiles. At `Rules.BOAT_SPEED` 4.0 that is 84.853 sub-steps, so
-## `_arrived` first fires on sub-step **85**.
+## ⚠⚠ **RE-MEASURED BY THE ROUTE SMOOTHER (round 3), and the old number is kept here because the
+## reason it existed is the whole story.** `water_route` descends a HOP-COUNT BFS where a diagonal and
+## an orthogonal step both cost 1, so on OPEN water it produced `(2,5) (3,4) (4,3) (5,4) (6,5)` — four
+## diagonal steps, `4 x sqrt(2) = 5.656854` tiles against a 4.0-tile straight line, arriving on
+## sub-step 85. Verify-look photographed the same shape on island 1's bay and called it what it is:
+## **a boat that does not know the way.**
 ##
-## ⚠ **This is measured, and it is reported rather than tuned away.** The bound is `sqrt(2)` — a route
-## can be up to 41% longer than the straight line, on open water, and on the three shipped islands the
-## worst ratio really is 1.414. `grid.water_route`'s own comment carries the finding.
-const BAY_DIST := 5.656854
-const BAY_SUBSTEPS := 85
-## `_far_bay()`'s crossing: the same harbour to (16,5). Two diagonal steps out, eleven straight, two
-## diagonal in = `13 + 2 * sqrt(2) = 15.656854` tiles = 234.853 sub-steps, so arrival is on **235**.
-const FAR_DIST := 15.656854
-const FAR_SUBSTEPS := 235
+## `water_route` now string-pulls that list — drop every waypoint whose removal leaves a straight
+## segment entirely over water. The route is **`(2,5) (5,4) (6,5)`, 3 points**:
+##   `dist((2,5),(5,4)) = sqrt(9+1) = 3.16227766`
+##   `dist((5,4),(6,5)) = sqrt(2)   = 1.41421356`
+##   total **4.57649122**, and `4.576491 / 4.0 = 1.144123 s = 68.647 sub-steps` ⇒ arrival on **69**.
+##
+## ⚠ **It is not the 4.0 straight line and that is not a smoothing failure.** `_entry_water_tile`
+## picks the CHEAPEST water 8-neighbour of the landing, ties to the earliest `NEIGHBOURS` entry, which
+## here is (5,4) rather than (5,5) — so the last hop is a one-tile dogleg onto the beach. Smoothing
+## works on the water waypoints; which water tile a boat beaches FROM is a different rule and this
+## round did not touch it.
+const BAY_DIST := 4.576491
+const BAY_SUBSTEPS := 69
+## `_far_bay()`'s crossing: the same harbour to (16,5). Smoothed to `(2,5) (15,4) (16,5)`, 3 points —
+## `sqrt(169+1) + sqrt(2) = 13.03840481 + 1.41421356 = 14.45261837` tiles = 216.789 sub-steps, so
+## arrival is on **217**. (Was `13 + 2 * sqrt(2) = 15.656854` over 15 points, arriving on 235.)
+const FAR_DIST := 14.452618
+const FAR_SUBSTEPS := 217
 
 const FULL_ROSTER := 13
 
@@ -92,28 +104,33 @@ func _crossing_arithmetic_is_literal(t) -> void:
 	var landing := _tile_of(6, 5)
 	t.ok(b.send(0, landing) >= 0 and b.commit(), "한 척을 보내고 확정했다 (자가 점검)")
 	t.ok(absf(float(b.boats[0]["dist"]) - BAY_DIST) <= 1e-5,
-			"이 항구에서 이 상륙지까지 항로가 정확히 4 x sqrt(2) = 5.656854칸이다 (자가 점검)")
+			"이 항구에서 이 상륙지까지 항로가 sqrt(10) + sqrt(2) = 4.576491칸이다 (자가 점검)")
 	var path0: PackedVector2Array = b.boats[0]["path"]
-	t.eq(path0.size(), 5, "그 항로는 5점짜리 폴리라인이다 (직선이면 2점이다)")
+	# ⚠ **3 and not 5.** The smoother pulled the V out of an open bay — the floor under this number is
+	# that it is still more than 2, since 2 points IS the straight line the polyline replaced, and the
+	# ceiling is that it is fewer than the 5 the hop-count descent produced.
+	t.eq(path0.size(), 3, "그 항로는 3점짜리 폴리라인이다 (직선이면 2점, 다듬기 전에는 5점이었다)")
 	t.eq(path0[0], Vector2(2.0, 5.0), "0번 지점은 항구다")
+	t.eq(path0[1], Vector2(5.0, 4.0), "1번 지점은 상륙 앞 물 (5,4) 하나뿐이다 — V 가 사라졌다")
 	t.eq(path0[path0.size() - 1], Vector2(6.0, 5.0), "마지막 지점은 상륙 칸이다")
 
 	# 30 sub-steps is 0.5 s, so the boat has sailed `0.5 * 4.0 = 2.0` tiles ALONG THE ROUTE. The route's
-	# vertices sit at 0, 1.414, 2.828, 4.243, 5.657, so 2.0 falls inside segment 1 at
-	# `f = (2.0 - sqrt(2)) / sqrt(2) = sqrt(2) - 1 = 0.4142136`, giving
-	# `(3,4).lerp((4,3), f) = (3.4142136, 3.5857864)`. **Computed by hand from the fixture, never read
-	# back off `cum`** — this is the one check in the file whose numbers are bare literals.
+	# vertices sit at 0, 3.16227766, 4.57649122, so 2.0 falls inside segment 0 at
+	# `f = 2.0 / sqrt(10) = 0.63245553`, giving
+	# `(2,5).lerp((5,4), f) = (2 + 3f, 5 - f) = (3.8973666, 4.3675445)`. **Computed by hand from the
+	# fixture, never read back off `cum`** — this is the one check in the file whose numbers are bare
+	# literals.
 	_drive(b, 30)
 	var half: Vector2 = b.boats[0]["pos"]
-	t.ok(Vector2(3.4142136, 3.5857864).distance_to(half) <= Rules.EPS,
-			"0.5초(30 서브스텝) 뒤 배는 항로를 2.0칸 지나 (3.4142136, 3.5857864)에 있다 — 손으로 센 리터럴이다")
-	t.eq(int(b.boats[0]["leg"]), 1, "그 지점은 1번 구간 위다 — leg 도 1이다")
+	t.ok(Vector2(3.8973666, 4.3675445).distance_to(half) <= Rules.EPS,
+			"0.5초(30 서브스텝) 뒤 배는 항로를 2.0칸 지나 (3.8973666, 4.3675445)에 있다 — 손으로 센 리터럴이다")
+	t.eq(int(b.boats[0]["leg"]), 0, "그 지점은 0번 구간 위다 — 첫 구간이 3.16칸으로 길어졌다")
 
 	_drive(b, BAY_SUBSTEPS - 30 - 1)
 	t.eq(b.soldier_state[0], Battle.SoldierState.TRANSIT,
-			"84 서브스텝에는 아직 안 도착했다 — 5.656854/4.0 = 1.41421초 = 84.853 서브스텝이다")
+			"68 서브스텝에는 아직 안 도착했다 — 4.576491/4.0 = 1.144123초 = 68.647 서브스텝이다")
 	_drive(b, 1)
-	t.eq(b.soldier_state[0], Battle.SoldierState.ASHORE, "85 서브스텝에는 도착해 있다")
+	t.eq(b.soldier_state[0], Battle.SoldierState.ASHORE, "69 서브스텝에는 도착해 있다")
 
 
 ## Two landable targets at different distances from one harbour: the ratio of the arrival TIMES equals
@@ -131,12 +148,17 @@ func _crossing_scales_with_distance(t) -> void:
 	t.ok(fb.send(0, _tile_of(16, 5)) >= 0 and fb.commit(), "먼 해안으로 보냈다 (자가 점검)")
 	var far_steps := _drive_until_ashore(t, fb, 0, "먼 해안")
 
-	t.eq(near_steps, BAY_SUBSTEPS, "가까운 해안은 85 서브스텝 걸린다")
-	t.eq(far_steps, FAR_SUBSTEPS, "먼 해안일수록 오래 걸린다 — 235 서브스텝이다")
+	t.eq(near_steps, BAY_SUBSTEPS, "가까운 해안은 69 서브스텝 걸린다")
+	t.eq(far_steps, FAR_SUBSTEPS, "먼 해안일수록 오래 걸린다 — 217 서브스텝이다")
 	# ⚠ The ratio is asserted against the two hand-measured ROUTE lengths, not against the two `dist`
 	# fields — the boats are gone by the time this reads them, and reading the thing under test for the
 	# expectation is what the check above this one exists to avoid.
-	t.ok(absf(float(far_steps) / float(near_steps) - FAR_DIST / BAY_DIST) <= 0.01,
+	# ⚠⚠ **The tolerance is 0.05 and it is DERIVED, not nudged until it passed.** Both counts are whole
+	# sub-steps ceiling'd off a real crossing time, so each carries up to one sub-step of rounding: the
+	# error on the RATIO is bounded by `ratio / near_steps = 3.158 / 69 = 0.046`. The old 0.01 held only
+	# because the two old crossings happened to round the same way — it was luck, and the smoother is
+	# what exposed it (217/69 = 3.1449 against 14.452618/4.576491 = 3.1580, a gap of 0.0131).
+	t.ok(absf(float(far_steps) / float(near_steps) - FAR_DIST / BAY_DIST) <= 0.05,
 			"걸린 시간의 비가 항로 길이의 비와 같다 (%.4f배)" % (FAR_DIST / BAY_DIST))
 
 
@@ -170,8 +192,10 @@ func _boats_do_not_share(t) -> void:
 ## shape. This drives the crossing one sub-step at a time and reads the hull's position on every one.
 ##
 ## The fixture is `_shadow_bay()` — a beach the OLD straight-line rule REFUSED, which is the whole
-## point of the round. Measured: the route is 8 points, `(2,4) (3,3) (4,3) (5,4) (6,3) (7,3) (8,3)`
-## then the beach at `(9,2)`, and the dip to `(5,4)` is the boat going around the `#` at `(5,3)`.
+## point of the round. ⚠ **Re-measured for the smoother**: the route was 8 points,
+## `(2,4) (3,3) (4,3) (5,4) (6,3) (7,3) (8,3) (9,2)`, and string-pulling leaves **4** —
+## `(2,4) (5,4) (8,3) (9,2)`, `3 + sqrt(10) + sqrt(2) = 7.576491` tiles. The bend at (5,4) is still
+## the boat going around the `#` at (5,3); what went is the row of collinear waypoints after it.
 func _the_boat_really_sails_on_water(t) -> void:
 	var army := _army_of(Rules.CELL_MELEE, 1)
 	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.BISON, 2, 1)], 999.0)
@@ -183,7 +207,7 @@ func _the_boat_really_sails_on_water(t) -> void:
 	# where it can be checked: in `_shadow_bay()`'s own comment.
 	t.ok(b.send(0, beach) >= 0 and b.commit(), "그 해안으로 보내고 확정했다 (자가 점검)")
 	var path: PackedVector2Array = b.boats[0]["path"]
-	t.eq(path.size(), 8, "항로가 8점짜리 폴리라인이다 (바깥에서 검증됨)")
+	t.eq(path.size(), 4, "항로가 4점짜리 폴리라인이다 (바깥에서 검증됨 — 다듬기 전에는 8점이었다)")
 
 	var dry: Array = []
 	var still := 0

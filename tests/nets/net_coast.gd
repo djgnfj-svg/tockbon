@@ -135,7 +135,10 @@ func _the_descent_home_never_squeezes(t) -> void:
 	t.eq(int(g.water[g.tile_index(2, 2)]), 0, "다른 어깨 (2,2)도 물이 아니다 (자가 점검)")
 
 	var route := g.water_route(0, landing)
-	t.eq(route.size(), 7, "항로가 7점이다 — 지름길을 안 타고 서쪽 팔을 그대로 되짚는다 %s" % str(route))
+	# ⚠ 7 before the route smoother, 6 after it — string-pulling merges `(1,1) (1,2) (1,3)` into one
+	# straight run down the west arm. The shortcut it must NOT take is unchanged, and the squeeze check
+	# under this line is what says so.
+	t.eq(route.size(), 6, "항로가 6점이다 — 지름길을 안 타고 서쪽 팔을 그대로 되짚는다 %s" % str(route))
 	t.eq(_squeeze_steps(g, route).size(), 0,
 		"그리고 그 7점 중 땅 모서리 사이를 지나는 걸음이 없다 %s" % str(_squeeze_steps(g, route)))
 	t.eq(route[0], Vector2(1.0, 1.0), "0번은 항구다")
@@ -343,8 +346,14 @@ func _every_waypoint_of_a_route_is_water(t) -> void:
 		"마지막을 뺀 모든 중간 지점이 물 위다 — 물 밖 지점: %s" % str(dry))
 
 
-## The same fixture, measured against the straight line it replaced. Verified outside Godot: route
-## length **8.6569** against a harbour-to-beach straight line of **7.2801**.
+## The same fixture, measured against the straight line it replaced.
+##
+## ⚠⚠ **The old check was `length > straight + 0.5` and the smoother made that slack a liability.**
+## Verified outside Godot: the route was **8.6569** over 8 points and is now **7.576491** over 4,
+## against an unchanged straight line of **7.280110** — a margin of 0.296, so a fuzzy `+ 0.5` reads as
+## "the detour is gone" when the detour is exactly what is still there. **The numbers are literals
+## now**, which is a stronger claim than the slack ever was: a smoother that pulled the route straight
+## through the `#` would land on 7.280110 and a smoother that did nothing would land on 8.6569.
 func _a_route_goes_around_the_headland(t) -> void:
 	var g := Grid.new()
 	g.load_rows(_peninsula_rows())
@@ -354,39 +363,78 @@ func _a_route_goes_around_the_headland(t) -> void:
 	for k in range(1, route.size()):
 		length += route[k - 1].distance_to(route[k])
 	var straight: float = route[0].distance_to(route[route.size() - 1])
-	t.ok(length > straight + 0.5,
-		"항로가 곶을 돌아가느라 직선보다 길다 — 항로 %.4f칸 vs 직선 %.4f칸" % [length, straight])
+	t.eq(route.size(), 4, "항로가 4점이다 — 다듬기 전에는 8점이었다 (바깥에서 검증됨)")
+	t.ok(absf(length - 7.576491) <= 1e-4,
+		"항로가 3 + sqrt(10) + sqrt(2) = 7.576491칸이다 (실제 %.6f)" % length)
+	t.ok(absf(straight - 7.280110) <= 1e-4,
+		"직선은 7.280110칸이다 (실제 %.6f) — 이 쪽은 다듬기가 안 건드린다" % straight)
+	t.ok(length > straight,
+		"그래서 항로는 곶을 돌아가느라 여전히 직선보다 길다 — 다듬어도 곧장 넘어가지 않는다")
+	# The bend itself, by name. Length alone could be bought by a detour anywhere.
+	t.eq(route[1], Vector2(5.0, 4.0), "1번 지점이 (5,4) — `#`(5,3) 밑을 도는 그 꺾임이다")
 
 
-## The walk's own shape, which is what makes it terminate without the `w * h` guard ever firing: from
-## the harbour outward every point's field value is EXACTLY its index, and every step is a
-## Chebyshev-1 hop. Verified outside Godot: field values `[0,1,2,3,4,5,6]` then the land tile, and
-## every one of the seven steps is Chebyshev 1.
+## ⚠⚠ **THIS CHECK USED TO SAY 「every step is one 8-way hop」 AND THE SMOOTHER MAKES THAT FALSE ON
+## PURPOSE.** It read the field value at point `k` and demanded exactly `k`, and it demanded Chebyshev
+## 1 between neighbours — both were properties of the raw BFS descent, and string-pulling deletes
+## waypoints, so a kept waypoint's cost is no longer its index and a segment now spans several tiles.
+## **Rewriting it to pass would have been the wrong move and so would deleting it**; what it was
+## really guarding is that the walk terminates, never loops, and never leaves the water. That survives
+## as three claims:
 ##
-## ⚠ This is the ceiling on a route that teleports or loops. A descent that took two steps at once,
-## or revisited a tile, breaks one of the two halves.
+##  1. the route starts AT the harbour — field value 0
+##  2. field values along the water waypoints are STRICTLY INCREASING. The kept points are a
+##     subsequence of a strict descent, so a loop or a revisit still breaks this
+##  3. every segment is straight and entirely over water, **sampled here by an independent walker**
+##     rather than by calling back into `grid` — the smoother's own predicate deciding whether the
+##     smoother was right is not a check
+##
+## ⚠ And the ceiling that says the smoother RAN: 4 points, where the raw descent gave 8.
 func _a_route_walks_the_field_down_one_step_at_a_time(t) -> void:
 	var g := Grid.new()
 	g.load_rows(_peninsula_rows())
 	var beach := 2 * 12 + 9
 	var route := g.water_route(0, beach)
 	var field: PackedInt32Array = g.water_fields[0]
+	t.eq(route.size(), 4, "다듬은 항로가 4점이다 (원래 하강은 8점) — 다듬기가 실제로 돌았다")
+
+	var start_tile := g.tile_index(int(round(route[0].x)), int(round(route[0].y)))
+	t.eq(int(field[start_tile]), 0, "0번 지점의 물 필드 값이 0이다 — 항구 그 자리다")
+
 	var bad_cost: Array = []
+	var last_cost := -1
 	for k in route.size() - 1:
 		var p: Vector2 = route[k]
 		var tile := g.tile_index(int(round(p.x)), int(round(p.y)))
-		if int(field[tile]) != k:
-			bad_cost.append("%d번 지점 비용 %d" % [k, int(field[tile])])
+		var c := int(field[tile])
+		if c <= last_cost:
+			bad_cost.append("%d번 지점 비용 %d, 앞은 %d" % [k, c, last_cost])
+		last_cost = c
 	t.eq(bad_cost.size(), 0,
-		"항구에서부터 물 필드 값이 정확히 0,1,2,... 로 한 칸씩 내려간다 — 어긋난 지점: %s" % str(bad_cost))
+		"물 필드 값이 지점마다 반드시 올라간다 — 되돌아가거나 맴돌면 문다: %s" % str(bad_cost))
 
-	var bad_hop: Array = []
-	for k in range(1, route.size()):
-		var d: Vector2 = route[k] - route[k - 1]
-		if maxi(absi(int(round(d.x))), absi(int(round(d.y)))) != 1:
-			bad_hop.append("%d->%d" % [k - 1, k])
-	t.eq(bad_hop.size(), 0,
-		"모든 걸음이 8방향 한 칸이다 — 순간이동한 구간: %s" % str(bad_hop))
+	# The independent walker. Step 0.25 tiles, GDScript's own round-half-away-from-zero, and a
+	# CORNER needs both shoulders — the same three rules `_straight_is_all_water` states, written out
+	# here so a change to one side has to be made twice before this goes quiet.
+	var dry: Array = []
+	for k in range(1, route.size() - 1):
+		var a: Vector2 = route[k - 1]
+		var b2: Vector2 = route[k]
+		var steps := int(ceil(a.distance_to(b2) / 0.25))
+		var px := -999
+		var py := -999
+		for s in steps + 1:
+			var p2 := a.lerp(b2, float(s) / float(steps))
+			var tx := int(round(p2.x))
+			var ty := int(round(p2.y))
+			if g.water[ty * g.w + tx] == 0:
+				dry.append("%d->%d 구간의 (%d,%d)" % [k - 1, k, tx, ty])
+			elif px != -999 and tx != px and ty != py:
+				if g.water[py * g.w + tx] == 0 or g.water[ty * g.w + px] == 0:
+					dry.append("%d->%d 구간이 (%d,%d)-(%d,%d) 모서리를 짼다" % [k - 1, k, px, py, tx, ty])
+			px = tx
+			py = ty
+	t.eq(dry.size(), 0, "모든 구간이 통째로 물 위를 지나는 직선이다 — 물 밖: %s" % str(dry))
 
 
 ## ⚠⚠ **돌아갈 항구는 물길이 가장 짧은 항구다, 직선으로 제일 가까운 쪽이 아니다.** The straight-line

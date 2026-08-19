@@ -360,8 +360,101 @@ func water_route(harbour_idx: int, landing: int) -> PackedVector2Array:
 			break
 		cur = step
 	out.reverse()
+	out = _smooth_water_path(out)
 	out.append(tile_point(landing))
 	return out
+
+
+## ⚠⚠ **A BFS FIELD GIVES A GRID PATH, NOT A ROUTE, AND THE DIFFERENCE IS WHAT A PLAYER SEES.**
+## `water_route` descends a HOP-COUNT field where a diagonal step and an orthogonal step both cost 1,
+## so among the many equal-hop paths the fixed `NEIGHBOURS` tie-break picks one that hugs corners.
+## Measured before this pass existed: island 1's bay mouth (24,17) is vertically open from the start
+## harbour (24,31) — nothing at all in between — and the route was a 15-point **V**, seven tiles
+## down-left to (17,24) and seven back up-right, **19.80 tiles against a 14.00 straight line**, with
+## the hull halfway across heading AWAY from its target. On screen that is not a longer sail, it is
+## **a boat that does not know the way**, and it is the first route anybody would draw. The headland
+## detour beside it reads correctly, which makes the V worse. After this pass: **3 points, 14.45**.
+##
+## This is string-pulling: walk the waypoints and drop every one whose removal leaves the straight
+## segment entirely over water. **A POST-PASS over a route that is already legal**, never a gate.
+##
+## ⚠⚠ **`_straight_is_all_water` IS the predicate `speed-off-open-landing` deleted, and it is back for
+## a DIFFERENT JOB.** As a sendability test it refused 39–42% of each island's own coastline and that
+## is exactly what the user threw out (*"상륙 못하는 데가 있는 거지 상륙 가능한 데가 있는 게 아니야"*).
+## **Nothing here asks it whether a tile may be landed on.** `sendable` is still the water BFS and
+## nothing else; if a future reader sees a straight-line test in this file and "restores" it to
+## `load_rows`, the denylist dies a second time.
+##
+## ⚠ **The LANDING is not in `pts` and must not be.** The caller appends it after this returns: it is
+## LAND, so a smoother that could see it would be free to pull a straight line across the beach.
+## Everything here is water in and water out, which is what keeps `net_boat`'s "every waypoint except
+## the last is water" true by construction rather than by luck.
+##
+## ⚠ **Greedy and not a true funnel, deliberately.** Each index is visited once and each visit costs
+## one line test, so this is O(n) tests rather than the O(n^2) a re-anchoring string-pull would be —
+## and `field_view` calls `water_route` EVERY FRAME while a drag is in flight. A funnel would shave a
+## few tiles off a bend; it would not change what the bay looks like, which is the whole finding.
+## ⚠ Cost, since the tests get longer as the anchor holds: a 30-tile route on the shipped islands is
+## roughly 1,900 samples. **On the 144-column map an open route is ~40,000**, which is the one place
+## this pass is a real per-frame cost and it is written down rather than guessed at.
+func _smooth_water_path(pts: PackedVector2Array) -> PackedVector2Array:
+	if pts.size() <= 2:
+		return pts
+	var out := PackedVector2Array()
+	out.append(pts[0])
+	var anchor := 0
+	var k := 1
+	while k < pts.size() - 1:
+		# The anchor holds as long as it can still see one waypoint further. The moment it cannot,
+		# THIS waypoint becomes the new anchor — never the one that failed, which is unreachable.
+		if not _straight_is_all_water(pts[anchor], pts[k + 1]):
+			out.append(pts[k])
+			anchor = k
+		k += 1
+	out.append(pts[pts.size() - 1])
+	return out
+
+
+## Whether the straight segment between two TILE points lies entirely over water.
+##
+## ⚠⚠ **A corner crossing needs BOTH shoulders, and this is deliberately STRICTER than
+## `_water_step_open`.** They answer different questions and sharing one rule here would be wrong, not
+## tidy:
+##   · `_water_step_open` asks *may a boat take this diagonal HOP* — one water shoulder is enough,
+##     because the hull rounds the corner through that shoulder
+##   · this asks *is every tile a CONTINUOUS segment might sit on water*, and a segment threading the
+##     point where four tiles meet can round onto any of the four
+## The sampler here steps 0.25 tiles while the sim advances the hull 4.0/60 = 0.067 tiles a sub-step,
+## so the boat samples FINER than this does — it can round onto a tile this never looked at, and if
+## only one shoulder were required that tile is exactly the dry one. **Requiring both is what makes
+## `net_boat`'s 「the hull was over water every sub-step」 true by construction instead of by luck.**
+##
+## The sample step is `Rules.ROUTE_SMOOTH_SAMPLE_TILES`, and its own comment carries why 0.25 is a
+## bound rather than a taste: any coarser and the rounded tile can jump past one nobody looked at.
+func _straight_is_all_water(a: Vector2, b: Vector2) -> bool:
+	var span := a.distance_to(b)
+	if span <= Rules.EPS:
+		return true
+	var steps := int(ceil(span / Rules.ROUTE_SMOOTH_SAMPLE_TILES))
+	var prev := -1
+	var px := 0
+	var py := 0
+	for k in steps + 1:
+		var p := a.lerp(b, float(k) / float(steps))
+		var tx := int(round(p.x))
+		var ty := int(round(p.y))
+		if tx < 0 or ty < 0 or tx >= w or ty >= h:
+			return false
+		var t := ty * w + tx
+		if water[t] == 0:
+			return false
+		if prev >= 0 and t != prev and px != tx and py != ty:
+			if water[py * w + tx] == 0 or water[ty * w + px] == 0:
+				return false
+		prev = t
+		px = tx
+		py = ty
+	return true
 
 
 ## The harbour with the SHORTEST WATER ROUTE to `landing`, among the harbours that can reach it at

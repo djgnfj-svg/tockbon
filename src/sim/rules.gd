@@ -159,6 +159,21 @@ const BEAK_RANGE := 1.0
 ## value.
 const BOAT_SPEED := 4.0
 
+## How finely `grid._straight_is_all_water` samples a candidate segment, in TILES. It is the one knob
+## on the route smoother — see `grid.water_route`.
+##
+## ⚠ **It must stay at or under 0.5.** Tile centres are on integers, so a tile spans ±0.5 around its
+## centre; sample any coarser and two consecutive samples can round to tiles that are two apart, and
+## the segment would be declared clear over a tile nobody looked at. **0.25 is that bound halved**, so
+## a step moves at most 0.25 on either axis and the rounded tile can never jump. Floor: nothing under
+## 0.05, which is 20 samples a tile for no more certainty than 4 already buys.
+##
+## ⚠ **This is NOT `LINE_SAMPLE_STEP` restored.** That constant tuned the deleted straight-line
+## SENDABILITY test — the rule the user threw out (*"상륙 못하는 데가 있는 거지…"*). This one tunes a
+## post-pass over a route that is already legal. Same arithmetic, opposite job; see the smoother's own
+## comment before assuming the denylist came back with it.
+const ROUTE_SMOOTH_SAMPLE_TILES := 0.25
+
 
 # --- The clock the fight is computed at -----------------------------------------------------------
 ## The discretisation the whole fight runs on. `Battle.step` consumes WHOLE sub-steps of exactly this

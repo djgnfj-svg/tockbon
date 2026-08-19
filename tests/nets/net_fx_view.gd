@@ -181,6 +181,7 @@ func run(t) -> void:
 	await _landing_rings(t)
 	await _shake(t)
 	await _gait(t)
+	await _a_cliff_free_view_hands_the_leaf_nothing(t)
 	await _the_picture_sits_inside_its_own_duties(t)
 	_spark_points_is_a_function_of_progress(t)
 	_the_inequalities_the_spark_stands_on(t)
@@ -1504,6 +1505,70 @@ func _view_of(t, b: Battle, army: Army) -> FieldSpy:
 	# drive `_process` at all is measured in the first scene, with this line absent.
 	fv.set_process(false)
 	return fv
+
+
+## ⚠⚠ **`draw_multiline` FAILS ON AN EMPTY ARRAY, and it fails on stderr while the frame looks fine.**
+## `canvas_item_add_multiline` bails on `p_points.is_empty() || p_points.size() % 2 != 0`. Culling made
+## that reachable — zoom in anywhere with no water-touching cliff edge in view and the cliff pass
+## produces nothing — and **verify-look caught eight of them in one capture run while the round's own
+## report said stderr was clean.** No net had ever driven the camera into a cliff-free view, so every
+## green said nothing at all about it.
+##
+## Island 1's only cliffs are row 2. At `ZOOM_MAX` with the camera parked on the bottom of the map the
+## visible span holds none of them, and the leaf must simply not be called.
+##
+## ⚠ **The claim is on the ARGUMENT, not the call count.** "It was called 0 times" is also what a
+## deleted cliff pass says; what must never happen is the leaf being handed something
+## `draw_multiline` refuses. Both frames below are read the same way, and the second one is the floor:
+## a view that DOES contain cliffs still hands it a real array.
+func _a_cliff_free_view_hands_the_leaf_nothing(t) -> void:
+	var rows := Islands.rows_of(0)
+	var g := Grid.new()
+	g.load_rows(rows)
+	var b := Battle.new()
+	b.setup(g, Army.new(), [], 999.0)
+	var fv := FieldSpy.new()
+	fv.setup(b, Army.new(), rows)
+	t.root.add_child(fv)
+
+	# ZOOM_MAX, parked on the bottom of the map: the visible world is 1280 x 720 world px starting at
+	# y = 1280 - 720 = 560, so tiles 14..31 — and row 2 is the only cliff row on this island.
+	fv.zoom = Look.ZOOM_MAX
+	fv.cam_px = Vector2(0.0, 9999.0)
+	fv._clamp_cam()
+	fv.cliff_faces.clear()
+	await t.pump_frames(2)
+	var span := fv._visible_tile_rect(0)
+	t.ok(span.position.y > 2, "절벽이 있는 2행이 보이는 구간(%d..%d) 밖이다 (자가 점검)"
+		% [span.position.y, span.end.y - 1])
+	var bad_empty := 0
+	for raw: Dictionary in fv.cliff_faces:
+		var pts: PackedVector2Array = raw["points"]
+		if pts.is_empty() or pts.size() % 2 != 0:
+			bad_empty += 1
+	t.eq(bad_empty, 0,
+		"절벽이 안 보이는 프레임에서 잎에 빈 배열이 안 간다 (%d번 불렸다) — draw_multiline 이 짖는 자리다"
+			% fv.cliff_faces.size())
+
+	# The floor. Pan back to the top and the same leaf gets a real array — so the line above is not
+	# green because the cliff pass has stopped working altogether.
+	fv.cam_px = Vector2(0.0, 0.0)
+	fv._clamp_cam()
+	fv.cliff_faces.clear()
+	await t.pump_frames(2)
+	var span_top := fv._visible_tile_rect(0)
+	t.ok(span_top.position.y <= 2, "위로 돌리면 2행이 다시 보이는 구간 안이다 (자가 점검)")
+	t.ok(fv.cliff_faces.size() >= 1, "그 프레임에서는 절벽 훅이 불린다 (%d번)" % fv.cliff_faces.size())
+	var top_bad := 0
+	var top_pts := 0
+	for raw2: Dictionary in fv.cliff_faces:
+		var pts2: PackedVector2Array = raw2["points"]
+		top_pts = maxi(top_pts, pts2.size())
+		if pts2.is_empty() or pts2.size() % 2 != 0:
+			top_bad += 1
+	t.eq(top_bad, 0, "그리고 그때 받은 배열은 비어 있지 않고 점 수가 짝수다 (최대 %d점)" % top_pts)
+	t.ok(top_pts > 0, "실제로 점이 들어 있다 — 0점이면 위의 초록이 아무것도 안 뜻한다")
+	_drop(t, fv)
 
 
 func _drop(t, fv: FieldSpy) -> void:

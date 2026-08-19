@@ -359,19 +359,22 @@ func _phase_order(t) -> void:
 	# lands a hair under it in IEEE double, so this row would read as "it did not unload" when what it
 	# measured was floating point.
 	#
-	# ⚠⚠ **RE-MEASURED by `speed-off-open-landing`: this crossing is no longer 4.0 tiles.** `_port()`'s
-	# bay is open water, but `water_route` descends a HOP-COUNT field where a diagonal and an
-	# orthogonal step both cost 1, so the route it picks among the equal-hop paths is four diagonals —
-	# `4 x sqrt(2) = 5.656854` tiles, `84.853` sub-steps, arrival on **85**. The literal moved; it did
-	# not become a formula.
-	t.ok(absf(float(ferry.boats[0]["dist"]) - 5.656854) <= 1e-5,
-			"이 항로는 정확히 4 x sqrt(2) = 5.656854칸이다 (자가 점검)")
-	t.ok(absf(float(ferry.boats[0]["dist"]) / float(ferry.boats[0]["speed"]) * 60.0 - 84.853) <= 0.01,
-			"곧 84.853 서브스텝이다 — 도착은 그 다음 서브스텝인 85에 걸린다 (자가 점검)")
-	for _i in 84:
+	# ⚠⚠ **RE-MEASURED TWICE.** `speed-off-open-landing` moved it off 4.0: `_port()`'s bay is open
+	# water, but `water_route` descends a HOP-COUNT field where a diagonal and an orthogonal step both
+	# cost 1, so it picked four diagonals — `4 x sqrt(2) = 5.656854` tiles, arriving on sub-step 85.
+	# The route SMOOTHER then string-pulled that V out: the route is `(2,5) (5,4) (6,5)` and the
+	# crossing is `sqrt(10) + sqrt(2) = 4.576491` tiles = `68.647` sub-steps, arrival on **69**.
+	# ⚠ It is still not the 4.0 straight line, and that is `_entry_water_tile` choosing (5,4) over
+	# (5,5) as the tile to beach from — a one-tile dogleg at the very end, not a smoothing failure.
+	# The literal moved twice; it did not become a formula.
+	t.ok(absf(float(ferry.boats[0]["dist"]) - 4.576491) <= 1e-5,
+			"이 항로는 정확히 sqrt(10) + sqrt(2) = 4.576491칸이다 (자가 점검)")
+	t.ok(absf(float(ferry.boats[0]["dist"]) / float(ferry.boats[0]["speed"]) * 60.0 - 68.647) <= 0.01,
+			"곧 68.647 서브스텝이다 — 도착은 그 다음 서브스텝인 69에 걸린다 (자가 점검)")
+	for _i in 68:
 		ferry.begin_frame()
 		ferry.step(TICK_ONE)
-	t.eq(ferry.soldier_state[0], Battle.SoldierState.TRANSIT, "84 서브스텝에는 아직 배 위다 (자가 점검)")
+	t.eq(ferry.soldier_state[0], Battle.SoldierState.TRANSIT, "68 서브스텝에는 아직 배 위다 (자가 점검)")
 	ferry.begin_frame()
 	ferry.step(TICK_ONE)
 	t.eq(ferry.soldier_state[0], Battle.SoldierState.ASHORE,
@@ -542,10 +545,11 @@ func _lane() -> Array:
 
 ## The open arena with a bay on its west side: rows 3-7 are open water for the first six columns, one
 ## harbour tile sitting inside it at (2,5). The coast begins at column 6 — `_PORT_HARBOUR` (2,5) and
-## `_PORT_LANDING` (6,5) are 4.0 tiles apart in a straight line, but ⚠ **the boat does not sail the
-## straight line**: `grid.water_route` walks down a hop-count BFS and picks four diagonal steps, so the
-## crossing is `4 x sqrt(2) = 5.656854` tiles over open water. `boat.dist` / `boat.speed` is still the
-## right way to time a crossing here — it is now the POLYLINE's length over the speed.
+## `_PORT_LANDING` (6,5) are 4.0 tiles apart in a straight line, and ⚠ **the boat sails 4.576491**:
+## the route smoother pulls the hop-count BFS's four-diagonal V (5.656854) down to `(2,5) (5,4) (6,5)`,
+## and the remainder over the straight line is `_entry_water_tile` beaching from (5,4) rather than
+## (5,5). `boat.dist` / `boat.speed` is still the right way to time a crossing here — it is the
+## POLYLINE's length over the speed.
 const _PORT_HARBOUR := Vector2(2, 5)
 const _PORT_LANDING := Vector2(6, 5)
 

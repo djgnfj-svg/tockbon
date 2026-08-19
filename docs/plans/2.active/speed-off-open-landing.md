@@ -345,6 +345,31 @@ verify-look**: that row asks for a boat that visibly follows the water rather th
 and a boat that visibly detours over open water where a straight line exists is a different complaint
 of the same shape. **A decision for the user, not a defect to patch quietly.**
 
+### ✅ **It DID fail S4, and round 3 fixed it — and the fix was not a Dijkstra**
+
+Verify-look photographed it on island 1's bay: the mouth at (24,17) is vertically open from the start
+harbour at (24,31), **nothing at all in between**, and the route was a 15-point **V** — seven tiles
+down-left to (17,24), seven back up-right — **19.80 tiles against a 14.00 straight line**, with the
+hull at t=58.3 heading away from its target across empty sea. **The headland detour beside it read
+correctly**, which is what made the V read as *a boat that does not know the way* rather than as a
+long sail.
+
+⇒ **String-pulling, as a POST-PASS.** `grid._smooth_water_path` walks the waypoints and drops every
+one whose removal leaves a straight segment entirely over water. The bay route is now **3 points and
+14.45 tiles**: `(24,31) (23,18) (24,17)`. This is not the Dijkstra the risk list forbade — the field
+is untouched and still hop count, and the smoother runs O(n) line tests over a route already legal.
+
+⚠ **The predicate it needs is the one this plan DELETED**, and that is the trap inside the fix:
+`_straight_is_all_water` is `water_line_clear` under a new name. **It is a smoothing helper and never
+a sendability gate**; as a gate it refused 39–42% of each island's own coastline, which is exactly
+what the user threw out. `grid.gd` says so on the function itself, because the next reader who finds
+a straight-line test in that file will otherwise "restore" it to `load_rows`.
+
+⚠ **The remainder is not smoothing's to fix.** `net_boat`'s `_bay()` ends at 4.576 rather than 4.000
+because `_entry_water_tile` picks the cheapest water 8-neighbour of the landing — (5,4) rather than
+(5,5) — so the last hop is a one-tile dogleg onto the beach. Which water tile a boat beaches FROM is
+a different rule and round 3 did not touch it.
+
 ---
 
 ### The mutations run, and the one that got through
@@ -457,3 +482,85 @@ is 1728 tiles. A guard that can never bite must not be described as the guard. W
 the property the count was standing in for: **the painted area contains the visible world**, asserted
 against the ring intersected with the view, at 40 camera states across both grid sizes in
 `net_camera`.
+
+---
+
+### Round 3 — fixer
+
+changed   `src/sim/grid.gd` (`_smooth_water_path` + `_straight_is_all_water`, wired into
+`water_route` after the descent) · `src/sim/rules.gd` (`ROUTE_SMOOTH_SAMPLE_TILES`) ·
+`src/view/field_view.gd` (the empty-array guard on the cliff-face call) · six nets — `net_boat`,
+`net_battle`, `net_islands`, `net_coast`, `net_shell` (crossing literals re-derived) and
+`net_fx_view` (the new cliff-free-view check) · this file's own 「One finding the plan did not
+predict」 section, which was describing a defect that is now fixed.
+
+why       The two defects verify-look found with pictures. **D1** — the boat did not go straight in
+open water, on the FIRST route a player would draw. **D2** — stderr was not clean during capture and
+round 2's report said it was.
+
+closed    **D1.** Island 1's bay mouth (24,17) is vertically open from the start harbour (24,31),
+nothing in between, and the route was a **15-point V**: seven tiles down-left to (17,24), seven back
+up-right, **19.7990 tiles against a 14.0000 straight line**. After string-pulling it is **3 points,
+14.4526** — `(24,31) (23,18) (24,17)`. The remaining 0.45 is `_entry_water_tile` beaching from
+(23,18) rather than (24,18); that is a different rule and it was not touched. Every crossing on every
+island got shorter and **none got longer**: wave-1 `15.14/45.80 -> 11.85/42.99`, `13.49/47.80 ->
+11.20/44.83`, `15.14/45.80 -> 13.08/42.99`; steady `9.49/29.31 -> 7.41/27.98`, `10.90/30.97 ->
+8.41/30.14`, `9.49/29.73 -> 7.41/28.23`.
+**D2.** `canvas_item_add_multiline` fails on an empty array, and the cull made a cliff-free view
+reachable. Guarded at the CALL SITE (a leaf that sometimes draws nothing stops being pinnable at one
+call), and `net_fx_view._a_cliff_free_view_hands_the_leaf_nothing` drives the camera to the bottom of
+island 1 at `ZOOM_MAX` — where row 2, the only cliff row, is outside the span — and asserts on the
+ARGUMENT rather than the call count, with a cliff-containing frame beside it as the floor.
+
+not closed  ⚠⚠ **THREE THINGS VERIFY-LOOK MEASURED AND I WAS TOLD TO RECORD, NOT FIX:**
+- **`TARGET_LINE` at 0.45 px and alpha 0.12 is invisible, not restrained.** Verify-look could not find
+  one until it knew where to look and zoomed 4x. Round 2 left it deliberately below the floor on the
+  argument that 14 lines would be clutter — **that is preventing a problem nobody has ever reached.**
+- **`SPARK` contributes nothing measurable.** A full-frame pixel scan found **43 spark-coloured
+  pixels in the busiest of 143 combat frames**, many of them actually tracers. The hit still reads via
+  the white flash and the grey halo, so nothing is broken; the shards are simply not there.
+- **`CLIFF_FACE`'s LINE is near-invisible** — 0.02 on 0.098, black on black. 「못 내림」 is carried by
+  the cliff **FILL**, not by the face line the plan credits. ⚠ **S3 passes for a different reason than
+  this plan says it does.**
+
+⚠ **The probe was NOT re-run.** Every crossing is shorter now, so 2.4's table (45.1% / 47.0% / 46.3%
+/ 49.1%) is stale in the loose direction — the clock has more slack than those numbers say, not less.
+Reporting the new figure is a measurement job, not a builder's.
+⚠ **Round 1's re-measured `net_islands` table above is stale in two rows** (`EXPECT_WAVE1`,
+`EXPECT_STEADY`); it is left as the record of that round, and this entry is the correction.
+⚠ **A4 · A7 · A8 · A9 unchanged**: A4's wording was fixed in round 2, A7 now has S1/S2/S3/S5 passing
+and S4 re-photographed against this fix rather than closed by it, and A8/A9 are **user only**.
+⚠ **Still open from round 2**: `flow_field`/`step_toward` carry no diagonal-shoulder guard;
+`SPARK_LEN_PX` is under the snap floor at `ZOOM_MIN`; `plan-then-watch`'s 결정 4 is overturned in the
+code with its own doc unedited.
+
+nets      **15 nets · 2216 checks · 4.4 s · green**, stderr clean. Was 15 / 2203 / 4.3 s.
+
+**Two mutations, each edited and re-run in ONE command:**
+
+| # | Mutation | Result |
+|---|---|---|
+| 10 | the empty-array guard removed from the cliff-face call | **red** — fx_view (the cliff-free frame captures an empty array) |
+| 11 | `_smooth_water_path` removed from `water_route` | **red** — 38 checks across islands · boat · battle · coast · shell |
+
+⚠⚠ **The literals were re-derived OUTSIDE Godot and then cross-checked against the engine**, because
+this round retypes numbers in the one table this file's own header warns about re-measuring by
+halves. A from-scratch reimplementation of the BFS, the descent, the smoother and the sampler — **including
+GDScript's round-half-away-from-zero, which Python's banker's rounding does not share** — produced all
+242 sendable routes on the three islands, and every one agrees with the engine to 1e-3. ⚠ The first
+run of that model disagreed with the engine on the maxima; the cause was the smoother's own corner
+rule, not the rounding, and it was found by diffing rather than by picking whichever number was
+convenient.
+
+⚠ **One tolerance was loosened and it is the row to be suspicious of.** `net_boat`'s
+「time ratio == length ratio」 was `<= 0.01` and is now `<= 0.05`. **The derivation, not a nudge**: both
+counts are whole sub-steps ceiling'd off a real crossing, so the ratio carries up to
+`ratio / near_steps = 3.158 / 69 = 0.046` of rounding error. The old 0.01 held only because the two old
+crossings happened to round the same way — it was luck, and the smoother is what exposed it.
+
+⚠ **One check was rewritten rather than repaired, and the reason is in it.**
+`net_coast._a_route_walks_the_field_down_one_step_at_a_time` demanded `field[route[k]] == k` and
+Chebyshev-1 between neighbours; **string-pulling makes both false on purpose.** It now asserts what it
+was really guarding — starts at the harbour, field values strictly increase, every segment is straight
+and all-water **sampled by an independent walker written out in the net** rather than by calling back
+into `grid`. Plus the ceiling that says the smoother ran: 4 points where the raw descent gave 8.

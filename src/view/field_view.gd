@@ -381,7 +381,16 @@ func _draw() -> void:
 				else:
 					cliff_points.append(crect.position + Vector2(crect.size.x, 0.0))
 					cliff_points.append(crect.end)
-	_paint_cliff_face(cliff_points, Look.COL_CLIFF_FACE, Look.CLIFF_FACE_WIDTH_PX)
+	# ⚠⚠ **AN EMPTY ARRAY IS A BARK, NOT A NO-OP.** `canvas_item_add_multiline` fails on
+	# `p_points.is_empty() || p_points.size() % 2 != 0`, and it fails on stderr while the frame carries
+	# on looking fine. Culling made this reachable: zoom in anywhere with no water-touching cliff edge
+	# in view and the loop above produces nothing. Verify-look caught eight of them in one capture run
+	# **while this round's own report said stderr was clean** — the nets had never driven the camera
+	# into a cliff-free view, so a green round said nothing about it.
+	# ⚠ The guard is at the CALL SITE and not inside the leaf: a leaf that sometimes draws nothing is a
+	# leaf `net_draw_leaf` can no longer pin at one call, and "it drew" would stop meaning anything.
+	if not cliff_points.is_empty():
+		_paint_cliff_face(cliff_points, Look.COL_CLIFF_FACE, Look.CLIFF_FACE_WIDTH_PX)
 
 	# --- 2. harbours -----------------------------------------------------------------------------
 	# The tile under a harbour is already water-coloured by the terrain pass, so the marker is an

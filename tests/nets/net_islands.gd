@@ -77,11 +77,20 @@ const EXPECT_SPAWNS := [8, 12, 14]
 ## can reach. ⚠ **These were Euclidean distances and that is now the wrong metric** — a boat sails a
 ## polyline around headlands, so the straight line prices a crossing nobody makes. Re-measured, not
 ## adjusted.
-const EXPECT_WAVE1 := [[15.14, 45.80], [13.49, 47.80], [15.14, 45.80]]
+## ⚠⚠ **RE-MEASURED AGAIN by the route smoother** (round 3): `water_route` now string-pulls the BFS
+## waypoints, dropping every one whose removal leaves a straight segment entirely over water. Every
+## crossing on every island got shorter and none got longer. **All 242 routes were re-derived outside
+## Godot from a from-scratch reimplementation of the smoother — including GDScript's own
+## round-half-away-from-zero, which Python's banker's rounding does not share — and compared tile for
+## tile against the engine: 242 of 242 agree to 1e-3.** That cross-check is the whole warrant for
+## typing new numbers into a table this file's own header warns about re-measuring by halves.
+const EXPECT_WAVE1 := [[11.85, 42.99], [11.20, 44.83], [13.08, 42.99]]
 ## Steady-state crossing: min/max route length from `home_harbour_for(t)` over the SAME start-sendable
 ## tiles as `EXPECT_WAVE1` — never the union over all harbours, which includes tiles unreachable until
 ## after a relocation and so is not "the next crossing to a landing you already hold".
-const EXPECT_STEADY := [[9.49, 29.31], [10.90, 30.97], [9.49, 29.73]]
+## ⚠ Moved by the smoother too, and by different amounts per island: 9.49/29.31 -> 7.41/27.98,
+## 10.90/30.97 -> 8.41/30.14, 9.49/29.73 -> 7.41/28.23.
+const EXPECT_STEADY := [[7.41, 27.98], [8.41, 30.14], [7.41, 28.23]]
 ## How many of the start-sendable tiles relocate the fleet away from the start harbour (i.e.
 ## `home_harbour_for(t) != start_harbour`), out of the start-sendable count itself (84, 76, 82).
 ## ⚠ Re-measured twice over: the domain grew AND the ranking became hop count instead of distance.

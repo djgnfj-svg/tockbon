@@ -1243,8 +1243,13 @@ func run(t) -> void:
 	var shrank := false
 	var tail_bad := 0
 	var head_bad := 0
+	# ⚠ **0.15 s a step and not 0.05, and the reason is the route smoother.** The drawn line shrinks
+	# when the sim's `leg` advances, and string-pulling left this crossing with ONE long first segment
+	# instead of a row of one-tile hops — so `leg` does not move until the boat is most of the way
+	# across, and 24 x 0.05 = 1.2 s of sim was no longer enough to reach it. The loop still breaks the
+	# moment the boat stops being OUTBOUND, so a shorter crossing costs nothing.
 	for _cn2 in 24:
-		game._process(0.05)
+		game._process(0.15)
 		await t.pump_frames(1)
 		if b.boats.is_empty() or fs.routes.is_empty():
 			break
