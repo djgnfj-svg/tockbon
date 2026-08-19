@@ -165,6 +165,25 @@ const COL_HULL_WAIT := Color(1.0, 0.780, 0.302)
 # accept/refuse pair the key boxes already use. One concept, one value.
 const COL_ROUTE := Color(0.851, 0.780, 0.600, 0.55)
 
+## **The summonable band** — the ribbon of water a number key makes pressable (`sea-summon`). It is
+## BLENDED into the terrain tone inside the existing tile pass rather than painted as a second layer,
+## so it costs no extra draw call and "the band was drawn" is measurable as two fills DIFFERING.
+##
+## ⚠⚠ **The alpha is the load-bearing number and it is a bet.** `PRESS_ALPHA_OFF`'s own paragraph below
+## names **0.18** as the measured failure — the drop tint the user read as terrain rather than as a
+## mark. 0.35 is that failure doubled. Floor 0.25; ceiling 0.50, over which the sea reads as land and
+## the island stops having a shape. Only a look at the real frame settles it.
+## Blended into `COL_WATER` (green 0.145) it reaches **green 0.363**, which is what a check reads.
+##
+## ⚠ **Deliberately NOT `COL_START` / `COL_WIN` / `COL_NODE_CHEST` re-typed.** Those are a press, a
+## verdict and a map node; a value shared by two concepts diverges the first time one of them is tuned.
+##
+## ⚠ **It is an ALLOWLIST and the land's rule is a DENYLIST, and that is not an inconsistency to be
+## "fixed".** Measured on all three islands (`sea-summon`, 2.1): water a boat cannot reach the shore
+## from is **0 / 0 / 0**, so a sea DENYLIST would draw nothing and refuse nothing. The two answer
+## different questions — 「어디에 상륙하나」 stays a denylist, 「어디에 손을 대나」 is a place.
+const COL_SUMMON_BAND := Color(0.353, 0.769, 0.475, 0.35)
+
 # HUD and panel.
 const COL_HUD_TEXT := Color(0.918, 0.937, 0.961)
 const COL_PANEL_BG := Color(0.071, 0.090, 0.122, 0.941)
@@ -191,6 +210,9 @@ const COL_START := Color(0.302, 0.541, 0.404)
 ## `COL_SLOT_OFF` is the one tone the title needs that nothing else can stand in for: a slot that does
 ## not press. It is drawn at `PRESS_ALPHA_OFF` with no border and no hover, and it is deliberately a
 ## NEUTRAL grey rather than a dimmed `COL_BUTTON` — a dark blue box reads as "a button in shadow".
+## ⚠ **It has a SECOND reader now** (`sea-summon`): a summon slot that is unbound, or whose bodies are
+## all out, wears the same tone. It is the same claim — *there is a place here and nothing is in it* —
+## so it is the same value rather than a second grey.
 ##
 ## The three node tones differ in HUE as well as in shape and size, which is the whole point: Slay the
 ## Spire's map is criticised for symbols that differ in neither, and that is the same failure shape the
@@ -303,6 +325,12 @@ const HUD_TIMER_POS_PX := Vector2(600.0, 38.0)
 ## them (`HUD_BERTH_*`, `berth_rect_px`, `HUD_KEY_*`, `key_rect_px`, `HULL_BERTH_OFFSET_PX`,
 ## `COL_BERTH_EMPTY`, `BERTH_FX_SEC`) because `plan-then-watch` deleted the two things they drew: the
 ## fleet as a resource, and the keyboard as the way soldiers reach the island.
+## ⚠⚠ **THE SECOND HALF OF THAT IS NO LONGER TRUE, and the user is the one who corrected it**
+## (*"정확히는 배 속이 별로여서 뺀거임 1~5번키"* — the keys came out because of what was IN the boat, not
+## because a key is the wrong door). `sea-summon` brings 1~5 back as an ARM, not as a spawn: the key
+## picks which slot, and the press on the water is what places. The berths stay dead — there is still
+## no fleet to meter. `HUD_SLOT_*` below is what the keys draw now, and it is a new block rather than
+## `HUD_KEY_*` restored, because a box that arms and a box that spawns are not the same widget.
 
 ## **The start button** — one large press, bottom LEFT, and the whole of the planning phase ends on
 ## it. It is drawn only while `battle.committed()` is false: a button that cannot be pressed and is
@@ -325,6 +353,59 @@ const HUD_START_TEXT_OFFSET_PX := Vector2(70.0, 42.0)   # > (0, HUD_START_FONT_S
                                       # that floor is the half proving the label exists at all;
                                       # x + label width <= 220 and y <= 64
 const HUD_START_FONT_SIZE_PX := 28    # > HUD_FONT_SIZE_PX; <= HUD_TIMER_FONT_SIZE_PX + 8
+
+## **The five summon slots, bottom right** (`sea-summon`). A number key arms one and a press on the
+## green band puts a body of that slot's type on a boat there. They are drawn only while
+## `battle.committed()` is false, exactly like the start button above.
+##
+## ⚠ **The bottom right stopped being empty.** `HUD_START_ORIGIN_PX`'s paragraph says it went empty
+## when the speed chips died and that a widget added to fill it would be one more thing to explain —
+## **that is still the standing objection and this row is the exception the user asked for by number**
+## (「이 삼 사 오에 내가 만든 세포 끼워 놓고 일 번 누르고」). What the old argument was actually
+## protecting is untouched: the bottom-CENTRE band, where all three islands put `start_harbour` and
+## therefore where the draggable army stands. Measured clear — the stack reaches screen x ≈ 597..701
+## at `ZOOM_MIN` and these boxes start at 956.
+##
+## ⚠ **The slot boxes are NOT clickable**: no hover, no press dip, no hit rect. This file's rule
+## 「one rectangle must not answer to two verbs」 does not bite an armed box being green, because that
+## rule is about a press landing on the wrong thing. 설정하기 set the precedent — *a slot drawn as
+## unpressable behaves as unpressable, and those two are the same claim.*
+const HUD_SLOT_ORIGIN_PX := Vector2(956.0, 632.0)   # **Measured, not chosen.** 956 + 5*56 + 4*8 =
+                                      # 1268 = 1280 - HUD_MARGIN_PX, so the row ends on the same right
+                                      # margin every other HUD item does; y shares HUD_START_ORIGIN_PX's
+                                      # own 632 so the two bottom widgets sit on one baseline, and
+                                      # 632 + 64 = 696 <= 720
+const HUD_SLOT_SIZE_PX := Vector2(56.0, 64.0)       # y equals HUD_START_SIZE_PX.y — no new press
+                                      # height enters the game. x >= 44 or a 34 px digit plus the bar's
+                                      # two 6 px insets does not fit; x <= 72 or five boxes run past 1268
+const HUD_SLOT_GAP_PX := 8.0          # >= 6 or two boxes read as one bar; <= 14, from the width sum
+const HUD_SLOT_FONT_SIZE_PX := 34     # ⚠ **> HUD_TIMER_FONT_SIZE_PX 30 is REFUSED** — the clock must
+                                      # stay the loudest thing on this screen. >= 28
+                                      # (HUD_START_FONT_SIZE_PX, the smallest glyph that has ever read
+                                      # on this HUD); <= 40 or a digit fills its box
+const HUD_SLOT_TEXT_OFFSET_PX := Vector2(20.0, 44.0)  # > (0, 0) — a glyph at the rect's own origin is
+                                      # a glyph that was never placed, and that floor is the half
+                                      # proving the label exists. 20 + ~20 <= 56 across;
+                                      # 44 <= 64 - 8 - 6 = 50 down, so the digit clears the bar
+const HUD_SLOT_BAR_INSET_PX := 6.0    # >= 4 (a visible margin); <= 16, or the bar is under 24 px and
+                                      # one notch of a twelve-body roster drops under the 2.0 px floor
+const HUD_SLOT_BAR_H_PX := 8.0        # >= 2.0 (snap floor — this is HUD space with no zoom under it);
+                                      # <= 14 or the bar competes with the digit
+const HUD_SLOT_BAR_BOTTOM_PX := 6.0   # >= 4; <= 20, from the text offset sum above
+
+## **How often a held summon puts out one more body.** `sea-summon`, 2.4.
+##
+## ⚠⚠ **It is a LOOK constant because this build presses BEFORE the start button** — it is the repeat
+## rate of an input, and a player holding at 0.50 s reaches the same committed plan as one holding at
+## 0.05 s. **`sea-summon`'s OPEN question 1 is unanswered**, and on the other answer (the press happens
+## DURING the fight) this moves to `rules.gd`: reinforcement spacing changes what happens. That is
+## seam #3 of the four the design names, and it is left visible on purpose.
+##
+## The roster is 10 at the start of a run and at most 19, so a full hold is **2.0 s** and **3.8 s**.
+## Floor 0.084 — five rendered frames at 60 fps, the beat this repo has measured going entirely unseen.
+## Ceiling 0.50 — the probe's figure for the drag this replaces is 0.6–1.0 s a drag, so at 0.50 the
+## hold is no faster than the gesture it exists to delete.
+const SLOT_HOLD_SEC := 0.20
 
 ## ⚠ **The five speed chips are DELETED** (`speed-off-open-landing`, item 1, on the user's own
 ## 「일단 배속 개념은 지워주고」 and 「일시정지 지워주고」). Five constants went with them —
@@ -431,9 +512,12 @@ const PRESS_HIT_PAD_PX := 8.0
 const PRESS_ALPHA_ON := 1.0
 const PRESS_ALPHA_OFF := 0.30
 
-## The border is the "it presses" mark, and the hover is the border getting thicker.
+## The border is the "it presses" mark, and the pair is **a RESTING border and a LIVE one** — the
+## hover is one instance of live and the armed summon slot is the other. (It read "the hover is the
+## border getting thicker" until `sea-summon` gave the pair a second reader; the pair is unchanged and
+## only the sentence widened, in the file that makes the claim.)
 ## ⚠ `PRESS_HOVER_BORDER_WIDTH_PX` must exceed `PRESS_BORDER_WIDTH_PX` by more than 2.0 — this file's
-## snap floor — or the hover changes nothing that reaches the screen. 3 -> 6 is a delta of 3.
+## snap floor — or the live state changes nothing that reaches the screen. 3 -> 6 is a delta of 3.
 const PRESS_BORDER_WIDTH_PX := 3.0        # >= 2.0 (snap floor); <= 5
 const PRESS_HOVER_BORDER_WIDTH_PX := 6.0  # > PRESS_BORDER_WIDTH_PX + 2; <= 10
 const PRESS_HOVER_BRIGHTEN := 0.12        # >= 0.08; <= 0.25, over which the hover reads as a
@@ -1142,6 +1226,29 @@ static func hp_bar_size_px() -> Vector2:
 ## by someone aiming at start.
 static func start_rect_px() -> Rect2:
 	return Rect2(HUD_START_ORIGIN_PX, HUD_START_SIZE_PX)
+
+
+## Summon slot `i`'s RESTING rectangle, in viewport px. The refusal shake rides on top of this in
+## `hud_view`, so the un-shaken box is drawn exactly here.
+##
+## ⚠ **There is no `slot_hit_rect_px` and there must not be.** The boxes are not clickable at all — the
+## keyboard arms them — so a hit rect would be geometry nothing tests against, and the next reader
+## would wire a press to it.
+static func slot_rect_px(i: int) -> Rect2:
+	var x := HUD_SLOT_ORIGIN_PX.x + i * (HUD_SLOT_SIZE_PX.x + HUD_SLOT_GAP_PX)
+	return Rect2(Vector2(x, HUD_SLOT_ORIGIN_PX.y), HUD_SLOT_SIZE_PX)
+
+
+## The roster bar under slot `i`'s digit: 44 x 8 px, inset 6 either side and 6 up from the bottom.
+##
+## ⚠ **Derived from `slot_rect_px` here and NOWHERE else.** `hud_view` draws it and `net_slots`
+## measures it; geometry written twice is exactly what this second accessor exists to prevent.
+static func slot_bar_rect_px(i: int) -> Rect2:
+	var box := slot_rect_px(i)
+	return Rect2(
+		Vector2(box.position.x + HUD_SLOT_BAR_INSET_PX,
+			box.position.y + box.size.y - HUD_SLOT_BAR_BOTTOM_PX - HUD_SLOT_BAR_H_PX),
+		Vector2(box.size.x - 2.0 * HUD_SLOT_BAR_INSET_PX, HUD_SLOT_BAR_H_PX))
 
 
 ## `COL_ALLY` at `GHOST_ALPHA` — a tone and a ratio kept as two constants so they can be re-measured

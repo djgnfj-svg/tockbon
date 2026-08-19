@@ -101,6 +101,11 @@ func _table() -> Dictionary:
 			# boat-and-landing stage 4 drag (P8): set_drag is the one state setter a press-start and
 			# a release-end both go through, so it is pure, like the camera functions above it.
 			"set_drag": 0,
+			# `sea-summon`: the one call site "a slot was armed", "the cursor moved" and "the press
+			# ended" all go through, so the two aim fields cannot disagree. 0 draws — the band is a
+			# BLEND into the existing `_paint_tile` fill and adds no leaf and no draw call, which is
+			# why "the band was drawn" has to be a RUNTIME row in `net_slots` and cannot come from here.
+			"set_summon_aim": 0,
 			# `speed-off-open-landing` 2.5: the shell pushes the sim's OWN refusal in through this,
 			# and the ground-ring block paints it next frame through the existing `_paint_ring` leaf.
 			# 0 draws — it appends one entry to `_fx` — which is exactly why the refusal mark needs a
@@ -163,8 +168,11 @@ func _table() -> Dictionary:
 			"_spark_points": 0,
 		},
 		# ⚠ **Seven names left this file in one edit and one arrived** (`plan-then-watch`, 6.5).
-		# `key_slot_count` · `key_type_of` · `reserve_count` — the 1/2 key roster, and the keyboard does
-		# nothing in this game now. `boat_label` · `note_launch` · `_berth_offset` · `_paint_berth` ·
+		# `key_slot_count` · `key_type_of` · `reserve_count` — the 1/2 key roster, which spawned a body
+		# straight onto a boat. ⚠ **`sea-summon` brings the keyboard back and does NOT bring those
+		# three back**: 1~5 now ARM a slot and the press on the water is what places, so the five new
+		# names below are a different widget rather than the old one restored.
+		# `boat_label` · `note_launch` · `_berth_offset` · `_paint_berth` ·
 		# `_paint_load` — the berths, which were the fleet drawn as a resource meter, and the boat
 		# stopped being a resource. `set_speed` is the arrival. Three renames on top: `note_key` ->
 		# `note_chip`, `_key_offset` -> `_chip_offset`, `_key_colour` -> `_chip_colour`, `_paint_key` ->
@@ -187,6 +195,13 @@ func _table() -> Dictionary:
 			# because a bare `draw_rect` in `_draw` is precisely what this whole table exists to redden.
 			"_paint_button": 2,
 			"_paint_enemies_left": 1,
+			# `sea-summon`'s five summon slot boxes. `set_armed` and `_slot_colour` are pure; the three
+			# leaves are the box (fill + border), the digit, and the roster bar (rail + fill).
+			"set_armed": 0,
+			"_slot_colour": 0,
+			"_paint_slot_box": 2,
+			"_paint_slot_digit": 1,
+			"_paint_slot_bar": 2,
 		},
 		"panel_view.gd": {
 			"bind": 0,
@@ -332,8 +347,16 @@ func run(t) -> void:
 	# last edit happened to be is a literal nobody re-derives.
 	# The variable grid added `_map_tiles` and `_visible_tile_rect` to `field_view` (43 -> 45), and the
 	# total is re-derived by hand here rather than nudged by two.
-	t.eq(total_funcs, 125, "다섯 파일의 함수는 모두 125개다 (45 + 12 + 21 + 18 + 29)")
-	t.eq(total_leaves, 31, "그중 draw 를 실제로 부르는 잎은 31개다 (13 + 3 + 4 + 4 + 7)")
+	# `sea-summon` added `set_summon_aim` to `field_view` (45 -> 46) and five names to `hud_view`
+	# (12 -> 17: `set_armed`, `_slot_colour`, `_paint_slot_box`, `_paint_slot_digit`,
+	# `_paint_slot_bar`), three of which are leaves (3 -> 6).
+	# ⚠⚠ **BOTH totals were re-derived from the five per-file tables and NOT nudged, and doing it
+	# caught the plan.** `sea-summon`'s own plan said hud_view held 13 names and that the total would
+	# land on 132; the table has held **12** since the speed chips died, so the answer is **131**. A
+	# literal that moves by whatever the last edit happened to be is a literal nobody re-derives — and
+	# this table has already been nudged once in this repo.
+	t.eq(total_funcs, 131, "다섯 파일의 함수는 모두 131개다 (46 + 17 + 21 + 18 + 29)")
+	t.eq(total_leaves, 34, "그중 draw 를 실제로 부르는 잎은 34개다 (13 + 6 + 4 + 4 + 7)")
 
 	# -- 3b. the array leaves hand their array WHOLE to one native call -----------------------------
 	# ⚠⚠ **THIS SECTION EXISTS BECAUSE THE COUNT ABOVE CANNOT SEE THE DIFFERENCE, AND THAT WAS

@@ -139,6 +139,46 @@ const START_RANGED := 4
 const REWARD_MELEE := 2
 const REWARD_RANGED := 1
 
+# --- The summon slots ------------------------------------------------------------------------------
+## What the five number keys hold, and how far out to sea a summon may be pressed. See `sea-summon`.
+##
+## ⚠⚠ **`CELL_MELEE` IS 0, so the "nothing is bound here" test is `< 0` and NEVER `<= 0`.** A `<= 0`
+## refuses slot 1 forever, and every count check downstream still passes — a slot that refuses looks
+## exactly like an empty roster.
+##
+## ⚠ **Slots 3, 4 and 5 are `SUMMON_UNBOUND` and are deliberately NOT `BISON` / `CROW` / `LION`.**
+## `TYPE_LABELS` has five entries and nothing range-checks it, so filling them reads as done and ships
+## three enemy bodies as the player's army. Re-binding a slot at runtime IS the 세포 economy, which is
+## blocked twice in `session-loop` and is not this table's business.
+const SUMMON_UNBOUND := -1
+const SUMMON_SLOTS := [CELL_MELEE, CELL_RANGED, SUMMON_UNBOUND, SUMMON_UNBOUND, SUMMON_UNBOUND]
+
+## How many hops of WATER travel from the coast a summon may still be pressed at. **It is a rule and
+## not a look value: it decides what `Grid.can_summon_at` REFUSES**, and the band the view paints is
+## that same predicate asked per tile — so the picture and the refusal are one fact rather than two.
+##
+## Measured over all three shipped islands (`sea-summon`, 2.2): the band holds 90 / 82 / 88 tiles at 1,
+## **190 / 174 / 186 at 2**, and 254 / 230 / 248 at 3. ⚠ **The reachable LANDING count does not move
+## with it at all** — 82 / 75 / 80 at every value — so this number decides how thick the green reads
+## and how comfortable the press is, and nothing about what the player may choose. A check written to
+## bite on it must bite on the band SIZE and never on the landing count.
+## Floor 1 (at `ZOOM_MIN` that is an 18 px ribbon, one tile of catchment); ceiling 3 (54 px, and past
+## it the sea starts reading as land rather than as a shoreline).
+const SUMMON_BAND_TILES := 2
+
+
+static func summon_slot_count() -> int:
+	return SUMMON_SLOTS.size()
+
+
+## The unit type in slot `slot`, or `SUMMON_UNBOUND` for an empty or out-of-range slot. The cast is
+## the same one every read of a `const` Array in this file makes.
+static func summon_type_of(slot: int) -> int:
+	if slot < 0 or slot >= SUMMON_SLOTS.size():
+		return SUMMON_UNBOUND
+	return int(SUMMON_SLOTS[slot])
+
+
 ## The beak (a `Reward.BEAK` node's pay): range += 1.0 on one surviving soldier. Deliberately NOT +1 HP —
 ## that candidate is unadopted, and the slice exists to learn whether "who do I bolt it onto" is a
 ## real decision. Range 1 means a second rank can attack, so it doubles the effective contact width

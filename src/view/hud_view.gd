@@ -18,12 +18,23 @@ extends Node2D
 ## no fleet to meter and no resource for a berth to draw down. The thing that visibly empties as the
 ## player plans is the stack of soldiers standing at the harbour, and `field_view` draws that.
 ##
-## ⚠ **The 1/2 keys are gone with them, and so is the speed ladder.** The hand does not move during
-## combat: the whole landing is authored before the start button and then watched. This file
-## therefore carries exactly ONE press — `commit` — and once that press has landed nothing on this
-## layer answers a click at all. `speed-off-open-landing`'s question A took the pause with the chips,
-## and its own row records that this overturns `plan-then-watch`'s decided 4 and takes the instrument
-## away from that decision's own metric.
+## ⚠ **The 1/2 keys' BOXES are gone with them, and so is the speed ladder.** The hand does not move
+## during combat: the whole landing is authored before the start button and then watched. This file
+## carries exactly ONE press — `commit` — and once that press has landed nothing on this layer answers
+## a click at all. `speed-off-open-landing`'s question A took the pause with the chips, and its own row
+## records that this overturns `plan-then-watch`'s decided 4 and takes the instrument away from that
+## decision's own metric.
+##
+## ⚠⚠ **THE KEYBOARD IS BACK, AND IT PRESSES NOTHING ON THIS LAYER** (`sea-summon`). Five summon slot
+## boxes are drawn bottom right and 1~5 arm one of them — but the boxes themselves are **not clickable
+## and have no hit rect at all**: what places a body is a press on the water. So the sentence above
+## survives exactly as written, and this file still holds one press. The user corrected the record
+## themselves: *"정확히는 배 속이 별로여서 뺀거임 1~5번키"* — the keys came out because of what was in
+## the boat, not because a key is the wrong door.
+## ⚠ The whole slot row lives inside the same `not battle.committed()` gate the start button does, and
+## that is **seam #4 of `sea-summon`'s OPEN question 1**: the bar's denominator (living bodies of the
+## slot's type) is only honest while nobody can die. Do not lift the gate without giving the bar a
+## denominator recorded at island open.
 ##
 ## Enemies-left is drawn from `battle.enemies_left()` and survives onto the lose screen on purpose:
 ## "the timer ran out with four alive" is a different loss from a wipe, and the player has to be able
@@ -46,7 +57,18 @@ extends Node2D
 ## game a unit still has to be named in words.
 const TYPE_LABELS := ["근접", "원거리", "들소", "까마귀", "사자"]
 
+## `_chip_fx` slot ids. **The start button is 0 and the five summon boxes are 1..5**, so one drawer
+## and one `_chip_offset` serve both — one concept, one value. Named rather than written as bare
+## numbers at four call sites, because the shell has to key the same slots from the other side.
+const CHIP_START := 0
+const CHIP_SLOT_BASE := 1
+
 var battle: Battle = null
+
+## Which summon slot the shell has armed, or -1. **Written only by `set_armed`**, which `game.gd` calls
+## from its own `_arm` / `_disarm` — the same two functions that tell `field_view` — so the HUD and the
+## field can never disagree about which slot is live.
+var _armed := -1
 
 ## Item 8's drawer. `slot -> {"sec": float, "ok": bool}`.
 ##
@@ -54,9 +76,11 @@ var battle: Battle = null
 ## the same button twice can then only reset the age, never stack two stains that multiply into a
 ## solid block. combat-juice, section B, picks the same shape for field_view's per-body drawer and
 ## for the same reason — stacking is made impossible by the container instead of by code that
-## remembers. **Slot 0 is the start button and it is the only slot there is**, now that the speed
-## chips are gone; the drawer keeps its dictionary shape because the anti-stacking property is the
-## reason it is a dictionary, not the number of slots.
+## remembers. **Slot `CHIP_START` is the start button and `CHIP_SLOT_BASE + i` is summon slot `i`** —
+## six slots, and the drawer would keep its dictionary shape at one, because the anti-stacking property
+## is the reason it is a dictionary and the number of slots never was.
+## ⚠ A held summon on a dry slot pushes one refusal PER BEAT and not per frame — `game.gd` owns that
+## rate; a mark fired every frame is a solid disc rather than a blink.
 var _chip_fx: Dictionary = {}
 
 ## Resolved once and kept, and STATIC because panel_view needs the same face — the explanation for
@@ -88,6 +112,14 @@ func bind(b: Battle) -> void:
 	# Island 2 must not open still wearing island 1's feedback. combat-juice pins the clearing on
 	# every `setup` / `bind` precisely because nothing else in the frame would ever notice.
 	_chip_fx.clear()
+	# Same argument, one field over: a slot armed on island 1 must not be drawn armed on island 2.
+	_armed = -1
+	queue_redraw()
+
+
+## The shell's one call, from `game.gd::_arm` and `_disarm`. -1 is "nothing armed".
+func set_armed(slot: int) -> void:
+	_armed = slot
 	queue_redraw()
 
 
@@ -104,8 +136,9 @@ func _process(delta: float) -> void:
 ## input→response budget for real-time controls under 100ms; this lands on the SAME frame the press
 ## happened, because Godot runs input before `_process` and `_process` queues the redraw.
 ##
-## Slot 0 is the start button. The name is generic because the drawer is, not because a second
-## caller exists — and a second caller would need a second rect, which `_chip_offset` reads.
+## Slot `CHIP_START` is the start button and `CHIP_SLOT_BASE + i` is summon slot `i`. **The name was
+## generic before the second caller existed and now it has five of them** — each one needs its own
+## rect, which is what `_chip_offset`'s caller reads.
 func note_chip(slot: int, ok: bool) -> void:
 	if slot < 0:
 		return
@@ -183,10 +216,43 @@ func _draw() -> void:
 	# alone leaves the box still and reads as nothing moving — combat-juice, item 8.
 	if not battle.committed():
 		var srect := Look.start_rect_px()
-		srect.position += _chip_offset(0)
-		_paint_button(face, srect, _chip_colour(0), "시작",
+		srect.position += _chip_offset(CHIP_START)
+		_paint_button(face, srect, _chip_colour(CHIP_START), "시작",
 			srect.position + Look.HUD_START_TEXT_OFFSET_PX,
 			Look.HUD_START_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+
+		# --- the five summon slots (sea-summon) ---------------------------------------------------
+		# ⚠ **Inside the SAME gate the start button is**, and that is seam #4 of OPEN question 1 — see
+		# this file's header. Nobody dies during planning, so the bar's denominator cannot move under
+		# its numerator; during a fight it could, and the bar would climb.
+		for i in Rules.summon_slot_count():
+			# ⚠ **The shake rides `rect.position` AND the glyph's `at` is derived from the SHIFTED
+			# rect.** Shake the box alone and the digit walks out of it; shake the digit alone and it
+			# reads as nothing having moved — combat-juice item 8, the same as the start button above.
+			var shake := _chip_offset(CHIP_SLOT_BASE + i)
+			var box := Look.slot_rect_px(i)
+			box.position += shake
+			# Two channels — fill AND border — so neither one carries the read of "this is the armed
+			# slot" alone. The pair's own inequality (`> PRESS_BORDER_WIDTH_PX + 2`, the snap floor) is
+			# what makes the thicker border reach the screen at all.
+			_paint_slot_box(box, _slot_colour(i), Look.COL_HUD_TEXT,
+				Look.PRESS_HOVER_BORDER_WIDTH_PX if i == _armed else Look.PRESS_BORDER_WIDTH_PX)
+			_paint_slot_digit(face, box.position + Look.HUD_SLOT_TEXT_OFFSET_PX, str(i + 1),
+				Look.HUD_SLOT_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+			# **An unbound slot draws NO bar; a slot whose bodies are all out draws an empty rail.**
+			# That rail is the only thing separating 「다 내보냈다」 from 「아직 아무것도 안 넣었다」.
+			var want := Rules.summon_type_of(i)
+			if want < 0:
+				continue
+			var rail := Look.slot_bar_rect_px(i)
+			rail.position += shake
+			var pool := 0
+			if battle.army != null:
+				pool = battle.army.living_ids_of_type(want).size()
+			var left := battle.slot_reserve_ids(i).size()
+			var frac := 0.0 if pool <= 0 else clampf(float(left) / float(pool), 0.0, 1.0)
+			_paint_slot_bar(rail, Look.COL_HP_EMPTY,
+				Rect2(rail.position, Vector2(rail.size.x * frac, rail.size.y)), Look.COL_ALLY)
 
 	_paint_enemies_left(face, Look.HUD_ENEMIES_LEFT_POS_PX, "적 %d" % battle.enemies_left(),
 		Look.HUD_FONT_SIZE_PX, Look.COL_HUD_TEXT)
@@ -213,3 +279,40 @@ func _paint_button(face: Font, rect: Rect2, bg: Color, text: String, at: Vector2
 
 func _paint_enemies_left(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
+
+
+## What a summon slot's box is filled with. **0 draws.** Three states and three tones:
+## armed -> `COL_START` (the same green the one press that ends planning wears, because arming is the
+## verb that leads to it) · bound and holding bodies -> `COL_BUTTON` · unbound or all bodies out ->
+## `COL_SLOT_OFF`, which already means *a slot that does not press* on the title screen.
+##
+## ⚠ Unbound and exhausted are ONE tone on purpose. They are the same sentence to the player — 「지금
+## 여기서는 아무것도 안 나온다」 — and what tells them apart is the bar underneath: an exhausted slot
+## has an empty rail and an unbound one has no rail at all.
+func _slot_colour(slot: int) -> Color:
+	if slot == _armed:
+		return Look.COL_START
+	if battle == null or battle.slot_reserve_ids(slot).is_empty():
+		return Look.COL_SLOT_OFF
+	return Look.COL_BUTTON
+
+
+## 2 calls: the fill, then the border that says which slot is live. One hook and not two — a box
+## without its border is the same box saying something else, not a second thing to draw. `border_w` is
+## an ARGUMENT rather than read from `look.gd` in here, so a spy can bite the armed/resting difference.
+func _paint_slot_box(rect: Rect2, bg: Color, border_col: Color, border_w: float) -> void:
+	draw_rect(rect, bg, true)
+	draw_rect(rect, border_col, false, border_w)
+
+
+## 1 call. The single digit that names the key which arms this slot.
+func _paint_slot_digit(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
+
+
+## 2 calls: the empty rail, then the filled part on top of it — the same two-rect shape `_paint_hp`
+## uses, and the empty half is drawn for the same reason. A bar only ever as long as what is left has
+## no length to lose, and 「nothing on screen ever went down」 is half of why the last game died.
+func _paint_slot_bar(back: Rect2, back_col: Color, fill: Rect2, fill_col: Color) -> void:
+	draw_rect(back, back_col)
+	draw_rect(fill, fill_col)

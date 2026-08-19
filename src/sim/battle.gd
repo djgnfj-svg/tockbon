@@ -372,7 +372,110 @@ func send(soldier_id: int, tile: int) -> int:
 		# moment of the judgement — three nets read it back to assert `send` and `home_harbour_for`
 		# answered as one. Same shape as `Rules.SPEED_STEPS`: a value with no reader inside `src/`
 		# needs a line saying why, or the next person deletes it as rot.
+		# ⚠⚠ **`summon` writes -1 here and that is the HONEST value, not a sentinel to be clamped.**
+		# A summoned boat was judged against no harbour at all — see that function.
 		"home": hb,
+	})
+	return uid
+
+
+## The bodies slot `slot` may still put on a boat: living, of that slot's type, and still RESERVE.
+## **Highest HP first, ties to the lower id** — that is `army.living_ids_of_type`'s already-documented
+## order, inherited rather than re-derived. Empty for an unbound or out-of-range slot, which is what
+## lets the shell test "unbound OR dry" with one call.
+##
+## **There is deliberately no second `slot_reserve_count`.** The HUD calls `.size()`; a count written
+## twice diverges.
+func slot_reserve_ids(slot: int) -> Array:
+	var out: Array = []
+	if army == null:
+		return out
+	var want := Rules.summon_type_of(slot)
+	# ⚠ `< 0` and never `<= 0` — `Rules.CELL_MELEE` is 0, so `<= 0` empties slot 1 forever and every
+	# count check downstream still passes, because a refusing slot looks exactly like an empty roster.
+	if want < 0:
+		return out
+	for raw in army.living_ids_of_type(want):
+		var i := int(raw)
+		if i < 0 or i >= soldier_state.size():
+			continue
+		if soldier_state[i] != SoldierState.RESERVE:
+			continue
+		out.append(i)
+	return out
+
+
+## Puts one body of slot `slot`'s type on a boat **at the sea tile `tile`**, aimed at the landing the
+## grid derives from it, and returns that boat's **uid** — or **-1 with nothing at all changed**.
+## `sea-summon` is the design.
+##
+## ⚠⚠ **This is `send` inverted.** `send` names the DESTINATION and `grid.home_harbour_for` derives the
+## origin; this names the ORIGIN and `grid.summon_landing_of` derives the destination. **A summon has
+## no harbour**, which is why nothing below asks for one.
+##
+## Refused when: already committed · no grid or army · the slot is out of range · the slot is unbound ·
+## the tile is not in the band · the slot is dry · the route is shorter than two points.
+##
+## ⚠ **The route test is a separate line rather than an assumption**, exactly as `send` carries it:
+## `can_summon_at` and `summon_route` agree by construction today (the second refuses on the first),
+## and the day one of them grows a case the other has not, a one-point path would divide by a
+## zero-length crossing instead of barking.
+##
+## ⚠ **The return is an int and uid 0 is the FIRST boat of every island**, so `if battle.summon(...)`
+## is a bug that refuses the common case. Every caller compares `>= 0`.
+func summon(slot: int, tile: int) -> int:
+	# ⚠ **Seam #1 of `sea-summon`'s OPEN question 1.** This build assumes the press happens BEFORE the
+	# start button; a live-fire version deletes this one line and nothing else in this function. Do not
+	# seal it by folding this call into a planning-only helper.
+	if _committed:
+		return -1
+	if grid == null or army == null:
+		return -1
+	if slot < 0 or slot >= Rules.summon_slot_count():
+		return -1
+	if Rules.summon_type_of(slot) < 0:
+		return -1
+	# ⚠ **REDUNDANT TODAY AND MEASURED SO**: `grid.summon_route` refuses on this same predicate, so
+	# deleting this line reddens nothing — the route test below catches every case. It is kept for the
+	# reason `send` keeps its own pair, written out rather than inferred: the two agree by construction
+	# *today*, and the day one of them grows a case the other has not, the refusal has to come from the
+	# predicate rather than from a side effect of the path being short.
+	if not grid.can_summon_at(tile):
+		return -1
+	var ids := slot_reserve_ids(slot)
+	if ids.is_empty():
+		return -1
+	# ⚠⚠ **The path and the target come from the summon field and from NOTHING else.** A `summon` that
+	# called `home_harbour_for` to satisfy an existing net would put the harbour back into a gesture
+	# that has none, and a grid with zero harbours would then refuse every press — which is exactly what
+	# `net_summon`'s zero-harbour row exists to catch.
+	var path := grid.summon_route(tile)
+	if path.size() < 2:
+		return -1
+	var cum := _arc_lengths(path)
+	var uid := _next_boat_uid
+	_next_boat_uid += 1
+	var sid := int(ids[0])
+	soldier_state[sid] = SoldierState.TRANSIT
+	soldier_pos[sid] = path[0]
+	boats.append({
+		"uid": uid,
+		"phase": Phase.OUTBOUND,
+		"speed": Rules.BOAT_SPEED,
+		"path": path,
+		"cum": cum,
+		"leg": 0,
+		"dist": maxf(cum[cum.size() - 1], Rules.EPS),
+		"t": 0.0,
+		"pos": path[0],
+		"soldiers": [sid],
+		"target": grid.summon_landing_of(tile),
+		# ⚠⚠ **-1 is the honest value.** `home`'s two jobs are a diagnostic in
+		# `tools/look/capture_landing.gd` and *the record of which harbour this boat was judged
+		# against* — and this one was judged against none. Nothing in `src/` reads it, and
+		# `_phase_landings` sails the return leg by REVERSING this boat's own path, so it goes back to
+		# the sea tile it was summoned at and vanishes there. **Do not add a return-to-harbour branch.**
+		"home": -1,
 	})
 	return uid
 

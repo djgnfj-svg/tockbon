@@ -22,10 +22,17 @@ extends Node2D
 ## object that does not exist cannot be reached.
 ##
 ## The input table this file implements is `plan-then-watch`, section "Input", with `title-and-map`'s
-## two branches on top of it. ⚠ The landing is authored with the mouse before a start button, and
-## **after that press only the camera answers at all** — `speed-off-open-landing` deleted the speed
-## chips and the pause with them, so a committed fight has nothing the hand can do to it. The keyboard
-## is not read anywhere.
+## two branches and `sea-summon`'s two on top of it. ⚠ The landing is authored before a start button,
+## and **after that press only the camera answers at all** — `speed-off-open-landing` deleted the speed
+## chips and the pause with them, so a committed fight has nothing the hand can do to it.
+##
+## ⚠⚠ **THE KEYBOARD IS READ AGAIN, and 1~5 ARM a summon slot rather than spawning anything**
+## (`sea-summon`). The user corrected the record themselves — *"정확히는 배 속이 별로여서 뺀거임
+## 1~5번키"* — the old keys came out because of what was IN the boat, not because a key is the wrong
+## door. What places a body is still a press, on the green band of water; the key only says which
+## slot. **The hand still does not move during combat**: every summon branch below is gated on
+## `battle.committed()`, and those gates are seams #2 and #3 of `sea-summon`'s OPEN question 1 — a
+## live-fire version deletes them and this build must not seal them shut.
 
 
 ## Session state. **`null` IS the title screen** — there is no separate scene and no autoload, and
@@ -89,6 +96,30 @@ var _pending_beak := -1
 ## frame, and delaying the CALL is the fix that does not edit the sim.
 var _pending_node := -1
 
+## `sea-summon`'s four. `_armed_slot` is which slot a number key has armed, or -1; `_summon_down` is
+## true while a summon press is being held; `_summon_at` is the tile under the cursor and
+## `_summon_cursor` the raw screen point it came from.
+##
+## ⚠ **The raw point is kept BESIDE the tile and is not derived from it.** `_tile_at` answers -1 off
+## the grid, and a press off the grid is a refusal that still has to draw its mark somewhere — with
+## only the tile there would be nowhere to put it.
+var _armed_slot := -1
+var _summon_down := false
+var _summon_at := -1
+var _summon_cursor := Vector2.ZERO
+
+## Seconds until the held summon puts out one more body.
+##
+## **Declared with an explicit type and not `:= 0.0`**, for the reason `_hold_sec` above already
+## carries: `net_draw_leaf`'s literal scan reads `src/shell/`, `sec` is one of its suffixes, and
+## `_x_sec := <number>` is exactly the shape it is widened to catch — the shape that would let the 0.20
+## be hardcoded here instead of read from `look.gd`. The zero is a "no beat is pending" sentinel, not a
+## duration.
+##
+## ⚠ **It is a different clock from `_hold_sec`** and the two never overlap: a hold cancels every
+## gesture on the first event it sees.
+var _summon_beat_sec: float = 0.0
+
 
 func _ready() -> void:
 	field_view = FieldView.new()
@@ -121,6 +152,9 @@ func _open_island() -> void:
 	# drop a drag that was in flight when the panel came up.
 	_drag_soldier = -1
 	field_view.set_drag(-1, -1)
+	# Same argument, one gesture over: a slot armed on island 1 must not survive onto island 2, and the
+	# tile it was aiming at would name a different piece of water there.
+	_disarm()
 	var opened := run.begin_island()
 	if opened != null:
 		battle = opened
@@ -201,6 +235,30 @@ func _process(delta: float) -> void:
 		return
 	if run.state() != Run.State.BATTLE:
 		return
+	# The held summon's beat (`sea-summon`). It sits ABOVE `battle.step` so a body placed this frame is
+	# on its boat before the sim looks at the boats.
+	#
+	# ⚠ **Seam #3 of OPEN question 1.** `not battle.committed()` is what makes this a planning gesture;
+	# a live-fire version deletes it, and `Look.SLOT_HOLD_SEC` then moves to `rules.gd` because during
+	# a fight it is the arrival spacing of reinforcements and changes what happens. Do not hard-code
+	# the cadence here and do not fold this into a planning-only helper — the seam is the thing worth
+	# preserving, the same argument `speed-off-open-landing` made for `Battle.step(dt)` keeping a bare
+	# delta after the multiplier was deleted.
+	if _summon_down and battle != null and not battle.committed():
+		_summon_beat_sec -= delta
+		# ⚠ **`+=` and not `=`**, so a long frame does not swallow beats. **It terminates
+		# unconditionally**: every pass adds a positive constant whether or not the summon succeeded,
+		# so the accumulator climbs out in a bounded number of passes. That argument is written down
+		# rather than assumed, because a `while` inside a `_process` is the shape that hung a net for
+		# 148.7 s in this repo once and printed no verdict at all.
+		# ⚠ **`<= Rules.EPS` and not `<= 0.0`, and the epsilon is load-bearing.** Four frames of 0.05
+		# against a 0.20 cadence leave `1.4e-17` on the accumulator, and a bare `<= 0.0` holds the beat
+		# back a whole extra frame for a residue eleven orders of magnitude under a millisecond. This is
+		# the same boundary — and the same epsilon — `Battle._arrived` already carries for the same
+		# reason: a float sum that lands ON the mark must count as having reached it.
+		while _summon_beat_sec <= Rules.EPS:
+			_fire_one_summon()
+			_summon_beat_sec += Look.SLOT_HOLD_SEC
 	# ⚠ **A BARE delta, and the call keeps taking one.** `speed-off-open-landing`'s 「what does NOT
 	# come out」 pins this: do not inline a constant anywhere, because the seam a multiplier plugs back
 	# into is the thing worth preserving. `Battle.step` still consumes whole `Rules.SIM_SUBSTEP_SEC`
@@ -272,6 +330,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		_panning = false
 		_drag_soldier = -1
 		field_view.set_drag(-1, -1)
+		# The held summon is cancelled here for exactly the reason the drag is: suppressing only the
+		# MOTION events leaves the flag alive, and the very next motion after the hold ends resumes a
+		# gesture the plan says must have been cancelled. The slot stays ARMED — arming is a mode, not
+		# a gesture in flight.
+		_summon_down = false
 		return
 	# ⚠ **The map branch sits ABOVE the mouse block below**, and that is measured against the code
 	# rather than tidy: the fall-through at the bottom of `_on_left_press` is `_panning = true`, so a
@@ -279,9 +342,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if run.state() == Run.State.MAP:
 		_map_input(event)
 		return
-	# ⚠ **There is no `InputEventKey` branch any more, and `_on_key` is deleted whole.** The 1/2 summon
-	# keys were the whole of the keyboard, and `plan-then-watch` deletes them: the landing is authored
-	# with the mouse before the start button and the hand does nothing during the fight.
+	# ⚠⚠ **The `InputEventKey` branch is BACK** (`sea-summon`), and it does something different from
+	# the `_on_key` `plan-then-watch` deleted: those keys spawned a body straight onto a boat, and
+	# these only ARM a slot. The landing is still authored by a press on the field, and it is still all
+	# authored before the start button. ⚠ Raw keycodes off the event and no `[input]` action: there is
+	# no `[input]` section in `project.godot` and none is added, so what a net drives is the shell
+	# rather than a settings file. Numpad keycodes and rebinding are out of scope.
+	if event is InputEventKey and (event as InputEventKey).pressed:
+		_on_summon_key(event as InputEventKey)
+		return
 	if event is InputEventMouseButton:
 		var click := event as InputEventMouseButton
 		if click.button_index == MOUSE_BUTTON_WHEEL_UP and click.pressed:
@@ -304,7 +373,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		# The gate is on the branch and not on the handler: the pan below has to keep working after the
 		# commit, and gating the whole handler would be the inert screen that makes the post-commit
 		# checks pass for the wrong reason.
-		if _drag_soldier >= 0 and battle != null and not battle.committed():
+		#
+		# ⚠ **The summon aim is updated whether or not the button is down**, so the ring and the route
+		# are readable BEFORE the press rather than after it. It is gated on the commit for the same
+		# reason the drag is and not as padding: ungated, a committed fight would consume every motion
+		# here and the pan below would never run again.
+		if _armed_slot >= 0 and battle != null and not battle.committed():
+			_summon_cursor = motion.position
+			_summon_at = _tile_at(motion.position)
+			field_view.set_summon_aim(_armed_slot, _summon_at)
+		elif _drag_soldier >= 0 and battle != null and not battle.committed():
 			# The candidate tile tracks the cursor; `battle.send` is not called until the release, so a
 			# drag that never releases over a droppable tile never touches the sim at all.
 			field_view.set_drag(_drag_soldier, _tile_at(motion.position))
@@ -413,6 +491,7 @@ func _enter_map_screen() -> void:
 	_drag_soldier = -1
 	field_view.setup(null, null, [])
 	field_view.set_drag(-1, -1)
+	_disarm()
 	hud_view.bind(null)
 	map_view.bind(run)
 	# The node the run is standing on is the one that was just cleared, and -1 (a run that has landed
@@ -460,11 +539,22 @@ func _on_left_press(at: Vector2) -> void:
 				# press did nothing because nobody is being landed" from "that press did nothing because
 				# the game is not listening", and the shell is the only place both facts exist at once.
 				# `combat-juice`, item 8, now pointed at the one press that ends the planning phase.
-				hud_view.note_chip(0, battle.commit())
+				hud_view.note_chip(HudView.CHIP_START, battle.commit())
 				return
 			var uid := _ring_hit_at(at)
 			if uid >= 0:
 				battle.recall(uid)
+				return
+			# ⚠ **The summon sits between the ring and the soldier, and BOTH sides of that are
+			# measured.** Above the ring it would eat an undo — a landing ring is 18 px around a LAND
+			# tile and can overlap the water beside it, and losing undo is the worse failure, which is
+			# the same argument this file already makes for "2 before 3". Below the harbour stack it
+			# would be unreachable wherever the stack sits over the band.
+			# ⚠ **It CONSUMES the press** (`sea-summon`, question 8): with a slot armed, a press outside
+			# the band marks a refusal instead of silently starting a pan. The wheel stays ungated and
+			# the same number key disarms, which is what that costs and what pays for it.
+			if _armed_slot >= 0:
+				_begin_summon(at)
 				return
 			var soldier := _soldier_hit_at(at)
 			if soldier >= 0:
@@ -493,6 +583,12 @@ func _on_left_press(at: Vector2) -> void:
 ## ⚠ **The `_drag_soldier` branch is the third PLAN BRANCH the commit gate lives on.** Without it a
 ## press that started before the commit and released after it would still author a landing.
 func _on_left_release(at: Vector2) -> void:
+	if _summon_down:
+		# **The slot stays ARMED**, so the next press streams again with no key press in between. Only
+		# the aim's tile is cleared; the arm is a mode and the press is the gesture.
+		_summon_down = false
+		_summon_at = -1
+		field_view.set_summon_aim(_armed_slot, -1)
 	if _drag_soldier >= 0:
 		var soldier := _drag_soldier
 		_drag_soldier = -1
@@ -502,6 +598,103 @@ func _on_left_release(at: Vector2) -> void:
 			if tile < 0 or battle.send(soldier, tile) < 0:
 				field_view.note_refusal(field_view.screen_to_world_px(at))
 	_panning = false
+
+
+# --- the summon (sea-summon) ----------------------------------------------------------------------
+
+## A number key. `1`..`5` arm a slot; the same key disarms it; anything else falls through.
+##
+## ⚠⚠ **The `echo` guard is not optional.** OS auto-repeat on a held number key delivers
+## `pressed = true, echo = true` many times a second, and without this the arm would toggle on and off
+## silently for as long as the key is down.
+##
+## ⚠ **`battle.committed()` is seam #2 of `sea-summon`'s OPEN question 1** — a live-fire version takes
+## this test out and the slot row keeps drawing. It is not padding: after the commit there is nothing
+## a slot could place, and an arm that survived would consume every field press for the rest of the
+## fight (see `_on_left_press`).
+##
+## **Unbound and dry are ONE test**, because `slot_reserve_ids` is empty for both — and they are the
+## same sentence to the player. The refusal goes to the HUD as a shake on that slot's own box, which
+## is the only thing separating "that key did nothing because the slot is empty" from "that key did
+## nothing because the game is not listening".
+func _on_summon_key(key: InputEventKey) -> void:
+	if key.echo:
+		return
+	if battle == null or battle.committed():
+		return
+	var slot := _slot_of_keycode(key.keycode)
+	if slot < 0:
+		return
+	if slot == _armed_slot:
+		_disarm()
+		return
+	if battle.slot_reserve_ids(slot).is_empty():
+		hud_view.note_chip(HudView.CHIP_SLOT_BASE + slot, false)
+		return
+	_arm(slot)
+
+
+## `KEY_1`..`KEY_5` -> 0..4, and -1 for everything else. A table rather than arithmetic on the
+## keycode: the five values are not guaranteed contiguous by anything this file controls.
+func _slot_of_keycode(code: int) -> int:
+	match code:
+		KEY_1:
+			return 0
+		KEY_2:
+			return 1
+		KEY_3:
+			return 2
+		KEY_4:
+			return 3
+		KEY_5:
+			return 4
+	return -1
+
+
+## Arms `slot`, or clears the arm. **Two functions, one place each**, and both tell the HUD and the
+## field in the same breath — so the box that is drawn green and the band that answers a press can
+## never name two different slots.
+func _arm(slot: int) -> void:
+	_armed_slot = slot
+	hud_view.set_armed(_armed_slot)
+	field_view.set_summon_aim(_armed_slot, _summon_at)
+
+
+## ⚠ **`_summon_beat_sec` is deliberately NOT reset here**, and it is not an oversight. The beat only
+## runs while `_summon_down` is true, and the only thing that sets that is `_begin_summon` — which
+## writes the accumulator in the same breath. A `_summon_beat_sec = 0.0` here would also be caught by
+## `net_draw_leaf`'s literal scan as a hardcoded duration in the shell, which is exactly the shape the
+## explicit type on its declaration exists to keep that scan biting.
+func _disarm() -> void:
+	_armed_slot = -1
+	_summon_down = false
+	_summon_at = -1
+	hud_view.set_armed(-1)
+	field_view.set_summon_aim(-1, -1)
+
+
+## Begins the stream. **One body leaves on the frame of the press**, not one cadence later — Swink's
+## bound on input-to-response is under 100 ms and `SLOT_HOLD_SEC` is 200.
+func _begin_summon(at: Vector2) -> void:
+	_summon_down = true
+	_summon_cursor = at
+	_summon_at = _tile_at(at)
+	field_view.set_summon_aim(_armed_slot, _summon_at)
+	_fire_one_summon()
+	_summon_beat_sec = Look.SLOT_HOLD_SEC
+
+
+## One beat's worth. **The refusal mark is driven by `Battle.summon`'s own -1 and by nothing else** —
+## the same guarantee the drag's mark carries, so this file can never deny a tile the sim allows.
+##
+## ⚠ **Once per BEAT and never once per frame.** 「더 없다」 is a picture, not a silence, and a mark
+## fired every frame is a solid disc rather than a blink.
+## ⚠ The position comes from the raw cursor point rather than from `_summon_at`: a press off the grid
+## is `tile == -1`, which is a refusal that still has to draw its mark somewhere.
+func _fire_one_summon() -> void:
+	if battle.summon(_armed_slot, _summon_at) >= 0:
+		return
+	field_view.note_refusal(field_view.screen_to_world_px(_summon_cursor))
 
 
 ## Which soldier still standing at the harbour a press at `at` grabs, or -1.
@@ -565,11 +758,16 @@ func _tile_at(at: Vector2) -> int:
 ## Zooms the field about `at`, keeping the world point under the cursor fixed
 ## (`field_view.zoom_at`). Refused while the panel is up, same as the drag.
 ##
-## ⚠ **This is NOT gated on the commit and must not be.** It holds no plan gesture — it reads exactly
-## the same before and after the start button — and gating it turns the "the camera still works
-## during the fight" row red, which is the one row that stops the "the hand does nothing after the
-## commit" rows from being satisfied by a screen that does nothing at all. `plan-then-watch`, section
-## "Input": **three plan branches are gated, not four.**
+## ⚠ **This is NOT gated on the commit and must not be, and it is not gated on the ARM either.** It
+## holds no plan gesture — it reads exactly the same before and after the start button, and with a
+## summon slot armed or without one — and gating it turns the "the camera still works during the
+## fight" row red, which is the one row that stops the "the hand does nothing after the commit" rows
+## from being satisfied by a screen that does nothing at all.
+## ⚠⚠ **It is also the whole mitigation for `sea-summon`'s question 8**: an armed slot consumes every
+## field press, so a left-drag no longer pans while one is armed. The wheel and the disarming key are
+## what a player who armed a slot and then wanted to look around has left.
+## `plan-then-watch`, section "Input": **five plan branches are gated, not six** — the drag's press,
+## motion and release, plus `sea-summon`'s summon key and summon press.
 ##
 ## ⚠ At `ZOOM_MIN` the map is narrower than the visible world on BOTH axes, so a PAN cannot move the
 ## camera at all — `_clamp_cam` centres both. That is the framing the user asked for (「조금 더 카메라를
@@ -619,7 +817,9 @@ func _click_panel(at: Vector2) -> void:
 # ⚠ Three handlers are gone whole and none of them was replaced by an equivalent:
 #  - `_click_dock` — a fixed dock stopped existing in `boat-and-landing`;
 #  - `_on_key` — the 1/2 summon keys stopped existing in `plan-then-watch`, along with the whole
-#    `InputEventKey` branch of `_unhandled_input`. The keyboard does nothing in this game now;
+#    `InputEventKey` branch of `_unhandled_input`. ⚠⚠ **The BRANCH came back with `sea-summon` and
+#    that handler did not**: `_on_summon_key` above arms a slot, where `_on_key` put a body straight
+#    onto a boat. A key that selects and a key that spawns are not the same handler restored;
 #  - `_boat_hit_at` / `_boat_grabbable` — they tested a HUD berth rect and an idle hull rect for a
 #    FLEET SLOT, and there is no fleet. `_soldier_hit_at` and `_ring_hit_at` above are what a press
 #    is asked instead, and neither one names a boat that already exists.

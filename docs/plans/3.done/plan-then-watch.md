@@ -876,6 +876,13 @@ that way so nobody later reads it as evidence the planning state lives in `Run`.
 `game.gd` stays the only file that reads an event. **`_on_key` is deleted whole**, and the
 `InputEventKey` branch of `_unhandled_input` empties with it.
 
+> ⚠⚠ **THE COUNT IS FIVE NOW, AND THE `InputEventKey` BRANCH IS BACK** — `sea-summon` added a summon
+> key and a summon press, both gated on `battle.committed()`, so `game.gd`'s own comment reads
+> **「five plan branches are gated, not six」**. The wheel is still the ungated one. **What this
+> section decided is untouched**: 1~5 ARM a slot rather than spawning anything, the landing is still
+> authored before the start button, and the hand still does not move during combat. Corrected here,
+> in the file that makes the claim, rather than only where the code changed.
+
 | Input | **Before commit** | **After commit** |
 |---|---|---|
 | Left press on an **un-sent soldier's body** (`_soldier_hit_at`) | grab that soldier (`_drag_soldier = i`) | **nothing** |

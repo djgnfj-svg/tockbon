@@ -120,6 +120,17 @@ var zoom := 1.0
 var _drag_soldier := -1
 var _drag_tile := -1
 
+## The summon aim (`sea-summon`). `_summon_slot` is the slot a number key has armed, or -1;
+## `_summon_aim` is the tile under the cursor, or -1. **Both are set by `game.gd` through one call**,
+## `set_summon_aim`, exactly as the drag's two fields are — "armed", "moved" and "cleared" all go
+## through it, so the two can never disagree about whether the aim marks should be showing.
+##
+## ⚠ **Neither of them gates the BAND.** The green ribbon is drawn from the moment the island opens
+## with nothing armed at all: the region on screen at frame one is what says a press belongs there,
+## and that is the answer to 「뭐 어떻게 동작시키는지 전혀모르겠는데?」.
+var _summon_slot := -1
+var _summon_aim := -1
+
 ## P7's stalled-boat blink clock (`boat-and-landing` stage 5). A boat's OWN age is not the right
 ## clock for this — a boat that just arrived and a boat that has been stuck for ten seconds must
 ## blink in the same phase, or the mark would read as counting something instead of as a warning.
@@ -141,6 +152,10 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	# its soldier id would now name a stranger standing at a different harbour.
 	_drag_soldier = -1
 	_drag_tile = -1
+	# Same argument as the drag one line up: a slot armed on island 1 must not survive onto island 2,
+	# and the tile index it was aiming at would name a different piece of water there.
+	_summon_slot = -1
+	_summon_aim = -1
 	_wait_clock = 0.0
 	# The survey: an island opens zoomed all the way out, so the WHOLE island is on screen before
 	# anything is planned — `plan-then-watch` 6.3, on the user's 「조금 더 카메라를 뒤로 빼야 될」.
@@ -282,6 +297,15 @@ func set_drag(soldier: int, tile: int) -> void:
 	_drag_tile = tile
 
 
+## Called by `game.gd` whenever a slot is armed or disarmed, whenever the cursor moves with one armed,
+## and on the release. `slot == -1` clears the whole aim. **0 draw calls** — the same shape `set_drag`
+## above is, and for the same reason: one call site for three events means the two fields cannot
+## disagree.
+func set_summon_aim(slot: int, tile: int) -> void:
+	_summon_slot = slot
+	_summon_aim = tile
+
+
 ## One mark at `at_px` (world px) saying the sim REFUSED this drop. **0 draw calls** — it pushes one
 ## entry into the transient drawer and the ground-ring block paints it on the next frame, the same
 ## path every other transient takes.
@@ -330,6 +354,20 @@ func _draw() -> void:
 				var row: String = rows[ty]
 				if tx < row.length():
 					fill = Look.terrain_colour_of_char(row[tx])
+			# --- the summonable band (sea-summon) ---------------------------------------------
+			# ⚠⚠ **A BLEND INTO THE EXISTING FILL, not a second pass, and that is what makes it
+			# checkable.** A `_paint_band` leaf would add a leaf, a draw call per band tile and a new
+			# width row; as a blend it costs zero extra draw calls, and a spy on `_paint_tile` sees the
+			# `fill` argument — so "the band was drawn" is measured by two fills being DIFFERENT, and
+			# dropping the blend makes the behaviour VANISH rather than diverge.
+			# ⚠ **The predicate is `grid.can_summon_at` and nothing else** — the same call
+			# `Battle.summon` refuses on — so the green cannot promise a tile the sim then denies. That
+			# is the guarantee the deleted coast wash carried and the reason it was trusted at all.
+			# The bounds test is here because this loop runs `WATER_MARGIN_TILES` wider than the grid
+			# and `tile_index` off the map would compute an in-range index for a tile that is not there.
+			if tx >= 0 and ty >= 0 and tx < battle.grid.w and ty < battle.grid.h:
+				if battle.grid.can_summon_at(battle.grid.tile_index(tx, ty)):
+					fill = fill.blend(Look.COL_SUMMON_BAND)
 			_paint_tile(
 				Look.tile_rect_px(tx, ty),
 				fill,
@@ -435,6 +473,34 @@ func _draw() -> void:
 				for wp in battle.grid.water_route(drag_hb, _drag_tile):
 					plan_px.append(Look.tile_point_px(wp))
 				_paint_route(plan_px, Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
+
+		# --- 2c. the summon aim (sea-summon) -------------------------------------------------------
+		# The same two leaves the drag uses, and nothing new. **A dry slot draws NEITHER** — the absence
+		# is the answer, and it arrives before the press instead of after it.
+		if _summon_slot >= 0 and _summon_aim >= 0 \
+				and not battle.slot_reserve_ids(_summon_slot).is_empty():
+			# ⚠ **The predicate is `can_summon_at`, the call `Battle.summon` itself refuses on** — not
+			# 「does this water tile have a landing at all」, which answers yes 534 tiles out to sea on
+			# island 0 and would promise a crossing the sim will not make.
+			var aim_ok := battle.grid.can_summon_at(_summon_aim)
+			var aim_landing := battle.grid.summon_landing_of(_summon_aim)
+			# ⚠⚠ **The ring sits on the DERIVED LANDING and not on the pressed tile.** The landing is
+			# the thing the player is choosing; the pressed tile is only how they said it. Off the band
+			# there is no landing to point at, so the refusal ring goes where the hand is.
+			var aim_at := _summon_aim if not aim_ok or aim_landing < 0 else aim_landing
+			_paint_ring(
+				Look.tile_point_px(battle.grid.tile_point(aim_at)),
+				Look.TARGET_RING_R_PX,
+				Look.COL_WIN if aim_ok else Look.COL_LOSE,
+				Look.AREA_RING_WIDTH_PX)
+			if aim_ok:
+				# ⚠ **Built from `grid.summon_route` — the same call `Battle.summon` builds its boat
+				# from** — so the screen cannot promise a crossing the sim does not make. Inherited from
+				# the drag's own route above rather than re-derived.
+				var summon_px := PackedVector2Array()
+				for wp in battle.grid.summon_route(_summon_aim):
+					summon_px.append(Look.tile_point_px(wp))
+				_paint_route(summon_px, Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
 
 	# --- 3. target lines -----------------------------------------------------------------------
 	# ENEMY side only, and none at all above the count: this is the one effect of the twelve that
