@@ -917,3 +917,98 @@ before running:**
 | 5 | the `_hold_sec` gate stops clearing `_summon_down` | **red** — slots (6 boats where 1 was expected) |
 | 6 | `field_view.setup` stops clearing the aim | **red** — slots, 2 rows |
 | 7 | `hud_view.bind` stops clearing `_armed` | **red** — slots |
+
+---
+
+### Round 3 — fixer
+
+changed   `src/sim/rules.gd` (`SUMMON_BAND_TILES := 2` -> `SUMMON_BAND_MIN_TILES := 4`, and the sweep it
+was chosen from) · `src/sim/grid.gd` (`can_summon_at` inverted, plus an explicit `UNREACHABLE` guard the
+inversion made load-bearing) · `tests/nets/net_summon.gd` (every band literal re-derived, two fixtures
+grown, three new rows) · `docs/design/sea-summon.md` (§3.2, §3.3 and §5.3).
+
+why       The user played it. ✅ **The gesture is accepted** — *"동작방식은 맞음"*, the first thing in
+this repo they have said works — and the region is not:
+***"해안선에 배를 배치하는게 아니라 좀 거리를 둬야함 지형하고 많이 줘도됨 배가 가는게 중요하니까"***.
+**The reason is a design reason and not a preference: the crossing is the thing worth watching, and a
+band hugging the shore deletes it.**
+
+closed    **The band is a MINIMUM distance from land and has no maximum.** The constant was RENAMED with
+its meaning — a constant whose sense inverts under the same name is one nobody re-reads.
+
+**D = 4, chosen from a sweep, compared against `≥ 3` and `≥ 6`.** Band tiles · distinct reachable
+landings · crossing min/median/max at `BOAT_SPEED` 4.0, all three islands:
+
+| rule | band | landings | crossing | spread |
+|---|---|---|---|---|
+| `≤ 2` (replaced) | 190 / 174 / 186 | 82 / 75 / 80 | 0.25 / 0.60 / 0.71 | 0.46 s |
+| `≥ 3` | 534 / 516 / 540 | 45 / 40 / 43 | 0.85 / 2.47 / 5.96 | **5.11 s** |
+| **`≥ 4` — adopted** | **470 / 460 / 478** | **42 / 38 / 40** | **1.10 / 2.47 / 5.96** | **4.86 s** |
+| `≥ 6` | 360 / 360 / 366 | 34 / 35 / 34 | 1.60 / 2.83 / 5.96 | 4.36 s |
+
+⚠⚠ **The MAXIMUM crossing is 5.96 s at every value, because the water is finite** — distance lifts the
+FLOOR and SHRINKS the spread, and the spread peaks at `≥ 3`. **4 is one step past the peak**, bought for
+a guaranteed 1.10 s minimum so no summon is ever instant. ⚠ **4.86 s is §5.2's drag figure restored**
+(the drag's crossing spread was 4.50–4.75 s) — reached now by one press instead of 10–13.
+
+**The destination rule did not have to move, and that is measured rather than assumed.** `_summon_field`
+is already a multi-source BFS whose `summon_landing[t]` is the landing of the NEAREST seed, min over all
+shortest paths. **「가까운 곳으로 자동이동」 was already built** — what the distance changes is not the
+rule but its answer.
+
+⚠⚠ **THE CATCHMENT COST, said as a number rather than papered over.** §3.3 predicted this and it is half
+right: the four biggest catchments really are corner landings (**40 / 40 / 72 / 84** tiles at `≥ 4`,
+against a MEDIAN catchment of **8**), but *"the same four corner landings"* overstates it —
+**42 of 84 coast tiles on island 1 stay individually addressable, 38 of 76, 40 of 82.** ⇒ **Half the
+coastline is the price**, and `net_summon` asserts the loss as 42 / 38 / 42 tiles rather than letting it
+read as the old two.
+
+**The long map (144 × 32)**: **1424 band tiles · 140 of 174 landings · crossing 1.10 / 2.83 / 17.96 s**,
+all 1424 producing a route. ⚠ **The catchment barely collapses there** — the coast is one straight line
+rather than a ring, so far sea drains to many nearest landings instead of to four corners. It has its own
+net row now; it is still not wired into `Rules.MAP_NODES`.
+
+**No island's band went empty or unreachable.** 470 / 460 / 478 pinned, and **all 1408 band tiles walk a
+route** (was 550). ⚠ **No island had to be given a smaller D** — the smallest band is island 2's 460,
+still 2.5x the 190 it replaced.
+
+⚠⚠ **THE GUARD THE INVERSION MADE LOAD-BEARING, AND IT WAS GREEN WHEN DELETED.** `UNREACHABLE` is
+`1 << 30`: under `<= max` it failed the test for free, under `>= min` it **passes**. Dropping the guard
+reddened NOTHING on the three islands or the long map, because all their water is one connected body —
+**the same shape this feature was bounced for last round.** So it has a fixture: a lake ringed by `#`,
+whose water touches no passable tile and is therefore never seeded. With it, mutation 2 reddens.
+
+not closed  ⚠⚠ **THE BAND/BOX TIE GOT WORSE, exactly as predicted.** The finding I pushed back on last
+round — nothing ties the green band to the five slot boxes, so 1~5 is undiscoverable until pressed — is
+**strictly worse now**: the band is no longer touching the island, so the only thing on screen anywhere
+near it is open water. **No fix built** (the shared-tone answer is still refused by `COL_SUMMON_BAND`'s
+own decision in `look.gd`, and an arrow or a label is unspecified presentation). **It is now the biggest
+open thing in this feature.**
+⚠ **I did not take a capture.** Whether the band still reads as a place to aim when it is no longer
+touching the shore is a screen judgement and **verify-look's**; a builder measuring its own picture is
+the bias this repo separates the roles for. **Where to look**: the green now starts four tiles out and
+runs to the map edge, so the question is whether it reads as *a region* or as *the whole sea*.
+⚠ **A new ranking question, and it is the interesting one this round leaves.** §5.4 worried that
+flattening the crossing removed the cost pulling toward the harbour-adjacent beach. **Term 2 is back at
+full size and it no longer points at a harbour at all** — it points at whatever coast is nearest to where
+you pressed. **Nobody has measured whether THAT ranking is dominated.**
+⚠ **Independent mutation coverage is still zero** (both sweeps landed in a worktree at `20ff378`, a tree
+with no `grid.gd`). Everything below is hand-run in the main tree.
+⚠ **Carried**: `flow_field`/`step_toward` have no diagonal-shoulder guard · `SPARK_LEN_PX` is under the
+snap floor at `ZOOM_MIN` · `TARGET_LINE`, `SPARK` and the `CLIFF_FACE` line · the probe has not been
+re-run since the loss rule changed.
+
+nets      **17 nets · 2576 checks · 4.5 s · green**, stderr clean. Was 17 / 2558 / 5.1 s. Fingerprint
+`C3311EBFE3B2`.
+
+⚠ **Every literal in this round was derived OUTSIDE Godot** from a from-scratch reimplementation of
+`_summon_field`, its tie-break, `_water_step_open`, the string-puller and GDScript's own
+round-half-away-from-zero — the same discipline `net_summon`'s own header already required.
+
+**Three mutations, each edited and re-run in ONE command, replacement asserted before running:**
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | `can_summon_at` back to `>= 1 and <= 2` | **red** — summon, 14 checks |
+| 2 | the `UNREACHABLE` guard dropped | **red** — summon, 3 checks ⚠ **green before the lake fixture existed** |
+| 3 | `SUMMON_BAND_MIN_TILES` 4 -> 3 | **red** — summon, 14 checks (band, landings, near-water, the long map) |

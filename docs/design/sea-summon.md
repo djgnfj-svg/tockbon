@@ -175,6 +175,38 @@ a summoned boat sails to the nearest landing it can reach from where it was born
 | C, `≤ 5 hops` | 264 / 253 / 264 | 34–38% | ⚠ **35 / 32 / 28 = 34–46%** |
 | C, `≤ 8 hops` | 487 / 468 / 500 | 67–69% | ⚠ **42 / 40 / 42 = 50–53%** |
 
+#### ⚠⚠ SHIPPED, THEN INVERTED BY THE USER — **rule B is a MINIMUM distance now, not a maximum**
+
+The build shipped rule B at `d ≤ 2` and the user played it. **The gesture was accepted** —
+*"동작방식은 맞음"* — and the region was not:
+
+> ***"해안선에 배를 배치하는게 아니라 좀 거리를 둬야함 지형하고 많이 줘도됨 배가 가는게 중요하니까"***
+
+⇒ **`SUMMON_BAND_TILES` (a maximum) became `SUMMON_BAND_MIN_TILES` (a minimum), and there is no maximum
+at all.** The reason is a design reason and not a preference: **the crossing is the thing worth watching,
+and a band hugging the shore deletes it.** The sweep, measured on all three islands — band tiles ·
+distinct reachable landings · crossing min/median/max at `BOAT_SPEED` 4.0:
+
+| Rule | sea tiles (i0 / i1 / i2) | **landings reachable** | crossing min / med / max | spread |
+|---|---|---|---|---|
+| B `≤ 2` (shipped, replaced) | 190 / 174 / 186 | **82 / 75 / 80** | 0.25 / 0.60 / 0.71 | 0.46 s |
+| B `≥ 3` | 534 / 516 / 540 | 45 / 40 / 43 | 0.85 / 2.47 / 5.96 | **5.11 s** |
+| **B `≥ 4` — adopted** | **470 / 460 / 478** | **42 / 38 / 40** | **1.10 / 2.47 / 5.96** | **4.86 s** |
+| B `≥ 6` | 360 / 360 / 366 | 34 / 35 / 34 | 1.60 / 2.83 / 5.96 | 4.36 s |
+| B `≥ 10` | 152 / 152 / 152 | 30 / 31 / 25 | 2.60 / 3.54 / 5.96 | 3.36 s |
+
+⚠⚠ **The MAXIMUM crossing is 5.96 s at every value, because the water is finite.** So distance lifts the
+FLOOR and shrinks the SPREAD — the spread peaks at `≥ 3` and decays from there. **4 is one step past the
+peak**, bought for a guaranteed 1.10 s minimum so that no summon is ever instant. The trade is three
+landings and 0.25 s of spread for a visible crossing on every press.
+
+⚠ **The band is now BIGGER, not smaller** — 470 against 190 — because a minimum with no maximum is most
+of the sea. 「많이 줘도됨」 is the whole of that.
+
+**The long map (144 × 32)**: 1424 band tiles · **140 of 174 landings** · crossing **1.10 / 2.83 / 17.96 s**.
+⚠ **The catchment barely collapses there**, because the coast is one long straight line rather than a
+ring, so far-out sea drains to many different nearest landings instead of to four corners.
+
 ⇒ **Rule C is refused, and by a number rather than by taste.** Anchoring the region to the harbours throws
 away **half to three quarters of the coastline** — which is the exact defect the user already threw out
 once: *"39% · 42% · 40% of each island's own coastline"* refused by the old harbour line-of-sight test,
@@ -210,6 +242,26 @@ where it is hard.**
 
 ⇒ **So the gesture does not fix aiming. What it fixes is the NUMBER of aims** — see section 6. **Both
 halves are kept because the first one is the one a builder would otherwise assume.**
+
+#### ⚠⚠ REFUTED BY THE USER'S DECISION — **the measurement was right and it is overridden**
+
+**Nothing above is withdrawn. The verdict on it is.** *"The sea press is imprecise exactly where it is
+useless and precise exactly where it is hard"* assumed the point of the gesture was AIM. The user's
+reason for moving the band out is a different axis entirely — *"배가 가는게 중요하니까"*, the crossing is
+the thing worth watching — so **precision at the shore was never the thing being bought.**
+
+**What it costs, measured at the adopted `≥ 4` rather than argued about:**
+
+| | median catchment | four biggest | landings reachable |
+|---|---|---|---|
+| `≤ 2` (replaced) | **2 tiles** | 8 / 8 / 10 / 10 | 82 / 75 / 80 |
+| **`≥ 4` (adopted)** | **8 tiles** | **40 / 40 / 72 / 84** | **42 / 38 / 40** |
+
+⇒ **§3.3's shape was exactly right** — the four biggest catchments really are the corner landings, and
+they really do swallow 40–84 tiles each. ⚠ **But "the same four corner landings" overstates it**: the
+MEDIAN catchment is 8 tiles and **42 of 84 coast tiles stay individually addressable on island 1**. The
+collapse is a halving, not a collapse to four. **Half the coastline is the price**, and it is written
+here as a number so a later round prices it rather than re-deriving the argument.
 
 ### 3.4 What the derived landing actually is
 
@@ -332,6 +384,22 @@ could feel, which is what 5.4 and 5.5b are arguing about. But it is a **flatteni
 "identical" is a word this doc may not use: a later round pricing plans off this line would build on a
 zero that does not exist. **A number cited as exact and reaching the build as something else is the shape
 this repo has paid for four times.**
+
+#### ⚠⚠ AND THEN THE USER PUT THE TERM BACK — the spread is **4.86 s**
+
+**5.3, 5.4 and 5.5b were all arguing about a term this gesture had flattened.** The user played the build
+and moved the band away from the shore (§3.2), and the crossing came back with it: **1.10 / 2.47 /
+5.96 s, a spread of 4.86 s** at the adopted `≥ 4`.
+
+⇒ **That is §5.2's own drag figure restored.** The drag's crossing spread was **4.50–4.75 s**, and 4.86 s
+is that number, reached by a gesture that costs one press instead of 10–13.
+
+⚠ **So 5.4's worry is answered by the same edit, and not by an argument.** 5.4 said flattening term 2
+removed the cost that pulled toward the harbour-adjacent beach, leaving casualties as the only axis.
+Term 2 is back at full size — and it no longer points at the harbour at all, because a summoned boat has
+no harbour. ⚠ **It now points at *whatever coast is nearest to where you pressed*, which is a different
+ranking**, and nobody has measured whether THAT one is dominated. **Open, and it is the interesting
+question this round leaves behind.**
 
 ### 5.4 ⚠ And that paragraph is half wrong — the deleted cost was pointing the wrong way
 

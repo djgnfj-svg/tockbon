@@ -25,51 +25,29 @@ and `gh-pages`, and neither moves while the freeze holds.
 - **Keep a reply short and load-bearing.** When it covers more than one subject, lay it out as a list so it
   reads cleanly.
 
-## Reply rule — **the whole reply under 50 characters**
+## Reply rule — **the core, and nothing else**
 
-"Be brief" didn't work, so it is a number now. Long replies go unread and block work.
+Length is not the rule; **every line being load-bearing is.** A long reply that circles the point goes
+unread, and a short one that hides the answer is worse. **Answer, then stop.**
 
-- **Not one sentence — the entire reply is 50 chars.** Over that, write it in a doc and name the file
-- **No tables or lists in chat. No emoji. No dates.** Bold is the only emphasis
+- **No emoji. No dates.** Bold is the only emphasis
+- **No file paths, no line numbers, no code locations in chat.** The user does not open them — say what the
+  thing is, not where it lives
+- **No word only you understand.** A doc name, a net name or an internal term standing in for the thing is
+  not an answer. Say it in the words the user used
 - **Don't ask.** Look in the conversation first. If you must ask, one sentence
-- **Cut every word that isn't load-bearing** — in docs and in chat
 
-### The exception — when the user asks to be told something, answer in chat
-
-**The 50 characters govern work reports** ("done", "here's the file"). **They do not govern answers.**
-When the user asks — "what is this", "list the options", "how does it work" — **write the answer, and a list
-is allowed.** **Filing the answer in a doc and replying with the filename is the failure this exception
-exists to stop.** A doc may be written *as well*; the chat still carries the answer.
-
-#### The exception has a ceiling — **10 lines**
-
-It buys an answer, not an essay. Five rounds of options-plus-reasoning-plus-recommendation-plus-question and
-**the user stopped the conversation to say the brevity rule had apparently been deleted. It had not.**
-
-- **One axis per reply.** Options are one line each; the reason goes on that line or is cut
-- **One line of recommendation**, and the next question is one line at the end — or it waits
-- **Do not restate what the user just said back to them**
-- **If the reply has more than one bold heading's worth of thought, it is two replies**
-
-### Do not close a conversation the user is still having
-
-Ending three replies in a row with "shall I start?" reads as being shut down, and **the user said so in those
-words.** **Answer, add what the answer opens up, and stop.**
-
-### A recommendation without a source is not a recommendation
+### When asked how others do it — name the technique, and who ships it
 
 **The user is new to making games and said so**: *"I have no data, so whatever you say feels like it must be
 right."* **That is the absence of anything to disagree with, not agreement.**
 
-- **Name who actually works that way** — studios, games, people, **several, disagreeing with each other**
-- **The source has to be checkable.** *"Usually in the industry…"* is not one, and neither is this file
-- **Look it up rather than remembering it.** A studio named from memory that turns out wrong is worse than no
-  example, because it cannot be checked and it will be repeated
+- **Name the technique first, then the games or studios that ship it** — several, disagreeing with each other
+- **Checkable sources only.** *"Usually in the industry…"* is not one, and neither is this file. **Look it up
+  rather than remembering it** — a studio named from memory that turns out wrong is worse than no example
+- **One line each.** The user is picking something to build, not reading an essay
 - **Give the case against your own recommendation too**
 - **This binds technical choices as well** — engines, libraries, tooling, verification
-
-⇒ The first one written this way is `how-studios-schedule-art`, **and the answer turned out to be neither of
-the two options that had been on the table.**
 
 ## Where things live
 

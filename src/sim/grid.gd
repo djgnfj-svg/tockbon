@@ -514,12 +514,24 @@ func _summon_frontier_before(a: int, b: int) -> bool:
 ## still refuses a boat on a beach — but **nobody may read `net_summon`'s 「육지 칸은 소환 지점이
 ## 아니다」 row as measuring it.** That row measures the invariant, and what bites a seed change is the
 ## band SIZE row beside it.
+## ⚠⚠ **THE TEST INVERTED: it was `<= SUMMON_BAND_TILES` and is `>= SUMMON_BAND_MIN_TILES`.** The band
+## used to hug the coast and now keeps away from it, on the user's own sentence — *"해안선에 배를
+## 배치하는게 아니라 좀 거리를 둬야함 … 배가 가는게 중요하니까"*. See the constant for the sweep 4 was
+## chosen from.
+##
+## ⚠ **`UNREACHABLE` is tested EXPLICITLY and that line is not padding any more.** Under the old `<=`
+## an unreached tile failed by being enormous; under `>=` it would PASS — `UNREACHABLE` is `1 << 30`,
+## which is greater than any distance. The sentinel that used to answer this question by accident now
+## answers the opposite one, and dropping this line puts the whole open ocean, land-locked lakes
+## included, inside the band.
 func can_summon_at(t: int) -> bool:
 	if t < 0 or t >= summon_hops.size():
 		return false
 	if water[t] == 0:
 		return false
-	return summon_hops[t] >= 1 and summon_hops[t] <= Rules.SUMMON_BAND_TILES
+	if summon_hops[t] == UNREACHABLE:
+		return false
+	return summon_hops[t] >= Rules.SUMMON_BAND_MIN_TILES
 
 
 ## The LAND tile a boat born at `t` sails to, or -1. Answered for any water tile the BFS reached, not

@@ -153,18 +153,38 @@ const REWARD_RANGED := 1
 const SUMMON_UNBOUND := -1
 const SUMMON_SLOTS := [CELL_MELEE, CELL_RANGED, SUMMON_UNBOUND, SUMMON_UNBOUND, SUMMON_UNBOUND]
 
-## How many hops of WATER travel from the coast a summon may still be pressed at. **It is a rule and
-## not a look value: it decides what `Grid.can_summon_at` REFUSES**, and the band the view paints is
-## that same predicate asked per tile — so the picture and the refusal are one fact rather than two.
+## ⚠⚠ **THE BAND IS A MINIMUM DISTANCE FROM LAND, AND IT USED TO BE A MAXIMUM.** It was
+## `SUMMON_BAND_TILES := 2` — *within 2 hops of the coast* — and the user inverted it after playing:
+## ***"해안선에 배를 배치하는게 아니라 좀 거리를 둬야함 지형하고 많이 줘도됨 배가 가는게 중요하니까"***.
+## **The reason is a design reason and not a preference: the crossing is the thing worth watching, and a
+## band hugging the shore deletes it.** The name changed with the meaning — a constant whose sense
+## inverts under the same name is one nobody re-reads.
 ##
-## Measured over all three shipped islands (`sea-summon`, 2.2): the band holds 90 / 82 / 88 tiles at 1,
-## **190 / 174 / 186 at 2**, and 254 / 230 / 248 at 3. ⚠ **The reachable LANDING count does not move
-## with it at all** — 82 / 75 / 80 at every value — so this number decides how thick the green reads
-## and how comfortable the press is, and nothing about what the player may choose. A check written to
-## bite on it must bite on the band SIZE and never on the landing count.
-## Floor 1 (at `ZOOM_MIN` that is an 18 px ribbon, one tile of catchment); ceiling 3 (54 px, and past
-## it the sea starts reading as land rather than as a shoreline).
-const SUMMON_BAND_TILES := 2
+## **It is a rule and not a look value: it decides what `Grid.can_summon_at` REFUSES**, and the band the
+## view paints is that same predicate asked per tile — so the picture and the refusal are one fact.
+## **There is no maximum.** Every water tile the summon BFS reached and that is far enough is in the
+## band; 「많이 줘도됨」 is the whole of that.
+##
+## ⚠⚠ **4 WAS CHOSEN FROM A SWEEP, NOT FROM TASTE.** Measured on all three shipped islands — band tiles ·
+## distinct reachable landings · crossing min/median/max seconds at `BOAT_SPEED` 4.0:
+##
+##   shipped `<= 2`   190/174/186 · 82/75/80 · **0.25 / 0.60 / 0.71**  (spread 0.46 s)
+##   `>= 3`           534/516/540 · 45/40/43 · **0.85 / 2.47 / 5.96**  (spread 5.11 s)
+##   `>= 4`  <- this  470/460/478 · 42/38/40 · **1.10 / 2.47 / 5.96**  (spread 4.86 s)
+##   `>= 6`           360/360/366 · 34/35/34 · **1.60 / 2.83 / 5.96**  (spread 4.36 s)
+##
+## ⚠ **The MAXIMUM crossing is 5.96 s at every value, because the water is finite** — so raising this
+## number lifts the floor and SHRINKS the spread. The spread peaks at 3 and decays from there; 4 is one
+## step past the peak, bought for a guaranteed **1.10 s** minimum crossing so that no summon is ever
+## instant. That is the trade, written out: 3 landings and 0.25 s of spread for a visible crossing on
+## every press.
+## ⚠ **It restores the term `sea-summon` §5.2 measured and §5.3 flattened**: the drag's crossing spread
+## was 4.50–4.75 s, and 4.86 s is that term back.
+##
+## Floor 3 — under it the minimum crossing drops below 0.85 s and the band starts touching the shore
+## again, which is what the user asked to end. Ceiling 8: at `>= 10` the band is 152 tiles, UNDER the
+## 190 it replaced, and 「많이 줘도됨」 has turned into a ribbon in the middle of the ocean.
+const SUMMON_BAND_MIN_TILES := 4
 
 
 static func summon_slot_count() -> int:
