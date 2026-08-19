@@ -21,6 +21,8 @@ extends RefCounted
 
 func run(t) -> void:
 	_diagonal_contact_is_sendable_now(t)
+	_a_diagonal_squeeze_is_not_a_sail(t)
+	_the_descent_home_never_squeezes(t)
 	_cliff_and_ramp(t)
 	_a_lagoon_harbour_cannot_see_the_open_shore(t)
 	_every_waypoint_of_a_route_is_water(t)
@@ -31,6 +33,161 @@ func run(t) -> void:
 	_no_harbour_island_is_a_defined_noop(t)
 	_water_fields_are_built_once(t)
 	_deleted_names_are_really_gone(t)
+
+
+## ⚠⚠ **A boat must not slip between two land corners that touch.** `_water_field` and `water_route`
+## walked `NEIGHBOURS` on the water byte alone, so a DIAGONAL step from water to water was accepted
+## with land on BOTH shoulders — the hull crosses a seam that has no water in it.
+##
+## The fixture is built so the squeeze is the ONLY thing joining two water bodies: pool A is the
+## harbour side `(4,1)H (5,1) (4,2) (5,2)`, pool B is `(3,3) (2,3) (2,4)`, and they touch nowhere
+## except the diagonal `(4,2) <-> (3,3)`, whose two shoulders `(3,2)` and `(4,3)` are both land.
+##
+## ⚠ **The shipped maps cannot fail this** — measured 0 squeezes on all three — so the old rule is
+## re-implemented HERE as an unguarded 8-way flood fill and the two answers are made to disagree.
+## Without that half, "the landing is refused" would also be what a fixture with no squeeze in it
+## says, and the check would be measuring nothing.
+##
+## ⚠ **`net_boat`'s water check cannot see this defect and never could**: it rounds the hull to a tile
+## every sub-step, and along a squeeze that rounded tile is always one of the two water endpoints.
+func _a_diagonal_squeeze_is_not_a_sail(t) -> void:
+	var rows := [
+		"########",
+		"####H~##",
+		"###.~~##",
+		"##~~.###",
+		"##~.####",
+		"########",
+	]
+	var g := Grid.new()
+	g.load_rows(rows)
+	t.eq(g.w, 8, "칸 너비가 8이다 (자가 점검)")
+	t.eq(g.harbour_tiles.size(), 1, "항구가 하나다 (자가 점검)")
+
+	# The squeeze itself, asserted rather than assumed: two water tiles a diagonal apart with land on
+	# both shoulders. If a later edit to these rows loses that shape, this check stops measuring a
+	# squeeze and would go on printing green about one.
+	var a := g.tile_index(4, 2)
+	var bpool := g.tile_index(3, 3)
+	t.eq(int(g.water[a]), 1, "(4,2)는 물이다 (자가 점검)")
+	t.eq(int(g.water[bpool]), 1, "(3,3)도 물이다 (자가 점검)")
+	t.eq(int(g.water[g.tile_index(3, 2)]), 0, "그 대각선의 어깨 (3,2)는 물이 아니다 (자가 점검)")
+	t.eq(int(g.water[g.tile_index(4, 3)]), 0, "다른 어깨 (4,3)도 물이 아니다 (자가 점검)")
+
+	# The old rule, re-implemented here. It reaches pool B; the shipped rule must not.
+	var loose := _unguarded_water_reach(g, int(g.harbour_tiles[0]))
+	t.ok(loose.has(bpool), "옛 규칙(어깨를 안 보는 8방향)이라면 (3,3)까지 갔다 — 이 검사가 잴 게 있다는 뜻이다")
+
+	var behind := g.tile_index(3, 4)
+	t.eq(int(g.passable[behind]), 1, "(3,4)는 땅이고 물에 닿아 있다 (자가 점검)")
+	t.ok(loose.has(g.tile_index(2, 4)),
+		"옛 규칙이라면 (3,4) 옆의 물 (2,4)까지 닿았다 — 곧 옛 규칙에서는 상륙 가능한 칸이었다 (자가 점검)")
+	t.ok(not g.can_land_at(0, behind),
+		"틈 너머 (3,4)로는 못 보낸다 — 배는 땅 모서리 둘 사이를 못 빠져나간다")
+	t.eq(g.water_route(0, behind).size(), 0, "그리로 가는 항로도 없다")
+
+	# The ceiling under it: the harbour side is still fully reachable, so the guard refuses the seam
+	# and not the sea. A guard that refused every diagonal would pass the two rows above.
+	var near := g.tile_index(4, 3)
+	t.ok(g.can_land_at(0, near), "같은 항구에서 (4,3)에는 그대로 보낼 수 있다 — 대각선 전체를 막은 게 아니다")
+	t.ok(g.can_land_at(0, g.tile_index(3, 2)), "(3,2)에도 보낼 수 있다")
+	var route := g.water_route(0, near)
+	t.ok(route.size() >= 2, "(4,3)로 가는 항로가 있다 (%d점)" % route.size())
+	t.eq(_squeeze_steps(g, route).size(), 0,
+		"그 항로의 어떤 걸음도 땅 모서리 사이를 지나지 않는다 %s" % str(_squeeze_steps(g, route)))
+
+
+## ⚠⚠ **The guard has to be in TWO places and the field alone is not enough.** `water_route` descends
+## the field by taking the cheapest strictly-lower water neighbour, so a squeezed neighbour that some
+## OTHER path reached cheaply is exactly what it prefers — the field can be perfectly clean and the
+## drawn, sailed route still cuts through the seam.
+##
+## The fixture, verified outside Godot before it was written here: the harbour arm runs east to
+## `(2,1)` at hop **1**, and the landing `(4,1)`'s only water neighbour is `(3,2)`, which the guarded
+## field reaches at hop **5** the long way round the west arm. `(2,1)` and `(3,2)` are a diagonal
+## apart with land on both shoulders `(3,1)` and `(2,2)`.
+##
+## ⇒ **An unguarded descent from `(3,2)` jumps straight to `(2,1)`** — cost 1 against cost 4 for the
+## honest step — and produces the 4-point route `(1,1) (2,1) (3,2) (4,1)`. The guarded one is 7 points
+## and goes the whole way round. Both numbers are literals below.
+func _the_descent_home_never_squeezes(t) -> void:
+	var rows := [
+		"########",
+		"#H~#.###",
+		"#~#~####",
+		"#~#~####",
+		"#~~~####",
+		"########",
+	]
+	var g := Grid.new()
+	g.load_rows(rows)
+	var landing := g.tile_index(4, 1)
+	t.eq(g.harbour_tiles.size(), 1, "항구가 하나다 (자가 점검)")
+	t.ok(g.can_land_at(0, landing), "(4,1)에는 보낼 수 있다 — 물이 빙 둘러 닿아 있다 (자가 점검)")
+
+	# The temptation, measured off the field itself: the honest approach tile sits at hop 5 while a
+	# squeezed neighbour of it sits at hop 1. Without this pair the check below could pass on a grid
+	# where the descent never had a shortcut to take.
+	var f: PackedInt32Array = g.water_fields[0]
+	t.eq(int(f[g.tile_index(3, 2)]), 5, "상륙 앞 물 (3,2)까지는 5홉이다 (서쪽 팔을 빙 돌아서)")
+	t.eq(int(f[g.tile_index(2, 1)]), 1, "그런데 그 대각선 옆 (2,1)은 1홉이다 — 내려오는 길이 탐낼 지름길이다")
+	t.eq(int(g.water[g.tile_index(3, 1)]), 0, "그 대각선의 어깨 (3,1)은 물이 아니다 (자가 점검)")
+	t.eq(int(g.water[g.tile_index(2, 2)]), 0, "다른 어깨 (2,2)도 물이 아니다 (자가 점검)")
+
+	var route := g.water_route(0, landing)
+	t.eq(route.size(), 7, "항로가 7점이다 — 지름길을 안 타고 서쪽 팔을 그대로 되짚는다 %s" % str(route))
+	t.eq(_squeeze_steps(g, route).size(), 0,
+		"그리고 그 7점 중 땅 모서리 사이를 지나는 걸음이 없다 %s" % str(_squeeze_steps(g, route)))
+	t.eq(route[0], Vector2(1.0, 1.0), "0번은 항구다")
+	t.eq(route[route.size() - 1], Vector2(4.0, 1.0), "마지막은 상륙 칸이다")
+
+
+## 8-way flood fill over water from `seed`, with NO shoulder rule — **the rule as it was before the
+## guard landed.** It exists so the check above can show the two answers differ; the shipped grids
+## cannot, because none of them holds a squeeze.
+func _unguarded_water_reach(g: Grid, seed: int) -> Dictionary:
+	var seen := {seed: true}
+	var queue := [seed]
+	var head := 0
+	while head < queue.size():
+		var tile := int(queue[head])
+		head += 1
+		var tx := tile % g.w
+		var ty := tile / g.w
+		for k in Grid.NEIGHBOURS.size():
+			var nx := tx + int(Grid.NEIGHBOURS[k][0])
+			var ny := ty + int(Grid.NEIGHBOURS[k][1])
+			if nx < 0 or ny < 0 or nx >= g.w or ny >= g.h:
+				continue
+			var nt := ny * g.w + nx
+			if g.water[nt] == 0 or seen.has(nt):
+				continue
+			seen[nt] = true
+			queue.append(nt)
+	return seen
+
+
+## Every step of `route` that is a DIAGONAL between two water tiles with land on both shoulders.
+## The last waypoint is the LANDING and is land by construction, so the pair that ends on it is a
+## beaching rather than a sail and is skipped — the same exemption `grid.gd` states in the guard's
+## own comment.
+func _squeeze_steps(g: Grid, route: PackedVector2Array) -> Array:
+	var out := []
+	for k in range(1, route.size()):
+		var from_p := route[k - 1]
+		var to_p := route[k]
+		var fx := int(from_p.x)
+		var fy := int(from_p.y)
+		var tx := int(to_p.x)
+		var ty := int(to_p.y)
+		if fx == tx or fy == ty:
+			continue
+		if g.water[ty * g.w + tx] == 0 or g.water[fy * g.w + fx] == 0:
+			continue
+		if g.water[fy * g.w + tx] != 0 or g.water[ty * g.w + fx] != 0:
+			continue
+		out.append("(%d,%d)->(%d,%d)" % [fx, fy, tx, ty])
+	return out
 
 
 ## ⚠ **This check is INVERTED from the one it replaces, and that is the whole of item 2.** The old

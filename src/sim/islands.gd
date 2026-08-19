@@ -1,9 +1,16 @@
 class_name Islands
-## The three islands, and the lookups that turn one into a fight.
+## The maps, and the lookups that turn one into a fight. **Three hand-authored islands and one
+## generated long map** — `count()` is 4, `ISLAND_ROWS.size()` is 3, and they are different questions.
 ##
-## Format: each island is 32 strings of EXACTLY 48 characters. 48 x 32 = 1536 tiles, 40 px each =
-## 1920 x 1280 canvas px — deliberately larger than the 1280x720 viewport, which is the whole reason
+## Format: every row of one map is the same length, and that length is the map's own. **The three
+## hand-authored islands are 32 strings of exactly 48 characters** — 48 x 32 = 1536 tiles, 40 px each
+## = 1920 x 1280 canvas px, deliberately larger than the 1280x720 viewport, which is the whole reason
 ## `boat-and-landing` adds a camera (section 7.1). There is no multiplier hidden anywhere else.
+##
+## ⚠ **48 x 32 is NOT the format any more, it is those three maps' size.** The long map at the bottom
+## of this file is 144 x 32, and `field_view` reads `battle.grid.w` / `h` rather than `Look.GRID_W` /
+## `GRID_H` so that both can exist. A reader who takes "48 characters" as a rule will write the next
+## map wrong.
 ##
 ## Legend (`boat-and-landing`, section 3.1):
 ##   `~` water — impassable to a soldier. It is what a boat SAILS OVER: `grid.water_fields` is a BFS
@@ -174,16 +181,129 @@ const ISLAND_ROWS := [
 const TIME_LIMITS := [60.0, 60.0, 90.0]
 
 
+# ---------------------------------------------------------------------------------------------
+# The long map — **the deliverable is the CAPABILITY, not a set of maps**
+# ---------------------------------------------------------------------------------------------
+#
+# Decided by the user 2026-08-19 (`idea-inbox` row 52): *"긴 맵 하나 하고 한 칸짜리 맵만 있으면 돼있듯
+# … 추후에 확장 가능하게 코딩만 해주고"*. What was blocking it was not this file — `Look.GRID_W` /
+# `GRID_H` were `const 48` / `32` and `field_view._draw` and `_clamp_cam` read those constants instead
+# of `battle.grid.w` / `h`, so **two maps of different sizes were unrepresentable.** That is fixed in
+# `field_view`; this is the first map that exercises it.
+#
+# ⚠ **It is NOT wired into `Rules.MAP_NODES` and no node opens it.** Reaching it is a fixture and
+# probe path only. `title-and-map`'s step 5 is paused and is being replaced; deciding which node opens
+# which grid is that plan's business, not this one's.
+#
+# ⚠ **144 is one edit, here.** The user asked for 「너무 크게 만들지 마」 and 「천천히 늘리자」, so the
+# width is a constant on its own line and nothing below it repeats the number: the rows, the enemy
+# spacing and the time limit are all derived from it.
+
+## 3x the shipped islands' 48 columns. The height is deliberately UNCHANGED — a long map is long, and
+## a taller one is a different question with different arithmetic behind it (`push-inland` measured
+## that its own height "cross-check" was an identity in t and demoted the paragraph).
+const LONG_ISLAND_W := 144
+const LONG_ISLAND_H := 32
+
+## Where the long map sits in the island index. `count()` includes it, so `rows_of` / `spawns_of` /
+## `time_limit_of` all answer for it exactly as they do for the hand-authored three, and `net_islands`
+## validates its rows with the same legend loop.
+const LONG_ISLAND_INDEX := 3
+
+## Row bands, as fractions of the height, so the shape survives `LONG_ISLAND_H` moving. They mirror
+## the three shipped islands: two rows of open sea, a cliff wall along the north shore, the land body,
+## then the southern sea the harbours sit in.
+const LONG_CLIFF_ROW := 2
+const LONG_LAND_TOP := 3
+const LONG_LAND_BOTTOM := 20      # inclusive. 21..31 is open water, as on all three shipped islands
+const LONG_SEA_EDGE := 2        # columns of water down each side, the same as the shipped rows
+
+## One bison every this many columns of land, and one harbour every this many columns of sea. Both are
+## SPACINGS rather than counts, so widening the map adds enemies and harbours instead of stretching
+## the same few further apart — a 144-column map with island 1's eight bison is an empty walk.
+const LONG_ENEMY_PITCH := 6
+const LONG_HARBOUR_PITCH := 24
+
+
 static func count() -> int:
-	return ISLAND_ROWS.size()
+	# ⚠ `ISLAND_ROWS.size() + 1` and not a literal 4: the long map is generated rather than typed out,
+	# so it is not in that array and cannot be counted by it.
+	return ISLAND_ROWS.size() + 1
 
 
 static func rows_of(i: int) -> Array:
+	if i == LONG_ISLAND_INDEX:
+		return _long_rows()
 	return ISLAND_ROWS[i] as Array
 
 
+## ⚠⚠ **The long map's limit is DERIVED from its width, and the arithmetic is here rather than a
+## guessed number.** Everything a run spends its clock on scales with how far across the map things
+## are: the crossing (`boat-invasion` measured crossings at ~20% of the clock, and this round's own
+## probe re-measured them at 45–49%) and the walk inland afterwards. So the limit is island 1's own
+## seconds-per-column, applied to this map's columns:
+##
+##   `TIME_LIMITS[0] / 48 columns = 60 / 48 = 1.25 s per column`
+##   `1.25 * 144 = 180.0 s`
+##
+## ⚠ **The 48 is READ off island 0's own first row**, never typed: the two numbers in that division
+## have to be the same island's, or the day the shipped grids change width the ratio silently rots.
+##
+## ⚠ **This is not a tuned number and must not be read as one.** The clock has never once bound on the
+## shipped islands (15 island-runs, worst plan at 49%), so 180 is a limit derived to be as loose on
+## this map as 60 is on island 1 — it is a placeholder that scales, not a balance decision. Retuning
+## `TIME_LIMITS` is a decision with the user in it.
 static func time_limit_of(i: int) -> float:
+	if i == LONG_ISLAND_INDEX:
+		var base_w := str((ISLAND_ROWS[0] as Array)[0]).length()
+		return float(TIME_LIMITS[0]) / float(base_w) * float(LONG_ISLAND_W)
 	return float(TIME_LIMITS[i])
+
+
+## The long map's rows, built rather than typed. **Nothing here repeats `LONG_ISLAND_W`** — every
+## span is that constant minus the margins, so widening the map is one edit up top.
+##
+## ⚠ **No cache.** `rows_of` is called once per island load in the shell and a handful of times by the
+## nets; 32 string builds is nothing, and a `static var` holding them would be state this class does
+## not otherwise have, invisible to `load_rows`' own "safe to call twice" contract.
+static func _long_rows() -> Array:
+	var w := LONG_ISLAND_W
+	var sea := LONG_SEA_EDGE
+	var body := w - 2 * sea
+	var rows := []
+	for y in LONG_ISLAND_H:
+		if y == LONG_CLIFF_ROW:
+			rows.append("~".repeat(sea) + "^".repeat(body) + "~".repeat(sea))
+			continue
+		if y >= LONG_LAND_TOP and y <= LONG_LAND_BOTTOM:
+			var land := ""
+			for x in body:
+				# The bison sit on the LAND, spaced by column, and the first one is a full pitch in
+				# from the west edge so nothing spawns on the corner a boat lands at.
+				var on_pitch := (x % LONG_ENEMY_PITCH) == 0 and x > 0
+				land += "B" if (on_pitch and y == _enemy_row(x)) else "."
+			rows.append("~".repeat(sea) + land + "~".repeat(sea))
+			continue
+		# Open sea. The harbours go on the bottom row, spread the width of the map, so a plan can be
+		# authored from either end of it rather than from one corner.
+		if y == LONG_ISLAND_H - 1:
+			var water := ""
+			for x in w:
+				water += "H" if (x % LONG_HARBOUR_PITCH) == LONG_HARBOUR_PITCH / 2 else "~"
+			rows.append(water)
+			continue
+		rows.append("~".repeat(w))
+	return rows
+
+
+## Which land row column `x`'s bison stands on. A single `sin`-free stagger — three rows walked in
+## turn — so the enemies are not one straight line across the map and the pattern is still
+## reproducible by hand. **No RNG**: a random layout cannot be measured, and this repo has paid for
+## that once already.
+static func _enemy_row(x: int) -> int:
+	var span := LONG_LAND_BOTTOM - LONG_LAND_TOP
+	var step := span / 4
+	return LONG_LAND_TOP + step + ((x / LONG_ENEMY_PITCH) % 3) * step
 
 
 ## Every enemy on island `i`, as `{"type_id": int, "tile": int}` with `tile` a row-major index.

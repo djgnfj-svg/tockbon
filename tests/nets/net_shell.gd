@@ -467,27 +467,53 @@ func run(t) -> void:
 	# smaller than the zoomed-out camera's own visible world (48 x 32 tiles against up to 2275 px of
 	# view at ZOOM_MIN), so the margin has to cover the whole zoomed-out edge now, not only a shake.
 	var margin := Look.WATER_MARGIN_TILES
-	var wt := Look.GRID_W + 2 * margin
-	var ht := Look.GRID_H + 2 * margin
-	# ⚠ **4032 and 1536 are written out as literals**, not as `wt * ht`. A check whose bounds come
-	# from the thing it checks proves nothing: with the count derived from `Look.WATER_MARGIN_TILES`,
-	# setting that constant to 0 would move the expectation and the reality together and the margin
-	# could vanish with the round green.
-	t.eq(wt * ht, 4032, "물 여백까지 세면 4032칸이다 (72 x 56) — 여백 상수가 0이 되면 여기가 문다")
+	# ⚠⚠ **THE TERRAIN PASS IS CULLED NOW**, so the count is the VISIBLE span rather than the whole
+	# margin ring. The island is sitting exactly where `field_view.setup()` left it — `ZOOM_MIN` 0.45,
+	# `cam_px` (-462.22, -160.00) — and the arithmetic, done by hand and not read off the code:
+	#   visible world  x -462.22 .. 2382.22  ·  y -160.00 .. 1440.00
+	#   + CULL_PAD_TILES 2 (80 px)   x -542.22 .. 2462.22  ·  y -240.00 .. 1520.00
+	#   floor/ceil to tiles          x -14 .. 62           ·  y -6 .. 38
+	#   clamped to [-12, 48+12) x [-12, 32+12)   ⇒ **x -12 .. 60, y -6 .. 38 = 72 x 44 = 3168**
+	# The x axis is not culled at all (72 is the full ring) and the y axis loses 12 rows, which is the
+	# shape of this framing: the visible world is wider than the map and shorter than it.
+	#
+	# ⚠ **3168, 4032 and 1536 are LITERALS.** Deriving any of them from `WATER_MARGIN_TILES` or
+	# `CULL_PAD_TILES` would move the expectation and the reality together, and the margin could vanish
+	# with the round green.
+	const CULL_X0 := -12
+	const CULL_Y0 := -6
+	const CULL_W := 72
+	const CULL_H := 44
+	t.eq((Look.GRID_W + 2 * margin) * (Look.GRID_H + 2 * margin), 4032,
+		"물 여백까지 다 세면 4032칸이다 (72 x 56) — 여백 상수가 0이 되면 여기가 문다")
 	t.eq(Look.GRID_W * Look.GRID_H, 1536, "격자 자체는 1536칸이다")
-	t.eq(fs.tiles.size(), 4032, "지형을 물 여백까지 4032칸 그렸다")
+	t.eq(fs.tiles.size(), 3168, "지형은 보이는 만큼만 3168칸 그린다 (72 x 44)")
+	# The ceiling that makes the cull mean something: it has to be strictly less than painting the lot.
+	t.ok(fs.tiles.size() < 4032,
+		"그리고 그건 4032보다 적다 — 컬링이 실제로 문다 (%d칸을 안 그렸다)" % (4032 - fs.tiles.size()))
 	var tile_bad := 0
 	var inner_rects: Array[Rect2] = []
+	var painted := Rect2()
 	for i in fs.tiles.size():
-		var tx: int = i % wt - margin
-		var ty: int = i / wt - margin
+		var tx: int = i % CULL_W + CULL_X0
+		var ty: int = i / CULL_W + CULL_Y0
 		var got: Rect2 = fs.tiles[i]["rect"]
 		if got != Look.tile_rect_px(tx, ty):
 			tile_bad += 1
+		painted = got if i == 0 else painted.merge(got)
 		if tx >= 0 and tx < Look.GRID_W and ty >= 0 and ty < Look.GRID_H:
 			inner_rects.append(got)
-	t.eq(tile_bad, 0, "4032칸이 전부 자기 자리의 사각형을 받았다 (행 우선, 여백 포함)")
-	t.eq(inner_rects.size(), 1536, "그중 격자 안쪽이 1536칸이다")
+	t.eq(tile_bad, 0, "3168칸이 전부 자기 자리의 사각형을 받았다 (행 우선, 잘라낸 구간 안에서)")
+	t.eq(inner_rects.size(), 1536, "그중 격자 안쪽이 1536칸이다 — 섬 자체는 한 칸도 안 잘렸다")
+	# ⚠⚠ **THE FLOOR UNDER THE CULL, and it is the only thing that makes the ceiling above safe.**
+	# "Fewer tiles" is also what a cull that ate the screen would say. What must never happen is a
+	# visible pixel with no tile under it, so the painted area has to CONTAIN the visible world.
+	var seen := fs._visible_world_rect()
+	t.ok(painted.encloses(seen),
+		"칠한 영역이 보이는 세계를 전부 덮는다 — 잘라낸 칸은 전부 화면 밖이었다 (칠함 %s ⊇ 보임 %s)"
+			% [str(painted), str(seen)])
+	t.eq(painted.size, Vector2(CULL_W, CULL_H) * Look.TILE_PX,
+		"칠한 영역이 2880 x 1760 px 다 (72 x 44 칸)")
 	# ⚠ The margin is why the tiles below are filtered before the on-screen check: `tile_rect_px(-1,
 	# -1)` really is at (-40, -40), so feeding all 680 in would break "everything lands inside
 	# 1280x720" for the 104 that are supposed to be outside it — and widening the screen rectangle
@@ -496,7 +522,8 @@ func run(t) -> void:
 		"여백 타일은 화면 밖에서 시작한다 — 그래서 화면-안 검사에서 빼야 한다")
 	t.eq(fs.tiles[0]["fill"], Look.COL_WATER,
 		"여백 칸은 COL_WATER 를 직접 받는다 — 격자 밖에는 범례 문자가 없다")
-	t.eq(fs.tiles[margin * wt + margin]["fill"],
+	# Tile (0, 0)'s index inside the culled span: `(0 - CULL_Y0) * CULL_W + (0 - CULL_X0)` = 6*72+12.
+	t.eq(fs.tiles[444]["fill"],
 		Look.terrain_colour_of_char(str(game.field_view.rows[0])[0]),
 		"격자 첫 칸의 색은 그 칸의 범례 문자에서 나왔다")
 	t.eq(float(fs.tiles[0]["width"]), Look.GRID_LINE_WIDTH_PX, "격자선 굵기가 look.gd 값이다")
@@ -821,9 +848,21 @@ func run(t) -> void:
 	# is already pinned at 4032 higher up in this file, which is the floor under this ceiling.
 	t.ok(not fs.has_method("_paint_overlay"),
 		"타일 덧칠 훅 자체가 없다 — 초록 해안을 그릴 방법이 남아 있지 않다")
-	t.eq(fs.tiles.size(), (Look.GRID_W + 2 * Look.WATER_MARGIN_TILES)
-			* (Look.GRID_H + 2 * Look.WATER_MARGIN_TILES),
-		"타일은 지형 한 벌만 그린다 — 상륙 가능 구역을 덧칠하지 않는다")
+	# ⚠ **The claim is NO OVERPAINT, and after the cull a COUNT can no longer carry it** — the camera
+	# has moved since the count higher up in this file, so any number written here would be a second
+	# copy of the cull's arithmetic rather than a statement about the wash. What says it directly is
+	# that no two `_paint_tile` calls in one frame share a rectangle: one coat of terrain, and nothing
+	# painted on top of it.
+	var tile_seen := {}
+	var repainted := 0
+	for entry in fs.tiles:
+		var key := str((entry as Dictionary)["rect"])
+		if tile_seen.has(key):
+			repainted += 1
+		tile_seen[key] = true
+	t.ok(fs.tiles.size() > 0, "지형 칸을 실제로 그렸다 (%d칸 — 0이면 깨끗한 게 아니라 안 돈 것이다)"
+		% fs.tiles.size())
+	t.eq(repainted, 0, "타일은 지형 한 벌만 그린다 — 같은 칸을 두 번 칠하지 않는다 (상륙 구역 덧칠 없음)")
 	# The union is still the domain `send` answers to, and it is still wider than one harbour's reach —
 	# that claim lost its picture, not its truth, so it is measured off the sim directly.
 	t.ok(droppable_tiles.size() >= _count_set(send),

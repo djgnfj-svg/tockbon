@@ -134,9 +134,16 @@ const WALK_STEPS_MAX := 900
 const WALKER_ID := 999_999
 
 
+## The hand-authored islands. **A literal, and NOT `Islands.count()`** — the long map is generated
+## rather than typed, so `count()` includes it and every 48 x 32 expectation below would then be
+## asserted against a 144-column grid. `_the_long_map` carries that one's own numbers.
+const HAND_WRITTEN := 3
+
+
 func run(t) -> void:
-	t.eq(Islands.count(), 3, "섬은 셋이다")
-	t.eq(Islands.TIME_LIMITS.size(), 3, "제한 시간도 섬마다 하나씩 있다")
+	t.eq(Islands.ISLAND_ROWS.size(), HAND_WRITTEN, "손으로 쓴 섬은 셋이다")
+	t.eq(Islands.count(), 4, "그리고 긴 지도까지 넷이다 — 격자 크기가 더 이상 상수에 박혀 있지 않다")
+	t.eq(Islands.TIME_LIMITS.size(), HAND_WRITTEN, "제한 시간도 손으로 쓴 섬마다 하나씩 있다")
 	for i in EXPECT_LIMITS.size():
 		t.eq(Islands.time_limit_of(i), float(EXPECT_LIMITS[i]),
 			"섬 %d 의 제한 시간은 %.0f초다" % [i + 1, float(EXPECT_LIMITS[i])])
@@ -152,7 +159,7 @@ func run(t) -> void:
 
 	var walker_pairs := 0
 	var walker_steps := 0
-	for i in Islands.count():
+	for i in HAND_WRITTEN:
 		var rows := Islands.rows_of(i)
 		var shape := _shape_errors(rows, EXPECT_ROWS, EXPECT_COLS)
 		t.eq(shape.size(), 0, "섬 %d 은 %d행 x %d자다 %s" % [i + 1, EXPECT_ROWS, EXPECT_COLS, str(shape)])
@@ -545,7 +552,94 @@ func run(t) -> void:
 	t.ok(walker_pairs > 0, "걸어본 칸-적 짝이 실제로 있다 (%d개)" % walker_pairs)
 	t.ok(walker_steps > 0, "그 걷기들은 실제로 칸을 넘었다 (총 %d칸)" % walker_steps)
 
+	_the_long_map(t)
 	_self_check(t)
+
+
+# -- the long map ----------------------------------------------------------------------------------
+
+## ⚠⚠ **This map exists to prove the CAPABILITY, not to be played** (`idea-inbox` row 52, the user:
+## *"긴 맵 하나 하고 한 칸짜리 맵만 있으면 돼있듯 … 추후에 확장 가능하게 코딩만 해주고"*). It is not in
+## `Rules.MAP_NODES` and no node opens it; what it has to do is LOAD, be sailed to, and be drawable.
+##
+## **Every literal here was derived outside Godot** from a from-scratch reimplementation of the same
+## generator and of `grid.gd`'s water BFS — the same discipline the rest of this file's numbers were
+## written under, and the only honest way to get a bound that is not read back off the thing it checks.
+##
+## ⚠ **The check that matters most is the last one**: every 8-way coast tile is sendable, exactly as
+## on the three shipped islands. That is the denylist's own property, and it is what says the water
+## rules did not quietly stop meaning anything at three times the width.
+func _the_long_map(t) -> void:
+	var i := Islands.LONG_ISLAND_INDEX
+	t.eq(i, 3, "긴 지도는 3번이다 — 손으로 쓴 셋 다음이다")
+	var rows := Islands.rows_of(i)
+	t.eq(rows.size(), 32, "긴 지도도 32줄이다 — 길어진 것은 가로뿐이다")
+	t.eq(_shape_errors(rows, 32, 144).size(), 0, "그리고 한 줄이 144자다 %s"
+		% str(_shape_errors(rows, 32, 144)))
+	t.eq(_illegal_chars(rows).size(), 0, "범례 밖 글자가 없다 %s" % str(_illegal_chars(rows)))
+	t.eq(_count_char(rows, "H"), 6, "항구가 여섯이다 (24칸마다 하나)")
+	t.eq(_count_char(rows, "B"), 23, "바이슨이 스물셋이다 (6칸마다 하나)")
+	t.eq(_count_char(rows, "^"), 140, "북쪽 절벽이 140칸이다")
+	t.eq(Islands.spawns_of(i).size(), 23, "그리고 spawns_of 도 스물셋을 뽑는다")
+
+	# The derived clock, as the arithmetic rather than as a number typed in twice:
+	# `60 / 48 = 1.25 s per column`, `1.25 * 144 = 180`.
+	t.eq(Islands.time_limit_of(i), 180.0, "제한 시간이 180초다 — 섬 1의 칸당 1.25초 x 144칸")
+	t.eq(Islands.time_limit_of(0), 60.0, "섬 1의 60초는 그대로다 (자가 점검 — 유도의 출발점)")
+
+	var g := Grid.new()
+	g.load_rows(rows)
+	t.eq(g.w, 144, "격자가 144칸 폭으로 실린다")
+	t.eq(g.h, 32, "그리고 32칸 높이다")
+	t.eq(g.harbour_tiles.size(), 6, "항구 여섯이 전부 실렸다")
+	var passable_n := 0
+	var water_n := 0
+	for tile in g.passable.size():
+		if g.passable[tile] != 0:
+			passable_n += 1
+		if g.water[tile] != 0:
+			water_n += 1
+	t.eq(passable_n, 2520, "땅이 2520칸이다")
+	t.eq(water_n, 1948, "물이 1948칸이다")
+
+	# The 8-way coast, rebuilt here from `passable` + `water` and NEVER read off `sendable` — that is
+	# what makes the line under it a claim instead of a tautology.
+	var coast := 0
+	var uncovered := 0
+	for tile in g.passable.size():
+		if g.passable[tile] == 0:
+			continue
+		var tx := tile % g.w
+		var ty := tile / g.w
+		var wet := false
+		for k in Grid.NEIGHBOURS.size():
+			var nx := tx + int(Grid.NEIGHBOURS[k][0])
+			var ny := ty + int(Grid.NEIGHBOURS[k][1])
+			if nx < 0 or ny < 0 or nx >= g.w or ny >= g.h:
+				continue
+			if g.water[ny * g.w + nx] != 0:
+				wet = true
+		if not wet:
+			continue
+		coast += 1
+		if g.home_harbour_for(tile) < 0:
+			uncovered += 1
+	t.eq(coast, 174, "8방향으로 물에 닿은 땅이 174칸이다")
+	t.eq(uncovered, 0, "그리고 그 174칸 전부에 배를 보낼 수 있다 — 세 섬과 똑같은 성질이다")
+
+	# The floor under it: an INLAND tile is still refused. Without this "everything is sendable" would
+	# also be what a broken predicate that answered yes to everything looked like.
+	var inland := g.tile_index(72, 12)
+	t.eq(int(g.passable[inland]), 1, "가운데 (72,12)는 땅이다 (자가 점검)")
+	t.eq(g.home_harbour_for(inland), -1, "그런데 내륙이라 못 보낸다")
+
+	# And a boat really sails it: the longest route on this map is longer than anything the 48-column
+	# islands could produce, which is the whole point of a long map existing.
+	var far := g.tile_index(140, 20)
+	t.ok(g.home_harbour_for(far) >= 0, "동쪽 끝 (140,20)에도 보낼 수 있다 (자가 점검)")
+	var route := g.water_route(g.home_harbour_for(far), far)
+	t.ok(route.size() >= 2, "그리로 가는 항로가 있다 (%d점)" % route.size())
+	t.eq(route[route.size() - 1], Vector2(140.0, 20.0), "항로의 마지막 점이 그 상륙 칸이다")
 
 
 # -- the instrument's own failing cases -------------------------------------------------------------

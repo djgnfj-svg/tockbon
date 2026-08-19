@@ -40,6 +40,15 @@ extends RefCounted
 const VIEWPORT_W_PX := 1280.0
 const VIEWPORT_H_PX := 720.0
 const TILE_PX := 40.0
+
+## ⚠⚠ **THESE ARE A DEFAULT NOW AND NOT THE MAP SIZE.** They were `const 48` / `32` read directly by
+## `field_view._draw` and `_clamp_cam`, which made **two maps of different sizes unrepresentable** —
+## the blocker `idea-inbox` row 52 names. Both of those now go through `field_view._map_tiles()`, which
+## asks `battle.grid`; these two are what that answers with when there is no grid yet (a `FieldView`
+## between `_ready` and the first island, and every net that builds one with a bare `Battle`).
+## ⚠ **Nothing that draws may read them**, and `islands.gd`'s long map is 144 wide precisely to keep
+## that true. They stay at the shipped islands' own size so every camera literal measured against
+## 48 x 32 still describes the state `setup()` leaves.
 const GRID_W := 48
 const GRID_H := 32
 
@@ -67,8 +76,38 @@ const ZOOM_MIN := 0.45
 const ZOOM_MAX := 1.0
 const ZOOM_STEP := 1.15
 
+## ⚠⚠ **THE WORLD-WIDTH TABLE. Every stroke `field_view` draws is multiplied by `zoom` before it
+## reaches the canvas, and an island OPENS at `ZOOM_MIN`** — `field_view.setup` sets it and the whole
+## plan is authored there, so `ZOOM_MIN` is the zoom a mark has to be legible at, not an edge case.
+##
+## The arithmetic: this file's snap floor is **2.0 canvas px** (see the combat-juice banner for why),
+## so a WORLD-space width must be **>= 2.0 / 0.45 = 4.45**, and the two constants that already did
+## this sum chose **5.0** (= 2.25 px). Every world width in this file is now on one of two sides:
+##
+##   ABOVE THE FLOOR (5.0 or more)   BODY_OUTLINE · SHOT · BURST · AREA_RING · LAND_RING · ROUTE ·
+##                                   CLIFF_FACE · REFUSE_MARK   (BEAK_WIDTH_PX clears it at 8.0)
+##   DELIBERATELY BELOW              GRID_LINE · TARGET_LINE · SPARK — each carries its own reason
+##                                   on its own line, and the reason is the whole licence
+##
+## ⚠ **This was a table with one row measured and eleven not.** `REFUSE_MARK_WIDTH_PX` did this sum
+## out loud and `CLIFF_FACE_WIDTH_PX` was re-measured 4.0 -> 5.0 when `ZOOM_MIN` fell; `ROUTE_WIDTH_PX`
+## was the third row and nobody looked, so the water route the round existed to draw reached the glass
+## at **1.35 px**. Re-measure the WHOLE set when `ZOOM_MIN` moves, never the row being argued about.
+## `net_draw_leaf` walks the set in one loop and reddens on a `Look.*_WIDTH_PX` name `field_view`
+## draws with that this table does not hold — a width added tomorrow lands on one side or reddens.
+##
+## ⚠ **There is deliberately no `WIDTH_FLOOR` constant here.** 4.45 is one division of two numbers this
+## file already holds, and a constant nothing in `src/` reads rots — while a net that read it would be
+## deriving its bound from the thing it checks, which is this repo's own named false green. The floor
+## is written out as a literal in `net_draw_leaf`, once.
+
 ## A faint grid, because in a game where position is the decision an invisible grid means the
 ## player cannot pick a position. It is drawn low-alpha, not thin-and-bright.
+## ⚠ **DELIBERATELY BELOW the world-width floor** (0.45 px at `ZOOM_MIN`) and it stays there. Nothing
+## is ever READ off a grid line — every mark the player aims with (the drag candidate ring, the
+## refusal mark, the cliff face) is its own mark and all three clear the floor. This is texture, and
+## `COL_GRID_LINE` is alpha 0.07 across every tile on the map: at 2.25 px that lattice is louder than
+## the terrain under it, which is the opposite of what the sentence above asks for.
 const GRID_LINE_WIDTH_PX := 1.0
 
 
@@ -208,7 +247,17 @@ const BODY_RADIUS_RATIO := [0.35, 0.28, 0.40, 0.25, 0.55]
 ## AT THE RADII ABOVE: 3.50 px, 9.52 px, 4.80 px, 9.00 px, 4.40 px.
 const BODY_CORNER_RATIO := [0.25, 0.85, 0.30, 0.90, 0.20]
 
-const BODY_OUTLINE_WIDTH_PX := 2.0
+## ⚠ **RAISED 2.0 -> 5.0 by the world-width table above, and this is the row that moves the most
+## picture.** A body IS its outline here — `_paint_body` draws a rounded-square polyline plus a 3 px
+## dot and nothing else — and the whole fight is WATCHED at `ZOOM_MIN`, where 2.0 reached the glass at
+## **0.90 px**. That is the same finding `COL_HIT_HALO`'s comment already carries one step short of
+## the conclusion ("a body here is a 2 px outline plus a 3 px dot, so a tint has no AREA to paint").
+## Ceiling 5.0, and it is arithmetic rather than taste: the smallest body is the crow at
+## `0.25 * 40 = 10.0 px` radius, and a stroke wider than half that radius closes the shape into a
+## solid blob at zoom 1.0 as well as at `ZOOM_MIN`.
+## ⚠ It is also the hull outline (`_paint_hull`) and the harbour marker (`_paint_dock`), both of which
+## are drawn on rectangles 40 px and wider — neither of them is what bounds this number.
+const BODY_OUTLINE_WIDTH_PX := 5.0
 const BODY_DOT_RADIUS_PX := 3.0
 
 ## The beak is a triangle poking OUT past the outline, so it reads at a glance which soldier is
@@ -708,7 +757,12 @@ const MAP_NODE_SIDES := [0, 4, 0]
 ## game's line ended in empty grass in one direction and buried itself under a body in the other.
 const SHOT_SEC := 0.10                # 4 tiles of range = 160 px crossed in 0.10 s, so 1600 px/s
 const SHOT_LEN_PX := 12.0
-const SHOT_WIDTH_PX := 2.0
+const SHOT_WIDTH_PX := 5.0            # ⚠ RAISED 2.0 -> 5.0 by the world-width table. A tracer that
+                                      # lives 0.10 s has one chance to be seen, and at `ZOOM_MIN` 2.0
+                                      # reached the glass at 0.90 px — the same failure shape as the
+                                      # 0.08 s attacker line the last game shipped and the user never
+                                      # saw once, on the other axis. <= 6, half of SHOT_LEN_PX: a stub
+                                      # as thick as it is long is a dot, not a tracer
 
 ## 2① — the lunge. Peaks at LUNGE_SEC * 0.5 and is exactly 0 at both ends, so no body is ever left
 ## sitting displaced.
@@ -743,8 +797,19 @@ const SPARK_REACH_PX := 18.0          # 45% of a tile. 18 / 7.2 = 2.5 px per fra
 const SPARK_LEN_PX := 5.0             # one shard spans 13 ~ 18 px out on the last frame. ⚠ EVERY
                                       # margin is computed from the INNER end (13), never the tip
                                       # (18) — built from the tip, half the points pass untested
-const SPARK_WIDTH_PX := 2.0           # same as a body outline. The leaf takes this as an ARGUMENT,
-                                      # which is the only reason a net can bite on it at all
+const SPARK_WIDTH_PX := 2.0           # ⚠ **DELIBERATELY BELOW the world-width floor** (0.90 px at
+                                      # `ZOOM_MIN`) and it is the one row that CANNOT be raised on its
+                                      # own: its ceiling is half a shard's own length,
+                                      # `SPARK_LEN_PX / 2 = 2.5`, and that ceiling sits UNDER the
+                                      # floor's 4.45. A shard as wide as it is long is a dot, so
+                                      # raising this needs SPARK_LEN_PX and SPARK_REACH_PX to move
+                                      # with it — that is a re-measure of item 2, not a width fix, and
+                                      # it belongs to whoever scores item 2 by eye.
+                                      # ⚠ SPARK_LEN_PX 5.0 is 2.25 px at `ZOOM_MIN` and is under the
+                                      # same floor; it is NOT in the width table (it is a length, not
+                                      # a stroke) and is flagged here rather than quietly changed.
+                                      # The leaf takes this as an ARGUMENT, which is the only reason a
+                                      # net can bite on it at all
 const SPARK_SPREAD_DEG := 12.0        # HALF-angle off the tangent, so one fan spans 24 degrees.
                                       # 2 * 22 * sin 12 = 9.2 < 13, which is what makes even the
                                       # inner end farther from both centres than the contact point
@@ -763,19 +828,34 @@ const HIT_KNOCK_SEC := 0.10
 ## 10 px burst is buried under a 22 px lion.
 const BURST_SEC := 0.32
 const BURST_GROWTH := 2.2             # lion 22 -> 48.4 px, crow 10 -> 22.0 px
-const BURST_WIDTH_PX := 2.0
+const BURST_WIDTH_PX := 5.0           # ⚠ RAISED 2.0 -> 5.0 by the world-width table. A death is the
+                                      # thing on screen that must go DOWN — the last game died partly
+                                      # for the want of it — and at `ZOOM_MIN` 2.0 was 0.90 px. <= 5,
+                                      # half the crow's own 10 px start radius
 
 ## 5 — the area ring, grown to the REAL area radius so the screen finally says which attacks splash:
 ## the lion's `area` 1.5 tiles = 60 px, and CELL_RANGED's `area` 1.0 = 40 px, which nothing on screen
 ## currently communicates at all.
 const AREA_RING_SEC := 0.25
 const AREA_RING_START_RATIO := 0.4    # of the final radius, so 24 px for the lion's 60
-const AREA_RING_WIDTH_PX := 3.0
+const AREA_RING_WIDTH_PX := 5.0       # ⚠ RAISED 3.0 -> 5.0 by the world-width table, and it has TWO
+                                      # jobs at `ZOOM_MIN`: the lion's telegraph during a watched
+                                      # fight, and the drag candidate ring during planning — an island
+                                      # OPENS at `ZOOM_MIN`, so the ring the player aims a drop with
+                                      # was a 1.35 px hairline every single time. <= 6, a third of
+                                      # TARGET_RING_R_PX 18, over which the candidate ring closes into
+                                      # a disc and stops reading as a ring at all
 
 ## 6 — target lines, drawn for ENEMIES ONLY. The one item of the twelve that can be a net loss in
 ## readability: Into the Breach draws intent but is turn-based with under ten actors, and neither TFT
 ## nor Bad North draws any line at all — Riot explicitly deleted its "cloud of visual effects and
 ## particles". Hence two narrowings: one side only, and a hard count above which none are drawn.
+## ⚠ **DELIBERATELY BELOW the world-width floor** (0.45 px at `ZOOM_MIN`), and this line is the one
+## place in this file where being under it is the POINT. `COL_TARGET_LINE` is alpha **0.12** and up to
+## `TARGET_LINE_MAX_COUNT` 14 of these cross the whole island at once; the paragraph above records
+## that this is the one item of the twelve that can be a net LOSS in readability, which is why Riot
+## deleted its own effect cloud. Raise this to 2.25 px and fourteen full-length lines over every body
+## on screen is exactly the clutter both narrowings exist to prevent.
 const TARGET_LINE_WIDTH_PX := 1.0
 const TARGET_LINE_MAX_COUNT := 14     # ⚠ **RAISED 8 -> 14, and it now bites for the first time.**
                                       # `plan-then-watch` stage 4 put 8 · 12 · 14 enemies on the
@@ -794,7 +874,11 @@ const TARGET_LINE_MAX_COUNT := 14     # ⚠ **RAISED 8 -> 14, and it now bites f
 ## 40, so two orthogonally adjacent rings touch and never overlap. At 26 px they overlapped by 12.
 const LAND_RING_SEC := 0.40
 const LAND_RING_R_PX := 20.0
-const LAND_RING_WIDTH_PX := 2.0
+const LAND_RING_WIDTH_PX := 5.0       # ⚠ RAISED 2.0 -> 5.0 by the world-width table. This ring is the
+                                      # only mark that says a soldier is ASHORE, and the arrival is
+                                      # watched at `ZOOM_MIN` where 2.0 was 0.90 px. <= 6, under a
+                                      # third of the 20 px radius so two adjacent rings still read as
+                                      # two rings touching rather than one band
 
 ## The drag overlay (`boat-and-landing` stage 4, P8) — not one of the twelve combat items, but the
 ## same "every number is a first value" rule applies. `TARGET_RING_R_PX` is the candidate ring on
@@ -804,7 +888,16 @@ const LAND_RING_WIDTH_PX := 2.0
 ## was washed at, and the user asked for the inverse picture: mark what is blocked, nothing else.
 ## It is also the 0.18 this file's own `PRESS_ALPHA_OFF` paragraph cites as the measured failure —
 ## that citation is about a NUMBER and survives the constant's deletion.
-const ROUTE_WIDTH_PX := 3.0
+## ⚠⚠ **`ROUTE_WIDTH_PX` RAISED 3.0 -> 5.0, and this is the row the world-width table was written
+## for.** At 3.0 the water route reached the glass at `3.0 * 0.45 = 1.35 px` — under this file's own
+## 2.0 px snap floor, at the zoom an island OPENS at and the whole plan is authored at. A capture
+## found only the axis-aligned leg rasterising at all, and a fully diagonal route drawing 36 px in
+## total. `REFUSE_MARK_WIDTH_PX` forty lines down did this exact sum out loud in its own comment and
+## `CLIFF_FACE_WIDTH_PX` was re-measured for it when `ZOOM_MIN` fell; this was the third row of the
+## same table and nobody re-measured it. 5.0 is 2.25 px, the same value both of those chose.
+## Ceiling 8 — over that the route covers the terrain it is drawn across, and the route's job is to
+## say WHICH WATER the boat sails, which needs the water visible beside it.
+const ROUTE_WIDTH_PX := 5.0
 const TARGET_RING_R_PX := 18.0        # >= 12; <= 20 or two adjacent rings would overlap
 
 ## **The refusal mark** — `speed-off-open-landing` 2.5, on the user's 「못내림만 표시하면 됨」. One ring
@@ -898,6 +991,21 @@ const SHAKE_B_FREQ := 47.0
 const WATER_MARGIN_TILES := 12        # >= 12 (11.6 tiles of bare ground at ZOOM_MIN 0.45, plus
                                       # SHAKE_MAX_PX 6 px = 0.15 tile); <= 16, or 80 x 64 = 5120
                                       # tiles is 10240 draw calls a frame
+
+## ⚠⚠ **The terrain pass is CULLED to the visible rect now, and this is how far past it the loop still
+## goes.** The "cost, measured rather than assumed" paragraph above is what forced it: at 48 x 32 the
+## unculled loop was 4,032 tiles = 8,064 immediate-mode calls **every frame**, and `push-inland`'s
+## variable grid takes the same loop to 168 x 56 = 9,408 at 144 columns.
+##
+## **2 is arithmetic, not slack.** Two things move the world under a `cam_px` that has not changed:
+## the SHAKE, added to `position` after the span is computed — `SHAKE_MAX_PX 6 / ZOOM_MIN 0.45 =
+## 13.3 world px = 0.33 tile` — and a tile straddling the edge, which the span's own `floor` / `ceil`
+## already covers. One tile clears both; 2 is one tile of margin on top, and it costs 2 rows and 2
+## columns of a loop that just shed a quarter of itself.
+## Floor 1 — at 0 a shaking frame exposes bare ground along one edge, which is the defect
+## `WATER_MARGIN_TILES` exists to prevent, reintroduced one layer in. Ceiling 6, past which the cull
+## stops paying on the tall axis (the visible world is 40 tiles high against a 56-tile margin rect).
+const CULL_PAD_TILES := 2
 
 ## 12 — gait. Phase turns on DISTANCE TRAVELLED, not on time, and that is the whole of "it must not
 ## slide": a body that does not move does not animate. Squash is a Vector2 and not a scalar —

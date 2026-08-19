@@ -27,6 +27,8 @@ func run(t) -> void:
 	_zoom_min_shows_the_whole_map(t)
 	_painted_area_covers_the_viewport(t)
 	_the_clamp_holds_and_the_camera_really_moves(t)
+	_a_wider_grid_moves_the_clamp(t)
+	_the_cull_never_cuts_anything_visible(t)
 	_both_ends_of_the_three_constants(t)
 	for raw in _created:
 		var fv: FieldView = raw
@@ -240,6 +242,119 @@ func _zoom_min_shows_the_whole_map(t) -> void:
 	var tight_visible := too_tight._visible_world_rect()
 	t.ok(tight_visible.size.x < map.size.x or tight_visible.size.y < map.size.y,
 		"자가 점검 — 줌 0.7에서는 섬 전체가 한 번에 안 보인다는 뜻이다")
+
+
+## ⚠⚠ **THE CAPABILITY CHECK: the camera asks the GRID how big the map is, not `Look.GRID_W`.** Those
+## were `const 48` / `32` and `_clamp_cam` read them, so a map of any other size was unrepresentable —
+## the clamp would have held a 144-column island inside a 48-column box and most of it would have been
+## unreachable, silently, with every check green.
+##
+## The literals, by hand and not read off the code. At `ZOOM_MIN` 0.45 the visible world is
+## 2844.44 x 1600.00 px:
+##   48 x 32  = 1920 x 1280 px — NARROWER than the view, so x is CENTRED at (1920-2844.44)/2 = -462.22
+##   144 x 32 = 5760 x 1280 px — WIDER than the view, so x is CLAMPED into [0, 2915.56] and `setup`'s
+##              `cam_px = ZERO` survives it at **0.00**
+## Both have y centred at (1280-1600)/2 = -160.00, because only the width moved.
+## ⇒ **The x coordinate is the whole check**: -462.22 against 0.00 is a difference nothing but reading
+## the grid can produce.
+func _a_wider_grid_moves_the_clamp(t) -> void:
+	var army := Army.new()
+	var long_rows := Islands.rows_of(Islands.LONG_ISLAND_INDEX)
+	var g := Grid.new()
+	g.load_rows(long_rows)
+	t.eq(g.w, 144, "긴 지도가 144칸 폭으로 실렸다 (자가 점검)")
+	t.eq(g.h, 32, "높이는 그대로 32칸이다 (자가 점검)")
+	var b := Battle.new()
+	b.setup(g, army, [], 999.0)
+
+	var fv := _fv()
+	fv.setup(b, army, long_rows)
+	t.eq(fv._map_tiles(), Vector2i(144, 32), "field_view 가 격자에게 크기를 묻는다")
+	t.ok(fv.cam_px.distance_to(Vector2(0.0, -160.0)) < 0.1,
+		"긴 지도에서 setup 뒤 cam_px 가 (0.00, -160.00) 이다 — x 는 가운데 맞춤이 아니라 물려서 잡힌다 (%.2f, %.2f)"
+			% [fv.cam_px.x, fv.cam_px.y])
+
+	# The self-check that makes the number above a claim: on the shipped 48 x 32 grid the same call
+	# leaves a DIFFERENT x, and `Look.GRID_W` is still 48 — so this is not two names for one answer.
+	t.eq(Look.GRID_W, 48, "Look.GRID_W 는 여전히 48이다 (격자 없는 뷰의 기본값으로만 남았다)")
+	var narrow := _fv()
+	narrow.setup(Battle.new(), Army.new(), [])
+	t.ok(absf(narrow.cam_px.x - fv.cam_px.x) > 400.0,
+		"48칸짜리에서는 x 가 -462.22 로 전혀 다르다 (%.2f vs %.2f) — 상수를 읽었다면 둘이 같았다"
+			% [narrow.cam_px.x, fv.cam_px.x])
+
+	# And the pan really reaches the far end. Under the old constant-fed clamp the ceiling was
+	# 1920 - 2844.44 < 0 and the camera could never leave the centre at all.
+	fv.pan_by(Vector2(-50000.0, 0.0))
+	t.ok(fv.cam_px.x > 2915.0 and fv.cam_px.x < 2916.0,
+		"동쪽 끝까지 밀면 cam_px.x 가 2915.56 에서 멈춘다 (5760 - 2844.44) — 얻은 값 %.2f" % fv.cam_px.x)
+
+	fv.battle = null   # the shared free() loop at the end of `run` must not hold a live Battle
+
+
+## ⚠⚠ **THE FLOOR UNDER THE CULL.** `_visible_tile_rect` is what the terrain loop walks instead of
+## the whole margin ring, and "fewer tiles" is also exactly what a cull that ate the screen would say.
+## So the span must always CONTAIN what the unculled loop could have painted inside the view — that is
+## the ring intersected with the visible world — at every zoom, at every corner, on both grid sizes.
+##
+## The ceiling beside it: on the long map the span has to be a small fraction of the ring, or there is
+## no cull and the 144-column map is 9,408 tiles a frame.
+func _the_cull_never_cuts_anything_visible(t) -> void:
+	var margin := Look.WATER_MARGIN_TILES
+	var army := Army.new()
+	var long_rows := Islands.rows_of(Islands.LONG_ISLAND_INDEX)
+	var long_grid := Grid.new()
+	long_grid.load_rows(long_rows)
+	var long_battle := Battle.new()
+	long_battle.setup(long_grid, army, [], 999.0)
+
+	var cases := [
+		{"battle": null, "rows": [], "tiles": Vector2i(48, 32), "label": "48 x 32"},
+		{"battle": long_battle, "rows": long_rows, "tiles": Vector2i(144, 32), "label": "144 x 32"},
+	]
+	var pushes := [Vector2.ZERO, Vector2(50000.0, 0.0), Vector2(-50000.0, 0.0),
+		Vector2(0.0, 50000.0), Vector2(0.0, -50000.0)]
+	var zooms := [Look.ZOOM_MIN, 0.7, 0.85, Look.ZOOM_MAX]
+	var bad: Array[String] = []
+	var checked := 0
+	for raw: Dictionary in cases:
+		var tiles: Vector2i = raw["tiles"]
+		var ring_px := margin * Look.TILE_PX
+		var ring := Rect2(Vector2(-ring_px, -ring_px),
+			Vector2(tiles) * Look.TILE_PX + Vector2(ring_px, ring_px) * 2.0)
+		for z: float in zooms:
+			for push: Vector2 in pushes:
+				var fv := _fv()
+				var bt: Battle = raw["battle"]
+				fv.setup(bt if bt != null else Battle.new(), army, raw["rows"])
+				fv.zoom = z
+				fv._clamp_cam()
+				fv.pan_by(push)
+				checked += 1
+				var span := fv._visible_tile_rect(margin)
+				var painted := Rect2(Vector2(span.position) * Look.TILE_PX,
+					Vector2(span.size) * Look.TILE_PX)
+				var want := ring.intersection(fv._visible_world_rect())
+				if not painted.encloses(want):
+					bad.append("%s z=%.2f push=%s: 칠함 %s ⊉ %s"
+						% [str(raw["label"]), z, str(push), str(painted), str(want)])
+				fv.battle = null
+	t.eq(checked, 40, "두 크기 x 네 줌 x 다섯 위치, 마흔 번을 실제로 쟀다 (자가 점검)")
+	t.eq(bad.size(), 0, "어느 경우에도 잘라낸 칸이 화면 안에 없었다 %s" % str(bad))
+
+	# The ceiling. At `ZOOM_MIN` on the long map the loop walks 76 x 44 = 3344 tiles against a ring of
+	# 168 x 56 = 9408 — the literals are hand arithmetic, and without them "the cull is on" is a
+	# sentence nothing measures.
+	var fv_long := _fv()
+	fv_long.setup(long_battle, army, long_rows)
+	var long_span := fv_long._visible_tile_rect(margin)
+	t.eq(long_span.position, Vector2i(-2, -6), "긴 지도의 ZOOM_MIN 구간은 (-2, -6) 에서 시작한다")
+	t.eq(long_span.size, Vector2i(76, 44), "그리고 76 x 44 칸이다")
+	t.eq(long_span.size.x * long_span.size.y, 3344, "곧 3344칸이다")
+	t.ok(3344 < (144 + 2 * margin) * (32 + 2 * margin),
+		"여백까지 통째로 칠하면 9408칸이니, 컬링이 %d칸을 덜어냈다"
+			% ((144 + 2 * margin) * (32 + 2 * margin) - 3344))
+	fv_long.battle = null
 
 
 ## The painted area (map + `WATER_MARGIN_TILES` on every side) covers the visible world rect at

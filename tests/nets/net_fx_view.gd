@@ -389,13 +389,42 @@ func _the_engine_really_drives_it(t) -> void:
 	fv.tiles_on = true
 	fv._process(0.001)
 	await t.pump_frames(2)
-	# The literal, not `(Look.GRID_W + 2*margin) * (Look.GRID_H + 2*margin)` — a check whose bound
-	# comes from the constants it is checking shrinks with them. **72 x 56 = 4032** (48 + 2x12,
-	# 32 + 2x12): `WATER_MARGIN_TILES` went 5 -> 12 with `ZOOM_MIN` 0.5625 -> 0.45, because at the new
-	# framing the visible world runs 11.6 tiles past the grid on the x axis and bare ground would show.
-	# ⚠ `_paint_tile` is 2 draw calls, so this is 8064 a frame, up from 4872 — `plan-then-watch`, 6.3.
-	t.eq(fv.tiles.size(), 4032,
-			"지형을 물 여백까지 4032칸 그렸다 — 줌 아웃해도 가장자리에 맨바닥이 안 드러난다")
+	# ⚠⚠ **THIS WAS A COUNT (4032) AND THE CULL RETIRED IT.** The claim it was making was never really
+	# "4032" — it was **「줌 아웃해도 가장자리에 맨바닥이 안 드러난다」**, and a count only carried that
+	# while the loop painted the whole margin ring whatever the camera was doing. This view's camera is
+	# wherever this net's own setup left it, so a number written here would be a second copy of
+	# `_visible_tile_rect`'s arithmetic and would move every time the fixture moved.
+	#
+	# ⇒ The property is asserted directly: the painted area CONTAINS the visible world. That is what
+	# "no bare ground at the edge" means, and it holds at any camera rather than at one.
+	# ⚠ `_paint_tile` is 2 draw calls, so this is the frame's terrain cost x2 — the cull is why the
+	# 144-column map in `islands.gd` is drawable at all (168 x 56 = 9408 unculled).
+	t.ok(fv.tiles.size() > 0,
+			"지형 칸을 실제로 그렸다 (%d칸 — 0이면 깨끗한 게 아니라 안 돈 것이다)" % fv.tiles.size())
+	var painted := Rect2()
+	for k in fv.tiles.size():
+		var r: Rect2 = (fv.tiles[k] as Dictionary)["rect"]
+		painted = r if k == 0 else painted.merge(r)
+	# ⚠ **The claim is against the visible world INTERSECTED with the margin ring**, and that is not a
+	# weakening to make it pass — it is what the uncculled loop itself could ever paint. This fixture's
+	# grid is 24 x 12, so its margin ring is 1920 x 1440 px against a visible world of 2844 x 1600 at
+	# `ZOOM_MIN`: painting every tile of the ring STILL leaves bare ground at the edge here. The cull
+	# has to drop nothing the old loop would have drawn inside the view, which is exactly this.
+	# (On the real 48 x 32 islands the ring does cover the view — `net_camera` pins that, and
+	# `net_shell` asserts the stronger form against the shipped grid.)
+	var ring_px := Look.WATER_MARGIN_TILES * Look.TILE_PX
+	var ring := Rect2(Vector2(-ring_px, -ring_px),
+		Vector2(fv.battle.grid.w, fv.battle.grid.h) * Look.TILE_PX + Vector2(ring_px, ring_px) * 2.0)
+	var want := ring.intersection(fv._visible_world_rect())
+	t.ok(want.size.x > 0.0 and want.size.y > 0.0, "그 교집합이 비어 있지 않다 (자가 점검)")
+	t.ok(painted.encloses(want),
+			"칠한 영역이 보이는 세계를 전부 덮는다 — 줌 아웃해도 가장자리에 맨바닥이 안 드러난다 (칠함 %s ⊇ 볼 수 있는 것 %s)"
+				% [str(painted), str(want)])
+	# ⚠ **There is deliberately NO "the cull bit" ceiling here.** This fixture's grid is 24 x 12, so its
+	# whole margin ring is 48 x 36 = 1728 tiles — under the shipped island's 4032 before any culling at
+	# all — and a bound written against 4032 would pass with the cull switched off entirely. A guard
+	# that can never bite must not be described as the guard. The real ceilings are `net_shell`
+	# (3168 < 4032 on the shipped grid) and `net_camera` (3344 against 9408 on the long map).
 	fv.tiles_on = false
 	_drop(t, fv)
 

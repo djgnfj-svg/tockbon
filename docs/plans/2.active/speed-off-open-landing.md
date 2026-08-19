@@ -180,7 +180,8 @@ screen says no*, driven by hand, not inferred from the code existing.
 - **The ceiling**: an inland tile with no water 8-neighbour is **still refused**, and a cliff tile is still
   refused. Without these the whole island going sendable would pass
 - **The boat**: a route to a shadowed beach has **length > straight-line distance**, and **every waypoint
-  is a water tile.** ⚠ *"The boat arrived"* is not *"the boat sailed on water"* — assert the path, not the
+  except the last is a water tile** — the last one IS the landing, which is land by construction.
+  ⚠ *"The boat arrived"* is not *"the boat sailed on water"* — assert the path, not the
   endpoint. That is `how-nets-lie`'s *a ceiling with no floor* in its exact shape
 - **Arrival order is unchanged**: two boats dropped in order onto one beach from one harbour still land
   front row first
@@ -224,7 +225,7 @@ Rows marked **user only** close when the user says so, and nobody else may close
 | A1 | The speed chips and the pause are gone from the code and from the screen; `Rules.SPEED_STEPS` still parses | verify-read + verify-look |
 | A2 | On all three islands, **sendable ≥ 84 · 76 · 82** and **every 8-way coast tile is sendable** | verify-run, against the literals in 2.1 |
 | A3 | An inland tile with no water 8-neighbour, and a cliff tile, are **still refused** | verify-run |
-| A4 | A boat sent to a beach that was refused before **arrives**, and **every waypoint of its path is a water tile** | verify-run. ⚠ Assert the path, not the endpoint |
+| A4 | A boat sent to a beach that was refused before **arrives**, and **every waypoint of its path EXCEPT THE LAST is a water tile** | verify-run. ⚠ Assert the path, not the endpoint. ⚠⚠ **The exception is not a loophole — it is the construction.** `water_route` appends the LANDING as its final point and a landing is land by definition, so the original wording ("every waypoint") was literally false of correct code and a later round deriving a check from it would have reddened honest work. verify-run swept all 242 sendable routes and found 0 non-water waypoints outside the landing |
 | A5 | Drop order still decides the front row — two boats onto one beach from one harbour | verify-run |
 | A6 | The crossing share of the clock, before and after, from `tools/probe/run_run.gd` — **reported, not tuned** | verify-run. ⚠ **A number, not a verdict** |
 | A7 | S1–S5 all read right | verify-look |
@@ -370,3 +371,89 @@ call inside it*). ⇒ `net_draw_leaf` grew a third scan, `_whole_array_leaves`: 
 take an array must hand it WHOLE to the named native call and must never index it inside the leaf.
 With that, mutation 2 reddens. **The corner cut is the one shape this file had no instrument for, and
 only the mutation found it.**
+
+---
+
+### Round 2 — fixer
+
+changed   `src/look.gd` (six world widths raised, three declared deliberately below, the width-table
+banner, `CULL_PAD_TILES` added, `GRID_W`/`GRID_H` redocumented as a fallback) · `src/sim/grid.gd`
+(`_water_step_open`, wired into `_water_field` AND `water_route`'s descent) · `src/sim/islands.gd`
+(the 144 x 32 long map, generated, with a width-derived time limit) · `src/view/field_view.gd`
+(`_map_tiles`, `_visible_tile_rect`, both `_draw` loops culled and asking the grid, `_clamp_cam`
+asking the grid) · `src/sim/battle.gd` (`boat["home"]`'s comment) · this file's A4 row and its
+section 3 twin · five nets (`net_draw_leaf` the width table, `net_coast` two squeeze checks,
+`net_camera` two variable-grid checks, `net_islands` the long map, `net_shell` / `net_fx_view` the
+culled tile counts) · `net_boat`'s one over-claiming label.
+
+why       The adversarial bounce of round 1 (F1 · F4 · F5 · F6 · F7a · F7c), plus the one small
+feature the user asked for on 2026-08-19 — **variable grid size and one long map**
+(`idea-inbox` row 52: *"긴 맵 하나 … 추후에 확장 가능하게 코딩만 해주고"*). ⚠ **The deliverable is the
+capability**, so the long map is deliberately NOT in `Rules.MAP_NODES` and no node opens it.
+
+closed    **F1** — `ROUTE_WIDTH_PX` 3.0 -> 5.0 (1.35 px -> 2.25 px at `ZOOM_MIN`).
+**F6** — the whole twelve-row table, judged one row at a time. **Raised**: `BODY_OUTLINE` 2->5,
+`SHOT` 2->5, `BURST` 2->5, `AREA_RING` 3->5, `LAND_RING` 2->5, `ROUTE` 3->5. **Left deliberately
+below, with the reason on the constant's own line**: `GRID_LINE` (texture at alpha 0.07 over every
+tile, nothing is ever read off it), `TARGET_LINE` (alpha 0.12 x up to 14 lines across the island —
+`look.gd` already records this as the one item that can be a net readability LOSS), `SPARK` (its
+ceiling is half a shard's length, 2.5, which sits UNDER the floor's 4.45 — it cannot move without
+`SPARK_LEN_PX` and `SPARK_REACH_PX`, which is a re-measure of item 2 by eye). `CLIFF_FACE`,
+`REFUSE_MARK` and `BEAK` already cleared. The check is `net_draw_leaf._world_width_table`, and it is
+**CLOSED against `field_view.gd`'s own text both ways** — a `Look.*_WIDTH_PX` the file draws with
+that the table does not hold is red, and a table row the file no longer draws with is red.
+**F4** — `grid._water_step_open`: a diagonal water step needs at least one water shoulder, applied in
+`_water_field` and in `water_route`'s descent. Two fixtures in `net_coast`, each with its own literal.
+**F5** — A4 now reads *"every waypoint EXCEPT THE LAST"*, and section 3's twin sentence was corrected
+in the same edit so the two cannot disagree.
+**F7a** — `boat["home"]` KEPT, with the reason written on it: its live reader is
+`tools/look/capture_landing.gd`, which prints it beside `pos`/`leg`/`dist`. ⚠ **The finding's premise
+was wrong** — it is read outside `src/`, not by nothing.
+**F7c** — the label is now 「그 해안으로 보내고 확정했다」.
+**The feature** — `field_view` asks `battle.grid` for the map size through `_map_tiles()`, both `_draw`
+loops and `_clamp_cam` go through it, the terrain pass is culled to the visible span, and
+`islands.gd` holds a generated **144 x 32** map at index 3 with a **180.0 s** limit derived as
+`TIME_LIMITS[0] / 48 columns * 144 = 1.25 * 144`, the 48 read off island 1's own first row.
+
+not closed  **A7** (S1–S5) — verify-look owns it and nothing here has been looked at; **S4 in
+particular is now more likely to bounce, not less**, since six world widths moved and the picture of
+a fight changed with them. **A8** and **A9** are **user only**. **`plan-then-watch`'s 결정 4 is still
+overturned in the code with its own doc unedited** — carried over from round 1, untouched here.
+⚠ **Not done and deliberately so**: the long map is not wired into `Rules.MAP_NODES`, `TIME_LIMITS`
+for islands 0–2 was not retuned, and the probe was not re-run — no sim number this round changes what
+a shipped island costs. ⚠ **`flow_field` / `step_toward` do NOT carry the shoulder rule**: a walking
+soldier can still cut a land diagonal between two impassable corners. That is stated in `grid.gd` and
+left open — it is a movement change with its own measurements, not this guard's business.
+⚠ **`SPARK_LEN_PX` is also under the snap floor at `ZOOM_MIN`** (2.25 px) and was flagged rather than
+changed; it is a length, not a width, and item 2 is scored by eye.
+
+nets      **15 nets · 2203 checks · 4.4 s · green**, stderr clean. Was 15 / 2100 / 4.3 s.
+Fingerprint `329806F492CF`.
+
+**Nine mutations, each edited and re-run in ONE command:**
+
+| # | Mutation | Result |
+|---|---|---|
+| 1 | `ROUTE_WIDTH_PX` back to 3.0 | **red** — draw_leaf |
+| 2 | one row deleted from the width table | **red** — draw_leaf, both directions (outside-the-table AND the count) |
+| 3 | `GRID_LINE_WIDTH_PX` declared "above the floor" | **red** — draw_leaf, three rows |
+| 4 | the shoulder guard removed from `_water_field` | **red** — coast |
+| 5 | the shoulder guard removed from `water_route`'s descent | **red** — coast (the field alone is NOT enough) |
+| 6 | `_map_tiles` ignores the grid and returns `Look.GRID_W`/`GRID_H` | **red** — camera, 7 rows |
+| 7 | the cull never bites (span = the whole margin ring) | **red** — camera · shell |
+| 8 | the cull cuts one tile INTO the view | **red** — camera · shell (the coverage floor) |
+| 9 | the long map's limit hardcoded to 120.0 | **red** — islands |
+
+⚠ **Mutation 5 is the one worth reading.** The bounce named `_water_field` only; guarding the field
+alone leaves `water_route` free to descend THROUGH a squeeze, because it takes the cheapest strictly
+lower neighbour and a squeezed tile some other path reached cheaply is exactly what it prefers. The
+field can be clean and the sailed route still cuts the seam. That needed its own fixture
+(`_the_descent_home_never_squeezes`) — the first one cannot fail it.
+
+⚠ **One check was DELETED rather than updated, and it is the honest half of this round.**
+`net_fx_view`'s 「4032칸」 could not survive the cull, and the replacement bound `< 4032` would have
+passed with culling switched off entirely — that fixture's grid is 24 x 12, so its whole margin ring
+is 1728 tiles. A guard that can never bite must not be described as the guard. What replaced it is
+the property the count was standing in for: **the painted area contains the visible world**, asserted
+against the ring intersected with the view, at 40 camera states across both grid sizes in
+`net_camera`.

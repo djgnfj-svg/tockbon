@@ -220,7 +220,7 @@ func zoom_at(at: Vector2, factor: float) -> void:
 ## than the visible world (every zoom below 0.667 horizontally, and always vertically at these
 ## dimensions) is CENTRED on that axis instead of clamped to an empty range.
 func _clamp_cam() -> void:
-	var map_px := Vector2(Look.GRID_W, Look.GRID_H) * Look.TILE_PX
+	var map_px := Vector2(_map_tiles()) * Look.TILE_PX
 	var visible := Look.viewport_size_px() / zoom
 	var out := cam_px
 	for axis in 2:
@@ -233,6 +233,45 @@ func _clamp_cam() -> void:
 
 func _visible_world_rect() -> Rect2:
 	return Rect2(cam_px, Look.viewport_size_px() / zoom)
+
+
+## **The grid's own size in tiles, and the one place anything here asks for it.**
+##
+## ⚠⚠ **Nothing that draws or clamps may read `Look.GRID_W` / `GRID_H` directly any more.** They were
+## `const 48` / `32` and `_draw` and `_clamp_cam` read them instead of the grid, so **two maps of
+## different sizes were unrepresentable** — a long map and a small one could not both exist. The
+## constants survive only as the answer for a view that has no grid yet (`setup(Battle.new(), …)`, and
+## the frames between the shell building the node and opening an island), and that fallback is what
+## keeps every camera literal measured against 48 x 32 still true.
+func _map_tiles() -> Vector2i:
+	if battle != null and battle.grid != null and battle.grid.w > 0 and battle.grid.h > 0:
+		return Vector2i(battle.grid.w, battle.grid.h)
+	return Vector2i(Look.GRID_W, Look.GRID_H)
+
+
+## The half-open tile span the terrain pass walks: what is on screen, padded, and clamped to the grid
+## plus its water margin. **`end` is exclusive**, so `range(position.x, end.x)` is the loop.
+##
+## ⚠⚠ **Without this the terrain loop paints the whole map every frame whatever is visible.** Measured
+## at 48 x 32 with a 12-tile margin: 72 x 56 = **4,032 tiles = 8,064 immediate-mode calls a frame**,
+## of which the zoomed-out camera can see about three quarters. At 144 columns the same loop is
+## 168 x 56 = 9,408, and the long map is unplayable before anything about it can be judged.
+##
+## The pad is `Look.CULL_PAD_TILES`, and it is arithmetic rather than slack — see its own comment: the
+## shake is added to `position` AFTER this is computed, so the world can slide under the camera by
+## `SHAKE_MAX_PX / ZOOM_MIN` px without `cam_px` moving at all.
+##
+## ⚠ **The clamp to the margin is the reason this can never cut anything.** `WATER_MARGIN_TILES` is
+## already sized so the margin rect contains the whole zoomed-out visible world (`net_camera` pins
+## that), so intersecting the two can only ever drop tiles that were off screen.
+func _visible_tile_rect(margin: int) -> Rect2i:
+	var tiles := _map_tiles()
+	var world := _visible_world_rect().grow(Look.CULL_PAD_TILES * Look.TILE_PX)
+	var x0 := maxi(-margin, int(floor(world.position.x / Look.TILE_PX)))
+	var y0 := maxi(-margin, int(floor(world.position.y / Look.TILE_PX)))
+	var x1 := mini(tiles.x + margin, int(ceil(world.end.x / Look.TILE_PX)))
+	var y1 := mini(tiles.y + margin, int(ceil(world.end.y / Look.TILE_PX)))
+	return Rect2i(Vector2i(x0, y0), Vector2i(maxi(0, x1 - x0), maxi(0, y1 - y0)))
 
 
 ## Called by `game.gd` on every press, motion and release of a drag. `soldier == -1` clears the
@@ -279,9 +318,13 @@ func _draw() -> void:
 	# painted COL_WATER DIRECTLY rather than through `terrain_colour_of_char`: that lookup takes a
 	# legend character and there is no legend outside the grid, so inventing one would put the island
 	# legend in two places.
+	# ⚠ **The bounds come from `battle.grid` through `_map_tiles()`, never from `Look.GRID_W`/`GRID_H`,
+	# and the span is CULLED to what is on screen.** Read off the constants this loop could only ever
+	# paint one map size; painted whole it was 4,032 tiles a frame at 48 x 32 and would be 9,408 at 144.
 	var margin := Look.WATER_MARGIN_TILES
-	for ty in range(-margin, Look.GRID_H + margin):
-		for tx in range(-margin, Look.GRID_W + margin):
+	var tile_span := _visible_tile_rect(margin)
+	for ty in range(tile_span.position.y, tile_span.end.y):
+		for tx in range(tile_span.position.x, tile_span.end.x):
 			var fill := Look.COL_WATER
 			if ty >= 0 and ty < rows.size() and tx >= 0:
 				var row: String = rows[ty]
@@ -306,10 +349,14 @@ func _draw() -> void:
 	# `segments` reads as "used" the moment `seg[0]` appears once, and a spy overriding the whole leaf
 	# never runs its body at all. A flat array hands `draw_multiline` everything in one native call;
 	# there is no per-segment indexing left inside the leaf for that mutation to hide in.
+	# Same two rules as the terrain pass above: the size comes from the grid, and the walk is culled to
+	# what is on screen. The span is clamped to the grid itself here (margin 0) — a cliff is a legend
+	# character and there is no legend outside the rows.
 	var cliff_points := PackedVector2Array()
-	for ty2 in Look.GRID_H:
+	var cliff_span := _visible_tile_rect(0)
+	for ty2 in range(cliff_span.position.y, cliff_span.end.y):
 		var row2: String = rows[ty2] if ty2 < rows.size() else ""
-		for tx2 in Look.GRID_W:
+		for tx2 in range(cliff_span.position.x, cliff_span.end.x):
 			if tx2 >= row2.length() or row2[tx2] != "^":
 				continue
 			var crect := Look.tile_rect_px(tx2, ty2)

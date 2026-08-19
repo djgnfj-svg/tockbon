@@ -192,10 +192,14 @@ func can_land_at(harbour_idx: int, t: int) -> bool:
 
 ## Breadth-first from a harbour over WATER tiles, 8-way, cost in hops. **A deliberate mirror of
 ## `flow_field` and not a call to it**: same queue, same `UNREACHABLE` sentinel, same fixed
-## `NEIGHBOURS` order — `water[nt] == 0: continue` in place of `passable[nt] == 0: continue`, and
-## that one line is the entire difference. Sharing one function through a flag would put the two
-## traversals one typo apart, and a boat that walked the LAND field would sail over the island with
-## every check about reachability still green.
+## `NEIGHBOURS` order — `water[nt] == 0: continue` in place of `passable[nt] == 0: continue`.
+## Sharing one function through a flag would put the two traversals one typo apart, and a boat that
+## walked the LAND field would sail over the island with every check about reachability still green.
+##
+## ⚠ **There is a SECOND difference now and it is not symmetric**: `_water_step_open` refuses a
+## diagonal squeezed between two land corners. `flow_field` has no such guard — see that function's
+## own note. An earlier version of this paragraph said the water byte was "the entire difference",
+## which was true when it was written and is not any more.
 ##
 ## The seed is planted at the harbour tile whatever its own contents, exactly as `flow_field` does,
 ## and for the same reason: an all-unreachable field produces an island with no landings at all and
@@ -226,11 +230,46 @@ func _water_field(seed_tile: int) -> PackedInt32Array:
 			var nt := ny * w + nx
 			if water[nt] == 0:
 				continue
+			if not _water_step_open(tx, ty, nx, ny):
+				continue
 			if field[nt] <= next_cost:
 				continue
 			field[nt] = next_cost
 			queue.append(nt)
 	return field
+
+
+## Whether a boat may take the 8-way step `(fx, fy) -> (tx, ty)`. An ORTHOGONAL step always may; a
+## DIAGONAL one needs at least one of its two SHOULDER tiles — `(tx, fy)` and `(fx, ty)` — to be water.
+##
+## ⚠⚠ **Without this a hull slips between two land corners that touch.** Both `_water_field` and
+## `water_route` walked `NEIGHBOURS` on the water byte alone, so water at (4,2) and water at (3,3) were
+## one step apart with land on BOTH (4,3) and (3,2) — the boat crosses a seam that has no water in it.
+## Reproduced on a fixture; **measured 0 occurrences on the three shipped grids**, so it was latent
+## rather than visible, and a longer map is exactly where a seam like that turns up.
+##
+## ⚠ **`net_boat`'s water check cannot see this and never could.** It rounds the hull to a tile every
+## sub-step, and along a squeeze that rounded tile is always one of the two water endpoints — a ceiling
+## with no floor, one layer down. What catches it is `net_coast`, on a fixture whose two pools touch
+## ONLY at a squeeze.
+##
+## ⚠ **`flow_field` and `step_toward` do NOT carry this rule**, and that is stated rather than assumed:
+## a walking soldier can still cut a land diagonal between two impassable corners today. Fixing that is
+## a movement change with its own measurements (queueing at necks, `_held`'s two-tile swap) and it is
+## not this guard's business — but nobody should read this function as evidence that the land half
+## already obeys it.
+##
+## Both shoulders are inside the grid by construction: each shares one coordinate with the start and
+## one with the end, and both of those are range-checked by the caller before this is asked.
+##
+## ⚠ **The BEACHING hop is deliberately not asked.** `_entry_water_tile` picks the water tile a boat
+## stops on and `water_route` appends the LANDING after it; that last segment is water -> land by
+## definition, and refusing it diagonally would refuse a corner beach for a reason that has nothing to
+## do with a hull passing through anything.
+func _water_step_open(fx: int, fy: int, tx: int, ty: int) -> bool:
+	if fx == tx or fy == ty:
+		return true
+	return water[fy * w + tx] != 0 or water[ty * w + fx] != 0
 
 
 ## The water tile a boat aimed at `t` actually stops on: the 8-neighbour of `t` that is water AND
@@ -308,6 +347,8 @@ func water_route(harbour_idx: int, landing: int) -> PackedVector2Array:
 				continue
 			var nt := ny * w + nx
 			if water[nt] == 0:
+				continue
+			if not _water_step_open(cx, cy, nx, ny):
 				continue
 			# Strictly lower, so the walk cannot sit between two equal-cost tiles forever. The same
 			# `<` (and not `<=`) that `step_toward` carries, and for the same reason.

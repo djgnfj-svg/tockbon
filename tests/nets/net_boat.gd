@@ -177,7 +177,11 @@ func _the_boat_really_sails_on_water(t) -> void:
 	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.BISON, 2, 1)], 999.0)
 	var beach := 2 * 12 + 9
 	t.eq(b.grid.home_harbour_for(beach), 0, "그 해안의 집 항구는 하나뿐인 0번이다 (자가 점검)")
-	t.ok(b.send(0, beach) >= 0 and b.commit(), "예전 규칙이 거절하던 해안으로 보냈다 (자가 점검)")
+	# ⚠ **The label says only what this line asserts.** It used to read 「예전 규칙이 거절하던 해안으로
+	# 보냈다」, and the old straight-line rule is DELETED — it cannot be consulted from in here, so that
+	# was a claim about code no net can run. What the fixture being a shadowed beach buys is recorded
+	# where it can be checked: in `_shadow_bay()`'s own comment.
+	t.ok(b.send(0, beach) >= 0 and b.commit(), "그 해안으로 보내고 확정했다 (자가 점검)")
 	var path: PackedVector2Array = b.boats[0]["path"]
 	t.eq(path.size(), 8, "항로가 8점짜리 폴리라인이다 (바깥에서 검증됨)")
 

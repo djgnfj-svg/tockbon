@@ -93,6 +93,11 @@ func _table() -> Dictionary:
 			"zoom_at": 0,
 			"_clamp_cam": 0,
 			"_visible_world_rect": 0,
+			# The variable grid. `_map_tiles` is the ONE place the drawing and the camera ask how big
+			# the map is — `Look.GRID_W`/`GRID_H` are a fallback for a view with no grid and nothing
+			# else — and `_visible_tile_rect` is the culled span the terrain loop walks. Both pure.
+			"_map_tiles": 0,
+			"_visible_tile_rect": 0,
 			# boat-and-landing stage 4 drag (P8): set_drag is the one state setter a press-start and
 			# a release-end both go through, so it is pure, like the camera functions above it.
 			"set_drag": 0,
@@ -325,7 +330,9 @@ func run(t) -> void:
 	# The map's four-state read added `_look_of` and `_node_radius_of` to `map_view` (27 -> 29), and
 	# the total is re-derived by hand here rather than nudged: a literal that moves by whatever the
 	# last edit happened to be is a literal nobody re-derives.
-	t.eq(total_funcs, 123, "다섯 파일의 함수는 모두 123개다 (43 + 12 + 21 + 18 + 29)")
+	# The variable grid added `_map_tiles` and `_visible_tile_rect` to `field_view` (43 -> 45), and the
+	# total is re-derived by hand here rather than nudged by two.
+	t.eq(total_funcs, 125, "다섯 파일의 함수는 모두 125개다 (45 + 12 + 21 + 18 + 29)")
 	t.eq(total_leaves, 31, "그중 draw 를 실제로 부르는 잎은 31개다 (13 + 3 + 4 + 4 + 7)")
 
 	# -- 3b. the array leaves hand their array WHOLE to one native call -----------------------------
@@ -397,7 +404,102 @@ func run(t) -> void:
 	t.ok(_colour_hits(_read(LOOK_PATH)).size() >= 15, "그리고 look.gd 안에는 색이 실제로 들어 있다")
 	t.ok(_literal_hits(_read(LOOK_PATH)).size() >= 10, "그리고 look.gd 안에는 픽셀 상수가 실제로 들어 있다")
 
+	_world_width_table(t)
 	_invert_the_scanner(t)
+
+
+# -- 5. the world-width table --------------------------------------------------------------------
+## Which side of the `ZOOM_MIN` snap floor each width `field_view` draws with sits on. **An empty
+## string means ABOVE the floor; any other string is the REASON it is deliberately below**, and the
+## reason is the whole licence — a row cannot be moved to the below side without writing one.
+##
+## ⚠⚠ **This is a TABLE and not a row, and the difference is the defect it was written for.**
+## `net_shell` pinned `REFUSE_MARK_WIDTH_PX * ZOOM_MIN >= 2.0` for one constant and nothing pinned the
+## other eleven, so `ROUTE_WIDTH_PX` — the water route a whole round existed to draw — reached the
+## glass at **1.35 px** with the round green. Nine of the twelve were under the floor and only one had
+## ever been measured.
+##
+## ⚠ **The set is CLOSED against `field_view.gd`'s own text**, both ways: a `Look.*_WIDTH_PX` the file
+## draws with that this table does not hold is red, and a row here that the file no longer draws with
+## is red too. That is this repo's own named failure — a per-function table that scans the names it
+## HOLDS leaked twice, the second time out of the fix for the first — written as a closure instead.
+func _world_widths() -> Dictionary:
+	return {
+		"BODY_OUTLINE_WIDTH_PX": "",
+		"SHOT_WIDTH_PX": "",
+		"BURST_WIDTH_PX": "",
+		"AREA_RING_WIDTH_PX": "",
+		"LAND_RING_WIDTH_PX": "",
+		"ROUTE_WIDTH_PX": "",
+		"CLIFF_FACE_WIDTH_PX": "",
+		"REFUSE_MARK_WIDTH_PX": "",
+		# A polygon base, not a stroke, and it clears the floor at 8.0 (3.60 px) without being raised.
+		"BEAK_WIDTH_PX": "",
+		"GRID_LINE_WIDTH_PX":
+			"격자선은 읽는 표시가 아니라 바탕이다 — COL_GRID_LINE 은 알파 0.07 이고 지도의 모든 칸에 깔린다."
+			+ " 2.25px 로 올리면 격자가 그 위의 지형보다 시끄러워진다. 조준하는 표시(후보 링·거절 표시·절벽 선)는"
+			+ " 셋 다 따로 있고 셋 다 바닥을 넘는다",
+		"TARGET_LINE_WIDTH_PX":
+			"의도선은 알파 0.12 이고 한 번에 최대 14개가 섬 전체를 가로지른다 — 열두 연출 중 유일하게"
+			+ " 가독성에 손해일 수 있는 항목이라 look.gd 가 이미 적어 두었다. 굵히면 그 두 제한이 막으려던"
+			+ " 바로 그 어수선함이 된다",
+		"SPARK_WIDTH_PX":
+			"파편은 혼자 못 올린다 — 천장이 제 길이의 절반(SPARK_LEN_PX 5.0 / 2 = 2.5)이고 그 천장이"
+			+ " 바닥 4.45 보다 낮다. 올리려면 SPARK_LEN_PX 와 SPARK_REACH_PX 가 같이 움직여야 하고,"
+			+ " 그건 굵기 수정이 아니라 항목 2 를 눈으로 다시 재는 일이다",
+	}
+
+
+func _world_width_table(t) -> void:
+	# ⚠ **2.0 and 0.45 are LITERALS here.** The floor is `look.gd`'s snap floor and the zoom is the one
+	# an island opens at; reading either back off `Look` would let a mutation move the expectation and
+	# the reality together — this repo's own named false green.
+	var floor_px := 2.0
+	var zoom_min := 0.45
+	t.eq(Look.ZOOM_MIN, zoom_min, "섬이 열리는 줌은 0.45 다 (이 표의 바닥 계산이 쓰는 값)")
+
+	var table := _world_widths()
+	var consts: Dictionary = Look.new().get_script().get_script_constant_map()
+
+	# The closure, and it runs FIRST: a table checked against nothing is a list.
+	var drawn := _look_width_names(_read(VIEW_DIR + "/field_view.gd"))
+	t.eq(drawn.size(), 12, "field_view 가 그리는 데 쓰는 Look.*_WIDTH_PX 이름이 열둘이다 %s" % str(drawn))
+	var outside: Array[String] = []
+	for name: String in drawn:
+		if not table.has(name):
+			outside.append(name)
+	t.eq(outside.size(), 0,
+		"field_view 가 쓰는 굵기 중 표 밖에 있는 게 없다 — 내일 추가된 상수는 어느 한쪽에 서거나 빨개진다 %s"
+			% str(outside))
+	var stale: Array[String] = []
+	for name: String in table:
+		if not drawn.has(name):
+			stale.append(name)
+	t.eq(stale.size(), 0, "그리고 표에만 있고 field_view 는 안 쓰는 줄도 없다 %s" % str(stale))
+
+	# Each row on its declared side. Both directions bite: a row claiming "above" that is under the
+	# floor is the defect, and a row claiming "deliberately below" that has been raised is a stale
+	# licence nobody withdrew.
+	var above := 0
+	var below := 0
+	for name: String in table:
+		t.ok(consts.has(name), "look.gd 에 %s 가 실제로 있다" % name)
+		if not consts.has(name):
+			continue
+		var on_glass := float(consts[name]) * zoom_min
+		var why := str(table[name])
+		if why == "":
+			above += 1
+			t.ok(on_glass >= floor_px - 1e-6,
+				"%s 는 ZOOM_MIN 에서 %.2fpx — 2.0px 스냅 바닥 위다" % [name, on_glass])
+		else:
+			below += 1
+			t.ok(on_glass < floor_px,
+				"%s 는 일부러 바닥 밑이다 (%.2fpx) — 올렸다면 표의 이유가 낡은 것이니 여기서 문다"
+					% [name, on_glass])
+			t.ok(why.length() >= 40, "%s 가 바닥 밑인 이유가 적혀 있다" % name)
+	t.eq(above, 9, "바닥 위가 아홉이다")
+	t.eq(below, 3, "일부러 바닥 밑인 것이 셋이다 — 격자선·의도선·파편")
 
 
 # -- the scanner turned on itself ----------------------------------------------------------------
@@ -518,6 +620,15 @@ func _invert_the_scanner(t) -> void:
 	t.ok(_literal_hits("const TYPE_COUNT := 5\n").size() > 0,
 		"표 컬럼 수도 문다 — 같은 이유다 (스캐너 자가 점검)")
 
+	# (f2) the world-width extractor. It is what CLOSES the width table, so it has to bite a name the
+	# table does not hold and it has to ignore the prose that names those same constants everywhere.
+	t.eq(_look_width_names("\t_paint_thing(p, Look.NEW_MARK_WIDTH_PX)\n"),
+		["NEW_MARK_WIDTH_PX"] as Array[String],
+		"내일 추가된 굵기 이름을 뽑아낸다 — 표에 없으면 위에서 빨개진다 (스캐너 자가 점검)")
+	t.eq(_look_width_names("# ⚠ Look.ROUTE_WIDTH_PX was 3.0 and drew at 1.35 px\n").size(), 0,
+		"주석 안의 굵기 이름은 안 뽑는다 (스캐너 자가 점검)")
+	t.eq(_look_width_names("\tvar w := Look.BEAK_LENGTH_PX\n").size(), 0,
+		"굵기가 아닌 이름은 안 뽑는다 (스캐너 자가 점검)")
 	# (g) the comment stripper is the floor under every scan above: if it stopped stripping, a comment
 	# naming `draw_rect` would be counted as a call and the whole table would read as broken; if it
 	# stripped too eagerly, a `#` inside a string would cut a line of real code away unseen.
@@ -698,6 +809,24 @@ func _draw_calls(body: String) -> int:
 	var re := RegEx.new()
 	re.compile("\\bdraw_[a-z_]+\\s*\\(")
 	return re.search_all(body).size()
+
+
+## Every `Look.<NAME>_WIDTH_PX` a file reads in CODE, deduplicated and sorted. Comments are stripped
+## first for the same reason every other scan here strips them: `look.gd`'s own paragraphs name these
+## constants a dozen times, and a scan that counted prose would report a table that covers names
+## nothing draws with.
+func _look_width_names(text: String) -> Array[String]:
+	var re := RegEx.new()
+	re.compile("Look\\.([A-Z][A-Z0-9_]*_WIDTH_PX)\\b")
+	var seen := {}
+	for raw in text.split("\n"):
+		for m in re.search_all(_strip_comment(raw)):
+			seen[m.get_string(1)] = true
+	var out: Array[String] = []
+	for k: String in seen:
+		out.append(k)
+	out.sort()
+	return out
 
 
 func _uses(body: String, name: String) -> bool:
