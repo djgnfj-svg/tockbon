@@ -26,9 +26,12 @@ has said the corrected screen reads either.
 
 ---
 
-## ⚠⚠ Up front — **two things the user decided, two the user must**
+## ⚠⚠ Up front — **four things the user decided, one still open**
 
-**These sit first so they cannot be skipped. No section below fills either of them in.**
+**These sit first so they cannot be skipped. No section below fills the open one in.**
+
+⚠ **Both former Opens were answered on 2026-08-19, and the answer to Open 1 was the reading this doc was
+already written for.** That is luck, not method — the doc says so under Decided 3.
 
 ### ✅ Decided 1 — **author a few more islands by hand; the user grows the set later** (user, 2026-08-18)
 
@@ -39,7 +42,7 @@ has said the corrected screen reads either.
 island" becomes a first-class design goal of this round**, not a nicety — the whole *island shortage*
 section below is that.
 
-### ⬜ Open 1 — **"two rows" reads two ways**
+### ✅ Decided 3 — **one node per floor** (user, 2026-08-19). *Was: Open 1 — "two rows" reads two ways*
 
 > ⚠⚠ **The user's own sentence, reproduced here. The previous draft did not carry it, and that was the
 > defect** — it showed the user only the induced reading and never the original, which leans the other way.
@@ -50,15 +53,22 @@ section below is that.
 
 ① **one of two at each step** · ② **two columns offered at once, one taken from each.**
 
+> ✅ ***"층마다 둘 중 하나"*** (user, 2026-08-19) ⇒ **①.** The rejected branch is filed as
+> [one node per floor](../decisions/one-node-per-floor-not-two-columns.md).
+>
+> ⚠ **This doc had already been written for ① on the strength of one word.** It happened to be right,
+> **and a round shipped before anyone asked** — `idea-inbox` row 14. ⇒ **Being right does not retire the
+> question of whether it was asked.**
+
 ⚠ **The plain reading of that sentence is ②.** "One from each side" is not "one from one side."
 **The only thing pointing at ① is one word from today** — ***"슬더슬식"*** (Slay-the-Spire-style), and
 that game is ①. ⇒ **This doc is written for ①, and records here that the evidence is one-sided.**
 
-⚠⚠ **And this item must be answered BEFORE the grids are authored.** Under ② the five floors, seven
-nodes, four routes and the six-grid arithmetic below are **all rewritten**, and only then is the value
-of three hand-written islands decided.
+⚠⚠ **This item had to be answered BEFORE the grids were authored** — under ② the five floors, seven
+nodes, four routes and the six-grid arithmetic below were **all rewritten**. ✅ **It is answered, so
+step 5 is unblocked**: the tables below stand and six grids is the number.
 
-### ⬜ Open 2 — **there is nothing in this game to configure**
+### ✅ Decided 4 — **설정하기 does not press** (user, 2026-08-19). *Was: Open 2*
 
 **Measured, not remembered**: `src/` has no audio, no window mode, no input map, no persisted config —
 none of it. The closest thing is `look.gd`'s `FX_GAIN`, and **it is a `const` Array, so it cannot be
@@ -79,6 +89,16 @@ user's own quote beside them.** ⇒ **Healing is not the chest's reward.**
 ⚠ **And this correction opens something else**: the recovery route is still open as the GDD's
 **undecided 14**, and **the HP schedule below shows arithmetically that this map is the first thing to
 make it bite.**
+
+> ⚠⚠ **2026-08-19 — the user reopened this, and the two quotes are both theirs.** Asked what the chest
+> pays, they answered ***"상자 보상은 아직 미정이고"***. The ✅ above quotes them on 2026-08-18 saying
+> artifacts. **Neither is overwritten here.** ⇒ **Treat the chest as UNDECIDED** and do not let this
+> heading's tick mark read as an answer — `idea-inbox` row 20.
+>
+> ⚠ **The consequence is arithmetic, not taste.** The HP schedule below reaches the chest at **43.0 pool**
+> against island 3's measured wipe threshold (between **61.5** and **84**). An artifact that does not heal
+> leaves the cells–beak–beak route **unwinnable at the boss**; healing makes it free value. ⇒ **Whatever is
+> decided, the schedule is re-run against it.**
 
 #### Three words, three different things — **the GDD already separated them**
 
@@ -562,7 +582,29 @@ the **maximum roster is `10 + 3 × 3 =` 19.** Today's maximum is 13, and **two p
 | Of those, nodes that open an island | **6** (the chest has no fight, so no grid) |
 | **Grids required** | **6** |
 | Grids that exist | **3** |
-| **Grids hand-authored this round** | **3** |
+| **Grids hand-authored this round** | **3** ⚠⚠ **and hand-authoring does not survive 2026-08-19** — see the box below |
+
+### ⚠⚠ Superseded 2026-08-19 — hand-authoring ends at continent scale, and the generator was refused
+
+**Nothing here is deleted and nothing is built.** The user decided one combat node's contents become a
+continent (*"엄청 길어도 돼 그 맵이. 타일맵"*), 10–15 minutes long. `push-inland` derives **984–1,476
+columns**. **Implemented: none. Accepted: nothing chosen.**
+
+> This doc's own words: *"because the user grows the set themselves, **cutting the cost of adding one
+> becomes a design goal**"* — and *"three are hand-authored this round, **no generator**"*, on the user's
+> *"섬은 그냥 네가 예시로 몇 개 더 만들어주고, 추 내가 차차 추가할게"*.
+
+**The cost went the other way by 41×.** `ISLAND_ROWS` is strings of exactly 48 characters; at 984 columns
+one node is **31,488 characters**, written as 32 source lines of 984 characters each — undiffable and
+unreadable. **Six nodes: 188,928 characters, against 4,608 today.**
+
+⇒ **The 「six grids, three by hand」 plan below does not survive, and a generator becomes required — which
+is the thing the user refused.** ⚠ **This is the one place in the continent design where nothing can
+proceed by decision alone**, and it is not decided either way. `rules.gd` states the same refusal for the
+map itself (*"Nothing in this section is generated and no seed is read"*).
+
+⚠ **The rest of this section is untouched.** Six is still six, the no-sharing rule still holds, and the
+island column is still `[0, 1, 2, 1, 2, -1, 2]` — **three grids across six island-opening nodes, unbuilt.**
 
 ⚠ **Six has exactly one reason: no two nodes on the map share a grid.**
 Point two nodes at the same grid and **choosing a branch becomes "the same island twice"** — at which
@@ -814,6 +856,24 @@ spent yet.** ⇒ **it does not fit.**
 - chest ↔ boss: **140** > 48 + 64 = 112 ✓
 
 ⇒ **The rule is "centre to centre ≥ 120px", and its reason is `48 × 2 = 96 < 120`.**
+> ⚠⚠ **2026-08-19 — the user removed the constraint this whole section was built on.**
+>
+> ***"맵이 굳이 한 맵 한 화면이 안 들어가도 돼요. 마우스 움직이면서 볼 수 있어도 되고"***
+>
+> ⇒ **The refutation above — *748px does not fit 720* — stops being a wall.** It is still TRUE arithmetic;
+> it just no longer forces the compression. The table below was authored to squeeze five floors into one
+> viewport, and **that squeeze is now optional.**
+>
+> ⚠ **What this does NOT license.** It is not a mandate to spread the map out, and **nothing here is
+> built.** Panning is a real feature with real cost — the field already owns `_panning` in `game.gd`, and
+> `map_view` draws in **absolute viewport space with no camera of its own**, so a pannable map means the
+> map grows a transform and **every hit rect on it is tested in map space, not screen space.** That is
+> exactly the seam where a click lands somewhere the eye did not aim.
+>
+> ⇒ **Until it is designed, the coordinate table below stands as written and still fits.** What changed is
+> that **the six-floor / bigger-map branch is no longer refuted by geometry** — it is merely unbuilt.
+> `idea-inbox` row 21.
+
 ⚠ **And this table buys one new acceptance row and one new net row**: **every node's hit circle and the
 boss's ring lie inside `Rect2(0, 0, 1280, 720)`, asserted against the literal 1280 · 720 and never against
 the layout's own extent.** That is the antidote to the trap `CLAUDE.md` names as *a check whose bounds come

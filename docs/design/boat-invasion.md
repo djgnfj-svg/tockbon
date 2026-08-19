@@ -57,7 +57,7 @@ reason to reread this doc at all.
 |---|---|---|
 | Grid | 32×18 (576 tiles) | **48×32 (1536 tiles)**, still 40 px tiles |
 | Camera | **none.** `CAMERA_ZOOM` 1.0, unread | **drag to pan, wheel to zoom**, `ZOOM_MIN` 0.5625 – `ZOOM_MAX` 1.0. Still no `Camera2D` — `field_view` carries one transform itself |
-| Landable | **`D` tiles only, two per island** | **the whole coastline.** 76–82 landable tiles per island, of which 38–47 are sendable from the starting harbour |
+| Landable | **`D` tiles only, two per island** | **the whole coastline.** 76–82 landable tiles per island, of which 38–47 are sendable from the starting harbour. ⚠ **Re-measured 2026-08-19 over the union of ALL harbours** — the number the game actually uses — it is **50 · 44 · 48**, against 744 · 760 · 716 passable land tiles. See the refutation box under Decided |
 | Boat origin | the border water nearest the target | **a harbour.** Three per island, and a boat **relocates** to the nearest harbour that can still see where it unloaded |
 | Crossing distance | **2 tiles on all three islands** | **11.0–26.4 tiles on wave 1 · 7.0–14.6 once the fleet has moved up** |
 | Crossing time | 3.0 s constant | **distance / speed** |
@@ -91,6 +91,40 @@ reason to reread this doc at all.
 | 8 | **The boat is drawn bigger and the soldiers aboard are visible** | *"내가 뭐를 보내는지도 보이고, 어디로 보내는지도 보이고"* |
 | 9 | **The clock is not touched this round.** A bigger grid lengthens every walk on its own, so `TIME_LIMITS` is re-tuned **after the build, from probe measurements** | told to the user, not objected to |
 | 10 | **Redirecting a boat mid-crossing is deferred — a named TODO.** ⚠⚠ **On 2026-08-18 it stopped being a TODO and became forbidden** — "the hand does not move during combat" rules it out. [Plan it, then watch it](plan-then-watch.md) | *"중간에 바꿀 수도 있을 거 같은데"* → *"이건 추후에 투두로 남겨두고"* |
+
+> ### ⚠⚠ Refutation — **decided #1 is written here and the code shipped its opposite** (2026-08-19)
+>
+> The user watched the built game and said: ***"상륙 못하는 데가 있는 거지 상륙 가능한 데가 있는 게
+> 아니야"*** — the same sentence as decided #1, said again because **the shipped rule is an allowlist.**
+> `grid.gd` computes `landable` (land orthogonally touching water), intersects it with a harbour
+> line-of-sight, and `field_view` **paints the survivors green**. A set of permitted tiles, drawn.
+>
+> **Measured 2026-08-19, headless, all three islands** — tiles:
+>
+> | Island | Passable land | Coast (`landable`) | **Sendable today** | Sendable if coast-adjacency is dropped |
+> |---|---|---|---|---|
+> | 0 | 744 | 82 | **50** | 97 |
+> | 1 | 760 | 76 | **44** | 83 |
+> | 2 | 716 | 80 | **48** | 94 |
+>
+> ⇒ **Two walls, not one.** Coast-adjacency costs about half the landing set. ⚠⚠ **The bigger one is the
+> line-of-sight: 39% · 42% · 40% of each island's own coastline is refused** because a headland shadows it,
+> **and nothing on screen says why.** That is what reads as *the landing spots are fixed*.
+>
+> ✅ **Decided 2026-08-19: the shadow is opened too.** Asked whether to leave it, the user answered
+> ***"못내리는데인가? 그러면 추가해주면됨"*** ⇒ **the straight-line test is replaced by water
+> reachability**: a boat sails a route around the headland. **Measured: sendable goes 50→84 · 44→76 ·
+> 48→82**, and since all water on each island is one connected body (724 · 690 · 726 tiles, every one
+> reachable from a harbour) **the refused set becomes exactly `cliff + inland`** — a denylist with nothing
+> left over. ⚠ **A boat may still not sail over ground**; what dies is the assumption that it sails in a
+> straight line.
+> ⚠⚠ **And this moves the clock**, unlike everything else in the change: a route is longer than the line
+> it replaces, and section 7 measured crossings at **20% of the limit** already. The plan measures and
+> reports it and is **forbidden to retune `TIME_LIMITS`**.
+> ⇒ The plan is `speed-off-open-landing`.
+>
+> ⚠ **And this closes undecided #3 of this doc** — *"what counts as a landable tile"*. The answer is
+> **nothing does**: there is no landable set, only tiles a boat cannot reach.
 
 ### Deferred by name — **parked, not closed**
 
@@ -389,6 +423,28 @@ be used.** ⇒ **The build plan picks the speeds; this inequality is the accepta
 
 ⇒ **Without zoom-out there is no way to survey the island at all.** That is the point of this session, so
 **the camera is part of the rules, not decoration.**
+
+### ⚠⚠ Superseded 2026-08-19 — the grid and the survey, and neither replacement is built
+
+**Nothing here is deleted and nothing is built.** The user decided one combat node's contents become a
+continent — *"섬이라기보단 대륙 단위죠. 엄청 길어도 돼 그 맵이. 타일맵"* — and a stage becomes 10–15
+minutes. **Implemented: none. Accepted: nothing chosen.** The derivation is in `push-inland`.
+
+- **Decided 3 (「48×32」, from *"양쪽 다 키워봐"*) is void as a ceiling.** `push-inland` derives
+  **984–1,476 columns** from the stage length and the 4.0 tiles/s walk speed — **20.5× to 30.8× this
+  doc's width.** ⚠ **And the height is NOT derived**: its cross-check turned out to be an identity in `t`,
+  returning **44.3** on three islands and **30.1** on one, so *"grow both sides"* has no arithmetic behind
+  its second half either way.
+- **The survey argument above inverts.** At 39,360–59,040 px, fitting a node into 1,280 px needs zoom
+  **0.0325** — **13.8× below `ZOOM_MIN` 0.45** — at which the crow draws at **0.33 px** against the **8 px
+  body floor** that is `ZOOM_MIN`'s own stated reason. ⇒ **Zoom-out stops being the answer, and
+  `field_view` can never draw a whole node.** What replaces it is undecided.
+- **The tile-count note below applies again, harder.** 576 → 1536 was 2.67×; 1536 → 31,488 is **20.5×**,
+  and `flow_field` still BFSes the entire map however near the target is.
+
+⚠ **Nothing in the shipped code contradicts this doc yet.** The landing rework the user asked for on
+2026-08-19 is plan `speed-off-open-landing`, **still `1.ready` and unbuilt** — so decided 1's inversion and
+everything above are open together.
 ⚠ **Tile count goes from 576 to 1536, 2.67×.** One `flow_field` BFS costs the same factor more, and the
 **"576 tiles" figure in `battle.gd`'s `FIELD_TTL` comment — plus the 23k-operations-a-second estimate built
 on it — dies with it.**
@@ -445,8 +501,11 @@ this round and not a climb** (10).
    today's docks**
 2. **The details of the drag.** What do you grab (the harbour's boat icon?), is the drop a tile or a point,
    how do you cancel
-3. ⚠ **What counts as a landable tile.** Land adjacent to water? Water adjacent to land? **Does diagonal
-   adjacency count** (`Grid.NEIGHBOURS` is 8-way)?
+3. ~~⚠ **What counts as a landable tile.** Land adjacent to water? Water adjacent to land? **Does diagonal
+   adjacency count** (`Grid.NEIGHBOURS` is 8-way)?~~ ✅ **Closed 2026-08-19, and the answer is that the
+   question was the defect.** **Nothing counts as landable** — there is no permitted set, only tiles a
+   boat cannot reach. The shipped answer (ortho-only, so a diagonal touch was refused) is what the user
+   hit. See the refutation box under Decided.
 4. **What the `D` tiles become.** Deleted, or kept as tiles with a landing bonus
 
 **Numbers**

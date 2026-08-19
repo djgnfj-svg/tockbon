@@ -30,6 +30,22 @@ The previous GDD's one line (deleted) **had the swarm appear only as a means**, 
 host alone, so the clones never belonged. **The game was built exactly as the document told it to be**, and
 this line inverts that.
 
+⚠⚠ **A REPLACEMENT WAS PROPOSED ON 2026-08-19 AND IS NOT DECIDED. The line above stands unchanged.**
+The user asked — and it was a question, not an instruction — *"먹을 걸 정하러 간다는 게 조금 어색해 …
+나만의 군대를 만드는 느낌이 조금 더 맞을 거 같나요?"* ⇒ 「먹을 것을 고르러 간다」 → 「나만의 군대를
+만든다」.
+
+**Their reason is arithmetic, not taste**: a floor offers **two** nodes, and 「고르러 간다」 promises a
+choosing that two options do not carry. ⚠ **`session-loop` already weakened the same line from the other
+side** — the user rejected *"what you ate becomes the build"* on level-design cost, so 「the path is the
+build」 is dead and the verb 「eat」 no longer carries the differentiation alone
+(`build-is-designed-not-inherited`).
+
+⇒ **Two independent pressures on one sentence and nobody has picked.** ⚠ **Do not edit the line by
+inference** — `docs/design/README` restates it in three places and `CLAUDE.md` carries it, so a silent
+change propagates as a decision. The remark is row 37 of `idea-inbox`; the continent design that made the
+「두 노드」 arithmetic concrete is `push-inland`. **Nothing built, nothing accepted.**
+
 ---
 
 ## The loop is three deep
@@ -1212,7 +1228,7 @@ size of the first slice.** Pixel-level layout belongs to the plan.
 | Time left | Top of screen |
 | Map | ~~Three nodes in a row~~ → **a branching node map** (user, 2026-08-18: *"두 줄로 떠서 양쪽에서 하나씩 선택하는"* — two rows offered, pick one from each). See `session-loop` |
 | Reward | ~~Click a soldier in the roster to bolt the beak onto them~~ → **fit objects in on the refit screen** (user, 2026-08-18). ⚠ ~~into slots 1~5~~ — **what they are fitted into reopened the same day**; see the Parts row of "What is decided" |
-| Plan · execute | ⚠ **New (user, 2026-08-18)** — a **planning screen** showing the whole island and every enemy, where boats are placed and ordered before start is pressed, and an **execution screen where the only things pressable are the speed control and the pause.** [Plan it, then watch it](plan-then-watch.md) |
+| Plan · execute | ⚠ **New (user, 2026-08-18)** — a **planning screen** showing the whole island and every enemy, where boats are placed and ordered before start is pressed, and an **execution screen where the only things pressable are the speed control and the pause.** [Plan it, then watch it](plan-then-watch.md) ⚠⚠ **Four of those five words are now wrong (2026-08-19, unbuilt).** **(a)** *the whole island* cannot be shown — a continent node is 39,360–59,040 px and fitting it needs zoom 13.8× below `ZOOM_MIN`; **(b)** *the speed control* was deleted by the user; **(c)** *the pause* went with it; **(d)** *only things pressable* — **the boat is now pressable during the fight** (*"저 배만 좀 참여하는 걸로"*). ⇒ **What the execution screen contains is undecided.** `push-inland` |
 | Win · lose | Centre text. **A loss has to show why you lost** |
 
 ## Undecided — cannot be built without picking
@@ -1254,7 +1270,19 @@ of them was missing from the list entirely.** They are now written separately:
    section in this same file already refuted it with arithmetic** — dead air is a ratio, so shortening the
    island shrinks numerator and denominator together. **A refuted sentence was still standing in another
    section.**
-   ⇒ What survives: **"when do I drop" acquires a value** — hold back and you are safe, but the clock runs
+   ⇒ What survives: ~~**"when do I drop" acquires a value** — hold back and you are safe, but the clock runs~~
+   ⚠⚠ **REVERSED, 2026-08-19 (user): *"지금 제한 시간 개념은 없어져야 될 거 같고"*.** The time limit is
+   deleted. **The measurement supports the deletion** — the probe ran 15 island-runs and the clock **never
+   once bound**, worst plan at 49% of its limit. ⇒ **The surviving line above dies with it: with no clock,
+   holding back costs nothing**, and the probe already measured what that produces — 「항구 옆에 내린다」
+   dominates 3 of 3 islands and all twelve controlled runs won inside half the limit.
+   ⚠ **What replaces it is a PROPOSAL and not a decision.** *Losing = running out of bodies* was put to the
+   user and they did not confirm it. **The 「being wiped out is also a loss」 line above is on the record —
+   but it was written as a SECOND condition standing behind the clock, never as the only one in a world
+   with no clock at all**, and that is a different rule.
+   ⇒ **This decided box no longer stands unsupported. Nothing is built and nothing is accepted.**
+   The arithmetic — including that at ρ = 16.9–23.3% a continent node would inflict 1,077–2,227 HP on a
+   116 HP roster — is derived in `push-inland`
 5. **Map structure.** ~~Are there branches (Slay the Spire), or is it a straight line~~ — **branches, decided**
    (user, 2026-08-18: *"두 줄로 떠서 양쪽에서 하나씩 선택하는"*).
    ⚠ **Branch count and depth are still open, and the user's "two rows" reads two ways** —
@@ -1304,7 +1332,13 @@ of them was missing from the list entirely.** They are now written separately:
     ordinary of them so far."*
     ⚠ **This item closing and the game being fun are two different sentences.** "Ambiguous" is still
     open, and it is carried by the new item below, not by this number.
-16. ~~**The sea is cramped and the terrain is one lonely shape**~~ — **decided: a 48×32 grid** (user,
+16. ⚠⚠ **REOPENED 2026-08-19** — the user decided one combat node's contents become a continent
+    (*"섬이라기보단 대륙 단위죠. 엄청 길어도 돼 그 맵이. 타일맵"*), so the grid size below is void as a
+    ceiling. `push-inland` derives **984–1,476 columns** from the 10–15 minute stage and the 4.0 tiles/s
+    walk speed, and finds **the height is NOT derivable** — its own cross-check turned out to be an
+    identity in `t`, returning 44.3 on three islands and 30.1 on one. **Nothing is decided, nothing built.**
+    The original entry, kept:
+    ~~**The sea is cramped and the terrain is one lonely shape**~~ — **decided: a 48×32 grid** (user,
     *"양쪽 다 키워봐"* — *grow both sides*). The original complaint was *"The terrain could stretch out long,
     but it feels like a quiz with one thing plonked in it."*
     ⇒ **The level design of the three islands is carried by [the boat and the landing](boat-invasion.md)** —

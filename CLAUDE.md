@@ -38,7 +38,7 @@ an open coastline**, and **what you eat turned into 세포 and objects you fit t
 **The tree**: `src/sim/` (rules · grid · islands · army · battle · run · map) · `src/view/` (field · hud ·
 panel · map · title) · `src/shell/game.gd` · `src/look.gd` · `tools/probe/run_run.gd`. `run/main_scene` is
 `src/shell/game.tscn`. **A run plays end to end from the title.**
-**Round: 15 nets, 2100 checks, 4.3s, green.**
+**Round: 15 nets, 2216 checks, 4.5s, green.**
 
 ⚠ **`title-and-map` step 5 is NOT built** — `MAP_NODES`'s island column is `[0, 1, 2, 1, 2, -1, 2]`, so
 **three grids serve six island-opening nodes** and every route replays terrain it has solved. The user
@@ -344,7 +344,7 @@ an effect that never happens.**
 
 ## Running the nets
 
-**15 nets, 2100 checks, 4.3 seconds, green.** The old game reached 25 / 3541 / 4.6s — ⚠ **a scale marker,
+**15 nets, 2216 checks, 4.5 seconds, green.** The old game reached 25 / 3541 / 4.6s — ⚠ **a scale marker,
 not a target.** Those nets drove a game deleted for not being fun.
 
 A net is `tests/nets/net_*.gd` with one method, `func run(t)`; `t` gives `ok` · `eq` · `pump_frames` ·

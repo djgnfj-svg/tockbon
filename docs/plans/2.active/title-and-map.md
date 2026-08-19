@@ -1,6 +1,6 @@
 # Plan — the title and the map: building the outside of a run
 
-**Status**: `2.active` — **steps 1–4 and 6 are BUILT and the round is green (14 nets, 1933 checks).
+**Status**: `2.active` but ⚠ **PAUSED on 2026-08-19** while `speed-off-open-landing` runs — two plans sit in this folder and only one is being built. ⚠⚠ **Before step 5 resumes, read `push-inland`**: terrain is now a hand-authored POOL drawn at random (user, 2026-08-19), so 「three grids for six nodes」 is no longer the right question. — **steps 1–4 and 6 are BUILT and the round is green (14 nets, 1933 checks).
 Step 5 — the three new grids — is NOT done, and step 7's instrument had to be repaired.** Moved out of
 `1.ready` on 2026-08-19 because it is part-built, not startable-from-scratch. ⚠ **A SECOND adversarial
 pass ran after the first one's fixes landed and found six more fake greens** — findings 16–21 below, all
@@ -45,10 +45,25 @@ side of each.
 
 **These go to the user in ONE message.** If no answer comes back, the default is what gets built.
 
-**Sent to the user**: NO. ⚠ **Never sent, and found on 2026-08-19.** All five defaults shipped silently.
-**A gated step 5** (the three grids) and it was descoped; **C shipped as a heal while the user had already
-decided the chest pays an artifact.** ⇒ `net_process` now reddens on a plan that carries this section
-without this line, because two written rules to relay these were both skipped.
+**Sent to the user**: **YES — 2026-08-19, all five in one message, and four came back answered.**
+⚠ **Was: NO, and that is kept here.** All five defaults had shipped silently — **A gated step 5**
+(the three grids) and it was descoped; **C shipped as a heal while the user had already decided the chest
+pays an artifact.** ⇒ `net_process` now reddens on a plan that carries this section without this line,
+because two written rules to relay these were both skipped.
+
+### ✅ The answers (user, 2026-08-19)
+
+| # | Answer | State |
+|---|---|---|
+| **A** | ***"층마다 둘 중 하나"*** ⇒ **①**, the default | **closed.** ⇒ **Step 5 is unblocked** — the node table stands, six grids is the number. Rejected branch filed as `one-node-per-floor-not-two-columns` |
+| **B** | ***"설정하기 버튼은 아직 필요 없고"*** ⇒ the default | **closed.** A slot that does not press. ⚠ ***"아직"***, not "never" |
+| **C** | ***"상자 보상은 아직 미정이고"*** | ⚠⚠ **STILL OPEN, and it now contradicts the design doc**, which carries the user's own 2026-08-18 quote *"아티팩트 녹개중 선택"* under a ✅ heading. **Neither quote was overwritten.** ⇒ **Do not build the chest's payout this round.** `idea-inbox` row 20 |
+| **D** | ***"로스터 패널 키워도 될 거 같고"*** ⇒ the default | **closed.** `ROSTER_ROWS` 7 → 10, panel 560×400 → 560×480, button y 320 → 420 |
+| **E** | ***"세계 격자 세계는 무슨 말을 하는지 모르겠고"*** | **default stands** (E = yes). ⚠⚠ **The user could not parse the question.** ⇒ **A question the user cannot read is the same as a question never sent**, and `net_process` forces the shape of the declaration but **cannot catch this**. E asked, in plain words: *which hand-authored island grid sits on which node of the map* — `idea-inbox` row 22 |
+
+⚠ **One thing arrived that was not asked**: ***"맵이 굳이 한 맵 한 화면이 안 들어가도 돼요"*** — the map may
+exceed the viewport and be panned. **It is NOT in this plan's scope** and nothing is built for it; the
+design doc's coordinate-table section carries what it costs. `idea-inbox` row 21.
 
 | # | Question | Default this plan assumes | What changes if the answer differs |
 |---|---|---|---|

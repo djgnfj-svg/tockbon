@@ -82,6 +82,18 @@
 >   ⇒ The fix is level design, not a rule — **30 to 40 enemies an island**. ~~which would tighten the clock
 >   at the same time~~ ⚠ **that clause went false on 2026-08-18** — the probe measured 15/15 wins with the
 >   worst plan at 49% of the limit, so **the clock never bound in the first place.** See `plan-then-watch`.
+>   ⚠⚠ **AND THE 15 ITSELF ROTTED, before any of the 2026-08-19 work touched it.** Re-counted off
+>   `ISLAND_ROWS` on 2026-08-19: island 1 = **8** · island 2 = **12** · island 3 = **14**. A route steps
+>   four fights, so **a run is 46–50 kills, not 15 — 3× off.** `plan-then-watch` raised the counts to
+>   8 · 12 · 14 and **nobody re-measured this paragraph**, which is exactly the failure `CLAUDE.md`
+>   describes as a correction pass checking only the row someone is arguing about.
+>   ⇒ **The recommendation it derives — 「30 to 40 enemies an island」 — was already met and overshot.**
+>   ⚠ **And 2026-08-19 overshoots it by an order of magnitude**: the user decided one combat node becomes
+>   a continent-scale 10–15 minute push, and `push-inland` derives **322–482 enemies a node, 1,288–1,928
+>   a run.** ⇒ **The paragraph's conclusion does not survive; the reason it was written does** — the grain
+>   of the resource is the grain of the decision, and at 322+ payment events per node the grain is
+>   somewhere entirely different from where this section reasoned about it.
+>   **Nothing built, nothing accepted.**
 > - ⚠ **Ten starting cells cannot win island 1.** Four bison = 80 enemy HP at 6.0 total DPS; a bare cell is
 >   14 HP at 2.0 DPS ⇒ `14N > 240/N` ⇒ **`N ≥ 5`** (`N` = 4 loses, 56 pool against 60 damage). **That is 20
 >   cells at `c₀` = 4, or 35 at `k` = 2.** The GDD's "start with ten cells" is **not an open question — it is

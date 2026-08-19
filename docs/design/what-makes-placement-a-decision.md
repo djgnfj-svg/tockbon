@@ -1,7 +1,14 @@
 # What makes placement a decision — nine games, nine different answers
 
-**Implemented**: none — `src/` is empty
+**Implemented**: none — **no rule from this table has been adopted.**
+⚠ **Corrected 2026-08-19**: this line read *"none — `src/` is empty"*, and `src/` has not been empty since
+the first vertical slice. **Nothing in this document is built; the tree around it is.**
 **Accepted**: none. **Nothing has been picked yet**
+
+⚠ **2026-08-19 — the TFT/Despot's finding acquired a load-bearing job.** The user decided attributes
+(range · area · speed · attack speed) exist and **element/damage types do not**, and `push-inland` derives
+that the *only* thing separating those two shipped games — whether abilities respond to distance and area —
+is also the first of the three places a factor of 9.3–19.2 can be paid. **Nothing built, nothing accepted.**
 
 The problem the user raised: *"특정 위치로 특정 부대를 이렇게 보낸다거나 내가 이렇게 한쪽으로 쭉 보내면
 재미가 없을 거 같아. 뭔가 좀 더 전투적인, 전략적인 면이 있어야 될 듯?"* (*"Sending a particular squad to a

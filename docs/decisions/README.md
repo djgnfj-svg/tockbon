@@ -31,7 +31,7 @@ Where it shakes if this reverses.
 
 ## Index
 
-**Seven decisions survive. Everything else was deleted on 2026-08-17** — see the note below.
+**Eight decisions survive. Everything else was deleted on 2026-08-17** — see the note below.
 
 | Decision | Status | Rejected |
 |---|---|---|
@@ -41,9 +41,10 @@ Where it shakes if this reverses.
 | [Land anywhere on the coastline, not at N fixed docks](open-coastline-over-fixed-docks.md) | valid — **and it reverses the same user's earlier "docks" decision** | N fixed docks per island, and its three arguments: it reads · it becomes level design · pulling works at dock granularity |
 | [Meta unlocks, never stat boosts](meta-unlocks-not-stat-boosts.md) | ⚠ **REVERSED by the user on 2026-08-16 — unlocks AND stat boosts are both in** | Permanent rate upgrades · a research tree · no meta layer |
 | [Dropped from the sky, not landed by boat](dropped-from-the-sky-not-landed-by-boat.md) | ⚠ **REVERSED by the user on 2026-08-17 — the boat is back, and it is a rule, not just a picture** | Beach landing · a boat that limits the drop point · an edge-only insertion |
+| [One node per floor, not two columns](one-node-per-floor-not-two-columns.md) | valid (2026-08-19) | Two rows offered at once with one taken from each side — **the plain reading of the user's own sentence**, which lost to the user when they were finally asked · deciding it by inference from one word (「슬더슬식」), which is how it shipped silently the first time |
 | [The body is an outline drawn by code](the-body-is-a-line-drawn-by-code.md) | valid — **the oldest one still binding.** ⚠ It was "the only one never reversed" until 2026-08-17~18 put four more valid decisions in this table | Two eyes · no dot · a filled body · body sprites · generating whole creatures · every part as a sprite · parts keeping the prey’s colours |
 
-⚠ **Two of the seven are reversed, and they are kept for exactly that reason.** A reversed decision is not
+⚠ **Two of the eight are reversed, and they are kept for exactly that reason.** A reversed decision is not
 waste: it records the fork, the ground the first answer stood on, and the argument that knocked it over.
 Deleting one means the same options get laid out from scratch months later — which this project has now
 lived through twice.

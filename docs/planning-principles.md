@@ -18,6 +18,13 @@ If there is time spent watching something roll on by itself, the game is stiflin
 by moving every decision in front of the start button. **If the fight ever feels like dead air, this line is
 the first thing to re-read**, not the last.
 
+⚠⚠ **2026-08-19 — the payment was deleted and the bend got 19–29× wider.** `plan-then-watch` paid for the
+bend with three candidates, and the only one that was concrete was **「a fight is short」**. The user then
+set a stage at **10–15 minutes** and deleted the time limit. The measured fight was **31 s**. **Nothing is
+built and nothing is accepted**; the arithmetic is in `push-inland`, and what it says about this line is:
+the boat becomes a live control again, **but a node offers at most R landing decisions in total** —
+**one action every 3.1 to 90 seconds depending on R, which is undecided.** ⇒ **Re-read this line now.**
+
 ## 2. Planning cannot decide whether something is fun
 
 A day of changing direction five times answered nothing that one multi-day prototype closed the same day.

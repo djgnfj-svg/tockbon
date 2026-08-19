@@ -218,6 +218,48 @@ island you can lose on** — and the tree does not contain one.
 
 ---
 
+---
+
+## ⚠⚠ Superseded, 2026-08-19 — four of this doc's rules were taken when a fight was one minute
+
+**Nothing below is deleted and nothing here is built.** The user redesigned what one combat node contains
+(a continent-scale push, 10–15 minutes) and the derivation lives in `push-inland`. **Implemented: none.
+Accepted: nothing chosen.** These boxes say a claim no longer stands unsupported — **not that anything
+changed.**
+
+| This doc's claim | What overturns it |
+|---|---|
+| **Decided 1** — *"전투 중에 손이 움직이는 거, 안 움직일 거 같은데."* | **The user reversed it**: *"저 배만 좀 참여하는 걸로 해서 기획 한번 해보자"* (2026-08-19). **You may act during the fight, on boats only; a soldier ashore still cannot be touched** |
+| **Decided 8** — *"싸움 자체가 일 분은 안 넘어갈 거 같은데 … 배속이 있을 거 같고"* | **A stage is now 10–15 minutes** (*"스테이지당 10~15분 정도가 좋을듯"*). ⚠ **And the second half of that sentence is already gone**: the speed ladder and the pause were deleted earlier the same day. **A 10–15 minute node runs at 1× with no brake, no skip and no pause — a thing the user has never seen** |
+| **Decided 20** and the screen table's **「The whole island — fits one screen」** | **Arithmetically impossible at continent scale.** `push-inland` derives a node **984–1,476 columns** long = 39,360–59,040 px. Fitting that into 1,280 px needs zoom **0.0325**, **13.8× below `ZOOM_MIN` 0.45**, at which the smallest body (the crow, 10.0 px at zoom 1.0) draws at **0.33 px** against the **8 px body floor** `look.gd` records as `ZOOM_MIN`'s own reason. ⇒ **`field_view` can never draw a whole node**, so decided 2's *"배치나 이런 게 미리 보이는 거지"* needs a second view that does not exist |
+| **Decided 3** — the 48×32 grid it plans against | Reopened; see the same box in `boat-invasion` |
+
+### ⚠⚠ And the sharpest consequence is this doc's own sentence, turned on itself
+
+> *"Rules 1, 4 and 5 are one block that props itself up. All three say **nothing exists after the commit**.
+> Soften any one of them and the other two collapse."*
+
+**Rule 1 has been softened.** ⇒ **By this doc's own argument, decided 4 (a pause you can do nothing with)
+and decided 5 (no preview, no pre-run simulation) are now unsupported.**
+
+⚠ **Neither has been re-decided. This is a hole, not a change.** Nobody has asked the user whether a pause
+survives, whether it acquires a verb, or whether a preview returns — and the pause was separately deleted
+with the speed ladder, so **there is currently no pause to attach the question to.**
+
+⚠ **A second thing survived that this doc never recorded here.** The rejected real-time branch in
+`commit-before-the-fight-not-during` was rejected for **two** reasons, and the boat-only reversal answers
+only the first. The second — *"게임이 Clash Royale처럼 보일까 걱정"* — is untouched, because sending units
+into a live fight from a home edge **is** that shape. **It has never been put back to the user.**
+
+### What this doc keeps
+
+Decided 2 · 3 · 6 · 7 · 9 · 15 · 16 · 17 · 18 · 19 are unaffected, and **its case against itself is the
+most reusable thing in it** — Frozen Synapse and Door Kickers both hand the player what this design
+refuses. ⚠ **The boat-only reversal moves this design one step toward Door Kickers** and makes that
+citation half-usable for the first time; it does not make it evidence, because Door Kickers pays by
+letting you return to *planning*, and here there is one verb and no pause.
+
+
 ## What is decided — **all ten said by the user, 2026-08-18**
 
 | # | Rule | The user's words |
@@ -225,7 +267,7 @@ island you can lose on** — and the tree does not contain one.
 | 1 | **The hand does not move during combat.** Everything is decided before the fight starts | *"전투 중에 손이 움직이는 거, 안 움직일 거 같은데."* (*"the hand moving during combat — I don't think it will."*) |
 | 2 | **You plan on the map and press start.** The map is laid out, there is a region you may place into, **you drag boats onto it and set the order they go in**, and **the plan is visible before you commit** | *"이렇게 이렇게 시작합니다"*, and once started, *"쫙 움직이면서 점령을 하는 느낌"* |
 | 3 | **Before the start the boat is free.** Loading and placing are unrestricted | *"배는 언제든지 내가 태울 수 있는 거지. 언제든지 시작하기 전에 어디서든지 내가 넣을 수 있는 느낌."* (*"I can load a boat any time, put it anywhere, any time before the start."*) |
-| 4 | **Pause exists during execution, and you can do nothing with it** | *"이시정지가 있긴 한데 이시정지 한다고 해서 내가 또 뭔가를 해줄 수는 없어."* (*"there's a pause, but pausing doesn't let me do anything more."*) |
+| 4 | ⚠⚠ **DELETED IN CODE 2026-08-19 — there is no pause.** It was slot 0 of the speed ladder and went with it at the user's request (「일시정지 지워주고」, `speed-off-open-landing`). ⚠ **Nobody decided whether a pause should exist in a 10–15 minute node** — see the collapse box above; **this row is history, not a rule.** ~~Pause exists during execution, and you can do nothing with it~~ | *"이시정지가 있긴 한데 이시정지 한다고 해서 내가 또 뭔가를 해줄 수는 없어."* (*"there's a pause, but pausing doesn't let me do anything more."*) |
 | 5 | **No pre-run simulation and no preview of the outcome** | *"미리 보긴 없고."* (*"no previewing."*) |
 | 6 | **If you get wrecked, you lose. That is all** | *"딱 시작을 했는데 이제 개털리면 지는 거지. 그냥 지면 지는 거야."* |
 | 7 | **"When do you find out you were wrong" is not a question.** The user closed it themselves | *"지면 틀린 거거든. 그래서 이건 뭐 틀린 걸 언제 알았을 필요는 없지."* (*"losing is being wrong, so there is no need to know when you were wrong."*) |
@@ -430,6 +472,42 @@ signal at all about whether the plan is any good.
 | **The twelve pieces of [combat juice](combat-juice.md)** | **All of them live.** Every one is view-side and driven by `Battle.events`, so removing the controls kills none of them |
 
 ---
+
+## ⚠⚠ Correction — **why the 1~5 keys were actually deleted** (user, 2026-08-19)
+
+This doc records the reason as *"왜 슬롯을 누르는 거지? 배 때문인가?"* — read as **the slot existed only
+because of the boat, so it dies with the boat.** ⚠ **The user says that is not the reason.**
+
+> ***"정확히는 배 속이 별로여서 뻐 거임 1~5번 키"*** (2026-08-19)
+
+⇒ **What was bad was loading soldiers INTO a boat with a number key** — which is exactly what
+[the boat and the landing](boat-invasion.md) parked by name (*"병사 태우는 게 숫자 키인 게 좀 별로야"*).
+**The slots themselves were never the defect.**
+
+⚠ **This matters because it changes what reviving them costs.** Under this doc's version, bringing the
+1~5 keys back reverses a decision. Under the user's own version **there is nothing to reverse** — the keys
+were collateral. `idea-inbox` rows 29 and 30. ⚠ **`CLAUDE.md`'s 「키보드는 아무것도 안 한다」 still
+describes the shipped tree and stays true until something is built.**
+
+## ⚠⚠ Refutation — **the speed ladder is being deleted, and this doc's metric loses its instrument** (2026-08-19)
+
+The user watched the built game, asked what the `0 1 2 3 6` chips at the bottom right were, and then said:
+***"일단 배속 개념은 지워주고, 저거는 아직은 필요 없을 때 추후에 추가해도"***
+
+⇒ **What this doc decided — that the speed control and the pause are the only things that can be pressed
+during a fight — becomes: nothing can be pressed at all.** The pause is slot 0 of the same row and has no
+widget of its own, so it goes with it unless the user says otherwise.
+
+⚠ **The metric below loses its instrument.** *"Time until maximum speed is pressed"* was this doc's test
+for principle 1 — *is execution being watched or endured* — and **after the deletion there is nothing to
+press, so the question cannot be asked that way.** It is not answered; it is unmeasurable. **Do not read
+its absence as a pass.**
+
+⚠ **`Rules.SPEED_STEPS` stays in the tree**, read by nothing, so restoring this is an edit rather than a
+design job. The plan is
+`speed-off-open-landing`.
+⚠⚠ **Everything below this box describes a feature that is on its way out.** It is kept because the
+arithmetic in it — the telegraph floor, and the derived ceiling of 7× — is what the restore has to obey.
 
 ## The speed-up — **it is `step(delta × k)` and it is not free**
 
