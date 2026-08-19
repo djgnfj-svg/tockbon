@@ -1,111 +1,15 @@
 # tockbon
 
-Loaded into every session and every agent. **Keep only what applies to everyone.**
-
-⚠ **This file was 726 lines on 2026-08-19 and the user cut it to ~300** — *"어느센가 claude.md 가 너무
-길어졌다"*. Four sections moved out whole; **nothing was deleted, only relocated**, and each pointer below
-names where. ⇒ **When you add here, ask first whether it belongs in the doc that owns the subject.**
-This file holds **rules every agent must have without reading anything**; everything else is a doc.
+Loaded into every session and every agent. **Keep only what applies to everyone** — rules an agent must
+have **without reading anything.** Everything else is a doc.
+⇒ **Before adding here, ask whether the doc that owns the subject should hold it instead.**
 
 ## The game — a **cell autobattler**, and it runs
 
-**Read `cell-army-gdd` before proposing anything.** One line: **「먹을 것을 고르러 간다」** — a node map of
-islands (상자 · 전투 · 엘리트 · 보스, **only 상자 has no fight**), a squad of square cells landed **by boat on
-an open coastline**, and **what you eat turned into 세포 and objects you fit together between rounds.**
+**A node map of islands, a squad of square cells landed by boat.** 「먹을 것을 고르러 간다」
 
-- **There is no host**, no `F`, no `V`, and **the keyboard does nothing in this game at all**
-- **There is no speed control and no pause** (deleted 2026-08-19, user). A fight runs at 1× and **nothing can be pressed during it** — ⚠ a state the user has never played
-- **You plan the whole landing, press start, and watch.** The hand does not move during combat
-  (`plan-then-watch`, user, 2026-08-18). The 1~5 summon keys are deleted
-  ⚠⚠ **OVERTURNED on 2026-08-19 in design, NOT in code** — the user decided **the boat stays live during
-  the fight** (「배만 좀 참여하는 걸로」): you may keep choosing when and where to send the next one,
-  **and a soldier already ashore still cannot be touched.** The tree above is what SHIPS; `push-inland`
-  holds the derivation. ⚠ **The reason the old rule was taken — a fight is one minute — is gone**, and
-  `plan-then-watch`'s own sentence says its rules 1/4/5 hold each other up, **so 4 and 5 are now
-  unsupported and nobody has re-decided them**
-- **Boats are unlimited and one-seat, and there is deliberately no brake yet** — 「일단 빼고 만든 이후에
-  추가하자는 거임」. **Nothing licenses writing a cap**
-- **Soldiers carry across islands, HP included, and a dead one is dead for good**
-- The loss condition is a **time limit**, ⚠ **and the probe measured it has never once bound** — 15
-  island-runs, worst plan at 49%. ⚠⚠ **The user deleted the time limit on 2026-08-19** (「제한 시간
-  개념은 없어져야 될 거 같고」) — **in design, not in code.** ⇒ **The loss condition is therefore
-  UNDECIDED.** `Lose.WIPED` already ships and the GDD wrote it as a *second* condition standing behind the
-  clock; **nobody has confirmed it as the only one**, and with no clock **nothing charges for waiting.**
-  ⚠ Deleting it also disarms the probe, whose entire grade is *"% of the time limit"*
-- Two reference points the user asked never to be dropped: **Bad North** (2 people, ~790k) and **Despot's
-  Game** (100k+, units not controlled at all). ⚠ **Bad North is NOT "place and watch"** — the developer says
-  he lowered the *granularity* of control, not removed it
-
-**The tree**: `src/sim/` (rules · grid · islands · army · battle · run · map) · `src/view/` (field · hud ·
-panel · map · title) · `src/shell/game.gd` · `src/look.gd` · `tools/probe/run_run.gd`. `run/main_scene` is
-`src/shell/game.tscn`. **A run plays end to end from the title.**
-**Round: 15 nets, 2216 checks, 4.5s, green.**
-
-⚠ **`title-and-map` step 5 is NOT built** — `MAP_NODES`'s island column is `[0, 1, 2, 1, 2, -1, 2]`, so
-**three grids serve six island-opening nodes** and every route replays terrain it has solved. The user
-decided six. **This is the standing instance of 「내가 말한대로 개발을 안하네」.**
-✅ **Its gate is answered — 「층마다 둘 중 하나」 (user, 2026-08-19)**, so the node table stands and the
-grids can be authored. ⚠ **The chest's payout is NOT answered and must not be built this round.**
-
-### Why the second game died — the most reusable sentence here
-
-The user played it: *"그냥 재미가 없다."* The diagnosis inverted: not *"the swarm has no merit"* but
-**"the swarm has no cost."**
-
-⇒ **An advantage with no cost is not a decision, and a mechanic that is not a decision is not fun.**
-
-**This test has caught three more designs since**, each time by working the arithmetic rather than arguing —
-the record is in `lessons-from-two-dead-games`. ⚠ **Nothing in that file is a spec.**
-
-⚠ **And the conversation circled six times**, because the complaint was one sentence (*"분신이 왜 있는지
-모르겠다"*) and **every answer offered was a new system.** ⇒ **When a complaint is one sentence, first ask
-whether a rule can answer it. A new system cannot be evaluated, only accumulated.**
-
-### What the user has said after playing — the open problems
-
-**Every verdict is recorded in the doc that owns it**, not here — `idea-inbox` indexes the open ones.
-The state of it: 「배가 곁다리」 stopped coming back after `boat-invasion`. **「애매하다」 did not come back
-last round, which is not the same as closed.** The title and the map drew **no complaint after their
-readability pass — the closest thing to a pass this repo has recorded.**
-
-⚠ **Both of the two that stood here were DROPPED by the user on 2026-08-19** — 「조작감이 너무 ㅈ같음」
-and 「싸움이 좀 아직은 별로네」, in their own words: ***"지워주고"***. `idea-inbox` rows 13 and 23 keep both.
-**`dropped` is not `refuted`** — no arithmetic killed either, so **do not re-raise them and do not treat
-them as answered.** The measurement behind the first (10–13 precision drags an island) stays in the probe.
-
-⇒ **Nothing is open here now.** The live work is `title-and-map` step 5, whose gate — 「층마다 둘 중
-하나」 — the user answered on 2026-08-19. ⚠ **One thing IS undecided and it is arithmetic-bearing:
-what the chest pays.** The design doc says artifacts under a ✅ with the user's quote; the user said
-미정 on 2026-08-19. **Both quotes stand and neither wins by inference.**
-
-⇒ Read *"제일 평범하네"* against what came before it: eight months of not one fun moment, then *"그냥 재미가
-없다"*. **"Ordinary" is the highest mark anything here has been given, and it is still not "fun".**
-
-⚠ **The named trap is here.** *"애매하다"* is one sentence. ⇒ **Turn it into a number before choosing what to
-add** — the move that produced *83% dead air, 150s between kills* is in `lessons-from-two-dead-games`, and
-the probe that does it exists at `tools/probe/run_run.gd`.
-
-### A feature is not done until its presentation is done (decided by the user)
-
-*"이번 것처럼 무조건 연출까지 개발하는 게 기본임."* ⇒ **A plan that ships rules and leaves the picture for
-later is an incomplete plan.** Presentation is planned in the same doc and ships in the same round.
-
-⚠ **This is not a licence to gold-plate.** What it means is narrow: **every rule that changes state has
-something on screen that says it happened.** The old game died partly because *"화면에 줄어드는 양이 하나도
-없었다"*. ⚠ **And presentation is where green rounds lie most easily** — see `how-nets-lie`.
-
-### Play is an instrument the harness does not contain
-
-Game two shipped 25 nets and 3541 green checks and **the user could not play it.** Four things three rounds
-of adversarial verification missed were found in five minutes of play, twice over.
-⇒ **`planning-principles` survived both resets on purpose.** Its second line — **planning cannot decide
-whether something is fun** — is why this section exists.
-
-### Do not restore code OR docs from a tag
-
-Everything measured in either dead game is recoverable at `v1-sim` and `v2-openfield`. **Restoring re-imports
-a whole set of constraints this design does not have** — `v1-sim` assumes integer determinism and a 20Hz
-tick, `v2-openfield` assumes a host, an open field and a swarm you steer.
+⇒ **Read `cell-army-gdd` before proposing anything, then `idea-inbox`** — the GDD is behind the user, and
+the inbox is the only place the open remarks are indexed. `run/main_scene` is `src/shell/game.tscn`.
 
 ## No `git push` until 2026-08-22 (decided by the user)
 
@@ -116,14 +20,10 @@ and `gh-pages`, and neither moves while the freeze holds.
 
 ## Language
 
-**Every reply to the user is in 한국어**, even when they write in English.
-
-**Docs, comments and prompts are English, one file each** — the Korean twins were deleted on 2026-08-19 after
-checking that every pair carried the same facts and section structure. **Do not recreate a `-ko` twin.**
-
-**Korean is what the user reads**: their own commands, commit messages, in-game text, **net check labels**,
-and the net runner's console output. **A `push_error` message and the `t.expect_error` that forgives it are
-one unit** — matched by plain substring, so translating one side leaves the bark undeclared.
+- **Replies to the user are 한국어.**
+- **Docs, comments and prompts are English.**
+- **Keep a reply short and load-bearing.** When it covers more than one subject, lay it out as a list so it
+  reads cleanly.
 
 ## Reply rule — **the whole reply under 50 characters**
 

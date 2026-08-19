@@ -149,3 +149,9 @@ These survive **even after you confirm every mutation goes red**:
   fixture reddened. ⇒ **When a defect is fixed, the checks that were green around it are suspects, not
   controls.** A check that survives a fix unchanged has been re-verified; one that reddens was
   measuring the defect, and the two look identical until the fix lands
+
+## A translated bark leaves its declaration behind
+
+A `push_error` message and the `t.expect_error` that forgives it are **one unit**, matched by plain
+substring. Translating one side and not the other leaves the bark undeclared — the net reds on a bark
+nobody changed, or worse, forgives one it was never meant to.

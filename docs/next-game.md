@@ -30,7 +30,7 @@ was a reason for its own central mechanic: **splitting cost nothing and absorbin
 splitting was never a decision.** The arithmetic is in
 [what two dead games left behind](lessons-from-two-dead-games.md).
 
-**Do not restore code from either tag.** Both were written against constraints this design does not have —
+**Do not restore code OR docs from either tag.** Both were written against constraints this design does not have —
 `v1-sim` against integer determinism and a 20Hz tick, `v2-openfield` against a host, an open field, and a
 swarm the player steers.
 
