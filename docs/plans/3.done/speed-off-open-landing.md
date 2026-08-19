@@ -590,3 +590,79 @@ a 7 s crossing) its top-right covers about **13×5 px of the last land row.** At
 negative is one nobody has authored. ⚠ **A hull-width margin was NOT added** — over-constraining the
 smoother would undo the fix that made the bay route straight, and no number exists for how much margin is
 right. **Decide it when a map shows it, and measure rather than guess.**
+
+---
+
+### Round 4 — fixer
+
+changed   `src/sim/battle.gd` (`_the_landing_force_is_gone`, replacing `army.living_count() == 0` in
+`_phase_clock`) · `tests/nets/net_battle.gd` (three new checks) · `tests/nets/net_run.gd`
+(`_timeout_loses`' fixture, and why). **No `src/view` and no `look.gd`** — the 1~5 slot plan owns those.
+
+why       The user played it and reported the fight never ending after the plan had already failed:
+***"실패조건은 시작하기하고 못깨면 이지 제한시간을 계속 기다리고 있길래"***. `_phase_clock` lost on
+`army.living_count() == 0`, and `living_count` counts every soldier that is not dead — **reserves at
+the harbour included.** After the commit `send` refuses everything, so a reserve can never be landed:
+hold anyone back, lose everyone you sent, and the run is decided and cannot end. **The old test could
+not fire.** The player watched an empty island for the rest of the clock.
+
+closed    **The rule as implemented**: after the commit, LOST the moment no LIVING soldier is `ASHORE`
+or `TRANSIT`.
+- **Gated on `_committed`, the same flag `send` reads** — one flag, not a second copy of the idea.
+  Without it every soldier is RESERVE on the frame an island opens and the island is lost immediately.
+  ⚠ `step` already returns before `_phase_clock` while uncommitted, so the gate is unreachable through
+  the public path; `net_battle._the_gate_itself` drives it directly, because an unreachable guard is
+  what the next person deletes as dead code.
+- **TRANSIT counts.** Collapsing to ASHORE-only throws away the last crossing one sub-step before it
+  resolves, which is a fake failure and the most interesting case on the island.
+- **`Lose.WIPED` kept** — see below for the argument that it should not stay that way.
+- **`TIMEOUT` untouched.**
+
+**The margin, measured**: `net_battle._reserves_do_not_hold_the_run_open` lands one of three soldiers,
+holds two at the harbour, drives the crossing, kills the beachhead through `army.hp = 0` and one
+sub-step so `_phase_deaths` writes the state the way the fight does — and the island is LOST
+**inside 2 s against a 90 s limit, with more than 85 s left on the clock**, which is what the two
+assertions pin. The arithmetic behind those bounds: `_port()`'s crossing is 4.576491 tiles at speed
+4.0 = 68.65 sub-steps, so the beachhead lands on **69** and dies on **70** ⇒ `70/60 = 1.167 s`.
+⚠ **The gap is the check.** `elapsed <= time_limit`
+is also true of the behaviour being fixed. And the floor under it: **`army.living_count() == 2` at the
+moment of the loss** — two soldiers alive, run over. That is the one line the old rule cannot pass.
+
+not closed  ⚠⚠ **`Lose.WIPED` IS NOW INACCURATE AND I KEPT IT ANYWAY.** The screen reads
+「패배 — 전멸」, and in the case this round exists for the player is looking at eight living soldiers
+standing at the harbour while being told they were annihilated. **A screen that says something the
+screen also disproves is how a screen stops being trusted.** It deserves its own reason — 「상륙 실패」
+or similar — but naming it costs a `panel_view` string, and `src/view` is off limits this round. ⇒
+**A follow-up, not a silent addition.**
+
+⚠⚠ **THE TWO SOLDIER COLUMNS CAN DISAGREE, AND NOBODY ASKED ABOUT THIS.** `_phase_deaths` opens with
+`if army.alive[i] == 0 ... continue`, so a soldier killed through `army` from OUTSIDE the fight is
+skipped forever and keeps whatever `soldier_state` it had. Nothing in `src/` does that today — but
+`net_run._wipe_loses` does, and it reddened the first draft of this fix, which read `soldier_state`
+alone. **A rule that answers "still in the fight" for a corpse holds the run open exactly as the
+reserve bug did, one column over.** The rule now reads BOTH columns. A between-island effect or a
+save/load would have walked straight into it.
+
+⚠⚠ **`net_run._timeout_loses` ONLY EVER PASSED BECAUSE OF THIS DEFECT.** It landed one soldier, held
+nine back, and asserted the run took all 3600 sub-steps. With the fix, the lone soldier meets a bison
+and the island is lost at **477 sub-steps (7.95 s)** — **the other 52 seconds it used to assert were
+the bug.** Its limit is cut to 5.0 s so the timer is once again the only thing that can end that
+island, and the claim it was doubling up on — that `Islands.time_limit_of(0)` is what reaches the
+battle — is pinned on its own line at the top of that file. ⇒ **A green check can be an artefact of
+the defect beside it.**
+
+⚠ **The probe has not been re-run and its grading scale is now different.** `run_run.gd` scores every
+plan as a % of the time limit; runs that used to finish at TIMEOUT with reserves alive now end sooner
+and lose. Any comparison against 2.4's table crosses that change.
+⚠ **Carried, untouched**: `flow_field`/`step_toward` have no diagonal-shoulder guard · `SPARK_LEN_PX`
+is under the snap floor at `ZOOM_MIN` · `TARGET_LINE`, `SPARK` and the `CLIFF_FACE` line are round 3's
+three recorded-not-fixed findings · `plan-then-watch`'s 결정 4 is overturned in the code with its own
+doc unedited.
+
+nets      **15 nets · 2248 checks · 4.4 s · green**, stderr clean. Was 15 / 2216 / 4.4 s.
+
+**One mutation, edited and re-run in ONE command:**
+
+| # | Mutation | Result |
+|---|---|---|
+| 12 | `army.living_count() == 0` restored in `_phase_clock` | **red** — battle, on exactly the three rows designed as the floor (LOST · WIPED · 「two soldiers are still alive」) |

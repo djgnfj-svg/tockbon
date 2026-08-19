@@ -343,15 +343,29 @@ func _wipe_loses(t) -> void:
 	t.eq(r.pending_reward(), Rules.Reward.NONE, "진 런은 보상을 주지 않는다")
 
 
-## The clock. **One soldier is landed and nine stay at the harbour**, which is the smallest plan a
-## commit will accept — so neither side can be wiped and the only way this ends is the timer. The step
-## count says it took the whole limit rather than ending early.
+## The clock, through a real `Run`. One soldier is landed and nine stay at the harbour, which is the
+## smallest plan a commit will accept. The step count says the run ended ON the clock rather than
+## early.
+##
+## ⚠⚠ **THE LIMIT IS SHORTENED HERE AND THAT IS THE FIX FOR THIS ISLAND'S LOSS RULE, NOT A DODGE.**
+## This fixture used island 1's own 60 s and asserted 3600 sub-steps — and it only ever passed because
+## the run could not end when the beachhead died. It can now: the lone soldier meets a bison and is
+## dead at **7.95 s**, and holding nine reserves no longer keeps the island open. **What sat out the
+## other 52 seconds was the defect the user reported**, so a check that needed those 52 seconds was
+## measuring the defect.
+##
+## ⇒ The limit is cut to 5.0 s, comfortably before that death, so the timer is once again the only
+## thing that can end this island. **The claim that `Islands.time_limit_of(0)` is what reaches the
+## battle is not lost with it** — it is pinned on its own line at the top of this file, which is where
+## it belongs; this row is about what the clock DOES, not where its number comes from.
 func _timeout_loses(t) -> void:
 	var r := Run.new()
 	r.enter_node(0)
 	var b := r.begin_island()
 	t.ok(b.send(0, _isle1_landing()) >= 0 and b.commit(), "한 명만 보내고 시작을 눌렀다 (자가 점검)")
-	var limit := Islands.time_limit_of(0)
+	t.eq(b.time_limit, Islands.time_limit_of(0), "섬이 준 제한 시간은 60초다 (자가 점검 — 줄이기 전에 확인한다)")
+	var limit := 5.0
+	b.time_limit = limit
 	# ⚠ **One sub-step per call, never `step(1.0)`.** `step` consumes whole `Rules.SIM_SUBSTEP_SEC`
 	# sub-steps and carries the leftover, so a 1.0 s call runs **59** of them and not 60 — the residue
 	# after sixty subtractions lands a hair under the sub-step in IEEE double — and the run would need
@@ -363,10 +377,10 @@ func _timeout_loses(t) -> void:
 
 	t.eq(b.outcome(), Battle.Outcome.LOST, "한 명으로는 시간이 다 되어 진다")
 	t.eq(b.lose_reason(), Battle.Lose.TIMEOUT, "패인은 시간 초과다")
-	t.eq(steps, 3600, "제한 시간 %.0f초 = 3600 서브스텝을 다 쓰고 나서야 졌다" % limit)
-	# Not `== 0.0`: 3600 additions of `1/60` land 2.1e-12 short of 60.0, and `_phase_clock` latches on
-	# `elapsed + EPS >= limit` for exactly that reason. Both ends, so a clock that never ran is caught
-	# by the first line and a clock that overran is caught by the second.
+	t.eq(steps, 300, "제한 시간 %.0f초 = 300 서브스텝을 다 쓰고 나서야 졌다" % limit)
+	# Not `== 0.0`: repeated additions of `1/60` land a hair short of the limit, and `_phase_clock`
+	# latches on `elapsed + EPS >= limit` for exactly that reason. Both ends, so a clock that never ran
+	# is caught by the first line and a clock that overran is caught by the second.
 	t.ok(b.elapsed >= limit - Rules.EPS, "시계는 제한 시간까지 갔다 (%.6f초)" % b.elapsed)
 	t.ok(b.time_left() <= Rules.EPS, "남은 시간은 0에 붙는다 (%.12f초)" % b.time_left())
 	t.eq(b.enemies_left(), Islands.spawns_of(0).size(), "적은 하나도 안 죽었다 — 한 명으로는 못 죽인다")

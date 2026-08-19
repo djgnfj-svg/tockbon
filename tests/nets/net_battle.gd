@@ -50,6 +50,9 @@ func run(t) -> void:
 	_death_is_permanent(t)
 	_phase_order(t)
 	_in_transit_is_hit_but_cannot_hit(t)
+	_reserves_do_not_hold_the_run_open(t)
+	_a_soldier_at_sea_does_hold_it_open(t)
+	_the_gate_itself(t)
 
 
 # -- the one bark this file owns -------------------------------------------------------------------
@@ -424,6 +427,126 @@ func _phase_order(t) -> void:
 	late.step(0.5)
 	t.eq(late.outcome(), Battle.Outcome.LOST, "적이 남은 채 시간이 끝나면 패배다")
 	t.eq(late.lose_reason(), Battle.Lose.TIMEOUT, "패배 사유는 시간 초과다")
+
+
+# -- the run ends when nobody is left in the fight -------------------------------------------------
+
+## ⚠⚠ **THE USER SAT WATCHING AN EMPTY ISLAND UNTIL THE TIMER RAN OUT**, and reported it:
+## ***"실패조건은 시작하기하고 못깨면 이지 제한시간을 계속 기다리고 있길래"***.
+##
+## `_phase_clock` lost on `army.living_count() == 0`, and `living_count` counts every soldier that is
+## not dead — **reserves at the harbour included.** After the commit `send` refuses everything, so a
+## reserve can never be landed: hold anyone back, lose everyone you sent, and the run is decided and
+## cannot end. The old test could not fire at all.
+##
+## ⚠ **The margin is the whole check.** `elapsed <= time_limit` is also true of the behaviour being
+## fixed — that is `how-nets-lie`'s *a ceiling with no floor* exactly — so the limit here is 90 s
+## against a crossing of about 1.2, and the assertion is on the GAP.
+##
+## ⚠ **And `living_count() == 2` is the floor under it.** Two soldiers are still alive when the island
+## is lost. Restore the old condition and that is the line that cannot be satisfied.
+func _reserves_do_not_hold_the_run_open(t) -> void:
+	var limit := 90.0
+	var army := _army_of([Rules.CELL_MELEE, Rules.CELL_MELEE, Rules.CELL_MELEE])
+	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], limit)
+	var landing := _tile_key(_PORT_LANDING, ARENA_W)
+	t.ok(b.send(0, landing) >= 0, "셋 중 한 명만 보냈다 (자가 점검)")
+	t.ok(b.commit(), "그리고 시작을 눌렀다 (자가 점검)")
+	t.eq(b.soldier_state[1], Battle.SoldierState.RESERVE, "1번은 항구에 남았다 (자가 점검)")
+	t.eq(b.soldier_state[2], Battle.SoldierState.RESERVE, "2번도 남았다 (자가 점검)")
+	# The premise, asserted rather than assumed: a reserve can never join the fight after the commit,
+	# which is what makes holding one back a decision that is already over.
+	t.eq(b.send(1, landing), -1, "확정 뒤에는 남은 병사를 못 내린다 — 이 검사의 전제다")
+
+	var n := 0
+	while n < 400 and b.soldier_state[0] != Battle.SoldierState.ASHORE:
+		b.begin_frame()
+		b.step(TICK_ONE)
+		n += 1
+	t.eq(b.soldier_state[0], Battle.SoldierState.ASHORE, "보낸 한 명이 상륙했다 (%d 서브스텝)" % n)
+	t.eq(b.outcome(), Battle.Outcome.RUNNING, "아직 굴러간다 (자가 점검)")
+
+	# It dies. `army.hp = 0` and one sub-step, so `_phase_deaths` writes DEAD the way the fight does —
+	# never by poking `soldier_state` here, which would make this a check about the poke.
+	army.hp[0] = 0.0
+	b.begin_frame()
+	b.step(TICK_ONE)
+	t.eq(b.soldier_state[0], Battle.SoldierState.DEAD, "그리고 죽었다 (자가 점검)")
+
+	t.eq(b.outcome(), Battle.Outcome.LOST, "상륙한 병사가 다 죽으면 그 자리에서 진다")
+	t.eq(b.lose_reason(), Battle.Lose.WIPED, "패인은 전멸이다")
+	t.ok(b.enemies_left() > 0, "적은 아직 남아 있다 — 승리와 헷갈릴 여지가 없다 (%d마리)" % b.enemies_left())
+	# ⚠⚠ **THE LINE THE OLD RULE CANNOT PASS.**
+	t.eq(army.living_count(), 2, "그런데 병사는 아직 둘이 살아 있다 — 항구에 선 예비 병력이다")
+	# The margin. Both ends: the fight really ran, and it ended nowhere near the clock.
+	t.ok(b.elapsed > 0.0, "시계는 실제로 돌았다 (%.4f초)" % b.elapsed)
+	t.ok(b.elapsed < 2.0, "그런데 2초도 안 걸렸다 (%.4f초) — 건너는 데 약 1.2초다" % b.elapsed)
+	t.ok(limit - b.elapsed > 85.0,
+		"제한 시간 90초까지 %.2f초를 남기고 끝났다 — 기다릴 것이 없어졌으면 기다리지 않는다"
+			% (limit - b.elapsed))
+
+
+## ⚠⚠ **THE COUNTER-CASE, and it is where the fix breaks silently if it is written as ASHORE-only.**
+## A soldier aboard an OUTBOUND boat has not landed and has not lost. Collapse the rule to "nobody
+## ashore" and the last crossing on an island whose beachhead just died is thrown away one sub-step
+## before it resolves — a fake failure, and one the player would read as the game giving up on them.
+func _a_soldier_at_sea_does_hold_it_open(t) -> void:
+	var army := _army_of([Rules.CELL_MELEE, Rules.CELL_MELEE, Rules.CELL_MELEE])
+	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], 90.0)
+	var landing := _tile_key(_PORT_LANDING, ARENA_W)
+	t.ok(b.send(0, landing) >= 0 and b.send(1, landing) >= 0, "둘을 보냈다 (자가 점검)")
+	t.ok(b.commit(), "2번은 항구에 남긴 채 시작했다 (자가 점검)")
+
+	# Five sub-steps in, both are still at sea — the crossing is about seventy.
+	for _f in 5:
+		b.begin_frame()
+		b.step(TICK_ONE)
+	t.eq(b.soldier_state[0], Battle.SoldierState.TRANSIT, "0번은 아직 바다 위다 (자가 점검)")
+	t.eq(b.soldier_state[1], Battle.SoldierState.TRANSIT, "1번도 바다 위다 (자가 점검)")
+
+	army.hp[0] = 0.0
+	b.begin_frame()
+	b.step(TICK_ONE)
+	t.eq(b.soldier_state[0], Battle.SoldierState.DEAD, "0번이 바다에서 죽었다 (자가 점검)")
+	t.eq(b.soldier_state[1], Battle.SoldierState.TRANSIT, "1번은 여전히 건너는 중이다")
+	t.eq(b.outcome(), Battle.Outcome.RUNNING,
+		"아무도 뭍에 없어도 배 위에 한 명이 있으면 아직 안 졌다 — 마지막 항해가 남았다")
+
+	# And then it lands, so the RUNNING above is not "this fixture can never end".
+	var n := 0
+	while n < 400 and b.soldier_state[1] != Battle.SoldierState.ASHORE:
+		b.begin_frame()
+		b.step(TICK_ONE)
+		n += 1
+	t.eq(b.soldier_state[1], Battle.SoldierState.ASHORE, "1번이 상륙했다 (%d 서브스텝 더)" % n)
+	t.eq(b.outcome(), Battle.Outcome.RUNNING, "상륙한 뒤에도 계속 굴러간다")
+
+	army.hp[1] = 0.0
+	b.begin_frame()
+	b.step(TICK_ONE)
+	t.eq(b.outcome(), Battle.Outcome.LOST, "그 마지막 한 명까지 죽고 나서야 진다")
+	t.eq(b.lose_reason(), Battle.Lose.WIPED, "패인은 전멸이다")
+	t.eq(army.living_count(), 1, "항구의 2번은 그때도 살아 있다")
+
+
+## ⚠⚠ **THE GATE, driven directly, because `step` hides it.** `step` returns before `_phase_clock`
+## while uncommitted, so the `_committed` test inside `_the_landing_force_is_gone` is unreachable
+## through the public path today — and an unreachable guard is exactly the kind that gets deleted as
+## dead code by the next person. Every soldier is RESERVE during planning, so without it an island is
+## lost on the frame it opens.
+func _the_gate_itself(t) -> void:
+	var army := _army_of([Rules.CELL_MELEE, Rules.CELL_MELEE])
+	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], 90.0)
+	t.eq(b.soldier_state[0], Battle.SoldierState.RESERVE, "계획 중에는 전원이 RESERVE 다 (자가 점검)")
+	t.eq(b.soldier_state[1], Battle.SoldierState.RESERVE, "둘 다 그렇다 (자가 점검)")
+	t.ok(not b._the_landing_force_is_gone(),
+		"확정 전에는 전원이 RESERVE 여도 '병력이 없어졌다'가 아니다 — 게이트가 없으면 섬이 열리자마자 진다")
+
+	# The same roster with the flag flipped: now it IS gone. Without this line the row above would
+	# also be green if the function simply always answered false.
+	b._committed = true
+	t.ok(b._the_landing_force_is_gone(),
+		"같은 명부라도 확정 뒤에는 '병력이 없어졌다'가 된다 — 게이트가 읽는 것은 _committed 하나다")
 
 
 # -- the boat is cargo, not a fighting position ----------------------------------------------------

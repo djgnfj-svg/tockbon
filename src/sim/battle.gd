@@ -888,13 +888,56 @@ func _phase_clock(dt: float) -> void:
 		_outcome = Outcome.WON
 		_lose = Lose.NONE
 		return
-	if army.living_count() == 0:
+	if _the_landing_force_is_gone():
 		_outcome = Outcome.LOST
 		_lose = Lose.WIPED
 		return
 	if elapsed + Rules.EPS >= time_limit:
 		_outcome = Outcome.LOST
 		_lose = Lose.TIMEOUT
+
+
+## ⚠⚠ **THE FIGHT IS OVER WHEN NOBODY IS STILL IN IT, AND A SOLDIER AT THE HARBOUR IS NOT IN IT.**
+##
+## This was `army.living_count() == 0`, and `living_count` counts every soldier that is not dead —
+## **including the ones still standing in RESERVE at the harbour.** After the commit `send` returns -1
+## for anything, so a reserve soldier **can never be landed**: if everyone you sent dies and you kept
+## anyone back, the run is already decided and the old test could never fire. The player sat watching
+## an empty island until `TIMEOUT`, which is what they reported:
+## ***"실패조건은 시작하기하고 못깨면 이지 제한시간을 계속 기다리고 있길래"***.
+##
+## ⚠ **The `_committed` gate is not defensive padding.** Every soldier is RESERVE during planning, so
+## without it this answers TRUE on the frame an island opens and the island is lost before the player
+## has dropped anything. `step` already returns before `_phase_clock` while uncommitted, so today the
+## gate is unreachable — it is here because the two guards are one idea and reading `_committed`
+## is what keeps them from becoming two.
+##
+## ⚠⚠ **TRANSIT COUNTS, and collapsing this to ASHORE would be a fake failure.** A soldier aboard an
+## OUTBOUND boat has not landed and has not lost; the last crossing on an island where everything
+## ashore just died is exactly the interesting case, and it is the one a narrower test would throw
+## away one sub-step before it resolved.
+##
+## ⚠⚠ **IT READS BOTH COLUMNS, AND AN EARLIER DRAFT OF THIS COMMENT SAID THEY COULD NOT DISAGREE.**
+## They can. `_phase_deaths` writes `SoldierState.DEAD` in the same block as `army.kill(i)`, but its
+## first line is `if army.alive[i] == 0 ... continue` — so a soldier killed through `army` from
+## OUTSIDE the fight is skipped forever and keeps whatever state it had. Nothing in `src/` does that
+## today; a net does, and it is the shape a session save/load or a between-island effect would take.
+## A rule that answered "still in the fight" for a corpse would hold the run open exactly as the
+## reserve bug did, one column over.
+##
+## `army.living_count()` keeps its own reader on the map screen, where 「how many soldiers do I still
+## have」 really does include reserves — that reading is correct there and wrong here, which is why
+## this is a second function rather than a second caller.
+func _the_landing_force_is_gone() -> bool:
+	if not _committed:
+		return false
+	for i in soldier_state.size():
+		if army.alive[i] == 0:
+			continue
+		var s := int(soldier_state[i])
+		if s == SoldierState.ASHORE or s == SoldierState.TRANSIT:
+			return false
+	return true
 
 
 # --- movement helpers ----------------------------------------------------------------------------
