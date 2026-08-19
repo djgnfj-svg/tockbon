@@ -140,3 +140,12 @@ These survive **even after you confirm every mutation goes red**:
   inside a helper and passing an **empty** array to the leaf reads as *1 draw call, 4/4 arguments used* —
   green, with nothing on screen. ⇒ **Build the points in `_draw()` and hand them to the leaf as an
   argument**, so the spy captures the geometry itself
+- ⚠⚠ **A GREEN CHECK CAN BE AN ARTEFACT OF THE DEFECT BESIDE IT.** `net_run._timeout_loses` landed one
+  soldier, held nine at the harbour, and asserted the island took **all 3600 sub-steps** of its 60 s
+  limit. It had been green in every round since it was written. What made it pass was the bug in the loss condition one file over:
+  `_phase_clock` lost on `army.living_count() == 0`, which counts reserves, so an island whose whole
+  beachhead was dead could not end. The lone soldier actually died at **477 sub-steps (7.95 s)** — **52
+  of the 60 seconds that check asserted were the defect**, and the moment the loss rule was fixed the
+  fixture reddened. ⇒ **When a defect is fixed, the checks that were green around it are suspects, not
+  controls.** A check that survives a fix unchanged has been re-verified; one that reddens was
+  measuring the defect, and the two look identical until the fix lands

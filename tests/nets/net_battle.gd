@@ -53,6 +53,7 @@ func run(t) -> void:
 	_reserves_do_not_hold_the_run_open(t)
 	_a_soldier_at_sea_does_hold_it_open(t)
 	_the_gate_itself(t)
+	_wiped_wins_when_both_are_true(t)
 
 
 # -- the one bark this file owns -------------------------------------------------------------------
@@ -474,7 +475,8 @@ func _reserves_do_not_hold_the_run_open(t) -> void:
 	t.eq(b.soldier_state[0], Battle.SoldierState.DEAD, "그리고 죽었다 (자가 점검)")
 
 	t.eq(b.outcome(), Battle.Outcome.LOST, "상륙한 병사가 다 죽으면 그 자리에서 진다")
-	t.eq(b.lose_reason(), Battle.Lose.WIPED, "패인은 전멸이다")
+	t.eq(b.lose_reason(), Battle.Lose.LANDING_LOST,
+		"패인은 전멸이 아니라 상륙 실패다 — 항구에 산 병사가 남아 있다")
 	t.ok(b.enemies_left() > 0, "적은 아직 남아 있다 — 승리와 헷갈릴 여지가 없다 (%d마리)" % b.enemies_left())
 	# ⚠⚠ **THE LINE THE OLD RULE CANNOT PASS.**
 	t.eq(army.living_count(), 2, "그런데 병사는 아직 둘이 살아 있다 — 항구에 선 예비 병력이다")
@@ -525,8 +527,37 @@ func _a_soldier_at_sea_does_hold_it_open(t) -> void:
 	b.begin_frame()
 	b.step(TICK_ONE)
 	t.eq(b.outcome(), Battle.Outcome.LOST, "그 마지막 한 명까지 죽고 나서야 진다")
-	t.eq(b.lose_reason(), Battle.Lose.WIPED, "패인은 전멸이다")
+	t.eq(b.lose_reason(), Battle.Lose.LANDING_LOST, "패인은 상륙 실패다 — 2번이 아직 살아 있다")
 	t.eq(army.living_count(), 1, "항구의 2번은 그때도 살아 있다")
+
+
+## ⚠⚠ **BOTH LOSS REASONS ARE TRUE AT ONCE HERE, AND THE PRECEDENCE IS THE CHECK.** Send everybody,
+## kill everybody: the landing force is gone AND every soldier is dead. `WIPED` wins, because "every
+## soldier is dead" is the stronger claim and the more useful one to read. **An unstated precedence is
+## what diverges later** — a reader of `_phase_clock` who reordered the two would break nothing that
+## anyone could see, because both arms end the island.
+##
+## ⚠ The floor beside it is the round-4 fixture two functions up, which reaches the SAME condition and
+## must answer `LANDING_LOST`. Neither reason is reachable-by-default: one holds reserves back and one
+## does not, and that single difference is the whole of what the screen now says.
+func _wiped_wins_when_both_are_true(t) -> void:
+	var army := _army_of([Rules.CELL_MELEE, Rules.CELL_MELEE])
+	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], 90.0)
+	var landing := _tile_key(_PORT_LANDING, ARENA_W)
+	t.ok(b.send(0, landing) >= 0 and b.send(1, landing) >= 0, "둘 다 보냈다 — 항구에 아무도 안 남는다 (자가 점검)")
+	t.ok(b.commit(), "그리고 시작을 눌렀다 (자가 점검)")
+	for _f in 5:
+		b.begin_frame()
+		b.step(TICK_ONE)
+	army.hp[0] = 0.0
+	army.hp[1] = 0.0
+	b.begin_frame()
+	b.step(TICK_ONE)
+
+	t.eq(army.living_count(), 0, "병사가 하나도 안 남았다 (자가 점검)")
+	t.eq(b.outcome(), Battle.Outcome.LOST, "그래서 졌다 (자가 점검)")
+	t.eq(b.lose_reason(), Battle.Lose.WIPED,
+		"두 조건이 다 참일 때는 전멸이 이긴다 — 「병사가 다 죽었다」가 「상륙 부대가 없어졌다」보다 큰 말이다")
 
 
 ## ⚠⚠ **THE GATE, driven directly, because `step` hides it.** `step` returns before `_phase_clock`

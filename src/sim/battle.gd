@@ -29,9 +29,22 @@ extends RefCounted
 
 enum Outcome { RUNNING, WON, LOST }
 
-## Why the island was lost. The loss screen has to say which, because "the timer ran out" and "every
-## soldier is dead" are different mistakes and a screen that shows neither teaches nothing.
-enum Lose { NONE, TIMEOUT, WIPED }
+## Why the island was lost. The loss screen has to say which, because these are different mistakes and
+## a screen that shows the wrong one teaches the wrong lesson.
+##
+## ⚠⚠ **`LANDING_LOST` and `WIPED` are two facts, not one, and the difference is on screen.** WIPED is
+## *every soldier you own is dead*. LANDING_LOST is *everyone you SENT is dead and the ones you kept
+## back can never be sent*, which is the same run-ending position with living soldiers still standing
+## at the harbour. Showing 「전멸」 for the second one puts a sentence on screen that the screen itself
+## disproves — the player is looking at those soldiers — and that is how a screen stops being trusted.
+##
+## ⚠ **Appended, never inserted.** These are ordinals a saved run or a pinned literal could hold.
+##
+## ⚠⚠ **BOTH ARE TRUE AT ONCE when the last body dies with nobody in reserve, and `WIPED` WINS.**
+## The precedence is stated here and applied in exactly one place (`_phase_clock`), because "every
+## soldier is dead" is strictly more than "the landing force is gone" — it is the stronger claim and
+## the more useful one to read. `net_battle` pins both arms of it.
+enum Lose { NONE, TIMEOUT, WIPED, LANDING_LOST }
 
 ## Where a soldier is right now, on THIS island. It is per-island state and not part of the roster:
 ## `army` holds who exists and how hurt they are, and that is what carries to the next island.
@@ -890,7 +903,12 @@ func _phase_clock(dt: float) -> void:
 		return
 	if _the_landing_force_is_gone():
 		_outcome = Outcome.LOST
-		_lose = Lose.WIPED
+		# ⚠⚠ **The CONDITION and the REASON are two questions, and `army.living_count() == 0` is the
+		# right answer to the second one only.** It used to be the condition, which is the bug this
+		# round before last fixed: reserves at the harbour kept it from ever firing. As the REASON it
+		# is exactly right — it is what 「전멸」 means — and WIPED wins when both are true, per the
+		# precedence written on the `Lose` enum.
+		_lose = Lose.WIPED if army.living_count() == 0 else Lose.LANDING_LOST
 		return
 	if elapsed + Rules.EPS >= time_limit:
 		_outcome = Outcome.LOST

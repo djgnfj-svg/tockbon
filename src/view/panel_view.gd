@@ -33,6 +33,13 @@ const MSG_REWARD := "부리를 달 병사를 고르세요"
 const MSG_WON := "승리"
 const MSG_LOST_TIMEOUT := "패배 — 시간 초과"
 const MSG_LOST_WIPED := "패배 — 전멸"
+## ⚠⚠ **`Battle.Lose.LANDING_LOST` — everyone you SENT is dead, and the ones you kept back can never
+## be sent.** It is its own line because 「전멸」 was a lie in this case: the player is looking at
+## living soldiers standing at the harbour while the band tells them they were annihilated, and a
+## screen that says something the screen disproves stops being read at all.
+## The wording is a TITLE, like the other four — 「상륙 실패」 rather than a sentence about reserves,
+## because the panel is read at a glance and the reserves are visible underneath it.
+const MSG_LOST_LANDING := "패배 — 상륙 실패"
 const MSG_LOST := "패배"
 const BUTTON_LABEL := "다시 하기"
 
@@ -262,6 +269,11 @@ func _entry_text(i: int, beaked: bool) -> String:
 	return (line + "  부리") if beaked else line
 
 
+## ⚠ **A new `Lose` reason opens no new state, and that was checked rather than assumed.** The band and
+## the panel are one path: `_draw` returns on `not panel_active()` before this is ever called, and
+## `panel_active` keys on `Run.State` alone. The failure this file's own `panel_active` paragraph
+## describes — a red 「패배」 band over a live screen, swallowing every click — is reachable by adding a
+## `Run.State` member, and `Lose` is not one.
 func _message_text() -> String:
 	if is_reward():
 		return MSG_REWARD
@@ -273,6 +285,11 @@ func _message_text() -> String:
 		return MSG_LOST_TIMEOUT
 	if battle.lose_reason() == Battle.Lose.WIPED:
 		return MSG_LOST_WIPED
+	if battle.lose_reason() == Battle.Lose.LANDING_LOST:
+		return MSG_LOST_LANDING
+	# ⚠ `Lose.NONE` with a lost run lands here, and so would a reason added tomorrow. The bare 「패배」
+	# is honest about knowing nothing; `net_shell` walks the whole enum so a new member cannot arrive
+	# and quietly fall through to it.
 	return MSG_LOST
 
 

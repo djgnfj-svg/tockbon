@@ -1712,6 +1712,7 @@ func run(t) -> void:
 	_the_readers_themselves(t)
 	_the_speed_ladder_is_gone(t)
 	_speed_steps_survives_read_by_nobody(t)
+	_every_lose_reason_reads_differently(t)
 
 
 ## Presses a map node the way a hand does — through `_unhandled_input`, then the ring's walk run out
@@ -2165,6 +2166,58 @@ func _the_speed_ladder_is_gone(t) -> void:
 ##
 ## The walk strips comments before matching, because `rules.gd`'s own paragraph NAMES these four and
 ## every doc comment in `src/` that explains the deletion would otherwise count as a reader.
+## ⚠⚠ **A COUNT THAT GROWS IS NOT A MESSAGE THAT READS.** `panel_view` gained `MSG_LOST_LANDING` and
+## **nothing in this suite would have noticed**: only three of its five message constants were ever
+## named by a net, none of them by count, and `_message_text` was never driven for a loss reason at
+## all. A fourth string could have been added, wired to nothing, and every round stayed green.
+##
+## So this drives `_message_text()` once per `Lose` member and demands the four come out DIFFERENT.
+## Distinctness is the whole claim — 「패배」 four times over is exactly the screen this round exists to
+## stop, and it is what a copy-paste branch produces.
+##
+## ⚠ **The walk is CLOSED against the enum, not against a list written here.** `Lose` is read out of
+## `Battle`'s own constant map, so a fifth reason added tomorrow either gets its own line in
+## `_message_text` or reddens this — it cannot arrive and fall through to the bare 「패배」 unnoticed.
+func _every_lose_reason_reads_differently(t) -> void:
+	var r := Run.new()
+	r.enter_node(0)
+	var b := r.begin_island()
+	r.finish_island(false)
+	t.eq(r.state(), Run.State.LOST, "진 런을 하나 만들었다 (자가 점검)")
+
+	var pv := PanelView.new()
+	pv.bind(r, b)
+	t.ok(not pv.is_reward(), "보상 화면이 아니다 — 패배 문구 가지를 탄다 (자가 점검)")
+
+	var lose_enum: Dictionary = Battle.new().get_script().get_script_constant_map()["Lose"]
+	t.eq(lose_enum.size(), 4, "패인은 넷이다 (NONE · TIMEOUT · WIPED · LANDING_LOST)")
+	var want := {
+		"NONE": PanelView.MSG_LOST,
+		"TIMEOUT": PanelView.MSG_LOST_TIMEOUT,
+		"WIPED": PanelView.MSG_LOST_WIPED,
+		"LANDING_LOST": PanelView.MSG_LOST_LANDING,
+	}
+	var seen := {}
+	var missing: Array[String] = []
+	for name: String in lose_enum:
+		if not want.has(name):
+			missing.append(name)
+			continue
+		b._lose = int(lose_enum[name])
+		var got := pv._message_text()
+		t.eq(got, str(want[name]), "패인 %s 는 「%s」로 읽힌다" % [name, str(want[name])])
+		seen[got] = true
+	t.eq(missing.size(), 0,
+		"표에 없는 패인이 없다 — 새 패인은 자기 문구를 받거나 여기서 문다 %s" % str(missing))
+	t.eq(seen.size(), 4, "그리고 넷이 서로 다른 문장이다 — 넷 다 「패배」면 이 줄이 문다")
+
+	# The floor under the distinctness: the two that existed before really did differ, so `seen` is
+	# not 4 because the four constants happen to be four copies of one edit.
+	t.ok(PanelView.MSG_LOST_WIPED != PanelView.MSG_LOST_LANDING,
+		"전멸과 상륙 실패는 다른 문장이다 — 이 라운드가 갈라놓은 그 둘이다")
+	pv.free()
+
+
 func _speed_steps_survives_read_by_nobody(t) -> void:
 	t.eq(Rules.SPEED_STEPS.size(), 5, "사다리에 다섯 칸이 남아 있다")
 	t.eq(Rules.SPEED_STEPS, [0.0, 1.0, 2.0, 3.0, 6.0], "그리고 값도 그대로다")

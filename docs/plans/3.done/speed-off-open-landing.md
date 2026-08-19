@@ -666,3 +666,67 @@ nets      **15 nets · 2248 checks · 4.4 s · green**, stderr clean. Was 15 / 2
 | # | Mutation | Result |
 |---|---|---|
 | 12 | `army.living_count() == 0` restored in `_phase_clock` | **red** — battle, on exactly the three rows designed as the floor (LOST · WIPED · 「two soldiers are still alive」) |
+
+---
+
+### Round 5 — fixer
+
+changed   `src/sim/battle.gd` (`Lose.LANDING_LOST`, and the precedence in `_phase_clock`) ·
+`src/view/panel_view.gd` (`MSG_LOST_LANDING`, its branch, and a note on why a new `Lose` member opens
+no new state) · `tests/nets/net_battle.gd` (two reasons corrected, one precedence check added) ·
+`tests/nets/net_shell.gd` (`_every_lose_reason_reads_differently`) · `docs/how-nets-lie.md` (one new
+case). **Nothing the 1~5 slot plan owns**: no `field_view`, no `look.gd`, no `hud_view`, no `game.gd`,
+no `rules.gd`.
+
+why       Round 4 shipped a loss the screen described wrongly. 「패배 — 전멸」 while eight living
+soldiers stand at the harbour is a band contradicting the picture under it, and that is how a screen
+stops being read at all. Round 4's own `not closed` argued for this; it is now built.
+
+closed    **The reason**: `Lose.LANDING_LOST`, appended (never inserted — these are ordinals a saved
+run could hold). **The message**: **「패배 — 상륙 실패」**, a title like the other four rather than a
+sentence about reserves, because the panel is read at a glance and the reserves are visible underneath
+it.
+**`WIPED` stays reachable and stays distinct** — it is *every soldier you own is dead*, which is a
+different fact from *everyone you sent is dead*.
+**The precedence, stated and pinned**: both are true when the last body dies with nobody in reserve,
+and **`WIPED` wins** — it is the stronger claim and the more useful one to read. It is written on the
+`Lose` enum, applied in exactly one expression in `_phase_clock`, and pinned from both sides:
+`net_battle._wiped_wins_when_both_are_true` sends everybody and kills everybody, and
+`_reserves_do_not_hold_the_run_open` reaches the same condition holding two back and must answer
+`LANDING_LOST`.
+⚠ **The `army.living_count() == 0` expression is back — as the REASON, which is the question it was
+always the right answer to.** It was wrong as the CONDITION (round 4) and is exactly right here: it is
+what 「전멸」 means.
+
+**The `panel_view` trap was checked, not assumed.** `_draw` returns on `not panel_active()` before
+`_message_text` is ever called, and `panel_active` keys on `Run.State` alone — the band and the panel
+are one path. The five-way failure that file's own paragraph describes needs a new `Run.State` member;
+`Lose` is not one. A note saying so now sits on `_message_text`.
+
+**The pinned literals**: ⚠ **nothing pinned a count, and that was the worse half.** Only three of
+`panel_view`'s five message constants were ever named by a net, none by count, and **`_message_text`
+had never been driven for a loss reason at all** — a fourth string could have been added, wired to
+nothing, with every round green. `net_shell._every_lose_reason_reads_differently` drives it once per
+`Lose` member and demands the four come out DIFFERENT, **closed against the enum read out of
+`Battle`'s own constant map** rather than against a list written in the net. A fifth reason gets its
+own line or reddens.
+
+not closed  ⚠ **「상륙 실패」 has not been read by the user or by verify-look.** It is the lead's
+wording and I took it rather than invent — my only reservation is that it names the *attempt* when
+what failed is the *beachhead*, and 「교두보 상실」 is more precise and heavier to read at a glance. **A
+wording call belongs to whoever sees it on screen.**
+⚠ **The probe has not been re-run** and its grading scale changed in round 4 (plans that used to run
+out the clock now end sooner and lose).
+⚠ **Carried, untouched**: `flow_field`/`step_toward` have no diagonal-shoulder guard · `SPARK_LEN_PX`
+is under the snap floor at `ZOOM_MIN` · round 3's three recorded-not-fixed findings (`TARGET_LINE`,
+`SPARK`, the `CLIFF_FACE` line — **S3 passes for a different reason than this plan says**) ·
+`plan-then-watch`'s 결정 4 is overturned in the code with its own doc unedited.
+
+nets      **15 nets · 2263 checks · 4.4 s · green**, stderr clean. Was 15 / 2248 / 4.4 s.
+
+**Two mutations, each edited and re-run in ONE command:**
+
+| # | Mutation | Result |
+|---|---|---|
+| 13 | the precedence flipped (`LANDING_LOST` when everyone is dead) | **red** — battle (3 rows) · run (`_wipe_loses`) |
+| 14 | `_message_text` returns `MSG_LOST_WIPED` for `LANDING_LOST` — the copy-paste branch | **red** — shell, on the text AND on the distinctness count |
