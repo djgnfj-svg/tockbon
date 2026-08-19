@@ -46,7 +46,7 @@ func run(t) -> void:
 	_drop_order_takes_the_front(t)
 	_thirteen_aimed_at_one_tile_stand_on_thirteen(t)
 	_the_empty_boat_goes_home_and_vanishes(t)
-	_one_speed_and_six_are_the_same_fight(t)
+	_one_slice_and_six_are_the_same_fight(t)
 	_they_are_still_the_same_past_the_verdict(t)
 	_uneven_frames_are_the_same_fight(t)
 	_the_substep_count_itself_matches(t)
@@ -214,9 +214,12 @@ func _a_boat_leaves_from_its_own_harbour(t) -> void:
 			"그리고 그 항구는 시작 항구가 아니다 (자가 점검: %d != %d)" % [hb, b.grid.start_harbour])
 
 	t.ok(b.send(0, landing) >= 0, "그 칸으로 보냈다 (자가 점검)")
-	var from: Vector2 = b.boats[0]["from"]
+	# ⚠ `from` is a deleted key — the boat is a polyline, so its departure point is `path[0]`.
+	var path: PackedVector2Array = b.boats[0]["path"]
+	var from: Vector2 = path[0]
 	t.eq(from, b.grid.tile_point(int(b.grid.harbour_tiles[hb])),
-			"배는 상륙지에서 가장 가까운 항구에서 뜬다 — 시작 항구가 아니다")
+			"배는 물길이 가장 짧은 항구에서 뜬다 — 시작 항구가 아니다")
+	t.eq(path[path.size() - 1], b.grid.tile_point(landing), "그리고 항로의 끝은 그 상륙지다")
 	t.eq(int(b.boats[0]["home"]), hb, "돌아갈 항구도 같은 한 번의 판정에서 적힌다")
 	t.eq(b.soldier_pos[0], from, "그리고 병사도 그 항구에 서 있다")
 
@@ -260,6 +263,22 @@ func _drop_order_takes_the_front(t) -> void:
 	t.ok(first["front"] != swapped["front"],
 			"두 배치가 실제로 다르다 — 한쪽 순서만으로 둘 다 통과할 수는 없다")
 
+	# ⚠⚠ **The promise is only visible in the EVENT STREAM, and the polyline is why it has to be
+	# re-asserted.** Final positions alone are also produced by a reversed pass 1 whose boats happened
+	# to arrive a sub-step apart. Two boats aimed at ONE tile from ONE harbour now sail an identical
+	# POLYLINE, so their `dist` must still be identical and they must still land on the SAME sub-step —
+	# if a bending route ever gave them different lengths, drop order would silently become arrival
+	# order and 「먼저 놓은 쪽이 앞줄」 would hold by accident instead of by rule.
+	t.ok(absf(float(first["dist_a"]) - float(first["dist_b"])) <= 1e-5,
+			"한 항구에서 한 칸으로 간 두 배의 항로 길이가 같다 (%.6f)" % float(first["dist_a"]))
+	t.ok(int(first["route_points"]) >= 2,
+			"그 항로는 %d점짜리다 (자가 점검)" % int(first["route_points"]))
+	t.eq(int(first["land_substep_a"]), int(first["land_substep_b"]),
+			"둘이 같은 서브스텝에 내린다 — 폴리라인이어도 도착이 안 갈린다")
+	t.eq(first["land_order"], [0, 1],
+			"그 서브스텝의 LAND 사건 순서가 놓은 순서 그대로다 — 최종 자리만 보면 못 잡는다")
+	t.eq(swapped["land_order"], [1, 0], "순서를 뒤집으면 사건 순서도 뒤집힌다")
+
 
 ## Sends the given soldier ids to one tile in the given order, commits, and steps until both are
 ## ashore. Returns `{front, back}` — which soldier id stands ON `landing`, and the tile the other one
@@ -275,16 +294,37 @@ func _formation_of(t, order: Array, landing: int) -> Dictionary:
 		t.ok(b.send(sid, landing) >= 0, "%d번 병사를 상륙지로 보냈다 (자가 점검)" % sid)
 	t.ok(b.commit(), "확정했다 (자가 점검)")
 
+	var dist_a := float((b.boats[0] as Dictionary)["dist"])
+	var dist_b := float((b.boats[1] as Dictionary)["dist"])
+	var route_points := (b.boats[0]["path"] as PackedVector2Array).size()
+
 	var turns := 0
+	var land_order: Array = []
+	var land_substep := {}
 	while turns < 1200 and (b.soldier_state[0] != Battle.SoldierState.ASHORE
 			or b.soldier_state[1] != Battle.SoldierState.ASHORE):
 		b.begin_frame()
 		b.step(Rules.SIM_SUBSTEP_SEC)
 		turns += 1
+		# Read out of `events` in the order the sim appended them — that IS pass 1's walk order, and it
+		# is the only place the drop-order promise is observable while it is being kept.
+		for raw_ev in b.events:
+			var ev: Dictionary = raw_ev
+			if int(ev["kind"]) != Battle.Event.LAND:
+				continue
+			land_order.append(int(ev["id"]))
+			land_substep[int(ev["id"])] = turns
 	# A `while` that never ran, or ran out of budget, is a check measuring nothing.
 	t.ok(turns > 0 and turns < 1200, "둘이 상륙할 때까지 %d 서브스텝 돌았다 (자가 점검)" % turns)
+	t.eq(land_order.size(), 2, "LAND 사건을 정확히 둘 봤다 (자가 점검)")
 
-	var out := {"front": -1, "back": -1}
+	var out := {
+		"front": -1, "back": -1,
+		"dist_a": dist_a, "dist_b": dist_b, "route_points": route_points,
+		"land_order": land_order,
+		"land_substep_a": int(land_substep.get(int(order[0]), -1)),
+		"land_substep_b": int(land_substep.get(int(order[1]), -2)),
+	}
 	for i in 2:
 		var tile := g.tile_index(int(round(b.soldier_pos[i].x)), int(round(b.soldier_pos[i].y)))
 		if tile == landing:
@@ -342,8 +382,11 @@ func _the_empty_boat_goes_home_and_vanishes(t) -> void:
 	t.eq(int(boat["phase"]), Battle.Phase.RETURNING, "빈 배가 되어 돌아가는 중이다")
 	t.eq((boat["soldiers"] as Array).size(), 0, "화물은 비었다")
 	var home := b.grid.home_harbour_for(landing)
-	t.eq(Vector2(boat["to"]), b.grid.tile_point(int(b.grid.harbour_tiles[home])),
-			"항구를 향하고 있다")
+	# The reversed path's LAST point is the harbour — read off `path`, never re-derived, because
+	# reversing rather than recomputing is the whole rule this leg obeys.
+	var back: PackedVector2Array = boat["path"]
+	t.eq(back[back.size() - 1], b.grid.tile_point(int(b.grid.harbour_tiles[home])),
+			"돌아가는 항로의 끝이 그 항구다")
 
 	# The floor for the return leg: it is really SAILED, not teleported away on the unload sub-step.
 	b.begin_frame()
@@ -361,13 +404,22 @@ func _the_empty_boat_goes_home_and_vanishes(t) -> void:
 		t.ok(int((raw as Dictionary)["uid"]) != uid, "그 번호는 목록에 없다")
 
 
-# -- the speed ladder is arithmetically inert --------------------------------------------------------
+# -- one span of time, cut into different numbers of pieces ------------------------------------------
+#
+# ⚠⚠ **These rows are NOT about the speed ladder and they survived its deletion on purpose.**
+# `speed-off-open-landing` deleted the chips, the pause and every check that presses one — these press
+# nothing. What they measure is `Battle.step`'s SUB-STEP DECOMPOSITION: that the same simulated span
+# lands on identical state however many `dt` pieces it is handed in. That is the seam
+# `battle.step(delta)` was kept taking a bare delta to preserve, and it is the only guarantee that a
+# restored multiplier would still be arithmetically inert. Deleting them with the widget would have
+# thrown that away and left nothing to restore against.
 
-## Two identical fights, one driven 60 x `step(1/60)` and the other 10 x `step(6/60)`.
+## Two identical fights, one driven 120 x `step(1/60)` and the other 20 x `step(6/60)` — the same 2.0
+## seconds cut into 120 pieces and into 20.
 ##
 ## ⚠ **The floor is not decoration.** Without "both arms really advanced and somebody really got hit",
 ## a `step` that returned immediately would make every column below compare equal.
-func _one_speed_and_six_are_the_same_fight(t) -> void:
+func _one_slice_and_six_are_the_same_fight(t) -> void:
 	var slow := _skirmish()
 	var fast := _skirmish()
 	_plan_the_skirmish(t, slow)
@@ -385,8 +437,8 @@ func _one_speed_and_six_are_the_same_fight(t) -> void:
 	var a: Battle = slow["battle"]
 	var c: Battle = fast["battle"]
 	t.ok(a.elapsed > 0.0 and c.elapsed > 0.0, "두 판 다 실제로 흘렀다 (자가 점검)")
-	t.ok(a.enemy_hp[0] < Rules.hp_of(Rules.BISON), "1배속 쪽에서 적이 실제로 맞았다 (자가 점검)")
-	_compare_arms(t, a, c, "1배속 120프레임과 6배속 20프레임이 완전히 같다")
+	t.ok(a.enemy_hp[0] < Rules.hp_of(Rules.BISON), "잘게 쪼갠 쪽에서 적이 실제로 맞았다 (자가 점검)")
+	_compare_arms(t, a, c, "같은 시간을 120조각으로 나눠도 20조각으로 나눠도 같은 싸움이다")
 
 
 ## The same pair driven PAST the verdict. ⚠ **The row above stops before it and stays green through the
@@ -407,8 +459,8 @@ func _they_are_still_the_same_past_the_verdict(t) -> void:
 		c.begin_frame()
 		c.step(6.0 / 60.0)
 
-	t.ok(a.outcome() != Battle.Outcome.RUNNING, "1배속 쪽은 판정까지 갔다 (자가 점검)")
-	t.ok(c.outcome() != Battle.Outcome.RUNNING, "6배속 쪽도 판정까지 갔다 (자가 점검)")
+	t.ok(a.outcome() != Battle.Outcome.RUNNING, "잘게 쪼갠 쪽은 판정까지 갔다 (자가 점검)")
+	t.ok(c.outcome() != Battle.Outcome.RUNNING, "굵게 쪼갠 쪽도 판정까지 갔다 (자가 점검)")
 	t.eq(a.outcome(), c.outcome(), "판정이 난 뒤까지 몰아도 승패가 같다")
 	t.eq(a.army.living_count(), c.army.living_count(), "판정이 난 뒤까지 몰아도 살아남은 수가 같다")
 	_compare_arms(t, a, c, "판정이 난 뒤까지 몰아도 같다")
@@ -452,7 +504,7 @@ func _uneven_frames_are_the_same_fight(t) -> void:
 				n += 1
 			c.begin_frame()
 			c.step(chunk)
-		_compare_arms(t, a, c, "고르지 않은 프레임 간격에서도 %d배속이 같다" % k)
+		_compare_arms(t, a, c, "고르지 않은 프레임 간격을 %d개씩 묶어도 같다" % k)
 
 
 ## ⚠ **Comparing final state catches *diverged*, never *vanished*.** `substeps` is incremented INSIDE
@@ -483,8 +535,8 @@ func _the_substep_count_itself_matches(t) -> void:
 				n += 1
 			c.begin_frame()
 			c.step(chunk)
-		t.ok(c.substeps > 0, "%d배속 판의 서브스텝 수도 0보다 크다 (자가 점검)" % k)
-		t.eq(c.substeps, a.substeps, "%d배속이어도 서브스텝 횟수 자체가 같다" % k)
+		t.ok(c.substeps > 0, "%d개씩 묶은 판의 서브스텝 수도 0보다 크다 (자가 점검)" % k)
+		t.eq(c.substeps, a.substeps, "%d개씩 묶어도 서브스텝 횟수 자체가 같다" % k)
 
 
 ## ⚠⚠ **The equivalence rows above do NOT pin the sub-step's value, and that was measured.** Setting
@@ -515,21 +567,21 @@ func _zero_stops_the_clock(t) -> void:
 	b.step(Rules.SIM_SUBSTEP_SEC)
 	var was := b.elapsed
 	var steps_was := b.substeps
-	t.ok(was > 0.0, "1배속 한 프레임이 시계를 움직였다 (자가 점검)")
+	t.ok(was > 0.0, "한 서브스텝이 시계를 움직였다 (자가 점검)")
 
 	for _i in 120:
 		b.begin_frame()
 		b.step(0.0)
-	t.eq(b.elapsed, was, "0배속은 시계를 세운다 — 120프레임을 밀어도 정확히 그대로다")
+	t.eq(b.elapsed, was, "dt 0 은 시계를 세운다 — 120프레임을 밀어도 정확히 그대로다")
 	t.eq(b.substeps, steps_was, "그리고 서브스텝도 한 번 더 안 돈다")
 
 	b.begin_frame()
 	b.step(Rules.SIM_SUBSTEP_SEC)
-	t.ok(b.elapsed > was, "다시 1배속을 주면 이어서 간다 — 판이 죽은 게 아니다")
+	t.ok(b.elapsed > was, "다시 dt 를 주면 이어서 간다 — 판이 죽은 게 아니다")
 
 	# ⚠⚠ **This is what gives `if dt <= 0.0: return` a bite at all, and it took measuring to find.**
 	# `step(0.0)` is already inert without that guard — the accumulator simply never reaches a whole
-	# sub-step — so deleting it changes nothing about 0x. A NEGATIVE `dt` is the case that only the
+	# sub-step — so deleting it changes nothing about a zero frame. A NEGATIVE `dt` is the case that only the
 	# guard catches: it eats into `_substep_acc` and silently delays the next sub-step, which reads as
 	# the fight stuttering with every check about `elapsed` still green.
 	var before_neg := b.elapsed
@@ -555,6 +607,10 @@ func _compare_arms(t, a: Battle, c: Battle, label: String) -> void:
 	t.ok(bool(r["army_hp"]), "%s — 병사 체력" % label)
 	t.ok(bool(r["pos"]), "%s — 병사 자리" % label)
 	t.ok(bool(r["boats"]), "%s — 남은 배 수" % label)
+	# ⚠ Added with the polyline: a boat now carries `leg`, `t` and `pos` of its own, and two arms could
+	# agree on every soldier while their hulls sat on different segments — which is a picture that
+	# differs with the sim's own state, exactly the split this file exists to forbid.
+	t.ok(bool(r["boat_state"]), "%s — 배의 leg·t·자리" % label)
 
 
 ## The five columns, as five booleans. **Split out of `_compare_arms` so the READER can be inverted**:
@@ -580,12 +636,22 @@ func _columns_match(a: Battle, c: Battle) -> Dictionary:
 			if Vector2(a.soldier_pos[i]).distance_to(Vector2(c.soldier_pos[i])) > Rules.EPS:
 				pos_same = false
 				break
+	var boat_same := a.boats.size() == c.boats.size()
+	if boat_same:
+		for k in a.boats.size():
+			var ba: Dictionary = a.boats[k]
+			var bc: Dictionary = c.boats[k]
+			if int(ba["leg"]) != int(bc["leg"]) or absf(float(ba["t"]) - float(bc["t"])) > Rules.EPS \
+					or Vector2(ba["pos"]).distance_to(Vector2(bc["pos"])) > Rules.EPS:
+				boat_same = false
+				break
 	return {
 		"clock": absf(a.elapsed - c.elapsed) <= Rules.EPS,
 		"enemy_hp": hp_same,
 		"army_hp": army_same,
 		"pos": pos_same,
 		"boats": a.boats.size() == c.boats.size(),
+		"boat_state": boat_same,
 	}
 
 

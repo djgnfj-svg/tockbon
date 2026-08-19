@@ -145,10 +145,23 @@ var _soldier_stale := PackedByteArray()
 ## reading the user's sentence as already implemented is how the repo starts lying about a decision
 ## nobody made.
 ##
-## Each entry is `{uid, phase, speed, from, to, dist, t, pos, soldiers, target, home}`, with
-## `from` / `to` / `pos` in tile units. `phase` is `Phase.OUTBOUND` (one soldier aboard, sailing to
-## `target`) or `Phase.RETURNING` (empty, sailing to harbour `home`). Waiting-to-unload is OUTBOUND
-## with `t` past arrival — there is no separate waiting state.
+## Each entry is `{uid, phase, speed, path, cum, leg, dist, t, pos, soldiers, target, home}`.
+## `phase` is `Phase.OUTBOUND` (one soldier aboard, sailing to `target`) or `Phase.RETURNING` (empty,
+## sailing to harbour `home`). Waiting-to-unload is OUTBOUND with `t` past arrival — there is no
+## separate waiting state.
+##
+## ⚠⚠ **`from` and `to` are DELETED and a boat is a POLYLINE now** (`speed-off-open-landing`, 2.3).
+## Landing became a denylist, which means a boat sails a WATER ROUTE around a headland instead of a
+## straight line, so two endpoints can no longer describe a crossing:
+##
+##  · `path` — `PackedVector2Array` in TILE units, harbour at index 0 and the landing last, straight
+##    out of `grid.water_route`. Never rebuilt from geometry anywhere else in this file
+##  · `cum` — `PackedFloat32Array`, prefix arc length along `path`, `cum[0] == 0.0`. `pos` is found by
+##    walking it, which is what makes the boat follow the water rather than cut the corner
+##  · `leg` — which segment the hull is on. **Stored by the SIM and read by the view**, so the drawn
+##    remaining route and the sailed position come from one fact rather than two walks of the same
+##    array. `t` is monotone, so advancing it is O(1) amortised and exact
+##  · `dist` — the path's TOTAL length, floored at `Rules.EPS`. Still what `_arrived` tests
 ##
 ## **The append order IS the drop order**, and `_phase_landings` reads it: two boats aimed at one tile
 ## arrive on the same sub-step, and whoever unloads first stands on the target tile.
@@ -292,9 +305,14 @@ func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
 ## RESERVE (dead, already sent, or already ashore) · **no harbour can see `tile`**.
 ##
 ## ⚠ **`grid.home_harbour_for` is the one predicate for both the refusal and the departure point**, and
-## it is also what the droppable overlay is drawn from, so the screen can never promise a tile this
-## call refuses. It returns the nearest harbour AMONG those that can still see the landing, so a boat
-## departs from and returns to the same harbour by construction.
+## the shell's refusal mark is drawn off THIS call's own -1, so the screen can never deny a tile this
+## call allows. It returns the harbour with the shortest WATER ROUTE among those that can reach the
+## landing, so a boat departs from and returns to the same harbour by construction.
+##
+## ⚠ **A route of fewer than two points is a refusal too**, and it is a separate line rather than an
+## assumption: `home_harbour_for` and `water_route` agree by construction today (both refuse on
+## `can_land_at`), and the day one of them grows a case the other has not, a one-point path would
+## divide by a zero-length crossing instead of barking.
 func send(soldier_id: int, tile: int) -> int:
 	if _committed:
 		return -1
@@ -308,28 +326,44 @@ func send(soldier_id: int, tile: int) -> int:
 	if hb < 0:
 		return -1
 
-	var from: Vector2 = _point_of_tile(int(grid.harbour_tiles[hb]))
-	var to: Vector2 = _point_of_tile(tile)
+	var path := grid.water_route(hb, tile)
+	if path.size() < 2:
+		return -1
+	var cum := _arc_lengths(path)
 	var uid := _next_boat_uid
 	_next_boat_uid += 1
 	soldier_state[soldier_id] = SoldierState.TRANSIT
-	soldier_pos[soldier_id] = from
+	soldier_pos[soldier_id] = path[0]
 	boats.append({
 		"uid": uid,
 		"phase": Phase.OUTBOUND,
 		"speed": Rules.BOAT_SPEED,
-		"from": from,
-		"to": to,
-		"dist": maxf(from.distance_to(to), Rules.EPS),
+		"path": path,
+		"cum": cum,
+		"leg": 0,
+		"dist": maxf(cum[cum.size() - 1], Rules.EPS),
 		"t": 0.0,
 		# `pos` is set here and not only by the first `_phase_boats` call: before the commit `step`
 		# never runs at all, so the whole planning screen would have nothing to draw the boat at.
-		"pos": from,
+		"pos": path[0],
 		"soldiers": [soldier_id],
 		"target": tile,
 		"home": hb,
 	})
 	return uid
+
+
+## Prefix arc length along `path`, `cum[0] == 0.0` and `cum[last]` the total. **One function and not
+## an expression written twice** — `send` builds it and `_phase_landings` rebuilds it for the reversed
+## return leg, and two copies of this sum is exactly how a return leg comes to disagree with the
+## outbound one it is supposed to be the mirror of.
+func _arc_lengths(path: PackedVector2Array) -> PackedFloat32Array:
+	var cum := PackedFloat32Array()
+	cum.resize(path.size())
+	cum[0] = 0.0
+	for k in range(1, path.size()):
+		cum[k] = cum[k - 1] + path[k - 1].distance_to(path[k])
+	return cum
 
 
 ## Undoes one `send`. The boat leaves `boats` and its soldier goes back to exactly what `setup` left —
@@ -490,9 +524,24 @@ func _phase_boats(dt: float) -> void:
 	for raw in boats:
 		var boat: Dictionary = raw
 		boat["t"] = float(boat["t"]) + dt
-		var dist := float(boat["dist"])
-		var f := clampf(float(boat["t"]) * float(boat["speed"]) / dist, 0.0, 1.0)
-		var here: Vector2 = Vector2(boat["from"]).lerp(Vector2(boat["to"]), f)
+		var path: PackedVector2Array = boat["path"]
+		var cum: PackedFloat32Array = boat["cum"]
+		var travelled := clampf(float(boat["t"]) * float(boat["speed"]), 0.0, float(boat["dist"]))
+		# ⚠ **`leg` walks FORWARD from where it already is and is never re-searched from 0.** `t` only
+		# ever grows within a leg (the return leg resets both together), so this is O(1) amortised over
+		# the whole crossing and lands on exactly the same segment a full re-scan would. It stops at
+		# `size() - 2` so the last segment is always the one a boat at `dist` is standing on, rather
+		# than an index one past the end.
+		var leg := int(boat["leg"])
+		while leg < path.size() - 2 and cum[leg + 1] < travelled:
+			leg += 1
+		boat["leg"] = leg
+		var span := cum[leg + 1] - cum[leg]
+		# A zero-length span cannot happen off `water_route` (consecutive tiles are always a hop
+		# apart), but dividing by it would give INF rather than a bark, and a boat at INF is a boat
+		# nobody can see. 0.0 puts it at the start of the segment, which is where it is.
+		var f := 0.0 if span <= Rules.EPS else clampf((travelled - cum[leg]) / span, 0.0, 1.0)
+		var here: Vector2 = path[leg].lerp(path[leg + 1], f)
 		boat["pos"] = here
 		for sid in boat["soldiers"]:
 			soldier_pos[int(sid)] = here
@@ -515,10 +564,18 @@ func _phase_boats(dt: float) -> void:
 ##
 ## **OUTBOUND** tries to unload — if there are fewer free tiles than soldiers aboard the whole boat
 ## waits, because landing part of a load would silently reorder the deployment the player chose — and
-## only on success does it turn RETURNING and sail to `home`, the harbour nearest the landing among
-## the ones that can still SEE it. Never simply the nearest, or a beachhead behind a headland strands
-## itself (`boat-and-landing`, 4.3). **RETURNING** leaves `boats` on arrival and the boat ceases to
-## exist: 「배는 왕복」 ends there, with nothing to reload and nothing to re-launch.
+## only on success does it turn RETURNING and **sail its own outbound path BACKWARDS**.
+##
+## ⚠⚠ **The return leg REVERSES `path` in place and never recomputes it** (`speed-off-open-landing`,
+## 2.3). `home` was decided by `send` off the same `home_harbour_for(target)` call the refusal test
+## used, and `path` came out of that same harbour, so asking `water_route` again here would be one
+## fact computed in two places — and the two would be free to disagree the day the route's tie-break
+## moves. `dist` and `home` are therefore NOT recomputed either: a reversed polyline has exactly the
+## length of the polyline. `cum` IS rebuilt, because a prefix sum is not symmetric under reversal
+## unless every segment is; `leg` and `t` go back to 0 together.
+##
+## **RETURNING** leaves `boats` on arrival and the boat ceases to exist: 「배는 왕복」 ends there,
+## with nothing to reload and nothing to re-launch.
 func _phase_landings() -> void:
 	for i in boats.size():
 		var boat: Dictionary = boats[i]
@@ -526,15 +583,13 @@ func _phase_landings() -> void:
 			continue
 		if not _try_unload(boat):
 			continue
-		var target := int(boat["target"])
-		# `home` was decided by `send` off the same `home_harbour_for(target)` call the refusal test
-		# used. Recomputing it here would be the same fact written in two places.
-		var home := int(boat["home"])
+		var back: PackedVector2Array = boat["path"]
+		back.reverse()
 		boat["phase"] = Phase.RETURNING
 		boat["soldiers"] = []
-		boat["from"] = _point_of_tile(target)
-		boat["to"] = _point_of_tile(int(grid.harbour_tiles[home]))
-		boat["dist"] = maxf(Vector2(boat["from"]).distance_to(Vector2(boat["to"])), Rules.EPS)
+		boat["path"] = back
+		boat["cum"] = _arc_lengths(back)
+		boat["leg"] = 0
 		boat["t"] = 0.0
 		boats[i] = boat
 

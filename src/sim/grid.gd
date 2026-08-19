@@ -9,12 +9,27 @@ extends RefCounted
 ## silently freezes on island 2's north-east crow and everything inside island 3's ring. The first-slice
 ## plan records the measurement under "What two adversarial passes broke".
 ##
-## **The coastline is open, not docked.** `boat-and-landing`, section 3, replaces the old fixed-dock
-## legend with harbours (`H`, plural, water tiles a boat sails from and returns to) and a `landable`
-## predicate any passable shore tile can satisfy. `can_land_at(harbour, tile)` is the one rule that
-## decides where a boat may go, and `home_harbour_for` — which is `can_land_at` filtered and then
-## nearest — is what both the droppable overlay and `Battle.send` answer to, so the screen cannot
-## promise a tile the sim refuses.
+## **The coastline is open, not docked, and landing is a DENYLIST.** `boat-and-landing`, section 3,
+## replaced the old fixed-dock legend with harbours (`H`, plural, water tiles a boat sails from and
+## returns to). `speed-off-open-landing` then replaced the permit list with the refusal list the user
+## actually asked for: ***"상륙 못하는 데가 있는 거지 상륙 가능한 데가 있는 게 아니야"***.
+##
+## ⚠⚠ **What the old rule cost, measured on all three shipped islands before it was replaced**: it
+## refused **39% · 42% · 40%** of each island's own coastline, because `water_line_clear` sampled a
+## STRAIGHT line from the harbour and any headland blocked it. That is what read as *the landing spots
+## are fixed*. The replacement is a BFS over WATER — `_water_field` — so a boat sails AROUND the
+## headland, and since all water on all three islands is one connected body (724 / 690 / 726 tiles,
+## every one reachable from every harbour) **the refused set is now exactly `cliff + inland`, with
+## nothing left over**. Sendable went 50 -> 84, 44 -> 76, 48 -> 82.
+##
+## ⚠ **A bigger number is not the same as the right set.** Merely dropping the coast-adjacency test
+## would have given 97 / 83 / 94 — MORE tiles than the water route gives — by letting a boat land one
+## tile INLAND while still refusing 40% of the actual shore. `speed-off-open-landing` 2.1 records the
+## whole table; do not read that middle column as better.
+##
+## `can_land_at(harbour, tile)` is the one rule that decides where a boat may go, and
+## `home_harbour_for` — which is `can_land_at` filtered and then nearest BY WATER ROUTE — is what
+## `Battle.send` answers to, so the screen cannot promise a tile the sim refuses.
 
 
 ## Unreachable tiles carry this instead of a sentinel like -1, so a caller comparing field values with
@@ -39,33 +54,44 @@ const NEIGHBOURS := [
 	[-1, 1], [0, 1], [1, 1],
 ]
 
-## 4-way, used ONLY by `landable` (3.3 of the plan): a tile touching water only at a corner is not
-## landable, because coming ashore there reads as landing on the rock beside it. `NEIGHBOURS` above
-## stays 8-way for movement and reservation, which is a different question.
-const ORTHO := [[0, -1], [0, 1], [-1, 0], [1, 0]]
-
-## The straight-line sampler's step and its landing-end exemption both live in `rules.gd`
-## (`Rules.LINE_SAMPLE_STEP`, `Rules.LINE_SAMPLE_EXEMPT_CHEBYSHEV`), not here — a coarser step
-## ACCEPTS targets a finer one refuses, so it changes what happens rather than how this file is
-## structured, and `CLAUDE.md`'s folder contract gives every constant that changes what happens to
-## `rules.gd` alone.
+## ⚠ **`ORTHO` is deleted from this file.** It existed for `landable` — "a tile touching water only
+## at a corner is not landable" — and `speed-off-open-landing` deleted that predicate whole: the
+## denylist opens the 8-WAY coast, so a tile touching water at a corner IS landable now, and that is
+## the difference between 82 and 84 tiles on island 0. Its one other reader was `field_view`'s
+## cliff-face pass, which walks a cliff tile's seaward EDGES and genuinely needs the four sides; the
+## four offsets moved into that file as its own private constant rather than dying.
+##
+## ⚠ **`Rules.LINE_SAMPLE_STEP` and `Rules.LINE_SAMPLE_EXEMPT_CHEBYSHEV` are deleted too.** They
+## tuned `water_line_clear`, which is gone, and a rule constant nobody reads rots silently.
 
 var w: int = 0
 var h: int = 0
 var passable := PackedByteArray()      # w*h, 1 = walkable (includes a ramp)
 var water := PackedByteArray()         # w*h, 1 = water (includes a harbour)
-var landable := PackedByteArray()      # w*h, 1 = passable AND orthogonally beside water
 var harbour_tiles := PackedInt32Array()   # row-major order — this defines harbour index
-## `sendable[hb][t]` = 1 iff a boat at harbour `hb` may be sent to tile `t` — landable AND the straight
-## line from that harbour does not cross land. Filled ONCE per harbour inside `load_rows`; `can_land_at`
-## only ever reads it back. See 3.5: computed live it would be 1536 tiles * ~500 samples a FRAME.
+## One BFS field per harbour over WATER tiles, hop count from that harbour, `UNREACHABLE` where a
+## boat cannot get. Indexed the same way `sendable` is. **This is the whole of the landing rule** —
+## a tile is sendable iff some 8-neighbour of it is water this field reached — and it is also where
+## `water_route` reads the polyline a boat actually sails.
+##
+## ⚠ **`landable` is DELETED and not kept beside this.** It was `passable AND some ORTHO neighbour is
+## water`, and the denylist opens the 8-way coast instead, so keeping it would be a second and
+## narrower answer to the same question sitting one line away from the real one.
+var water_fields: Array = []           # Array of PackedInt32Array, one per harbour
+## `sendable[hb][t]` = 1 iff a boat at harbour `hb` may be sent to tile `t` — passable AND some 8-way
+## neighbour of `t` is water that `water_fields[hb]` reached. Filled ONCE per harbour inside
+## `load_rows`; `can_land_at` only ever reads it back. See 3.5: computed live it would be 1536 tiles
+## x 3 harbours a FRAME, and a BFS is more expensive than the line test it replaced, not less.
 var sendable: Array = []               # Array of PackedByteArray, one per harbour
 ## The harbour whose nearest reachable coast tile is farthest away, ties to the lowest tile index (which
 ## is also the lowest harbour index, since `harbour_tiles` is row-major). -1 on an empty grid.
 var start_harbour: int = -1
-## Every call to `water_line_clear`, ever. A net asserts this does not move across pumped frames once
-## `load_rows` has run — the straight-line test is a load-time cost, not a per-frame one.
-var line_tests: int = 0
+## Every water BFS ever built, one per harbour per `load_rows`. **A net asserts this does not move
+## across pumped frames or across sixty `can_land_at` / `home_harbour_for` / `water_route` calls** —
+## the field is a load-time cost, not a per-frame one, and that is the whole reason it is cached.
+## ⚠ It replaces `line_tests`, which counted the deleted straight-line sampler's calls and was the
+## same guarantee about the cheaper thing.
+var water_field_builds: int = 0
 
 var reserved := PackedInt32Array()     # tile -> unit id, or -1
 
@@ -92,7 +118,7 @@ func load_rows(rows: Array) -> void:
 	reserved.fill(-1)
 	harbour_tiles = PackedInt32Array()
 	_held = {}
-	line_tests = 0
+	water_field_builds = 0
 
 	for y in h:
 		var row := String(rows[y])
@@ -110,32 +136,25 @@ func load_rows(rows: Array) -> void:
 			if c == HARBOUR_CHAR:
 				harbour_tiles.append(t)
 
-	landable = PackedByteArray()
-	landable.resize(n)
-	for t in n:
-		if passable[t] == 0:
-			continue
-		var tx := t % w
-		var ty := t / w
-		for k in ORTHO.size():
-			var nx := tx + int(ORTHO[k][0])
-			var ny := ty + int(ORTHO[k][1])
-			if nx < 0 or ny < 0 or nx >= w or ny >= h:
-				continue
-			if water[ny * w + nx] != 0:
-				landable[t] = 1
-				break
-
+	# ⚠ **Both tables are filled here and NOWHERE else, once per island.** The comment on
+	# `can_land_at` records the cost that forces it; a BFS per harbour is ~1536 operations, and
+	# recomputing one per tile per frame would be 1536 x 3 BFS passes a frame.
+	water_fields = []
 	sendable = []
 	for hb in harbour_tiles.size():
+		var field := _water_field(int(harbour_tiles[hb]))
 		var arr := PackedByteArray()
 		arr.resize(n)
-		var origin := tile_point(int(harbour_tiles[hb]))
 		for t in n:
-			if landable[t] == 0:
+			# The landing tile itself must be LAND — a boat unloads soldiers onto it — and it must
+			# touch, on any of eight sides, water this harbour's boat can actually reach. Those two
+			# conditions are the whole denylist: what is left refused is cliff (impassable) and
+			# inland (no water neighbour).
+			if passable[t] == 0:
 				continue
-			if water_line_clear(origin, tile_point(t)):
+			if _entry_water_tile(field, t) >= 0:
 				arr[t] = 1
+		water_fields.append(field)
 		sendable.append(arr)
 
 	start_harbour = _derive_start_harbour()
@@ -158,9 +177,10 @@ func tile_index(tx: int, ty: int) -> int:
 
 
 ## Whether a boat sitting at harbour `harbour_idx` may be sent to tile `t`. **Reads the cached
-## `sendable` table filled once in `load_rows` — never recomputes a straight line here.** That split is
-## what makes `line_tests` flat across a pumped frame; recomputed per call at 1536 tiles a frame it would
-## be a real wall (3.5 of the plan).
+## `sendable` table filled once in `load_rows` — never runs a BFS here.** That split is what makes
+## `water_field_builds` flat across a pumped frame; recomputed per call at 1536 tiles a frame it would
+## be a real wall (3.5 of the plan), and worse than the straight-line test it replaced rather than
+## better.
 func can_land_at(harbour_idx: int, t: int) -> bool:
 	if harbour_idx < 0 or harbour_idx >= sendable.size():
 		return false
@@ -170,53 +190,170 @@ func can_land_at(harbour_idx: int, t: int) -> bool:
 	return arr[t] != 0
 
 
-## The straight line from world point `a` to world point `b` does not cross land, sampled every
-## `Rules.LINE_SAMPLE_STEP` tiles and rounded to the nearest tile — fine enough that a one-tile wall
-## cannot be stepped over. Tiles within `Rules.LINE_SAMPLE_EXEMPT_CHEBYSHEV` of `b` are exempt (see
-## that constant's comment): grazing the beach beside the target is not sailing over the island.
+## Breadth-first from a harbour over WATER tiles, 8-way, cost in hops. **A deliberate mirror of
+## `flow_field` and not a call to it**: same queue, same `UNREACHABLE` sentinel, same fixed
+## `NEIGHBOURS` order — `water[nt] == 0: continue` in place of `passable[nt] == 0: continue`, and
+## that one line is the entire difference. Sharing one function through a flag would put the two
+## traversals one typo apart, and a boat that walked the LAND field would sail over the island with
+## every check about reachability still green.
 ##
-## Public, and not folded away inside `load_rows`, because `net_coast` drives this directly to pin the
-## sampler's own geometry — the cached path above is what a caller in the running game actually uses.
-func water_line_clear(a: Vector2, b: Vector2) -> bool:
-	line_tests += 1
-	var dist := a.distance_to(b)
-	if dist <= 0.0:
-		return true
-	var steps := int(ceil(dist / Rules.LINE_SAMPLE_STEP))
-	var bx := int(round(b.x))
-	var by := int(round(b.y))
-	for s in range(steps + 1):
-		var f := float(s) / float(steps)
-		var p := a.lerp(b, f)
-		var tx := int(round(p.x))
-		var ty := int(round(p.y))
-		if maxi(absi(tx - bx), absi(ty - by)) <= Rules.LINE_SAMPLE_EXEMPT_CHEBYSHEV:
+## The seed is planted at the harbour tile whatever its own contents, exactly as `flow_field` does,
+## and for the same reason: an all-unreachable field produces an island with no landings at all and
+## nothing logged.
+func _water_field(seed_tile: int) -> PackedInt32Array:
+	water_field_builds += 1
+	var n := w * h
+	var field := PackedInt32Array()
+	field.resize(n)
+	field.fill(UNREACHABLE)
+	if seed_tile < 0 or seed_tile >= n:
+		return field
+	field[seed_tile] = 0
+	var queue := PackedInt32Array()
+	queue.append(seed_tile)
+	var head := 0
+	while head < queue.size():
+		var t := queue[head]
+		head += 1
+		var tx := t % w
+		var ty := t / w
+		var next_cost := field[t] + 1
+		for k in NEIGHBOURS.size():
+			var nx := tx + int(NEIGHBOURS[k][0])
+			var ny := ty + int(NEIGHBOURS[k][1])
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var nt := ny * w + nx
+			if water[nt] == 0:
+				continue
+			if field[nt] <= next_cost:
+				continue
+			field[nt] = next_cost
+			queue.append(nt)
+	return field
+
+
+## The water tile a boat aimed at `t` actually stops on: the 8-neighbour of `t` that is water AND
+## that `field` reached, cheapest first. **-1 when none, and -1 is the refusal** — an inland tile has
+## no water neighbour at all, and a coast tile on a lake this harbour cannot reach has one the field
+## never touched.
+##
+## Ties go to the earliest `NEIGHBOURS` entry (the comparison is a strict `<`), so two runs from
+## identical rows pick the same approach and `water_route` is reproducible.
+##
+## ⚠ **8-way and not 4-way.** A tile touching water only at a CORNER is landable now — that is the
+## user's 「어디든지」, and on island 0 it is exactly the two tiles between the ortho coast (82) and
+## the 8-way coast (84).
+func _entry_water_tile(field: PackedInt32Array, t: int) -> int:
+	var n := w * h
+	if n == 0 or t < 0 or t >= n or field.size() != n:
+		return -1
+	var tx := t % w
+	var ty := t / w
+	var best := -1
+	var best_cost := 0
+	for k in NEIGHBOURS.size():
+		var nx := tx + int(NEIGHBOURS[k][0])
+		var ny := ty + int(NEIGHBOURS[k][1])
+		if nx < 0 or ny < 0 or nx >= w or ny >= h:
 			continue
-		if tx < 0 or ty < 0 or tx >= w or ty >= h:
-			return false
-		if water[ty * w + tx] == 0:
-			return false
-	return true
+		var nt := ny * w + nx
+		if water[nt] == 0:
+			continue
+		if field[nt] == UNREACHABLE:
+			continue
+		if best == -1 or field[nt] < best_cost:
+			best = nt
+			best_cost = field[nt]
+	return best
 
 
-## The harbour nearest `landing` AMONG the harbours that can still see it (`can_land_at(h, landing)`),
-## ties to the lowest index. **The set is never empty when `landing` was ever sendable at all** — the
-## boat sailed from one such harbour, so at worst it stays put. Returns -1 only when NO harbour can see
-## the tile, which a caller should never pass in (the boat could not have landed there to begin with).
+## **The route a boat sails**, harbour first and landing last, in TILE units with tile centres on
+## integers — never pixels. Empty when the landing is refused, which is the same test `Battle.send`
+## refuses on, so a caller can price a crossing without asking twice.
 ##
-## The naive "nearest harbour, full stop" strands a beachhead behind a headland the nearest harbour
-## cannot see (measured: 2 of 46 beachheads on island 3) — the `can_land_at` filter is what makes that
-## unrepresentable.
+## It walks DOWN `water_fields[harbour_idx]` from the landing's entry tile, one strictly-lower 8-way
+## water neighbour at a time, the way `step_toward` walks `flow_field` — then reverses, so index 0 is
+## the harbour. The landing tile itself is appended as the last hop: it is LAND, so it is not in the
+## field and cannot come out of the descent.
+##
+## ⚠ **The descent terminates because BFS cost drops by exactly 1 every step**, but the loop is
+## guarded at `w * h` anyway. A hung sim prints no verdict at all, and that is the failure shape that
+## silently disarmed a whole net in this repo once.
+func water_route(harbour_idx: int, landing: int) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if not can_land_at(harbour_idx, landing):
+		return out
+	var field: PackedInt32Array = water_fields[harbour_idx]
+	var cur := _entry_water_tile(field, landing)
+	if cur < 0:
+		return out
+	var guard := 0
+	var limit := w * h
+	while true:
+		out.append(tile_point(cur))
+		if field[cur] == 0:
+			break
+		guard += 1
+		if guard > limit:
+			break
+		var cx := cur % w
+		var cy := cur / w
+		var step := -1
+		var step_cost := field[cur]
+		for k in NEIGHBOURS.size():
+			var nx := cx + int(NEIGHBOURS[k][0])
+			var ny := cy + int(NEIGHBOURS[k][1])
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var nt := ny * w + nx
+			if water[nt] == 0:
+				continue
+			# Strictly lower, so the walk cannot sit between two equal-cost tiles forever. The same
+			# `<` (and not `<=`) that `step_toward` carries, and for the same reason.
+			if field[nt] >= step_cost:
+				continue
+			step = nt
+			step_cost = field[nt]
+		if step < 0:
+			break
+		cur = step
+	out.reverse()
+	out.append(tile_point(landing))
+	return out
+
+
+## The harbour with the SHORTEST WATER ROUTE to `landing`, among the harbours that can reach it at
+## all (`can_land_at(h, landing)`), ties to the lowest index. **The set is never empty when `landing`
+## was ever sendable at all** — the boat sailed from one such harbour, so at worst it stays put.
+## Returns -1 only when NO harbour can reach the tile, which is exactly the refusal `Battle.send`
+## answers to.
+##
+## ⚠ **It was straight-line distance and it is not any more.** Straight-line ranking picks a harbour
+## on the far side of a headland — near as the crow flies, a long sail — and a beachhead behind that
+## headland strands itself (measured under the old rule: 2 of 46 beachheads on island 3).
+##
+## ⚠⚠ **The metric is HOP COUNT and not sailed length, and that is a deliberate coarseness.** It
+## mirrors `flow_field`, which is also hop count; a diagonal hop costs 1 here and sqrt(2) tiles on the
+## water, so the fewest-hops harbour is occasionally not the shortest actual sail. Making it exact
+## needs a Dijkstra with two edge weights, which is a bigger change than this rule is worth — the
+## error is bounded by 41% on a route that is all diagonal, and every harbour on these islands is
+## reached by a mixed route. **Do not "fix" it by weighting one and leaving `flow_field` unweighted**;
+## the two would then disagree about what "near" means on the same grid.
 func home_harbour_for(landing: int) -> int:
 	var best := -1
-	var best_d := 0.0
+	var best_hops := 0
 	for hb in harbour_tiles.size():
 		if not can_land_at(hb, landing):
 			continue
-		var d: float = tile_point(int(harbour_tiles[hb])).distance_to(tile_point(landing))
-		if best == -1 or d < best_d - Rules.EPS:
+		var field: PackedInt32Array = water_fields[hb]
+		var entry := _entry_water_tile(field, landing)
+		if entry < 0:
+			continue
+		var hops := int(field[entry])
+		if best == -1 or hops < best_hops:
 			best = hb
-			best_d = d
+			best_hops = hops
 	return best
 
 

@@ -8,14 +8,28 @@ extends RefCounted
 ## crossing bounds all reproduced `boat-and-landing` section 5's own measured table exactly, which is
 ## the strongest evidence this file has that `grid.gd` matches the plan it was written from.
 ##
-## **`boat-and-landing`'s "steady state" crossing bounds (section 4.6) ARE pinned here, resolved.**
-## The earlier gap ("island 1's max comes out 24.60, not 14.56") was measuring the wrong domain: the
-## plan's own figure is `distance(harbour_tiles[home_harbour_for(t)], t)` over tiles the START harbour
-## can reach (`sendable[start_harbour]`), never the union across all three harbours. The union includes
-## tiles that are only reachable AFTER a relocation — they are not wave-1 landings at all, so folding
-## them into "steady state" measures something the plan never claimed. Verified by an independent
-## reimplementation against `islands.gd`'s own rows: restricted to start-sendable tiles, the figures
-## and the relocation counts reproduce the plan's table exactly (`EXPECT_STEADY`, `EXPECT_RELOCATES`).
+## ⚠⚠ **EVERY NUMBER IN THIS FILE WAS RE-MEASURED BY `speed-off-open-landing`, INCLUDING THE ROWS
+## THAT WERE NOT MAKING A DRAMATIC CLAIM.** Landing became a denylist and `home_harbour_for` stopped
+## ranking by straight-line distance, so BOTH the domain these figures are defined over and the metric
+## they are measured in moved on the same day. Re-measuring only the rows that failed is this repo's
+## own named failure — one table once shipped a quiet row off by a factor of twenty-four because it
+## was not the row anybody was arguing about.
+##
+## What moved, and why:
+##  · `EXPECT_SENDABLE` / `_UNION` / `EXPECT_DROPPABLE` / `EXPECT_START_SENDABLE` — the DOMAIN. Every
+##    8-way coast tile is sendable now and all three harbours agree, because all water on all three
+##    islands is one connected body
+##  · `EXPECT_COAST` — was the ORTHO coast under the old `landable`; it is the 8-WAY coast now, and
+##    `EXPECT_COAST_ORTHO` is kept beside it as a second literal so the two can be shown to DIFFER
+##  · `EXPECT_WAVE1` / `EXPECT_STEADY` — the METRIC. A crossing is the length of the water route the
+##    boat actually sails, not the Euclidean line it no longer takes
+##  · `EXPECT_RELOCATES` — both at once: more tiles, ranked by hops instead of distance
+##  · `EXPECT_STRICT_UNREACHED` — the walker runs over 1.7x the tiles, so island 2 went 0 -> 128
+##
+## **"Steady state" is still `route(home_harbour_for(t), t)` over tiles the START harbour can reach**,
+## never the union across all three harbours — the union includes tiles only reachable after a
+## relocation, which are not wave-1 landings at all. That distinction survived the rewrite; on these
+## three islands the two sets now happen to coincide, and the code still says which one it means.
 ##
 ## **This net drives `grid.flow_field` and `grid.step_toward` and never carries a walker of its own** —
 ## the same reason the first-slice plan gives: a walker with its own BFS measures the walker, not
@@ -31,39 +45,62 @@ const EXPECT_COLS := 48
 ## `Grid` — see the header.
 const EXPECT_HARBOUR_TILES := [[1337, 1398, 1512], [1382, 1402, 1514], [1303, 1432, 1512]]
 const EXPECT_START_TILE := [1512, 1514, 1512]
-## Per-harbour sendable counts, in harbour-index order (0, 1, 2 — the start harbour is index 2 on all
-## three islands, which is exactly why 미정/section 5 warns against pinning the INDEX instead of the
-## tile: "harbour 0" would stay green on these three islands by accident).
-const EXPECT_SENDABLE := [[24, 29, 47], [23, 21, 38], [29, 33, 46]]
-const EXPECT_SENDABLE_UNION := [50, 44, 48]
-const EXPECT_COAST := [82, 76, 80]
+## Per-harbour sendable counts, in harbour-index order. ⚠ **All three harbours now agree on every
+## island**, because all water on all three is ONE connected body — that is the finding that made the
+## whole coast landable, and it is asserted rather than assumed (`EXPECT_WATER` below plus the
+## byte-for-byte equality check).
+const EXPECT_SENDABLE := [[84, 84, 84], [76, 76, 76], [82, 82, 82]]
+const EXPECT_SENDABLE_UNION := [84, 76, 82]
+## ⚠ **The 8-WAY coast**, which is what the denylist opens. `speed-off-open-landing` 2.1's own table.
+const EXPECT_COAST := [84, 76, 82]
+## The ORTHO coast, kept as a SECOND literal for one job only: proving the two are different numbers
+## on islands 0 and 2. Under the old `landable` this WAS `EXPECT_COAST`; a suite that dropped it could
+## not tell an 8-way rule from a 4-way one on island 1, where they coincide at 76.
+const EXPECT_COAST_ORTHO := [82, 76, 80]
+## From `speed-off-open-landing` 2.1, typed in by hand and never read off the grid under test.
+## `EXPECT_PASSABLE` minus the sendable count is the INLAND refusal set — 660 · 684 · 634 — which is
+## what pins the denylist by SIZE and not only by membership.
+const EXPECT_PASSABLE := [744, 760, 716]
+const EXPECT_WATER := [724, 690, 726]
+## What the rule used to give, and what merely dropping coast-adjacency would have given. Neither is
+## the answer, and the second is the trap: 97 > 84 is a BIGGER number that is the WRONG set — its
+## extra tiles are one tile INLAND while it still refuses 40% of the actual shore.
+const EXPECT_OLD_SENDABLE := [50, 44, 48]
+const EXPECT_COAST_ADJACENCY_DROPPED := [97, 83, 94]
 const EXPECT_CUTS := [15, 2, 10]
 ## ⚠ **RAISED by `plan-then-watch` stage 4 — 4 · 6 · 5 became 8 · 12 · 14**, by adding characters to
 ## `islands.gd` rows and nothing else (`spawns_of` is a scan, so an added `B` is an added enemy with
 ## no table to widen). The old counts could not lose an island: the probe's baseline plan won all
 ## fifteen island-runs, and its worst island spent under a third of its limit.
 const EXPECT_SPAWNS := [8, 12, 14]
-## Wave-1 crossing distance, tiles: min/max over every tile the START harbour can reach.
-const EXPECT_WAVE1 := [[11.70, 24.60], [11.00, 26.40], [13.00, 24.60]]
-## Steady-state crossing distance, tiles: min/max of `distance(harbour_tiles[home_harbour_for(t)], t)`
-## over the SAME start-sendable tiles as `EXPECT_WAVE1` — never the union over all harbours, which
-## includes tiles unreachable until after a relocation and so is not "the next crossing to a landing
-## you already hold". See the header for how this was resolved.
-const EXPECT_STEADY := [[7.00, 14.56], [8.00, 12.04], [7.00, 14.32]]
+## Wave-1 crossing, tiles: min/max **WATER ROUTE LENGTH** from the START harbour over every tile it
+## can reach. ⚠ **These were Euclidean distances and that is now the wrong metric** — a boat sails a
+## polyline around headlands, so the straight line prices a crossing nobody makes. Re-measured, not
+## adjusted.
+const EXPECT_WAVE1 := [[15.14, 45.80], [13.49, 47.80], [15.14, 45.80]]
+## Steady-state crossing: min/max route length from `home_harbour_for(t)` over the SAME start-sendable
+## tiles as `EXPECT_WAVE1` — never the union over all harbours, which includes tiles unreachable until
+## after a relocation and so is not "the next crossing to a landing you already hold".
+const EXPECT_STEADY := [[9.49, 29.31], [10.90, 30.97], [9.49, 29.73]]
 ## How many of the start-sendable tiles relocate the fleet away from the start harbour (i.e.
-## `home_harbour_for(t) != start_harbour`), out of the start-sendable count itself (47, 38, 46).
-const EXPECT_RELOCATES := [30, 32, 32]
+## `home_harbour_for(t) != start_harbour`), out of the start-sendable count itself (84, 76, 82).
+## ⚠ Re-measured twice over: the domain grew AND the ranking became hop count instead of distance.
+const EXPECT_RELOCATES := [66, 73, 76]
 ## The strict walker's own count — every enemy reserved simultaneously, matching a live
 ## `battle.setup`. Only island 2 has any (bison sitting close enough together jam the walker on each
 ## other's tiles); see the comment above that check for why this is a real but different, weaker
 ## property than the terrain-only walker above it.
-## ⚠ **RE-MEASURED at 8 · 12 · 14: island 2 went 14 -> 63**, which is what doubling its bison does to
-## a walker that has to route around all of them at once. **The prose that used to certify the 14 by
-## hand is deleted, not scaled up** — 63 cases are not something a comment can verify. What replaced
-## it is a CHECK on the property that made those 14 benign, run over all 63.
-const EXPECT_STRICT_UNREACHED := [0, 63, 0]
+## ⚠ **RE-MEASURED AGAIN by `speed-off-open-landing`: 0 · 63 · 0 became 0 · 119 · 128.** Nothing about
+## the walker changed; the DOMAIN did. It runs over every sendable tile, and that set went from
+## 50 · 44 · 48 to 84 · 76 · 82, so island 3's whole east shore entered the scan for the first time and
+## brought its bison jams with it. **The number is reported, not judged** — what makes these benign is
+## the check one line below it (`strict_with_no_nearer_blocker == 0`), which still holds on all three.
+const EXPECT_STRICT_UNREACHED := [0, 119, 128]
 
-## How many landable coast tiles sit inside NO enemy's detect circle (`plan-then-watch`, 8.3).
+## How many SENDABLE coast tiles sit inside NO enemy's detect circle (`plan-then-watch`, 8.3).
+## ⚠ Re-measured over the wider 8-way coast and it did not move — the two tiles islands 0 and 2 gained
+## are both already covered. **That it did not move is a measurement, not a reason to have skipped
+## it.**
 ## Hand-measured off the shipped rows, one literal per island. ⚠ **Not a bound** — a greedy cover
 ## reaches zero on all three at these counts and deletes the 「quiet shore」 plan with it.
 const EXPECT_UNCOVERED_COAST := [13, 14, 4]
@@ -78,13 +115,15 @@ const EXPECT_UNCOVERED_COAST := [13, 14, 4]
 ## the real simultaneous demand went UP.
 
 ## How many tiles `grid.home_harbour_for(t) >= 0` answers yes to — **the exact predicate `battle.send`
-## refuses on and the exact predicate the droppable overlay is drawn from**, so the screen can never
-## promise a tile the sim refuses. Hand-measured off the shipped rows, one literal per island.
-## ⚠ It is bounded below by the START harbour's own sendable count and above by `EXPECT_COAST`; both
-## bounds are asserted as well as the literal, so a `home_harbour_for` that collapsed to one harbour or
-## opened to every tile would be caught even if the literal were mis-transcribed.
-const EXPECT_DROPPABLE := [50, 44, 48]
-const EXPECT_START_SENDABLE := [47, 38, 46]
+## refuses on**, so the shell's refusal mark can never deny a tile the sim allows. ⚠ It is no longer
+## "the predicate the droppable overlay is drawn from": that overlay is deleted (question C — the
+## screen marks what is BLOCKED and nothing else), so `send` is the only other reader.
+##
+## **These three literals come from `speed-off-open-landing` 2.1's measurement table, typed by hand.**
+## They are never read back off the grid under test — a ceiling whose bound comes from the thing it
+## checks measures nothing.
+const EXPECT_DROPPABLE := [84, 76, 82]
+const EXPECT_START_SENDABLE := [84, 76, 82]
 
 ## Seconds per island — unchanged by this plan (decided #9).
 const EXPECT_LIMITS := [60.0, 60.0, 90.0]
@@ -133,17 +172,54 @@ func run(t) -> void:
 		t.eq(int(grid.harbour_tiles[grid.start_harbour]), int(EXPECT_START_TILE[i]),
 			"섬 %d — 함대는 자기 해안에서 가장 먼 항구에서 시작한다" % (i + 1))
 
+		# ⚠ **The 8-way coast, built locally from `passable` + `water`, and NOT read off `sendable`.**
+		# `grid.landable` is deleted; recomputing the set here from the two primitive tables is what
+		# makes the next check ("every one of them is sendable") a real claim instead of a tautology.
+		var coast8 := PackedByteArray()
+		coast8.resize(grid.passable.size())
 		var coast := 0
-		for tile in grid.landable.size():
-			if grid.landable[tile] != 0:
+		var coast_ortho := 0
+		for tile in grid.passable.size():
+			if grid.passable[tile] == 0:
+				continue
+			var tx := tile % grid.w
+			var ty := tile / grid.w
+			var touch8 := false
+			var touch4 := false
+			for k in Grid.NEIGHBOURS.size():
+				var nx := tx + int(Grid.NEIGHBOURS[k][0])
+				var ny := ty + int(Grid.NEIGHBOURS[k][1])
+				if nx < 0 or ny < 0 or nx >= grid.w or ny >= grid.h:
+					continue
+				if grid.water[ny * grid.w + nx] == 0:
+					continue
+				touch8 = true
+				if int(Grid.NEIGHBOURS[k][0]) == 0 or int(Grid.NEIGHBOURS[k][1]) == 0:
+					touch4 = true
+			if touch8:
+				coast8[tile] = 1
 				coast += 1
-		t.eq(coast, int(EXPECT_COAST[i]), "섬 %d 의 상륙 가능 칸 수" % (i + 1))
+			if touch4:
+				coast_ortho += 1
+		t.eq(coast, int(EXPECT_COAST[i]), "섬 %d — 8방향으로 물에 닿은 땅이 %d칸이다" % [i + 1, int(EXPECT_COAST[i])])
+		t.eq(coast_ortho, int(EXPECT_COAST_ORTHO[i]),
+			"섬 %d — 직교로만 세면 %d칸이다" % [i + 1, int(EXPECT_COAST_ORTHO[i])])
+
+		var passable_n := 0
+		var water_n := 0
+		for tile in grid.passable.size():
+			if grid.passable[tile] != 0:
+				passable_n += 1
+			if grid.water[tile] != 0:
+				water_n += 1
+		t.eq(passable_n, int(EXPECT_PASSABLE[i]), "섬 %d 의 땅은 %d칸이다" % [i + 1, int(EXPECT_PASSABLE[i])])
+		t.eq(water_n, int(EXPECT_WATER[i]), "섬 %d 의 물은 %d칸이다" % [i + 1, int(EXPECT_WATER[i])])
 
 		var cut := _cut_of(grid)
 		t.eq(cut, int(EXPECT_CUTS[i]), "섬 %d 의 최협 절단" % (i + 1))
 
 		var union := PackedByteArray()
-		union.resize(grid.landable.size())
+		union.resize(grid.passable.size())
 		for hb in grid.harbour_tiles.size():
 			var got_send := 0
 			var arr: PackedByteArray = grid.sendable[hb]
@@ -159,6 +235,24 @@ func run(t) -> void:
 				union_n += 1
 		t.eq(union_n, int(EXPECT_SENDABLE_UNION[i]), "섬 %d — 항구 셋을 합쳐 닿는 해안 칸 수" % (i + 1))
 
+		# ⚠⚠ **The three harbours see the SAME coast, byte for byte** — that is what "all water on
+		# this island is one connected body" looks like from the outside, and it is the finding the
+		# whole denylist stands on. Compared as whole arrays rather than as counts: three harbours
+		# reaching 84 tiles EACH could still be three different 84s.
+		for hb2 in range(1, grid.harbour_tiles.size()):
+			t.eq(grid.sendable[hb2], grid.sendable[0],
+				"섬 %d — 항구 %d 가 항구 0 과 완전히 같은 해안을 본다 (물이 하나로 이어져 있다)" % [i + 1, hb2])
+		# And every water tile really is reachable from every harbour — the floor under the equality
+		# above, because three EMPTY sendable tables are also byte-for-byte equal.
+		var unreachable_water := 0
+		for hb3 in grid.harbour_tiles.size():
+			var wf: PackedInt32Array = grid.water_fields[hb3]
+			for tile_w in grid.water.size():
+				if grid.water[tile_w] != 0 and int(wf[tile_w]) == Grid.UNREACHABLE:
+					unreachable_water += 1
+		t.eq(unreachable_water, 0,
+			"섬 %d — 어느 항구에서 출발해도 물 %d칸 전부에 닿는다" % [i + 1, int(EXPECT_WATER[i])])
+
 		# ⚠ **Counted through `home_harbour_for`, not through `sendable`.** They agree today and that is
 		# the point: `send` refuses on `home_harbour_for(tile) < 0` and the droppable overlay is painted
 		# from the same call, so this is the number the PLAYER is offered. Reading `sendable` again here
@@ -168,31 +262,110 @@ func run(t) -> void:
 		for tile in grid.passable.size():
 			if grid.home_harbour_for(tile) >= 0:
 				droppable += 1
-		t.eq(droppable, int(EXPECT_DROPPABLE[i]), "섬 %d — 배를 보낼 수 있는 칸 수" % (i + 1))
-		t.ok(droppable >= int(EXPECT_START_SENDABLE[i]),
-			"섬 %d — 그 수는 시작 항구 혼자 닿는 %d칸보다 작지 않다 — 한 항구로 오그라들지 않았다"
-			% [i + 1, int(EXPECT_START_SENDABLE[i])])
-		t.ok(droppable <= int(EXPECT_COAST[i]),
-			"섬 %d — 그리고 상륙 가능한 %d칸을 넘지 않는다 — 모든 칸으로 열리지도 않았다"
-			% [i + 1, int(EXPECT_COAST[i])])
+		t.eq(droppable, int(EXPECT_DROPPABLE[i]),
+			"섬 %d — 배를 보낼 수 있는 칸이 정확히 %d칸이다" % [i + 1, int(EXPECT_DROPPABLE[i])])
+
+		# ⚠⚠ **THE FLOOR — 「어디든지」의 절반.** Without it a rule that opened only HALF the coast
+		# would still hit the count above by opening inland tiles instead. The misses are collected so
+		# a failure names the tiles rather than only the size.
+		var coast_misses: Array = []
+		for tile in coast8.size():
+			if coast8[tile] != 0 and grid.home_harbour_for(tile) < 0:
+				coast_misses.append(tile)
+		t.eq(coast_misses.size(), 0,
+			"섬 %d — 8방향으로 물에 닿은 땅은 전부 보낼 수 있다, 한 칸도 안 빠진다 %s" % [i + 1, str(coast_misses)])
+		t.eq(coast, int(EXPECT_DROPPABLE[i]),
+			"섬 %d — 그리고 그 해안 칸 수가 보낼 수 있는 칸 수와 같다 (두 집합이 정확히 겹친다)" % (i + 1))
+
+		# ⚠⚠ **THE CEILING.** Without it the whole island going sendable passes every count-based
+		# check above by inflating both sides at once. Pinned by SIZE as well as by membership.
+		var inland_open: Array = []
+		var inland_refused := 0
+		for tile in grid.passable.size():
+			if grid.passable[tile] == 0 or coast8[tile] != 0:
+				continue
+			inland_refused += 1
+			if grid.home_harbour_for(tile) >= 0:
+				inland_open.append(tile)
+		t.eq(inland_open.size(), 0,
+			"섬 %d — 물에 안 닿은 내륙 칸은 여전히 전부 거절된다 %s" % [i + 1, str(inland_open)])
+		t.eq(inland_refused, int(EXPECT_PASSABLE[i]) - int(EXPECT_DROPPABLE[i]),
+			"섬 %d — 거절되는 내륙이 %d칸이다 (%d - %d)"
+			% [i + 1, int(EXPECT_PASSABLE[i]) - int(EXPECT_DROPPABLE[i]),
+				int(EXPECT_PASSABLE[i]), int(EXPECT_DROPPABLE[i])])
+
+		# Cliffs, from the ROWS rather than from `passable`, so the check names the legend character
+		# the design argues about. The fixture floor first: an island with no cliffs proves nothing.
+		var cliff_n := 0
+		var cliff_open: Array = []
+		for y in rows.size():
+			var crow := str(rows[y])
+			for x in crow.length():
+				if crow[x] != "^":
+					continue
+				cliff_n += 1
+				var ct := y * grid.w + x
+				if grid.passable[ct] != 0 or grid.home_harbour_for(ct) >= 0:
+					cliff_open.append(ct)
+		t.ok(cliff_n > 0, "섬 %d 에 절벽이 실제로 있다 (%d칸, 자가 점검)" % [i + 1, cliff_n])
+		t.eq(cliff_open.size(), 0,
+			"섬 %d — 절벽 칸은 지나갈 수도 없고 배도 못 받는다 %s" % [i + 1, str(cliff_open)])
+
+		# ⚠ **Neither the old rule's answer nor the coast-adjacency one.** 97 > 84 and it is the WRONG
+		# set — the plan says so in as many words, so the wrong-bigger-number is pinned as a literal
+		# rather than left to be re-derived by whoever reads the table next.
+		t.ok(droppable != int(EXPECT_OLD_SENDABLE[i]),
+			"섬 %d — 예전 직선 규칙의 %d칸이 아니다" % [i + 1, int(EXPECT_OLD_SENDABLE[i])])
+		t.ok(droppable != int(EXPECT_COAST_ADJACENCY_DROPPED[i]),
+			"섬 %d — 해안 인접만 버린 %d칸도 아니다 (더 큰 수지만 틀린 집합이다)"
+			% [i + 1, int(EXPECT_COAST_ADJACENCY_DROPPED[i])])
+
+		# ⚠ Route length against the straight line it replaced. The floor is 「strictly longer
+		# SOMEWHERE」: a polyline that is everywhere equal to the straight line IS the straight line.
+		var strictly_longer := 0
+		var shorter: Array = []
+		var worst_ratio := 0.0
+		for tile in grid.passable.size():
+			var hb_r := grid.home_harbour_for(tile)
+			if hb_r < 0:
+				continue
+			var rlen := _route_length(grid, hb_r, tile)
+			var straight: float = grid.tile_point(int(grid.harbour_tiles[hb_r])).distance_to(
+				grid.tile_point(tile))
+			if rlen < straight - Rules.EPS:
+				shorter.append(tile)
+			elif rlen > straight + Rules.EPS:
+				strictly_longer += 1
+			if straight > Rules.EPS:
+				worst_ratio = maxf(worst_ratio, rlen / straight)
+		t.eq(shorter.size(), 0,
+			"섬 %d — 항로가 직선보다 짧은 칸은 하나도 없다 %s" % [i + 1, str(shorter)])
+		t.ok(strictly_longer > 0,
+			"섬 %d — 그리고 %d칸에서는 실제로 더 길다 (최대 %.3f배) — 전부 같으면 그건 직선이다"
+			% [i + 1, strictly_longer, worst_ratio])
 
 		var start_hb := grid.start_harbour
-		var origin := grid.tile_point(int(grid.harbour_tiles[start_hb]))
 		var start_sendable: PackedByteArray = grid.sendable[start_hb]
+		var start_n := 0
 		var wave1_min := -1.0
 		var wave1_max := -1.0
 		for tile in start_sendable.size():
 			if start_sendable[tile] == 0:
 				continue
-			var d := origin.distance_to(grid.tile_point(tile))
+			start_n += 1
+			# ⚠ **The WATER ROUTE the boat sails, not the straight line.** Pricing wave 1 by a line no
+			# boat takes is the same defect the probe's `_crossing_of` carried until this round.
+			var d := _route_length(grid, start_hb, tile)
 			if wave1_min < 0.0 or d < wave1_min:
 				wave1_min = d
 			if d > wave1_max:
 				wave1_max = d
+		t.eq(start_n, int(EXPECT_START_SENDABLE[i]),
+			"섬 %d — 시작 항구 혼자 닿는 칸이 %d칸이다" % [i + 1, int(EXPECT_START_SENDABLE[i])])
 		t.ok(absf(wave1_min - float(EXPECT_WAVE1[i][0])) <= 0.02,
-			"섬 %d — 1파 최단 항해가 %.2f칸이다" % [i + 1, wave1_min])
+			"섬 %d — 1파 최단 항로가 %.2f칸이다 (재측정: 직선이 아니라 물길 길이)" % [i + 1, wave1_min])
 		t.ok(absf(wave1_max - float(EXPECT_WAVE1[i][1])) <= 0.02,
-			"섬 %d — 1파 최장 항해가 %.2f칸이다" % [i + 1, wave1_max])
+			"섬 %d — 1파 최장 항로가 %.2f칸이다 (재측정)" % [i + 1, wave1_max])
 
 		# -- steady state: the SAME start-sendable tiles, distance from wherever the fleet relocates to
 		var steady_min := -1.0
@@ -202,8 +375,7 @@ func run(t) -> void:
 			if start_sendable[tile] == 0:
 				continue
 			var home := grid.home_harbour_for(tile)
-			var home_pt := grid.tile_point(int(grid.harbour_tiles[home]))
-			var d2 := home_pt.distance_to(grid.tile_point(tile))
+			var d2 := _route_length(grid, home, tile)
 			if steady_min < 0.0 or d2 < steady_min:
 				steady_min = d2
 			if d2 > steady_max:
@@ -211,9 +383,9 @@ func run(t) -> void:
 			if home != start_hb:
 				relocates += 1
 		t.ok(absf(steady_min - float(EXPECT_STEADY[i][0])) <= 0.02,
-			"섬 %d — 정착 후 최단 항해가 %.2f칸이다" % [i + 1, steady_min])
+			"섬 %d — 정착 후 최단 항로가 %.2f칸이다 (재측정)" % [i + 1, steady_min])
 		t.ok(absf(steady_max - float(EXPECT_STEADY[i][1])) <= 0.02,
-			"섬 %d — 정착 후 최장 항해가 %.2f칸이다" % [i + 1, steady_max])
+			"섬 %d — 정착 후 최장 항로가 %.2f칸이다 (재측정)" % [i + 1, steady_max])
 		t.eq(relocates, int(EXPECT_RELOCATES[i]),
 			"섬 %d — 1파 상륙지 중 함대가 항구를 옮기는 곳의 수" % (i + 1))
 
@@ -236,8 +408,8 @@ func run(t) -> void:
 		# 「quiet shore」 plan outright and with it one of the probe's discriminating axes. **The number
 		# is a design choice, not a bound**, so it is pinned exactly rather than bounded above.
 		var uncovered := 0
-		for tile_u in grid.landable.size():
-			if grid.landable[tile_u] == 0:
+		for tile_u in coast8.size():
+			if coast8[tile_u] == 0:
 				continue
 			if not _seen_by_any(grid, spawns, tile_u):
 				uncovered += 1
@@ -252,17 +424,18 @@ func run(t) -> void:
 		# harbour has to be inside SOME detect circle. `EXPECT_WAVE1[i][0]` is that crossing.
 		var cheap_tile := -1
 		var cheap_d := 0.0
-		var start_origin := grid.tile_point(int(grid.harbour_tiles[grid.start_harbour]))
 		var start_send: PackedByteArray = grid.sendable[grid.start_harbour]
 		for tile_c in start_send.size():
 			if start_send[tile_c] == 0:
 				continue
-			var dc: float = start_origin.distance_to(grid.tile_point(tile_c))
+			# Priced by the route, the same way the probe's own policies price a beach — otherwise
+			# "the cheapest beach" here and "the cheapest beach" there are two different tiles.
+			var dc := _route_length(grid, grid.start_harbour, tile_c)
 			if cheap_tile == -1 or dc < cheap_d - Rules.EPS:
 				cheap_tile = tile_c
 				cheap_d = dc
 		t.ok(absf(cheap_d - float(EXPECT_WAVE1[i][0])) <= 0.02,
-			"섬 %d — 가장 싼 상륙지의 항해가 %.2f칸이다 (자가 점검 — EXPECT_WAVE1 의 최솟값과 같다)"
+			"섬 %d — 가장 싼 상륙지의 항로가 %.2f칸이다 (자가 점검 — EXPECT_WAVE1 의 최솟값과 같다)"
 			% [i + 1, cheap_d])
 		t.ok(_seen_by_any(grid, spawns, cheap_tile),
 			"섬 %d — 가장 싼 상륙지가 어느 적의 탐지 원 안에 있다 (싼 해안과 조용한 해안이 같은 곳이면 안 된다)"
@@ -482,6 +655,18 @@ func _cut_of(grid: Grid) -> int:
 func _min_region_floor() -> int:
 	return Rules.START_MELEE + Rules.START_RANGED \
 		+ Rules.map_max_count_nodes_on_a_route() * (Rules.REWARD_MELEE + Rules.REWARD_RANGED) + 1
+
+
+## The length of the water route from harbour `hb` to `landing`, in tiles — what a crossing actually
+## costs now. **Summed from `grid.water_route`'s own points**, never re-derived from the endpoints: a
+## straight line between the same two ends is exactly the number this round replaced, and computing it
+## here would put it back under the new name.
+func _route_length(grid: Grid, hb: int, landing: int) -> float:
+	var route := grid.water_route(hb, landing)
+	var total := 0.0
+	for k in range(1, route.size()):
+		total += route[k - 1].distance_to(route[k])
+	return total
 
 
 ## Is tile `t` inside any spawned enemy's detect circle? Read off `Rules.detect_of` rather than a

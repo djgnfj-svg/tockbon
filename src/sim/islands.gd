@@ -6,21 +6,28 @@ class_name Islands
 ## `boat-and-landing` adds a camera (section 7.1). There is no multiplier hidden anywhere else.
 ##
 ## Legend (`boat-and-landing`, section 3.1):
-##   `~` water — impassable to a soldier, not landable
+##   `~` water — impassable to a soldier. It is what a boat SAILS OVER: `grid.water_fields` is a BFS
+##       across these tiles, and a land tile is sendable iff one of its eight neighbours is water a
+##       harbour's boat can reach
 ##   `H` harbour — water, AND a tile a boat may sail from and return to. **Several per island, no
 ##       single exact launch point** — the user's own correction to the first draft of the plan.
 ##   `.` land
 ##   `#` hole — impassable land, inland. Attacks pass over it; only movement is blocked
 ##   `^` cliff — impassable land, AT THE COAST. Exactly as impassable as `#`; it differs only in the
 ##       character the view reads to colour it. There is no elevation axis this round: a cliff blocks
-##       simply by making the land behind it not orthogonally adjacent to water, so it is never
-##       landable — no code has to remember that separately.
+##       simply by being impassable, so `sendable` refuses it on its FIRST test and the land behind it
+##       on the second (no water neighbour) — no code has to remember that separately. ⚠ Since
+##       `speed-off-open-landing` the cliff face is also the ONLY standing 「여긴 못 내린다」 mark on
+##       screen: the green coast wash that used to say the same thing from the other side is deleted.
 ##   `/` ramp — passable land, the only doorway through a cliff wall. A doorway, not a climb.
 ##   `B` `C` `L` land, with a bison / crow / lion starting there
 ##
 ## **`D` (dock) is gone.** The old fixed-dock legend is deleted along with `Grid.DOCK_CHAR` and
-## `grid.dock_tiles` — an open coastline replaces it, and `grid.gd`'s `landable` / `sendable` /
-## `can_land_at` are what decide where a boat may go now.
+## `grid.dock_tiles` — an open coastline replaces it, and `grid.gd`'s `water_fields` / `sendable` /
+## `can_land_at` / `water_route` are what decide where a boat may go and what it sails to get there.
+## ⚠ **`landable` is gone too** (`speed-off-open-landing`): landing is a DENYLIST now, and what is
+## refused on these three grids is exactly cliff plus inland — 84 · 76 · 82 of the 744 · 760 · 716
+## land tiles are sendable, which is every tile touching water on any of eight sides.
 ##
 ## Harbour index is the order an `H` is met scanning row-major, top-left first. Nothing chooses a
 ## harbour by hand any more — `grid.home_harbour_for(landing)` picks the nearest one that can still

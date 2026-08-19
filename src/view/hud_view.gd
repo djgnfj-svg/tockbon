@@ -1,8 +1,8 @@
 class_name HudView
 extends Node2D
 
-## The heads-up layer: the clock, how many enemies are left, **the start button** and **the speed
-## ladder**. Four things, and that is the whole of it.
+## The heads-up layer: the clock, how many enemies are left, and **the start button**. Three things,
+## and that is the whole of it.
 ##
 ## It READS `battle` and writes nothing back — src/view/ is a reader by contract, and a view that
 ## nudges the sim makes "the screen changed but the sim did not" indistinguishable from its inverse.
@@ -18,9 +18,12 @@ extends Node2D
 ## no fleet to meter and no resource for a berth to draw down. The thing that visibly empties as the
 ## player plans is the stack of soldiers standing at the harbour, and `field_view` draws that.
 ##
-## ⚠ **The 1/2 keys are gone with them.** The hand does not move during combat: the whole landing is
-## authored before the start button and then watched. This file therefore carries exactly one press
-## that changes the sim (`commit`) and one that changes only the rate the picture is read at.
+## ⚠ **The 1/2 keys are gone with them, and so is the speed ladder.** The hand does not move during
+## combat: the whole landing is authored before the start button and then watched. This file
+## therefore carries exactly ONE press — `commit` — and once that press has landed nothing on this
+## layer answers a click at all. `speed-off-open-landing`'s question A took the pause with the chips,
+## and its own row records that this overturns `plan-then-watch`'s decided 4 and takes the instrument
+## away from that decision's own metric.
 ##
 ## Enemies-left is drawn from `battle.enemies_left()` and survives onto the lose screen on purpose:
 ## "the timer ran out with four alive" is a different loss from a wipe, and the player has to be able
@@ -31,10 +34,6 @@ extends Node2D
 ## calls `note_chip` on every start press, whether the commit was accepted or refused.
 ## The clock is this node's own — see combat-juice, section B: `battle.step()` is skipped entirely
 ## while a panel is up, so an effect hung off sim time freezes behind the win screen.
-##
-## ⚠ **`_fx_step` is aged by `delta * _speed_scale`, not by `delta`** — the speed ladder moves the
-## interval every `look.gd` duration was budgeted against, so a view aged by the real frame delta
-## plays a different animation at 6x. `plan-then-watch`, 5.4.
 
 
 ## Display names, indexed by the type id in rules.gd. `Rules.name_of` returns the table's IDENTIFIER
@@ -47,12 +46,6 @@ extends Node2D
 ## game a unit still has to be named in words.
 const TYPE_LABELS := ["근접", "원거리", "들소", "까마귀", "사자"]
 
-## The speed chips' labels, one per `Rules.SPEED_STEPS` entry. **One glyph each, and no verb**: the
-## pause is 「0」 and not 「정지」, because a verb on the pause is exactly where 「well, while we're
-## stopped, let it turn one boat around」 walks in — and the moment that lands, 결정 1 is dead.
-## Indexed the same way `Rules.SPEED_STEPS` is, so the label and the multiplier cannot disagree.
-const SPEED_LABELS := ["0", "1", "2", "3", "6"]
-
 var battle: Battle = null
 
 ## Item 8's drawer. `slot -> {"sec": float, "ok": bool}`.
@@ -61,15 +54,10 @@ var battle: Battle = null
 ## the same button twice can then only reset the age, never stack two stains that multiply into a
 ## solid block. combat-juice, section B, picks the same shape for field_view's per-body drawer and
 ## for the same reason — stacking is made impossible by the container instead of by code that
-## remembers. **Slot 0 is the start button and it is the only slot anything writes today**; the speed
-## chips carry no feedback of their own, because the chip that is lit IS the feedback.
+## remembers. **Slot 0 is the start button and it is the only slot there is**, now that the speed
+## chips are gone; the drawer keeps its dictionary shape because the anti-stacking property is the
+## reason it is a dictionary, not the number of slots.
 var _chip_fx: Dictionary = {}
-
-## Which speed chip is lit, and what the drawers above are aged by. **Both come down from the shell
-## in one call** (`set_speed`) on the same frame, because they are one number: splitting them would
-## be two readers of one ladder, and a view must never read `Rules.SPEED_STEPS` itself.
-var _speed_slot := Rules.SPEED_SLOT_DEFAULT
-var _speed_scale := 1.0
 
 ## Resolved once and kept, and STATIC because panel_view needs the same face — the explanation for
 ## picking it lives here only, in one file, rather than in both view files.
@@ -103,20 +91,12 @@ func bind(b: Battle) -> void:
 	queue_redraw()
 
 
-## The shell's one call for the whole ladder: which chip is lit, and what every drawer here is aged
-## by. Called from `game.gd::_process` every frame, before `_fx_step` runs.
-##
-## ⚠ **It takes the multiplier, not the slot's meaning** — a view that looked the float up itself
-## would be a second reader of `Rules.SPEED_STEPS`, and the day the ladder changes one of the two
-## copies starts lying. At scale 0 the picture freezes with the sim: a pause is a still frame, not a
-## still sim under a running animation.
-func set_speed(slot: int, scale: float) -> void:
-	_speed_slot = slot
-	_speed_scale = scale
-
-
+## ⚠ **Aged by the bare frame delta.** `set_speed` is deleted with the ladder, and with no multiplier
+## the only honest scale is 1.0 — handing a leaf a constant 1.0 is the shape 「No fake code」 names, so
+## the multiply is removed rather than pinned. Every duration in `look.gd` is budgeted against real
+## seconds again, which is where they were written.
 func _process(delta: float) -> void:
-	_fx_step(delta * _speed_scale)
+	_fx_step(delta)
 	queue_redraw()
 
 
@@ -194,9 +174,9 @@ func _draw() -> void:
 		Look.HUD_TIMER_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
 	# The start button, and ONLY while the plan can still be started. A button that cannot be pressed
-	# and is still drawn is the "well, while we're stopped…" door `plan-then-watch` closes on purpose:
-	# the moment `committed()` is true the only thing left on this layer that answers a press is the
-	# speed row.
+	# and is still drawn is the "well, while we're stopped…" door `plan-then-watch` closes on purpose.
+	# ⚠ **The moment `committed()` is true this layer draws no pressable thing at all** — the speed row
+	# that used to survive the commit is deleted, so a committed fight has nothing the hand can press.
 	#
 	# The shake rides on `rect.position`, and the label's `at` is derived FROM the shifted rect rather
 	# than from the resting one. Shaking the box alone walks the glyphs out of it; shaking the glyphs
@@ -206,16 +186,6 @@ func _draw() -> void:
 		srect.position += _chip_offset(0)
 		_paint_button(face, srect, _chip_colour(0), "시작",
 			srect.position + Look.HUD_START_TEXT_OFFSET_PX,
-			Look.HUD_START_FONT_SIZE_PX, Look.COL_HUD_TEXT)
-
-	# The speed ladder. One chip per rung, the lit one being the rate the fight is being read at, and
-	# the same hook the start button uses — they are the same shape (a filled rect with one label in
-	# it) and two leaves would be two copies of one `draw_rect` + `draw_string`.
-	for slot in SPEED_LABELS.size():
-		var chip_bg: Color = Look.COL_SPEED_ON if slot == _speed_slot else Look.COL_BUTTON
-		var crect := Look.speed_rect_px(slot)
-		_paint_button(face, crect, chip_bg, str(SPEED_LABELS[slot]),
-			crect.position + Look.HUD_SPEED_TEXT_OFFSET_PX,
 			Look.HUD_START_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
 	_paint_enemies_left(face, Look.HUD_ENEMIES_LEFT_POS_PX, "적 %d" % battle.enemies_left(),
@@ -232,7 +202,9 @@ func _paint_timer(face: Font, at: Vector2, text: String, fsize: int, col: Color)
 
 ## 2 calls: the filled rectangle, then its label. Renamed from `_paint_key` rather than deleted —
 ## the 1/2 key boxes are gone but the SHAPE they drew (a pressable box with one word in it) is what
-## the start button and every speed chip are, and a second hook would be a second copy of it.
+## the start button is. ⚠ **The start button is now its ONLY call site**, the five speed chips having
+## been the other five; the hook stays a hook because `_draw` calling `draw_rect` directly is the bare
+## draw call `net_draw_leaf` exists to redden.
 func _paint_button(face: Font, rect: Rect2, bg: Color, text: String, at: Vector2, fsize: int,
 		col: Color) -> void:
 	draw_rect(rect, bg, true)

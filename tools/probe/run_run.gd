@@ -421,6 +421,8 @@ func _play_run(label: String, kind: String, reverse: bool, verbose := true,
 			var pool_in := _pool(run.army)
 			var alive_in := run.army.living_count()
 			var plan := _make_plan(battle, kind, reverse)
+			if verbose:
+				_print_crossings(battle)
 			var res := _play_island(battle, plan)
 			var pool_out := _pool(run.army)
 			var won := battle.outcome() == Battle.Outcome.WON
@@ -463,6 +465,32 @@ func _play_run(label: String, kind: String, reverse: bool, verbose := true,
 		print("  런: %s · 살아남은 병사 %d · 남은 풀 %.1f" % [
 			_state_name(run.state()), run.army.living_count(), _pool(run.army)])
 	return rows
+
+
+## ⚠ **2.4 asks for the crossing as a NUMBER on the console, not as an inference.** A water route is
+## longer than the straight line it replaced and crossing time is `dist / speed`, so every
+## `TIME_LIMITS` number is suspect after that change and nobody had measured by how much. This prints
+## the shortest and longest sendable crossing on the island and what each costs in seconds at
+## `Rules.BOAT_SPEED`, so the rise can be read off rather than argued about.
+##
+## ⚠ **It reports and does not tune.** `TIME_LIMITS` is read as it stands; retuning it is a decision
+## with the user in it (`speed-off-open-landing`, 2.4).
+func _print_crossings(battle: Battle) -> void:
+	var lo := 1e30
+	var hi := 0.0
+	var count := 0
+	for raw in _droppable_tiles(battle):
+		var d := _crossing_of(battle, int(raw))
+		if d >= 1e29:
+			continue
+		count += 1
+		lo = minf(lo, d)
+		hi = maxf(hi, d)
+	if count == 0:
+		print("       항로: 보낼 수 있는 칸이 없다")
+		return
+	print("       항로 %d칸 — 최단 %.2f칸 (%.2fs) · 최장 %.2f칸 (%.2fs) · 배 속도 %.1f칸/s" % [
+		count, lo, lo / Rules.BOAT_SPEED, hi, hi / Rules.BOAT_SPEED, Rules.BOAT_SPEED])
 
 
 func _print_row(battle: Battle, row: Dictionary, res: Dictionary) -> void:
@@ -712,8 +740,10 @@ func _sendable_soldiers(battle: Battle) -> Array:
 
 
 ## Every tile a boat may be sent to — the UNION over every harbour, which is the same predicate
-## `battle.send` refuses on and the same one the droppable overlay is painted from. A probe policy
-## can therefore never choose a tile the real game would have refused.
+## `battle.send` refuses on. A probe policy can therefore never choose a tile the real game would have
+## refused. ⚠ **It is no longer "the same one the droppable overlay is painted from"**: the overlay is
+## deleted (`speed-off-open-landing`, question C — the screen marks what is BLOCKED and nothing else),
+## so `Battle.send` is the only other reader of this predicate now.
 func _droppable_tiles(battle: Battle) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	if battle.grid == null:
@@ -724,15 +754,27 @@ func _droppable_tiles(battle: Battle) -> PackedInt32Array:
 	return out
 
 
-## The crossing a boat aimed at `tile` actually sails: from the harbour `home_harbour_for` picks,
-## which is the one `send` uses. Never re-derived from `start_harbour` — that would price a landing
-## against a harbour no boat leaves from.
+## The crossing a boat aimed at `tile` actually sails: the LENGTH OF THE WATER ROUTE from the harbour
+## `home_harbour_for` picks, which is the one `send` uses. Never re-derived from `start_harbour` —
+## that would price a landing against a harbour no boat leaves from.
+##
+## ⚠⚠ **It was the straight-line distance and that is now the wrong number.**
+## `speed-off-open-landing` made a boat sail a polyline around headlands, so a straight line prices a
+## sail no boat makes — and since every policy below CHOOSES a tile by this function, pricing it wrong
+## would silently make `near`, `far` and `split` pick the wrong beaches while every printed number
+## still looked plausible. Measured on the three shipped grids: the route is strictly longer than the
+## straight line on 82 / 74 / 80 of the sendable tiles and never shorter, by up to 1.41x.
 func _crossing_of(battle: Battle, tile: int) -> float:
 	var hb := battle.grid.home_harbour_for(tile)
 	if hb < 0:
 		return 1e30
-	return battle.grid.tile_point(int(battle.grid.harbour_tiles[hb])).distance_to(
-			battle.grid.tile_point(tile))
+	var route := battle.grid.water_route(hb, tile)
+	if route.size() < 2:
+		return 1e30
+	var total := 0.0
+	for k in range(1, route.size()):
+		total += route[k - 1].distance_to(route[k])
+	return total
 
 
 func _pick_tile(battle: Battle, kind: String) -> int:

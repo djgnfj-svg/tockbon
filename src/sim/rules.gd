@@ -172,7 +172,18 @@ const BOAT_SPEED := 4.0
 ## `plan-then-watch` works the table out.
 const SIM_SUBSTEP_SEC := 1.0 / 60.0
 
-## The rates the fight may be computed at, as a ladder the shell indexes into. Every step ABOVE zero
+## ⚠⚠ **NOTHING IN `src/` READS THIS TABLE OR THE THREE NAMES UNDER IT.** The speed chips and the
+## pause were deleted on the user's own sentence (「일단 배속 개념은 지워주고, 저거는 아직은 필요 없을
+## 때 추후에 추가해도」 · 「일시정지 지워주고」), and `speed-off-open-landing` is the plan that did it.
+##
+## **The table stays anyway, and that is a decision rather than an oversight.** It is four lines, and
+## it is the only thing that has to come back the day the user says 「이제 필요해」 — the ceiling
+## argument, the divisor argument and the 0x-is-not-a-viewing-rate argument below are what make
+## restoring this a wiring job instead of a design job again. `net_shell` asserts both halves: that
+## the table still parses and holds its entries, and that no file under `src/` outside this one names
+## any of them.
+##
+## The rates the fight may be computed at, as a ladder a shell could index into. Every step ABOVE zero
 ## is arithmetically inert under `SIM_SUBSTEP_SEC` and changes only whether the picture can be read.
 ##
 ## ⚠ **0x IS NOT A VIEWING RATE, which is why this table is not in look.gd.** `Battle.step` returns on
@@ -189,7 +200,7 @@ const SIM_SUBSTEP_SEC := 1.0 / 60.0
 ## read casts — see the `UNITS` header.
 const SPEED_STEPS := [0.0, 1.0, 2.0, 3.0, 6.0]
 
-## The slot the shell opens every island at. ⚠ **NOT 0.** A shell that opened at slot 0 would call
+## The slot a shell would open every island at. ⚠ **NOT 0.** A shell that opened at slot 0 would call
 ## `step(0.0)` every frame and the fight would be frozen from the moment the start button was pressed,
 ## with nothing barking. A net pins this to the index whose value is 1.0 rather than to a bare 0.
 const SPEED_SLOT_DEFAULT := 1
@@ -204,18 +215,15 @@ static func speed_mul_of(slot: int) -> float:
 
 
 # --- The coastline ---------------------------------------------------------------------------------
-## `grid.gd`'s straight-line sampler, in tiles. This is a rule constant and not a `Grid` constant
-## and not a `look.gd` one: a coarser step ACCEPTS targets a finer one refuses (measured — widening
-## it to 1.0 tile lets a boat sail through a wall the 0.05 step catches), so it changes what happens
-## rather than how it is drawn. `net_coast` pins both directions.
-const LINE_SAMPLE_STEP := 0.05
-
-## Samples within this Chebyshev distance of the LANDING end are exempt from the water test, or a
-## shallow approach rounds onto the beach tile next door to its target and refuses a legitimate
-## landing — measured on a draft of island 1, where it refused 20 of 36 beaches for grazing the sand
-## beside them. Also a rule constant for the same reason as the step above: 0 vs 1 changes which
-## tiles a boat may be sent to.
-const LINE_SAMPLE_EXEMPT_CHEBYSHEV := 1
+## ⚠ **`LINE_SAMPLE_STEP` and `LINE_SAMPLE_EXEMPT_CHEBYSHEV` are DELETED.** They were the straight-line
+## sampler's step and its landing-end exemption, and `grid.water_line_clear` — their only reader —
+## went with the permit list `speed-off-open-landing` replaced. Unlike `SPEED_STEPS` above they have
+## no restore case: the rule they tuned is not coming back, because a straight line is what refused
+## 40% of every island's shore. A rule constant nobody reads rots silently, so they are gone rather
+## than parked.
+##
+## ⚠ The exemption in particular must NOT be restored by anyone reading the 97 / 83 / 94 column of
+## 2.1's table as an improvement: it was a Chebyshev 1, which is what let a boat land one tile INLAND.
 
 
 # --- The map ---------------------------------------------------------------------------------------

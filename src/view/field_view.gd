@@ -11,10 +11,11 @@ extends Node2D
 ## decoration would rewrite the rules it exists to decorate.
 ##
 ## **`_draw()` calls the `_paint_*` hooks and nothing else**, and every `draw_*` call in the file
-## lives inside one of those fourteen hooks, in the exact per-function counts `net_draw_leaf._table()`
-## pins (`combat-juice`'s original eleven, plus `_paint_overlay` / `_paint_route` for stage 4's drag
-## and `_paint_hull` / `_paint_cliff_face` for stage 5's fleet — `_paint_boat` is gone, replaced by
-## `_paint_hull`). A net overrides a hook and reads its arguments back; the per-function count is
+## lives inside one of those thirteen hooks, in the exact per-function counts `net_draw_leaf._table()`
+## pins (`combat-juice`'s original eleven, plus `_paint_route` for stage 4's drag and `_paint_hull` /
+## `_paint_cliff_face` for stage 5's fleet — `_paint_boat` is gone, replaced by `_paint_hull`, and
+## `_paint_overlay` is gone with the green coast wash it drew). A net overrides a hook and reads its
+## arguments back; the per-function count is
 ## what stops a hook from quietly throwing its drawing away, because **argument capture proves a
 ## value was computed and handed on, never that it was used** — a `draw_circle(p, 0.0, col)` inside
 ## a leaf once turned forty rocks invisible with the whole round green. See
@@ -46,10 +47,24 @@ const CORNER_SEGMENTS := 6
 ## parameter" check and buy nothing, because "does the arc look faceted" is not a design value.
 const RING_SEGMENTS := 24
 
+## The four ORTHOGONAL offsets, used ONLY by the cliff-face pass below — which walks a cliff tile's
+## seaward EDGES, and a tile has four edges however many neighbours it has.
+##
+## ⚠ **These four moved here out of `Grid.ORTHO`, which is deleted.** `Grid`'s copy existed for the
+## `landable` predicate ("a tile touching water only at a corner is not landable"), and
+## `speed-off-open-landing` deleted that whole rule — the coast is 8-way now. This is a DRAWING
+## question, not a rule one: an edge is an edge. It is not in `look.gd` because it is not a number
+## anyone would tune; it is the geometry of a square.
+const CLIFF_SIDES := [[0, -1], [0, 1], [-1, 0], [1, 0]]
+
 ## What lives in the transient drawer. Anything bolted to a BODY lives in `_body` instead, keyed by
 ## body, which is why "drop the oldest" and "one flash per body, age reset rather than stacked" never
 ## eat each other — they are rules of two different drawers.
-enum FxKind { SHOT, SPARK, BURST, AREA, LAND }
+## ⚠ `REFUSE` is the one entry here that is NOT born in `_drain_events`. Every other kind is drained
+## out of `battle.events`; a refusal produces no event because `Battle.send` refuses with **nothing at
+## all changed** — that is the whole of its contract — so the shell pushes this one in through
+## `note_refusal` off `send`'s own -1. See that function.
+enum FxKind { SHOT, SPARK, BURST, AREA, LAND, REFUSE }
 
 
 ## The fight being drawn. Null until `setup`, and `_draw` paints nothing while it is.
@@ -105,38 +120,11 @@ var zoom := 1.0
 var _drag_soldier := -1
 var _drag_tile := -1
 
-## Every tile a boat may be sent to, as world rects, built ONCE per island in `setup`.
-##
-## **The predicate is `grid.home_harbour_for(t) >= 0` — the exact call `Battle.send` refuses on**, so
-## the green coast on screen can never promise a tile the sim then refuses. It is the UNION over every
-## harbour rather than one harbour's reach, because a drop no longer belongs to a boat that is sitting
-## somewhere: the harbour is chosen BY the landing.
-##
-## Cached rather than recomputed per frame because it is static for the island and the predicate runs
-## a line-of-sight test per harbour per tile — 1536 tiles x 3 harbours every frame is the kind of cost
-## that turns a picture into a stutter. `setup` is the one place it is filled, so a stale list cannot
-## outlive the island it describes.
-var _droppable_rects: Array = []
-
 ## P7's stalled-boat blink clock (`boat-and-landing` stage 5). A boat's OWN age is not the right
 ## clock for this — a boat that just arrived and a boat that has been stuck for ten seconds must
 ## blink in the same phase, or the mark would read as counting something instead of as a warning.
 ## One shared clock, like `_shake_offset`'s own, deterministic so a net can drive it by hand.
 var _wait_clock := 0.0
-
-## What every drawer in this file is aged by, handed down from the shell (`set_time_scale`).
-##
-## ⚠ **This is not decoration and it is not optional.** `plan-then-watch` 5.2 makes the SIM inert
-## under the speed ladder by sub-stepping; it does nothing at all to the picture. Three of `look.gd`'s
-## own written inequalities are measured against the 1.0 s attack period, and at 6x that period is
-## 0.1667 real seconds: `HIT_FLASH_SEC` 0.14 goes from a 14% duty to **84%** (every body permanently
-## white), `LUNGE_SEC` 0.18 exceeds the whole period so **no melee body ever returns to rest**, and
-## `8 * SPARK_SEC / period` goes from 0.96 to **5.76** so one body's rim is never clean. Ageing by
-## `delta * _time_scale` is what keeps all three where their comments say they are.
-## At 0 the picture freezes with the sim — a pause is a still frame, not a still sim under a running
-## animation.
-var _time_scale := 1.0
-
 
 @warning_ignore("shadowed_variable")
 func setup(battle: Battle, army: Army, rows: Array) -> void:
@@ -154,19 +142,6 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	_drag_soldier = -1
 	_drag_tile = -1
 	_wait_clock = 0.0
-	# The multiplier is re-handed down by the shell on the very next frame; this is the value one
-	# frame of drawing is aged by if `setup` and `_process` land in the same frame, and it is 1.0
-	# rather than 0.0 so an island can never open frozen.
-	_time_scale = 1.0
-	# The droppable coast, built once. The rects are built HERE and handed to `_paint_overlay` as an
-	# argument for the same reason `_spark_points` is: a leaf that builds its own geometry can be
-	# handed an EMPTY array and still read as "1 draw call, arguments used" — green, nothing drawn.
-	_droppable_rects = []
-	if battle != null and battle.grid != null and battle.grid.w > 0:
-		var g := battle.grid
-		for t in g.passable.size():
-			if g.home_harbour_for(t) >= 0:
-				_droppable_rects.append(Look.tile_rect_px(t % g.w, t / g.w))
 	# The survey: an island opens zoomed all the way out, so the WHOLE island is on screen before
 	# anything is planned — `plan-then-watch` 6.3, on the user's 「조금 더 카메라를 뒤로 빼야 될」.
 	# `_clamp_cam` centres any axis whose map is narrower than the visible world, and at `ZOOM_MIN`
@@ -188,23 +163,18 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 ## reach `HIT_KNOCK_PX` and the shake really does reach `dmg * SHAKE_PER_DAMAGE_PX` once. Draining
 ## first would shave one frame's delta off every effect before anyone saw it.
 ##
-## **Every clock in this file takes the multiplier**, `_wait_clock` included: a blink that keeps its
-## real-time period while the fight around it runs six times faster stops naming anything.
+## ⚠ **Every clock in this file is aged by the BARE frame delta**, `_wait_clock` included.
+## `set_time_scale` and `_time_scale` are deleted with the speed ladder
+## (`speed-off-open-landing`, item 1): with no multiplier the only honest value the field could hand
+## its own drawers is a constant 1.0, and a leaf handed a constant is the shape 「No fake code」 names.
+## Every duration in `look.gd` is budgeted against real seconds, which is where they were written.
 func _process(delta: float) -> void:
-	var aged := delta * _time_scale
-	_fx_step(aged)
+	_fx_step(delta)
 	_drain_events()
-	_wait_clock += aged
+	_wait_clock += delta
 	position = _compose_position()
 	scale = Vector2(zoom, zoom)
 	queue_redraw()
-
-
-## The shell's one call. It takes the bare multiplier and NOT the ladder slot: a view that looked the
-## float up itself would be a second reader of `Rules.SPEED_STEPS`, and the day the ladder changes one
-## of the two copies starts lying. `game.gd::_process` calls this every frame, before `_fx_step` runs.
-func set_time_scale(k: float) -> void:
-	_time_scale = k
 
 
 # --- the camera: one transform, in one place ------------------------------------------------------
@@ -273,6 +243,28 @@ func set_drag(soldier: int, tile: int) -> void:
 	_drag_tile = tile
 
 
+## One mark at `at_px` (world px) saying the sim REFUSED this drop. **0 draw calls** — it pushes one
+## entry into the transient drawer and the ground-ring block paints it on the next frame, the same
+## path every other transient takes.
+##
+## ⚠⚠ **The shell calls this off `Battle.send`'s own -1 and off nothing else.** A view that decided
+## for itself whether a tile was refusable would be a second copy of `grid.home_harbour_for`, and two
+## copies of one predicate is exactly what the deleted green wash was trusted NOT to be. Driving it
+## from the sim's answer is how the honesty guarantee survives the wash it used to belong to
+## (`speed-off-open-landing`, 2.5).
+##
+## `delay` is 0.0: the mark has to land on the frame of the press, not one beat after it — Swink's
+## bound on input-to-response is under 100 ms and `REFUSE_MARK_SEC` is the whole of the effect.
+func note_refusal(at_px: Vector2) -> void:
+	_fx.append({
+		"kind": FxKind.REFUSE,
+		"age": 0.0,
+		"delay": 0.0,
+		"life": Look.REFUSE_MARK_SEC,
+		"at": at_px,
+	})
+
+
 func _draw() -> void:
 	if battle == null or army == null or battle.grid == null:
 		return
@@ -321,9 +313,9 @@ func _draw() -> void:
 			if tx2 >= row2.length() or row2[tx2] != "^":
 				continue
 			var crect := Look.tile_rect_px(tx2, ty2)
-			for k in Grid.ORTHO.size():
-				var dx := int(Grid.ORTHO[k][0])
-				var dy := int(Grid.ORTHO[k][1])
+			for k in CLIFF_SIDES.size():
+				var dx := int(CLIFF_SIDES[k][0])
+				var dy := int(CLIFF_SIDES[k][1])
 				var nx := tx2 + dx
 				var ny := ty2 + dy
 				if nx < 0 or ny < 0 or nx >= battle.grid.w or ny >= battle.grid.h:
@@ -357,18 +349,18 @@ func _draw() -> void:
 		var at := _tile_xy(harbour)
 		_paint_dock(Look.tile_rect_px(at.x, at.y), Look.COL_BOAT, Look.BODY_OUTLINE_WIDTH_PX)
 
-	# --- 2b. the droppable coast, and the drag candidate (P3, plan-then-watch) --------------------
-	# ⚠ **The green coast is drawn from the moment the island opens, not only while dragging.** The
-	# user's sentence is 「바다위에 초록색 지역에 … 무한으로 배를 띄워서 보낼 수 있는걸로」 — that is a
-	# standing invitation, and a hover state cannot be one. It goes away at the commit, because after
-	# the start button there is nothing left to drop.
+	# --- 2b. the drag candidate (P3, plan-then-watch) --------------------------------------------
+	# ⚠⚠ **THE GREEN COAST IS DELETED.** It washed every sendable tile at alpha 0.18 from the moment
+	# the island opened; `speed-off-open-landing`'s question C replaced it on the user's own sentence
+	# 「못내림만 표시하면 됨 ㅇㅇ」 — the screen marks what is BLOCKED and nothing else. What carries
+	# 「여긴 못 내린다」 now is the cliff-face pass above (a standing mark on the terrain itself) plus
+	# the refusal mark below, which fires on the frame the sim actually refuses a drop.
 	#
-	# The rects were built ONCE in `setup` off `grid.home_harbour_for(t) >= 0`, the exact predicate
-	# `Battle.send` refuses on, so the screen can never promise a tile the sim refuses. They are handed
-	# to the leaf as an argument rather than built inside it: a leaf that builds its own geometry can
-	# be given an EMPTY array and still read as "1 draw call, arguments used" — green, nothing drawn.
+	# ⚠ **The wash was also what made the promise honest** — its predicate was
+	# `grid.home_harbour_for(t) >= 0`, the exact call `Battle.send` refuses on, so the green could never
+	# promise a tile the sim then denied. The refusal mark inherits that guarantee from the OTHER end:
+	# it is pushed by the shell off `send`'s own -1, so it cannot deny anything the sim allows.
 	if not battle.committed():
-		_paint_overlay(_droppable_rects, Look.sendable_tint())
 		if _drag_soldier >= 0 and _drag_tile >= 0:
 			# The ring under the cursor answers the SAME predicate the release will, so the refusal is
 			# readable before the release rather than after it.
@@ -377,11 +369,16 @@ func _draw() -> void:
 			var candidate_px := Look.tile_point_px(battle.grid.tile_point(_drag_tile))
 			_paint_ring(candidate_px, Look.TARGET_RING_R_PX, ring_col, Look.AREA_RING_WIDTH_PX)
 			if drag_hb >= 0:
-				# Which harbour it would sail from is decided by the LANDING, so the line the player
-				# sees while dragging is the line the boat will really take.
-				var harbour_px := Look.tile_point_px(
-					battle.grid.tile_point(int(battle.harbour_tile(drag_hb))))
-				_paint_route(harbour_px, candidate_px, Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
+				# ⚠ **Built from `grid.water_route` and not from two endpoints.** Which harbour it
+				# would sail from is decided by the LANDING, and since
+				# `speed-off-open-landing` the crossing bends around headlands — so a straight line
+				# drawn here would promise a sail the boat does not make, and it would promise it
+				# over LAND. `send` builds its boat off this same call, so the line the player sees
+				# while dragging is point for point the line the boat will really take.
+				var plan_px := PackedVector2Array()
+				for wp in battle.grid.water_route(drag_hb, _drag_tile):
+					plan_px.append(Look.tile_point_px(wp))
+				_paint_route(plan_px, Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
 
 	# --- 3. target lines -----------------------------------------------------------------------
 	# ENEMY side only, and none at all above the count: this is the one effect of the twelve that
@@ -430,7 +427,12 @@ func _draw() -> void:
 	for raw_ground in _fx:
 		var ground: Dictionary = raw_ground
 		var ground_kind := int(ground["kind"])
-		if ground_kind != FxKind.AREA and ground_kind != FxKind.LAND:
+		# ⚠ An ALLOWLIST and never a denylist. Written as "skip the three that are not ground marks",
+		# a sixth kind added tomorrow would fall through into the `else` below and be drawn as a
+		# refusal ring, silently, with every check green.
+		var is_ground := ground_kind == FxKind.AREA or ground_kind == FxKind.LAND
+		is_ground = is_ground or ground_kind == FxKind.REFUSE
+		if not is_ground:
 			continue
 		var ground_at := clampf(
 			(float(ground["age"]) - float(ground["delay"])) / float(ground["life"]), 0.0, 1.0)
@@ -442,7 +444,7 @@ func _draw() -> void:
 				float(ground["radius"]) * lerpf(Look.AREA_RING_START_RATIO, 1.0, ground_at),
 				area_col,
 				Look.AREA_RING_WIDTH_PX)
-		else:
+		elif ground_kind == FxKind.LAND:
 			var land_col := Look.COL_LAND_RING
 			land_col.a = land_col.a * (1.0 - ground_at)
 			_paint_ring(
@@ -450,6 +452,18 @@ func _draw() -> void:
 				Look.LAND_RING_R_PX * ground_at,
 				land_col,
 				Look.LAND_RING_WIDTH_PX)
+		else:
+			# The refusal mark (2.5). It fades out at a FIXED radius rather than growing like the
+			# landing ring: growth reads as "something is happening here", and a refusal is the
+			# statement that nothing happened. Drawn through the same `_paint_ring` leaf as the other
+			# three so no new leaf enters `net_draw_leaf`'s table for one more circle.
+			var refuse_col := Look.COL_LOSE
+			refuse_col.a = refuse_col.a * (1.0 - ground_at)
+			_paint_ring(
+				ground["at"],
+				Look.REFUSE_MARK_R_PX,
+				refuse_col,
+				Look.REFUSE_MARK_WIDTH_PX)
 
 	# ⚠ **`_deck_slots` is gone and there is no `transit_pos` table any more.** A boat carries exactly
 	# one soldier (결정 14R), the hull is centred on `boat["pos"]`, and a TRANSIT soldier's
@@ -534,7 +548,7 @@ func _draw() -> void:
 		if phase == Battle.Phase.OUTBOUND:
 			var target_px := Look.tile_point_px(battle.grid.tile_point(int(boat["target"])))
 			_paint_ring(target_px, Look.TARGET_RING_R_PX, Look.COL_ROUTE, Look.AREA_RING_WIDTH_PX)
-			_paint_route(anchor, target_px, Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
+			_paint_route(_route_ahead(boat), Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
 			# P7 — the ghost fan. The rank is how many EARLIER boats aim at this same tile, so the
 			# fan spreads in the order the player dropped and the FRONT of it is the front of the
 			# landing. That is exactly and only what the order decides: every boat departs on the
@@ -561,10 +575,11 @@ func _draw() -> void:
 						Look.BODY_DOT_RADIUS_PX,
 						Vector2.ONE)
 		else:
-			var home_tile := battle.harbour_tile(int(boat["home"]))
-			if home_tile >= 0:
-				var home_px := Look.tile_point_px(battle.grid.tile_point(home_tile))
-				_paint_route(anchor, home_px, Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
+			# The return leg is the outbound path reversed by the sim, so its last waypoint IS the
+			# home harbour — asking `battle.harbour_tile(boat["home"])` for it again would be the
+			# same fact read from two places, and the whole reason the sim reverses rather than
+			# recomputes is to keep it one.
+			_paint_route(_route_ahead(boat), Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
 
 		# P3: the passenger, on deck, with its own HP bar — RETURNING boats carry nobody, so this loop
 		# is a no-op for them, which is itself half of what draws the return leg as empty.
@@ -803,19 +818,19 @@ func _paint_hull(rect: Rect2, colour: Color, outline_width: float) -> void:
 	draw_rect(rect, colour.darkened(0.35), false, outline_width)
 
 
-## 1 call, over every rect the caller built — one `draw_rect` call SITE, however many tiles are in
-## `rects`, the same shape `_paint_spark` uses for its six shards. The drag overlay (P8): which coast
-## the dragged boat's own harbour can reach.
-func _paint_overlay(rects: Array, colour: Color) -> void:
-	for r: Rect2 in rects:
-		draw_rect(r, colour)
-
-
-## 1 call. The line from a harbour to the candidate tile while a drag is in flight (P8), and now also
-## the hull -> target line while a boat crosses, and the hull -> home-harbour line on the return leg
-## (P5 / P6, `boat-and-landing` stage 5) — one hook, three call sites in `_draw()`, same shape.
-func _paint_route(from: Vector2, to: Vector2, colour: Color, width: float) -> void:
-	draw_line(from, to, colour, width)
+## 1 call — `draw_polyline`, over however many waypoints the caller built. The water route from a
+## harbour to the candidate tile while a drag is in flight (P8), the REMAINING route under a crossing
+## hull, and the remaining route home on the return leg (P5 / P6) — one hook, three call sites in
+## `_draw()`, same shape.
+##
+## ⚠⚠ **This was `draw_line(from, to, ...)` and the change is invisible to every scanner.**
+## `net_draw_leaf` counts call SITES, so a polyline and a straight line between the same endpoints are
+## both "1 call, every argument used" — and a `draw_line(points[0], points[points.size() - 1], ...)`
+## written in here would put the route back over the island with the whole round green. What catches
+## it is a RUNTIME check in `net_shell` reading the captured `points` back and asserting the drag over
+## a bent route hands this more than two of them. `speed-off-open-landing`'s S4 is that row.
+func _paint_route(points: PackedVector2Array, colour: Color, width: float) -> void:
+	draw_polyline(points, colour, width)
 
 
 ## 1 call. `draw_multiline` — the same shape `_paint_spark` uses, and for the same reason: a loop
@@ -856,6 +871,24 @@ func _paint_spark(points: PackedVector2Array, colour: Color, width: float) -> vo
 
 
 # --- pure helpers. None of these calls draw_* ---------------------------------------------------
+
+## The part of a boat's route it has NOT sailed yet, in canvas px: where the hull is standing now,
+## then every waypoint strictly past the segment it is on. **Draw 0** — it builds geometry and hands
+## it to `_paint_route`.
+##
+## ⚠⚠ **`leg` is read off the SIM and the walk is never re-derived here.** `_phase_boats` advances it
+## as the boat moves; a view that found its own segment by re-walking `cum` would be the same fact
+## computed in two places, and the two would drift the first time one of them changed — which is the
+## failure this file's own deleted `_deck_slots` comment records. The drawn line therefore cannot show
+## a boat sailing water it has already crossed, because the sim is what decides what is behind it.
+func _route_ahead(boat: Dictionary) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	out.append(Look.tile_point_px(Vector2(boat["pos"])))
+	var path: PackedVector2Array = boat["path"]
+	for k in range(int(boat["leg"]) + 1, path.size()):
+		out.append(Look.tile_point_px(path[k]))
+	return out
+
 
 func _tile_xy(tile: int) -> Vector2i:
 	var w := battle.grid.w

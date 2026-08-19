@@ -23,8 +23,9 @@ extends Node2D
 ##
 ## The input table this file implements is `plan-then-watch`, section "Input", with `title-and-map`'s
 ## two branches on top of it. ⚠ The landing is authored with the mouse before a start button, and
-## after that press nothing but the speed chips and the camera answers at all. The keyboard is not
-## read anywhere.
+## **after that press only the camera answers at all** — `speed-off-open-landing` deleted the speed
+## chips and the pause with them, so a committed fight has nothing the hand can do to it. The keyboard
+## is not read anywhere.
 
 
 ## Session state. **`null` IS the title screen** — there is no separate scene and no autoload, and
@@ -60,16 +61,6 @@ var _panning := false
 ## ⚠ **It is a soldier, not a boat** (`plan-then-watch`, 결정 14R). Boats are unlimited and one is
 ## created BY the drop, so there is nothing to pick up and nothing to run out of.
 var _drag_soldier := -1
-
-## Which rung of `Rules.SPEED_STEPS` the fight is being watched at — **an index into the ladder, never
-## the float**. The multiplier is read through `Rules.speed_mul_of` at the two places it is used.
-##
-## ⚠ **The name ends in `slot` for a measured reason**: `net_draw_leaf`'s widened literal sweep covers
-## `src/shell/`, and both `mul` and `speed` are suffixes in it, so a field called `_speed_mul` or
-## `_speed` would redden the round. This is not an evasion — a slot is what this actually holds.
-## ⚠ **And the default is NOT slot 0.** Slot 0 is 0.0, `step` returns on `dt <= 0.0` before
-## `_phase_clock`, so a shell that opened there would freeze the fight the instant start was pressed.
-var _speed_slot := Rules.SPEED_SLOT_DEFAULT
 
 ## Seconds the shell is standing still, holding a moment on screen before it walks the run forward.
 ## Two things ride it — the verdict pause and the beak stain — and they never overlap, because a hold
@@ -130,10 +121,6 @@ func _open_island() -> void:
 	# drop a drag that was in flight when the panel came up.
 	_drag_soldier = -1
 	field_view.set_drag(-1, -1)
-	# Every island opens at 1x and is PLANNED at 1x. Carrying the slot across would let island 2 open
-	# paused because island 1 was paused when it ended, and 「the fight never started」 and 「the fight
-	# is over」 look identical on a still screen.
-	_speed_slot = Rules.SPEED_SLOT_DEFAULT
 	var opened := run.begin_island()
 	if opened != null:
 		battle = opened
@@ -199,18 +186,12 @@ func _close_island() -> void:
 func _process(delta: float) -> void:
 	if run == null:
 		return
-	# **The ladder is handed down here and nowhere else**, on every frame, above every early return
-	# below this line. One number, read once, given to the sim as `delta * k` and to both views as `k`
-	# — the sim runs whole `Rules.SIM_SUBSTEP_SEC` sub-steps so `k` is arithmetically inert for it, and
-	# the views age their own drawers by it so a 6x fight does not play a different animation. A view
-	# that looked the float up itself would be a second reader of `Rules.SPEED_STEPS`.
-	# ⚠ Above the hold and the panel guard on purpose: a paused ladder has to freeze the picture too,
-	# and two places deciding "what is the current speed" is how the sim and the screen drift apart.
-	var k := Rules.speed_mul_of(_speed_slot)
+	# ⚠ **No multiplier is handed down any more.** `speed-off-open-landing` deleted the ladder, so the
+	# sim and both views run on the bare frame delta — which is what every duration in `look.gd` was
+	# budgeted against in the first place. `set_time_scale` and `set_speed` are gone rather than being
+	# called with a constant 1.0: a leaf handed a constant is the shape 「No fake code」 names.
 	if battle != null:
 		battle.begin_frame()
-		field_view.set_time_scale(k)
-		hud_view.set_speed(_speed_slot, k)
 	if _hold_sec > 0.0:
 		_hold_sec = maxf(0.0, _hold_sec - delta)
 		if _hold_sec <= 0.0:
@@ -220,11 +201,12 @@ func _process(delta: float) -> void:
 		return
 	if run.state() != Run.State.BATTLE:
 		return
-	# ⚠ **At 0x this still calls `step(0.0)`** rather than skipping the call. `step` owns the pause —
-	# it returns on `dt <= 0.0` before `_phase_clock`, which is the only writer of `elapsed` and so of
-	# the loss condition. A second test up here would be the same rule in two places, and two tests
-	# for one fact diverge.
-	battle.step(delta * k)
+	# ⚠ **A BARE delta, and the call keeps taking one.** `speed-off-open-landing`'s 「what does NOT
+	# come out」 pins this: do not inline a constant anywhere, because the seam a multiplier plugs back
+	# into is the thing worth preserving. `Battle.step` still consumes whole `Rules.SIM_SUBSTEP_SEC`
+	# sub-steps and carries the leftover, so `step(dt)` and `step(dt/k)` k times still land on
+	# identical state — which is the property the restored multiplier would stand on.
+	battle.step(delta)
 	if battle.outcome() != Battle.Outcome.RUNNING:
 		# This REPLACES the old immediate `_close_island()`. Without the pause the last enemy's death
 		# ring never gets a frame: the verdict and the next island's `setup()` landed inside one frame,
@@ -429,7 +411,6 @@ func _enter_node(n: int) -> void:
 func _enter_map_screen() -> void:
 	battle = null
 	_drag_soldier = -1
-	_speed_slot = Rules.SPEED_SLOT_DEFAULT
 	field_view.setup(null, null, [])
 	field_view.set_drag(-1, -1)
 	hud_view.bind(null)
@@ -451,17 +432,20 @@ func _enter_map_screen() -> void:
 ##  1. **the start button**, which is HUD chrome and therefore sits ON TOP of the island — at
 ##     `ZOOM_MIN` the island band and the button's rectangle overlap in one corner, and chrome that
 ##     loses to what it is drawn over is chrome that cannot be pressed;
-##  2. **a speed chip**, and only after the commit — before it there is nothing running to speed up;
-##  3. **a placed boat's landing ring** (`_ring_hit_at`), which undoes that drop;
-##  4. **a soldier still standing at the harbour** (`_soldier_hit_at`), which begins a drag;
-##  5. otherwise a camera pan.
+##  2. **a placed boat's landing ring** (`_ring_hit_at`), which undoes that drop;
+##  3. **a soldier still standing at the harbour** (`_soldier_hit_at`), which begins a drag;
+##  4. otherwise a camera pan.
 ##
-## ⚠ **3 before 4 is measured, not tidy.** A landing ring can sit on top of the harbour when a player
+## ⚠ **There is no post-commit branch left at all.** The speed chips used to sit between 1 and 2 as
+## the one thing pressable after the commit; `speed-off-open-landing` deleted them, so every branch
+## above is inside `not battle.committed()` and a committed fight falls straight through to the pan.
+##
+## ⚠ **2 before 3 is measured, not tidy.** A landing ring can sit on top of the harbour when a player
 ## drops a boat onto the beach beside it, and undo losing to grab is the worse failure: a grab that
 ## should have been an undo starts a drag the player then has to cancel, whereas an undo that should
 ## have been a grab is one press to recover.
 ##
-## ⚠ **Two of the three PLAN BRANCHES the commit gate lives on are here** (1 with 3 and 4), and it is
+## ⚠ **Two of the three PLAN BRANCHES the commit gate lives on are here** (1 with 2 and 3), and it is
 ## the branches that are gated rather than this handler: the pan fall-through and `_on_wheel` read the
 ## same before and after the commit, and gating them turns the "camera still works" row red — the one
 ## row that stops the post-commit checks from being satisfied by a screen that does nothing at all.
@@ -487,11 +471,6 @@ func _on_left_press(at: Vector2) -> void:
 				_drag_soldier = soldier
 				field_view.set_drag(soldier, _tile_at(at))
 				return
-		else:
-			var chip := _speed_hit_at(at)
-			if chip >= 0:
-				_speed_slot = chip
-				return
 	_panning = true
 
 
@@ -502,7 +481,14 @@ func _on_left_press(at: Vector2) -> void:
 ## readable before the button came up.
 ##
 ## ⚠ **`send` returns an int uid and uid 0 is the FIRST boat of every island**, so `if battle.send(…)`
-## would refuse the common case. Nothing here reads the return as a bool.
+## would refuse the common case. The return is compared `< 0` and NOT read as a bool.
+##
+## ⚠⚠ **The refusal mark is driven by `send`'s own -1** (`speed-off-open-landing`, 2.5). The green
+## coast wash used to be what made the screen's promise honest — it was painted from
+## `grid.home_harbour_for(t) >= 0`, the exact call `send` refuses on — and question C deleted it, so
+## the mark inherits that guarantee from the other end: it is drawn when and only when the SIM said
+## no, never from a predicate this file evaluates for itself. A release off the grid (`tile < 0`)
+## marks too — from the player's hand that is the same gesture and the same answer.
 ##
 ## ⚠ **The `_drag_soldier` branch is the third PLAN BRANCH the commit gate lives on.** Without it a
 ## press that started before the commit and released after it would still author a landing.
@@ -513,8 +499,8 @@ func _on_left_release(at: Vector2) -> void:
 		field_view.set_drag(-1, -1)
 		if not panel_view.panel_active() and battle != null and not battle.committed():
 			var tile := _tile_at(at)
-			if tile >= 0:
-				battle.send(soldier, tile)
+			if tile < 0 or battle.send(soldier, tile) < 0:
+				field_view.note_refusal(field_view.screen_to_world_px(at))
 	_panning = false
 
 
@@ -560,15 +546,6 @@ func _ring_hit_at(at: Vector2) -> int:
 		if centre.distance_to(world) <= Look.TARGET_RING_R_PX:
 			return int(boat["uid"])
 		i -= 1
-	return -1
-
-
-## Which speed chip a press at `at` is on, or -1. Viewport coordinates, not world ones: the chips are
-## HUD chrome and do not move with the camera.
-func _speed_hit_at(at: Vector2) -> int:
-	for i in Rules.speed_slot_count():
-		if Look.speed_rect_px(i).has_point(at):
-			return i
 	return -1
 
 

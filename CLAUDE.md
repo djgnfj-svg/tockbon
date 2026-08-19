@@ -16,11 +16,21 @@ an open coastline**, and **what you eat turned into 세포 and objects you fit t
 - **There is no host**, no `F`, no `V`, and **the keyboard does nothing in this game at all**
 - **You plan the whole landing, press start, and watch.** The hand does not move during combat
   (`plan-then-watch`, user, 2026-08-18). The 1~5 summon keys are deleted
+  ⚠⚠ **OVERTURNED on 2026-08-19 in design, NOT in code** — the user decided **the boat stays live during
+  the fight** (「배만 좀 참여하는 걸로」): you may keep choosing when and where to send the next one,
+  **and a soldier already ashore still cannot be touched.** The tree above is what SHIPS; `push-inland`
+  holds the derivation. ⚠ **The reason the old rule was taken — a fight is one minute — is gone**, and
+  `plan-then-watch`'s own sentence says its rules 1/4/5 hold each other up, **so 4 and 5 are now
+  unsupported and nobody has re-decided them**
 - **Boats are unlimited and one-seat, and there is deliberately no brake yet** — 「일단 빼고 만든 이후에
   추가하자는 거임」. **Nothing licenses writing a cap**
 - **Soldiers carry across islands, HP included, and a dead one is dead for good**
 - The loss condition is a **time limit**, ⚠ **and the probe measured it has never once bound** — 15
-  island-runs, worst plan at 49%
+  island-runs, worst plan at 49%. ⚠⚠ **The user deleted the time limit on 2026-08-19** (「제한 시간
+  개념은 없어져야 될 거 같고」) — **in design, not in code.** ⇒ **The loss condition is therefore
+  UNDECIDED.** `Lose.WIPED` already ships and the GDD wrote it as a *second* condition standing behind the
+  clock; **nobody has confirmed it as the only one**, and with no clock **nothing charges for waiting.**
+  ⚠ Deleting it also disarms the probe, whose entire grade is *"% of the time limit"*
 - Two reference points the user asked never to be dropped: **Bad North** (2 people, ~790k) and **Despot's
   Game** (100k+, units not controlled at all). ⚠ **Bad North is NOT "place and watch"** — the developer says
   he lowered the *granularity* of control, not removed it
@@ -28,11 +38,13 @@ an open coastline**, and **what you eat turned into 세포 and objects you fit t
 **The tree**: `src/sim/` (rules · grid · islands · army · battle · run · map) · `src/view/` (field · hud ·
 panel · map · title) · `src/shell/game.gd` · `src/look.gd` · `tools/probe/run_run.gd`. `run/main_scene` is
 `src/shell/game.tscn`. **A run plays end to end from the title.**
-**Round: 15 nets, 1953 checks, 6.3s, green.**
+**Round: 15 nets, 2100 checks, 4.3s, green.**
 
 ⚠ **`title-and-map` step 5 is NOT built** — `MAP_NODES`'s island column is `[0, 1, 2, 1, 2, -1, 2]`, so
 **three grids serve six island-opening nodes** and every route replays terrain it has solved. The user
 decided six. **This is the standing instance of 「내가 말한대로 개발을 안하네」.**
+✅ **Its gate is answered — 「층마다 둘 중 하나」 (user, 2026-08-19)**, so the node table stands and the
+grids can be authored. ⚠ **The chest's payout is NOT answered and must not be built this round.**
 
 ### Why the second game died — the most reusable sentence here
 
@@ -55,12 +67,15 @@ The state of it: 「배가 곁다리」 stopped coming back after `boat-invasion
 last round, which is not the same as closed.** The title and the map drew **no complaint after their
 readability pass — the closest thing to a pass this repo has recorded.**
 
-⚠ **Two are open and both are about the part loop**, and they are the work:
-- **「조작감이 너무 ㅈ같음」 is measurable, not taste**: the drag source is a ~10px stack in open water, the
-  droppable coast is alpha 0.18 on dark green, and the probe counts **10–13 precision drags an island.**
-  ⇒ **The hand is aiming, not deciding.** A rule can answer this — what ONE drag places
-- **「싸움이 좀 아직은 별로네」 is NEW and it is the fight itself.** Every earlier verdict was about the frame
-  around the fight. **This is the half nobody has attacked.** The user parked it — parked, not answered
+⚠ **Both of the two that stood here were DROPPED by the user on 2026-08-19** — 「조작감이 너무 ㅈ같음」
+and 「싸움이 좀 아직은 별로네」, in their own words: ***"지워주고"***. `idea-inbox` rows 13 and 23 keep both.
+**`dropped` is not `refuted`** — no arithmetic killed either, so **do not re-raise them and do not treat
+them as answered.** The measurement behind the first (10–13 precision drags an island) stays in the probe.
+
+⇒ **Nothing is open here now.** The live work is `title-and-map` step 5, whose gate — 「층마다 둘 중
+하나」 — the user answered on 2026-08-19. ⚠ **One thing IS undecided and it is arithmetic-bearing:
+what the chest pays.** The design doc says artifacts under a ✅ with the user's quote; the user said
+미정 on 2026-08-19. **Both quotes stand and neither wins by inference.**
 
 ⇒ Read *"제일 평범하네"* against what came before it: eight months of not one fun moment, then *"그냥 재미가
 없다"*. **"Ordinary" is the highest mark anything here has been given, and it is still not "fun".**
@@ -171,8 +186,9 @@ the two options that had been on the table.**
 | `how-studios-schedule-art` | **When other studios attach the art**, with sources |
 | `gdd-audit` | **Findings already refuted — do not raise them again.** Fifteen of them |
 | `docs/decisions/` | **Why something was *not* done.** Seven docs; **two are reversed and kept for that reason** |
+| `push-inland` | ⚠⚠ **The newest and the biggest — one combat node becomes a continent you land on and push through for 10–15 minutes, with the boat as the only live control.** Nothing built, nothing accepted. **Read its retraction boxes**: six of its own numbers were refuted by an independent re-measure, one "cross-check" turned out to be an algebraic identity, and **every remaining question lands on R, the roster size, which nobody has decided** |
 | `title-and-map` · `plan-then-watch` · `session-loop` · `boat-invasion` · `combat-juice` | The design docs. Each header carries `Implemented` and `Accepted` as **two separate axes**, and several carry refutations of their own earlier drafts |
-| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` empty; `2.active` holds `title-and-map`; `3.done` holds three |
+| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` empty; `2.active` holds `speed-off-open-landing` (**building**) and `title-and-map` (**paused**); `3.done` holds three |
 | `docs/next-game.md` | The two resets and what carried across |
 
 **Moved out of this file on 2026-08-19, unedited**: the fake-green casebook → `how-nets-lie`; the godot MCP
@@ -328,7 +344,7 @@ an effect that never happens.**
 
 ## Running the nets
 
-**15 nets, 1953 checks, 6.3 seconds, green.** The old game reached 25 / 3541 / 4.6s — ⚠ **a scale marker,
+**15 nets, 2100 checks, 4.3 seconds, green.** The old game reached 25 / 3541 / 4.6s — ⚠ **a scale marker,
 not a target.** Those nets drove a game deleted for not being fun.
 
 A net is `tests/nets/net_*.gd` with one method, `func run(t)`; `t` gives `ok` · `eq` · `pump_frames` ·

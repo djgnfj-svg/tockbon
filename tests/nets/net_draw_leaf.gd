@@ -96,10 +96,13 @@ func _table() -> Dictionary:
 			# boat-and-landing stage 4 drag (P8): set_drag is the one state setter a press-start and
 			# a release-end both go through, so it is pure, like the camera functions above it.
 			"set_drag": 0,
-			# `plan-then-watch` 5.4: the shell hands the speed multiplier down and every drawer in the
-			# file is aged by `delta * k`. Pure — it stores one float — and it is the only thing
-			# standing between the ladder and a picture where every body is permanently white.
-			"set_time_scale": 0,
+			# `speed-off-open-landing` 2.5: the shell pushes the sim's OWN refusal in through this,
+			# and the ground-ring block paints it next frame through the existing `_paint_ring` leaf.
+			# 0 draws — it appends one entry to `_fx` — which is exactly why the refusal mark needs a
+			# RUNTIME check in `net_shell` and cannot be certified from this table.
+			# ⚠ `set_time_scale` left in the same edit: the speed ladder is deleted, and a leaf handed
+			# a constant 1.0 is the shape 「No fake code」 names.
+			"note_refusal": 0,
 			"_draw": 0,
 			"_paint_tile": 2,
 			"_paint_dock": 1,
@@ -111,7 +114,11 @@ func _table() -> Dictionary:
 			"_paint_ring": 1,
 			"_paint_target_line": 1,
 			"_paint_spark": 1,
-			"_paint_overlay": 1,
+			# ⚠ **1 call, and `draw_polyline` and `draw_line` are BOTH 1 call.** This scan counts call
+			# SITES; it cannot tell a polyline from a straight line between the same two endpoints, so
+			# the corner-cut it would let through is caught at RUNTIME in `net_shell` instead (the
+			# drawn `points` on a bent route must hold more than two entries).
+			# ⚠ `_paint_overlay` left with the green coast wash it drew (question C).
 			"_paint_route": 1,
 			"_paint_hull": 2,
 			"_paint_cliff_face": 1,
@@ -123,6 +130,10 @@ func _table() -> Dictionary:
 			# fact written twice. **`field_view`'s count does not move (43 -> 43) while one function is
 			# added, one deleted and one renamed**, which is exactly why it has to be re-derived by hand
 			# rather than trusted for having stayed still.
+			# ⚠⚠ **AND IT DID NOT MOVE AGAIN.** `speed-off-open-landing` deleted `set_time_scale` and
+			# `_paint_overlay` and added `note_refusal` and `_route_ahead` — 43 -> 43 once more, while
+			# the LEAF count went 14 -> 13. Two files' totals were re-derived by hand from the five
+			# tables below rather than nudged by whatever the last edit happened to be.
 			"idle_soldier_rect": 0,
 			"_hp_rects": 0,
 			"_beak_points": 0,
@@ -137,6 +148,9 @@ func _table() -> Dictionary:
 			"_knock_offset": 0,
 			"_flash_of": 0,
 			"_gait_squash": 0,
+			# draw 0: it builds the remaining-route polyline out of the boat's own `path` and `leg`
+			# and hands it to `_paint_route`, the same split `_spark_points` uses one line below.
+			"_route_ahead": 0,
 			# draw 0 and NOT a leaf on purpose: the points are built here and handed to
 			# `_paint_spark` as an argument. Built inside the leaf they never leave it, and the
 			# unused-argument check below skips every function whose count is 0 — so a leaf holding
@@ -156,7 +170,6 @@ func _table() -> Dictionary:
 			"default_font": 0,
 			"type_label": 0,
 			"bind": 0,
-			"set_speed": 0,
 			"_process": 0,
 			"_draw": 0,
 			"note_chip": 0,
@@ -164,9 +177,9 @@ func _table() -> Dictionary:
 			"_chip_offset": 0,
 			"_chip_colour": 0,
 			"_paint_timer": 1,
-			# 2 calls, and it is one hook with two kinds of call site on purpose: the start button and
-			# every speed chip are the same shape (a filled rect with one label in it), so two leaves
-			# would be two copies of one `draw_rect` + `draw_string`.
+			# 2 calls. ⚠ **The start button is its ONLY call site now** — the five speed chips were the
+			# other five and they are deleted. It stays a hook rather than being inlined into `_draw`,
+			# because a bare `draw_rect` in `_draw` is precisely what this whole table exists to redden.
 			"_paint_button": 2,
 			"_paint_enemies_left": 1,
 		},
@@ -312,8 +325,40 @@ func run(t) -> void:
 	# The map's four-state read added `_look_of` and `_node_radius_of` to `map_view` (27 -> 29), and
 	# the total is re-derived by hand here rather than nudged: a literal that moves by whatever the
 	# last edit happened to be is a literal nobody re-derives.
-	t.eq(total_funcs, 124, "다섯 파일의 함수는 모두 124개다 (43 + 13 + 21 + 18 + 29)")
-	t.eq(total_leaves, 32, "그중 draw 를 실제로 부르는 잎은 32개다 (14 + 3 + 4 + 4 + 7)")
+	t.eq(total_funcs, 123, "다섯 파일의 함수는 모두 123개다 (43 + 12 + 21 + 18 + 29)")
+	t.eq(total_leaves, 31, "그중 draw 를 실제로 부르는 잎은 31개다 (13 + 3 + 4 + 4 + 7)")
+
+	# -- 3b. the array leaves hand their array WHOLE to one native call -----------------------------
+	# ⚠⚠ **THIS SECTION EXISTS BECAUSE THE COUNT ABOVE CANNOT SEE THE DIFFERENCE, AND THAT WAS
+	# MEASURED.** `speed-off-open-landing` turned `_paint_route` from `draw_line(from, to, …)` into
+	# `draw_polyline(points, …)`. Mutating it back to
+	# `draw_line(points[0], points[points.size() - 1], …)` — a boat's route cut straight across the
+	# island — left **the whole 15-net round green at 2095 checks**: it is still ONE call site, and
+	# `points` still counts as "used". The runtime check in `net_shell` could not catch it either,
+	# because a spy OVERRIDES the leaf and never runs its body at all (`CLAUDE.md`: a spy on a hook
+	# never sees the native call inside it).
+	#
+	# ⇒ For the three leaves that take an ARRAY, the shape is pinned: the native call must be the one
+	# named, and the array parameter must appear WHOLE — never indexed inside the leaf. That is the
+	# same argument `_paint_cliff_face`'s own comment already makes for `draw_multiline` over a loop
+	# of `draw_line`, written as a check instead of as prose.
+	var shape_bad: Array[String] = []
+	var shape_checked := 0
+	for path2: String in view_files:
+		var base2 := path2.get_file()
+		if not _whole_array_leaves().has(base2):
+			continue
+		var want_shapes: Dictionary = _whole_array_leaves()[base2]
+		var text2 := _read(path2)
+		for f2: Dictionary in _funcs(text2):
+			var fname: String = f2["name"]
+			if not want_shapes.has(fname):
+				continue
+			shape_checked += 1
+			shape_bad.append_array(_shape_hits(fname, f2["body"], want_shapes[fname]))
+	t.eq(shape_checked, 3, "배열을 받는 잎 셋을 실제로 봤다 (자가 점검 — 0개면 깨끗한 게 아니라 안 돈 것이다)")
+	t.eq(shape_bad.size(), 0,
+		"배열을 받는 잎은 그 배열을 통째로 네이티브 호출에 넘긴다 — 안을 색인하지 않는다 %s" % str(shape_bad))
 
 	# -- 4. no presentation constant loose in src/ -------------------------------------------------
 	var src_files := _gd_files_deep(SRC_DIR)
@@ -410,6 +455,20 @@ func _invert_the_scanner(t) -> void:
 			hit_missing = true
 	t.ok(hit_missing, "표에는 있는데 파일에서 사라진 함수를 잡는다 (스캐너 자가 점검)")
 
+	# (c3) ⚠⚠ **the corner cut, which every other check in this file is blind to.** A `_paint_route`
+	# that draws a straight line between the polyline's two ends is still one call site with every
+	# argument used — measured green across the whole round. Both halves of the shape rule have to
+	# bite: the wrong native call, and the parameter indexed inside the leaf.
+	var cut := "\tdraw_line(points[0], points[points.size() - 1], colour, width)\n"
+	t.ok(_shape_hits("_paint_route", cut, ["draw_polyline", "points"]).size() >= 1,
+		"폴리라인을 두 끝점 직선으로 바꾼 잎을 잡는다 (스캐너 자가 점검 — 라운드 전체가 초록이던 그 변형이다)")
+	var indexed := "\tdraw_polyline(points, colour, width)\n\tvar x := points[0]\n"
+	t.ok(_shape_hits("_paint_route", indexed, ["draw_polyline", "points"]).size() >= 1,
+		"올바른 호출을 해도 잎 안에서 배열을 색인하면 잡는다 (스캐너 자가 점검)")
+	var whole := "\tdraw_polyline(points, colour, width)\n"
+	t.eq(_shape_hits("_paint_route", whole, ["draw_polyline", "points"]).size(), 0,
+		"멀쩡한 잎은 안 잡는다 — 전부 빨개지는 검사가 아니다 (스캐너 자가 점검)")
+
 	# (d) a colour moved out of look.gd, in both of its shapes.
 	t.ok(_colour_hits("var c := Color(0.1, 0.2, 0.3)\n").size() > 0,
 		"look.gd 밖으로 옮겨진 색 리터럴을 잡는다 (스캐너 자가 점검)")
@@ -471,6 +530,37 @@ func _invert_the_scanner(t) -> void:
 # -- the scan itself -----------------------------------------------------------------------------
 ## Returns one string per violation, empty when the text matches `expect` exactly. It takes TEXT, not
 ## a path, so the synthetic cases above can fail the scanner rather than the tree.
+## The three leaves that take an ARRAY of geometry, and the shape each one's body must have:
+## `[native call name, the parameter that must be handed to it whole]`.
+##
+## ⚠ **A table and not a branch**, for the same reason `_table()` is: a fourth array leaf added
+## tomorrow costs one line here, and until it is written the closed-class scan above already reddens
+## on its NAME — so it cannot arrive unnoticed and then silently skip this scan too.
+func _whole_array_leaves() -> Dictionary:
+	return {
+		"field_view.gd": {
+			"_paint_route": ["draw_polyline", "points"],
+			"_paint_cliff_face": ["draw_multiline", "points"],
+			"_paint_spark": ["draw_multiline", "points"],
+		},
+	}
+
+
+## The shape findings for one leaf body. Two halves, and both are needed:
+##  · the named native call must appear taking that parameter as its FIRST argument
+##  · the parameter must never be indexed (`points[`) anywhere in the body — that is how a loop of
+##    `draw_line`, or a straight line between the two ends, gets written while every count stays right
+func _shape_hits(fname: String, body: String, want: Array) -> Array[String]:
+	var call_name := str(want[0])
+	var param := str(want[1])
+	var out: Array[String] = []
+	if body.find("%s(%s," % [call_name, param]) < 0:
+		out.append("%s 가 %s(%s, …) 를 안 부른다" % [fname, call_name, param])
+	if body.find("%s[" % param) >= 0:
+		out.append("%s 가 잎 안에서 %s 를 색인한다" % [fname, param])
+	return out
+
+
 func _scan(text: String, expect: Dictionary) -> Array[String]:
 	var bad: Array[String] = []
 	var seen := {}

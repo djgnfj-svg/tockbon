@@ -125,17 +125,18 @@ class FieldSpy extends FieldView:
 	func _paint_spark(points: PackedVector2Array, colour: Color, width: float) -> void:
 		sparks.append({"seq": _bump(), "points": points, "colour": colour, "width": width})
 
-	func _paint_overlay(rects: Array, colour: Color) -> void:
-		overlays.append({"seq": _bump(), "rects": rects, "colour": colour})
-
-	func _paint_route(from: Vector2, to: Vector2, colour: Color, width: float) -> void:
-		routes.append({"seq": _bump(), "from": from, "to": to, "colour": colour, "width": width})
+	## ⚠ `_paint_overlay` is gone with the green coast wash (question C). `_paint_route` takes a
+	## POLYLINE, and the WHOLE point list is kept: `net_draw_leaf` counts call SITES and cannot tell
+	## `draw_polyline(points)` from `draw_line(points[0], points[-1])` — both are one call with every
+	## argument used — so the point list captured HERE is the only thing that catches a corner cut.
+	func _paint_route(points: PackedVector2Array, colour: Color, width: float) -> void:
+		routes.append({"seq": _bump(), "points": points, "colour": colour, "width": width})
 
 
 ## ⚠ **`_paint_berth` / `_paint_load` / `_paint_key` are GONE**, deleted with the berths and the 1/2
-## keys (`plan-then-watch`, 결정 14R). What is left is one shape — a filled box with one word in it —
-## used by the start button and by all five speed chips, so **one array captures both** and the checks
-## below separate them by rect. Two arrays would be two names for one hook.
+## keys (`plan-then-watch`, 결정 14R). ⚠⚠ **And the five speed chips are gone too**
+## (`speed-off-open-landing`, item 1), so `_paint_button` has exactly ONE call site left: the start
+## button. The array stays an array because the hook is still a hook.
 class HudSpy extends HudView:
 	var draws := 0
 	var seq := 0
@@ -201,17 +202,10 @@ static func _start_button(hs: HudSpy) -> Dictionary:
 	return {}
 
 
-## The speed chips, in ladder order, matched by their own rects. Size alone would not do — every chip
-## is the same size — so this one compares positions, which no shake ever moves.
-static func _speed_chips(hs: HudSpy) -> Array:
-	var out := []
-	for slot in Rules.speed_slot_count():
-		var want := Look.speed_rect_px(slot)
-		for raw: Dictionary in hs.buttons:
-			if (raw["rect"] as Rect2).position == want.position:
-				out.append(raw)
-				break
-	return out
+## ⚠ **`_speed_chips` is DELETED with the widget it read.** It matched five rects out of `buttons`;
+## `Look.speed_rect_px` no longer exists, so the reader could not even be written now. What replaced
+## it is `_the_speed_ladder_is_gone`, which asserts the chips are ABSENT rather than merely unread —
+## a green round after deleting a widget proves nothing about the widget.
 
 
 class PanelSpy extends PanelView:
@@ -584,16 +578,17 @@ func run(t) -> void:
 	# `ZOOM_MIN` the island band and the HUD's two corners both exist, so the two rectangles are
 	# compared for real — `HUD_START_ORIGIN_PX` moved to the bottom CENTRE is the mutation.
 	t.eq(fs.zoom, Look.ZOOM_MIN, "섬이 ZOOM_MIN 으로 열려 있다 (자가 점검 — 이 절의 좌표 변환이 그 값을 쓴다)")
+	# ⚠ **The chip row is gone, so the start button is the whole of the chrome now.** The bottom right
+	# is deliberately empty — see `HUD_START_ORIGIN_PX`'s own comment, whose 「the chips hold that
+	# corner」 half was deleted in the same edit rather than left standing and false.
 	var chrome: Array[Rect2] = [Look.start_rect_px()]
-	for ci in Rules.speed_slot_count():
-		chrome.append(Look.speed_rect_px(ci))
 	var overlap := 0
 	for r2: Rect2 in idle_rects:
 		var screen_rect := Rect2(r2.position * fs.zoom + fs.position, r2.size * fs.zoom)
 		for c: Rect2 in chrome:
 			if screen_rect.intersects(c):
 				overlap += 1
-	t.eq(overlap, 0, "항구에 선 병사는 시작 버튼과 배속 칩 밑에 안 깔린다 (ZOOM_MIN 에서)")
+	t.eq(overlap, 0, "항구에 선 병사는 시작 버튼 밑에 안 깔린다 (ZOOM_MIN 에서)")
 
 	# P10: `_paint_cliff_face` is called every frame regardless (so the seq-order check above always
 	# has something to compare against), but that alone proves nothing was thrown away INSIDE it —
@@ -695,11 +690,11 @@ func run(t) -> void:
 	t.eq(str(hs.timers[0]["text"]), "시간 %.1f" % b.time_left(), "타이머 글자가 sim 의 남은 시간이다")
 	t.eq(hs.timers[0]["at"], Look.HUD_TIMER_POS_PX, "타이머 위치가 look.gd 값이다")
 
-	# ⚠⚠ **The berth boxes, the per-boat load labels and the two key slots are all DELETED**, with the
-	# fleet and the keyboard they belonged to. What is on this layer now is one start button and five
-	# speed chips — six calls to ONE hook — plus the timer and the enemy count.
-	t.eq(hs.buttons.size(), 1 + Rules.speed_slot_count(),
-		"HUD 단추는 시작 하나 + 배속 칩 다섯, 여섯 번이다")
+	# ⚠⚠ **The berth boxes, the per-boat load labels, the two key slots AND the five speed chips are
+	# all DELETED.** What is on this layer during planning is ONE start button — one call to the hook —
+	# plus the timer and the enemy count. Three text items, against the shipped build's six and the
+	# eight this file counted one round ago.
+	t.eq(hs.buttons.size(), 1, "HUD 단추는 시작 하나뿐이다 — 배속 칩 다섯이 사라졌다")
 	var start_btn := _start_button(hs)
 	t.ok(not start_btn.is_empty(), "시작 버튼이 화면에 있다")
 	t.eq(str(start_btn["text"]), "시작", "시작 버튼에 「시작」이라고 쓰여 있다")
@@ -713,33 +708,28 @@ func run(t) -> void:
 		"그리고 글자가 상자 모서리가 아니라 상자 안쪽에 놓였다")
 	t.ok((start_btn["rect"] as Rect2).has_point(start_at), "그 자리가 상자 안이다 (천장)")
 
-	var chips := _speed_chips(hs)
-	t.eq(chips.size(), Rules.speed_slot_count(), "배속 칩을 사다리 칸 수만큼 그렸다")
-	var lit := 0
-	var chip_text_bad := 0
-	for ci2 in chips.size():
-		var chip: Dictionary = chips[ci2]
-		if chip["bg"] == Look.COL_SPEED_ON:
-			lit += 1
-		if str(chip["text"]) != str(HudView.SPEED_LABELS[ci2]):
-			chip_text_bad += 1
-	t.eq(lit, 1, "칩 하나만 켜져 있다 — 지금 보고 있는 배속이다")
-	t.eq(chip_text_bad, 0, "칩마다 자기 배속 숫자가 쓰여 있다 (동사 없는 숫자 다섯)")
-	t.eq(chips[Rules.SPEED_SLOT_DEFAULT]["bg"], Look.COL_SPEED_ON,
-		"켜진 칸이 SPEED_SLOT_DEFAULT 다 — 섬은 1배속으로 열린다")
-	t.eq(chips[0]["bg"], Look.COL_BUTTON, "안 켜진 칩은 COL_BUTTON 이다")
+	# ⚠⚠ **배속 칩이 화면에서 사라졌다, and it is asserted as an ABSENCE with a floor under it.**
+	# 「buttons has no chip」 is also true of a HUD that stopped drawing entirely, so the floor is the
+	# start button one block up: exactly one button, and it is the start button at its own rect.
+	var chip_shaped := 0
+	for raw_btn: Dictionary in hs.buttons:
+		if (raw_btn["rect"] as Rect2).size != Look.start_rect_px().size:
+			chip_shaped += 1
+	t.eq(chip_shaped, 0, "시작 버튼 말고는 HUD 에 상자가 하나도 없다 — 배속 칩이 그려지지 않는다")
+	t.eq((start_btn["rect"] as Rect2).size, Look.start_rect_px().size,
+		"그 하나가 시작 버튼의 크기다 (바닥 — HUD 가 통째로 죽어서 0개인 게 아니다)")
 
 	t.eq(hs.enemies.size(), 1, "남은 적 수를 한 번 그렸다")
 	t.eq(str(hs.enemies[0]["text"]), "적 %d" % b.enemies_left(), "남은 적 글자가 sim 의 수다")
 	t.eq(ps.panels.size(), 0, "전투 중에는 패널이 한 번도 안 그려졌다")
-	# ⚠ **The counted glyph budget**, written down because 6.1 predicted it: 1 timer + 1 start label
-	# + 5 chip labels + 1 enemy count = **8 text items on the planning screen**, against the shipped
-	# build's 6. The prediction was right and this is where it is recorded so it cannot drift.
-	t.eq(hs.timers.size() + hs.buttons.size() + hs.enemies.size(), 8,
-		"계획 화면의 글자 항목은 여덟이다 (타이머 1 + 시작 1 + 칩 5 + 적 1)")
-	t.ok(hs.timers[0]["seq"] < start_btn["seq"] and start_btn["seq"] < _seq_min(chips)
-		and _seq_max(chips) < hs.enemies[0]["seq"],
-		"HUD 는 타이머 -> 시작 버튼 -> 배속 칩 -> 남은 적 순서로 그린다")
+	# ⚠ **The counted glyph budget.** It was 8 (timer 1 + start 1 + chip 5 + enemy 1) and
+	# `speed-off-open-landing` took the five chips out: **3 text items on the planning screen**,
+	# against the shipped build's 6 and the user's own 「글자가 너무 많고」. Recorded here so it cannot
+	# drift back up without somebody editing this number on purpose.
+	t.eq(hs.timers.size() + hs.buttons.size() + hs.enemies.size(), 3,
+		"계획 화면의 글자 항목은 셋이다 (타이머 1 + 시작 1 + 적 1)")
+	t.ok(hs.timers[0]["seq"] < start_btn["seq"] and int(start_btn["seq"]) < int(hs.enemies[0]["seq"]),
+		"HUD 는 타이머 -> 시작 버튼 -> 남은 적 순서로 그린다")
 
 	# **The resting look of the start button**, captured before any press. Item 8's whole content is
 	# the DIFFERENCE from this, so it has to be read once while nothing has happened yet.
@@ -799,18 +789,46 @@ func run(t) -> void:
 	var second_px := Look.tile_point_px(b.grid.tile_point(second_tile))
 	var refuse_tile := int(b.grid.harbour_tiles[start_hb])   # water — never landable
 	var refuse_px := Look.tile_point_px(b.grid.tile_point(refuse_tile))
+	# ⚠ **An INLAND tile with no water 8-neighbour at all** — the denylist's own refusal case, and the
+	# one `speed-off-open-landing` 2.5 names for the acceptance row (「drag a boat to the middle of the
+	# island and the screen says no」). A water tile is refused too, but for a different reason, and the
+	# mark has to fire on the one a player will actually aim at by mistake.
+	var inland_tile := -1
+	for tt2 in b.grid.passable.size():
+		if b.grid.passable[tt2] == 0 or b.grid.home_harbour_for(tt2) >= 0:
+			continue
+		var itx := tt2 % b.grid.w
+		var ity := tt2 / b.grid.w
+		var wet := false
+		for k2 in Grid.NEIGHBOURS.size():
+			var nx2 := itx + int(Grid.NEIGHBOURS[k2][0])
+			var ny2 := ity + int(Grid.NEIGHBOURS[k2][1])
+			if nx2 < 0 or ny2 < 0 or nx2 >= b.grid.w or ny2 >= b.grid.h:
+				continue
+			if b.grid.water[ny2 * b.grid.w + nx2] != 0:
+				wet = true
+		if not wet:
+			inland_tile = tt2
+			break
+	t.ok(inland_tile >= 0, "섬 한가운데에 물에 안 닿은 내륙 칸이 있다 (자가 점검)")
+	t.eq(b.grid.home_harbour_for(inland_tile), -1, "그 칸은 어느 항구도 못 간다 (자가 점검)")
+	var inland_px := Look.tile_point_px(b.grid.tile_point(inland_tile))
 
-	# ⚠ **The droppable coast is on screen from the moment the island opens**, not only while a drag is
-	# in flight — the user's 「바다위에 초록색 지역」 is a standing invitation. And it is painted from the
-	# UNION over every harbour, which is the same predicate `battle.send` refuses on, so the screen can
-	# never promise a tile the sim then refuses.
-	t.eq(fs.overlays.size(), 1, "아무것도 안 끌고 있어도 상륙 가능 구역이 그려진다")
-	t.eq((fs.overlays[0]["rects"] as Array).size(), droppable_tiles.size(),
-		"그 칸 수가 home_harbour_for 가 받아주는 칸 수와 같다 — 항구 하나가 아니라 셋의 합집합이다")
-	t.ok(droppable_tiles.size() > _count_set(send),
-		"그리고 시작 항구 혼자 닿는 칸(%d)보다 넓다 — 합집합이라는 증거다" % _count_set(send))
-	t.ok(absf((fs.overlays[0]["colour"] as Color).a - Look.DROP_TINT_ALPHA) < 0.001,
-		"타일 알파가 DROP_TINT_ALPHA 와 같다")
+	# ⚠⚠ **초록색 해안이 사라졌다.** The wash used to be drawn from the moment the island opened and
+	# the user asked for its inverse (「못내림만 표시하면 됨 ㅇㅇ」). The hook it went through is gone,
+	# so the spy cannot even capture it — what is asserted here is the CONSEQUENCE on the tile pass:
+	# every `_paint_tile` call is the terrain loop and nothing repaints a tile on top of it. That count
+	# is already pinned at 4032 higher up in this file, which is the floor under this ceiling.
+	t.ok(not fs.has_method("_paint_overlay"),
+		"타일 덧칠 훅 자체가 없다 — 초록 해안을 그릴 방법이 남아 있지 않다")
+	t.eq(fs.tiles.size(), (Look.GRID_W + 2 * Look.WATER_MARGIN_TILES)
+			* (Look.GRID_H + 2 * Look.WATER_MARGIN_TILES),
+		"타일은 지형 한 벌만 그린다 — 상륙 가능 구역을 덧칠하지 않는다")
+	# The union is still the domain `send` answers to, and it is still wider than one harbour's reach —
+	# that claim lost its picture, not its truth, so it is measured off the sim directly.
+	t.ok(droppable_tiles.size() >= _count_set(send),
+		"보낼 수 있는 칸(%d)이 시작 항구 혼자 닿는 칸(%d)보다 좁지 않다"
+			% [droppable_tiles.size(), _count_set(send)])
 
 	# -- item 8: a refused START shakes the button, and an accepted one does not ---------------------
 	# ⚠ **This runs FIRST, while `boats` is still empty**, because an empty plan is the only thing that
@@ -858,10 +876,31 @@ func run(t) -> void:
 	await t.pump_frames(1)
 	t.eq(Vector2(fs.rings[0]["centre"]), sendable_px, "커서를 옮기면 링도 따라온다")
 	t.eq(fs.rings[0]["colour"], Look.COL_WIN, "받아주는 칸이면 링이 수락(COL_WIN) 색이다")
+	# ⚠⚠ **끄는 중에 보이는 선이 배가 실제로 갈 길이다.** `net_draw_leaf` pins `_paint_route` at one
+	# call and cannot tell a polyline from a straight line, so this is the ONLY place a corner cut over
+	# the island is catchable — S4's row, caught at runtime.
 	t.eq(fs.routes.size(), 1, "항로 선도 하나 그렸다")
-	t.eq(Vector2(fs.routes[0]["to"]), sendable_px, "그 선이 커서 쪽에서 끝난다")
-	t.ok(Vector2(fs.routes[0]["from"]).distance_to(sendable_px) > 1.0,
-		"그리고 실제 길이가 있다 — 두 끝점이 겹치지 않는다")
+	var drag_pts: PackedVector2Array = fs.routes[0]["points"]
+	t.ok(drag_pts.size() >= 3,
+		"그 선은 %d점짜리 폴리라인이다 (바닥 3 — 2점이면 그건 예전 직선 그대로다)" % drag_pts.size())
+	t.eq(drag_pts[drag_pts.size() - 1], sendable_px, "그 선이 커서 칸에서 끝난다")
+	var drag_hb := b.grid.home_harbour_for(sendable_tile)
+	t.ok(drag_hb >= 0, "그 칸을 받아주는 항구가 있다 (자가 점검)")
+	t.eq(drag_pts[0], Look.tile_point_px(b.grid.tile_point(int(b.grid.harbour_tiles[drag_hb]))),
+		"그리고 home_harbour_for 가 고른 그 항구에서 시작한다")
+	# Point for point against the sim's own route — the line the player sees IS the line the boat will
+	# sail, because `send` builds its boat off this same call.
+	var want_pts := PackedVector2Array()
+	for wp in b.grid.water_route(drag_hb, sendable_tile):
+		want_pts.append(Look.tile_point_px(wp))
+	t.eq(drag_pts, want_pts, "그리고 grid.water_route 와 점 하나까지 똑같다")
+	var dry_drag := 0
+	for di in drag_pts.size() - 1:
+		var wt2 := b.grid.tile_index(int(round(drag_pts[di].x / Look.TILE_PX - 0.5)),
+			int(round(drag_pts[di].y / Look.TILE_PX - 0.5)))
+		if b.grid.water[wt2] == 0:
+			dry_drag += 1
+	t.eq(dry_drag, 0, "마지막 점을 뺀 모든 점이 물 위다 — 섬을 가로지르는 선이 아니다")
 	t.root.push_input(_motion(refuse_px, Vector2.ZERO), true)
 	await t.pump_frames(1)
 	t.root.push_input(_release(refuse_px), true)
@@ -869,6 +908,69 @@ func run(t) -> void:
 	t.eq(b.boats.size(), 0, "물 위에 놓으면 아무 배도 안 생긴다")
 	t.eq(b.soldier_state[0], Battle.SoldierState.RESERVE, "그 병사는 항구에 그대로 남는다")
 	t.eq(game._drag_soldier, -1, "드래그가 끝났다 (자가 점검)")
+	# A refusal over WATER says no too — same call, same -1.
+	var wet_marks := _refusal_marks(fs)
+	t.eq(wet_marks.size(), 1, "물 위에 놓아도 거절 표시가 하나 뜬다")
+	t.ok(Vector2(wet_marks[0]["centre"]).distance_to(refuse_px) <= 1.0, "그 표시가 놓은 자리에 있다")
+
+	# ⚠ **It has to GO AWAY, and that is `REFUSE_MARK_SEC`'s own ceiling measured rather than asserted
+	# in prose.** It is also what makes the inland row below able to say 「exactly one」 — a mark that
+	# never expired would make every later refusal count two.
+	var fade := 0
+	while fade < 400 and not _refusal_marks(fs).is_empty():
+		await t.pump_frames(1)
+		fade += 1
+	t.ok(fade > 0 and fade < 400, "%d 프레임 만에 그 표시가 사라진다 — 다음 끌기까지 안 남는다" % fade)
+
+	# -- ⚠⚠ 내륙에 놓으면 화면이 거절했다고 말한다 (2.5) ------------------------------------------------
+	# The green coast wash used to make the screen's promise honest — its predicate was
+	# `home_harbour_for(t) >= 0`, the exact call `send` refuses on. Question C deleted it, and the mark
+	# inherits that guarantee from the other end: `game._on_left_release` draws it off `send`'s OWN -1,
+	# never off a predicate the view evaluates for itself.
+	t.root.push_input(_press(idle0.get_center()), true)
+	await t.pump_frames(1)
+	t.eq(game._drag_soldier, 0, "다시 그 병사를 잡았다 (자가 점검)")
+	t.root.push_input(_motion(inland_px, Vector2.ZERO), true)
+	await t.pump_frames(1)
+	t.root.push_input(_release(inland_px), true)
+	await t.pump_frames(1)
+	t.eq(b.boats.size(), 0, "내륙에 놓으면 배가 안 생긴다")
+	t.eq(b.soldier_state[0], Battle.SoldierState.RESERVE, "병사도 항구에 그대로다")
+	var marks := _refusal_marks(fs)
+	t.eq(marks.size(), 1, "그리고 그 프레임에 거절 표시가 정확히 하나 뜬다")
+	t.ok(Vector2(marks[0]["centre"]).distance_to(inland_px) <= 1.0,
+		"그 표시가 놓은 커서 자리에 있다 (%.2f px 차이)"
+			% Vector2(marks[0]["centre"]).distance_to(inland_px))
+	t.eq(float(marks[0]["width"]), Look.REFUSE_MARK_WIDTH_PX, "굵기가 look.gd 값이다")
+	var mark_col: Color = marks[0]["colour"]
+	t.ok(mark_col.r == Look.COL_LOSE.r and mark_col.g == Look.COL_LOSE.g
+			and mark_col.b == Look.COL_LOSE.b,
+		"색이 COL_LOSE 다 — 후보 링이 거절될 때 쓰는 그 색과 한 값이다")
+	t.ok(mark_col.a > Look.COL_LOSE.a * 0.5,
+		"그리고 갓 태어나 아직 거의 안 흐려졌다 (알파 %.3f, 바닥)" % mark_col.a)
+
+	# ⚠ **The ceiling, and it is the half that matters**: a mark drawn on EVERY release would pass
+	# every line above. An accepted drop must produce none — so the inland one is waited out first,
+	# or this row would be reading the previous refusal and could never redden.
+	var fade2 := 0
+	while fade2 < 400 and not _refusal_marks(fs).is_empty():
+		await t.pump_frames(1)
+		fade2 += 1
+	t.ok(fade2 > 0 and fade2 < 400, "내륙 표시도 %d 프레임 만에 사라진다 (자가 점검)" % fade2)
+	t.root.push_input(_press(idle1.get_center()), true)
+	await t.pump_frames(1)
+	t.root.push_input(_motion(sendable_px, Vector2.ZERO), true)
+	await t.pump_frames(1)
+	t.root.push_input(_release(sendable_px), true)
+	await t.pump_frames(1)
+	t.eq(b.boats.size(), 1, "받아주는 칸에 놓으면 배가 생긴다 (자가 점검)")
+	t.eq(_refusal_marks(fs).size(), 0,
+		"그리고 성공한 놓기에는 거절 표시가 안 뜬다 — 매번 뜨면 아무 뜻도 없다 (천장)")
+	# Wound back: the accepted drop above exists only to be the ceiling's control, and every row after
+	# this one was written against an empty plan.
+	t.ok(b.recall(int((b.boats[0] as Dictionary)["uid"])), "그 배를 도로 물린다 (자가 점검)")
+	await t.pump_frames(1)
+	t.eq(b.boats.size(), 0, "다시 아무 배도 없다 (자가 점검)")
 
 	# The accepted drop: one boat, carrying THAT soldier, and the clock still exactly stopped.
 	t.root.push_input(_press(idle0.get_center()), true)
@@ -1021,11 +1123,16 @@ func run(t) -> void:
 	# One route and one ring per boat, all of them at once: this is 「the whole plan on one page」.
 	t.eq(fs.routes.size(), b.boats.size(), "계획한 항로가 배마다 하나씩, 전부 그려진다")
 	var route_bad := 0
+	var route_short := 0
 	for ri in b.boats.size():
 		var want_to := Look.tile_point_px(b.grid.tile_point(int((b.boats[ri] as Dictionary)["target"])))
-		if Vector2(fs.routes[ri]["to"]).distance_to(want_to) > 0.01:
+		var pts: PackedVector2Array = fs.routes[ri]["points"]
+		if pts.size() < 3:
+			route_short += 1
+		if pts[pts.size() - 1].distance_to(want_to) > 0.01:
 			route_bad += 1
-	t.eq(route_bad, 0, "항로마다 끝점이 그 배가 노리는 칸이다")
+	t.eq(route_bad, 0, "항로마다 마지막 점이 그 배가 노리는 칸이다")
+	t.eq(route_short, 0, "그리고 전부 3점 이상짜리 폴리라인이다 — 2점이면 예전 직선이다")
 
 	# ⚠⚠ **OPEN 0 as a shell check.** The brake is deliberately absent (the user: 「일단 빼고 만든 이후에
 	# 추가하자는 거임」), so every remaining soldier has to be sendable. A cap appearing here is not a
@@ -1066,16 +1173,6 @@ func run(t) -> void:
 	t.eq(b.soldier_state[spare], Battle.SoldierState.RESERVE, "그 병사는 항구에 남는다 (자가 점검)")
 	t.ok(fs.idle_soldier_rect(spare).size != Vector2.ZERO, "그리고 다시 그려진다 (자가 점검)")
 
-	# -- the speed chips do nothing before the commit -------------------------------------------------
-	t.eq(game._speed_slot, Rules.SPEED_SLOT_DEFAULT, "섬은 기본 배속으로 열렸다 (자가 점검)")
-	t.root.push_input(_press(Look.speed_rect_px(4).get_center()), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(Look.speed_rect_px(4).get_center()), true)
-	t.eq(game._speed_slot, Rules.SPEED_SLOT_DEFAULT,
-		"커밋 전에는 배속 칩이 아무것도 안 한다 — 빠르게 할 것이 아직 없다")
-	t.eq(float(Rules.SPEED_STEPS[Rules.SPEED_SLOT_DEFAULT]), 1.0,
-		"SPEED_SLOT_DEFAULT 가 1배속 칸을 가리킨다 — 0번(정지) 칸이면 시작하자마자 얼어붙는다")
-
 	# -- the start button commits, and the screen changes with it --------------------------------------
 	t.root.push_input(_press(Look.start_rect_px().get_center()), true)
 	await t.pump_frames(1)
@@ -1089,10 +1186,46 @@ func run(t) -> void:
 			ghosts_after += 1
 	t.eq(ghosts_after, 0, "유령이 사라진다")
 	t.eq(fs.hulls.size(), b.boats.size(), "대신 배마다 선체가 하나씩 그려진다")
-	t.eq(fs.overlays.size(), 0, "상륙 가능 구역 색칠도 사라진다 — 더 놓을 수 없다")
 	t.eq(fs.routes.size(), b.boats.size(), "아직 안 간 배의 항로는 남아 있다")
-	t.eq(hs.buttons.size(), Rules.speed_slot_count(),
-		"HUD 에 남은 단추는 배속 칩 다섯뿐이다 (실행 화면의 글자 항목은 일곱)")
+	# ⚠⚠ **확정 뒤 HUD 에 상자가 하나도 없다.** The start button goes at the commit and the five speed
+	# chips no longer exist, so this layer answers no press at all — that is 결정 1 without the escape
+	# hatch the chips used to be. The floor for this zero is the `== 1` one section above, measured on
+	# the same HUD a few frames earlier.
+	t.eq(hs.buttons.size(), 0, "확정 뒤 HUD 에 상자가 하나도 안 남는다 (실행 화면의 글자 항목은 둘)")
+	t.eq(hs.timers.size() + hs.buttons.size() + hs.enemies.size(), 2,
+		"실행 화면의 글자 항목은 둘이다 (타이머 1 + 적 1)")
+
+	# -- ⚠⚠ 항해 중인 배의 선은 남은 길만 그린다 --------------------------------------------------------
+	# The view draws from the SIM's own `leg`; a route redrawn whole every frame would show the boat
+	# sailing water it has already crossed. Compared against `path.slice(leg + 1)` and never against a
+	# walk re-derived here — a second copy of the arc-length walk is the drift this split exists to
+	# make impossible.
+	var route_len_first := (fs.routes[0]["points"] as PackedVector2Array).size()
+	var shrank := false
+	var tail_bad := 0
+	var head_bad := 0
+	for _cn2 in 24:
+		game._process(0.05)
+		await t.pump_frames(1)
+		if b.boats.is_empty() or fs.routes.is_empty():
+			break
+		var boat0: Dictionary = b.boats[0]
+		if int(boat0["phase"]) != Battle.Phase.OUTBOUND:
+			break
+		var live: PackedVector2Array = fs.routes[0]["points"]
+		if live.size() < route_len_first:
+			shrank = true
+		if live[0].distance_to(Look.tile_point_px(Vector2(boat0["pos"]))) > 0.01:
+			head_bad += 1
+		var want_tail := PackedVector2Array()
+		for wp2 in (boat0["path"] as PackedVector2Array).slice(int(boat0["leg"]) + 1):
+			want_tail.append(Look.tile_point_px(wp2))
+		if live.slice(1) != want_tail:
+			tail_bad += 1
+	t.eq(head_bad, 0, "항해 중 선의 첫 점은 언제나 선체 자신의 자리다")
+	t.eq(tail_bad, 0, "그리고 나머지는 정확히 path.slice(leg + 1) 이다 — 뷰가 따로 걷지 않는다")
+	t.ok(shrank, "가면서 점 수가 줄어든다 (%d점에서 시작) — 이미 지나온 물을 다시 안 그린다"
+		% route_len_first)
 
 	# ⚠⚠ **결정 1 as a check.** All three plan branches are gated, and the three of them are pressed.
 	var boats_snapshot := b.boats.size()
@@ -1131,39 +1264,63 @@ func run(t) -> void:
 	t.eq(b.boats.size(), boats_snapshot, "확정 뒤에는 손에 든 병사를 놓아도 배가 안 생긴다")
 	t.eq(game._drag_soldier, -1, "그리고 손은 비워진다")
 
-	# -- the default speed is not the pause: no chip pressed, and the clock moves ----------------------
+	# -- the clock runs with nothing pressed at all ----------------------------------------------------
 	var elapsed_before := b.elapsed
 	for _n in 4:
 		game._process(0.016)
 	t.ok(b.elapsed > elapsed_before,
-		"시작하면 아무것도 안 눌러도 시계가 간다 (%.4f초) — 기본 칸이 0배속이면 여기가 문다" % b.elapsed)
+		"시작하면 아무것도 안 눌러도 시계가 간다 (%.4f초) — 셸이 delta 를 안 넘기면 여기가 문다" % b.elapsed)
 
-	# -- the speed chips answer AFTER the commit -------------------------------------------------------
-	t.root.push_input(_press(Look.speed_rect_px(4).get_center()), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(Look.speed_rect_px(4).get_center()), true)
-	t.eq(game._speed_slot, 4, "확정 뒤에는 배속 칩이 배속을 바꾼다")
-	# ⚠ **The field's scale is nulled back out before `_process` runs.** Reading it straight after the
-	# press would pass on a value left over from an earlier frame — and pre-setting a field is exactly
-	# how the line that wires it gets deleted with the round green.
-	fs._time_scale = -1.0
-	game._process(0.016)
-	t.eq(fs._time_scale, float(Rules.SPEED_STEPS[4]),
-		"그리고 셸이 그 배속을 뷰에 넘긴다 — 뷰가 사다리를 직접 읽지 않는다")
-	t.eq(hs._speed_scale, float(Rules.SPEED_STEPS[4]), "HUD 도 같은 한 숫자를 받는다")
-	t.eq(hs._speed_slot, 4, "그리고 어느 칩이 켜졌는지도 같이 받는다")
-	t.root.push_input(_press(Look.speed_rect_px(0).get_center()), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(Look.speed_rect_px(0).get_center()), true)
-	t.eq(game._speed_slot, 0, "0배속 칩도 눌린다 — 멈춤은 같은 사다리의 한 칸이다")
-	var paused_at := b.elapsed
-	for _n2 in 6:
+	# -- ⚠⚠ 확정 뒤 화면 아무 데나 눌러도 시뮬레이션이 안 바뀐다 ----------------------------------------
+	# The four corners of the row the chips USED to occupy, typed as literals because
+	# `Look.speed_rect_px` no longer exists to ask. Pressed through `game._unhandled_input` directly —
+	# mouse clicks pushed at the root arrive at (2000, 6520) in a 64px headless window and hit nothing
+	# with no error at all, so half an input suite can be green while the other half is dead.
+	var ghost_row := Rect2(Vector2(1060.0, 648.0), Vector2(220.0, 40.0))
+	var corners: Array[Vector2] = [
+		ghost_row.position + Vector2(2.0, 2.0),
+		Vector2(ghost_row.end.x - 2.0, ghost_row.position.y + 2.0),
+		Vector2(ghost_row.position.x + 2.0, ghost_row.end.y - 2.0),
+		ghost_row.end - Vector2(2.0, 2.0),
+	]
+	# The control arm: the same number of `_process` calls with NO presses at all. Run first, off a
+	# snapshot, so the comparison is against a number rather than against a hope.
+	var control_elapsed := b.elapsed
+	var control_substeps := b.substeps
+	for _cn in 6:
 		game._process(0.016)
-	t.eq(b.elapsed, paused_at, "0배속이면 프레임을 밀어도 시계가 정확히 그대로다")
-	t.root.push_input(_press(Look.speed_rect_px(Rules.SPEED_SLOT_DEFAULT).get_center()), true)
+	var control_after_elapsed := b.elapsed - control_elapsed
+	var control_after_substeps := b.substeps - control_substeps
+
+	var pressed_elapsed := b.elapsed
+	var pressed_substeps := b.substeps
+	var pressed_positions: Array = []
+	for i5 in b.soldier_state.size():
+		pressed_positions.append(Vector2(b.soldier_pos[i5]))
+	for c5: Vector2 in corners:
+		game._unhandled_input(_press(c5))
+		game._unhandled_input(_release(c5))
+	for _pn in 6:
+		game._process(0.016)
+	t.ok(absf((b.elapsed - pressed_elapsed) - control_after_elapsed) <= 1e-5,
+		"옛 배속 줄 네 귀퉁이를 눌러도 시계가 아무것도 안 누른 판과 똑같이 간다")
+	t.eq(b.substeps - pressed_substeps, control_after_substeps,
+		"서브스텝 수도 똑같다 — 누름이 시뮬레이션을 한 번도 안 건드렸다")
+	var moved_same := true
+	for i6 in b.soldier_state.size():
+		if b.soldier_state[i6] == Battle.SoldierState.RESERVE:
+			continue
+		if Vector2(pressed_positions[i6]).distance_to(Vector2(b.soldier_pos[i6])) <= Rules.EPS:
+			moved_same = false
+	t.ok(moved_same, "그 사이 병사들은 실제로 움직이고 있었다 (바닥 — 죽은 화면이라 안 바뀐 게 아니다)")
+	# And the camera still answers, which is what stops the row above being green because the screen
+	# is dead. Driven downward: `ZOOM_MAX` is 1.0 and the camera can be parked there.
+	var ghost_zoom := fs.zoom
+	game._unhandled_input(_wheel(ghost_row.get_center(), false))
+	t.ok(fs.zoom < ghost_zoom,
+		"그래도 같은 자리에서 휠은 화면을 움직인다 (%.3f -> %.3f)" % [ghost_zoom, fs.zoom])
+	fs.zoom = ghost_zoom
 	await t.pump_frames(1)
-	t.root.push_input(_release(Look.speed_rect_px(Rules.SPEED_SLOT_DEFAULT).get_center()), true)
-	t.eq(game._speed_slot, Rules.SPEED_SLOT_DEFAULT, "다시 1배속으로 돌려놨다 (자가 점검)")
 
 	# ⚠⚠ **Without this row the three above are satisfied by a screen that does nothing at all.**
 	# `_on_wheel` and the `_panning` fall-through are NOT gated on the commit — three plan branches
@@ -1509,6 +1666,8 @@ func run(t) -> void:
 	await _two_presses_reach_the_first_island(t)
 	_the_plan_constants_have_both_ends(t)
 	_the_readers_themselves(t)
+	_the_speed_ladder_is_gone(t)
+	_speed_steps_survives_read_by_nobody(t)
 
 
 ## Presses a map node the way a hand does — through `_unhandled_input`, then the ring's walk run out
@@ -1643,7 +1802,7 @@ func _the_plan_constants_have_both_ends(t) -> void:
 	t.ok(Look.HUD_START_SIZE_PX.x > 150.0 and Look.HUD_START_SIZE_PX.y > 26.0,
 		"시작 버튼이 옛 키 상자(150x26)보다 두 축 다 크다 (바닥 — 판을 끝내는 단 한 번의 누름이다)")
 	t.ok(Look.HUD_START_SIZE_PX.x <= 320.0 and Look.HUD_START_SIZE_PX.y <= 96.0,
-		"그리고 (320, 96) 을 안 넘는다 (천장 — 넘으면 배속 줄에 닿는다)")
+		"그리고 (320, 96) 을 안 넘는다 (천장 — 화면 왼쪽 절반 안에 머문다)")
 	t.ok(Look.HUD_START_TEXT_OFFSET_PX.x > 0.0
 			and Look.HUD_START_TEXT_OFFSET_PX.y > float(Look.HUD_START_FONT_SIZE_PX),
 		"시작 글자가 상자 원점에 안 붙어 있다 (바닥 — 원점에 놓인 글자는 놓인 적이 없는 글자다)")
@@ -1654,17 +1813,24 @@ func _the_plan_constants_have_both_ends(t) -> void:
 		"시작 글자가 보통 HUD 글자보다 크다 (바닥)")
 	t.ok(Look.HUD_START_FONT_SIZE_PX <= Look.HUD_TIMER_FONT_SIZE_PX + 8,
 		"그리고 시계 글자 + 8 을 안 넘는다 (천장)")
-	t.ok(Look.HUD_SPEED_ORIGIN_PX.x >= 1000.0,
-		"배속 줄이 오른쪽 끝에 있다 (바닥 x>=1000 — 시작 버튼과 섬을 사이에 두고 떨어진다)")
-	t.ok(Look.HUD_SPEED_ORIGIN_PX.x + Rules.speed_slot_count() * Look.HUD_SPEED_SIZE_PX.x
-			+ (Rules.speed_slot_count() - 1) * Look.HUD_SPEED_GAP_PX <= 1280.0,
-		"그리고 칩 다섯이 화면 오른쪽으로 안 넘친다 (천장 1280)")
-	t.ok(Look.HUD_SPEED_SIZE_PX.x >= 30.0 and Look.HUD_SPEED_SIZE_PX.y >= 30.0,
-		"배속 칩이 누를 만큼 크다 (바닥 30x30)")
-	t.ok(Look.HUD_SPEED_SIZE_PX.x <= 48.0 and Look.HUD_SPEED_SIZE_PX.y <= 48.0,
-		"그리고 (48, 48) 을 안 넘는다 (천장)")
-	t.ok(Look.HUD_SPEED_GAP_PX >= 3.0, "칩 사이가 벌어져 있다 (바닥 3 — 붙으면 한 막대로 읽힌다)")
-	t.ok(Look.HUD_SPEED_GAP_PX <= 10.0, "그리고 10 을 안 넘는다 (천장)")
+	# ⚠ **The five `HUD_SPEED_*` bounds are deleted with the chips they measured.** What replaced them
+	# is `_the_speed_ladder_is_gone`, which asserts the constants themselves are absent — a bound on a
+	# constant nobody draws is a bound that rots.
+	#
+	# **The refusal mark's own three, both ends each** (`speed-off-open-landing`, 2.5).
+	t.ok(Look.REFUSE_MARK_SEC >= 0.25,
+		"거절 표시가 최소 0.25초는 남는다 (바닥 — 60fps 다섯 프레임 0.084초 아래는 이 리포가 두 번 못 봤다)")
+	t.ok(Look.REFUSE_MARK_SEC <= 0.6, "그리고 0.6초를 안 넘는다 (천장 — 다음 끌기까지 남아 있으면 안 된다)")
+	t.ok(Look.REFUSE_MARK_R_PX >= Look.TARGET_RING_R_PX,
+		"거절 표시가 후보 링(%.0f px)보다 크다 (바닥 — 같으면 「여기 놓을 수 있다」로 읽힌다)"
+			% Look.TARGET_RING_R_PX)
+	t.ok(Look.REFUSE_MARK_R_PX <= 40.0, "그리고 한 타일(40px)을 안 넘는다 (천장 — 이유가 될 지형을 덮는다)")
+	t.ok(Look.REFUSE_MARK_WIDTH_PX >= 5.0,
+		"굵기가 5 이상이다 (바닥 — ZOOM_MIN 0.45 에서 %.2f px, 이 파일의 2.0 px 스냅 바닥 위다)"
+			% (Look.REFUSE_MARK_WIDTH_PX * Look.ZOOM_MIN))
+	t.ok(Look.REFUSE_MARK_WIDTH_PX * Look.ZOOM_MIN >= 2.0,
+		"그 산술이 실제로 성립한다 (자가 점검 — 바닥이 도출된 부등식 자체를 잰다)")
+	t.ok(Look.REFUSE_MARK_WIDTH_PX <= 8.0, "그리고 8 을 안 넘는다 (천장 — 가리키는 칸을 삼킨다)")
 	# A melee body is `BODY_RADIUS_RATIO_MELEE * TILE_PX * 2` across; the pitch has to clear it or two
 	# soldiers standing side by side are one blob and the thing you drag has no edges.
 	var melee_across := Look.body_radius_of(Rules.CELL_MELEE) * 2.0
@@ -1861,28 +2027,20 @@ func _count_set(arr: PackedByteArray) -> int:
 # -- the readers themselves, inverted -----------------------------------------------------------------
 
 ## ⚠⚠ **Cases that fail the READERS above rather than the tree.** `_start_button` is what says 「the
-## start button disappeared at the commit」 and `_speed_chips` is what says 「exactly one chip is lit」 —
-## written loosely (return the first button, return every button) they answer both of those questions
-## about a screen that never drew any of it. This repo has twice shipped a check carrying the defect it
-## was written to catch, and neither was found by mutating the code.
+## start button disappeared at the commit」 — written loosely (return the first button) it answers that
+## question about a screen that never drew any of it. This repo has twice shipped a check carrying the
+## defect it was written to catch, and neither was found by mutating the code.
 func _the_readers_themselves(t) -> void:
 	var fake := HudSpy.new()
 	t.eq(_start_button(fake), {}, "빈 화면에서 시작 버튼을 찾으면 빈 사전이다 — 첫 단추를 아무거나 주지 않는다")
-	t.eq(_speed_chips(fake).size(), 0, "빈 화면에서 배속 칩도 하나도 안 찾는다")
 
-	# Only the chips, no start button: the reader must still not hand one back.
-	for slot in Rules.speed_slot_count():
-		fake.buttons.append({"seq": slot, "rect": Look.speed_rect_px(slot), "bg": Look.COL_BUTTON,
-			"text": "x", "at": Vector2.ZERO, "fsize": 1, "col": Look.COL_HUD_TEXT})
+	# A box of some OTHER size: the reader must still not hand it back as the start button. This is
+	# what the five speed-chip rects used to be, and the case survives them.
+	fake.buttons.append({"seq": 0, "rect": Rect2(Vector2(1060.0, 648.0), Vector2(36.0, 40.0)),
+		"bg": Look.COL_BUTTON, "text": "x", "at": Vector2.ZERO, "fsize": 1,
+		"col": Look.COL_HUD_TEXT})
 	t.eq(_start_button(fake), {},
-		"칩만 다섯 있는 화면에서도 시작 버튼은 못 찾는다 — 크기로 가려낸다")
-	t.eq(_speed_chips(fake).size(), Rules.speed_slot_count(), "그 다섯은 다 찾는다")
-	var order_ok := true
-	var chips_found := _speed_chips(fake)
-	for slot2 in chips_found.size():
-		if (chips_found[slot2]["rect"] as Rect2).position != Look.speed_rect_px(slot2).position:
-			order_ok = false
-	t.ok(order_ok, "그리고 사다리 순서대로 돌려준다 — 어느 칸이 켜졌는지가 그 순서에 달려 있다")
+		"다른 크기의 상자만 있는 화면에서도 시작 버튼은 못 찾는다 — 크기로 가려낸다")
 
 	# A start button shifted by a refusal shake must still be found: the reader matches on SIZE, and a
 	# reader that matched on the whole rect would stop finding it on the one frame that matters.
@@ -1899,3 +2057,134 @@ func _the_readers_themselves(t) -> void:
 	# hand, or the round ends with a leaked `CanvasItem` RID and the wrapper reddens on stderr. Measured
 	# the first time this block ran.
 	fake.free()
+
+
+## ⚠⚠ **배속 조작이 코드에서도 없어졌다.** Every deletion needs a check that the thing is GONE, not
+## only that what is left still passes: a green round after deleting a widget proves nothing about the
+## widget, because the checks that drove it were deleted in the same edit.
+##
+## ⚠ `get_script_constant_map()` is NOT static — calling it on the class name is a PARSE error that
+## takes the whole net out with 「Nonexistent function 'new'」 rather than a red line. It is asked of an
+## instance's own script here, which is also the script the game actually loaded.
+func _the_speed_ladder_is_gone(t) -> void:
+	var hv := HudView.new()
+	var fv := FieldView.new()
+	var lk := Look.new()
+	var gm := Game.new()
+
+	t.ok(not hv.has_method("set_speed"), "hud_view 에 set_speed 가 없다")
+	t.ok(not fv.has_method("set_time_scale"), "field_view 에 set_time_scale 이 없다")
+	t.ok(not fv.has_method("_paint_overlay"), "field_view 에 _paint_overlay 훅이 없다")
+	t.ok(fv.has_method("note_refusal"), "대신 note_refusal 이 있다 (자가 점검 — 메서드 조회가 실제로 돈다)")
+	t.ok(not gm.has_method("_speed_hit_at"), "game 에 _speed_hit_at 이 없다")
+
+	var game_props: Array = []
+	for raw in gm.get_property_list():
+		game_props.append(str((raw as Dictionary)["name"]))
+	t.ok(not game_props.has("_speed_slot"), "game 에 _speed_slot 필드도 없다")
+	t.ok(game_props.has("_drag_soldier"), "_drag_soldier 는 그대로 있다 (자가 점검)")
+
+	var fv_props: Array = []
+	for raw2 in fv.get_property_list():
+		fv_props.append(str((raw2 as Dictionary)["name"]))
+	t.ok(not fv_props.has("_time_scale"), "field_view 에 _time_scale 필드도 없다")
+	t.ok(not fv_props.has("_droppable_rects"), "그리고 _droppable_rects 도 없다 — 초록 해안이 통째로 빠졌다")
+
+	var look_consts: Dictionary = lk.get_script().get_script_constant_map()
+	for gone in ["COL_SPEED_ON", "HUD_SPEED_ORIGIN_PX", "HUD_SPEED_SIZE_PX", "HUD_SPEED_GAP_PX",
+			"HUD_SPEED_TEXT_OFFSET_PX", "COL_SENDABLE", "DROP_TINT_ALPHA"]:
+		t.ok(not look_consts.has(gone), "look.gd 에 %s 가 없다" % gone)
+	t.ok(look_consts.has("COL_START"), "COL_START 는 그대로 있다 (자가 점검 — 상수 표를 실제로 읽고 있다)")
+	for kept in ["REFUSE_MARK_SEC", "REFUSE_MARK_R_PX", "REFUSE_MARK_WIDTH_PX"]:
+		t.ok(look_consts.has(kept), "그리고 %s 가 새로 있다" % kept)
+
+	var look_methods: Array = []
+	for raw3 in (lk.get_script() as Script).get_script_method_list():
+		look_methods.append(str((raw3 as Dictionary)["name"]))
+	t.ok(not look_methods.has("speed_rect_px"), "look.gd 에 speed_rect_px 가 없다")
+	t.ok(not look_methods.has("sendable_tint"), "look.gd 에 sendable_tint 도 없다")
+	t.ok(look_methods.has("start_rect_px"), "start_rect_px 는 그대로 있다 (자가 점검)")
+
+	var hud_consts: Dictionary = hv.get_script().get_script_constant_map()
+	t.ok(not hud_consts.has("SPEED_LABELS"), "hud_view 에 SPEED_LABELS 가 없다")
+	t.ok(hud_consts.has("TYPE_LABELS"), "TYPE_LABELS 는 그대로 있다 (자가 점검)")
+
+	hv.free()
+	fv.free()
+	gm.free()
+
+
+## ⚠⚠ **`Rules.SPEED_STEPS` 는 살아 있고, src 안에서 아무도 안 읽는다.** The plan pins BOTH halves:
+## the table is the only thing that has to come back the day the user says 「이제 필요해」, and a
+## constant nobody reads is exactly the thing that rots unnoticed unless somebody says out loud that
+## nobody reads it.
+##
+## The walk strips comments before matching, because `rules.gd`'s own paragraph NAMES these four and
+## every doc comment in `src/` that explains the deletion would otherwise count as a reader.
+func _speed_steps_survives_read_by_nobody(t) -> void:
+	t.eq(Rules.SPEED_STEPS.size(), 5, "사다리에 다섯 칸이 남아 있다")
+	t.eq(Rules.SPEED_STEPS, [0.0, 1.0, 2.0, 3.0, 6.0], "그리고 값도 그대로다")
+	t.eq(Rules.SPEED_SLOT_DEFAULT, 1, "기본 칸은 여전히 1이다 — 0번(정지)이 아니다")
+	t.eq(float(Rules.SPEED_STEPS[Rules.SPEED_SLOT_DEFAULT]), 1.0, "그 칸의 값이 1.0 이다")
+	t.eq(Rules.speed_slot_count(), 5, "접근자도 그대로 돈다")
+	t.eq(Rules.speed_mul_of(4), 6.0, "꼭대기는 6배속이다")
+
+	var files := _gd_files_under("res://src")
+	# ⚠ The file-count floor. A walk that found nothing to read reads as clean, and this repo has
+	# already shipped a scan that silently matched zero files.
+	t.ok(files.size() >= 8, "src 아래 .gd 를 %d개 걸었다 (바닥 8 — 0개면 깨끗한 게 아니라 안 돈 것이다)"
+		% files.size())
+	var readers: Array = []
+	var scanned := 0
+	for raw in files:
+		var path := str(raw)
+		if path.ends_with("/rules.gd"):
+			continue
+		scanned += 1
+		var text := FileAccess.get_file_as_string(path)
+		var stripped := ""
+		for line in text.split("\n"):
+			var cut := String(line).find("#")
+			stripped += (String(line) if cut < 0 else String(line).substr(0, cut)) + "\n"
+		for name in ["SPEED_STEPS", "speed_mul_of", "speed_slot_count", "SPEED_SLOT_DEFAULT"]:
+			if stripped.find(name) >= 0:
+				readers.append("%s -> %s" % [path, name])
+	t.ok(scanned >= 7, "그 중 rules.gd 를 뺀 %d개를 실제로 읽었다 (자가 점검)" % scanned)
+	t.eq(readers.size(), 0,
+		"src 안에서 아무도 사다리를 안 읽는다 — 읽는 곳: %s" % str(readers))
+
+
+## Every `.gd` under `dir`, recursively. Written here rather than borrowed: `net_draw_leaf` has its own
+## walker over a FIXED list of five files, and a fixed list is exactly what this check must not use —
+## a new `src/` file that read the ladder would be invisible to it.
+func _gd_files_under(dir: String) -> Array:
+	var out: Array = []
+	var d := DirAccess.open(dir)
+	if d == null:
+		return out
+	d.list_dir_begin()
+	var name := d.get_next()
+	while name != "":
+		if d.current_is_dir():
+			if not name.begins_with("."):
+				out.append_array(_gd_files_under(dir + "/" + name))
+		elif name.ends_with(".gd"):
+			out.append(dir + "/" + name)
+		name = d.get_next()
+	d.list_dir_end()
+	return out
+
+
+## The refusal marks in one captured frame: rings at `REFUSE_MARK_R_PX`, which is deliberately larger
+## than `TARGET_RING_R_PX` so a drag candidate ring can never be mistaken for one.
+##
+## ⚠ **Matched on RADIUS and not on colour.** The drag candidate ring is `COL_LOSE` too whenever the
+## tile under the cursor is refused, so a colour match would count it and this row would go green on a
+## frame where no mark was ever pushed. The radii differ by 8 px and that gap is what the constant's
+## own floor (`>= TARGET_RING_R_PX`) exists to keep.
+static func _refusal_marks(fs: FieldSpy) -> Array:
+	var out := []
+	for raw: Dictionary in fs.rings:
+		if absf(float(raw["radius"]) - Look.REFUSE_MARK_R_PX) <= 0.01:
+			out.append(raw)
+	return out

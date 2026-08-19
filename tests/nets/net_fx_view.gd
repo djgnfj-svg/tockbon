@@ -63,7 +63,6 @@ class FieldSpy extends FieldView:
 	var bodies := []
 	var beaks := []
 	var hps := []
-	var overlays := []
 	var routes := []
 	var shots := []
 	var halos := []
@@ -80,7 +79,6 @@ class FieldSpy extends FieldView:
 		bodies.clear()
 		beaks.clear()
 		hps.clear()
-		overlays.clear()
 		routes.clear()
 		shots.clear()
 		halos.clear()
@@ -123,12 +121,11 @@ class FieldSpy extends FieldView:
 		cliff_faces.append({"points": points, "colour": colour, "width": width, "seq": seq})
 		seq += 1
 
-	func _paint_overlay(rects: Array, colour: Color) -> void:
-		overlays.append({"rects": rects, "colour": colour, "seq": seq})
-		seq += 1
-
-	func _paint_route(from: Vector2, to: Vector2, colour: Color, width: float) -> void:
-		routes.append({"from": from, "to": to, "colour": colour, "width": width, "seq": seq})
+	## ⚠ `_paint_overlay` is gone with the green coast wash it drew (question C). `_paint_route` takes a
+	## POLYLINE now, and the spy keeps the WHOLE point list rather than two endpoints — reading only the
+	## ends is exactly what cannot tell a route around a headland from the straight line over it.
+	func _paint_route(points: PackedVector2Array, colour: Color, width: float) -> void:
+		routes.append({"points": points, "colour": colour, "width": width, "seq": seq})
 		seq += 1
 
 	func _paint_shot(from: Vector2, to: Vector2, colour: Color, width: float) -> void:
@@ -184,9 +181,7 @@ func run(t) -> void:
 	await _landing_rings(t)
 	await _shake(t)
 	await _gait(t)
-	await _the_ladder_does_not_destroy_the_picture(t)
-	await _the_hud_ladder_ages_with_the_speed(t)
-	await _zero_speed_freezes_the_picture(t)
+	await _the_picture_sits_inside_its_own_duties(t)
 	_spark_points_is_a_function_of_progress(t)
 	_the_inequalities_the_spark_stands_on(t)
 	_fx_gain_is_indexed_by_item_number(t)
@@ -203,39 +198,40 @@ func run(t) -> void:
 ## 0.18 > 0.1667, so an unscaled lunge never returns to rest. `SPARK_SEC` 0.12's own eight-neighbour
 ## bound goes from 0.96 to **5.76**.
 ##
-## ⇒ **`field_view` ages its drawers by `delta * _time_scale`**, and these rows are the only thing
-## standing between that line and a destroyed picture. Each one drives the SIM at `dt * k` and the VIEW
-## at the real `dt`, exactly as `game.gd::_process` does, and measures over one real attack period.
+## ⚠⚠ **THE 2x / 3x / 6x ARMS ARE DELETED WITH THE LADDER, AND THE ROW IS NOT.**
+## `speed-off-open-landing` removed the speed chips and `field_view.set_time_scale` with them, so the
+## sim and the view run on the same bare frame delta and there is no second rate to compare against.
+## What the three extra arms measured was the SCALING; what the 1x arm measures is that `look.gd`'s
+## three written inequalities actually hold on the picture the game draws — and that claim did not go
+## anywhere. Deleting the whole row because its widget died would have thrown away the only check that
+## the flash, the lunge and the shards sit inside the duties their comments promise.
 ##
 ## ⚠ **Every row is bounded at BOTH ends.** A duty ceiling with no floor is green with the effect
 ## deleted outright — this repo found that on four items at once in the presentation round.
-func _the_ladder_does_not_destroy_the_picture(t) -> void:
-	for raw_k in [1.0, 2.0, 3.0, 6.0]:
+func _the_picture_sits_inside_its_own_duties(t) -> void:
+	for raw_k in [1.0]:
 		var k := float(raw_k)
 		var m: Dictionary = await _ladder_measure(t, k)
 		# ① the white. `CELL_MELEE`'s period is 1.0 s, so the duty is `HIT_FLASH_SEC / 1.0` at every
 		# rung once the view is scaled — 0.14. Unscaled at 6x it is 0.84.
 		t.ok(float(m["flash_duty"]) > 0.05,
-			"%.0f배속 — 몸이 실제로 하얗게 번쩍인다 (듀티 %.3f, 바닥 0.05)" % [k, float(m["flash_duty"])])
+			"몸이 실제로 하얗게 번쩍인다 (듀티 %.3f, 바닥 0.05)" % float(m["flash_duty"]))
 		t.ok(float(m["flash_duty"]) <= 0.25,
-			"%.0f배속으로 감아도 몸이 하얗게 물들지 않는다 (듀티 %.3f, 천장 0.25)"
-				% [k, float(m["flash_duty"])])
+			"그리고 몸이 하얗게 물들지는 않는다 (듀티 %.3f, 천장 0.25)" % float(m["flash_duty"]))
 		# ② the lunge. Both ends of ONE quantity: it leaves rest, and it comes back to EXACTLY rest.
 		t.ok(float(m["lunge_peak"]) > 0.5,
-			"%.0f배속 — 때린 몸이 실제로 앞으로 나갔다 (%.2f px, 바닥)" % [k, float(m["lunge_peak"])])
+			"때린 몸이 실제로 앞으로 나갔다 (%.2f px, 바닥)" % float(m["lunge_peak"]))
 		t.ok(float(m["lunge_duty"]) <= 0.45,
-			"%.0f배속으로 감아도 몸이 밀린 채로 안 남는다 (밀려 있던 프레임 비율 %.3f, 천장 0.45)"
-				% [k, float(m["lunge_duty"])])
+			"그리고 밀린 채로 안 남는다 (밀려 있던 프레임 비율 %.3f, 천장 0.45)" % float(m["lunge_duty"]))
 		# ③ the shards. One bundle per body at a time, and the fraction of the period they cover has to
 		# stay well under 1 or a body's rim is never clean.
 		t.ok(float(m["spark_duty"]) > 0.02,
-			"%.0f배속 — 파편이 실제로 튄다 (듀티 %.3f, 바닥)" % [k, float(m["spark_duty"])])
+			"파편이 실제로 튄다 (듀티 %.3f, 바닥)" % float(m["spark_duty"]))
 		t.ok(float(m["spark_duty"]) <= 0.45,
-			"%.0f배속에서도 불꽃이 몸 테두리를 다 덮지 않는다 (듀티 %.3f, 천장 0.45)"
-				% [k, float(m["spark_duty"])])
+			"그리고 불꽃이 몸 테두리를 다 덮지 않는다 (듀티 %.3f, 천장 0.45)" % float(m["spark_duty"]))
 		t.ok(int(m["spark_max_per_frame"]) <= int(m["bodies_max"]),
-			"%.0f배속에서도 한 프레임의 파편 묶음이 몸 수를 안 넘는다 — 몸마다 하나뿐이다 (%d개 / 몸 %d개)"
-				% [k, int(m["spark_max_per_frame"]), int(m["bodies_max"])])
+			"한 프레임의 파편 묶음이 몸 수를 안 넘는다 — 몸마다 하나뿐이다 (%d개 / 몸 %d개)"
+				% [int(m["spark_max_per_frame"]), int(m["bodies_max"])])
 
 
 ## One melee cell beside one bison, driven for `2.0 / k` REAL seconds in 1/60 s real frames — two whole
@@ -250,7 +246,9 @@ func _ladder_measure(t, k: float) -> Dictionary:
 	var b := _battle_of(_open(), army, [_spawn(Rules.BISON, 13, 5)], 999.0)
 	_ashore(b, 0, Vector2(12, 5))
 	var fv := _view_of(t, b, army)
-	fv.set_time_scale(k)
+	# ⚠ No `set_time_scale` — it is deleted with the ladder. `k` is kept as a parameter because the
+	# arithmetic below (`frames`, the duties) is written in terms of it, and hard-coding 1.0 through
+	# the body would make restoring a second rate a rewrite rather than one more entry in the loop.
 
 	var soldier_px := Look.tile_point_px(Vector2(12, 5))
 	var plain_enemy := Look.body_colour_of(true)
@@ -300,59 +298,6 @@ func _ladder_measure(t, k: float) -> Dictionary:
 		"bodies_max": bodies_max,
 	}
 
-
-## ⚠⚠ **The HUD takes the same multiplier, and nothing proved it USED it.** `net_shell` reads
-## `hud_view._speed_scale` off the field and finds the shell's number there — which proves it was
-## computed and handed down, never that a drawer ages by it. **Measured: `_fx_step(delta *
-## _speed_scale)` changed to `_fx_step(delta)` left the whole round green**, because `_chip_fx` is
-## this layer's only drawer and it can only fire pre-commit, where the shell is always at 1x. The
-## moment a second drawer lands here, or the start button gains a post-commit state, the ladder
-## destroys it silently — this is `CLAUDE.md`'s named shape: capturing an argument proves it was
-## computed, never that it was used.
-##
-## The shake is read off the DRAWN rect, not off `_chip_offset`, so a hook that stopped applying the
-## offset would fail here too. Both arms run the same REAL interval and the same real frames; only
-## the multiplier differs, so the 1x arm is the self-check that the interval is genuinely short.
-func _the_hud_ladder_ages_with_the_speed(t) -> void:
-	# One sixth of the drawer's life, plus a hair. At 6x that is the whole of it; at 1x it is a
-	# sixth of it, and the button is still visibly displaced.
-	var real_sec := Look.CHIP_FX_SEC / 6.0 + 0.001
-	var top := float(Rules.SPEED_STEPS[Rules.speed_slot_count() - 1])
-	t.eq(top, 6.0, "사다리 꼭대기가 6배속이다 (자가 점검 — 이 행의 산술이 그 숫자에서 나온다)")
-	for raw_k in [1.0, top]:
-		var k := float(raw_k)
-		var army := _army_of([Rules.CELL_MELEE])
-		var b := _planning_battle_of(_open(), army, [_spawn(Rules.BISON, 13, 5)], 999.0)
-		var hud := HudSpy.new()
-		hud.bind(b)
-		t.root.add_child(hud)
-		hud.set_process(false)
-		hud.set_speed(Rules.SPEED_SLOT_DEFAULT if k == 1.0 else Rules.speed_slot_count() - 1, k)
-		# A refused start — `boats` is empty, so `commit()` says false and this is the real refusal
-		# the shell pushes in, not a hand-set field.
-		t.ok(not b.commit(), "%.0f배속 — 빈 계획으로 누른 시작이 거절된다 (자가 점검)" % k)
-		hud.note_chip(0, false)
-		await t.pump_frames(1)
-		var peak := _start_shift(hud)
-		t.ok(peak.length() > 0.0,
-			"%.0f배속 — 거절 흔들림이 실제로 일어난다 (%.2f px, 바닥)" % [k, peak.length()])
-		t.ok(peak.length() <= Look.REFUSE_SHAKE_PX + 0.01,
-			"%.0f배속 — 그리고 REFUSE_SHAKE_PX 를 안 넘는다 (천장)" % k)
-		# The real clock advances by the same amount in both arms.
-		hud._process(real_sec)
-		await t.pump_frames(1)
-		var after := _start_shift(hud)
-		if k == 1.0:
-			t.ok(after.length() > 0.0,
-				"1배속 — 실제 %.3fs 뒤에도 단추가 아직 흔들리고 있다 (자가 점검 — 간격이 진짜 짧다)"
-					% real_sec)
-		else:
-			t.eq(after, Vector2.ZERO,
-				"%.0f배속 — 같은 실제 시간에 흔들림이 정확히 끝나 있다 (HUD 도 배속으로 늙는다)" % k)
-		t.root.remove_child(hud)
-		hud.free()
-
-
 ## The start button's displacement from its resting rect, read off the captured draw call. The
 ## reader matches on SIZE because the shake moves the position, and a reader keyed on the whole rect
 ## would stop finding the button on the one frame that matters.
@@ -363,36 +308,14 @@ func _start_shift(hud: HudSpy) -> Vector2:
 			return (btn["rect"] as Rect2).position - Look.start_rect_px().position
 	return Vector2(1e9, 1e9)
 
+## ⚠⚠ **Two checks were DELETED here with the speed ladder, and this note is what stops them being
+## re-invented.** `_the_hud_ladder_ages_with_the_speed` drove `hud_view.set_speed` and
+## `_zero_speed_freezes_the_picture` drove `field_view.set_time_scale`; both functions are gone, and
+## both rows were about a rate the game no longer has. **The refusal shake they used as their
+## instrument is still measured** — `net_shell` presses start with an empty plan and reads the shifted
+## rect back — so what was lost is the ladder half and nothing else.
+## `_start_shift` below survives because that shake reader is still wanted.
 
-## ⚠ **0x is not a viewing rate for the picture either.** A still sim under a running animation is the
-## exact shape 「pause」 must not be, so the view's own clock has to stop with it. Both ends: the effect
-## exists at all on the frame of the blow, and it does not age by so much as one frame afterwards.
-func _zero_speed_freezes_the_picture(t) -> void:
-	var army := _army_of([Rules.CELL_MELEE])
-	var b := _battle_of(_open(), army, [_spawn(Rules.BISON, 13, 5)], 999.0)
-	_ashore(b, 0, Vector2(12, 5))
-	var fv := _view_of(t, b, army)
-
-	# One real frame at 1x to make a blow, and to spawn the drawers this row is about.
-	fv.set_time_scale(1.0)
-	await _frame(t, b, fv, TICK_ONE, 1.0 / 60.0)
-	var flash_col := Look.body_colour_of(true).lerp(Look.COL_FLASH, Look.HIT_FLASH_STRENGTH)
-	var lit := 0
-	for rawb: Dictionary in fv.bodies:
-		if _col(rawb, "colour") == flash_col:
-			lit += 1
-	t.eq(lit, 1, "0배속 시험 — 먼저 1배속에서 몸 하나가 실제로 번쩍였다 (바닥)")
-	var frozen_col := _col(_at(fv.bodies, 0), "colour")
-	var frozen_pos := _pt(_at(fv.bodies, 1), "centre")
-
-	# Now 0x, and twenty real frames. Nothing on either clock may move.
-	fv.set_time_scale(0.0)
-	for _f in 20:
-		await _frame(t, b, fv, 0.0, 1.0 / 60.0)
-	t.eq(_col(_at(fv.bodies, 0), "colour"), frozen_col,
-		"0배속이면 연출도 멈춘다 — 스무 프레임을 돌려도 흰색이 한 톨도 안 빠진다")
-	t.eq(_pt(_at(fv.bodies, 1), "centre"), frozen_pos, "런지도 그 자리에 얼어붙어 있다")
-	_drop(t, fv)
 
 # -- the instrument, inverted ----------------------------------------------------------------------
 
@@ -497,18 +420,26 @@ func _transit_body_is_drawn_and_can_flash(t) -> void:
 
 	# Two DIFFERENT landings, so the two boats are two places. Aimed at one tile they would sail the
 	# identical route and the "not drawn on top of each other" floor below would be measuring nothing.
+	#
+	# ⚠⚠ **The second landing moved from (6,3) to (6,7), and that is a finding rather than a nudge.**
+	# Since `speed-off-open-landing` a boat sails a water ROUTE, and the routes to (6,5) and (6,3) share
+	# their first TWO hops — `(2,5) (3,4) (4,3)`, 2.83 tiles of identical sailing — so two boats aimed
+	# at "different" beaches sat on exactly the same pixel for the first two thirds of the crossing and
+	# this floor measured nothing at all. (6,7) leaves the shared prefix after ONE hop:
+	# `(2,5) (3,4)` then (4,3) against (4,5). Both routes are 5.657 tiles, so neither has arrived below.
 	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
-	var landing2 := int(_PORT_LANDING.y - 2.0) * ARENA_W + int(_PORT_LANDING.x)
+	var landing2 := int(_PORT_LANDING.y + 2.0) * ARENA_W + int(_PORT_LANDING.x)
 	t.ok(b.send(0, landing) >= 0, "1번 병사를 배에 태워 보냈다 (자가 점검)")
 	t.ok(b.send(1, landing2) >= 0, "2번 병사는 다른 해안으로 보냈다 (자가 점검)")
 	t.ok(b.commit(), "시작을 눌러 두 척을 띄웠다 (자가 점검)")
 
-	# 0.4 s of SIM and 0.001 s of VIEW, on purpose. The two boats leave the same harbour, so a single
-	# sub-step leaves them 1.2 px apart and the "not drawn on top of each other" floor below would be
-	# measuring nothing; 0.4 s at `BOAT_SPEED` 4.0 is 1.6 tiles of divergence and neither has arrived
-	# (the shorter leg is 4.0 tiles). The view clock stays at ~0 so no hit reaction has surfaced yet
-	# and the two bodies are still their own colour.
-	await _frame(t, b, fv, 0.4, 0.001)
+	# 0.7 s of SIM and 0.001 s of VIEW, on purpose. The two boats leave the same harbour AND share their
+	# first hop, so a short run leaves them on the same point and the "not drawn on top of each other"
+	# floor below would be measuring nothing. 0.7 s at `BOAT_SPEED` 4.0 is 2.8 tiles: both are deep in
+	# their second segment, roughly (3.98, 3.02) and (3.98, 4.98) — about 78 px apart against a 22.4 px
+	# body — and neither has arrived (each route is 5.657 tiles = 1.414 s). The view clock stays at ~0
+	# so no hit reaction has surfaced yet and the two bodies are still their own colour.
+	await _frame(t, b, fv, 0.7, 0.001)
 	t.eq(b.soldier_state[0], Battle.SoldierState.TRANSIT, "병사 둘 다 아직 배 위에 있다 (자가 점검)")
 	t.eq(b.soldier_state[1], Battle.SoldierState.TRANSIT, "(자가 점검, 두 번째 병사)")
 	t.eq(fv.bodies.size(), 3, "적 하나 + 배 위의 병사 둘, 몸 셋을 그렸다 — 예전엔 하나(적)뿐이었다")
@@ -686,23 +617,37 @@ func _destination_marker_both_legs(t) -> void:
 			ring_found = true
 	t.ok(ring_found, "가는 중에는 목표 칸에 도착 링이 떠 있다")
 	t.eq(fv.routes.size(), 1, "항로 선도 하나 그렸다")
-	t.eq(_pt(_at(fv.routes, 0), "to"), target_px, "그 선이 목표 칸을 향한다")
-	t.eq(_pt(_at(fv.routes, 0), "from"), Look.tile_point_px(Vector2(b.boats[0]["pos"])),
-		"그리고 배 자신의 자리에서 출발한다 (from 도 잰다 — to 만 재면 collapsed line 이 안 잡힌다)")
+	var out_pts: PackedVector2Array = (_at(fv.routes, 0) as Dictionary)["points"]
+	t.ok(out_pts.size() >= 2, "그 선은 %d점짜리 폴리라인이다 (자가 점검)" % out_pts.size())
+	t.eq(out_pts[out_pts.size() - 1], target_px, "그 선이 목표 칸에서 끝난다")
+	t.eq(out_pts[0], Look.tile_point_px(Vector2(b.boats[0]["pos"])),
+		"그리고 배 자신의 자리에서 출발한다 (끝점만 재면 collapsed line 이 안 잡힌다)")
 
-	# `sim_dt` 0.0 from here — `to`/`dist`/`t` still hold the OUTBOUND leg's own values (the view
-	# never reads them for a RETURNING boat, only `home`), so a real `step` would misread `arrived`
-	# against them and could remove the boat from `battle.boats` before the view ever saw it.
-	# `pos` is also moved to the landing tile — the real position a RETURNING boat actually starts
-	# from (`_phase_landings` sets `boat["from"] = _point_of_tile(target)`). `_port()` has only ONE
-	# harbour, so leaving `pos` where it was (still near the harbour, from the tiny `t` above) would
-	# make "home" and "here" nearly the same point and the from/to-apart check below couldn't tell a
-	# real line from a collapsed one — the fixture's own fault, not a control worth keeping.
+	# `sim_dt` 0.0 from here — `dist`/`t` still hold the OUTBOUND leg's own values, so a real `step`
+	# would misread `arrived` against them and could remove the boat from `battle.boats` before the
+	# view ever saw it.
+	#
+	# ⚠ **The turn is forged the way `_phase_landings` really does it**: the path is REVERSED in place,
+	# `cum` is rebuilt from the reversed points and `leg` goes back to 0 — never a `to` field, which is
+	# a deleted key. `pos` is moved to the landing, the real place a RETURNING boat starts from.
+	# `_port()` has only ONE harbour, so leaving `pos` near the harbour would make "home" and "here"
+	# nearly the same point and the two-ends-apart check below could not tell a real line from a
+	# collapsed one — the fixture's own fault, not a control worth keeping.
 	var home_hb := b.grid.start_harbour
 	var boat: Dictionary = b.boats[0]
+	var back_path := PackedVector2Array(boat["path"])
+	back_path.reverse()
+	var back_cum := PackedFloat32Array()
+	back_cum.resize(back_path.size())
+	back_cum[0] = 0.0
+	for ci in range(1, back_path.size()):
+		back_cum[ci] = back_cum[ci - 1] + back_path[ci - 1].distance_to(back_path[ci])
 	boat["phase"] = Battle.Phase.RETURNING
 	boat["soldiers"] = []
 	boat["home"] = home_hb
+	boat["path"] = back_path
+	boat["cum"] = back_cum
+	boat["leg"] = 0
 	boat["pos"] = Vector2(_PORT_LANDING)
 	b.boats[0] = boat
 
@@ -714,15 +659,16 @@ func _destination_marker_both_legs(t) -> void:
 			ring_gone = false
 	t.ok(ring_gone, "돌아가는 중에는 도착 링이 사라진다 — 더는 노리는 칸이 없다")
 	t.eq(fv.routes.size(), 1, "항로 선은 여전히 하나다")
-	t.eq(_pt(_at(fv.routes, 0), "to"), home_px, "이제는 새 항구를 향한다 — 배가 순간이동하지 않는다")
-	# ⚠ `to` alone passes a line collapsed to a point (`_paint_route(anchor, home_px)` mutated to
-	# `_paint_route(home_px, home_px)`) — measured green under a check that only read `to`. `from`
-	# has to be the boat's OWN position (still near the landing, nowhere near `home_px` in this
-	# fixture), and the two ends have to actually be apart.
-	t.eq(_pt(_at(fv.routes, 0), "from"), Look.tile_point_px(Vector2(b.boats[0]["pos"])),
-		"그리고 여전히 배 자신의 자리에서 출발한다 — from 이 조용히 to 로 무너지지 않았다")
-	t.ok(_pt(_at(fv.routes, 0), "from").distance_to(_pt(_at(fv.routes, 0), "to")) > 1.0,
-		"두 끝점이 실제로 떨어져 있다 (자가 점검 아님 — from 이 무너지면 여기서 문다)")
+	var home_pts: PackedVector2Array = (_at(fv.routes, 0) as Dictionary)["points"]
+	t.eq(home_pts[home_pts.size() - 1], home_px, "이제는 항구에서 끝난다 — 배가 순간이동하지 않는다")
+	# ⚠ The far end alone passes a line collapsed to a point — measured green under a check that only
+	# read `to`. The near end has to be the boat's OWN position (still at the landing, nowhere near
+	# `home_px` in this fixture), and the two ends have to actually be apart.
+	t.eq(home_pts[0], Look.tile_point_px(Vector2(b.boats[0]["pos"])),
+		"그리고 여전히 배 자신의 자리에서 출발한다 — 시작점이 조용히 끝점으로 무너지지 않았다")
+	t.ok(home_pts[0].distance_to(home_pts[home_pts.size() - 1]) > 1.0,
+		"두 끝점이 실제로 떨어져 있다 (자가 점검 아님 — 시작점이 무너지면 여기서 문다)")
+	t.ok(home_pts.size() >= 2, "돌아가는 선도 폴리라인이다 (%d점)" % home_pts.size())
 	t.eq(fv.bodies.size(), 1, "화물칸이 비었으니 배 위의 몸이 없다 — 적 하나만 남는다")
 	_drop(t, fv)
 

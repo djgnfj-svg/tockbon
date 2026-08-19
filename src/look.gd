@@ -116,13 +116,14 @@ const COL_BOAT := Color(0.851, 0.780, 0.600)
 # rather than a flat tint, so a stalled boat never reads as merely "differently coloured."
 const COL_HULL_WAIT := Color(1.0, 0.780, 0.302)
 
-# The drag overlay (`boat-and-landing` stage 4, P8). Reach is per harbour (3.4), so this tints
-# whichever coast the dragged boat's OWN harbour can reach — the same tone as the boat itself,
-# read through `DROP_TINT_ALPHA` rather than baked in, since the tile fill and a future full-alpha
-# use of the same tone must be able to move independently.
+# The route line — the harbour-to-landing polyline while a drag is in flight, and the remaining
+# water route under a boat that is crossing.
+# ⚠ **`COL_SENDABLE` and its `DROP_TINT_ALPHA` are DELETED** (`speed-off-open-landing`, question C:
+# 「못내림만 표시하면 됨 ㅇㅇ」). They tinted every sendable tile green from the moment the island
+# opened; the screen now marks what is BLOCKED (the cliff faces, and the refusal mark below) and
+# nothing else, so a tone with nothing to paint would be a colour that rots.
 # ⚠ `COL_DROP_OK` / `COL_DROP_NO` deliberately reuse `COL_WIN` / `COL_LOSE` below — the same
 # accept/refuse pair the key boxes already use. One concept, one value.
-const COL_SENDABLE := Color(0.851, 0.780, 0.600)
 const COL_ROUTE := Color(0.851, 0.780, 0.600, 0.55)
 
 # HUD and panel.
@@ -132,13 +133,13 @@ const COL_BUTTON := Color(0.239, 0.341, 0.459)
 const COL_WIN := Color(0.549, 0.949, 0.600)
 const COL_LOSE := Color(1.0, 0.451, 0.420)
 
-## `plan-then-watch`'s two new HUD colours, and there are only two because everything else on those
-## screens already had a value. `COL_START` is the one press that ends the planning phase, so it is
-## deliberately NOT `COL_BUTTON` — the restart button in the panel is `COL_BUTTON`, and one tone
-## answering to two verbs is how a restart gets pressed by someone aiming at start.
-## `COL_SPEED_ON` marks the chip the ladder is currently sitting on; a resting chip is `COL_BUTTON`.
+## `plan-then-watch`'s one surviving new HUD colour. `COL_START` is the one press that ends the
+## planning phase, so it is deliberately NOT `COL_BUTTON` — the restart button in the panel is
+## `COL_BUTTON`, and one tone answering to two verbs is how a restart gets pressed by someone aiming
+## at start.
+## ⚠ `COL_SPEED_ON` died with the speed chips (`speed-off-open-landing`, item 1). It marked which
+## rung the ladder was sitting on, and with no ladder there is no rung.
 const COL_START := Color(0.302, 0.541, 0.404)
-const COL_SPEED_ON := Color(0.945, 0.729, 0.290)
 
 ## `title-and-map`'s four new colours, and there are only four because the title's own two boxes
 ## already have tones that mean the right thing.
@@ -257,32 +258,30 @@ const HUD_TIMER_POS_PX := Vector2(600.0, 38.0)
 ## **The start button** — one large press, bottom LEFT, and the whole of the planning phase ends on
 ## it. It is drawn only while `battle.committed()` is false: a button that cannot be pressed and is
 ## still on screen is the 「well, while we're stopped…」 door the design closes on purpose.
-## ⚠ Bottom-left is not taste. At `ZOOM_MIN` the island occupies x 208..1072 and the speed chips take
-## the bottom RIGHT, so the bottom-centre band — where all three islands put `start_harbour`, and
-## therefore where the army you drag is standing — is left clear BY LAYOUT rather than by luck.
+## ⚠ **Bottom-left is not taste, and its old argument is now HALF FALSE.** It read: at `ZOOM_MIN` the
+## island occupies x 208..1072 and the speed chips take the bottom RIGHT, so the bottom-centre band —
+## where all three islands put `start_harbour`, and therefore where the army you drag is standing — is
+## left clear by layout. **`speed-off-open-landing` deleted the chips, so nothing holds the bottom
+## right any more.** What survives is the half that was load-bearing: the button must not sit over the
+## bottom-centre band where the draggable army stands, and bottom-LEFT is the corner that clears it.
+## The bottom right is now empty on purpose — the whole HUD during a fight is the clock, the enemy
+## count and this one button, and a widget added to fill the gap would be one more thing to explain.
 const HUD_START_ORIGIN_PX := Vector2(24.0, 632.0)   # y >= 560 (or it floats in the middle of the
                                       # island); y + HUD_START_SIZE_PX.y <= 720
 const HUD_START_SIZE_PX := Vector2(220.0, 64.0)     # strictly larger on BOTH axes than the key box
-                                      # it replaces (150 x 26); <= (320, 96) or it reaches the chips
+                                      # it replaces (150 x 26); <= (320, 96), which keeps it inside
+                                      # the left half and clear of the bottom-centre army stack
 const HUD_START_TEXT_OFFSET_PX := Vector2(70.0, 42.0)   # > (0, HUD_START_FONT_SIZE_PX) — a glyph at
                                       # the rect's own origin is a glyph that was never placed, and
                                       # that floor is the half proving the label exists at all;
                                       # x + label width <= 220 and y <= 64
 const HUD_START_FONT_SIZE_PX := 28    # > HUD_FONT_SIZE_PX; <= HUD_TIMER_FONT_SIZE_PX + 8
 
-## **The speed ladder**, bottom RIGHT — one chip per `Rules.SPEED_STEPS` entry, five of them, and the
-## pause is slot 0 of the same row rather than a widget of its own (미정 4). The chips are the ONLY
-## thing that can be pressed once the plan is committed.
-## Width check: 1060 + 5 * 36 + 4 * 5 = 1260 <= 1280. Height check: 648 + 40 = 688 <= 720.
-## ⚠ The ladder itself lives in `rules.gd` and NOT here — slot 0 is 0.0, `step` returns before
-## `_phase_clock`, and `elapsed` is the loss condition, so that table changes WHAT HAPPENS.
-const HUD_SPEED_ORIGIN_PX := Vector2(1060.0, 648.0) # x >= 1000 (clear of the start button with the
-                                      # island band between them); x + 5*w + 4*gap <= 1280
-const HUD_SPEED_SIZE_PX := Vector2(36.0, 40.0)      # >= (30, 30), a touchable chip; <= (48, 48)
-const HUD_SPEED_GAP_PX := 5.0         # >= 3 or two chips read as one bar; <= 10
-const HUD_SPEED_TEXT_OFFSET_PX := Vector2(11.0, 31.0)   # > (0, 0) and inside the chip: one digit at
-                                      # HUD_START_FONT_SIZE_PX is ~16 px wide, so 11 + 16 = 27 <= 36
-                                      # and the baseline at 31 <= 40
+## ⚠ **The five speed chips are DELETED** (`speed-off-open-landing`, item 1, on the user's own
+## 「일단 배속 개념은 지워주고」 and 「일시정지 지워주고」). Five constants went with them —
+## `HUD_SPEED_ORIGIN_PX`, `HUD_SPEED_SIZE_PX`, `HUD_SPEED_GAP_PX`, `HUD_SPEED_TEXT_OFFSET_PX` and
+## `speed_rect_px()` — plus `COL_SPEED_ON` up in the colours block. `Rules.SPEED_STEPS` survives, read
+## by nothing, and its own comment says why.
 
 ## Enemies left, top right. It has to survive onto the lose screen — the player must be able to
 ## see WHY they lost, and "the timer ran out with four alive" is a different loss to a wipe.
@@ -799,11 +798,40 @@ const LAND_RING_WIDTH_PX := 2.0
 
 ## The drag overlay (`boat-and-landing` stage 4, P8) — not one of the twelve combat items, but the
 ## same "every number is a first value" rule applies. `TARGET_RING_R_PX` is the candidate ring on
-## the tile under the cursor; `ROUTE_WIDTH_PX` the line from that boat's harbour to it.
-const DROP_TINT_ALPHA := 0.18         # > 0.06 or the tint is invisible; < 0.4 or the terrain under
-                                      # it is not
+## the tile under the cursor; `ROUTE_WIDTH_PX` the water route from that boat's harbour to it, which
+## is a POLYLINE now and not a straight line (`speed-off-open-landing`, 2.3).
+## ⚠ **`DROP_TINT_ALPHA` is deleted with `COL_SENDABLE`.** It was the alpha the whole sendable coast
+## was washed at, and the user asked for the inverse picture: mark what is blocked, nothing else.
+## It is also the 0.18 this file's own `PRESS_ALPHA_OFF` paragraph cites as the measured failure —
+## that citation is about a NUMBER and survives the constant's deletion.
 const ROUTE_WIDTH_PX := 3.0
 const TARGET_RING_R_PX := 18.0        # >= 12; <= 20 or two adjacent rings would overlap
+
+## **The refusal mark** — `speed-off-open-landing` 2.5, on the user's 「못내림만 표시하면 됨」. One ring
+## at the cursor on the frame the sim REFUSES a drop, fading out. It reuses `COL_LOSE`, which is
+## already the tone the drag candidate ring turns when the tile under the cursor cannot be landed on:
+## one concept (「여긴 못 내린다」), one value.
+##
+## ⚠ **It is driven by `Battle.send`'s own -1 and never by a second copy of the rule.** The green
+## sendable tint used to carry that guarantee — its predicate was `grid.home_harbour_for(t) >= 0`,
+## the exact call `send` refuses on — and deleting the tint deletes the guarantee with it, so the mark
+## inherits it from the SIM's answer rather than from a predicate the view evaluates itself.
+const REFUSE_MARK_SEC := 0.35         # >= 0.25 — under five rendered frames at 60fps (0.084 s) is
+                                      # unseen, and this repo has measured exactly that twice; the
+                                      # floor is raised well above it because the mark is a ONE-SHOT
+                                      # with nothing before or after it to be read against.
+                                      # <= 0.6 or it is still on screen for the next drag
+const REFUSE_MARK_R_PX := 26.0        # >= TARGET_RING_R_PX 18 — at or under it the mark is the same
+                                      # circle as the drag candidate ring and reads as a candidate
+                                      # rather than a refusal; <= 40 (one tile) or it covers the
+                                      # terrain that says WHY the tile was refused
+const REFUSE_MARK_WIDTH_PX := 5.0     # >= 5, and the 5 is ARITHMETIC: this ring is drawn in WORLD
+                                      # space, so at ZOOM_MIN 0.45 it reaches the canvas at 2.25 px —
+                                      # just over this file's 2.0 px snap floor. The same sum is why
+                                      # `CLIFF_FACE_WIDTH_PX` was re-measured from 4.0 to 5.0 when
+                                      # ZOOM_MIN fell; a mark specified at 3.0 would draw at 1.35 px
+                                      # and be a hairline exactly where it has to be read.
+                                      # <= 8 or the stroke swallows the tile it points at
 
 ## The fleet as a picture (`boat-and-landing` stage 5). `CLIFF_FACE_WIDTH_PX` is P10's seaward-edge
 ## line. ⚠ **RE-MEASURED when `ZOOM_MIN` fell to 0.45**: the old 4.0 drew at 2.25 px at the old
@@ -933,15 +961,10 @@ static func body_colour_of(is_enemy: bool) -> Color:
 	return COL_ENEMY if is_enemy else COL_ALLY
 
 
-## `COL_SENDABLE` at `DROP_TINT_ALPHA` — split into two constants (7.2 of `boat-and-landing`) so the
-## tone and the ratio can be re-measured independently; combined here, in the one place, so the
-## overlay and any future full-alpha use of the same tone cannot silently diverge.
-static func sendable_tint() -> Color:
-	var c := COL_SENDABLE
-	c.a = DROP_TINT_ALPHA
-	return c
-
-
+## ⚠ **`sendable_tint()` is deleted with the two constants it combined.** It washed every sendable
+## tile in `COL_SENDABLE` at `DROP_TINT_ALPHA`; `speed-off-open-landing`'s question C replaced that
+## whole picture with a mark on what is BLOCKED. `ghost_tint()` below is the surviving example of the
+## tone-plus-ratio split this used to be the other half of.
 static func hp_bar_colour(filled: bool) -> Color:
 	return COL_HP_FULL if filled else COL_HP_EMPTY
 
@@ -1013,16 +1036,10 @@ static func start_rect_px() -> Rect2:
 	return Rect2(HUD_START_ORIGIN_PX, HUD_START_SIZE_PX)
 
 
-## Speed chip `i`'s rectangle, in viewport px. One row, left to right, in `Rules.SPEED_STEPS` order,
-## so slot 0 (the pause) is the leftmost chip and the ladder reads as a ladder.
-static func speed_rect_px(slot_index: int) -> Rect2:
-	var x := HUD_SPEED_ORIGIN_PX.x + slot_index * (HUD_SPEED_SIZE_PX.x + HUD_SPEED_GAP_PX)
-	return Rect2(Vector2(x, HUD_SPEED_ORIGIN_PX.y), HUD_SPEED_SIZE_PX)
-
-
-## `COL_ALLY` at `GHOST_ALPHA` — the same split `sendable_tint()` uses, and for the same reason: the
-## tone and the ratio are re-measured independently, and combining them in one place stops a ghost
-## from becoming a fourth ally colour. **A ghost has no colour of its own on purpose.**
+## `COL_ALLY` at `GHOST_ALPHA` — a tone and a ratio kept as two constants so they can be re-measured
+## independently, combined in one place so a ghost cannot become a fourth ally colour. **A ghost has
+## no colour of its own on purpose.** (`sendable_tint()` was the other half of this pattern and died
+## with the coast wash; `speed_rect_px()` died with the speed chips.)
 static func ghost_tint() -> Color:
 	var c := COL_ALLY
 	c.a = GHOST_ALPHA
