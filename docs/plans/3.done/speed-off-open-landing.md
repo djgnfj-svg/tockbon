@@ -1,6 +1,8 @@
 # Plan — delete the speed ladder, and make landing a denylist
 
-**Status**: `2.active` — moved 2026-08-19 when the user said 「돌려」. ⚠ `title-and-map` also sits in `2.active` and is **PAUSED, not running**. Asked for by the user on 2026-08-19 while watching the game run.
+**Status**: `3.done` — **implementation finished 2026-08-19, three builder rounds. 15 nets · 2216 checks · green.**
+⚠⚠ **`3.done` is not acceptance.** Acceptance rows **A8 and A9 are `user only` and both are OPEN** — the user has not launched this. verify-look drove S1–S5 and all five read right; that is an agent's eyes, not the user's.
+Was `2.active`, moved when the user said 「돌려」. ⚠ `title-and-map` stays in `2.active`, **PAUSED**, and its step 5 is being replaced — see `push-inland`. Asked for by the user on 2026-08-19 while watching the game run.
 Design owners: [the boat and the landing](../../design/boat-invasion.md) for item 2,
 [plan it, then watch it](../../design/plan-then-watch.md) for item 1.
 
@@ -564,3 +566,27 @@ Chebyshev-1 between neighbours; **string-pulling makes both false on purpose.** 
 was really guarding — starts at the harbour, field values strictly increase, every segment is straight
 and all-water **sampled by an independent walker written out in the net** rather than by calling back
 into `grid`. Plus the ceiling that says the smoother ran: 4 points where the raw descent gave 8.
+
+
+---
+
+## ⚠ Known risk carried out of this plan — **the smoother spends clearance, and nobody set a floor**
+
+Measured by verify-look on the headland route (island 1, `07_nw`), before and after string-pulling:
+
+| | waypoints | length | clearance from the headland corner |
+|---|---|---|---|
+| before | 27 | 45.80 | **two tiles** — the raw path went out to column 0 |
+| after | 5 | 42.99 | **~3 px at `ZOOM_MIN`** |
+
+**The line never touches green** — zero pixels, checked at 8× — and the boat's centre is on water in every
+frame. ⚠ **But the hull sprite is 18×22 px**, so while rounding the corner (one frame of twelve, ~0.3 s of
+a 7 s crossing) its top-right covers about **13×5 px of the last land row.** At play scale it reads as
+*a boat hugging the shore*, which is fine — it took a pixel scan to find.
+
+⇒ **What is NOT known**: whether that clearance can go negative on a headland this repo has not drawn yet.
+`_straight_is_all_water` guarantees the **centre line** stays on water and says nothing about hull width.
+**The terrain set is about to grow** (a hand-authored pool, user 2026-08-19), so the map that makes this
+negative is one nobody has authored. ⚠ **A hull-width margin was NOT added** — over-constraining the
+smoother would undo the fix that made the bay route straight, and no number exists for how much margin is
+right. **Decide it when a map shows it, and measure rather than guess.**

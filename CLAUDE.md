@@ -14,6 +14,7 @@ islands (상자 · 전투 · 엘리트 · 보스, **only 상자 has no fight**),
 an open coastline**, and **what you eat turned into 세포 and objects you fit together between rounds.**
 
 - **There is no host**, no `F`, no `V`, and **the keyboard does nothing in this game at all**
+- **There is no speed control and no pause** (deleted 2026-08-19, user). A fight runs at 1× and **nothing can be pressed during it** — ⚠ a state the user has never played
 - **You plan the whole landing, press start, and watch.** The hand does not move during combat
   (`plan-then-watch`, user, 2026-08-18). The 1~5 summon keys are deleted
   ⚠⚠ **OVERTURNED on 2026-08-19 in design, NOT in code** — the user decided **the boat stays live during
@@ -188,7 +189,7 @@ the two options that had been on the table.**
 | `docs/decisions/` | **Why something was *not* done.** Seven docs; **two are reversed and kept for that reason** |
 | `push-inland` | ⚠⚠ **The newest and the biggest — one combat node becomes a continent you land on and push through for 10–15 minutes, with the boat as the only live control.** Nothing built, nothing accepted. **Read its retraction boxes**: six of its own numbers were refuted by an independent re-measure, one "cross-check" turned out to be an algebraic identity, and **every remaining question lands on R, the roster size, which nobody has decided** |
 | `title-and-map` · `plan-then-watch` · `session-loop` · `boat-invasion` · `combat-juice` | The design docs. Each header carries `Implemented` and `Accepted` as **two separate axes**, and several carry refutations of their own earlier drafts |
-| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` empty; `2.active` holds `speed-off-open-landing` (**building**) and `title-and-map` (**paused**); `3.done` holds three |
+| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` empty; `2.active` holds `title-and-map` (**paused, step 5 being replaced**); `3.done` holds four |
 | `docs/next-game.md` | The two resets and what carried across |
 
 **Moved out of this file on 2026-08-19, unedited**: the fake-green casebook → `how-nets-lie`; the godot MCP
