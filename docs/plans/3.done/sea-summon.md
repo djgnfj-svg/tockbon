@@ -1,7 +1,13 @@
 # Plan — summon on the sea: arm a slot, press the water, cells come out there on boats
 
-**Status**: `2.active` — **implementation landed 2026-08-19; the round is 17 nets / 2508 checks / 4.8 s
-green. Verification and every acceptance row below are OPEN.** See the round log at the foot of this
+**Status**: `3.done` — **four builder rounds, 2026-08-19. Round: 17 nets / 2473 checks / 4.5 s green.**
+✅ **And the user played it and accepted the gesture** — ***"동작방식은 맞음"*** then ***"잘되네"***.
+⚠⚠ **`3.done` is not blanket acceptance**: what they accepted is the gesture and the distance. **The
+catchment price, the slot contents and the cost question are all still open**, and so is every row below
+marked *user only*.
+⚠ **The check count went DOWN 2576 → 2473 and that is the signal, not a regression** — the drag suite was
+**deleted with its subject** rather than repaired to keep passing.
+Was: `2.active` — implementation landed, verification open. See the round log at the foot of this
 file, and ⚠⚠ **question 1 is still unanswered** — §8's four seams are the receipt.
 Design owner: [summon on the sea](../../design/sea-summon.md). ⚠ **Read it whole before starting** — it is
 ~700 lines and it did the arithmetic, including **the refutation of its own most attractive claim**
@@ -23,7 +29,24 @@ for the part loop.
 
 ## 0. OPEN questions — **none of these closes by inference**
 
-**Sent to the user**: NO — **not one of the ten below has been put to the user.**
+**Sent to the user**: **YES — 2026-08-19, at wrap-up.** ⚠ **`net_process` is what forced it**: the plan was
+moved to `3.done` with this line reading `NO` and the round **went red on the move**, naming the file. That
+is the check working exactly as `title-and-map`'s failure taught it to. **The line was not flipped; the
+questions were sent.**
+
+**What the user's play already answered, without being asked** — recorded separately, because play is not
+an answer to a question nobody put:
+- **4 (does the drag die)** — ✅ **YES**, explicitly: ***"ㅇㅇ 지워주줘"***, pointing at a screenshot of the
+  harbour markers and the reserve stack. Built.
+- **2 (a drawn band)** — ✅ shipped and played twice with no complaint about the band existing; ⚠ **that is
+  absence of complaint, not a decision.** The contradiction with 「못내림만 표시하면 됨」 is **still unheard.**
+- **3 (band width)** — **superseded.** The band became a *minimum distance* (`SUMMON_BAND_MIN_TILES` 6) at
+  the user's own instruction, so `d` no longer exists as a question.
+
+**Sent at wrap-up and still open**: **1** (before 시작 or during the fight — the one this build assumed) ·
+**5** (a type or a designed cell) · **6** (healthiest or most hurt first) · **7** (five boxes or two) ·
+**8** (does an armed slot still pan) · **9** (`CLAUDE.md`'s two false sentences) · **10** (a hull on the
+pressed tile). ⚠⚠ **Every one shipped as its assumed default and none is closed.**
 
 ⚠⚠ **That value is the honest one today and it must be changed the moment the message is sent**, with the
 answers written into the rows. `title-and-map`'s plan opened with five questions marked *"these go to the

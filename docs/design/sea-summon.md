@@ -1,10 +1,23 @@
 # Summon on the sea — press the water, a cell appears there on a boat, and it sails itself ashore
 
-**Implemented**: none. **Not one line of code.** Every number below is either read out of the shipped tree
-or computed by this document from the shipped island rows; nothing here has been run in the engine.
-**Accepted**: nothing chosen. The user decided the gesture (quoted in section 1) and **no arithmetic in
-this document has been put to them.** Two of its findings contradict things they said the same day, and
-both halves are kept.
+**Implemented**: **YES, 2026-08-19, four builder rounds** — the band, the slot row, the keys, the hold,
+the boat that sails itself ashore, and **the drag deleted whole** with the harbours, the reserve stack and
+the `H` legend's readers in `src/`. Round: **17 nets / 2473 checks / 4.5 s green.**
+
+**Accepted**: ✅ **YES — the user played it and said so, twice, on 2026-08-19.**
+> ***"동작방식은 맞음"*** — after the first build, and it is the first thing this repository has shipped
+> that the user has called correct.
+> ***"잘되네"*** — after the drag was deleted and the band pushed to six tiles off the shore.
+
+⚠⚠ **What that accepts and what it does NOT.** It accepts **the gesture and the distance.** It does not
+accept: the catchment price (**half the coastline stops being individually addressable** — 34/35/34 of
+84/76/82 at `D = 6`), the slot contents (types, not designed cells), or anything about cost. **No row of
+section 9 that says *user only* is closed by these two sentences.**
+
+⚠ **And two things below were overruled by the user rather than refuted by arithmetic**: §6's catchment
+argument said the press is precise only where it is useless — the user chose distance anyway, on the
+ground that **「배가 가는게 중요하니까」**; and §5.3's crossing figures moved twice. **Both are kept with
+their refutations beside them.**
 
 **One line**
 
