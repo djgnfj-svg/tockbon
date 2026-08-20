@@ -51,63 +51,31 @@ right."* **That is the absence of anything to disagree with, not agreement.**
 
 ## Where things live
 
-**`docs/` is small on purpose. This table plus the three README indexes is the whole of it.**
+**`docs/` is two folders and four loose files. Each folder's README is its index — open the README, not the
+folder.**
 
-| Doc | Question it answers |
+| Path | What it holds |
 |---|---|
-| `cell-army-gdd` | **The GDD. What is being built.** ⚠ Its refutation boxes — where an earlier claim is disproved by arithmetic in the same file — are the most valuable paragraphs in it |
-| `idea-inbox` | **What the user said, before anyone decided what to do with it.** One row per remark, verbatim, dated, with a state. **Three rows are open and one — 「넷이 의미가 있나」 — has never been answered** |
+| `docs/design/` | **Concepts, and the forks that were rejected.** Every doc's header carries `Implemented` and `Accepted` as **two separate axes.** The GDD is `cell-army-gdd` |
+| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** One doc per implementation |
+| `idea-inbox` | **What the user said, before anyone decided what to do with it.** One row per remark, verbatim, dated, with a state |
+| `how-nets-lie` | **Every green measured to be false.** Read it before writing a check and before believing a green round |
 | `planning-principles` | **How to judge a direction.** Survived both resets on purpose — read it first |
-| `how-nets-lie` | **Every green measured to be false.** The casebook behind 「No fake nets」. **Read it before writing a check and before believing a green round** |
-| `lessons-from-two-dead-games` | **What two deleted games measured**, and the three measurement lessons that outlive them — *a constant is not what reaches the screen* (a radius of 8 was cited as 8px and reached the screen at **38px**, off by 4.8x, and the same shape bit four times) · *a design complaint can become a number* · *a probe that grades its own step must be inverted*. ⚠ **Nothing in it is a spec** |
-| `what-makes-placement-a-decision` | Nine shipped games and the rule each used to make position a real choice, with the case against each |
-| `parallel-build` | **Worktree per builder, and the report the user reads.** ⚠ **Never run**, and **its section 6 is an adversarial review of itself** that moved four of its own claims and found a blocking defect in `run_nets.ps1` |
-| `how-studios-schedule-art` | **When other studios attach the art**, with sources |
-| `gdd-audit` | **Findings already refuted — do not raise them again.** Fifteen of them |
-| `docs/decisions/` | **Why something was *not* done.** Seven docs; **two are reversed and kept for that reason** |
-| `push-inland` | ⚠⚠ **The newest and the biggest — one combat node becomes a continent you land on and push through for 10–15 minutes, with the boat as the only live control.** Nothing built, nothing accepted. **Read its retraction boxes**: six of its own numbers were refuted by an independent re-measure, one "cross-check" turned out to be an algebraic identity, and **every remaining question lands on R, the roster size, which nobody has decided** |
-| `title-and-map` · `plan-then-watch` · `session-loop` · `boat-invasion` · `combat-juice` | The design docs. Each header carries `Implemented` and `Accepted` as **two separate axes**, and several carry refutations of their own earlier drafts |
-| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** `1.ready` empty; `2.active` holds **two** — `sea-summon` (running) and `title-and-map` (**paused, step 5 being replaced**); `3.done` holds four |
-| `docs/next-game.md` | The two resets and what carried across |
+| `lessons-from-two-dead-games` | **What two deleted games measured**, and the two resets. ⚠ **Nothing in it is a spec** |
 
-**Moved out of this file on 2026-08-19, unedited**: the fake-green casebook → `how-nets-lie`; the godot MCP
-bridge → `.claude/agents/verify-look.md` (its only user); what pixel generation measured →
-`tools/pixel/README.md`.
-
-**A concept never changes folder.** `docs/archive/` does **not** exist and must not be recreated — **a doc
-about a dead thing gets distilled and deleted.** Archiving in place produced 60 stale docs by 2026-08-17.
-
-**Never state the same thing twice.** A value counted in two places will diverge.
-
-**A refutation that lands in a different doc than the claim does not propagate.** One doc's wrong claim was
-already disproved by a measurement written **in a different file**; it was never fixed and a whole stage's
-cost model was built on it. ⇒ **Go and edit the doc that makes the claim.**
-
-**And a correction pass only checks the row someone is arguing about.** One table held two rotted numbers:
-the loud one was re-measured and the quiet one beside it — **off by a factor of twenty-four** — was waved
-through **because it was not making a dramatic claim.** ⇒ **Re-measure the whole table.**
 
 **When the user says something in passing, it goes into `idea-inbox` as one row, that turn.** Verbatim,
-dated, with a state. **Nothing is deleted from it.**
-
-⚠ **Two process rules are now forced by `net_process` rather than by good faith**, because both were
-written in two places each and skipped both times: **a plan carrying an `OPEN questions` section must
-declare whether they were sent**, and **a plan must carry a `## Round log` with all five fields per block.**
-Four plans predate it and the exemption list **is pinned at four — plan number five is checked.**
-⚠ **It forces the shape, never the truth**: a `Sent to the user: yes` on a message nobody sent passes. ⚠ **This exists because the heavier rule below was never
-followed** — *"내가 그냥 대화를 하고 있지만 사실 항상 아이디어를 내는 거거든? 근데 니가 그냥 지워버림."* A
-design doc costs more than a remark, so the remark was dropped instead.
+dated, with a state. **Nothing is deleted from it.** *"내가 그냥 대화를 하고 있지만 사실 항상 아이디어를
+내는 거거든? 근데 니가 그냥 지워버림."*
 
 **Once an idea is picked, it grows into a `docs/design/` doc with one row in that README**, headed
 `Implemented` and `Accepted` — without them, "written down" reads as "exists".
 
-**When a fork is taken, record the rejected branch in `docs/decisions/`.** Laying out options and letting the
+**When a fork is taken, record the rejected branch in `docs/design/`.** Laying out options and letting the
 user pick means two or three unpicked options appear every round and only the picked one is written down.
 Months later the same options get laid out from scratch. **The user lived this with inventory, and again with
 the whole game.**
 
-**Moving a `plans/` doc means three edits**: the `**Status**:` line inside it, every link pointing at it, and
-a report of all three folders. **Links leak every single time.**
 
 ## Acceptance goes into the doc the moment it happens
 
@@ -205,56 +173,28 @@ measured.**
 
 When the label claims more than the check measures, that green is a false guarantee.
 
-**Invert every new check.** An uninverted check proves "it runs", not "it measures". **If the inversion
-doesn't bite, suspect the check last** — first confirm the mutation actually landed. String replacement has
-silently matched zero times, twice.
+**Invert every new check.** An uninverted check proves "it runs", not "it measures" — and **a new check
+needs a case that fails *it*, not only the subject.** Twice in one night a check was written to catch a
+defect and shipped carrying that same defect.
 
-**Invert the instrument, not only the subject.** Twice in one night a check was written to catch a defect and
-**shipped carrying that same defect.** ⇒ A new check needs a case that fails *it*.
+⚠ **The rules for writing one are in `tests/README`; the cases are in `how-nets-lie` — 129 lines of greens
+that guaranteed nothing, each one measured. Read it before writing a check and before believing a green
+round.** Its four sharpest: **a check that greps a file measures its text, never what it computes** · **a spy
+on a hook never sees the native call inside it** · **"`_draw()` ran" is not "anything was drawn"** · **a
+ceiling with no floor passes an effect that never happens.**
 
-**A truncated search is not a search.** `grep ... | head` on a term with many hits **silently drops the one
-that matters. Count the hits before reading them.**
-
-⚠ **These are the rules. The cases are in `how-nets-lie` — 129 lines of greens that guaranteed nothing, each
-one measured. Read it before writing a check and before believing a green round.** Its four sharpest:
-**a check that greps a file measures its text, never what it computes** · **a spy on a hook never sees the
-native call inside it** · **"`_draw()` ran" is not "anything was drawn"** · **a ceiling with no floor passes
-an effect that never happens.**
 
 ## Running the nets
 
-**17 nets, 2558 checks, 5.2 seconds, green.** The old game reached 25 / 3541 / 4.6s — ⚠ **a scale marker,
+**17 nets, 2473 checks, 4.7 seconds, green.** The old game reached 25 / 3541 / 4.6s — ⚠ **a scale marker,
 not a target.** Those nets drove a game deleted for not being fun.
 
-A net is `tests/nets/net_*.gd` with one method, `func run(t)`; `t` gives `ok` · `eq` · `pump_frames` ·
-`expect_error` · `root`. **The wrapper reds below five nets** — that is the scan-broken detector, so nets
-land in groups, never one at a time.
+⚠ **"N passed" is not green.** `load()` returns non-null on a parse failure, so only the final `[wrapper]`
+line decides — and **a net that ran zero checks is a failure.**
 
-1. **"N passed" is not green.** `load()` returns non-null on a parse failure. Only the final `[wrapper]` line
-   decides. **A net that ran zero checks is a failure** — added the day a missing `await` made a net vanish
-   with exit code 0
-2. **If `[race]` prints, distrust the result — green included.** ⚠ It catches an edit *during* a round, never
-   one *between* rounds, and comparing two rounds is the whole of mutation testing. ⇒ **`[지문]` hashes the
-   content of every scanned file** (`src`, `tests`, `docs`, `CLAUDE.md`): **two rounds with different
-   fingerprints did not measure the same tree.** ⇒ **When the tree is contested, do the edit and the run in
-   ONE command.** `git status --porcelain` is deliberately NOT a red — an uncommitted tree is the normal
-   state of every builder round
-3. ⚠ **A hung net is not a slow net**, and for two plans the round could not tell them apart — one net spun
-   148.7s with no verdict printed at all, silently disarming mutation testing. The runner now kills any net
-   past `$NetTimeoutSec` (120s), reports it red, and **zeroes its pass count**
-4. **Each net runs in its own process, in parallel.** Not for speed — **for honesty**: amnesty stays inside
-   its own net. Measured: net 1's forged bark was covered by net 3's declaration when they shared one.
-   **Do not break this property**
-5. **`_draw()` is measurable headless.** The runner pumps real frames (`t.pump_frames(n)` after
-   `t.root.add_child`). **"It can't be driven headless" has been claimed four times and was wrong four
-   times.** Only pixel appearance is verify-look's
-6. ⚠ **Mouse clicks cannot be driven through `root.push_input()` headless, and they fail silently.** The
-   headless window is 64x64 so the stretch transform is 0.05; a click aimed at a dock **arrives at
-   (2000, 6520), hits nothing, and raises no error.** Keys pass through fine — so **half an input suite can
-   be green while the other half is dead.** Call `game._unhandled_input(ev)` directly
+⇒ **How the runner behaves, and the six traps measured in it, are in `tests/README`. Read it before
+writing a net or believing a round.**
 
-**Call `harness-manager` when a round grows.** The old game's round was ~28s and **one net was 24.3s of it,
-unnoticed for weeks.** Slow means verification gets skipped, and then none of the above matters.
 
 ## Agent models
 

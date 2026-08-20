@@ -27,7 +27,7 @@ row of 「What success means」 below, not the 967 above it.
 This doc takes over **미정 15** of the [cell army GDD](cell-army-gdd.md) in full, **closes 미정 16 (grid
 size)**, and **replaces both the GDD's 「선착장」 section and 「지형」's "the first slice has no tiers".**
 **A refutation box sits in each of those two sections** — both are user decisions reversed by the same user.
-The rejected branch is [open coastline over fixed docks](../decisions/open-coastline-over-fixed-docks.md).
+The rejected branch is [open coastline over fixed docks](open-coastline-over-fixed-docks.md).
 
 ---
 

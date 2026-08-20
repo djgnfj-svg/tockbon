@@ -4,7 +4,7 @@ extends RefCounted
 ##  · `title-and-map`'s plan opens with a section titled *"OPEN questions — these go to the user in ONE
 ##    message"*, five questions with defaults. **The message was never sent.** All five defaults shipped
 ##    silently, question A gated step 5, and step 5 was descoped
-##  · `build-feature` and `parallel-build` both say a round report is written. **No plan has one**
+##  · `build-feature` says a round report is written. **No plan has one**
 ##
 ## `CLAUDE.md` already records the general form: seventeen line-number citations were honour-based for
 ## weeks and **six were already dead, one of them cited by the rule forbidding the shape.** The day a net

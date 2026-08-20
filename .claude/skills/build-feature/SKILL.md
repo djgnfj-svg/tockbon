@@ -93,8 +93,7 @@ Skip it and builder finishes the whole implementation with no report reaching me
 
 ⚠ **Steps 0 and 7 are the two the user has actually complained about, and both are about them, not the
 code.** Step 0 is the permission to spend; step 7 is *"여러 번 빌더가 도는데 각각 무엇을 개발하고 무엇을
-수정하는지 말하지 않음. 그냥 여러 번 돌기만 함."* **The protocol behind step 7 is `parallel-build`,
-section 4 — read it before the first round, not after the last.**
+수정하는지 말하지 않음. 그냥 여러 번 돌기만 함."* **Write it before the first round, not after the last.**
 
 ## Running the mutation sweep as a workflow
 
@@ -300,7 +299,10 @@ causes the "editing during verification" problem above.
 **6. The round report — you write it, in the main tree, after every round**
 
 Not at the end. Not by the builder. **Append one block to the plan doc's `## Round log` and travel with it
-to `3.done`.** Columns and their sources are `parallel-build` section 4; the shape is:
+to `3.done`.** Sources: `changed` from `git show --numstat` · `why` from the previous round's red check labels ·
+`closed` is whether that label is green now. **"closed / not closed" is the whole point of the table** —
+print `not closed` even when it is empty, because an absent line reads as an absent problem.
+⚠ **An agent's own summary is not the report** — measuring your own work reads favourably. The shape:
 
 ```
 ## Round log
@@ -344,3 +346,28 @@ Keep going and builder starts bending the code to get past verification. That is
 - A `2.active/` doc exists and the team is dead: read the doc's progress and spawn only the agents you need.
 - Want to re-verify only: spawn the three verifiers. Leave builder alone.
 - Team is alive: just `SendMessage`.
+
+---
+
+## Running builders in parallel — what was measured, before the doc was deleted
+
+**Never run.** These are the numbers and traps a first attempt needs; the full write-up was deleted on
+2026-08-19 as a doc nobody had used.
+
+- **The net round is not the bottleneck.** A round is ~6.7s; one mutation is 1–2 min (the round is 6–12% of
+  it) and one plan is **24 agent round-trips**. ⇒ **Most of the wall clock is an agent reading and typing.**
+  Making the runner faster changes nothing — it was taken from 6.1s to 3.7s once and the conclusion held
+- ⚠ **One property of the runner is not for sale**: each net gets its own process so an amnesty stays inside
+  its own net. Measured — net 1's forged bark was covered by net 3's declaration when they shared one
+- **The mutation sweep is the bigger win.** No judgement, no merge, no ceiling — the worktrees are thrown
+  away, so thirty cost one's wall clock. **If only one of the two ever gets built, build the sweep**
+- **Worktree round trip**: re-branch from `main` immediately before starting · a fresh worktree has no
+  `.godot` cache and `run_nets.ps1` runs `--import` itself (~2.5s) · finish with
+  `git worktree remove --force` + `prune` (700MB in one night, measured)
+- ⚠ **BLOCKING, unfixed**: `run_nets.ps1`'s timing cache is `tockbon_net_timings.json` in `$tmp` with
+  **no per-tree scoping**, while every other temp path there is `_$PID`-suffixed. N worktrees read, merge and
+  overwrite one file; the write sits in a swallowed `try/catch`, so losses are silent, and a worktree under
+  CPU contention **reorders the main tree's next round.** Correctness is unaffected; **every timing
+  measurement is not.** ⇒ Append the repo root's hash to that filename before running anything parallel
+- **What collides is CPU, not files**: the runner runs `Min(16, cores)` wide, so three worktrees put 48
+  processes on 16 threads. **How many builders at once is not measured** — take the cap from the first run

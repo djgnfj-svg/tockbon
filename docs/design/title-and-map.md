@@ -54,7 +54,7 @@ section below is that.
 ① **one of two at each step** · ② **two columns offered at once, one taken from each.**
 
 > ✅ ***"층마다 둘 중 하나"*** (user, 2026-08-19) ⇒ **①.** The rejected branch is filed as
-> [one node per floor](../decisions/one-node-per-floor-not-two-columns.md).
+> [one node per floor](one-node-per-floor-not-two-columns.md).
 >
 > ⚠ **This doc had already been written for ① on the strength of one word.** It happened to be right,
 > **and a round shipped before anyone asked** — `idea-inbox` row 14. ⇒ **Being right does not retire the
@@ -742,7 +742,7 @@ user never said** — and [plan it, then watch it](plan-then-watch.md) had to re
 
 | What | How |
 |---|---|
-| **The title text** | Upper part of the screen, **72px** glyphs. ⚠ **Not a logo image** — [the body is a line drawn by code](../decisions/the-body-is-a-line-drawn-by-code.md) forbids sprites |
+| **The title text** | Upper part of the screen, **72px** glyphs. ⚠ **Not a logo image** — [the body is a line drawn by code](the-body-is-a-line-drawn-by-code.md) forbids sprites |
 | **Three slots** | Stacked vertically, horizontally centred. **360 × 88px** each, **24px** apart ⇒ `88×3 + 24×2 = 312px` tall, comfortable in 720 |
 | **Slot glyphs** | **40px.** ⚠ **The largest glyph on screen today is not the start button's 28px but the clock's `HUD_TIMER_FONT_SIZE_PX` at 30px** — the previous draft said 28 and was wrong. 40 clears that 30 |
 | **A pressable slot** | alpha 1.0 fill + 3px border; hover takes the border to 6px |

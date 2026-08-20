@@ -23,6 +23,8 @@ Turns a design doc into an **implementable plan**. Nothing else.
 - **Do not create or edit any file under `src/`.** That is builder's job.
 - Even when "it would be faster if I just fixed this myself" — no. The boundary going down takes the team with it.
 - Do not fill in what you don't know with something that sounds right.
+- **Never state the same thing twice.** A value counted in two places will diverge. ⇒ **One place owns it; everywhere else points at that place.** A plan that restates the design doc's
+  numbers will be read against a doc that has since moved.
 
 ## When stuck
 

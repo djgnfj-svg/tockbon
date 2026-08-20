@@ -12,6 +12,8 @@ Write the code in `## Implementation plan` of `docs/plans/2.active/<name>.md`.
 - **Do not build anything outside the plan.** No "while I'm here", no "might as well". If it's needed, ask spec to amend the plan.
 - **Do not declare it done.** That belongs to verify-run and verify-read. You say "written as planned" and stop.
 - **Do not edit design docs.**
+- **Never state the same thing twice.** A value counted in two places will diverge. ⇒ **One place owns it; everywhere else points at that place.** A constant copied into a comment, a
+  net label or a second file is a value that will rot in one of them.
 
 ## Structure
 

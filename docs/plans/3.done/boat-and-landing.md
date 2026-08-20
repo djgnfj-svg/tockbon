@@ -15,7 +15,7 @@ did not land.** Do not read this folder move as acceptance.
 `boat-invasion`, section 1-A — that is the doc whose own question they answer, and a figure
 written in two places diverges. **What is here is only what this plan got wrong or cut.**
 **Design**: [the boat and the landing](../../design/boat-invasion.md).
-**Rejected fork**: [open coastline over fixed docks](../../decisions/open-coastline-over-fixed-docks.md).
+**Rejected fork**: [open coastline over fixed docks](../../design/open-coastline-over-fixed-docks.md).
 **Presentation contract**: [combat juice](../../design/combat-juice.md) — its hook table and
 `net_draw_leaf._table()` are the authority for every `draw_*` count named here.
 
@@ -997,7 +997,7 @@ into the design doc's 1-A rather than only here.
 **③ Section 4.6's caveat was the right one and it resolved against the design.** That section ended
 *"do not read this as proof"* about whether landing next to a harbour dominates. **Measured: it dominates
 3 of 3.** The re-open condition in
-[open coastline over fixed docks](../../decisions/open-coastline-over-fixed-docks.md) has fired, and that
+[open coastline over fixed docks](../../design/open-coastline-over-fixed-docks.md) has fired, and that
 doc now carries both the firing **and** the reason it is not being re-opened — the cause is the clock, not
 the coastline, and reverting to 1-of-N docks would not touch it.
 

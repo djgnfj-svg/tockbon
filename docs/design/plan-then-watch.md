@@ -653,7 +653,7 @@ they own**, and **the boat is plumbing** (decided 18).
 boats (capacity 4/2 at speeds 3.0/5.0, held by the throughput inequality `2×5 = 10 < 4×3 = 12`), so a new
 axis is needed"* — **no new axis is needed. Boats no longer have to differ from one another.** The whole
 rejected branch is held by
-[unlimited boats, not a five-boat cap](../decisions/unlimited-boats-not-a-five-boat-cap.md).
+[unlimited boats, not a five-boat cap](unlimited-boats-not-a-five-boat-cap.md).
 
 ⚠ **Arithmetic that died with it**: *bare cells need `N ≥ 5` to take island 1 (four bison, 6.0 enemy DPS),
 so five boats is exactly the minimum that wins and calling a second wave becomes a real choice.*

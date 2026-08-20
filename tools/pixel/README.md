@@ -162,7 +162,7 @@ Two things it measured that outlive the old game:
   presets can never be made to match, however the prompt is tuned.
   ⚠ **This is the constraint the cell game escaped, and it is worth knowing how**: a part is worn **in the
   host's own colour**, so there is only ever one tone and nothing has to match. **It bought back the cap on
-  how many species a habitat can have** — see [the body is a line](../../docs/decisions/the-body-is-a-line-drawn-by-code.md).
+  how many species a habitat can have** — see [the body is a line](../../docs/design/the-body-is-a-line-drawn-by-code.md).
   The rule still binds anything that keeps its own colours
 
 **And three things measured on 2026-08-13, generating for the cell game:**

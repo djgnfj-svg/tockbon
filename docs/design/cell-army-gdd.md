@@ -69,7 +69,7 @@ start → begin the adventure with unlocks applied → [session loop] → die or
 
 **Unlocks give both content and numbers** — new soldier types · new island types · a choice of starting
 specialty, **and also** figures like the starting cell count. The user decided this, and in doing so
-[reversed the older decision not to raise numbers](../decisions/meta-unlocks-not-stat-boosts.md).
+[reversed the older decision not to raise numbers](meta-unlocks-not-stat-boosts.md).
 
 ⚠ **The trap that decision wrote down survives the reversal**: permanent upgrades only sell if there is
 headroom, and **headroom is made by making the first run weak.** The first run is the one that decides
@@ -139,7 +139,7 @@ trip now decide **how many waves a plan splits into.**
 ## Deployment — **you arrive by boat. Position and timing are the whole of the controls**
 
 **Decided (user, 2026-08-17): you go by boat.** The drop-from-the-sky option was **reversed** (see the
-Status line in [that decision](../decisions/dropped-from-the-sky-not-landed-by-boat.md)).
+Status line in [that decision](dropped-from-the-sky-not-landed-by-boat.md)).
 **A boat sailing in to invade does not break the "cells are invaders" fiction** — that fiction was the
 original reason for picking the sky drop, and a boat does not violate it. What the user wanted is
 **the staging of riding in and invading.**
@@ -313,7 +313,7 @@ You pick **one of the few docks the island owns, not any point on the whole shor
 > **Play refuted the first argument (it reads)** — the docks were visible and **read as buttons**:
 > *"그냥 버튼 여기 누르세요 이런 느낌"*. The other two survive and **blocked (cliff) coastline takes them
 > over.** ⇒ The rules and the arithmetic live in [the boat and the landing](boat-invasion.md); the rejected
-> branch is in [open coastline over fixed docks](../decisions/open-coastline-over-fixed-docks.md).
+> branch is in [open coastline over fixed docks](open-coastline-over-fixed-docks.md).
 
 ⚠ **And "a soldier type that ignores docks" is itself a build.** It overlaps naturally with the flying
 type — ignore elevation *and* ignore docks and that one type opens the whole terrain. **Which is why what
@@ -369,7 +369,7 @@ in 5 boats and 15 seconds, so **the price never once bites.**
 > during combat) **was not refuted; the user chose to pay it.**
 >
 > ⇒ Rules and screens belong to [plan it, then watch it](plan-then-watch.md).
-> The rejected fork is [commit before the fight, not during it](../decisions/commit-before-the-fight-not-during.md).
+> The rejected fork is [commit before the fight, not during it](commit-before-the-fight-not-during.md).
 
 *"내가 얻은 몬스터들을 1, 2, 3, 4, 5 단축키에 넣어두고 그 몬스터들을 소환하는 게 맞을 듯."*
 (*"I think the right thing is to put the monsters I've collected on the 1, 2, 3, 4, 5 hotkeys and summon
@@ -1107,7 +1107,7 @@ there is, but with no control the player has no way to steer it.
 
 ## Screen — **the absence of a section here is a hole**
 
-⚠ **The live decision [the body is a line drawn by code](../decisions/the-body-is-a-line-drawn-by-code.md)
+⚠ **The live decision [the body is a line drawn by code](the-body-is-a-line-drawn-by-code.md)
 defers screen detail to "the GDD's *Screen* section", and the GDD it points at is `cell-game.md`, which this
 document replaces.**
 ⇒ **The living screen spec exists only inside a superseded document.** It stays that way until it is copied
@@ -1257,7 +1257,7 @@ of them was missing from the list entirely.** They are now written separately:
    on level-design cost. **Fixed or random, the build is settled on the refit screen.**
    Rejected in the same breath: **"the island decides what drops"** (eat a swamp and amphibian parts get
    likelier). The fork is in
-   [the build is designed, not inherited](../decisions/build-is-designed-not-inherited.md).
+   [the build is designed, not inherited](build-is-designed-not-inherited.md).
    ⇒ **The question itself survives** — random or fixed is still unpicked, and
    **[the session loop](session-loop.md) puts an inequality on the total drops in a run**
 4. ~~Lose condition~~ — **decided: a time limit** (user, 2026-08-17). Each island has a clock, and failing to
@@ -1293,7 +1293,7 @@ of them was missing from the list entirely.** They are now written separately:
 8. ~~Is deployment real-time or pre-set~~ — ~~**decided: real time.**~~
    ⚠⚠ **Overturned: pre-set** (user, 2026-08-18). **The whole landing is laid out, then start is pressed.**
    [Plan it, then watch it](plan-then-watch.md) ·
-   the rejected fork is [commit before the fight, not during it](../decisions/commit-before-the-fight-not-during.md)
+   the rejected fork is [commit before the fight, not during it](commit-before-the-fight-not-during.md)
 9. ~~Cap on soldier count~~ — **decided: no cap** (user, 2026-08-17, *"for now"*).
    **Deleting multiplication removed the exponent itself, so a cap does not need to be a barrier.**
    ⚠ **But [Lessons from two dead games](../lessons-from-two-dead-games.md)' *"there is no readability cap
@@ -1403,7 +1403,7 @@ terrain, auto-combat. It's so similar right now that I'm a bit worried."*)
 > [the session loop](session-loop.md). ⚠ **This said "five slots", a number the summon keys set and the same
 > day deleted** — what gets designed is now undecided 1 of `plan-then-watch`.
 > The fork is in
-> [the build is designed, not inherited](../decisions/build-is-designed-not-inherited.md).
+> [the build is designed, not inherited](build-is-designed-not-inherited.md).
 
 ⚠ And having exactly one reference point is not a problem — Balatro's LocalThunk also
 [started from Luck Be a Landlord alone](https://www.shacknews.com/article/139116/balatro-inspiration-luck-be-a-landlord-reddit-ama).
@@ -1593,3 +1593,55 @@ which one is right has to be asked again once the presentation is in.**
 **Whether it is fun.** That is the second line of [planning principles](../planning-principles.md), and it
 is also why one conversation went six rounds before this direction appeared. **The last line of the
 reference-points section is the only prescription for it.**
+
+---
+
+## Findings already refuted — do not raise these again
+
+**What this was**: a six-axis audit of the GDD and the first slice plan, run on 2026-08-17 **before `src/`
+existed.** Its blockers, majors and open questions are **superseded** — the slice was built, the boat round
+and the main loop shipped on top of it, and the user has played all three. Re-reading a pre-build audit as a
+constraint is exactly the failure `CLAUDE.md` names about stale docs.
+
+**What survives is this list**, and only this list: findings that were raised during that audit and **shown
+to be wrong.** It is here so the next session does not spend a round re-deriving them.
+
+⚠ **Being on this list means the finding was refuted at the time it was raised.** It does not mean the
+subject is closed forever — if new measurement contradicts an entry, that is a new finding, and **the entry
+gets edited here rather than argued elsewhere.**
+
+---
+
+- **"The plan does not know about the ranged-range asymmetry"** — it did, in its own adversarial section.
+  The only real problem was **the refutation never propagating to the GDD**
+- **"Sending only ranged soldiers is a pure dominant strategy"** — you get wiped on island 1 (bison detect
+  radius 6). It is free **only when melee is there to shield**
+- **"Take the plan out of `1.ready`"** — the six files and the probe are all buildable regardless. What was
+  blocked was not starting but **calling it finished**
+- **"Pin the dead-air pass line at 40% (or 50%)"** — **a line with no source.** The 61% / 25% figures were
+  measured on **directly-controlled action games**, and the GDD had already written that the ratio is
+  structurally higher in an autobattler
+- **"Loading order is a constant"** — that does not follow from the disembark BFS rule (whoever boarded
+  first stands nearer the dock)
+- **"The entry-HP sweep reading WON everywhere is an artefact of the lion's area geometry"** — that sweep
+  varied the **entry HP pool**, not the committed headcount `k`. `k` was never swept on island 3
+- **"There are eight values the builder will have to ask back about"** — five already had answers
+  (projectiles are instant · dock occupancy · detection drop-out · where constants live · what distance
+  range is measured from). **Three remained**
+- **"The Korean/English split in the disembark BFS is an implementation risk"** — the plan pinned
+  `passable`, so the builder could not get it wrong. **Only the Korean GDD's wording needed fixing**
+- **"Despot's Game's 100k is a SteamSpy owner estimate"** — it is a **sales figure** backed by the
+  publisher's own announcement. Only the link needed changing
+- **"The Warcraft III high-ground miss chance was also ranged-only"** — **not confirmed first-hand.**
+  It has to be recorded as unverified, not corrected
+- **"The GDD's «boats also disturb enemy detection» dies under the plan's rules"** — the firing targets are
+  unchanged, so **the original reason (ranged enemies shoot the boats) still holds**
+- **"The GDD uses «the Bad North structure where winning still hurts» as grounds"** — that paragraph had
+  already been voided by a refutation box below it, and the multiplication itself was deleted. **It was
+  already a dead sentence**
+- **"The Mechabellum row's conclusion collapses"** — demoted to a statement of fact, **the conclusion
+  (fixed placement is not pure) survives intact**
+- **"The Brood War numbers were wrong, so «do not put numbers on the layer» collapses"** — that section's
+  real grounds are **StarCraft II removing random miss outright**, and the first round has no layer at all
+- **"Having no dead-air pass line is a blocker"** — the blocker was that **the instrument measures a
+  different quantity.** What the line's value should be is the user's call, made looking at the screen

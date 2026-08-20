@@ -6,7 +6,7 @@
 
 ***"층마다 둘 중 하나"*** — at each floor two nodes are on offer and **one** of them is taken.
 Slay-the-Spire's shape. The five floors, seven nodes and four routes already written in
-[the title and the map](../design/title-and-map.md) are the correct table, and **step 5's grids can be
+[the title and the map](title-and-map.md) are the correct table, and **step 5's grids can be
 authored against them.**
 
 ## What wasn't chosen

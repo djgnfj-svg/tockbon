@@ -169,7 +169,7 @@
 > - **Calling the refit gesture a "drag" collides with decision 10.** Its stated grounds are *"the boat
 >   already taught this gesture"*, and the boat is not fixed.
 > - ✅ Only the Clash Royale line lacks a link; the other five sources check out, links and counter-cases.
-> - ✅ Zero citation-shape violations · zero re-raised refutations · every item in `gdd-audit`'s refuted list
+> - ✅ Zero citation-shape violations · zero re-raised refutations · every item on the GDD's refuted-findings list
 >   checked against.
 
 **One line**
@@ -267,7 +267,7 @@ table says the whole differentiation **rests on the verb "eat."** What that line
 | **Undecided 3's "fixed per island makes route choice into build choice"** | **Its grounds are gone.** Fixed or random, the build is decided in refit |
 
 ⇒ **The rejected fork is recorded in
-[the build is designed, not inherited](../decisions/build-is-designed-not-inherited.md).**
+[the build is designed, not inherited](build-is-designed-not-inherited.md).**
 ⇒ **And both GDD twins were edited directly.**
 [What two dead games left behind](../lessons-from-two-dead-games.md): *a refutation lands where the claim
 is, or it does not propagate.*

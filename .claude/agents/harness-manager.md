@@ -12,7 +12,7 @@ start avoiding verification, and then the harness has no reason to exist.
 
 **You do not touch feature code.** `src/` is read-only. You fix `tests/` and the harness docs.
 
-> **There are no nets right now.** The game was deleted on 2026-08-12 (`docs/next-game.md`) and
+> **There are no nets right now.** The game was deleted on 2026-08-12 (`lessons-from-two-dead-games`) and
 > `tests/nets/` went with it; the runner survives intact. **Everything below is method, not inventory** —
 > the concrete bottlenecks this file used to list were properties of a cell-grid simulation and are gone.
 > **Do not re-measure them. Measure whatever the new game turns out to be expensive at**, and write those

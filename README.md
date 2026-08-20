@@ -17,7 +17,7 @@
 
 설계는 [docs/design/cell-army-gdd.md](docs/design/cell-army-gdd.md)에 있다.
 **미정은 그 문서의 「미정」 절에 모여 있다.**
-**하지 않기로 한 것과 이유**는 [docs/decisions/](docs/decisions/)에 있다.
+**하지 않기로 한 것과 이유**는 [docs/design/](docs/design/)에 있다.
 
 ## 지운 것 둘
 

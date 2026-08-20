@@ -28,7 +28,9 @@ In order of how easily each is missed:
 
 - **`docs/plans/` status moves** — is a finished doc still sitting in `2.active/`. If you moved it, did you fix the `**Status**:` line inside too
 - **Dead references** — does any doc or comment still point at what you deleted or renamed this session
-- **`CLAUDE.md`** — does a structure or rule that changed this session need to land here. Keep it short
+- ⚠ **`CLAUDE.md` — do NOT edit it here.** It loads into every session and every agent, so it grows every
+  time a wrap-up decides something "belongs" in it. **Only the user adds to it, and only when they say so.**
+  If something really has to land there, name it in the report and stop
 - **Memory** — **delete what became wrong this session.** Do not add. Anything that can live in the repo lives in the repo
 
 For each item, **say you checked it, or say it doesn't apply.** Do not skip silently.
