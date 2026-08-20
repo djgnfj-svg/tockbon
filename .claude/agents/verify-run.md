@@ -20,7 +20,7 @@ Failure in this repo is usually silent. So "no error" is not grounds for a pass.
 - **Screen changes, sim doesn't** (or the reverse). Observe both separately.
 - **Nothing happens at all.** Bypass the command gate and it is silently ignored, without error.
 - **Numbers change, screen doesn't.** Power went up with no visible change — that's a failure.
-- **Cost isn't zero at rest.** Nothing moving but active chunks remaining means performance collapses soon.
+- **Cost isn't zero at rest.** Nothing moving on screen while work keeps being done every frame.
 
 ## How to observe — headless only
 

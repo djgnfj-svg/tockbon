@@ -1,5 +1,5 @@
 ---
-name: build-feature
+name: implement-plan
 description: Implements one design doc with a team. Use when the user says "이거 구현하자" "만들어줘" "개발 시작" "let's build this", or points at a doc in docs/plans/1.ready/. Spawns and coordinates five agents — spec, builder, verify-run, verify-look, verify-read. Also used for retries, resuming, and re-running verification only.
 ---
 
@@ -158,6 +158,21 @@ return { survivors: results.filter(Boolean).filter(r => r.landed && !r.went_red)
 The reason is not cost but **role boundaries.** builder only checks "does it come up without errors"
 (`agents/builder.md`) — so **the moment a stage finishes, nobody knows whether it matches the plan.**
 Delaying verification stacks the next stage on top of an unknown one, and the rollback grows with the stage count.
+
+### Models, and never lowering verification to save money
+
+| Character | Who | Model |
+|---|---|---|
+| Judgment changes the outcome | spec · verify-read · verify-look · verify-run | opus |
+| Executes a plan | builder | sonnet |
+| Mechanical — reading values, finding files | — | haiku |
+
+`net-tuner` pins sonnet in its own file, so the caller cannot override it. Nothing else is pinned.
+
+
+The signature failure is "pretends to run", and verify-read · verify-look are what catch it. **And the
+verifier is never the builder** — measured: a builder closed a hole in one file and left the identical one
+open one file over; a verifier who had not built it found it.
 
 **If builder "measures a value and reports it", that is crossing the boundary, not verification.** Do not use
 that report as grounds for a judgment. Measuring your own work reads favorably. The verifiers exist to fill that gap.

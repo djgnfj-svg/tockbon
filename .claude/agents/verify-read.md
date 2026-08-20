@@ -35,11 +35,11 @@ steps on a broken repo and its entire result is void — that accident happened.
 - Swallowed errors
 
 **Breaks silently**
-- Grid mutated outside an `apply()` gate. The chunk never wakes and nothing happens, without error
-- Writes into an array returned by a query like `get_mat()`. That's the original, not a copy
+- State written outside the gate that publishes it — nothing happens, and nothing errors
+- Writing into an array a query handed back. That is the original, not a copy
 - A `Packed*Array` passed as an argument and written to inside. It's a copy; the write evaporates
 - The same rule implemented in two places. It will diverge
-- float · sqrt · sin · randi · Time in the sim core. Multiplayer dies
+- `randi` or `Time` in the sim core. A net cannot reproduce a run that reads either
 - A value out of range with nobody barking
 
 **Didn't follow**
@@ -51,12 +51,12 @@ steps on a broken repo and its entire result is void — that accident happened.
 **When what the check measures differs from what the label says, that green is a false guarantee.**
 Worse than nothing — the next person reads that line as "this is enforced".
 
-Four of this shape came out of one feature:
+The four shapes:
 
-- **A value assertion that happens to be right** — the table value is 2, so hardcoding `layers()` to `return 2` still gives `2 == 2`
-- **The amnesty string is too wide** — `expect_error("unknown rune")` covered both `SpellSim:` and `SpellCircle:`, so a bark from a place that should never bark still read "clean"
-- **Checks "is it called", never "is it used"** — call the function, ignore the value, still passes. **More text checks cannot fix this.** "Does that value reach the result" is behavior; text sees only syntax
-- **A check whose scene fails to build doesn't fail — it disappears** — it quietly `return`s, the pass count drops, nobody barks
+- **A value assertion that happens to be right** — hardcode the function to the table's current value and `==` still holds
+- **An amnesty string wider than the thing it forgives** — it covers a bark from a place that should never bark, and the round still reads "clean"
+- **Checks "is it called", never "is it used"** — call the function, ignore the value, still passes. **More text checks cannot fix this**; text sees syntax, not whether the value reaches the result
+- **A check whose fixture fails to build doesn't fail — it disappears.** It quietly `return`s, the pass count drops, nobody barks
 
 ⇒ **Mutation is not only "does it go red" — it is finding what it fails to catch.** A mutation that stays green
 *is* a hole in the net, and that is this agent's main output.

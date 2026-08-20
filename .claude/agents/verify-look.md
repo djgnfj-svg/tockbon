@@ -123,8 +123,8 @@ Check three things before launching:
 it once killed this session's server too and the tools vanished entirely.
 **Close any editor you launched when the session ends.**
 
-⇒ **Without the bridge the game screenshots itself, and that is now built: `tools/look/`.** Windowed, seven
-frames, quits on its own, every input through `root.push_input()` so nothing is taken from the user.
+⇒ **Without the bridge the game screenshots itself, and that is now built: `tools/look/`.** Windowed, ten
+frames in about ten seconds, quits on its own, every input through `root.push_input()` so nothing is taken from the user.
 **`--headless` cannot capture** — no swapchain, `root.get_texture()` comes back blank, and every PNG is a
 black rectangle **with no error anywhere.** (Headless still turns real frames and really runs `_draw()`;
 what it cannot do is hand back pixels.) Read that folder's README before writing another one: its first

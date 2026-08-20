@@ -1,5 +1,5 @@
 ---
-name: harness-audit
+name: audit-harness
 description: Inspects this repo's harness (CLAUDE.md, .claude/agents/, .claude/skills/, tests/) and reports problems. Use when the user says "하네스 평가" "하네스 점검" "감사" "지금 상태 어때" "제대로 돌아가나" "audit the harness", or asks for a full harness review. Reports only; fixes nothing.
 ---
 

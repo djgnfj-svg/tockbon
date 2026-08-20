@@ -294,7 +294,7 @@ the metric (what a crossing costs) both changed on the same day.
 
 **`net_islands` wall time: 1.5 s** (was ~1.0 s) against the runner's 120 s kill. The walker pair count
 went 1600 -> 2732 as this plan's risk list predicted; it is nowhere near the timeout and
-`harness-manager` is not needed.
+`net-tuner` is not needed.
 
 ---
 

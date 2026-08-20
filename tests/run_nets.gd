@@ -1,5 +1,5 @@
 extends SceneTree
-## The net runner. Runs headless. There is no display — but frames DO turn now (harness-manager, see below).
+## The net runner. Runs headless. There is no display — but frames DO turn now (net-tuner, see below).
 ##
 ## Running the runner alone is only half of it. Engine errors cannot be intercepted from inside the runner
 ## (Godot has no logger hook). The stderr check is done by run_nets.ps1. Always run it through the wrapper.
@@ -11,7 +11,7 @@ extends SceneTree
 ##
 ## **`_draw()` was declared impossible to measure headless in three places (`net_render`, `net_pick`,
 ##  `net_settlement`) — "it needs a live draw context", citing `get_theme_default_font()` returning null
-##  untreed. Measured (harness-manager): both halves of that diagnosis were wrong.** Probed directly (a bare
+##  untreed. Measured (net-tuner): both halves of that diagnosis were wrong.** Probed directly (a bare
 ##  `Control` and the real `CircleWindow`, both untreed): `get_theme_default_font()` is **never** null —
 ##  Godot 4.7.1 falls back to the engine's global default theme with no tree involved at all, so the font
 ##  was never the blocker. The real reason `_draw()` never ran is exactly the one this file owns:
@@ -156,7 +156,7 @@ func expect_error(substr: String) -> void:
 
 # ------------------------------------------------------------------
 
-## **The `^` prefix is an exact match — not a substring match** (harness-manager, measured).
+## **The `^` prefix is an exact match — not a substring match** (net-tuner, measured).
 ##  **Why**: the parallel runner spawns one process per net and gives a short name as the filter to bind that
 ##  process **to that one net only** (`run_nets.ps1`). But with a substring match, names that contain each other
 ##  (`net_sprite` in `net_monster_sprite`, `net_water` in `net_water_rain`) mean **one process secretly runs

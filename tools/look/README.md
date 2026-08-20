@@ -1,14 +1,14 @@
 # tools/look — the game screenshots itself
 
-**This is verify-look without the bridge.** `CLAUDE.md` says in one line that "without the bridge the game
-can `save_png()` itself" and nothing implemented it; `capture.gd` is that. Written 2026-08-15, when plan 3
-needed looking at and there were **zero `godot-mcp` node processes** on the machine to grab 6550 with.
+**This is verify-look without the bridge.** ⚠ **Only `capture_map.gd` runs** — every other script this file
+describes drove the deleted game and is gone, and their sections are kept for what they MEASURED, not to be
+run.
 
 ```
-.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture.gd -- <output-dir>
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_map.gd -- <output-dir>
 ```
 
-Seven PNGs, about fifteen seconds, and it quits on its own.
+Ten PNGs, about ten seconds, and it quits on its own.
 
 ## The three rules it exists to obey
 

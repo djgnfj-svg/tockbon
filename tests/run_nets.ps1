@@ -252,14 +252,14 @@ if ($Serial) {
 #
 #  **The value is named rather than inline** so raising it is a decision someone makes on purpose. 120s is
 #  ~57x the whole round (2.1s) and ~66x the slowest single net (1.8s), so it can only fire on something
-#  that is not working — a net that legitimately grows past two minutes is a `harness-manager` problem
+#  that is not working — a net that legitimately grows past two minutes is a `net-tuner` problem
 #  long before it is a timeout problem.
 $NetTimeoutSec = 120.0
 
 # -- Parallel. The number of processes alive at once is limited.
 #  **The old ceiling (8, i.e. `ProcessorCount - 2` on this machine) was tuned for a game that is gone** —
 #  v2-openfield's grid was 4.12M cells x four arrays per process, and that memory reasoning does not apply
-#  to an empty `src/`. harness-manager measured (2026-08-17), 8-core/16-thread machine, throwaway load:
+#  to an empty `src/`. net-tuner measured (2026-08-17), 8-core/16-thread machine, throwaway load:
 #   · 32 cheap nets (spawn-dominated): cap 8 (4 waves) 2.36s -> cap 16 (2 waves) not retested alone, but
 #     the 49-net mixed round below carries it
 #   · 16 CPU-heavy nets (~1s of real work each): cap 8 (2 waves) 3.6s -> cap 16 (1 wave, 2x oversubscribed
@@ -278,7 +278,7 @@ Write-Host "[그물] $($nets.Count)개를 병렬로 돈다 (동시 ${maxParallel
 # **Queue order decides the makespan, not just per-net speed.** The slot-filling loop below starts
 #  whatever is next in `$queue` the moment a slot frees — queued alphabetically, the two heaviest nets
 #  (`water`, `monster`) don't even start together, so a slot sits idle-of-the-heavy-work while a run of
-#  light nets finishes first. harness-manager measured: 21 nets' own Sec summed to 75.9s, the slowest
+#  light nets finishes first. net-tuner measured: 21 nets' own Sec summed to 75.9s, the slowest
 #  single net was 12.2s, so the best possible makespan at 8-way parallel is max(12.2, 75.9/8) = 12.2s —
 #  and the alphabetical queue was landing at 15.2s, ~3s of pure scheduling waste, nothing to do with any
 #  net's own speed.
@@ -307,7 +307,7 @@ while ($queue.Count -gt 0 -or $running.Count -gt 0) {
         $n = $queue.Dequeue()
         $o = Join-Path $tmp "tockbon_net_${n}_out_$PID.txt"
         $e = Join-Path $tmp "tockbon_net_${n}_err_$PID.txt"
-        # **`^` binds it to exactly this one net** (harness-manager, measured).
+        # **`^` binds it to exactly this one net** (net-tuner, measured).
         #  With a substring match (passing `$n` as-is), nets whose names contain each other (`net_water` in
         #  `net_water_rain`, `net_sprite` in `net_monster_sprite`) let one process secretly run several nets —
         #  the isolation breaks and the parallelism does not reduce the time (see the comment on the `run_nets.gd` side).
@@ -322,7 +322,7 @@ while ($queue.Count -gt 0 -or $running.Count -gt 0) {
     }
     # **120ms narrowed to 25ms.** Every wave-boundary pays up to one full poll interval before a freed slot
     #  is noticed and the next queued net starts. With many short nets and several waves this compounds —
-    #  harness-manager measured (2026-08-17): 32 cheap throwaway nets at 4 waves, 120ms poll averaged 2.36s,
+    #  net-tuner measured (2026-08-17): 32 cheap throwaway nets at 4 waves, 120ms poll averaged 2.36s,
     #  25ms poll averaged 2.23s over 3 runs each, same nets, same cap. The poll body itself is a few cheap
     #  `HasExited` checks, so 5x more of them costs nothing worth naming.
     Start-Sleep -Milliseconds 25

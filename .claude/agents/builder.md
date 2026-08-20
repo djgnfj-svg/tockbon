@@ -19,10 +19,8 @@ Write the code in `## Implementation plan` of `docs/plans/2.active/<name>.md`.
 
 **If adding one new kind means editing several places, the design is wrong.**
 
-This repo is already data-driven. Build the same way.
-
-- One material = one row in `Mat.DEFS`. Palette, behavior and name all derive from there
-- One power tier = one row each in `SIM_TIERS` and `FX_TIERS`
+This repo is already data-driven. Build the same way: **one new kind is one new row in the table that owns
+it**, and everything about it derives from that row.
 
 If you reach "adding one thing means editing four files", **stop and tell spec.** Push through and the next person misses one of the four.
 
@@ -36,7 +34,7 @@ in one line why the existing thing doesn't work.
 
 ## No fake code
 
-`CLAUDE.md`'s list applies as written. The shapes that recur here:
+The shapes that recur here:
 
 - Hardcoding for this input only
 - Returning a plausible value instead of computing one
@@ -45,6 +43,18 @@ in one line why the existing thing doesn't work.
 
 **If you can't do it, say so. If it's half done, say half.** This matters most — code that pretends to work
 can pass both verifiers, and then the lie is in the repo.
+
+## One clock
+
+**The game runs on the render loop and nothing else.** ⚠ **If a plan has you put a fixed timestep under it,
+say so before writing it** — the deleted game ran three clocks and every defect worth the name came out of
+the seams between them, and no net here is written to watch a seam.
+
+## If the plan has you writing a net
+
+**Invert every new check.** An uninverted check proves "it runs", not "it measures" — and **a new check
+needs a case that fails *it*, not only the subject.** Twice in one night a check was written to catch a
+defect and shipped carrying that same defect. The rules are in `tests/README`, the cases in `how-nets-lie`.
 
 ## When stuck
 
@@ -74,7 +84,7 @@ If you edited `project.godot`, **just report that you did.** Whether a restart i
 
 **Do not observe values. Do not look at the screen.**
 
-"Stone went from 4704 to 4492", "one flash appeared", "the hole persists" are **all verifier observations.**
+A count that moved, a flash that appeared, a hole that persisted — **all verifier observations.**
 Headless or by eye makes no difference — **the moment you measure, you have judged.**
 
 **Why this strict**: measuring your own work always reads favorably. "Looks mostly right" comes from exactly here,
