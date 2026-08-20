@@ -1,4 +1,4 @@
- ---
+---
 name: net-tuner
 description: Measures and fixes nets when they get slow or spin idle. Call when "the nets take too long" or "verification is painful" during feature work, or right after a new net is born. Never touches feature code.
 model: sonnet

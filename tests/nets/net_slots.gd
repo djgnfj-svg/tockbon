@@ -519,7 +519,7 @@ func _the_slot_row(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
 	var back: Rect2 = _bar_at(hs, 0)["back"]
 	var full: Rect2 = _bar_at(hs, 0)["fill"]
 	t.eq(full.size.x, back.size.x, "내보내기 전에는 막대가 가득이다 (자가 점검)")
-	t.eq(Rules.START_MELEE, 6, "시작 근접 병력이 여섯이다 (아래 6분의 5 가 재는 값 — 자가 점검)")
+	t.eq(Rules.slot_start_count(0), 6, "시작 근접 병력이 여섯이다 (아래 6분의 5 가 재는 값 — 자가 점검)")
 	game._unhandled_input(_press(at))
 	game._unhandled_input(_release(at))
 	t.eq(game.battle.boats.size(), 1, "한 척 내보냈다 (자가 점검)")

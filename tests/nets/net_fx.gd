@@ -549,11 +549,21 @@ func _grid_of(rows: Array) -> Grid:
 	return g
 
 
+## `Army.add(type_id)` is gone — a body is `recruit`ed from a SLOT now. Every `type_id` this file passes
+## is one `SUMMON_SLOTS` already binds, so it is resolved back to its slot here rather than at every
+## call site.
 func _army_of(types: Array) -> Army:
 	var a := Army.new()
 	for raw in types:
-		a.add(int(raw))
+		a.recruit(_slot_of_type(int(raw)))
 	return a
+
+
+func _slot_of_type(type_id: int) -> int:
+	for s in Rules.summon_slot_count():
+		if Rules.summon_type_of(s) == type_id:
+			return s
+	return 0
 
 
 func _spawn(w: int, type_id: int, x: int, y: int) -> Dictionary:

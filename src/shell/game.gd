@@ -48,6 +48,8 @@ var battle: Battle = null
 var field_view: FieldView = null
 var hud_view: HudView = null
 var map_view: MapView = null
+var reward_view: RewardView = null
+var refit_view: RefitView = null
 var title_view: TitleView = null
 var panel_view: PanelView = null
 
@@ -117,11 +119,15 @@ func _ready() -> void:
 	field_view = FieldView.new()
 	hud_view = HudView.new()
 	map_view = MapView.new()
+	reward_view = RewardView.new()
+	refit_view = RefitView.new()
 	title_view = TitleView.new()
 	panel_view = PanelView.new()
 	add_child(field_view)
 	add_child(hud_view)
 	add_child(map_view)
+	add_child(reward_view)
+	add_child(refit_view)
 	add_child(title_view)
 	add_child(panel_view)
 
@@ -173,10 +179,22 @@ func _open_island() -> void:
 ## did — by leaving the last island drawable behind the panel.
 func _close_island() -> void:
 	run.finish_island(battle.outcome() == Battle.Outcome.WON)
-	if run.state() == Run.State.MAP:
-		_enter_map_screen()
-	else:
-		_open_island()
+	_show_state()
+
+
+## The one mapping from `run.state()` to a screen. Three copies of a state->screen dispatch is three
+## places to forget a new state — `_close_island`, `_release_hold`'s beak branch and `_enter_node`'s
+## else arm all call this instead of deciding for themselves.
+func _show_state() -> void:
+	match run.state():
+		Run.State.MAP:
+			_enter_map_screen()
+		Run.State.PICK:
+			_enter_pick_screen()
+		Run.State.REFIT:
+			_enter_refit_screen()
+		_:
+			_open_island()
 
 
 ## `battle.step(delta)` is called here and **nowhere else**. The three views only ever call
@@ -276,10 +294,11 @@ func _release_hold() -> void:
 	if _pending_beak >= 0:
 		run.apply_beak(_pending_beak)
 		_pending_beak = -1
-		# ⚠ **Not `_open_island()`.** `apply_beak` ends in `_advance`, which now lands in `MAP` — asking
-		# `begin_island` for a fight the run is not in returns null and leaves the previous island
-		# drawing under the map.
-		_enter_map_screen()
+		# ⚠⚠ **Not `_enter_map_screen()` and not `_open_island()`.** `apply_beak` ends in `_advance`,
+		# which lands in `PICK` when the win that paid this beak still has cards undrawn from — a run
+		# may collect the beak before the cards, and both screens have to show. `_show_state()` is the
+		# one place that already knows which of `MAP` / `PICK` / `REFIT` that is.
+		_show_state()
 		return
 	_close_island()
 
@@ -327,6 +346,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	# click on a node would otherwise pan the camera over the island still sitting behind the map.
 	if run.state() == Run.State.MAP:
 		_map_input(event)
+		return
+	# ⚠⚠ **The `PICK` and `REFIT` branches sit BESIDE the `MAP` branch, above the `battle != null`
+	# block.** Below it, a click on a card or a cell falls through to `_panning = true` — the field is
+	# `null` on both these screens, but `_on_left_press` does not know that until it gets there.
+	if run.state() == Run.State.PICK:
+		_pick_input(event)
+		return
+	if run.state() == Run.State.REFIT:
+		_refit_input(event)
 		return
 	# ⚠⚠ **The `InputEventKey` branch is BACK** (`sea-summon`), and it does something different from
 	# the `_on_key` `plan-then-watch` deleted: those keys spawned a body straight onto a boat, and
@@ -438,6 +466,68 @@ func _map_input(event: InputEvent) -> void:
 	_hold_sec = Look.MAP_TRAVEL_SEC
 
 
+## The reward screen's whole input table: one hover and one press.
+##
+## ⚠ **Whether a card may be taken is asked of the SIM**, exactly as the map asks `run.map.is_reachable`
+## — `reward_view.is_card_pressable` calls the same predicate `run.take_card` refuses on, so the
+## picture can never offer a card the sim then refuses.
+func _pick_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		reward_view.set_hover((event as InputEventMouseMotion).position)
+		return
+	if not (event is InputEventMouseButton):
+		return
+	var click := event as InputEventMouseButton
+	if click.button_index != MOUSE_BUTTON_LEFT or not click.pressed:
+		return
+	var k := reward_view.card_at(click.position)
+	if not reward_view.is_card_pressable(k):
+		return
+	reward_view.note_press(k)
+	run.take_card(k)
+	if run.state() != Run.State.PICK:
+		_enter_refit_screen()
+
+
+## The refit screen's whole input table: one hover and, in order, four kinds of press — 완료, 뒤로 (only
+## with a board open), a slot box (only on the strip), a held row, or a filled cell.
+func _refit_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		refit_view.set_hover((event as InputEventMouseMotion).position)
+		return
+	if not (event is InputEventMouseButton):
+		return
+	var click := event as InputEventMouseButton
+	if click.button_index != MOUSE_BUTTON_LEFT or not click.pressed:
+		return
+	var at := click.position
+	if refit_view.is_done_pressable(at):
+		refit_view.note_done_press()
+		run.close_refit()
+		_show_state()
+		return
+	if refit_view.is_back_pressable(at):
+		refit_view.open_slot(-1)
+		return
+	var s := refit_view.slot_at(at)
+	if s >= 0:
+		refit_view.note_slot_press(s)
+		refit_view.open_slot(s)
+		return
+	if not refit_view.is_board_open():
+		return
+	var open_slot := refit_view.open_slot_index()
+	var row := refit_view.held_at(at)
+	if row >= 0:
+		refit_view.note_held_press(row)
+		run.army.loadout.fit(open_slot, row)
+		return
+	var part := refit_view.cell_at(at)
+	if part >= 0:
+		refit_view.note_cell_press(part)
+		run.army.loadout.unfit(open_slot, part)
+
+
 ## 시작하기: a brand new run, and the map rather than an island. **`Run.restart()` is not called here**
 ## — a fresh `Run` is what 시작하기 means, and `restart` stays alive for `net_run` to keep `_reset`
 ## honest about fields added to one path and not the other.
@@ -455,7 +545,7 @@ func _enter_node(n: int) -> void:
 	if run.state() == Run.State.BATTLE:
 		_open_island()
 	else:
-		_enter_map_screen()
+		_show_state()
 
 
 ## Puts the map on screen and takes the island off it.
@@ -480,6 +570,27 @@ func _enter_map_screen() -> void:
 	map_view.note_cleared(run.map.at())
 	panel_view.bind(run, null)
 	title_view.visible = false
+
+
+## Six cards are up. The shape of `_enter_map_screen`: the island stops being drawable and the panel
+## goes with it, so a card press can never land on an invisible roster underneath.
+func _enter_pick_screen() -> void:
+	battle = null
+	field_view.setup(null, null, [])
+	_disarm()
+	hud_view.bind(null)
+	panel_view.bind(run, null)
+	reward_view.bind(run)
+
+
+## The two taken cards are ready to be laid into a board.
+func _enter_refit_screen() -> void:
+	battle = null
+	field_view.setup(null, null, [])
+	_disarm()
+	hud_view.bind(null)
+	panel_view.bind(run, null)
+	refit_view.bind(run)
 
 
 ## The panel is asked first, and it is asked through `panel_active()` rather than through a state

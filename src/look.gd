@@ -215,16 +215,16 @@ const COL_START := Color(0.302, 0.541, 0.404)
 ## all out, wears the same tone. It is the same claim — *there is a place here and nothing is in it* —
 ## so it is the same value rather than a second grey.
 ##
-## The three node tones differ in HUE as well as in shape and size, which is the whole point: Slay the
+## The node tones differ in HUE as well as in shape and size, which is the whole point: Slay the
 ## Spire's map is criticised for symbols that differ in neither, and that is the same failure shape the
 ## user hit on the plan screen. See `title-and-map`, the map table.
-## ⚠ **None of the three is an existing constant re-typed.** They are near-neighbours of `COL_ALLY`,
-## `COL_WIN` and `COL_LOSE` in hue and deliberately not equal to them: a node is not a body and not a
-## verdict, and a value shared by two concepts diverges the first time one of them is tuned. What is
-## pinned is that the three differ from EACH OTHER — 210 deg, 105 deg and 5 deg apart.
+## ⚠ **`COL_NODE_CHEST` is GONE with the chest** (`parts-on-a-board-not-on-the-body`, 「일단 전부 다
+## monster 노드로 만들면 될듯」). `NodeKind` has two entries now, so two tones is the whole of it.
+## ⚠ **Neither is an existing constant re-typed.** They are near-neighbours of `COL_ALLY` and
+## `COL_LOSE` in hue and deliberately not equal to them: a node is not a body and not a verdict, and a
+## value shared by two concepts diverges the first time one of them is tuned.
 const COL_SLOT_OFF := Color(0.420, 0.420, 0.440)
 const COL_NODE_FIGHT := Color(0.373, 0.678, 0.941)
-const COL_NODE_CHEST := Color(0.545, 0.878, 0.471)
 const COL_NODE_BOSS := Color(0.933, 0.322, 0.290)
 
 # Combat juice. Seven, and every one of them is a colour no existing name can stand in for.
@@ -453,34 +453,38 @@ const GHOST_ALPHA := 0.55             # >= 0.35 — dimmer than that and the pla
 # Panel — reward pick, win, lose, restart
 # ---------------------------------------------------------------------------------------------
 
-## Centred: (1280 - 560) / 2 = 360, (720 - 480) / 2 = 120.
+## Centred: (1280 - 560) / 2 = 360, (720 - 520) / 2 = 100.
 ##
-## ⚠ **The panel grew 400 -> 480 px tall with the node map, and it is not taste.** A route through
-## `Rules.MAP_NODES` can step on `map_max_count_nodes_on_a_route()` = 3 count nodes, so the roster
-## reaches `10 + 3 * 3 = 19` soldiers against a capacity that used to be 14. `panel_view.roster_ids`
-## caps at `roster_capacity()` and drops the rest **silently**, so the overflow would have been five
-## soldiers the player can see nowhere and can never give the beak to.
-## Height check: `72 + 10 * (28 + 6) = 412 <= 480` and `420 + 48 = 468 <= 480`.
-const PANEL_ORIGIN_PX := Vector2(360.0, 120.0)
-const PANEL_SIZE_PX := Vector2(560.0, 480.0)
+## ⚠ **The panel grew again with `refit-board`'s node table.** Node 5 (floor 4, the ex-chest) now pays
+## `Reward.COUNT`, which moves `map_max_count_nodes_on_a_route()` 3 -> 4: a route can step on FOUR count
+## nodes, so the roster reaches `10 + 4 * 3 = 22` against a capacity that was sized for 19.
+## `panel_view.roster_ids` caps at `roster_capacity()` and drops the rest **silently** — its own comment
+## already said the cap "never actually bites" once, and it bit. ⇒ **The bound is pinned CONSERVATIVE**:
+## the panel holds every soldier a run can field, with no clause about where the beak nodes happen to
+## sit on the route that reaches one — see `net_shell`'s 22-body fixture, built by driving `run`
+## directly rather than by walking a route, because no route today actually reaches a `REWARD` screen
+## with 22 bodies aboard.
+## Height check: `72 + 11 * (28 + 6) = 446 <= 520` and `456 + 48 = 504 <= 520`.
+const PANEL_ORIGIN_PX := Vector2(360.0, 100.0)
+const PANEL_SIZE_PX := Vector2(560.0, 520.0)
 
 const PANEL_TITLE_OFFSET_PX := Vector2(40.0, 44.0)
 const PANEL_TITLE_FONT_SIZE_PX := 28
 const PANEL_BODY_FONT_SIZE_PX := 18
 
-## The roster the player clicks to bolt the beak on. Two columns of **ten** = 20 slots, against a run
-## that can now field 19 soldiers (see PANEL_SIZE_PX above), so no entry is ever off the panel.
-## Width check: 40 + 240 + 24 + 240 = 544 <= 560. Height check: 72 + 10 * (28 + 6) = 412 <= 480.
+## The roster the player clicks to bolt the beak on. Two columns of **eleven** = 22 slots, against a run
+## that can now field 22 soldiers (see PANEL_SIZE_PX above), so no entry is ever off the panel.
+## Width check: 40 + 240 + 24 + 240 = 544 <= 560. Height check: 72 + 11 * (28 + 6) = 446 <= 520.
 const ROSTER_ORIGIN_OFFSET_PX := Vector2(40.0, 72.0)
 const ROSTER_ENTRY_SIZE_PX := Vector2(240.0, 28.0)
 const ROSTER_ENTRY_GAP_PX := 6.0
 const ROSTER_COLUMN_GAP_PX := 24.0
 const ROSTER_COLUMNS := 2
-const ROSTER_ROWS := 10
+const ROSTER_ROWS := 11
 const ROSTER_TEXT_OFFSET_PX := Vector2(8.0, 20.0)
 
-## The restart / continue button. 420 + 48 = 468 <= 480, so it clears the roster block above it.
-const BUTTON_OFFSET_PX := Vector2(180.0, 420.0)
+## The restart / continue button. 456 + 48 = 504 <= 520, so it clears the roster block above it.
+const BUTTON_OFFSET_PX := Vector2(180.0, 456.0)
 const BUTTON_SIZE_PX := Vector2(200.0, 48.0)
 const BUTTON_TEXT_OFFSET_PX := Vector2(24.0, 32.0)
 
@@ -536,6 +540,173 @@ const PRESS_DOWN_DIM := 0.15              # >= 0.10; <= 0.30
 ## Floor 0.20 — under it the fade reads as the hard cut it exists to remove; ceiling 0.60 or leaving
 ## the title feels slow.
 const SCENE_FADE_SEC := 0.35
+
+
+# ---------------------------------------------------------------------------------------------
+# The reward screen — six cards, take two (`parts-on-a-board-not-on-the-body`)
+# ---------------------------------------------------------------------------------------------
+
+## 3 across, 2 down. `≥ (220, 64)` — the largest press in the game, and no new press is smaller;
+## `3×280 + 2×32 = 904 ≤ 1280`.
+const CARD_SIZE_PX := Vector2(280.0, 200.0)
+const CARD_GAP_PX := 32.0             # ≥ 12 or two cards read as one bar; ≤ 80, from the width sum
+## x = `(1280 − 904) / 2` exactly; y ≥ 120 (clear of the hint line); `180 + 2×200 + 32 = 612 ≤ 720`.
+const CARD_GRID_ORIGIN_PX := Vector2(188.0, 180.0)
+
+const CARD_PART_FONT_SIZE_PX := 34    # > HUD_TIMER_FONT_SIZE_PX 30 — the part name is the loudest
+                                      # thing on its own card; ≤ 44, from 4 glyphs at ~0.6em inside
+                                      # 280 − 2×24
+const CARD_SPECIES_FONT_SIZE_PX := 20 # ≥ 16 (unreadable below); ≤ CARD_PART_FONT_SIZE_PX − 12, or
+                                      # 부위 and 종 read as one line
+const CARD_PART_OFFSET_PX := Vector2(24.0, 84.0)        # x > 0 and y ≥ the part font size; inside
+                                      # the card
+const CARD_SPECIES_OFFSET_PX := Vector2(24.0, 132.0)    # y ≥ CARD_PART_OFFSET_PX.y +
+                                      # CARD_PART_FONT_SIZE_PX, or the two lines overlap
+## ⚠⚠ **A taken card and a card that can no longer be taken both fall to `PRESS_ALPHA_OFF`, so alpha
+## alone cannot tell them apart** — the map measured exactly this and answered it with size AND
+## brightness AND what is drawn on top. This mark is the third channel.
+const CARD_TAKEN_MARK_R_PX := 26.0    # ≥ 18; ≤ 40, or it covers the part name
+const CARD_HINT_POS_PX := Vector2(500.0, 120.0)         # y ≥ the font size, y ≤ 160, clear of the
+                                      # grid at 180
+const CARD_HINT_FONT_SIZE_PX := 26    # > HUD_FONT_SIZE_PX 22
+## How long the taken mark takes to grow to full size. >= 0.084 (five frames); <= 0.40.
+const CARD_TAKEN_GROW_SEC := 0.20
+
+## `시작하기` reuses `COL_START` and `종료` reuses `COL_BUTTON`, by this file's own same-verb-same-tone
+## rule; a card is a new verb and gets one tone.
+const COL_CARD := Color(0.596, 0.549, 0.827)
+
+## Indexed by `Rules.Species`. Pairwise luminance ratio ≥ 1.4, so no two species read as one tone.
+const COL_SPECIES := [
+	Color(0.796, 0.596, 0.322),   # MAMMAL
+	Color(0.451, 0.780, 0.851),   # BIRD
+	Color(0.373, 0.596, 0.941),   # FISH
+]
+
+
+## Card `k`'s (0..5) RESTING rectangle, in viewport px. 3 across, 2 down.
+static func card_rect_px(k: int) -> Rect2:
+	var col := k % 3
+	var row := k / 3
+	return Rect2(CARD_GRID_ORIGIN_PX + Vector2(col * (CARD_SIZE_PX.x + CARD_GAP_PX),
+		row * (CARD_SIZE_PX.y + CARD_GAP_PX)), CARD_SIZE_PX)
+
+
+## The same rectangle grown by `PRESS_HIT_PAD_PX` on all four sides — 296×216 at a 312×232 pitch, so
+## no two hit rects ever touch (312 − 296 = 16 > 0, 232 − 216 = 16 > 0).
+static func card_hit_rect_px(k: int) -> Rect2:
+	return card_rect_px(k).grow(PRESS_HIT_PAD_PX)
+
+
+# ---------------------------------------------------------------------------------------------
+# The refit screen (`parts-on-a-board-not-on-the-body`)
+# ---------------------------------------------------------------------------------------------
+
+## The slot strip — step one. `≥ (220, 64)` · `200 + 2×120 + 24 = 464 ≤ 720`.
+const REFIT_SLOT_SIZE_PX := Vector2(360.0, 120.0)
+const REFIT_SLOT_GAP_PX := 24.0       # ≥ 12; ≤ 60
+## x = `(1280 − 360) / 2` exactly.
+const REFIT_SLOT_ORIGIN_PX := Vector2(460.0, 200.0)
+const REFIT_BUTTON_SIZE_PX := Vector2(240.0, 80.0)      # ≥ (220, 64); ≤ (360, 120)
+## `600 + 80 = 680 ≤ 720`, and `600 > 464` so it never touches the strip.
+const REFIT_DONE_ORIGIN_PX := Vector2(520.0, 600.0)
+
+## The board, the pile, the dashboard, the body — step two. `≥ (220, 64)` — exactly at the width
+## floor, deliberately: the board is the densest press on any screen. `3×220 + 2×20 = 700`.
+const REFIT_CELL_SIZE_PX := Vector2(220.0, 140.0)
+## ⚠⚠ **≥ 17, and the reason is the hit pad, not the eye**: a hit rect grows 8 on each side, so at a
+## gap of 16 two neighbours' hit rects share an edge exactly and `Rect2.intersects` (borders excluded
+## by default) calls that no overlap. 20 leaves 4 px clear; ≤ 40 (`80 + 3×220 + 2×40 ≤ 800`).
+const REFIT_CELL_GAP_PX := 20.0
+## `80 + 700 = 780 ≤ 800` (clear of the pile column); `320 + 2×140 + 20 = 620`, hit bottom 628.
+const REFIT_BOARD_ORIGIN_PX := Vector2(80.0, 320.0)
+const REFIT_CELL_PART_FONT_SIZE_PX := 26      # > HUD_FONT_SIZE_PX 22; ≤ 34
+const REFIT_CELL_SPECIES_FONT_SIZE_PX := 18   # ≥ 16; ≤ the part font − 6
+
+## x > 780 (clear of the board and the dashboard); `800 + 240 + 220 = 1260`, hit right edge 1268.
+const REFIT_HELD_ORIGIN_PX := Vector2(800.0, 300.0)
+## The exact smallest legal press on this screen.
+const REFIT_HELD_SIZE_PX := Vector2(220.0, 64.0)
+const REFIT_HELD_GAP_PX := 20.0               # ≥ 17 (the cells' own hit-pad arithmetic); ≤ 32
+## ≥ 237 (220 + 8 + 8 + 1) or the two columns' hit rects overlap; ≤ 250 from the right edge.
+const REFIT_HELD_COL_PITCH_PX := 240.0
+## ⚠⚠ **`refit_held_capacity()` = 2 × 5 = 10, and it must stay ≥ `Rules.CARD_PICKS *
+## Rules.map_max_card_nodes_on_a_route()` = 8.** `panel_view.roster_ids` shipped a cap that silently
+## dropped the overflow and its comment said the cap never bit — it bit. This one is pinned against
+## the map, not against a guess.
+const REFIT_HELD_ROWS := 5                    # `300 + 4×84 + 64 = 700`, hit bottom 708 ≤ 720
+
+const REFIT_STAT_ORIGIN_PX := Vector2(80.0, 150.0)      # y ≥ the value font size; `80 + 5×140 =
+                                      # 780 ≤ 800`
+const REFIT_STAT_PITCH_PX := 140.0    # ≥ 110 (the widest label 「공격주기」 at ~0.6em of 20px is
+                                      # 48px, and the value below it needs the same again); ≤ 144
+const REFIT_STAT_LABEL_FONT_SIZE_PX := 20     # ≥ 16; < the value font − 10
+const REFIT_STAT_VALUE_FONT_SIZE_PX := 34     # > HUD_TIMER_FONT_SIZE_PX 30; ≤ 44
+
+const REFIT_BODY_CENTRE_PX := Vector2(1030.0, 180.0)    # y − radius ≥ 90; y + radius ≤ 300, clear
+                                      # of the pile; x ± radius inside 780…1280
+const REFIT_BODY_SCALE := 5.0         # ≥ 3 — under it the ranged body's corner rounding is
+                                      # invisible; ≤ 8, from 0.35 × 40 × 8 = 112 > the 210 px band
+
+## The button has TWO positions: step one reuses `REFIT_DONE_ORIGIN_PX` above (the strip's hit
+## bottom is 472, and 600 clears it); step two moves it clear of the board, which occupies y
+## 320…628 including its pad.
+const REFIT_DONE_BOARD_ORIGIN_PX := Vector2(80.0, 632.0)       # `632 > 628`; `632 + 80 = 712 ≤ 720`
+const REFIT_BACK_ORIGIN_PX := Vector2(340.0, 632.0)            # 260 apart against a 240 width — the
+                                      # two hit rects clear by 4
+
+
+static func refit_slot_rect_px(slot: int) -> Rect2:
+	var y := REFIT_SLOT_ORIGIN_PX.y + slot * (REFIT_SLOT_SIZE_PX.y + REFIT_SLOT_GAP_PX)
+	return Rect2(Vector2(REFIT_SLOT_ORIGIN_PX.x, y), REFIT_SLOT_SIZE_PX)
+
+
+static func refit_slot_hit_rect_px(slot: int) -> Rect2:
+	return refit_slot_rect_px(slot).grow(PRESS_HIT_PAD_PX)
+
+
+static func refit_done_rect_px(board_open: bool) -> Rect2:
+	return Rect2(REFIT_DONE_BOARD_ORIGIN_PX if board_open else REFIT_DONE_ORIGIN_PX,
+		REFIT_BUTTON_SIZE_PX)
+
+
+static func refit_back_rect_px() -> Rect2:
+	return Rect2(REFIT_BACK_ORIGIN_PX, REFIT_BUTTON_SIZE_PX)
+
+
+## Cell `part`'s (0..5, `Rules.Part`) RESTING rectangle: 3 across, 2 down, same pitch shape the cards
+## use.
+static func refit_cell_rect_px(part: int) -> Rect2:
+	var col := part % 3
+	var row := part / 3
+	return Rect2(REFIT_BOARD_ORIGIN_PX + Vector2(col * (REFIT_CELL_SIZE_PX.x + REFIT_CELL_GAP_PX),
+		row * (REFIT_CELL_SIZE_PX.y + REFIT_CELL_GAP_PX)), REFIT_CELL_SIZE_PX)
+
+
+static func refit_cell_hit_rect_px(part: int) -> Rect2:
+	return refit_cell_rect_px(part).grow(PRESS_HIT_PAD_PX)
+
+
+## How many held rows the pile can show at once — two columns of `REFIT_HELD_ROWS`.
+static func refit_held_capacity() -> int:
+	return 2 * REFIT_HELD_ROWS
+
+
+## Held row `row_index` (0..`refit_held_capacity()`-1), two columns top to bottom then across.
+static func refit_held_rect_px(row_index: int) -> Rect2:
+	var col := row_index / REFIT_HELD_ROWS
+	var row := row_index % REFIT_HELD_ROWS
+	return Rect2(REFIT_HELD_ORIGIN_PX + Vector2(col * REFIT_HELD_COL_PITCH_PX,
+		row * (REFIT_HELD_SIZE_PX.y + REFIT_HELD_GAP_PX)), REFIT_HELD_SIZE_PX)
+
+
+static func refit_held_hit_rect_px(row_index: int) -> Rect2:
+	return refit_held_rect_px(row_index).grow(PRESS_HIT_PAD_PX)
+
+
+## The five dashboard rows, top to bottom, indexed by `Rules.PART_COL_*`.
+static func refit_stat_origin_px(col: int) -> Vector2:
+	return REFIT_STAT_ORIGIN_PX + Vector2(0.0, col * REFIT_STAT_PITCH_PX)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -735,10 +906,9 @@ const MAP_REVEAL_STEP_SEC := 0.06         # >= 0.03, under which seven nodes app
 ## readout, and the shell holds for exactly this long so that it plays.
 const MAP_TRAVEL_SEC := 0.45              # >= 0.25 or the ring teleports; <= 0.70 or it is a wait
 
-## The node just won filling in, and the army's 「힘」 number climbing after a chest.
-## ⚠ `MAP_HEAL_SEC`'s floor is 0.30 because the number has to be WATCHED climbing: a chest is the only
-## node in this round that changes state without a fight, so without the climb, pressing it and not
-## pressing it look identical on screen.
+## The node just won filling in, and the army's 「힘」 number climbing after a `Reward.COUNT` win.
+## ⚠ `MAP_HEAL_SEC`'s floor is 0.30 because the number has to be WATCHED climbing — without it a win
+## that raised the pool and a win that did not look identical on screen.
 const MAP_CLEAR_FILL_SEC := 0.25          # >= 0.084; <= 0.50
 const MAP_HEAL_SEC := 0.60                # >= 0.30; <= 1.00
 
@@ -810,10 +980,12 @@ const MAP_ARMY_POS_PX := Vector2(24.0, 44.0)   # y >= MAP_ARMY_FONT_SIZE_PX (a b
 const MAP_ARMY_FONT_SIZE_PX := 26         # > HUD_FONT_SIZE_PX 22 — it is the only readout on this
                                           # screen; <= 30
 
-## Kind -> how many sides its shape has, indexed by `Rules.NodeKind`: 0 is a circle, 4 a diamond.
-## ⚠ **A TABLE and not a branch in `map_view`.** Adding the elite one day then costs `rules.gd` plus
-## this line and **no view edit**; written as a branch it costs a view edit forever after.
-const MAP_NODE_SIDES := [0, 4, 0]
+## Kind -> how many sides its shape has, indexed by `Rules.NodeKind`: 0 is a circle. ⚠ **The diamond
+## (4 sides) was the chest's and left with it** — `NodeKind` has two entries, FIGHT and BOSS, and both
+## are circles told apart by size and colour alone. **A TABLE and not a branch in `map_view`.** Adding
+## the elite one day then costs `rules.gd` plus this line and **no view edit**; written as a branch it
+## costs a view edit forever after.
+const MAP_NODE_SIDES := [0, 0]
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1343,8 +1515,6 @@ static func map_node_sides_of(kind: int) -> int:
 
 static func map_node_colour_of(kind: int) -> Color:
 	match kind:
-		Rules.NodeKind.CHEST:
-			return COL_NODE_CHEST
 		Rules.NodeKind.BOSS:
 			return COL_NODE_BOSS
 		_:

@@ -1,8 +1,24 @@
 # Plan — the title and the map: building the outside of a run
 
-**Status**: `2.active` but ⚠ **PAUSED on 2026-08-19** while `speed-off-open-landing` runs — two plans sit in this folder and only one is being built. ⚠⚠ **Before step 5 resumes, read `push-inland`**: terrain is now a hand-authored POOL drawn at random (user, 2026-08-19), so 「three grids for six nodes」 is no longer the right question. — **steps 1–4 and 6 are BUILT and the round is green (14 nets, 1933 checks).
-Step 5 — the three new grids — is NOT done, and step 7's instrument had to be repaired.** Moved out of
-`1.ready` on 2026-08-19 because it is part-built, not startable-from-scratch. ⚠ **A SECOND adversarial
+**Status**: `3.done` — **closed 2026-08-20 by the user's decision, with step 5 deliberately OUT of scope.**
+
+> ***"지형은 지금 정도면 되는데 추후에 추가한다고 해서 일단 완결이었는데 … 지형 돌렸으면 되고, 추후에
+> 이제 추가한다고 했고 … 그냥 완료하면 안 되는걸? 지도 다 만들었잖아."***
+
+**Steps 1–4 and 6 are built and green (14 nets, 1933 checks). Step 5 — the three new grids — is NOT built
+and will not be**, on that decision: six island-opening nodes keep sharing three grids, so **a route
+replays terrain it has already solved, and that is accepted rather than fixed.** ⚠ **This is a scope
+decision, not a pass** — the design doc's own probe found the beak branch losing its second node because
+node 2 opens the LION grid, and **that measurement still stands unaddressed.** ⚠⚠ **The reason step 5
+could not simply be finished is recorded in the design's *island shortage* section**: one node became a
+10–15 minute continent, hand-authoring six of those is 188,928 characters against 4,608 today, and the
+generator was refused. ⇒ **When terrain is added later, that is the question to answer first.**
+
+⚠ **And one part of this plan's map was overturned the same day**: the chest node and its four artifacts
+leave, because **every node becomes a fight node** — see `parts-on-a-board-not-on-the-body`. **The HP
+schedule in the design was derived WITH the chest in it.**
+
+*Was: moved out of `1.ready` on 2026-08-19 because it was part-built, not startable-from-scratch.* ⚠ **A SECOND adversarial
 pass ran after the first one's fixes landed and found six more fake greens** — findings 16–21 below, all
 of them the same shape: *the value was computed and handed to a leaf, and nothing measured that it was
 visible.* Design: `title-and-map`.

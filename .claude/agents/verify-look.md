@@ -13,53 +13,58 @@ The `## Screen` section of `docs/plans/2.active/<name>.md` — "what does the us
 
 If that section is empty you cannot judge. Send it back to spec.
 
-## Method
+## Method — the game screenshots itself
 
-1. Launch the game with godot-mcp.
-2. Actually create the designed situation. Inject input, or build the scene with an in-game script.
-3. Capture that moment.
+**Start here, not at the editor bridge.** `tools/look/` exists precisely so this agent works with no bridge at
+all, and **in this project there is no bridge to have right now**: the `godot` MCP server is switched off in
+`.claude/settings.local.json`, so **no `godot_*` tool exists in the session.** The bridge section below is for
+the day that changes.
+
+```
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_map.gd -- <output-dir>
+```
+
+Seven frames in about ten seconds, and it quits on its own. Frames land where you point it; nothing is written
+into the repo.
+
+1. **Read `tools/look`'s README before anything else.** Only `capture_map.gd` still runs — the other scripts it
+   describes drove the deleted game — and the README carries what they *measured*, which is what keeps a new
+   capture script from rediscovering the same traps.
+2. Actually create the designed situation. Stage it in the script; drive input through `root.push_input()`.
+3. Capture that moment. If the effect flashes past, freeze and step frames — a 16ms effect is invisible in a
+   running frame.
 4. Compare against the `## Screen` section, line by line.
 
-If the effect flashes past, freeze game time and step frames. A 16ms effect is invisible in a running frame.
+**Not `--headless`.** No swapchain, `root.get_texture()` comes back blank, every PNG is a black rectangle **with
+no error anywhere** — and one of the deleted tools *hung* there instead, waiting on a `frame_post_draw` that
+never comes. `capture_map.gd` refuses `--headless` outright rather than writing the rule down.
+
+**A capture harness is an instrument, so invert it before trusting it.** `capture_map.gd` takes a known-answer
+frame first for exactly this: `FieldView.setup()` opens every island at `Look.ZOOM_MIN` with the camera home, and
+`_clamp_cam()` re-centres whichever axis the map is narrower than — **either can quietly undo a staged camera
+between the write and the shutter, and the failure looks exactly like a change that had no effect.** Stage the
+camera by writing `cam_px`/`zoom` and letting `FieldView._process` compose them, **never** by writing `position` —
+that node reserves the composition for one place.
+
+**Is there a path for the thing you want to see to reach the screen?** The most common miss, and it reads as a
+broken feature: sim and colour both in, but nothing in the shell ever calls the setter, so nothing appears.
+If the path is missing, that is a report, not a screenshot.
 
 ## Never take the user's mouse or keyboard
 
-**Input injection and screen capture go through godot-mcp only.** Focusing a window via Win32, injecting keys,
-or capturing the OS screen are **forbidden.**
+**The user is on the same machine.** Focusing a window via Win32, injecting keys, or capturing the OS screen are
+**forbidden** — the moment you steal focus, their mouse and keyboard go to the game. The user stopped this in the
+act: verify-look, unable to grab the bridge, was building a path to launch the game and drive it with Win32.
 
-**The user is on the same machine.** The moment you steal window focus, their mouse and keyboard go to the game.
-The user stopped this in the act — verify-look, unable to grab the bridge, was building a path to launch the game
-via CLI and drive it with Win32.
+⇒ **Every input goes through `root.push_input()`, inside the engine.** That is why `tools/look` opens a window
+that never waits for a person and quits itself.
 
-**If you can't grab the bridge, stop there and report to main.** Do not route around it. "Stopped, couldn't do it"
-beats "did it by taking the user's input".
-
-The bridge (`127.0.0.1:6550`) accepts one client. The usual cause is **a godot-mcp process from another session.**
-Killing it cuts someone else's tools, so **do not decide alone — go through main to the user.**
-
-**If it still says `Another client` after killing the holder, restart the editor.** The symptom splits like this:
-with **no established sockets at all** in the OS but refusals continuing, the addon is **holding a dead client**
-(`-Force` kills skip the clean close). No amount of process hunting finds a culprit. An editor restart clears it.
-
-As a bonus, if you edited `project.godot`, a restart **also loads the input map**, dissolving that trap.
-
-**Mouse coordinates cannot go through `godot_input`.** To measure a click, use `tree.root.push_input(ev, true)`
-inside `godot_exec` — it's inside the engine, so the user's mouse is untouched. Drop `in_local_coords` and it
-skips the GUI pipeline (reason in `agents/verify-run.md`).
+**If you can't capture, stop there and report to main.** Do not route around it. "Stopped, couldn't do it" beats
+"did it by taking the user's input".
 
 **To measure a click being blocked, attach a negative control.** "The window blocked it" and "the GUI is dead
-entirely" observe identically. Click inside the window, then immediately outside it — or close the window and click
-the same coordinate — to prove the former.
-
-### Close the editor you launched
-
-**When the judgment is done, stop the game and close the editor.** Leave it and the next session fights over that
-bridge, and the user gets asked to approve the connection over and over. That request was actually made.
-
-**Especially an editor holding a worktree** — the worktree gets cleaned up while the editor holds a vanished path.
-
-**An editor the user launched is the exception. Don't close it.** If you're not sure it was yours, don't close it — ask.
-A `--path` pointing at a worktree usually means it was yours.
+entirely" observe identically. Click inside the window, then immediately outside it — or close the window and
+click the same coordinate — to prove the former.
 
 ## What to catch
 
@@ -68,11 +73,15 @@ A `--path` pointing at a worktree usually means it was yours.
 - **Something unintended is visible.** Magenta (undefined slot), flicker, half-cell misalignment, things happening off-screen.
 - **The tiers aren't distinguishable.** Strong/medium/weak that the eye can't separate is the same as no axis at all.
 
-### Observation traps — the screen lies about things that are fine
+### The screen lies about things that are fine
 
-- **Move `Camera2D.global_position` while frozen and screenshot without stepping a frame, and `SkyBackground` stays
-  behind** — dark-grey seams that read as broken terrain. Step one frame after moving the camera.
-  (Measured: two screenshots in one pass carried it; neither was a game fault.)
+- **Move the camera while frozen and shoot without stepping a frame and the background stays put** — seams that
+  read as broken terrain. **Step one frame after moving the camera.** (Measured on the deleted game; the shape is
+  the engine's, not that game's — `RenderingServer.frame_post_draw` before every read, or you photograph the
+  previous frame.)
+- **`Engine.time_scale = 0` does not freeze the simulation.** Anything correcting positions by a flat amount per
+  frame keeps moving at zero delta. Switch the shell's own `_process` off instead — `set_process` is per-node, so
+  the view keeps redrawing and the picture is still the game's own `_draw()`.
 
 ## Screenshot cost
 
@@ -99,53 +108,37 @@ This isolation is why this agent exists separately. Expensive observation is dig
 
 ---
 
-# The godot MCP bridge — moved here from `CLAUDE.md` on 2026-08-19
+# The godot MCP bridge — only if the server is turned back on
 
-**You are the only agent that uses it**, so it is documented on you rather than on everybody.
+**Documented here rather than on everybody, because you are the only agent that would use it.**
+**Right now it is switched off in `.claude/settings.local.json` and `godot_*` does not exist in the session** —
+`capture_map.gd` was written on 2026-08-17 under exactly that condition and is the supported path. Read this
+section only when the user has re-enabled the server.
 
+The bridge (`127.0.0.1:6550`) accepts **one client**, and `godot_*` is verify-look only; everything else is
+headless. `godot_*` screenshots are the one exception to the no-OS-capture rule — the editor captures its own
+viewport and steals no input. **Mouse coordinates cannot go through `godot_input`**: use
+`tree.root.push_input(ev, true)` inside `godot_exec` (why, in `agents/verify-run.md`).
 
-The bridge (`127.0.0.1:6550`) accepts one client. **`godot_*` is verify-look only.** Everything else is headless.
-The server reconnects on its own even if no tool is called — resolve is not a mechanism.
+Before launching: is the editor already up · the game window steals focus, so ask if the user is working ·
+is there a path for the thing to reach the screen.
 
-**Never take the user's mouse or keyboard.** No window focus, key injection, or OS screen capture.
-The user is on the same machine.
-**`godot_*` screenshots are the exception** — the editor captures its viewport directly and steals no input.
+**`godot-mcp` (node) survives everything.** Agents do not launch it — Claude Code starts it when a session opens,
+and it does not die when the session ends. Measured: **no editor running, 6 node processes alive.** The symptom
+is not "can't grab the bridge", it is **"the user can't see the screen"** — the moment an editor launches they all
+grab 6550 and the losers retry forever, flooding the output panel with `Another client is already connected`.
 
-Check three things before launching:
-
-1. Is the editor already up
-2. The game window steals focus. If the user is working, ask
-3. **Is there a path for the thing you want to see to reach the screen** — the most common miss.
-   Water material and colour were both in, but nothing called `set_water`, so not one cell appeared.
-   If the path is missing, wire it into the shell first
-
-**If you can't grab the bridge, stop and report.** Killing someone else's idle `godot-mcp` is not the answer —
-it once killed this session's server too and the tools vanished entirely.
-**Close any editor you launched when the session ends.**
-
-⇒ **Without the bridge the game screenshots itself, and that is now built: `tools/look/`.** Windowed, ten
-frames in about ten seconds, quits on its own, every input through `root.push_input()` so nothing is taken from the user.
-**`--headless` cannot capture** — no swapchain, `root.get_texture()` comes back blank, and every PNG is a
-black rectangle **with no error anywhere.** (Headless still turns real frames and really runs `_draw()`;
-what it cannot do is hand back pixels.) Read that folder's README before writing another one: its first
-close-up came back **at play scale** because `_apply_zoom()` rewrote the camera before the shot, silently —
-**a capture harness is an instrument, so take one frame you already know the answer to before trusting any
-of the others.**
-
-### Closing the editor is not enough — `godot-mcp` (node) survives
-
-**Agents do not launch that node.** Claude Code starts it automatically when a session opens,
-and **it does not die when the session ends.** Measured: no editor running, **6 node processes** alive.
-
-**The symptom is not "can't grab the bridge" — it is "the user can't see the screen".**
-The moment an editor launches, all of them grab 6550, and the losers **retry forever**,
-flooding the editor output panel with `Another client is already connected` until nothing else is readable.
-
-**Count the competitors before launching verify-look:**
 ```powershell
 Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match 'godot' }
 ```
-**More than one: tell the user before launching the editor.** Finding out afterwards is finding out too late.
 
-Killing them stays the user's call — it also cuts this session's server (`godot_*` disappears
-entirely) and new nodes restart immediately (killed 6, 2 came back). **It does not get clean.**
+**More than one: tell the user before launching the editor.** Killing them stays the user's call — it also cuts
+this session's server, and new ones restart immediately (killed 6, 2 came back). **It does not get clean.**
+
+**If it still says `Another client` with no established sockets at all**, the addon is holding a dead client
+(`-Force` kills skip the clean close) and no process hunting finds a culprit. **Restart the editor.** As a bonus,
+that also loads the input map if `project.godot` changed.
+
+**Close any editor you launched when the judgment is done** — otherwise the next session fights over the bridge
+and the user gets asked to approve the connection again and again. **Especially one holding a worktree**, which
+gets cleaned up under it. **An editor the user launched is the exception; if you aren't sure it was yours, ask.**

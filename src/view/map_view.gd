@@ -30,10 +30,9 @@ extends Node2D
 ## reaches nothing here, and a view aged by the shell would be one clock living in two places.
 ##
 ## ⚠ **The 힘 number CHASES the army's pool rather than printing it.** Nothing tells this file that a
-## chest was opened — it notices the pool moved and climbs to it over `MAP_HEAL_SEC`. That is why the
-## chest, which is the only node in this round that changes state without a fight, does not look
-## identical pressed and unpressed. A shell that had to remember to announce the heal would eventually
-## forget on one of the two paths that can raise the pool.
+## `Reward.COUNT` node was won — it notices the pool moved and climbs to it over `MAP_HEAL_SEC`. That is
+## what makes a win visibly pay rather than merely returning to the same-looking map. A shell that had
+## to remember to announce the change would eventually forget on one of the paths that can raise it.
 ##
 ## `_draw()` calls `_paint_*` hooks and nothing else; `net_draw_leaf` pins each hook's `draw_*` count
 ## and reddens any function here it does not name.
@@ -92,9 +91,9 @@ var _force_age := 0.0
 ## which is what restarts the reveal and the scene fade — the map arriving is a beat, not a state.
 ##
 ## ⚠ **The force chase is reset only for a DIFFERENT run object.** Re-binding the same run must leave
-## `_force_to` where it was, or the chest's heal — which lands inside `Run.enter_node`, one line before
-## the shell re-binds — would be snapped to instead of climbed to, and the one node that changes state
-## without a fight would look exactly like not pressing it.
+## `_force_to` where it was, or a `Reward.COUNT` win — applied inside `Run.take_count_reward`, before
+## the shell re-binds — would be snapped to instead of climbed to, and a win would look like nothing had
+## changed.
 func bind(r: Run) -> void:
 	var fresh := r != run
 	run = r
@@ -323,7 +322,7 @@ func _edge_style(e: int) -> Vector2:
 
 ## The glyph inside node `n`, as **point PAIRS** for one `draw_multiline` — three little squares for a
 ## node that pays cells, one triangle for a node that pays the beak (the same shape the beak on a body
-## is), a cross for the chest. Empty for the boss, which is told apart by size and by its nested rings.
+## is). Empty for the boss, which is told apart by size and by its nested rings.
 ##
 ## ⚠ **Built here and handed to the leaf as an argument**, the `_spark_points` precedent: geometry
 ## built INSIDE a leaf never leaves it, and `net_draw_leaf` skips the unused-argument check on any
@@ -354,11 +353,6 @@ func _glyph_points(n: int) -> PackedVector2Array:
 			for i in 3:
 				out.append(tri[i])
 				out.append(tri[(i + 1) % 3])
-		Rules.Reward.HEAL:
-			out.append(c + Vector2(-r, 0.0))
-			out.append(c + Vector2(r, 0.0))
-			out.append(c + Vector2(0.0, -r))
-			out.append(c + Vector2(0.0, r))
 	return out
 
 

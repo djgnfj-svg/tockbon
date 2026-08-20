@@ -218,9 +218,10 @@ Hand over the plan. Remember where builder said "unsure". Tell the verifiers tho
 
 **Two things builder does every round, for step 7's sake — say both in the spawn message:**
 
-- **Capture the round.** `powershell -NoProfile -File tests/run_nets.ps1 2>&1 | Tee-Object .rounds/r<N>.txt`
-  ⚠ **Without this there is no "closed?" column** — nothing else persists the failing check labels, so
-  round N cannot be compared to round N+1 and the report becomes an agent's memory in a table's clothes
+- **Quote the red labels verbatim in its round report.** Not "two checks failed" — the check names as the
+  runner printed them, copied, plus the pass count, the seconds and the `[지문]` digest.
+  ⚠ **That quote IS the "closed?" column's source**, so round N cannot be compared to round N+1 without it.
+  **Nothing is written to disk for this** — no round-output files are left behind.
 - **Commit at the end of its round**, one Korean sentence. ⚠ **In a worktree this is the ONLY thing that
   survives** — its doc edits never leave the copy, so the commit is the report's raw material
 
@@ -253,7 +254,12 @@ table monotonicity), all of them builder's intermediate saves.
 
 ⇒ Instruct builder: **"one chunk → nets green → report → halt until instructed."** That halt is the verification window.
 
-### The editor bridge takes one agent at a time
+### The editor bridge takes one agent at a time — and right now nobody has it
+
+⚠ **The `godot` MCP server is switched off in `.claude/settings.local.json`, so `godot_*` exists in no session.**
+verify-look captures with `tools/look/capture_map.gd` instead — a real window it opens and closes itself, no
+bridge involved — so **none of the contention below applies until the user turns that server back on.** It is
+kept because turning it back on brings all of it back.
 
 `127.0.0.1:6550` holds **one client.** But each agent gets its own godot-mcp server instance, and
 **going idle does not kill that connection.**
@@ -289,7 +295,7 @@ It happened. Global key injection (`keybd_event`) hit Windows foreground lock, t
 
 | Who | How |
 |---|---|
-| **verify-look** | **Uses the editor bridge.** Only this agent sees the screen |
+| **verify-look** | **Opens its own window via `tools/look`** (the bridge only if the server is re-enabled). Only this agent sees the screen |
 | **verify-run** | **Headless only** — `Godot_*.exe --headless --script` (same as `run_nets.ps1`). Separate process, no collision |
 | **verify-read** | Reads code. No conflict |
 | **builder** | `godot_*` **forbidden** (`agents/builder.md`) |
@@ -325,7 +331,7 @@ print `not closed` even when it is empty, because an absent line reads as an abs
 ### Round 3 — builder-A
 
 changed     src/sim/battle.gd +48 -12 · src/look.gd +9 -0        <- git show --numstat
-why         red in round 2: `연출: 돌진이 항상 0이 아니다`         <- .rounds/r2.txt
+why         red in round 2: `연출: 돌진이 항상 0이 아니다`         <- builder's round-2 report, quoted
 closed      that label green in round 3
 not closed  none
 nets        1948 checks · 6.9s · fingerprint A31F...
@@ -338,8 +344,9 @@ grandfathered and that list is pinned at four — plan number five is checked.**
 
 ⚠ **Print `not closed` even when it is empty.** An absent line reads as an absent problem.
 ⚠ **Never write it from your own recollection of what the agents said.** Measuring your own work reads
-favourably; file names, line counts and check labels do not. If `.rounds/r<N>.txt` is missing, **say the
-column is missing** — do not fill it in from memory.
+favourably; file names, line counts and check labels do not. **If builder did not quote the red labels,
+say the column is missing** — do not fill it in from memory, and do not go re-run the round to reconstruct it
+(a rerun measures a different tree, which the `[지문]` digest will say out loud).
 
 ## Rollback limit
 

@@ -24,7 +24,9 @@ Failure in this repo is usually silent. So "no error" is not grounds for a pass.
 
 ## How to observe — headless only
 
-**No `godot_*` MCP tools** — reason is in `CLAUDE.md` under "godot MCP". Launch the game directly with
+**No `godot_*` MCP tools.** Seeing the screen is verify-look's, and the long version of why lives on that
+agent. **In this project they are nobody's right now** — the `godot` MCP server is switched off in
+`.claude/settings.local.json`, so no session has those tools at all. Launch the game directly with
 `Godot_*.exe --headless --script` (same as `tests/run_nets.ps1`). That script prints the values.
 
 ### Measuring a click headless: drive `root.push_input`, never `_gui_input`
@@ -49,40 +51,42 @@ propagates faster than a wrong number.
 
 **Measure a click as "did the command queue grow within that frame".** Independent of tick timing, so repeats don't wobble.
 
-**Always attach a negative control.** "The window blocked it" and "the GUI is dead entirely" observe identically.
-Clicking over an `IGNORE` Control and seeing the shot fire is what proves the former.
-
 ### The runner cannot measure parse errors in `src/`. Always run through the wrapper and read the last line
 
-**`load()` returns a non-null object even on parse failure.** So `net_layers`' "it loads" **passes on a broken file.**
-Confirmed by controlled experiment — `circle_window.gd` was fully broken and the runner printed:
+**`load()` returns a non-null object even on parse failure.** So any check written as "it loads" **passes on a
+broken file**, and the round reads identical to a clean one.
 
-```
-o circle_window.gd loads          ← parse-failed file, passes
-[net] 959 passed                  ← identical to clean. 0 failures
-```
+⚠ **The controlled experiment behind this was run on the deleted game** — the nets that carried it are gone and
+**there is nothing here to go look at.** What is live is the device that caught it: **the wrapper's stderr guard.**
+Godot barks on a broken file when the round imports and loads it, and the wrapper treats **any undeclared stderr
+line as failure** (`[침묵사]`), whatever the pass count says. A legitimate bark is declared in the net with
+`t.expect_error("...")` — anything else reddens the round.
 
-**The only thing that caught it was the wrapper's stderr check.** Warm cache or cold, it caught it on the first
-run, and "green only on the first run" never occurred in 6/6.
+⇒ **Do not read the pass count as green.** In this repo the round prints `[그물] 통과 N개 · 실패 M개` and then
+`[지문]`, and **the verdict is the last line, `[래퍼] 통과. stderr 깨끗함.` or `[래퍼] 실패`.** Read that line, not
+the count. And this is **not the kind of thing repeated runs catch** — it looks green identically every time.
 
-⇒ **Do not read "N passed" as green.** The `[wrapper]` line below it is the verdict. And this is **not the kind
-of thing repeated runs catch** — it looks green identically every time.
+**And a check whose fixture fails to build doesn't fail — it disappears.** Bail out via `if x == null: return`
+and the check simply stops running: the pass count drops and nobody barks. A **drop** in the pass count is a
+signal too — don't watch only for increases.
 
-**And a check whose scene fails to build doesn't fail — it disappears.** `net_render`'s scene checks bail out via
-`if scene == null: return`, so the pass count drops and nobody barks. A **drop** in the pass count is a signal too —
-don't watch only for increases.
+### Pin down that the tree didn't move during measurement — the wrapper already does it
 
-### Pin down that the tree didn't move during measurement, with a hash
+builder and the verifiers run in parallel on this team. **If the repo changes while you observe, the result is
+void** — it happened repeatedly.
 
-builder and the verifiers run in parallel on this team. **If the repo changes while you observe, the result is void** —
-it happened repeatedly. Hash immediately before and after; proving you measured one revision is part of the observation.
+**Do not hand-roll a hash for this.** The wrapper prints `[지문] src·tests·docs <digest>` on every round, over
+`src/`, `tests/`, `docs/` and `CLAUDE.md`, **recursively and by directory walk** — so a file that did not exist
+when the round started is inside the digest, and the "unchanged" answer cannot be produced by a stale file list.
+A hand-held list is exactly what failed here: builder added one new file and the check answered "stable".
 
-**Do not hold a fixed file list. Hash the directory recursively.** A **new file** isn't in the list, so a tree that
-really did change reads as "unchanged". Measured: builder added one new file and the hash check answered "stable".
+⇒ **Two rounds carrying the same `[지문]` measured the same tree. Two that differ did not**, and quoting both
+digests is part of the observation. The wrapper also barks `[경합]` on its own when `src/` or `tests/` moved
+while the nets were running — **that warning voids the round, green included.**
 
-**If nets suddenly go red, suspect a new file first.** `net_layers` scans `src/` recursively and auto-parses new files.
-A half-written file referencing a constant that doesn't exist yet throws a parse error the moment it lands.
-**Pass count up by 3 per file is the evidence** — it's not your change, someone else is mid-work.
+**If nets suddenly go red, suspect a new file first.** `net_draw_leaf` walks `src/` recursively rather than off a
+fixed list, so a file joins the round the moment it lands. A pass count that moved without your change means
+someone else is mid-work, not that you broke something.
 
 - **Do not take screenshots.** How it looks is verify-look's job. Numbers only.
 - **Aspect ratio IS measurable here, and this line used to say the opposite.** Headless `visible_rect` reports **1280×720**, which is `project.godot`'s viewport, and the real window override is 1920×1080 — **the same 16:9**. The old text (960×960 against 960×540) was measured on the deleted game and inherited unchecked; verify-run caught it on 2026-08-14 by reporting its own measurement against this file. **Read the value, do not trust this sentence** — and if it disagrees with what you measure, fix the sentence. What stays verify-look's is how much of the stage the window *covers* and whether that reads right.

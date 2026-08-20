@@ -97,7 +97,7 @@ func run(t) -> void:
 	_the_graph_is_legal(t)
 	_every_route_walked(t)
 	_the_walk_over_it(t)
-	_the_chest_heals_the_living_only(t)
+	_the_fourth_floor_opens_an_island_too(t)
 	await _the_picture(t)
 
 
@@ -164,35 +164,28 @@ func _the_graph_is_legal(t) -> void:
 			dead_ends += 1
 	t.eq(dead_ends, 0, "보스가 아닌 칸은 전부 나가는 변이 있다 — 막다른 칸은 런을 잠근다")
 
-	# The kinds, and the one rule the GDD states about them: only 상자 has no fight, and it is the only
-	# node allowed to carry no island.
+	# ⚠⚠ 「칸 종류는 전투와 보스뿐이다」 — the chest is gone, every node opens a fight, and no node's
+	# island is -1 any more. Mutation: give node 5 back a third kind.
 	t.eq(Rules.map_kind_of(6), Rules.NodeKind.BOSS, "꼭대기 칸은 보스다")
 	var bosses := 0
-	var chests := 0
-	var gridless_fights := 0
+	var other_kind := 0
 	var bad_island := 0
 	for n in Rules.map_node_count():
 		var kind := Rules.map_kind_of(n)
 		var island := Rules.map_island_of(n)
 		if kind == Rules.NodeKind.BOSS:
 			bosses += 1
-		if kind == Rules.NodeKind.CHEST:
-			chests += 1
-			if island >= 0:
-				bad_island += 1
-		elif island < 0:
-			gridless_fights += 1
-		if island >= 0 and island >= Islands.count():
+		elif kind != Rules.NodeKind.FIGHT:
+			other_kind += 1
+		if island < 0 or island >= Islands.count():
 			bad_island += 1
 	t.eq(bosses, 1, "보스 칸은 하나다")
-	t.eq(chests, 1, "상자 칸도 하나다")
-	t.eq(gridless_fights, 0, "싸우는 칸은 전부 격자를 하나씩 가리킨다")
-	t.eq(bad_island, 0, "상자만 격자가 없고, 나머지가 가리키는 섬 번호는 전부 실제 섬이다 (섬 %d개)"
-		% Islands.count())
-	t.eq(Rules.map_kind_of(5), Rules.NodeKind.CHEST, "5번이 그 상자 칸이다")
-	t.eq(Rules.map_island_of(5), -1, "그리고 5번은 섬을 안 연다")
+	t.eq(other_kind, 0, "칸 종류는 전투와 보스뿐이다")
+	t.eq(bad_island, 0, "칸 일곱 전부가 가리키는 섬 번호가 실제 섬이다 (섬 %d개)" % Islands.count())
+	# 「4층 칸도 섬을 연다」 — node 5 WAS the chest, floor 4, no fight. Mutation: give it back island -1.
+	t.eq(Rules.map_kind_of(5), Rules.NodeKind.FIGHT, "5번(4층, 옛 상자 자리)도 전투 칸이다")
+	t.ok(Rules.map_island_of(5) >= 0, "그리고 섬을 연다")
 	t.eq(Rules.map_reward_of(6), Rules.Reward.NONE, "보스는 보상을 안 낸다 — 런이 거기서 끝난다")
-	t.eq(Rules.map_reward_of(5), Rules.Reward.HEAL, "상자는 회복을 낸다")
 
 
 # -- every route, walked ---------------------------------------------------------------------------
@@ -234,30 +227,23 @@ func _every_route_walked(t) -> void:
 	t.ok(routes.size() >= 4, "경로가 넷 이상이다 (%d개) — 하나라도 줄면 갈림길이 좁아진 것이다" % routes.size())
 	t.ok(routes.size() <= 4, "그리고 넷을 넘지도 않는다 (%d개)" % routes.size())
 
-	# Every route ends on the boss and passes the chest. A route that ends anywhere else is a run that
-	# can never be won, and nothing else in the tree would notice.
+	# Every route ends on the boss. A route that ends anywhere else is a run that can never be won, and
+	# nothing else in the tree would notice.
 	var not_boss := 0
-	var no_chest := 0
 	var wrong_length := 0
 	for route: PackedInt32Array in routes:
 		if Rules.map_kind_of(route[route.size() - 1]) != Rules.NodeKind.BOSS:
 			not_boss += 1
-		var has_chest := false
-		for id in route:
-			if Rules.map_kind_of(id) == Rules.NodeKind.CHEST:
-				has_chest = true
-		if not has_chest:
-			no_chest += 1
 		if route.size() != Rules.map_floor_count():
 			wrong_length += 1
 	t.eq(not_boss, 0, "경로 넷이 전부 보스 칸에서 끝난다")
-	t.eq(no_chest, 0, "그리고 전부 상자 칸을 지난다 — 회복은 경로가 고를 것이 아니다")
 	t.eq(wrong_length, 0, "경로마다 칸이 층 수(%d)만큼이다 — 변이 한 층씩만 오르니 길이가 곧 층 수다"
 		% Rules.map_floor_count())
 
 	# ⚠⚠ **The row that replaces the plan's self-contradicting pair.** Every route steps on exactly
 	# three FIGHT nodes, and that is what makes 「세포 칸 최대 셋」 and 「부리 칸 최소 하나」 mutually
-	# exclusive: three fights all paying cells is a route with no beak on it at all.
+	# exclusive: four fights all paying cells is a route with no beak on it at all. ⚠⚠ **The chest is
+	# gone and node 5 (floor 4) is a fight now, so every route steps on FOUR fight nodes, not three.**
 	var fights_min := 99
 	var fights_max := 0
 	for route: PackedInt32Array in routes:
@@ -267,8 +253,24 @@ func _every_route_walked(t) -> void:
 				n += 1
 		fights_min = mini(fights_min, n)
 		fights_max = maxi(fights_max, n)
-	t.eq(fights_min, 3, "어느 경로든 싸우는 칸이 셋 이상이다")
-	t.eq(fights_max, 3, "그리고 셋을 넘지도 않는다 — 어느 길로 가도 싸우는 횟수는 같다")
+	t.eq(fights_min, 4, "어느 경로든 싸우는 칸이 넷 이상이다")
+	t.eq(fights_max, 4, "그리고 넷을 넘지도 않는다 — 어느 길로 가도 싸우는 횟수는 같다")
+
+	# 「한 경로가 카드를 내는 칸을 넷 지난다」 — a node pays cards iff it is not the boss, so this is the
+	# same count as the fights above, asked through the accessor `refit_held_capacity()` will ride on.
+	var cards_min := 99
+	var cards_max := 0
+	for route: PackedInt32Array in routes:
+		var n := 0
+		for id in route:
+			if Rules.map_kind_of(id) != Rules.NodeKind.BOSS:
+				n += 1
+		cards_min = mini(cards_min, n)
+		cards_max = maxi(cards_max, n)
+	t.eq(cards_min, 4, "카드를 내는 칸이 넷 밑으로 안 내려간다")
+	t.eq(cards_max, 4, "그리고 넷을 넘지도 않는다")
+	t.eq(Rules.map_max_card_nodes_on_a_route(), cards_max,
+		"map_max_card_nodes_on_a_route() 가 걸어서 나온 최대(%d)와 같다" % cards_max)
 
 	var beaks_min := 99
 	var beaks_max := 0
@@ -283,13 +285,15 @@ func _every_route_walked(t) -> void:
 		counts_max = maxi(counts_max, c)
 		# The two are complementary on every single route, which is the arithmetic above stated per
 		# row rather than as an aggregate.
-		t.eq(b + c, 3, "경로 %s 는 부리 %d + 세포 %d = 싸우는 칸 셋이다" % [str(route), b, c])
+		t.eq(b + c, 4, "경로 %s 는 부리 %d + 세포 %d = 싸우는 칸 넷이다" % [str(route), b, c])
 
-	# 「한 경로가 지나는 세포 칸은 최대 셋이다」 — ⚠ **the FLOOR is the half that proves the fork
-	# exists**: a table where nobody can reach three count nodes has no cells-heavy branch at all.
-	t.ok(counts_max >= 3, "세포 칸만 셋 지나는 경로가 실제로 있다 (최대 %d) — 갈림길의 세포 쪽 답이다"
+	# ⚠⚠ 「한 경로가 지나는 세포 칸은 최대 넷이다」 — node 5 (floor 4, the ex-chest) pays COUNT now, so
+	# the ceiling this repo watched rot once already moved from 3 to 4 with it. ⚠ **the FLOOR is the
+	# half that proves the fork exists**: a table where nobody can reach four count nodes has no
+	# cells-heavy branch at all.
+	t.ok(counts_max >= 4, "세포 칸만 넷 지나는 경로가 실제로 있다 (최대 %d) — 갈림길의 세포 쪽 답이다"
 		% counts_max)
-	t.ok(counts_max <= 3, "그리고 셋을 넘는 경로는 없다 (최대 %d) — 명부 상한이 이 수에 걸려 있다"
+	t.ok(counts_max <= 4, "그리고 넷을 넘는 경로는 없다 (최대 %d) — 명부 상한이 이 수에 걸려 있다"
 		% counts_max)
 	# 「부리 칸을 지나는 경로가 있다」 — the other end of the same fork.
 	t.ok(beaks_max >= 2, "부리를 둘까지 모으는 경로가 있다 (최대 %d) — 갈림길의 부리 쪽 답이다" % beaks_max)
@@ -301,10 +305,10 @@ func _every_route_walked(t) -> void:
 		"경로에 따라 세포 칸 수가 %d~%d 로 갈린다 — 두 칸 이상 차이가 나야 고를 이유가 있다"
 			% [counts_min, counts_max])
 	t.ok(beaks_max - beaks_min >= 2, "부리 칸 수도 %d~%d 로 갈린다" % [beaks_min, beaks_max])
-	t.eq(beaks_min, 0, "부리를 하나도 안 지나는 경로가 있다 — 세포를 셋 다 먹는 길이 바로 그 길이다")
+	t.eq(beaks_min, 0, "부리를 하나도 안 지나는 경로가 있다 — 세포를 넷 다 먹는 길이 바로 그 길이다")
 
 	# 「`map_max_count_nodes_on_a_route()` 가 그 최대와 같다」 — the accessor is walked over the table
-	# and never written as a literal 3, because `net_islands`'s region floor and the roster capacity
+	# and never written as a literal 4, because `net_islands`'s region floor and the roster capacity
 	# both ride on it. Mutation: hardcode it to 1.
 	t.eq(Rules.map_max_count_nodes_on_a_route(), counts_max,
 		"map_max_count_nodes_on_a_route() 가 걸어서 나온 최대(%d)와 같다" % counts_max)
@@ -415,18 +419,13 @@ func _the_walk_over_it(t) -> void:
 	t.ok(not m.is_finished(), "그리고 끝난 지도가 아니게 된다")
 
 
-# -- the chest -------------------------------------------------------------------------------------
+# -- the ex-chest floor --------------------------------------------------------------------------------
 
-func _the_chest_heals_the_living_only(t) -> void:
+## ⚠⚠ 「4층 칸도 섬을 연다」 — node 5, floor 4, WAS the chest and had no island. Walked the way a run
+## does: node 0, win, node 1, win, node 3, win (a beak node, so a pick is taken), then node 5.
+## Mutation: give node 5 back `island < 0`.
+func _the_fourth_floor_opens_an_island_too(t) -> void:
 	var r := Run.new()
-	var hp := r.army.hp
-	hp[0] = 1.0
-	hp[3] = 2.0
-	r.army.hp = hp
-	r.army.kill(7)
-	var wounded_pool := _pool(r.army)
-
-	# Walk to the chest the way a run does: node 0, win, node 1, win, node 3, win, then the chest.
 	t.ok(r.enter_node(0), "0번 칸을 밟는다")
 	r.finish_island(true)
 	t.ok(r.enter_node(1), "1번 칸을 밟는다")
@@ -438,56 +437,24 @@ func _the_chest_heals_the_living_only(t) -> void:
 	t.eq(r.state(), Run.State.MAP, "부리를 달고 지도로 돌아왔다")
 	t.eq(r.map.at(), 3, "서 있는 칸은 3번 그대로다")
 
-	# 「상자 칸은 섬을 안 열고 그 자리에서 회복한다」 — floor: the pool rises; ceiling: the state stays
-	# MAP. Mutation: give the chest an island index.
-	var before := _pool(r.army)
-	t.ok(before < _full_pool(r.army), "상자에 서기 전 병력이 다쳐 있다 (%.1f) (자가 점검)" % before)
-	t.ok(r.enter_node(5), "상자 칸을 밟는다")
-	t.eq(r.state(), Run.State.MAP, "상자는 섬을 안 연다 — 밟은 그 자리에서 지도에 머문다")
-	t.ok(r.begin_island() == null, "그래서 전투도 안 열린다")
-	t.ok(_pool(r.army) > before, "그리고 HP 총합이 %.1f 에서 %.1f 로 올랐다" % [before, _pool(r.army)])
-	t.eq(r.pending_reward(), Rules.Reward.NONE, "회복은 그 자리에서 소모된다 — 고를 것이 없다")
+	var before := r.army.living_count()
+	t.ok(r.enter_node(5), "4층 칸(옛 상자 자리)을 밟는다")
+	t.eq(r.state(), Run.State.BATTLE, "섬이 열린다 — 상자처럼 그 자리에서 끝나지 않는다")
+	t.ok(r.begin_island() != null, "그리고 실제로 전투가 만들어진다")
+	r.finish_island(true)
+	t.eq(r.state(), Run.State.MAP, "이겼으니 지도로 돌아온다 — COUNT는 고를 게 없다")
+	t.ok(r.army.living_count() > before, "그리고 COUNT 보상으로 병력이 늘었다 (%d -> %d)"
+		% [before, r.army.living_count()])
 
-	# 「회복은 살아 있는 줄만 만피로 만든다」 — floor: a wounded living soldier reaches its maximum;
-	# ceiling: **a dead row stays 0 HP and stays dead**. Mutation: make `heal_all` skip the alive test.
-	t.eq(r.army.hp[0], Rules.hp_of(int(r.army.type_id[0])), "0번이 만피가 됐다")
-	t.eq(r.army.hp[3], Rules.hp_of(int(r.army.type_id[3])), "3번도 만피가 됐다")
-	t.eq(int(r.army.alive[7]), 0, "7번은 여전히 죽어 있다 — 상자는 죽음을 못 되돌린다")
-	t.eq(r.army.hp[7], 0.0, "그리고 죽은 7번의 HP 는 0 그대로다")
+	# ⚠ 「이기면 카드가 여섯 장 나온다」 — the win drew the six cards even though nothing consumes them
+	# yet this stage. Mutation: skip `_draw_cards()` inside `finish_island`.
+	t.eq(r.cards.size(), Rules.CARDS_PER_WIN * 2, "이긴 뒤 카드 배열이 여섯 장(칸 열둘)이다")
 
-	# ⚠ 「회복이 안 다쳤을 때의 풀을 못 넘는다」 — mutation: make `heal_all` add instead of set. The
-	# ceiling is the sum of the LIVING maxima, computed row by row and not read off the army.
-	t.eq(_pool(r.army), _full_pool(r.army), "회복 뒤 HP 총합이 정확히 살아 있는 줄의 만피 합이다")
-	t.ok(_pool(r.army) > wounded_pool, "그리고 다쳐 있던 때보다 높다 (자가 점검)")
-
-	# Healing twice is a no-op, which is what "set, not add" means where it can be seen.
-	var once := _pool(r.army)
-	r.army.heal_all()
-	t.eq(_pool(r.army), once, "안 다친 군대를 또 회복해도 총합이 안 움직인다 — 더하기가 아니라 대입이다")
-
-	t.eq(r.map.reachable_nodes(), PackedInt32Array([6]), "상자 다음은 보스뿐이다")
+	t.eq(r.map.reachable_nodes(), PackedInt32Array([6]), "4층 다음은 보스뿐이다")
 	t.ok(r.enter_node(6), "보스를 밟는다")
 	t.eq(r.state(), Run.State.BATTLE, "보스는 섬을 연다")
 	r.finish_island(true)
 	t.eq(r.state(), Run.State.WON, "보스를 이기면 런이 끝난다 — 지도로 안 돌아간다")
-
-
-func _pool(army: Army) -> float:
-	var sum := 0.0
-	for i in army.hp.size():
-		if army.alive[i] != 0:
-			sum += army.hp[i]
-	return sum
-
-
-## The sum of the LIVING rows' type maxima. Computed row by row rather than read off the army, so a
-## `heal_all` that added instead of setting cannot move the expectation with it.
-func _full_pool(army: Army) -> float:
-	var sum := 0.0
-	for i in army.type_id.size():
-		if army.alive[i] != 0:
-			sum += Rules.hp_of(int(army.type_id[i]))
-	return sum
 
 
 # -- the picture -----------------------------------------------------------------------------------
@@ -557,11 +524,11 @@ func _the_picture(t) -> void:
 		"그리고 52px 을 안 넘는다 (%.0f) — 2 x 52 = 104 는 120px 세로 간격에 16px 밖에 안 남긴다"
 			% Look.MAP_NODE_R_PX)
 	var too_small_press := 0
-	for kind in [Rules.NodeKind.FIGHT, Rules.NodeKind.CHEST, Rules.NodeKind.BOSS]:
+	for kind in [Rules.NodeKind.FIGHT, Rules.NodeKind.BOSS]:
 		if Look.map_node_hit_radius_px(int(kind)) * 2.0 < 64.0:
 			too_small_press += 1
 	t.eq(too_small_press, 0,
-		"칸 세 종류의 판정 원이 전부 지름 64px 이상이다 — 타이틀 칸에 건 것과 같은 리터럴이다")
+		"칸 두 종류의 판정 원이 전부 지름 64px 이상이다 — 타이틀 칸에 건 것과 같은 리터럴이다")
 
 	# ⚠ **The glyph radius was referenced by NO net at all**: every point is built as `c +- r * k`, so
 	# `MAP_GLYPH_R_PX = 0` collapses all six glyphs onto their node centres and the point-count rows
@@ -644,20 +611,12 @@ func _the_picture(t) -> void:
 		"가장 안쪽 겹고리(반지름 %.0fpx)가 획 두께까지 보스 안에 남는다"
 			% (Look.MAP_BOSS_R_PX - float(Look.MAP_BOSS_RINGS - 1) * Look.MAP_BOSS_RING_STEP_PX))
 
-	# The three colours, and they have to be three DIFFERENT colours: shape and size alone is
-	# differentiation, and the design's acceptance row asks for identification.
+	# ⚠ The two colours, and they have to be DIFFERENT: the chest's diamond is gone with it, so a fight
+	# and the boss are told apart by size and by the boss's nested rings, and by hue as well.
 	var fight := Look.map_node_colour_of(Rules.NodeKind.FIGHT)
-	var chest := Look.map_node_colour_of(Rules.NodeKind.CHEST)
 	var boss := Look.map_node_colour_of(Rules.NodeKind.BOSS)
-	var hues := [absf(fight.h - chest.h), absf(chest.h - boss.h), absf(fight.h - boss.h)]
-	var too_close := 0
-	for raw in hues:
-		var d: float = minf(float(raw), 1.0 - float(raw))
-		if d < 0.08:
-			too_close += 1
-	t.eq(too_close, 0, "칸 종류 셋의 색상이 서로 최소 29도 떨어져 있다")
-	t.ok(Look.map_node_sides_of(Rules.NodeKind.CHEST) == 4,
-		"상자는 네모다 — 색과 크기 말고 모양으로도 다르다")
+	var hue_gap: float = minf(absf(fight.h - boss.h), 1.0 - absf(fight.h - boss.h))
+	t.ok(hue_gap >= 0.08, "칸 두 종류의 색상이 서로 최소 29도 떨어져 있다")
 	t.eq(Look.map_node_sides_of(Rules.NodeKind.FIGHT), 0, "싸우는 칸은 원이다")
 	t.eq(Look.map_node_sides_of(Rules.NodeKind.BOSS), 0, "보스도 원이고, 대신 크기와 겹고리로 갈린다")
 	t.ok(Look.MAP_BOSS_RINGS == 3, "보스 겹고리는 셋이다")
@@ -882,11 +841,13 @@ func _the_picture(t) -> void:
 		"2층 두 칸의 무늬가 서로 다르다 — 같으면 갈림길에 고를 것이 없다")
 	t.ok(not _shapes_match(_glyph_shape(spy, 3), _glyph_shape(spy, 4)),
 		"3층 두 칸의 무늬도 서로 다르다")
-	# Three reward kinds, three shapes: node 0 pays cells, node 2 the beak, node 5 the heal.
-	t.ok(not _shapes_match(_glyph_shape(spy, 0), _glyph_shape(spy, 5)),
-		"세포 칸과 상자 칸의 무늬도 다르다")
+	# ⚠ Two reward kinds now, not three: the chest (and its cross glyph) is gone, and node 5 (floor 4,
+	# the ex-chest) pays COUNT exactly like node 0 — so their glyphs MATCH now, which is the inverse of
+	# what this row used to assert.
+	t.ok(_shapes_match(_glyph_shape(spy, 0), _glyph_shape(spy, 5)),
+		"세포를 내는 두 칸(0번과 5번)의 무늬가 같다 — 같은 보상은 같은 무늬다")
 	t.ok(not _shapes_match(_glyph_shape(spy, 2), _glyph_shape(spy, 5)),
-		"부리 칸과 상자 칸의 무늬도 다르다")
+		"부리 칸과 세포 칸의 무늬는 다르다")
 	# ⚠⚠ **The case that fails the CHECK rather than the tree.** Nodes 1 and 4 both pay cells and sit at
 	# different centres. If the four rows above were comparing POSITIONS again, this one would go red —
 	# it is the inversion of the instrument, not of the subject.
@@ -1376,29 +1337,27 @@ func _the_picture(t) -> void:
 	t.eq(spy.here_rings[0]["centre"], Look.map_node_pos_px(1), "그 고리가 서 있는 칸 위다")
 	t.eq(float(spy.here_rings[0]["radius"]), Look.MAP_HERE_RING_R_PX, "고리 반지름이 look.gd 값이다")
 
-	# ⚠ 「상자를 누르면 힘 숫자가 0.60초에 걸쳐 올라간다」 — the chest is the ONLY node in this round
-	# that changes state without a fight, so without the climb pressing it and not pressing it look
-	# identical. Mutation: make `bind` reset `_force_to` unconditionally, and the heal snaps.
-	var hurt := run.army.hp
-	for i in hurt.size():
-		hurt[i] = 1.0
-	run.army.hp = hurt
+	# ⚠ 「COUNT 보상을 타면 힘 숫자가 0.60초에 걸쳐 올라간다」 — winning a `Reward.COUNT` node is the
+	# node in this round that raises the pool without the player choosing anything, so without the climb
+	# a win that grew the roster and one that did not look identical. Mutation: make `bind` reset
+	# `_force_to` unconditionally, and the rise snaps.
 	t.ok(run.enter_node(3), "3번 부리 칸을 밟는다 (자가 점검)")
 	run.finish_island(true)
 	run.apply_beak(0)
 	spy.bind(run)
 	# Two steps: the first notices the pool moved, the second runs the chase all the way out, so the
-	# number is SETTLED before the chest is pressed. Without that the row below would be measuring a
-	# climb that was already in flight.
+	# number is SETTLED before node 5 is won. Without that the row below would be measuring a climb
+	# that was already in flight.
 	spy._fx_step(0.016)
 	spy._fx_step(Look.MAP_HEAL_SEC * 2.0)
 	var low := await _force_shown(t, spy)
 	t.ok(is_equal_approx(low, _pool(run.army)),
-		"상자를 밟기 전 힘 숫자가 실제 총합 %.0f 에 도착해 있다 (자가 점검)" % _pool(run.army))
-	t.ok(run.enter_node(5), "상자 칸을 밟는다 (자가 점검)")
-	# ⚠ The SAME run object, re-bound exactly as the shell does one line after `enter_node` — which is
-	# what must NOT reset the chase. Reset it and the heal snaps, and the one node that changes state
-	# without a fight looks exactly like not pressing it.
+		"4층 칸을 밟기 전 힘 숫자가 실제 총합 %.0f 에 도착해 있다 (자가 점검)" % _pool(run.army))
+	t.ok(run.enter_node(5), "4층 칸을 밟는다 (자가 점검)")
+	run.finish_island(true)
+	# ⚠ The SAME run object, re-bound exactly as the shell does one line after `finish_island` — which is
+	# what must NOT reset the chase. Reset it and the rise snaps, and a win that grew the roster looks
+	# exactly like one that did not.
 	spy.bind(run)
 	spy._fx_step(0.016)
 	# ⚠ `is_processing()` still reads TRUE under `PROCESS_MODE_DISABLED` — the flag is set and the mode
@@ -1584,3 +1543,11 @@ func _force_shown(t, spy: MapSpy) -> float:
 	if parts.size() < 2:
 		return -1.0
 	return str(parts[1]).to_float()
+
+
+func _pool(army: Army) -> float:
+	var sum := 0.0
+	for i in army.hp.size():
+		if army.alive[i] != 0:
+			sum += army.hp[i]
+	return sum

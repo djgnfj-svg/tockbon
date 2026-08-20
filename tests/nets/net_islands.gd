@@ -158,12 +158,15 @@ func run(t) -> void:
 			"섬 %d 의 제한 시간은 %.0f초다" % [i + 1, float(EXPECT_LIMITS[i])])
 
 	var min_region_floor := _min_region_floor()
-	# ⚠ The 20 is a LITERAL on purpose. Writing the formula on both sides would let the roster grow and
+	# ⚠ The 23 is a LITERAL on purpose. Writing the formula on both sides would let the roster grow and
 	# the expectation grow with it, which is the shape that proves nothing.
-	t.eq(min_region_floor, 20, "가장 좁아도 되는 상륙지 바닥은 20칸이다 (최대 병력 19 + 여유 1) — 자가 점검")
-	t.eq(Rules.START_MELEE + Rules.START_RANGED
-		+ Rules.map_max_count_nodes_on_a_route() * (Rules.REWARD_MELEE + Rules.REWARD_RANGED), 19,
-		"그 최대 병력 19가 10 + 세포 칸 셋 x 3 이다 — look.gd 의 명부 정원과 같은 셈이다 (자가 점검)")
+	# ⚠⚠ **20 -> 23**: node 5 (floor 4, the ex-chest) now pays `Reward.COUNT`, so
+	# `map_max_count_nodes_on_a_route()` moved 3 -> 4 with it — a route can now step on FOUR count
+	# nodes, not three. The floor moves with the roster it exists to clear.
+	t.eq(min_region_floor, 23, "가장 좁아도 되는 상륙지 바닥은 23칸이다 (최대 병력 22 + 여유 1) — 자가 점검")
+	t.eq(Rules.roster_start_count()
+		+ Rules.map_max_count_nodes_on_a_route() * (Rules.roster_reward_count()), 22,
+		"그 최대 병력 22가 10 + 세포 칸 넷 x 3 이다 — 4층 칸도 세포를 내면서 최대가 하나 늘었다 (자가 점검)")
 	_the_floor_actually_rejects_something(t, min_region_floor)
 
 	var walker_pairs := 0
@@ -756,8 +759,8 @@ func _cut_of(grid: Grid) -> int:
 ## is in the hundreds) and a new grid with a 15-tile landing region would pass green and stall a boat
 ## forever.
 func _min_region_floor() -> int:
-	return Rules.START_MELEE + Rules.START_RANGED \
-		+ Rules.map_max_count_nodes_on_a_route() * (Rules.REWARD_MELEE + Rules.REWARD_RANGED) + 1
+	return Rules.roster_start_count() \
+		+ Rules.map_max_count_nodes_on_a_route() * (Rules.roster_reward_count()) + 1
 
 
 ## The length of the water route from harbour `hb` to `landing`, in tiles — what a crossing actually

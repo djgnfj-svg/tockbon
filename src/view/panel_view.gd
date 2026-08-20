@@ -91,12 +91,12 @@ func is_finished() -> bool:
 
 ## Living soldier ids in ascending id order, capped at what the panel can physically show.
 ##
-## ⚠ **This comment used to say the cap never actually bites, and the node map made that false.** A
-## route can step on `Rules.map_max_count_nodes_on_a_route()` = 3 count nodes, so the roster reaches
-## `10 + 3 * 3 = 19` against what were 14 slots — five soldiers the player could see nowhere and could
-## never give the beak to, with every check about the panel still green. `ROSTER_ROWS` went 7 -> 10 in
-## the same edit and the capacity is 20; the cap is still here so that a roster grown past the panel
-## drops entries instead of drawing a clickable rectangle outside the viewport.
+## ⚠ **This comment used to say the cap never actually bites, and the node map made that false once
+## already.** `Look.PANEL_SIZE_PX`'s own header carries the current arithmetic — `roster_capacity()` is
+## now pinned CONSERVATIVE, at the largest roster a run can ever field (22), specifically so this cap
+## does not have to be re-derived from where the beak nodes happen to sit on a route. It is still here
+## so that a roster grown past the panel drops entries instead of drawing a clickable rectangle outside
+## the viewport, and `net_shell`'s 22-body fixture is what keeps this line honest.
 func roster_ids() -> Array:
 	var ids := []
 	if run == null or run.army == null:
@@ -265,7 +265,7 @@ func _paint_button(face: Font, rect: Rect2, bg: Color, text: String, at: Vector2
 func _entry_text(i: int, beaked: bool) -> String:
 	var a := run.army
 	var t := int(a.type_id[i])
-	var line := "%d  %s  %.0f/%.0f" % [i, HudView.type_label(t), a.hp[i], Rules.hp_of(t)]
+	var line := "%d  %s  %.0f/%.0f" % [i, HudView.type_label(t), a.hp[i], a.max_hp_of(i)]
 	return (line + "  부리") if beaked else line
 
 

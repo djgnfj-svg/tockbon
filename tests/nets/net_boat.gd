@@ -682,10 +682,16 @@ func _th_tile(x: int, y: int) -> int:
 	return y * 12 + x
 
 
+## `Army.add(type_id)` is gone — a body is `recruit`ed from a SLOT now. `type_id` here is always one
+## `SUMMON_SLOTS` binds, so it is resolved back to its slot here rather than at every call site.
 func _army_of(type_id: int, n: int) -> Army:
 	var a := Army.new()
+	var slot := 0
+	for s in Rules.summon_slot_count():
+		if Rules.summon_type_of(s) == type_id:
+			slot = s
 	for _i in n:
-		a.add(type_id)
+		a.recruit(slot)
 	return a
 
 

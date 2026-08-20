@@ -60,9 +60,9 @@ func _starting_state(t) -> void:
 	t.eq(r.map.at(), -1, "서 있는 칸이 -1 이다")
 	t.ok(r.begin_island() == null, "지도 위에서는 전투가 안 열린다 — 아무 섬도 안 골랐다")
 	t.eq(r.pending_reward(), Rules.Reward.NONE, "시작할 때 기다리는 보상은 없다")
-	t.eq(r.army.living_count(), Rules.START_MELEE + Rules.START_RANGED, "시작 병력은 10")
-	t.eq(r.army.living_ids_of_type(Rules.CELL_MELEE).size(), Rules.START_MELEE, "근접 6으로 시작한다")
-	t.eq(r.army.living_ids_of_type(Rules.CELL_RANGED).size(), Rules.START_RANGED, "원거리 4로 시작한다")
+	t.eq(r.army.living_count(), Rules.roster_start_count(), "시작 병력은 10")
+	t.eq(r.army.living_ids_of_type(Rules.CELL_MELEE).size(), Rules.slot_start_count(0), "근접 6으로 시작한다")
+	t.eq(r.army.living_ids_of_type(Rules.CELL_RANGED).size(), Rules.slot_start_count(1), "원거리 4로 시작한다")
 
 	# ⚠ **`Reward` moved to `rules.gd` and `Run.Reward` is gone.** It had to: `MAP_NODES` names the
 	# reward column, and `rules.gd` referencing `Run` would close a class cycle. This row is what stops
@@ -224,16 +224,16 @@ func _rewards(t) -> void:
 	t.eq(r.army.has_beak[4], 1, "둘째 부리가 다른 병사에게 붙었다")
 	t.eq(r.army.has_beak[1], 1, "첫째 부리도 그대로 남아 있다")
 
-	# 「상자 칸은 회복을 주고 MAP 에 머문다」
-	var wounded := r.army.hp
-	wounded[0] = 1.0
-	r.army.hp = wounded
-	t.ok(r.enter_node(5), "상자 칸을 밟는다")
-	t.eq(r.state(), Run.State.MAP, "상자는 지도에 머문다 — 열 섬이 없다")
-	t.eq(r.army.hp[0], Rules.hp_of(Rules.CELL_MELEE), "그리고 그 자리에서 회복이 붙었다")
-	t.eq(r.pending_reward(), Rules.Reward.NONE, "회복도 고를 것이 없다")
-	t.eq(r.island_index, Rules.map_island_of(3),
-		"상자는 섬 번호를 안 건드린다 — -1 이 그대로 들어가면 그 다음 begin_island 가 표 밖을 짚는다")
+	# ⚠⚠ 「4층 칸(옛 상자 자리)도 섬을 열고, 이기면 세포 보상을 낸다」 — the chest is gone; node 5 is a
+	# fight now, exactly like every other node.
+	var before_living := r.army.living_count()
+	t.ok(r.enter_node(5), "4층 칸(옛 상자 자리)을 밟는다")
+	t.eq(r.state(), Run.State.BATTLE, "섬이 열린다 — 상자처럼 지도에 머물지 않는다")
+	t.eq(r.island_index, Rules.map_island_of(5), "이 섬의 번호가 5번 칸이 가리키는 섬이다")
+	r.finish_island(true)
+	t.eq(r.state(), Run.State.MAP, "COUNT 보상은 고를 게 없으니 지도로 돌아온다")
+	t.eq(r.pending_reward(), Rules.Reward.NONE, "그리고 기다리는 보상이 없다")
+	t.ok(r.army.living_count() > before_living, "COUNT 보상으로 병력이 늘었다")
 
 	# 「보스 칸을 이기면 `WON` 이고 지도로 안 돌아간다」
 	t.ok(r.enter_node(6), "보스 칸을 밟는다")
@@ -266,12 +266,14 @@ func _the_route_is_what_the_run_takes(t) -> void:
 		"부리 경로가 부리가 더 많다 (%d개 > %d개)" % [int(beaks["beaks"]), int(cells["beaks"])])
 	t.eq(int(cells["beaks"]), 0, "세포 경로는 부리를 하나도 안 받는다 — 그게 그 갈래의 대가다")
 	t.eq(int(beaks["beaks"]), 2, "부리 경로는 부리를 둘 받는다")
-	t.eq(int(cells["living"]), Rules.START_MELEE + Rules.START_RANGED
-		+ 3 * (Rules.REWARD_MELEE + Rules.REWARD_RANGED),
-		"세포 경로 병사가 10 + 보상 셋 x 3 = 19명이다")
-	t.eq(int(beaks["living"]), Rules.START_MELEE + Rules.START_RANGED
-		+ (Rules.REWARD_MELEE + Rules.REWARD_RANGED),
-		"부리 경로 병사는 10 + 보상 한 번 = 13명이다")
+	# ⚠⚠ **3 -> 4 COUNT nodes on ROUTE_ALL_CELLS, 1 -> 2 on ROUTE_TWO_BEAKS**: node 5 (floor 4, the
+	# ex-chest) pays `Reward.COUNT` now and every route steps on it, so both counts moved by one.
+	t.eq(int(cells["living"]), Rules.roster_start_count()
+		+ 4 * (Rules.roster_reward_count()),
+		"세포 경로 병사가 10 + 보상 넷 x 3 = 22명이다")
+	t.eq(int(beaks["living"]), Rules.roster_start_count()
+		+ 2 * (Rules.roster_reward_count()),
+		"부리 경로 병사는 10 + 보상 두 번 x 3 = 16명이다 — 4층 칸도 세포를 낸다")
 	t.ok(int(cells["living"]) - int(beaks["living"]) >= 6,
 		"두 경로의 병사 수가 %d명이나 갈린다 — 한 명 차이면 고를 이유가 없다"
 			% (int(cells["living"]) - int(beaks["living"])))

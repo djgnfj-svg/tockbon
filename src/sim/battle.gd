@@ -394,24 +394,26 @@ func send(soldier_id: int, tile: int) -> int:
 ##
 ## **There is deliberately no second `slot_reserve_count`.** The HUD calls `.size()`; a count written
 ## twice diverges.
+##
+## ⚠⚠ **Filtered by `army.slot_id[i] == slot`, NOT by `army.type_id[i] == want`.** The two agree today
+## (one slot per type), and they stop agreeing the day two slots bind to the same type — which is what
+## `SUMMON_SLOTS`' three-column table exists for. Filtering on type would draw two slots from one pool
+## with every count check downstream still green.
 func slot_reserve_ids(slot: int) -> Array:
 	var out: Array = []
 	if army == null:
 		return out
-	var want := Rules.summon_type_of(slot)
-	# ⚠ `< 0` and never `<= 0` — `Rules.CELL_MELEE` is 0, so `<= 0` empties slot 1 forever and every
-	# count check downstream still passes, because a refusing slot looks exactly like an empty roster.
-	if want < 0:
+	if Rules.summon_type_of(slot) < 0:
 		return out
-	for raw in army.living_ids_of_type(want):
+	for raw in army.living_ids_of_slot(slot):
 		var i := int(raw)
 		if i < 0 or i >= soldier_state.size():
 			continue
 		if soldier_state[i] != SoldierState.RESERVE:
 			continue
 		out.append(i)
-	# Re-sorted rather than filtered in a different order: `living_ids_of_type` is the one place that
-	# knows what "living, of this type" means, and re-deriving that here would be the same rule twice.
+	# Re-sorted rather than filtered in a different order: `living_ids_of_slot` is the one place that
+	# knows what "living, of this slot" means, and re-deriving that here would be the same rule twice.
 	out.sort_custom(_hp_asc)
 	return out
 
@@ -812,7 +814,7 @@ func _phase_movement(dt: float) -> void:
 		if soldier_state[i] != SoldierState.ASHORE:
 			continue
 		var goal: Vector2 = _soldier_goal[i]
-		var speed := Rules.speed_of(int(army.type_id[i]))
+		var speed := army.speed_of(i)
 		var tgt := int(soldier_target[i])
 		if tgt < 0 or _within(soldier_pos[i], enemy_pos[tgt], _soldier_reach(i)):
 			# Stopping mid-tile would leave the unit holding both tiles for the rest of the island,
@@ -875,9 +877,15 @@ func _phase_attacks(dt: float) -> void:
 			continue
 		# The cooldown is NOT reset when the target changes. Reset on retarget, and a soldier
 		# standing in a crowd fires every frame by killing one enemy and picking the next.
+		#
+		# ⚠⚠ **`army.period_of(i)` / `army.damage_of(i)`, not `Rules.period_of` / `Rules.damage_of`
+		# keyed on the TYPE.** This is what lets a fitted 팔 or 손 change what THIS soldier does —
+		# two soldiers of one type can now differ. `Rules.area_of(st)` stays: 면적 is not one of the
+		# five columns a part moves, and moving it too would invent a sixth stat with no table
+		# behind it.
 		var st := int(army.type_id[i])
-		_soldier_cd[i] = Rules.period_of(st)
-		_hit_enemies(i, tgt, Rules.damage_of(st), Rules.area_of(st))
+		_soldier_cd[i] = army.period_of(i)
+		_hit_enemies(i, tgt, army.damage_of(i), Rules.area_of(st))
 
 	for e in enemy_alive.size():
 		if enemy_alive[e] == 0:

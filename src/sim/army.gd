@@ -25,28 +25,47 @@ extends RefCounted
 ## collides with the global identifier — and a hard-coded path to a sim file is the second copy of a fact
 ## the class name already carries.
 
-## Columns. Same length, always, and index `i` means the same soldier in all four.
+## Columns. Same length, always, and index `i` means the same soldier in all five.
 var type_id := PackedInt32Array()
 var hp := PackedFloat32Array()
 var has_beak := PackedByteArray()
 var alive := PackedByteArray()
 
+## Which summon slot this body belongs to. Written once, by `recruit`, and never again.
+## ⚠⚠ **A body belongs to a slot from BIRTH and not from the moment it is summoned.** Bound at summon, a
+## reserve body's numbers would be the base ones while it waits and the slot's ones once it sails — so a
+## fresh body would arrive at less than full HP the first time a 체력 part was fitted, with the bar
+## saying it was wounded when nothing had hurt it.
+var slot_id := PackedInt32Array()
 
-## Appends one soldier at full HP, no beak, alive. Returns its id — its index, which never changes again.
+## The boards, one per summon slot. Hangs off the ARMY and not off `Run`: `Battle` is handed `army` and
+## nothing else, so this is what lets `damage_of(i)` reach a board without a new argument on
+## `Battle.setup`. It also makes the design's own sentence structural — a body dies and its parts die
+## with it, the board does not — because `Army` outlives every `Battle` and no code has to remember to
+## move a board across an island.
+var loadout := Loadout.new()
+
+
+## Appends one soldier of `slot`'s type, born at that slot's own current maximum HP, no beak, alive.
+## Returns its id — its index, which never changes again.
 ##
-## The parameter shadows the `type_id` column and the name is fixed by the plan, so the column is reached
-## through `self` on purpose: a bare `type_id.append(...)` here would call `append` on an int.
-@warning_ignore("shadowed_variable")
-func add(type_id: int) -> int:
-	var id := self.type_id.size()
-	self.type_id.append(type_id)
-	hp.append(Rules.hp_of(type_id))
+## ⚠ The HP is read back off `max_hp_of`, the same function combat reads, so a body is never born on a
+## number nothing else uses.
+func recruit(slot: int) -> int:
+	var t := Rules.summon_type_of(slot)
+	var id := type_id.size()
+	type_id.append(t)
+	slot_id.append(slot)
 	has_beak.append(0)
 	alive.append(1)
+	hp.append(0.0)
+	hp[id] = max_hp_of(id)
 	return id
 
 
-## Marks a soldier dead. The row stays; only `alive` and `hp` move.
+## Marks a soldier dead. The row stays; only `alive` and `hp` move. **The slot's board is untouched** —
+## it belongs to the slot, not to the body, so the next body `recruit`ed from that slot arrives with the
+## same parts.
 func kill(i: int) -> void:
 	if alive[i] == 0:
 		return
@@ -81,11 +100,45 @@ func _hp_desc(a: int, b: int) -> bool:
 	return hp[a] > hp[b]
 
 
-## Attack range in tiles: the type's base, plus the beak's bonus if this soldier is wearing one.
+## Attack range in tiles: the slot's board (base + any head part), plus the beak's bonus if this
+## soldier is wearing one. The beak is added HERE and never inside `loadout.stat_of`, which knows
+## nothing about a per-soldier reward.
 func range_of(i: int) -> float:
-	var base: float = Rules.range_of(int(type_id[i]))
+	var base := loadout.stat_of(int(slot_id[i]), Rules.PART_COL_RANGE)
 	var bonus: float = Rules.BEAK_RANGE if has_beak[i] != 0 else 0.0
 	return base + bonus
+
+
+## The five per-soldier lookups. Each is one line reading `loadout.stat_of(slot_id[i], COL)` — the same
+## call the dashboard reads, so the screen and the fight can never disagree about what a fitted part is
+## worth. ⚠⚠ **This is what makes two soldiers of one type able to differ**: before this round every
+## stat downstream read `Rules.*_of(type_id)`, keyed on the TYPE and identical for every body of it.
+func max_hp_of(i: int) -> float:
+	return loadout.stat_of(int(slot_id[i]), Rules.PART_COL_HP)
+
+
+func damage_of(i: int) -> float:
+	return loadout.stat_of(int(slot_id[i]), Rules.PART_COL_DAMAGE)
+
+
+func period_of(i: int) -> float:
+	return loadout.stat_of(int(slot_id[i]), Rules.PART_COL_PERIOD)
+
+
+func speed_of(i: int) -> float:
+	return loadout.stat_of(int(slot_id[i]), Rules.PART_COL_SPEED)
+
+
+## Living soldiers of one SLOT, **highest HP first**. Mirrors `living_ids_of_type`'s shape and its
+## comparator for the same reason: `sort_custom` is not stable, so two bodies on equal HP would
+## otherwise board in whatever order the sort happened to produce.
+func living_ids_of_slot(slot: int) -> Array:
+	var out: Array = []
+	for i in range(type_id.size()):
+		if alive[i] != 0 and int(slot_id[i]) == slot:
+			out.append(i)
+	out.sort_custom(_hp_desc)
+	return out
 
 
 func living_count() -> int:
@@ -96,27 +149,11 @@ func living_count() -> int:
 	return n
 
 
-## Every LIVING soldier back to its type's maximum. Dead rows are not touched and are not resurrected:
-## a row this file has never deleted is what makes permanent death structurally true, and healing one
-## would undo that in the one place nothing is watching. **The chest's whole cost model is that wounds
-## come back and deaths do not.**
-##
-## It reads `Rules.hp_of(...)` rather than storing a max per row, or the maximum lives in two files and
-## the beak's sibling — anything that ever raises a soldier's HP — would have to remember to move both.
-##
-## It SETS rather than adds, so healing an undamaged army is a no-op and the pool can never climb past
-## the sum of the living rows' maxima.
-func heal_all() -> void:
-	for i in range(type_id.size()):
-		if alive[i] == 0:
-			continue
-		hp[i] = Rules.hp_of(int(type_id[i]))
-
-
-## The force a run starts with, in melee-then-ranged order. Called on a fresh `Army`; it appends, so a
-## caller that wants a clean start builds a new one rather than clearing this.
+## The force a run starts with, slot by slot. Called on a fresh `Army`; it appends, so a caller that
+## wants a clean start builds a new one rather than clearing this.
+## ⚠ **No type is named in this function any more.** `SUMMON_SLOTS`' own header says a third binding
+## costs one row here and nothing else, and this is the function that makes that true for the roster.
 func add_starting_force() -> void:
-	for _i in range(Rules.START_MELEE):
-		add(Rules.CELL_MELEE)
-	for _i in range(Rules.START_RANGED):
-		add(Rules.CELL_RANGED)
+	for s in Rules.summon_slot_count():
+		for _i in range(Rules.slot_start_count(s)):
+			recruit(s)

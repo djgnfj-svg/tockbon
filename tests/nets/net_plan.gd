@@ -28,9 +28,10 @@ const ISLE1_LANDING_X := 28
 const ISLE1_LANDING_Y := 20
 const ISLE1_W := 48
 
-## The largest roster a run can ever field: `START_MELEE + START_RANGED + REWARD_MELEE + REWARD_RANGED`.
-## Written out here rather than summed from `Rules`, because 「배 수에 상한이 없다」 is the row that
-## catches a brake being quietly reintroduced and a bound read off the thing it checks shrinks with it.
+## The largest roster this net drives a plan against: `roster_start_count() + roster_reward_count()`.
+## Written out here as a literal rather than summed from `Rules`, because 「배 수에 상한이 없다」 is the
+## row that catches a brake being quietly reintroduced and a bound read off the thing it checks shrinks
+## with it.
 const FULL_ROSTER := 13
 
 
@@ -744,10 +745,17 @@ func _tile_of(x: int, y: int) -> int:
 	return y * ARENA_W + x
 
 
+## `Army.add(type_id)` is gone — a body is `recruit`ed from a SLOT now. Every caller here passes
+## `Rules.CELL_MELEE`, which is `SUMMON_SLOTS`' own slot 0, so the type is resolved back to its slot
+## once here rather than at every one of this file's fourteen call sites.
 func _army_of(type_id: int, n: int) -> Army:
 	var a := Army.new()
+	var slot := 0
+	for s in Rules.summon_slot_count():
+		if Rules.summon_type_of(s) == type_id:
+			slot = s
 	for _i in n:
-		a.add(type_id)
+		a.recruit(slot)
 	return a
 
 

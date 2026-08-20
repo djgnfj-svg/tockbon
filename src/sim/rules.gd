@@ -124,20 +124,19 @@ const LION_WINDUP_SEC := 0.6
 
 
 # --- The run -------------------------------------------------------------------------------------
-## Starting force: 10 soldiers. A run starts from this identical state every time — no meta, no
-## unlocks, no carry between runs.
-const START_MELEE := 6
-const START_RANGED := 4
-
-## What a `Reward.COUNT` node pays: three more soldiers at FULL HP. It has nothing to click, so it is
-## applied on the win and the run goes straight back to the map; only the beak opens a reward screen.
+## Starting force: 10 soldiers (`roster_start_count()`, below `SUMMON_SLOTS`). A run starts from this
+## identical state every time — no meta, no unlocks, no carry between runs.
+##
+## ⚠ **`START_MELEE` / `START_RANGED` / `REWARD_MELEE` / `REWARD_RANGED` are DELETED, not renamed.**
+## They were per-TYPE and the roster is per-SLOT — see `SUMMON_SLOTS`' own header below, which is where
+## the two counts moved. What a `Reward.COUNT` node pays is `roster_reward_count()`: more soldiers at
+## FULL HP, applied on the win with nothing to click, so the run goes straight back to the map; only the
+## beak opens a reward screen.
 ##
 ## ⚠ It is a NODE's reward and no longer an island's. A route may step on up to
 ## `map_max_count_nodes_on_a_route()` of them, which is why nothing downstream may assume one per run —
 ## the roster capacity and `net_islands`' landing-region floor both ride on that accessor. See
 ## `title-and-map`, the reward-belongs-to-the-node refutation box.
-const REWARD_MELEE := 2
-const REWARD_RANGED := 1
 
 # --- The summon slots ------------------------------------------------------------------------------
 ## What the number keys hold, and how far out to sea a summon may be pressed. See `sea-summon`.
@@ -171,7 +170,20 @@ const REWARD_RANGED := 1
 ## **nothing in code changes**: slots stay bound to types. `sea-summon`'s design doc records why
 ## `session-loop`'s object-cost arithmetic cannot be reused for it.
 const SUMMON_UNBOUND := -1
-const SUMMON_SLOTS := [CELL_MELEE, CELL_RANGED]
+
+## Columns: unit type, how many bodies a run STARTS with in this slot, how many a COUNT node adds to it.
+## ⚠⚠ **The starting counts moved here from `START_MELEE` / `START_RANGED` because they were per-TYPE
+## and the roster is per-SLOT.** A third row used to arrive with no bodies at all and every count check
+## downstream stayed green; the header above already claimed a third binding costs one line, and for the
+## roster it did not until this moved.
+const SUMMON_SLOTS := [
+	[CELL_MELEE, 6, 2],
+	[CELL_RANGED, 4, 1],
+]
+
+const _SLOT_COL_TYPE := 0
+const _SLOT_COL_START := 1
+const _SLOT_COL_REWARD := 2
 
 ## ⚠⚠ **THE BAND IS A MINIMUM DISTANCE FROM LAND, AND IT USED TO BE A MAXIMUM.** It was
 ## `SUMMON_BAND_TILES := 2` — *within 2 hops of the coast* — and the user inverted it after playing:
@@ -226,7 +238,107 @@ static func summon_slot_count() -> int:
 static func summon_type_of(slot: int) -> int:
 	if slot < 0 or slot >= SUMMON_SLOTS.size():
 		return SUMMON_UNBOUND
-	return int(SUMMON_SLOTS[slot])
+	return int(SUMMON_SLOTS[slot][_SLOT_COL_TYPE])
+
+
+## How many bodies a run STARTS with in this slot. 0 for an out-of-range slot.
+static func slot_start_count(slot: int) -> int:
+	if slot < 0 or slot >= SUMMON_SLOTS.size():
+		return 0
+	return int(SUMMON_SLOTS[slot][_SLOT_COL_START])
+
+
+## How many bodies a `Reward.COUNT` node adds to this slot. 0 for an out-of-range slot.
+static func slot_reward_count(slot: int) -> int:
+	if slot < 0 or slot >= SUMMON_SLOTS.size():
+		return 0
+	return int(SUMMON_SLOTS[slot][_SLOT_COL_REWARD])
+
+
+## The sum of every slot's starting count. Replaces `START_MELEE + START_RANGED` at every reader —
+## walked over the table, never written as a literal, so a third slot moves this for free.
+static func roster_start_count() -> int:
+	var sum := 0
+	for s in summon_slot_count():
+		sum += slot_start_count(s)
+	return sum
+
+
+## The sum of every slot's `Reward.COUNT` payout. Replaces `REWARD_MELEE + REWARD_RANGED`.
+static func roster_reward_count() -> int:
+	var sum := 0
+	for s in summon_slot_count():
+		sum += slot_reward_count(s)
+	return sum
+
+
+## --- Parts (parts-on-a-board-not-on-the-body) -------------------------------------------------------
+## The six parts a board has a cell for. ⚠ A cell is bound to one part — head goes in the head cell and
+## nowhere else — so this enum IS the cell index and there is no second numbering to keep in step.
+enum Part { HEAD, CHEST, BELLY, ARM, HAND, LEG }
+
+## What a part belongs to. ⚠ It does NOTHING this round and that is decided, not forgotten: the user
+## took set effects out and left the species in as the place they will attach. Nothing below reads it.
+enum Species { MAMMAL, BIRD, FISH }
+
+## The five columns a part may move — declared in UNITS' own order so the two tables read alike.
+const PART_COL_HP := 0
+const PART_COL_DAMAGE := 1
+const PART_COL_PERIOD := 2
+const PART_COL_RANGE := 3
+const PART_COL_SPEED := 4
+const PART_COL_TOTAL := 5
+
+## One row per part, five columns, ADDED to the type's own number. Nothing multiplies: two rules for one
+## column is the second copy that diverges.
+## ⚠ These are first values, not measured ones. `parts-on-a-board-not-on-the-body` records that what a
+## part moves and by how much is balance work that needs the screen to exist first.
+## ⚠ There is deliberately NO clamp on the result anywhere in the code. One part per cell means a period
+## can fall by at most one row's worth, so a floor would be a branch no input can reach — dead code
+## wearing a safety belt. The bound lives in `net_parts` as a literal instead, so a table edit that
+## drove a period to zero reddens where a dead clamp would have hidden it.
+const PART_STATS := [
+	[0.0, 0.0,  0.00, 1.0, 0.0],   # HEAD  머리 — 사거리
+	[4.0, 0.0,  0.00, 0.0, 0.0],   # CHEST 가슴 — 체력
+	[3.0, 0.0,  0.00, 0.0, 0.0],   # BELLY 배   — 체력
+	[0.0, 1.0,  0.00, 0.0, 0.0],   # ARM   팔   — 공격력
+	[0.0, 0.0, -0.15, 0.0, 0.0],   # HAND  손   — 공격주기 (내려간다)
+	[0.0, 0.0,  0.00, 0.0, 0.8],   # LEG   다리 — 이동속도
+]
+
+const CARDS_PER_WIN := 6
+const CARD_PICKS := 2
+
+
+static func part_count() -> int:
+	return PART_STATS.size()
+
+
+static func species_count() -> int:
+	return Species.size()
+
+
+static func part_bonus(part: int, col: int) -> float:
+	return float(PART_STATS[part][col])
+
+
+## Maps a `PART_COL_*` onto the matching base-stat column, so the five columns are not named twice.
+## ⚠ This is what stops the five columns being named twice — every base number in the game is still
+## read through the existing `hp_of` · `damage_of` · `period_of` · `range_of` · `speed_of`, and this is
+## a `match` over those five and nothing else.
+static func unit_stat(type_id: int, col: int) -> float:
+	match col:
+		PART_COL_HP:
+			return hp_of(type_id)
+		PART_COL_DAMAGE:
+			return damage_of(type_id)
+		PART_COL_PERIOD:
+			return period_of(type_id)
+		PART_COL_RANGE:
+			return range_of(type_id)
+		PART_COL_SPEED:
+			return speed_of(type_id)
+	return 0.0
 
 
 ## The beak (a `Reward.BEAK` node's pay): range += 1.0 on one surviving soldier. Deliberately NOT +1 HP —
@@ -342,19 +454,18 @@ static func speed_mul_of(slot: int) -> float:
 ## run, and `title-and-map` records that as a decision rather than a stage that was skipped: a map that
 ## is the same every time is the one whose four routes can be walked exhaustively by a net.
 
-## The GDD's node kinds, minus the elite. Only `CHEST` has no fight, which is also the only reason a
-## node may carry no island.
-enum NodeKind { FIGHT, CHEST, BOSS }
+## ⚠ The chest is GONE — 「일단 전부 다 monster 노드로 만들면 될듯」. Every node opens an island now, so
+## the island column has no -1 in it any more and `NodeKind` has two entries.
+enum NodeKind { FIGHT, BOSS }
 
 ## What a node pays on the way out. Moved here from `Run` so the table below can name it.
 ##
-## `HEAL` is new: it restores every LIVING soldier to full and touches no dead row, which is why the
-## chest cannot undo a death. `COUNT` is applied on the win with nothing to choose; only `BEAK` opens a
-## `REWARD` state; `HEAL` lands the instant the node is entered, because a chest has no fight to wait
-## for.
-enum Reward { NONE, COUNT, BEAK, HEAL }
+## ⚠ `HEAL` is GONE with the chest that was its only payer — see `NodeKind`'s own header. `COUNT` is
+## applied on the win with nothing to choose; only `BEAK` opens a `REWARD` state (the beak pick, which
+## predates the card pick and still routes through it — see `run.gd`).
+enum Reward { NONE, COUNT, BEAK }
 
-## One row is ONE NODE: floor, kind, reward, island index (-1 = opens no island).
+## One row is ONE NODE: floor, kind, reward, island index.
 ##
 ## ⚠ The reward is the NODE's and not the KIND's. Keyed by kind, every fight node would pay the
 ## identical thing and a fork could never put "cells or beak" side by side — see `title-and-map`, the
@@ -363,17 +474,17 @@ enum Reward { NONE, COUNT, BEAK, HEAL }
 ## ⚠ `const X := PackedInt32Array([...])` is a parse error on 4.7.1, so this is a plain const Array and
 ## every read below casts.
 ##
-## ⚠ The island column ships as [0, 1, 2, 1, 2, -1, 2] — three grids serving six nodes — and a later
-## stage replaces it with [0, 1, 3, 4, 5, -1, 2] once the three new grids exist. The check that forbids
-## two nodes sharing a grid lands WITH those grids, so no round is red for the gap. It is a declared,
-## temporary lie and the only one in this round.
+## ⚠ The island column is still the declared temporary from `title-and-map`: three grids serving SEVEN
+## island-opening nodes now, one more than before the chest's floor joined them. The check that forbids
+## two nodes sharing a grid lands WITH the three new grids, so no round is red for the gap.
 const MAP_NODES := [
 	[0, NodeKind.FIGHT, Reward.COUNT, 0],   # 0 — floor 1, fixed, where every run lands
 	[1, NodeKind.FIGHT, Reward.COUNT, 1],   # 1 — floor 2 left
 	[1, NodeKind.FIGHT, Reward.BEAK,  2],   # 2 — floor 2 right
 	[2, NodeKind.FIGHT, Reward.BEAK,  1],   # 3 — floor 3 left
 	[2, NodeKind.FIGHT, Reward.COUNT, 2],   # 4 — floor 3 right
-	[3, NodeKind.CHEST, Reward.HEAL, -1],   # 5 — floor 4, no fight, no grid
+	[3, NodeKind.FIGHT, Reward.COUNT, 0],   # 5 — floor 4, WAS THE CHEST, now a fight on grid 0 (closed
+	                                         # open question B: `Reward.COUNT`, on a grid already in use)
 	[4, NodeKind.BOSS,  Reward.NONE,  2],   # 6 — floor 5, the lion, the run ends here
 ]
 
@@ -456,6 +567,30 @@ static func _map_max_count_from(n: int) -> int:
 	for e in range(map_edge_count()):
 		if map_edge_from(e) == n:
 			best = maxi(best, _map_max_count_from(map_edge_to(e)))
+	if best < 0:
+		return here
+	return here + best
+
+
+## The most card-paying nodes a single route can step on. ⚠ **A node pays cards iff it is not the
+## boss** — every fight now pays six cards on the win — so this walks the SAME shape
+## `map_max_count_nodes_on_a_route()` does, never written as a literal. `Look.refit_held_capacity()`'s
+## floor rides on it: a hand-written literal beside a table that can grow is the second copy this repo
+## has watched rot twice.
+static func map_max_card_nodes_on_a_route() -> int:
+	var best := 0
+	for n in range(map_node_count()):
+		if map_floor_of(n) == 0:
+			best = maxi(best, _map_max_card_from(n))
+	return best
+
+
+static func _map_max_card_from(n: int) -> int:
+	var here := 0 if map_kind_of(n) == NodeKind.BOSS else 1
+	var best := -1
+	for e in range(map_edge_count()):
+		if map_edge_from(e) == n:
+			best = maxi(best, _map_max_card_from(map_edge_to(e)))
 	if best < 0:
 		return here
 	return here + best

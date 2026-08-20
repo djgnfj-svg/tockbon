@@ -19,12 +19,14 @@ extends RefCounted
 
 
 ## Where the run is. `MAP` means the node map is open and a node is waiting to be pressed; `BATTLE`
-## means an island is open and `begin_island` will build its fight; `REWARD` means a pick is waiting;
-## `WON` and `LOST` are both terminal until `restart`.
+## means an island is open and `begin_island` will build its fight; `REWARD` means a beak pick is
+## waiting; `PICK` means the six cards are up and two are waiting to be taken; `REFIT` means the two
+## taken cards are ready to be laid into a board; `WON` and `LOST` are both terminal until `restart`.
 ##
 ## ⚠ **`MAP` is FIRST so it is 0**, and a default-constructed int therefore lands on the map rather
-## than in a battle against an island nobody entered.
-enum State { MAP, BATTLE, REWARD, WON, LOST }
+## than in a battle against an island nobody entered. ⚠ **Nothing anywhere may compare a state against
+## a literal int** — `net_run` pins `State.MAP == 0` and the rest by name.
+enum State { MAP, BATTLE, REWARD, PICK, REFIT, WON, LOST }
 
 
 ## The island the node the army is standing on opened. **It never leaves the range of real islands.**
@@ -46,6 +48,16 @@ var map: RunMap = null
 var _state := State.MAP
 var _pending := Rules.Reward.NONE
 
+## `Rules.CARDS_PER_WIN` pairs, flat: `cards[2*k]` is the part, `cards[2*k + 1]` the species.
+## ⚠ **Flat and parallel, not an Array of Arrays**, for the reason `army.gd`'s header gives.
+var cards := PackedInt32Array()
+var cards_taken := PackedByteArray()
+
+## ⚠⚠ **The first RNG in `src/sim/`, and it is bounded on purpose**: one object, one reader
+## (`_draw_cards`), one seed verb. **The map stays authored** — `title-and-map`'s reason for that (four
+## routes a net can walk exhaustively) is untouched.
+var _rng := RandomNumberGenerator.new()
+
 
 func _init() -> void:
 	_reset()
@@ -65,6 +77,14 @@ func _reset() -> void:
 	map = RunMap.new()
 	_state = State.MAP
 	_pending = Rules.Reward.NONE
+	cards = PackedInt32Array()
+	cards_taken = PackedByteArray()
+	_rng.randomize()
+
+
+## For nets and the probe: makes `_draw_cards()` reproducible.
+func seed_cards(s: int) -> void:
+	_rng.seed = s
 
 
 ## The map screen's ONE verb: step onto a node. Returns false and changes nothing when the run is not
@@ -75,20 +95,17 @@ func _reset() -> void:
 ## calling `enter` would be the same rule written twice, free to disagree the day one of them grows a
 ## clause.
 ##
-## A node that opens an island hands the run to `BATTLE` and `begin_island` builds the fight. A node
-## that opens none is a chest: **its reward is applied here, on the spot, and the run stays on the
-## map.** There is no `CHEST` state because it would have exactly one frame of life and one caller.
+## ⚠ **Every node opens an island now — the chest is gone.** `enter_node` used to have a second branch
+## for a node with no island (`island < 0`, applying its reward on the spot and staying on the map);
+## that branch is DELETED rather than left unreachable, because an unreachable arm reads as a supported
+## case. No node's `map_island_of` is ever negative any more.
 func enter_node(n: int) -> bool:
 	if _state != State.MAP:
 		return false
 	if not map.enter(n):
 		return false
-	var island := Rules.map_island_of(n)
-	if island >= 0:
-		island_index = island
-		_state = State.BATTLE
-		return true
-	_queue_reward(n)
+	island_index = Rules.map_island_of(n)
+	_state = State.BATTLE
 	return true
 
 
@@ -121,62 +138,63 @@ func begin_island() -> Battle:
 ## past an island nobody fought; now a win lands in `MAP` and the second call falls out on the guard
 ## above. ⚠ **That is a property of `_advance` no longer stepping `island_index`** — put the step back
 ## and this paragraph becomes a lie again as well.
+## ⚠ **Six cards are drawn on every win, before the node's own reward is queued** — 「6개중 2택」, paid
+## by every fight ON TOP of the node's own reward (open question A, closed). ⚠ **A node pays cards iff
+## it is not the boss** — the boss node is the one node that ends the run, and `map.is_finished()` is
+## the same fact `_advance()` checks first; a route walk cannot ask `map.is_finished()` and a standing
+## run cannot ask a route, so this is the one place both directions agree.
 func finish_island(won: bool) -> void:
 	if _state != State.BATTLE:
 		return
 	if not won:
 		_state = State.LOST
 		return
+	if not map.is_finished():
+		_draw_cards()
 	_queue_reward(map.at())
 
 
-## Queues the node's reward and resolves it as far as it can go on its own. **One dispatch, shared by
-## the win path and the chest path**, so a reward that needs no fight and a reward that needed one are
-## applied by the same lines — a second `match` here is how `HEAL` would end up silently falling into
-## `_advance()` with nothing healed.
+## `Rules.CARDS_PER_WIN` independent draws of `(part, species)`, flat. `cards_taken` is cleared with it,
+## so a stale mark from a previous win can never survive into the next one.
+func _draw_cards() -> void:
+	cards = PackedInt32Array()
+	cards.resize(Rules.CARDS_PER_WIN * 2)
+	for k in Rules.CARDS_PER_WIN:
+		cards[2 * k] = _rng.randi_range(0, Rules.part_count() - 1)
+		cards[2 * k + 1] = _rng.randi_range(0, Rules.species_count() - 1)
+	cards_taken = PackedByteArray()
+	cards_taken.resize(Rules.CARDS_PER_WIN)
+
+
+## Queues the node's reward and resolves it as far as it can go on its own. **One dispatch**, so a
+## reward that needs no fight and one that did are applied by the same lines.
 func _queue_reward(n: int) -> void:
 	_pending = Rules.map_reward_of(n)
 	match _pending:
 		Rules.Reward.COUNT:
 			take_count_reward()
-		Rules.Reward.HEAL:
-			take_heal_reward()
 		Rules.Reward.BEAK:
 			_state = State.REWARD
 		_:
 			_advance()
 
 
-## `Rules.Reward.NONE`, `COUNT`, `BEAK` or `HEAL` — what is waiting to be taken right now.
+## `Rules.Reward.NONE`, `COUNT` or `BEAK` — what is waiting to be taken right now.
 func pending_reward() -> int:
 	return _pending
 
 
 ## A `COUNT` node's reward: more soldiers, at full HP, appended to the roster that is already carrying
-## the survivors. `Army.add` is what fills their HP, so no starting value is written twice.
+## the survivors. `Army.recruit` is what fills their HP, so no starting value is written twice.
 ##
 ## Applied the moment it is queued, because there is nothing to choose — it is public only so that the
 ## applying of the reward and the naming of it are the same function in all three cases.
 func take_count_reward() -> void:
 	if _pending != Rules.Reward.COUNT:
 		return
-	for _i in range(Rules.REWARD_MELEE):
-		army.add(Rules.CELL_MELEE)
-	for _i in range(Rules.REWARD_RANGED):
-		army.add(Rules.CELL_RANGED)
-	_pending = Rules.Reward.NONE
-	_advance()
-
-
-## The chest's reward: every LIVING soldier back to full HP. `Army.heal_all` is what refuses to touch a
-## dead row, so the rule that a death is permanent is not restated here.
-##
-## Applied the moment it is queued — a chest has no fight to wait for — and public for the same reason
-## `take_count_reward` is: the applying and the naming are one function.
-func take_heal_reward() -> void:
-	if _pending != Rules.Reward.HEAL:
-		return
-	army.heal_all()
+	for s in Rules.summon_slot_count():
+		for _i in range(Rules.slot_reward_count(s)):
+			army.recruit(s)
 	_pending = Rules.Reward.NONE
 	_advance()
 
@@ -203,13 +221,58 @@ func apply_beak(soldier_id: int) -> void:
 	_advance()
 
 
-## `State.MAP`, `State.BATTLE`, `State.REWARD`, `State.WON` or `State.LOST`.
+## Takes card `k`. Refused (and nothing changes) unless the run is in `PICK`, `k` is in range, that
+## card has not already been taken, and fewer than `Rules.CARD_PICKS` have been taken so far.
+##
+## When the `CARD_PICKS`th card is taken, the run moves to `REFIT` — the two taken cards are already
+## in `army.loadout`'s held pile by then, so refit has something to lay into a board.
+func take_card(k: int) -> bool:
+	if _state != State.PICK:
+		return false
+	if k < 0 or k >= Rules.CARDS_PER_WIN:
+		return false
+	if cards_taken[k] != 0:
+		return false
+	var taken := _cards_taken_count()
+	if taken >= Rules.CARD_PICKS:
+		return false
+	cards_taken[k] = 1
+	army.loadout.take_card(int(cards[2 * k]), int(cards[2 * k + 1]))
+	if taken + 1 >= Rules.CARD_PICKS:
+		_state = State.REFIT
+	return true
+
+
+func _cards_taken_count() -> int:
+	var n := 0
+	for b in cards_taken:
+		if b != 0:
+			n += 1
+	return n
+
+
+## Closes the refit screen. Refused unless the run is actually in `REFIT`. ⚠ **The boss pays no cards**
+## (`Reward.NONE`, and `_advance` checks `map.is_finished()` first), so this arm exists only so a
+## future boss-that-pays cannot end a run on the refit screen.
+func close_refit() -> bool:
+	if _state != State.REFIT:
+		return false
+	_advance()
+	return true
+
+
+## `State.MAP`, `State.BATTLE`, `State.REWARD`, `State.PICK`, `State.REFIT`, `State.WON` or
+## `State.LOST`.
 func state() -> int:
 	return _state
 
 
-## The reward is settled: back to the map, unless the node just settled was the boss, in which case
-## the run is won.
+## The reward is settled: `WON` if the map is finished; else `PICK` if there is a card still undrawn
+## from (`cards.size() > 0 and taken < CARD_PICKS`); else `MAP`.
+##
+## ⚠⚠ **The `PICK` arm is ABOVE the `MAP` arm.** Below it, the cards are drawn and never shown and the
+## round stays green — the roster grows (or the beak lands), the run walks back to the map, and every
+## check that only counts soldiers or beaks stays green.
 ##
 ## ⚠ **It does not touch `island_index`.** Walking to the next island by itself is what the old
 ## `island_index + 1` did, and a map added on top of that just gets walked past — the map appears, the
@@ -218,5 +281,7 @@ func state() -> int:
 func _advance() -> void:
 	if map.is_finished():
 		_state = State.WON
+	elif cards.size() > 0 and _cards_taken_count() < Rules.CARD_PICKS:
+		_state = State.PICK
 	else:
 		_state = State.MAP

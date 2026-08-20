@@ -262,7 +262,7 @@ func _draw() -> void:
 			rail.position += shake
 			var pool := 0
 			if battle.army != null:
-				pool = battle.army.living_ids_of_type(want).size()
+				pool = battle.army.living_ids_of_slot(i).size()
 			var left := battle.slot_reserve_ids(i).size()
 			var frac := 0.0 if pool <= 0 else clampf(float(left) / float(pool), 0.0, 1.0)
 			_paint_slot_bar(rail, Look.COL_HP_EMPTY,

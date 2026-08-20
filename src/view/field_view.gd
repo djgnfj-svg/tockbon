@@ -700,7 +700,7 @@ func _draw() -> void:
 			if army.has_beak[i] != 0:
 				var ttri := _beak_points(scentre, sradius, _facing_of(i, false))
 				_paint_beak(ttri[0], ttri[1], ttri[2], Look.COL_BEAK)
-			var tbars := _hp_rects(scentre, st, army.hp[i] / Rules.hp_of(st))
+			var tbars := _hp_rects(scentre, st, army.hp[i] / army.max_hp_of(i))
 			_paint_hp(tbars[0], Look.hp_bar_colour(false), tbars[1], Look.hp_bar_colour(true))
 
 	# --- 6b. ⚠⚠ THE RESERVE STACK IS DELETED ------------------------------------------------------
@@ -762,7 +762,7 @@ func _draw() -> void:
 			var left: Vector2 = tri[1]
 			var right: Vector2 = tri[2]
 			_paint_beak(tip, left, right, Look.COL_BEAK)
-		var sbars := _hp_rects(scentre, st, army.hp[i] / Rules.hp_of(st))
+		var sbars := _hp_rects(scentre, st, army.hp[i] / army.max_hp_of(i))
 		var sback: Rect2 = sbars[0]
 		var sfill: Rect2 = sbars[1]
 		_paint_hp(sback, Look.hp_bar_colour(false), sfill, Look.hp_bar_colour(true))

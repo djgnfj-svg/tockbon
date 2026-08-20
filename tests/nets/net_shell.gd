@@ -385,7 +385,7 @@ func run(t) -> void:
 	t.eq(game.run.state(), Run.State.BATTLE, "런도 전투 상태다")
 	t.eq(game.run.map.at(), 0, "서 있는 칸이 0번이다")
 	t.eq(game.run.island_index, Rules.map_island_of(0), "그 칸이 가리키는 섬이 열렸다")
-	t.eq(game.run.army.living_count(), Rules.START_MELEE + Rules.START_RANGED,
+	t.eq(game.run.army.living_count(), Rules.roster_start_count(),
 		"시작 병력이 10명이다")
 
 	# The wiring itself, by identity and not by shape: the field must hold the SAME `Battle` and the
@@ -847,14 +847,14 @@ func run(t) -> void:
 				"%d번 슬롯에서 한 명 더 내보냈다 (자가 점검)" % slot_i)
 			guard += 1
 	await t.pump_frames(1)
-	t.eq(b.boats.size(), Rules.START_MELEE + Rules.START_RANGED,
+	t.eq(b.boats.size(), Rules.roster_start_count(),
 		"명단 전부를 내보낼 수 있다 — 배 수에 상한이 없다")
 	t.ok(b.boats.size() > before_fill, "그리고 실제로 늘었다 (자가 점검)")
 	var all_transit := 0
 	for si5 in b.soldier_state.size():
 		if b.soldier_state[si5] == Battle.SoldierState.TRANSIT:
 			all_transit += 1
-	t.eq(all_transit, Rules.START_MELEE + Rules.START_RANGED, "열 명 전부 배에 탔다")
+	t.eq(all_transit, Rules.roster_start_count(), "열 명 전부 배에 탔다")
 	t.eq(b.elapsed, 0.0, "열 척을 내보내는 동안에도 시계는 정확히 0이다")
 
 	# -- the start button commits, and the screen changes with it --------------------------------------
@@ -1207,8 +1207,8 @@ func run(t) -> void:
 	t.eq(Look.COL_BUTTON, Color(0.239, 0.341, 0.459), "COL_BUTTON 이 리터럴 그 색이다")
 	t.eq(ps.messages[0]["bg"], Look.COL_BUTTON, "안내 문구 상자 색이 COL_BUTTON 이다")
 	var roster: Array = game.panel_view.roster_ids()
-	t.eq(roster.size(), Rules.START_MELEE + Rules.START_RANGED + Rules.REWARD_MELEE
-		+ Rules.REWARD_RANGED, "명단이 13명이다 (10 + 보상 3)")
+	t.eq(roster.size(), Rules.roster_start_count() + Rules.roster_reward_count(),
+		"명단이 13명이다 (10 + 보상 3)")
 	t.eq(ps.entries.size(), roster.size(), "명단에 있는 만큼 항목을 그렸다")
 	var entry_bad := 0
 	for e in ps.entries.size():
@@ -1266,20 +1266,19 @@ func run(t) -> void:
 	t.eq(game.run.state(), Run.State.MAP, "이기고 다시 지도로 돌아왔다")
 	t.ok(game.battle == null, "그리고 섬이 닫혔다")
 
-	# ⚠ **The chest is the only node in this round that changes state with no fight**, so what it must
-	# NOT do is open an island — and what it must do is land its heal before the map comes back.
-	t.eq(Rules.map_island_of(5), -1, "5번은 상자 칸이라 격자가 없다 (자가 점검)")
-	var hurt := game.run.army.hp
-	for i in hurt.size():
-		hurt[i] = 1.0
-	game.run.army.hp = hurt
-	_press_node(t, game, 5, "상자")
-	t.ok(game.battle == null, "상자 칸은 섬을 안 연다")
-	t.eq(game.run.state(), Run.State.MAP, "그리고 지도에 그대로 머문다")
-	t.eq(game.run.army.hp[0], Rules.hp_of(int(game.run.army.type_id[0])),
-		"밟은 그 자리에서 회복이 붙었다 — 셸이 따로 부르는 곳은 없다")
+	# ⚠⚠ **The chest is GONE — node 5 (floor 4, its old spot) is a fight now, exactly like every other
+	# node.** Mutation: give node 5 back `island < 0`.
+	t.ok(Rules.map_island_of(5) >= 0, "5번(4층, 옛 상자 자리)은 이제 격자를 가리킨다 (자가 점검)")
+	var before_living := game.run.army.living_count()
+	_press_node(t, game, 5, "4층")
+	t.ok(game.battle != null, "4층 칸도 섬을 연다 — 상자처럼 지도에 머물지 않는다")
+	t.eq(game.run.island_index, Rules.map_island_of(5), "그 칸이 가리키는 섬이다")
+	_win_the_open_island(t, game, "4층")
+	t.eq(game.run.state(), Run.State.MAP, "COUNT 보상은 고를 게 없으니 지도로 돌아온다")
+	t.ok(game.battle == null, "그리고 섬이 닫혔다")
+	t.ok(game.run.army.living_count() > before_living, "COUNT 보상으로 병력이 늘었다")
 	await t.pump_frames(2)
-	t.eq(fs.tiles.size(), 0, "상자를 밟아도 지형은 여전히 안 그려진다")
+	t.eq(fs.tiles.size(), 0, "지도 화면으로 돌아오면 지형은 다시 안 그려진다")
 
 	_press_node(t, game, 6, "보스")
 	t.ok(game.battle != null, "보스 칸이 섬을 열었다")
@@ -1332,7 +1331,7 @@ func run(t) -> void:
 	t.eq(game.run.map.path.size(), 0, "새 런은 밟은 자취가 비어 있다")
 	t.ok(game.battle == null, "그리고 섬은 아직 없다")
 	t.ok(game.run.army != old_army, "명부가 통째로 새것이다 — 부리도 상처도 안 따라온다")
-	t.eq(game.run.army.living_count(), Rules.START_MELEE + Rules.START_RANGED, "다시 10명이다")
+	t.eq(game.run.army.living_count(), Rules.roster_start_count(), "다시 10명이다")
 	t.eq(int(game.run.army.has_beak[3]), 0, "지난 런의 부리도 안 따라왔다")
 
 	t.root.remove_child(game)
@@ -1345,6 +1344,7 @@ func run(t) -> void:
 	_the_speed_ladder_is_gone(t)
 	_speed_steps_survives_read_by_nobody(t)
 	_every_lose_reason_reads_differently(t)
+	_the_panel_holds_every_soldier_a_run_can_field(t)
 
 
 ## Presses a map node the way a hand does — through `_unhandled_input`, then the ring's walk run out
@@ -1517,8 +1517,8 @@ func _the_plan_constants_have_both_ends(t) -> void:
 		"유령 부채가 벌어진다 (바닥 6 — 못 미치면 두 유령이 한 덩어리이고 놓은 순서에 그림이 없다)")
 	t.ok(Look.GHOST_FAN_PX.x <= 14.0 and Look.GHOST_FAN_PX.y <= 14.0,
 		"그리고 14 를 안 넘는다 (천장 — 넘으면 열셋이 4타일에 퍼져 한 상륙으로 안 읽힌다)")
-	t.ok(Look.GHOST_FAN_PX.length() * float(Rules.START_MELEE + Rules.START_RANGED
-			+ Rules.REWARD_MELEE + Rules.REWARD_RANGED - 1) > Look.TARGET_RING_R_PX,
+	t.ok(Look.GHOST_FAN_PX.length() * float(Rules.roster_start_count()
+			+ Rules.roster_reward_count() - 1) > Look.TARGET_RING_R_PX,
 		"자가 점검 — 열셋을 한 칸에 놓으면 부채가 고리 밖까지 나간다 (그래서 순위는 해변마다 센다)")
 	t.ok(Look.CHIP_FX_SEC >= 0.1,
 		"누름 반응이 한 프레임보다 길다 (바닥 0.1s — 짧으면 팝이 되고 반응 자체가 안 보인다)")
@@ -1802,6 +1802,51 @@ func _the_speed_ladder_is_gone(t) -> void:
 ## ⚠ **The walk is CLOSED against the enum, not against a list written here.** `Lose` is read out of
 ## `Battle`'s own constant map, so a fifth reason added tomorrow either gets its own line in
 ## `_message_text` or reddens this — it cannot arrive and fall through to the bare 「패배」 unnoticed.
+## ⚠⚠ `Look.roster_capacity()` is pinned CONSERVATIVE — the largest roster a run can ever field, not
+## the most a route happens to carry into a beak node — because node 5 (floor 4, the ex-chest) moved
+## `map_max_count_nodes_on_a_route()` from 3 to 4 and the panel's old 20-slot capacity would have
+## silently dropped the overflow again, the exact shape `roster_ids`'s own comment already warned about
+## once. Three rows: the demand is pinned as a literal on the `Rules` side alone, the capacity is
+## checked against that SAME literal (so a constant that quietly shrank cannot move the expectation
+## with it), and the floor drives an actual 22-body roster through the real panel and reads back what
+## it draws. Mutation: `panel_view.gd`'s `roster_ids` — `if ids.size() >= Look.roster_capacity():` ->
+## `... - 2:`.
+func _the_panel_holds_every_soldier_a_run_can_field(t) -> void:
+	var demand := Rules.roster_start_count() \
+		+ Rules.map_max_count_nodes_on_a_route() * Rules.roster_reward_count()
+	t.eq(demand, 22, "이 판이 낼 수 있는 최대 명부가 스물둘이다 (10 + 세포 넷 x 3)")
+	t.ok(Look.roster_capacity() >= 22,
+		"명부 판이 그 스물둘을 전부 담을 자리가 있다 (%d칸)" % Look.roster_capacity())
+
+	# ⚠ Synthetic on purpose — no route today reaches a REWARD screen with 22 bodies aboard (the fewest
+	# fights before the first beak node is two, per `Look.PANEL_SIZE_PX`'s own comment), so this drives
+	# `run` directly rather than walking a route, and is a fixture rather than a real playthrough.
+	var run := Run.new()
+	t.ok(run.enter_node(0), "0번 칸을 밟는다 (자가 점검)")
+	run.finish_island(true)
+	# A win now stops for the card pick before the map — take both and close the board so the run can
+	# step onto a second node at all.
+	t.eq(run.state(), Run.State.PICK, "이긴 뒤 카드 고르기가 먼저 열린다 (자가 점검)")
+	run.take_card(0)
+	run.take_card(1)
+	t.ok(run.close_refit(), "정비를 닫고 지도로 돌아온다 (자가 점검)")
+	while run.army.living_count() < 22:
+		run.army.recruit(0)
+	t.ok(run.enter_node(2), "부리 칸을 밟는다 (자가 점검)")
+	run.finish_island(true)
+	t.eq(run.state(), Run.State.REWARD, "고르기가 열렸다 (자가 점검, 스물두 명째)")
+
+	var pv := PanelView.new()
+	pv.bind(run, null)
+	var ids := pv.roster_ids()
+	t.eq(ids.size(), 22, "패널이 스물두 명을 전부 담는다 — 캡이 빠뜨리지 않는다")
+	var last_rect := pv.roster_rect_of(21)
+	t.ok(Rect2(0.0, 0.0, 1280.0, 720.0).encloses(last_rect), "스물두 번째 자리도 화면 안이다")
+	var hit := pv.soldier_id_at(last_rect.position + Vector2(4.0, 4.0))
+	t.eq(hit, int(ids[21]), "그 자리를 누르면 스물두 번째 병사가 잡힌다")
+	pv.free()
+
+
 func _every_lose_reason_reads_differently(t) -> void:
 	var r := Run.new()
 	r.enter_node(0)
