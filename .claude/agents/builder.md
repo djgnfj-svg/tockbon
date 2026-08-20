@@ -56,6 +56,19 @@ the seams between them, and no net here is written to watch a seam.
 needs a case that fails *it*, not only the subject.** Twice in one night a check was written to catch a
 defect and shipped carrying that same defect. The rules are in `tests/README`, the cases in `how-nets-lie`.
 
+## Godot traps measured here
+
+- **A `const` packed array does not parse on 4.7.1.** `const X := PackedInt32Array([1,2,3])` is a parse
+  error; a plain `const X := [1,2,3]` is fine and stays read-only, but **element typing does not survive**,
+  which is why every read casts. **Every flat table in this repo walks into it**
+
+## Comments
+
+- **Write why doing it differently dies silently.** What the code does, the code says
+- **Keep a measurement where it was taken, and let one place own an explanation**
+- **Point at a doc; never summarize one**
+- **Name a doc; never path it, never line-number it.** `net_citations` fails on both forms
+
 ## When stuck
 
 - Plan is wrong or incomplete → `SendMessage(to: "spec")`

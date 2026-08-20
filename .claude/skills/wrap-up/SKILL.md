@@ -31,6 +31,26 @@ In order of how easily each is missed:
 - ⚠ **`CLAUDE.md` — do NOT edit it here.** It loads into every session and every agent, so it grows every
   time a wrap-up decides something "belongs" in it. **Only the user adds to it, and only when they say so.**
   If something really has to land there, name it in the report and stop
+- **Count its lines and tell the user if it is over 100.** It has crossed that line twice by accumulation
+  and both times nobody noticed until the file was read end to end. **Report the number; do not cut it
+  yourself** — what comes out is the user's call
+
+  ```
+  (Get-Content CLAUDE.md).Count
+  ```
+  ⚠ **`Measure-Object -Line` is the wrong tool here** — it drops blank lines and reports a number ~30%
+  lower, which reads as "still fine" on a file that is not.
+- ⚠ **Acceptance — ask once, and the answer decides.** *"확인했어?"* **The user always answers one way or
+  the other, so do not infer it from anything else.**
+  - **They looked and it read right** → write the verdict under that design doc's `Accepted` section now,
+    and delete its row from `acceptance-debt` if it had one
+  - **They did not look, or the session put something on screen and they said nothing** → **add a row to
+    `acceptance-debt`**: what shipped · **how to see it** · which design doc takes the verdict · when it
+    landed. ⚠ **Silence is a row, not a pass**
+  - **They looked and it was wrong** → that closes a row too. The story goes into the design doc
+  ⚠ **The "how to see it" column is the whole point** — the user works this list off **in one sitting**,
+  weeks later, and will not re-derive how to reach each thing. Name the screen, the key, and what should
+  look different
 - **Memory** — **delete what became wrong this session.** Do not add. Anything that can live in the repo lives in the repo
 
 For each item, **say you checked it, or say it doesn't apply.** Do not skip silently.
