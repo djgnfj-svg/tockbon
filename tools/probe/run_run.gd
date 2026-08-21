@@ -459,6 +459,17 @@ func _play_run(label: String, kind: String, reverse: bool, verbose := true,
 			if verbose:
 				print("  부리 -> 병사 #%d (%s, HP %.1f)" % [
 					pick, Rules.name_of(int(run.army.type_id[pick])), run.army.hp[pick]])
+		elif st == Run.State.PICK:
+			# The branch whose absence would repeat this file's own history. Every win now draws six
+			# cards and stops here before the map; without this arm the loop fell into `else: break`
+			# on the FIRST island's win, printing no `[!!]` line (a `break` is the loop's normal exit)
+			# and every later route read as one island shorter than it was walked -- the same
+			# silent-zero shape this file's own header names, one state later. Reported here, not
+			# graded: the probe takes the first two cards blind so `close_refit` has something to close.
+			run.take_card(0)
+			run.take_card(1)
+		elif st == Run.State.REFIT:
+			run.close_refit()
 		else:
 			break
 	if verbose:

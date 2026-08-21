@@ -295,6 +295,84 @@ func _table() -> Dictionary:
 			# leaf draws one; without it 시작하기 cuts to the map, which reads as a glitch.
 			"_paint_fade": 1,
 		},
+		# `refit-board` stage 4's new screen: six cards after a won fight. It holds no `Run` state of
+		# its own beyond the hover/press pair every screen carries -- `run.cards` and `run.cards_taken`
+		# are read straight off the sim.
+		"reward_view.gd": {
+			"bind": 0,
+			"card_rect_of": 0,
+			"card_hit_rect_of": 0,
+			"card_at": 0,
+			"is_card_pressable": 0,
+			"set_hover": 0,
+			"note_press": 0,
+			"_hover_of": 0,
+			"_press_of": 0,
+			"_taken_of": 0,
+			"_card_box": 0,
+			"_card_fill": 0,
+			"_fx_step": 0,
+			"_process": 0,
+			"_picks_made": 0,
+			"_draw": 0,
+			# fill + border, the same shape every other pressable box in this repo draws.
+			"_paint_card": 2,
+			"_paint_card_part": 1,
+			"_paint_card_species": 1,
+			"_paint_taken_mark": 1,
+			"_paint_hint": 1,
+		},
+		# `refit-board` stage 5's new screen: the slot strip, then a 3x2 board, a held pile, a
+		# five-number dashboard and a body preview. `_rounded_square` is 0 draws and NOT a leaf --
+		# the same `_spark_points` shape: the geometry is built here and handed to `_paint_body` as
+		# an argument, and never leaves that one call site.
+		"refit_view.gd": {
+			"bind": 0,
+			"open_slot": 0,
+			"is_board_open": 0,
+			"open_slot_index": 0,
+			"slot_rect_of": 0,
+			"slot_hit_rect_of": 0,
+			"slot_at": 0,
+			"cell_rect_of": 0,
+			"cell_hit_rect_of": 0,
+			"cell_at": 0,
+			"held_rect_of": 0,
+			"held_hit_rect_of": 0,
+			"held_at": 0,
+			"done_rect": 0,
+			"done_hit_rect": 0,
+			"is_done_pressable": 0,
+			"back_rect": 0,
+			"back_hit_rect": 0,
+			"is_back_pressable": 0,
+			"set_hover": 0,
+			"note_slot_press": 0,
+			"note_cell_press": 0,
+			"note_held_press": 0,
+			"note_done_press": 0,
+			"_hover_of": 0,
+			"_press_of": 0,
+			"_fx_step": 0,
+			"_process": 0,
+			"_draw": 0,
+			"_draw_board": 0,
+			"_paint_slot_box": 2,
+			"_paint_slot_label": 1,
+			"_paint_cell_box": 2,
+			"_paint_cell_part": 1,
+			"_paint_cell_species": 1,
+			"_paint_held_row": 2,
+			"_paint_held_part": 1,
+			"_paint_held_species": 1,
+			"_paint_stat_label": 1,
+			"_paint_stat_value": 1,
+			# `draw_polyline` + `draw_circle`, the outline-and-dot shape `field_view._paint_body`
+			# already draws -- this screen's own scale, no part drawn on it.
+			"_paint_body": 2,
+			"_paint_button": 2,
+			"_rounded_square": 0,
+		},
 	}
 
 
@@ -304,8 +382,8 @@ func run(t) -> void:
 	# "It is not 0" first. A directory walk that found nothing would report a perfectly clean tree and
 	# every assertion below would simply stop running.
 	var view_files := _gd_files(VIEW_DIR)
-	t.eq(view_files.size(), 5, "src/view/ 에 그릴 줄 아는 파일이 다섯이다 %s" % str(view_files))
-	t.eq(table.size(), 5, "표도 파일 다섯을 덮는다")
+	t.eq(view_files.size(), 7, "src/view/ 에 그릴 줄 아는 파일이 일곱이다 %s" % str(view_files))
+	t.eq(table.size(), 7, "표도 파일 일곱을 덮는다")
 
 	# -- 1~3. the per-function table, the closed class, and the leaf arguments ----------------------
 	var total_funcs := 0
@@ -361,8 +439,8 @@ func run(t) -> void:
 	# Round 2 of `sea-summon` added `_chip_tint` to `hud_view` (17 -> 18) — the tint half of item 8,
 	# which had been written inline in `_chip_colour` and so reached the start button alone while
 	# `_chip_offset` already served both. Pure, so the leaf count does not move.
-	t.eq(total_funcs, 129, "다섯 파일의 함수는 모두 129개다 (43 + 18 + 21 + 18 + 29)")
-	t.eq(total_leaves, 33, "그중 draw 를 실제로 부르는 잎은 33개다 (12 + 6 + 4 + 4 + 7)")
+	t.eq(total_funcs, 193, "일곱 파일의 함수는 모두 193개다 (43 + 18 + 21 + 18 + 29 + 21 + 43)")
+	t.eq(total_leaves, 50, "그중 draw 를 실제로 부르는 잎은 50개다 (12 + 6 + 4 + 4 + 7 + 5 + 12)")
 
 	# -- 3b. the array leaves hand their array WHOLE to one native call -----------------------------
 	# ⚠⚠ **THIS SECTION EXISTS BECAUSE THE COUNT ABOVE CANNOT SEE THE DIFFERENCE, AND THAT WAS
@@ -424,7 +502,7 @@ func run(t) -> void:
 		if wides.size() > 0:
 			wide_bad.append("%s %s" % [path.get_file(), str(wides)])
 	t.ok(scanned >= 8, "look.gd 를 뺀 나머지 %d개를 실제로 훑었다" % scanned)
-	t.eq(wide_scanned, 6, "그중 뷰 다섯과 셸 하나, 여섯을 넓힌 목록으로 다시 훑었다 — 셸이 빠지면 hold 초가 game.gd 에 박힌다")
+	t.eq(wide_scanned, 8, "그중 뷰 일곱과 셸 하나, 여덟을 넓힌 목록으로 다시 훑었다 — 셸이 빠지면 hold 초가 game.gd 에 박힌다")
 	t.eq(colour_bad.size(), 0, "look.gd 밖에 Color( 도 Color. 도 없다 %s" % str(colour_bad))
 	t.eq(pixel_bad.size(), 0, "look.gd 밖에 픽셀 이름에 박힌 리터럴이 없다 %s" % str(pixel_bad))
 	t.eq(wide_bad.size(), 0, "뷰와 셸에는 시간·비율 이름에 박힌 리터럴도 없다 %s" % str(wide_bad))

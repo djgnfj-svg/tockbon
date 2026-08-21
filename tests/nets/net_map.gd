@@ -424,17 +424,40 @@ func _the_walk_over_it(t) -> void:
 ## ⚠⚠ 「4층 칸도 섬을 연다」 — node 5, floor 4, WAS the chest and had no island. Walked the way a run
 ## does: node 0, win, node 1, win, node 3, win (a beak node, so a pick is taken), then node 5.
 ## Mutation: give node 5 back `island < 0`.
+## Every win now stops for the card pick before the map (「6개중 2택」). ⚠ **`enter_node` refuses
+## unless `_state == MAP`**, so a route walk that skips the pick between two nodes never reaches the
+## second one at all — `enter_node` would just return false and the whole rest of this function would
+## read a run parked one node behind where it looks like it should be. Mutation: skip the take/close
+## pair on any leg below and every `enter_node` after it silently starts returning false.
+func _take_two_and_close_refit(r: Run) -> void:
+	if r.state() != Run.State.PICK:
+		return
+	r.take_card(0)
+	r.take_card(1)
+	r.close_refit()
+
+
 func _the_fourth_floor_opens_an_island_too(t) -> void:
 	var r := Run.new()
 	t.ok(r.enter_node(0), "0번 칸을 밟는다")
 	r.finish_island(true)
+	t.eq(r.state(), Run.State.PICK, "0번은 세포 칸이라 지도 전에 카드 고르기부터 연다 (자가 점검)")
+	_take_two_and_close_refit(r)
+	t.eq(r.state(), Run.State.MAP, "카드를 고르고 정비를 닫아야 지도다 (자가 점검)")
+
 	t.ok(r.enter_node(1), "1번 칸을 밟는다")
 	r.finish_island(true)
+	_take_two_and_close_refit(r)
+
 	t.ok(r.enter_node(3), "3번 칸을 밟는다")
 	r.finish_island(true)
 	t.eq(r.state(), Run.State.REWARD, "3번은 부리 칸이라 고르기가 열렸다 (자가 점검)")
 	r.apply_beak(0)
-	t.eq(r.state(), Run.State.MAP, "부리를 달고 지도로 돌아왔다")
+	# ⚠⚠ 「부리를 달고 나면 지도가 아니라 카드 화면이다」 — 3번의 승리도 여섯 장을 냈고 `apply_beak`
+	# 는 그 카드를 건드리지 않으므로, `_advance` 는 `MAP` 이 아니라 `PICK` 에 내려앉는다.
+	t.eq(r.state(), Run.State.PICK, "부리를 달고 나면 지도가 아니라 카드 고르기다")
+	_take_two_and_close_refit(r)
+	t.eq(r.state(), Run.State.MAP, "카드를 고르고 정비를 닫아야 비로소 지도다")
 	t.eq(r.map.at(), 3, "서 있는 칸은 3번 그대로다")
 
 	var before := r.army.living_count()
@@ -442,19 +465,22 @@ func _the_fourth_floor_opens_an_island_too(t) -> void:
 	t.eq(r.state(), Run.State.BATTLE, "섬이 열린다 — 상자처럼 그 자리에서 끝나지 않는다")
 	t.ok(r.begin_island() != null, "그리고 실제로 전투가 만들어진다")
 	r.finish_island(true)
-	t.eq(r.state(), Run.State.MAP, "이겼으니 지도로 돌아온다 — COUNT는 고를 게 없다")
+	t.eq(r.state(), Run.State.PICK, "이겼으니 카드 고르기부터 연다 — COUNT는 고를 게 없어도 카드는 있다")
+
+	# ⚠ 「이기면 카드가 여섯 장 나온다」 — the win drew the six cards even though the COUNT reward itself
+	# had nothing to choose. Mutation: skip `_draw_cards()` inside `finish_island`.
+	t.eq(r.cards.size(), Rules.CARDS_PER_WIN * 2, "이긴 뒤 카드 배열이 여섯 장(칸 열둘)이다")
+
+	_take_two_and_close_refit(r)
+	t.eq(r.state(), Run.State.MAP, "카드를 고르고 정비를 닫으면 지도로 돌아온다")
 	t.ok(r.army.living_count() > before, "그리고 COUNT 보상으로 병력이 늘었다 (%d -> %d)"
 		% [before, r.army.living_count()])
-
-	# ⚠ 「이기면 카드가 여섯 장 나온다」 — the win drew the six cards even though nothing consumes them
-	# yet this stage. Mutation: skip `_draw_cards()` inside `finish_island`.
-	t.eq(r.cards.size(), Rules.CARDS_PER_WIN * 2, "이긴 뒤 카드 배열이 여섯 장(칸 열둘)이다")
 
 	t.eq(r.map.reachable_nodes(), PackedInt32Array([6]), "4층 다음은 보스뿐이다")
 	t.ok(r.enter_node(6), "보스를 밟는다")
 	t.eq(r.state(), Run.State.BATTLE, "보스는 섬을 연다")
 	r.finish_island(true)
-	t.eq(r.state(), Run.State.WON, "보스를 이기면 런이 끝난다 — 지도로 안 돌아간다")
+	t.eq(r.state(), Run.State.WON, "보스를 이기면 런이 끝난다 — 지도로도 카드 고르기로도 안 돌아간다")
 
 
 # -- the picture -----------------------------------------------------------------------------------
@@ -1035,7 +1061,11 @@ func _the_picture(t) -> void:
 	# is invisible: the walk IS the progress readout. Mutation: freeze `_here_centre` at the source.
 	t.ok(run.enter_node(0), "0번 칸을 밟는다 (자가 점검)")
 	run.finish_island(true)
-	t.eq(run.state(), Run.State.MAP, "이기고 지도로 돌아왔다 (자가 점검)")
+	# ⚠ `map_view._draw` gates on `run.state() == MAP`, so the whole picture below reads a blank
+	# `spy` unless the win is walked all the way through the pick and the refit board first.
+	t.eq(run.state(), Run.State.PICK, "이겼으니 카드 고르기부터 연다 (자가 점검)")
+	_take_two_and_close_refit(run)
+	t.eq(run.state(), Run.State.MAP, "카드를 고르고 정비를 닫아야 지도다 (자가 점검)")
 	spy.bind(run)
 	spy._fx_step(Look.SCENE_FADE_SEC + Look.MAP_NODE_FADE_SEC * 4.0)
 	t.eq(spy._here_centre(), Look.map_node_pos_px(0), "누르기 전 고리는 서 있는 칸 위에 있다")
@@ -1066,6 +1096,7 @@ func _the_picture(t) -> void:
 	# picture cannot claim progress the sim did not make.
 	t.ok(run.enter_node(1), "1번 칸을 밟는다 (자가 점검)")
 	run.finish_island(true)
+	_take_two_and_close_refit(run)
 	spy.bind(run)
 	# The reveal is run out FIRST and the clear is armed after it, because both ride the same
 	# `_fx_step` and folding them would leave `_cleared_age` past the whole fill before the first read.
@@ -1344,6 +1375,7 @@ func _the_picture(t) -> void:
 	t.ok(run.enter_node(3), "3번 부리 칸을 밟는다 (자가 점검)")
 	run.finish_island(true)
 	run.apply_beak(0)
+	_take_two_and_close_refit(run)
 	spy.bind(run)
 	# Two steps: the first notices the pool moved, the second runs the chase all the way out, so the
 	# number is SETTLED before node 5 is won. Without that the row below would be measuring a climb
@@ -1355,6 +1387,7 @@ func _the_picture(t) -> void:
 		"4층 칸을 밟기 전 힘 숫자가 실제 총합 %.0f 에 도착해 있다 (자가 점검)" % _pool(run.army))
 	t.ok(run.enter_node(5), "4층 칸을 밟는다 (자가 점검)")
 	run.finish_island(true)
+	_take_two_and_close_refit(run)
 	# ⚠ The SAME run object, re-bound exactly as the shell does one line after `finish_island` — which is
 	# what must NOT reset the chase. Reset it and the rise snaps, and a win that grew the roster looks
 	# exactly like one that did not.

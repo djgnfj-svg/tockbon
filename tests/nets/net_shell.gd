@@ -265,17 +265,20 @@ func run(t) -> void:
 	await t.pump_frames(2)
 
 	# -- _ready built the children, in code --------------------------------------------------------
-	t.eq(game.get_child_count(), 5, "_ready 가 자식 다섯을 만들었다")
+	t.eq(game.get_child_count(), 7, "_ready 가 자식 일곱을 만들었다")
 	t.ok(game.field_view != null and game.hud_view != null and game.map_view != null
-		and game.title_view != null and game.panel_view != null, "다섯 뷰가 전부 생겼다")
+		and game.reward_view != null and game.refit_view != null and game.title_view != null
+		and game.panel_view != null, "일곱 뷰가 전부 생겼다")
 	t.ok(game.get_child(0) == game.field_view and game.get_child(1) == game.hud_view
-		and game.get_child(2) == game.map_view and game.get_child(3) == game.title_view
-		and game.get_child(4) == game.panel_view,
-		"자식 순서가 field -> hud -> map -> title -> panel 이다 (Node2D 형제의 그리기 순서가 곧 이 순서다)")
-	# Named by hand, because `get_class()` on all five is "Node2D" and five identical labels do not
+		and game.get_child(2) == game.map_view and game.get_child(3) == game.reward_view
+		and game.get_child(4) == game.refit_view and game.get_child(5) == game.title_view
+		and game.get_child(6) == game.panel_view,
+		"자식 순서가 field -> hud -> map -> reward -> refit -> title -> panel 이다 (Node2D 형제의 그리기 순서가 곧 이 순서다)")
+	# Named by hand, because `get_class()` on all seven is "Node2D" and seven identical labels do not
 	# say which one went missing — a failure log that cannot narrow the cause is half a failure log.
 	var built := {"field_view": game.field_view, "hud_view": game.hud_view,
-		"map_view": game.map_view, "title_view": game.title_view, "panel_view": game.panel_view}
+		"map_view": game.map_view, "reward_view": game.reward_view, "refit_view": game.refit_view,
+		"title_view": game.title_view, "panel_view": game.panel_view}
 	for label: String in built:
 		var v: Node2D = built[label]
 		t.ok(v.is_inside_tree(), "%s 가 트리에 붙어 있다" % label)
@@ -1108,18 +1111,25 @@ func run(t) -> void:
 	# if only the shell's were cleared. Mutation: delete the `battle = null` line in
 	# `_enter_map_screen`, and the last island keeps drawing, panning, and its clock and start button
 	# come with it.
-	t.ok(game.battle == null, "그제서야 지도로 돌아갔다 (바닥 — 영영 안 돌아오면 여기가 문다)")
-	t.ok(fs.battle == null, "field_view 도 섬을 놓았다 — 안 그러면 지난 섬 지형이 지도 밑에 계속 그려진다")
-	t.ok(hs.battle == null, "hud_view 도 놓았다 — 시계와 시작 단추가 지도 위에 남지 않는다")
-	t.eq(game.run.state(), Run.State.MAP, "런은 지도 상태다")
+	t.ok(game.battle == null, "그제서야 카드 화면으로 돌아갔다 (바닥 — 영영 안 돌아오면 여기가 문다)")
+	t.ok(fs.battle == null, "field_view 도 섬을 놓았다 — 안 그러면 지난 섬 지형이 카드 화면 밑에 계속 그려진다")
+	t.ok(hs.battle == null, "hud_view 도 놓았다 — 시계와 시작 단추가 카드 화면 위에 남지 않는다")
+	# ⚠⚠ 「이기면 지도가 아니라 카드 고르기가 먼저 열린다」 — mutation: move `_advance`'s `PICK` arm
+	# below its `MAP` arm, and the cards are drawn and never shown while every count-only check stays
+	# green.
+	t.eq(game.run.state(), Run.State.PICK, "이긴 뒤 카드 고르기가 먼저 열린다")
 	t.eq(game.run.island_index, 0, "그리고 섬 번호는 혼자 안 움직였다 — 어느 칸으로 갈지는 손이 정한다")
 	t.eq(game.run.map.at(), 0, "서 있는 칸은 아직 0번이다")
 	t.eq(game.run.army.type_id.size(), 13, "0번 칸의 수 보상이 그 자리에서 붙었다 (10 + 3)")
-	t.ok(not game.panel_view.panel_active(), "지도에서는 패널이 안 뜬다")
+	t.ok(not game.panel_view.panel_active(), "카드 화면에서도 패널이 안 뜬다")
 	await t.pump_frames(2)
-	t.eq(fs.tiles.size(), 0, "지도 밑에 지형이 한 칸도 안 그려진다 — 지난 섬이 안 남는다")
+	t.eq(fs.tiles.size(), 0, "카드 화면 밑에 지형이 한 칸도 안 그려진다 — 지난 섬이 안 남는다")
 	t.eq(hs.timers.size(), 0, "시계도 안 그려진다")
 	t.eq(ps.panels.size(), 0, "패널도 없다")
+
+	_walk_pick_and_refit_to_map(t, game, fs, "0번")
+	t.eq(game.run.state(), Run.State.MAP, "카드를 고르고 정비를 닫으면 지도다")
+	t.ok(not game.panel_view.panel_active(), "지도에서는 패널이 안 뜬다")
 
 	# 「지도에서 칸을 누르면 섬이 열린다」, on the floor-2 node that pays the BEAK — which is what puts
 	# the reward panel on screen below. Its sibling pays cells; that fork is `net_map`'s.
@@ -1248,22 +1258,27 @@ func run(t) -> void:
 	game._process(Look.HOLD_BEAK_SEC)
 	t.eq(game._pending_beak, -1, "hold 가 끝나면서 셸이 손을 놓았다")
 	t.eq(int(game.run.army.has_beak[3]), 1, "그제서야 3번 병사에게 부리가 붙었다")
-	# 「부리를 달고 나면 섬이 아니라 지도로 간다」 — mutation: leave `_open_island()` in `_release_hold`.
-	# `apply_beak` ends in `_advance`, which now lands in `MAP`, so asking `begin_island` for a fight
-	# the run is not in returns null and leaves the previous island drawing under the map.
-	t.eq(game.run.state(), Run.State.MAP, "고르고 나자 섬이 아니라 지도로 갔다")
+	# 「부리를 달고 나면 지도가 아니라 카드 화면이다」 — mutation: `_release_hold`'s beak branch calls
+	# `_enter_map_screen()` directly instead of `_show_state()`, the one place that already knows a win
+	# with cards still undrawn from lands in `PICK` rather than `MAP` — 2번 칸의 승리도 여섯 장을 냈고
+	# `apply_beak` 는 그 카드를 건드리지 않는다.
+	t.eq(game.run.state(), Run.State.PICK, "부리를 달고 나면 지도가 아니라 카드 화면이다")
 	t.ok(game.battle == null, "그래서 섬이 닫혔다")
 	t.eq(game.run.map.at(), 2, "서 있는 칸은 부리 칸 그대로다")
 	await t.pump_frames(2)
 	t.eq(ps.panels.size(), 0, "패널이 사라졌다")
-	t.eq(fs.tiles.size(), 0, "그리고 지형이 한 칸도 안 그려진다 — 지도 밑에 지난 섬이 안 남는다")
+	t.eq(fs.tiles.size(), 0, "그리고 지형이 한 칸도 안 그려진다 — 카드 화면 밑에 지난 섬이 안 남는다")
+
+	_walk_pick_and_refit_to_map(t, game, fs, "부리 칸")
+	t.eq(game.run.state(), Run.State.MAP, "카드를 고르고 정비를 닫아야 비로소 지도다")
 
 	# -- on to the chest and the boss, one node press at a time ------------------------------------
 	_press_node(t, game, 4, "3층 오른쪽")
 	t.ok(game.battle != null, "3층 칸이 섬을 열었다")
 	t.eq(game.run.island_index, Rules.map_island_of(4), "그 칸이 가리키는 섬이다")
 	_win_the_open_island(t, game, "3층")
-	t.eq(game.run.state(), Run.State.MAP, "이기고 다시 지도로 돌아왔다")
+	_walk_pick_and_refit_to_map(t, game, fs, "3층")
+	t.eq(game.run.state(), Run.State.MAP, "이기고 카드를 고른 뒤 다시 지도로 돌아왔다")
 	t.ok(game.battle == null, "그리고 섬이 닫혔다")
 
 	# ⚠⚠ **The chest is GONE — node 5 (floor 4, its old spot) is a fight now, exactly like every other
@@ -1274,7 +1289,8 @@ func run(t) -> void:
 	t.ok(game.battle != null, "4층 칸도 섬을 연다 — 상자처럼 지도에 머물지 않는다")
 	t.eq(game.run.island_index, Rules.map_island_of(5), "그 칸이 가리키는 섬이다")
 	_win_the_open_island(t, game, "4층")
-	t.eq(game.run.state(), Run.State.MAP, "COUNT 보상은 고를 게 없으니 지도로 돌아온다")
+	_walk_pick_and_refit_to_map(t, game, fs, "4층")
+	t.eq(game.run.state(), Run.State.MAP, "COUNT 보상도 카드를 고르고 정비를 닫아야 지도로 돌아온다")
 	t.ok(game.battle == null, "그리고 섬이 닫혔다")
 	t.ok(game.run.army.living_count() > before_living, "COUNT 보상으로 병력이 늘었다")
 	await t.pump_frames(2)
@@ -1383,6 +1399,46 @@ func _win_the_open_island(t, game: Game, label: String) -> void:
 	game._process(Look.HOLD_OUTCOME_SEC)
 
 
+## Every win now stops for the card pick before the map — six cards drawn, two taken, then 완료 closes
+## the board. Walked through the real input door (`game._unhandled_input`), never by poking `Run`, for
+## the same reason `_win_the_open_island` above drives the hold through `_process` rather than calling
+## `finish_island` directly.
+##
+## ⚠⚠ **This is where §8.4's two new `net_shell` rows about the card screen actually get exercised**:
+## a card screen draws no island underneath it (`battle == null` **and** `field_view.battle == null`,
+## the same lever `_enter_map_screen` pulls) and a click on a card does not start a camera pan (the
+## `PICK` branch has to sit ABOVE the `battle != null` fallback that ends in `_panning = true` —
+## mutation: move it below).
+func _walk_pick_and_refit_to_map(t, game: Game, fs: FieldSpy, label: String) -> void:
+	t.eq(game.run.state(), Run.State.PICK, "%s — 이긴 뒤 카드 고르기가 열렸다" % label)
+	t.ok(game.battle == null, "%s — 카드 화면 밑에는 섬이 없다" % label)
+	t.ok(fs.battle == null, "%s — field_view 도 섬을 안 물었다 — 카드 화면에서는 섬이 안 그려진다" % label)
+	t.ok(not game._panning, "%s — 카드를 고르기 전엔 드래그가 없다 (자가 점검)" % label)
+
+	game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
+	t.ok(int(game.run.cards_taken[0]) != 0, "%s — 첫 카드를 골랐다" % label)
+	t.ok(not game._panning, "%s — 카드 화면의 클릭이 카메라를 안 움직인다" % label)
+	t.eq(game.run.state(), Run.State.PICK, "%s — 한 장으로는 아직 정비로 안 넘어간다" % label)
+
+	game._unhandled_input(_click(Look.card_rect_px(1).get_center()))
+	t.ok(int(game.run.cards_taken[1]) != 0, "%s — 둘째 카드도 골랐다" % label)
+	t.eq(game.run.state(), Run.State.REFIT, "%s — 둘을 고르면 정비로 넘어간다" % label)
+
+	game._unhandled_input(_click(Look.refit_done_rect_px(false).get_center()))
+	t.eq(game.run.state(), Run.State.MAP, "%s — 완료를 누르면 정비에서 지도로 돌아온다" % label)
+
+
+## The sim-only twin of the walk above, for fixtures that drive `Run` directly rather than through the
+## shell. A no-op on any state that is not `PICK` — the boss pays no cards, and a `REWARD` win has not
+## reached `PICK` yet — so a caller may call this after every `finish_island(true)` unconditionally.
+func _take_two_and_close_refit(r: Run) -> void:
+	if r.state() != Run.State.PICK:
+		return
+	r.take_card(0)
+	r.take_card(1)
+	r.close_refit()
+
+
 ## ⚠⚠ **`panel_active()` is an ALLOWLIST and adding `MAP` to it "for symmetry" is the mutation this
 ## measures.** Its header records that the denylist form (`state() != BATTLE`) broke five ways on one
 ## added state; what the map round owes it is not an edit but this table — **both directions**, or an
@@ -1407,13 +1463,17 @@ func _panel_active_answers_all_five_screens(t) -> void:
 	t.ok(not pv.panel_active(), "섬 위에서도 패널이 안 뜬다")
 
 	# ⚠ **The other direction, and it is what stops "always false" from passing.**
+	# 0번 칸의 승리도 여섯 장을 내므로, 2번 칸을 밟기 전에 카드를 고르고 정비를 닫아 지도로 돌아가야
+	# `enter_node` 가 다시 먹는다 — `enter_node` 는 `MAP` 이 아니면 조용히 거절한다.
 	r.finish_island(true)
+	_take_two_and_close_refit(r)
 	r.enter_node(2)
 	r.finish_island(true)
 	t.eq(r.state(), Run.State.REWARD, "부리 칸을 이기면 REWARD 다 (자가 점검)")
 	t.ok(pv.panel_active(), "부리 고르기에서는 패널이 뜬다")
 
 	r.apply_beak(0)
+	_take_two_and_close_refit(r)
 	r.enter_node(3)
 	r.finish_island(false)
 	t.eq(r.state(), Run.State.LOST, "지면 LOST 다 (자가 점검)")
@@ -1424,6 +1484,7 @@ func _panel_active_answers_all_five_screens(t) -> void:
 		won.enter_node(int(n))
 		if won.state() == Run.State.BATTLE:
 			won.finish_island(true)
+			_take_two_and_close_refit(won)
 	t.eq(won.state(), Run.State.WON, "보스를 이기면 WON 이다 (자가 점검)")
 	pv.bind(won, null)
 	t.ok(pv.panel_active(), "이긴 화면에서도 패널이 뜬다")
