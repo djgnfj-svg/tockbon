@@ -41,11 +41,19 @@ const ROUTE_TWO_BEAKS := [0, 2, 3, 5, 6]
 ## between two wins never reaches the second node at all. A no-op when the run has not stopped for a
 ## pick (a `REWARD` win has not reached `PICK` yet; the boss pays no cards at all), so a caller may call
 ## this after every `finish_island(true)` and every `apply_beak` unconditionally.
-func _take_two_and_close_refit(r: Run) -> void:
+func _take_two_and_close_refit(r: Run, fit_into_slot0: bool = false) -> void:
 	if r.state() != Run.State.PICK:
 		return
 	r.take_card(0)
 	r.take_card(1)
+	if fit_into_slot0:
+		# A FIXED policy — always fit whatever landed into slot 0's own board, in the order taken —
+		# used by `_the_route_is_what_the_board_holds` so the two routes are compared under IDENTICAL
+		# fitting behaviour and only the CARDS the route itself produced can make the boards differ.
+		# `fit(0, 0)` twice: after the first fit consumes held index 0, the second taken card is the
+		# new index 0.
+		r.army.loadout.fit(0, 0)
+		r.army.loadout.fit(0, 0)
 	r.close_refit()
 
 
@@ -54,6 +62,7 @@ func run(t) -> void:
 	_hp_carries_by_identity(t)
 	_rewards(t)
 	_the_route_is_what_the_run_takes(t)
+	_the_route_is_what_the_board_holds(t)
 	_wipe_loses(t)
 	_timeout_loses(t)
 	_restart_resets(t)
@@ -314,8 +323,13 @@ func _the_route_is_what_the_run_takes(t) -> void:
 ## Walks one route end to end and reports what came out. Every step goes through the run's own public
 ## verbs — `enter_node`, `finish_island`, `apply_beak` — because a walk that poked at fields would
 ## measure the fixture.
-func _walk_route(t, route: Array, label: String) -> Dictionary:
+## ⚠ `seed` and `fit_into_slot0` both default to "off", so every EXISTING call keeps behaving exactly
+## as before — a route walk that never fits anything is unaffected by either argument, and its own
+## comparisons (roster count, pool, beaks) do not depend on which cards were drawn, only on how many.
+func _walk_route(t, route: Array, label: String, fit_into_slot0: bool = false, seed: int = -1) -> Dictionary:
 	var r := Run.new()
+	if seed >= 0:
+		r.seed_cards(seed)
 	var refused := 0
 	for n in route:
 		if not r.enter_node(int(n)):
@@ -332,7 +346,7 @@ func _walk_route(t, route: Array, label: String) -> Dictionary:
 		# Every win now stops for the card pick before the map, and `enter_node` refuses unless
 		# `_state == MAP` — walk it all the way through, or the very next node in `route` is refused
 		# and `refused` below reads a route that was never actually walked.
-		_take_two_and_close_refit(r)
+		_take_two_and_close_refit(r, fit_into_slot0)
 	t.eq(refused, 0, "%s 다섯 칸이 전부 밟혔다 — 하나라도 거절당하면 걸은 길이 고른 길이 아니다" % label)
 	var pool := 0.0
 	var beaks := 0
@@ -341,7 +355,43 @@ func _walk_route(t, route: Array, label: String) -> Dictionary:
 			pool += r.army.hp[i]
 			beaks += int(r.army.has_beak[i])
 	return {"state": r.state(), "living": r.army.living_count(), "beaks": beaks, "pool": pool,
-		"path": r.map.path}
+		"path": r.map.path, "board": r.army.loadout.board.duplicate()}
+
+
+## ⚠ §8.4's dropped row: 「경로가 다르면 명부만이 아니라 판도 다르다」. The check above already proves
+## the ROSTER differs by route; nothing anywhere checked the BOARD, and `grep -n 'board\|loadout'` over
+## this file found nothing before this row. A FIXED fit policy (`fit_into_slot0`) is what makes the
+## claim about the ROUTE and not about which slot a hand happened to fit into — without it, two boards
+## fit by two different policies would differ for a reason that has nothing to do with the map.
+##
+## ⚠⚠ **Deliberately UNSEEDED, and that is not an oversight — it is measured to be the only option.**
+## Both routes here are 5 nodes, 4 non-boss wins each (`ROUTE_ALL_CELLS` / `ROUTE_TWO_BEAKS`'s own
+## sizes), and every non-boss win now pays six cards regardless of the node's OWN reward kind — so a
+## seeded run draws the IDENTICAL card sequence on both routes (same call count, same RNG stream) and
+## a fixed policy then fits the identical sequence into the identical slot: the boards are GUARANTEED
+## equal, not just usually equal. Confirmed by running it seeded first — it failed 100% of runs, not
+## flakily. Unseeded, this is the exact same "two runs, overwhelmingly likely to disagree" shape
+## `_the_route_is_what_the_run_takes` right above already accepts for the roster and the pool.
+func _the_route_is_what_the_board_holds(t) -> void:
+	var cells := _walk_route(t, ROUTE_ALL_CELLS, "세포 경로 (끼우며)", true)
+	var beaks := _walk_route(t, ROUTE_TWO_BEAKS, "부리 경로 (끼우며)", true)
+	var cells_board: PackedInt32Array = cells["board"]
+	var beaks_board: PackedInt32Array = beaks["board"]
+	t.eq(cells_board.size(), beaks_board.size(),
+		"두 판의 크기는 같다 — 슬롯 수 x 부위 수는 경로와 무관하다 (자가 점검)")
+
+	var cells_filled := 0
+	var beaks_filled := 0
+	for v in cells_board:
+		if int(v) >= 0:
+			cells_filled += 1
+	for v in beaks_board:
+		if int(v) >= 0:
+			beaks_filled += 1
+	t.ok(cells_filled > 0 and beaks_filled > 0,
+		"두 판 다 실제로 뭔가 끼워져 있다 (%d칸, %d칸) — 빈 판끼리는 다를 수 없다" % [cells_filled, beaks_filled])
+	t.ok(cells_board != beaks_board,
+		"같은 정책으로 끼워도 세포 경로와 부리 경로의 0번 슬롯 판이 서로 다르다 — 경로가 판에도 닿는다")
 
 
 # -- losing ------------------------------------------------------------------------------------------

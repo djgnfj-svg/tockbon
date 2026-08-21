@@ -1164,8 +1164,15 @@ func _drain_events() -> void:
 		# **The reaction is delayed by exactly the tracer's flight time.** The sim landed the damage
 		# on the firing frame, so without this the target flashes and flinches before the bullet has
 		# left the muzzle — the one thing item 1's own spec calls a lie about time.
+		#
+		# ⚠ **Tracer-vs-lunge reads the ATTACKER'S OWN reach, not the type's base range.** A soldier
+		# is the one side of this that can carry a fitted 머리 part, and `army.range_of(from_id)` is
+		# what combat itself throws that soldier's blow with — `Rules.range_of(atk_type)` alone would
+		# play the melee lunge for a body that just became ranged, pushing it toward a target it
+		# never walked to. Enemies stay type-keyed, same as everywhere else this round.
+		var atk_reach := army.range_of(from_id) if not from_enemy else Rules.range_of(atk_type)
 		var reaction := 0.0
-		if Rules.range_of(atk_type) > 0.0:
+		if atk_reach > 0.0:
 			reaction = Look.SHOT_SEC
 			if Look.fx_gain_of(1) > 0.0:
 				born.append({

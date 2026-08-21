@@ -576,11 +576,18 @@ const CARD_TAKEN_GROW_SEC := 0.20
 ## rule; a card is a new verb and gets one tone.
 const COL_CARD := Color(0.596, 0.549, 0.827)
 
-## Indexed by `Rules.Species`. Pairwise luminance ratio ≥ 1.4, so no two species read as one tone.
+## Indexed by `Rules.Species`. Pairwise luminance ratio ≥ 1.4, so no two species read as one tone —
+## and, ⚠⚠ **every one WCAG-contrasts ≥ 3:1 against `COL_CARD`, the ONE surface this table is ever
+## drawn on** (`reward_view._paint_card_species`, `refit_view._paint_cell_species`). The three used to
+## be picked for pairwise separation alone and land at 1.03:1 / 1.16:1 / 1.56:1 against the card — a
+## smudge next to the part name it sits below. All three moved dark (light text was never going to
+## clear 3:1 against a card this light without turning white and erasing hue), which is what pushed
+## the pairwise floor down near the card-contrast one: the two constraints share the same three
+## numbers and both are checked, not just the one this comment used to name.
 const COL_SPECIES := [
-	Color(0.796, 0.596, 0.322),   # MAMMAL
-	Color(0.451, 0.780, 0.851),   # BIRD
-	Color(0.373, 0.596, 0.941),   # FISH
+	Color(0.370, 0.239, 0.087),   # MAMMAL
+	Color(0.040, 0.199, 0.212),   # BIRD
+	Color(0.025, 0.050, 0.158),   # FISH
 ]
 
 
@@ -602,13 +609,23 @@ static func card_hit_rect_px(k: int) -> Rect2:
 # The refit screen (`parts-on-a-board-not-on-the-body`)
 # ---------------------------------------------------------------------------------------------
 
-## The slot strip — step one. `≥ (220, 64)` · `200 + 2×120 + 24 = 464 ≤ 720`.
-const REFIT_SLOT_SIZE_PX := Vector2(360.0, 120.0)
+## The slot strip — drawn on both steps, side by side rather than stacked, because step two also
+## draws the board and the two must never share a pixel of hit rect. `≥ (220, 64)` ·
+## `250×2 + 24 = 524` wide, centred: `(1280 − 524) / 2 = 378`.
+##
+## ⚠⚠ **This is the fix for the BELLY cell that could never be pressed.** The strip used to sit at
+## y 200…464 — squarely on top of the board's y 320…628 — so the BELLY cell's centre landed inside
+## slot 1's hit rect and `_refit_input` (which asks `slot_at` before `cell_at`) answered "slot 1"
+## for a press aimed at the board. Laying the strip out ABOVE the board, with its own hit rect
+## entirely inside y 92…172, removes the two regions' only overlap instead of reordering the input
+## check that found it (see `_refit_input`'s own comment for why that order cannot change).
+const REFIT_SLOT_SIZE_PX := Vector2(250.0, 64.0)
 const REFIT_SLOT_GAP_PX := 24.0       # ≥ 12; ≤ 60
-## x = `(1280 − 360) / 2` exactly.
-const REFIT_SLOT_ORIGIN_PX := Vector2(460.0, 200.0)
-const REFIT_BUTTON_SIZE_PX := Vector2(240.0, 80.0)      # ≥ (220, 64); ≤ (360, 120)
-## `600 + 80 = 680 ≤ 720`, and `600 > 464` so it never touches the strip.
+## y clears the dashboard above it (ends ~78) and the board below it (hit-top 312) by 14 px and
+## 140 px. x centres the 524-wide strip.
+const REFIT_SLOT_ORIGIN_PX := Vector2(378.0, 100.0)
+const REFIT_BUTTON_SIZE_PX := Vector2(240.0, 64.0)      # ≥ (220, 64); ≤ (360, 120)
+## `600 + 64 = 664 ≤ 720`, and `600 > 172` so it never touches the strip.
 const REFIT_DONE_ORIGIN_PX := Vector2(520.0, 600.0)
 
 ## The board, the pile, the dashboard, the body — step two. `≥ (220, 64)` — exactly at the width
@@ -642,12 +659,23 @@ const REFIT_HELD_COL_PITCH_PX := 240.0
 ## the map, not against a guess.
 const REFIT_HELD_ROWS := 5                    # `300 + 4×84 + 64 = 700`, hit bottom 708 ≤ 720
 
-const REFIT_STAT_ORIGIN_PX := Vector2(80.0, 150.0)      # y ≥ the value font size; `80 + 5×140 =
+## ⚠ A ROW, not a column — `refit_stat_origin_px` steps this in X. It used to step in Y, which
+## stacked the five numbers straight down the board's own left edge (`REFIT_BOARD_ORIGIN_PX.x`)
+## starting at the board's own y, so two of the five sat on top of board cells and the fifth sat
+## past the bottom of a 720 px screen. A row at the very top of the screen is clear of the strip
+## (starts y 100), the board (starts y 320) and the pile (x 800+) by construction.
+const REFIT_STAT_ORIGIN_PX := Vector2(80.0, 40.0)      # y ≥ the label font size; `80 + 5×140 =
                                       # 780 ≤ 800`
 const REFIT_STAT_PITCH_PX := 140.0    # ≥ 110 (the widest label 「공격주기」 at ~0.6em of 20px is
                                       # 48px, and the value below it needs the same again); ≤ 144
 const REFIT_STAT_LABEL_FONT_SIZE_PX := 20     # ≥ 16; < the value font − 10
 const REFIT_STAT_VALUE_FONT_SIZE_PX := 34     # > HUD_TIMER_FONT_SIZE_PX 30; ≤ 44
+
+## Step one's hint — 「no line of text anywhere says what this screen is or that a slot presses」.
+## Sits in the gap between the strip's hit-bottom (172) and the board's own top (320); drawn only
+## while `_open_slot < 0` (`refit_view._draw`), so it never competes with the board for the same band.
+const REFIT_HINT_POS_PX := Vector2(400.0, 220.0)
+const REFIT_HINT_FONT_SIZE_PX := 22    # == HUD_FONT_SIZE_PX, the map's own hint-adjacent size
 
 const REFIT_BODY_CENTRE_PX := Vector2(1030.0, 180.0)    # y − radius ≥ 90; y + radius ≤ 300, clear
                                       # of the pile; x ± radius inside 780…1280
@@ -655,16 +683,21 @@ const REFIT_BODY_SCALE := 5.0         # ≥ 3 — under it the ranged body's cor
                                       # invisible; ≤ 8, from 0.35 × 40 × 8 = 112 > the 210 px band
 
 ## The button has TWO positions: step one reuses `REFIT_DONE_ORIGIN_PX` above (the strip's hit
-## bottom is 472, and 600 clears it); step two moves it clear of the board, which occupies y
+## bottom is 172, and 600 clears it); step two moves it clear of the board, which occupies y
 ## 320…628 including its pad.
-const REFIT_DONE_BOARD_ORIGIN_PX := Vector2(80.0, 632.0)       # `632 > 628`; `632 + 80 = 712 ≤ 720`
-const REFIT_BACK_ORIGIN_PX := Vector2(340.0, 632.0)            # 260 apart against a 240 width — the
+## ⚠⚠ The comparison that matters is HIT rect against HIT rect, not resting position against a hit
+## rect — `632 > 628` compared the wrong pair (this button's own RESTING top against the board's
+## HIT bottom) and forgot this button gets an 8 px pad of its own, so its actual hit-top was 624,
+## 4 px INSIDE the board's hit-bottom of 628. `640 − 8 = 632 > 628`, this button's real hit-top,
+## is the comparison that has to hold.
+const REFIT_DONE_BOARD_ORIGIN_PX := Vector2(80.0, 640.0)       # `632 > 628`; `640 + 64 + 8 = 712 ≤ 720`
+const REFIT_BACK_ORIGIN_PX := Vector2(340.0, 640.0)            # 260 apart against a 240 width — the
                                       # two hit rects clear by 4
 
 
 static func refit_slot_rect_px(slot: int) -> Rect2:
-	var y := REFIT_SLOT_ORIGIN_PX.y + slot * (REFIT_SLOT_SIZE_PX.y + REFIT_SLOT_GAP_PX)
-	return Rect2(Vector2(REFIT_SLOT_ORIGIN_PX.x, y), REFIT_SLOT_SIZE_PX)
+	var x := REFIT_SLOT_ORIGIN_PX.x + slot * (REFIT_SLOT_SIZE_PX.x + REFIT_SLOT_GAP_PX)
+	return Rect2(Vector2(x, REFIT_SLOT_ORIGIN_PX.y), REFIT_SLOT_SIZE_PX)
 
 
 static func refit_slot_hit_rect_px(slot: int) -> Rect2:
@@ -710,9 +743,9 @@ static func refit_held_hit_rect_px(row_index: int) -> Rect2:
 	return refit_held_rect_px(row_index).grow(PRESS_HIT_PAD_PX)
 
 
-## The five dashboard rows, top to bottom, indexed by `Rules.PART_COL_*`.
+## The five dashboard columns, left to right, indexed by `Rules.PART_COL_*`.
 static func refit_stat_origin_px(col: int) -> Vector2:
-	return REFIT_STAT_ORIGIN_PX + Vector2(0.0, col * REFIT_STAT_PITCH_PX)
+	return REFIT_STAT_ORIGIN_PX + Vector2(col * REFIT_STAT_PITCH_PX, 0.0)
 
 
 # ---------------------------------------------------------------------------------------------

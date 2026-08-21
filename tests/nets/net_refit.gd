@@ -35,6 +35,8 @@ class RefitSpy extends RefitView:
 	var stat_values := []
 	var bodies := []
 	var buttons := []
+	var fades := []
+	var hints := []
 
 	func _draw() -> void:
 		slot_boxes.clear()
@@ -49,6 +51,8 @@ class RefitSpy extends RefitView:
 		stat_values.clear()
 		bodies.clear()
 		buttons.clear()
+		fades.clear()
+		hints.clear()
 		super()
 		draws += 1
 
@@ -89,6 +93,12 @@ class RefitSpy extends RefitView:
 			col: Color) -> void:
 		buttons.append({"rect": rect, "bg": bg, "text": text, "at": at, "fsize": fsize, "col": col})
 
+	func _paint_fade(rect: Rect2, col: Color) -> void:
+		fades.append({"rect": rect, "col": col})
+
+	func _paint_hint(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+		hints.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
+
 
 const SCREEN := Rect2(0.0, 0.0, 1280.0, 720.0)
 const SMALLEST_PRESS_BEFORE := Vector2(220.0, 64.0)
@@ -102,6 +112,7 @@ func run(t) -> void:
 	await _the_dashboard_reads_the_same_function_the_fight_does(t)
 	await _the_cell_flashes_when_a_part_lands(t)
 	await _the_body_differs_per_slot(t)
+	await _the_screen_itself_fades_in(t)
 
 
 # -- geometry: can it be aimed at ------------------------------------------------------------------
@@ -126,6 +137,25 @@ func _the_geometry(t) -> void:
 				overlapping += 1
 	t.eq(outside, 0, "칸 여섯의 판정 사각형이 전부 화면 안이고 넓이가 0이 아니다")
 	t.eq(overlapping, 0, "어느 두 칸의 판정 사각형도 1px 안으로도 안 붙는다")
+
+	# ⚠⚠ 「어느 칸의 판정도 슬롯 띠나 완료/뒤로 단추와 안 겹친다」 — cells were checked against EACH
+	# OTHER above and never against the OTHER region drawn on the same frame the board is open. The
+	# BELLY cell's centre used to land inside slot 1's hit rect (nothing in `look.gd` ever compared
+	# the two), and the board's bottom row shared a 4 px seam with both step-two buttons (their own
+	# 8 px pad was left out of the comparison that was supposed to clear it). Both are geometry that
+	# stays wrong until something measures the CROSS product, not the board alone.
+	var done_open_hit := Look.refit_done_rect_px(true).grow(Look.PRESS_HIT_PAD_PX)
+	var cross := 0
+	for p in Rules.part_count():
+		var hit := view.cell_hit_rect_of(p).grow(1.0)
+		for s in Rules.summon_slot_count():
+			if hit.intersects(view.slot_hit_rect_of(s).grow(1.0)):
+				cross += 1
+		if hit.intersects(done_open_hit.grow(1.0)):
+			cross += 1
+		if hit.intersects(view.back_hit_rect().grow(1.0)):
+			cross += 1
+	t.eq(cross, 0, "어느 칸의 판정 사각형도 슬롯 띠나 완료(열린 자리)/뒤로 단추와 1px 안으로도 안 겹친다")
 
 	# 「가장 작은 누름이 220x64보다 작지 않다」 — both the board's cells and the held rows.
 	t.ok(Look.REFIT_CELL_SIZE_PX.x >= SMALLEST_PRESS_BEFORE.x
@@ -200,12 +230,23 @@ func _the_strip_and_the_board(t) -> void:
 	t.eq(spy.stat_values.size(), 0, "대시보드 숫자도 아직 없다")
 	t.eq(spy.bodies.size(), 0, "몸 미리보기도 아직 없다")
 
+	# 「아무 것도 안 열렸을 때 안내 글이 있다」 — this screen used to have no line of text anywhere
+	# saying what it is or that a slot presses.
+	t.eq(spy.hints.size(), 1, "슬롯이 하나도 안 열렸을 때 안내 글을 하나 그렸다")
+
 	# 「연 슬롯이 띠에서 밝고 나머지는 어둡다」 — before any slot is opened, every strip box reads the
 	# SAME (unlit) alpha; there is nothing to compare yet, so this is the self-check that the rest of
 	# the row means something.
 	var rest_a := (spy.slot_boxes[0]["bg"] as Color).a
 	var rest_b := (spy.slot_boxes[1]["bg"] as Color).a
 	t.ok(is_equal_approx(rest_a, rest_b), "아무 슬롯도 안 열렸을 때는 둘 다 같은 밝기다 (자가 점검)")
+	# ⚠ **Both boxes ARE pressable here — pressing either one opens it.** `PRESS_ALPHA_OFF` is the
+	# SAME tone the title screen uses for a slot that cannot be pressed at all; painting it on a box
+	# that presses says the opposite of what is true. Mutation: `refit_view.gd`'s `lit := s ==
+	# _open_slot` (drop the `or _open_slot < 0`), which paints both dim before anything is chosen.
+	t.eq(rest_a, Look.PRESS_ALPHA_ON,
+		"그리고 그 밝기가 '눌린다'는 밝기다 (%.2f) — '눌리지 않는다'는 밝기(%.2f)가 아니다"
+			% [rest_a, Look.PRESS_ALPHA_OFF])
 
 	# 「슬롯을 누르면 그 슬롯의 판이 열린다」
 	spy.open_slot(0)
@@ -218,6 +259,7 @@ func _the_strip_and_the_board(t) -> void:
 	t.eq(spy.stat_values.size(), Rules.PART_COL_TOTAL, "대시보드 숫자 다섯도 그렸다")
 	t.eq(spy.bodies.size(), 1, "몸 미리보기를 하나 그렸다")
 	t.eq(spy.buttons.size(), 2, "완료와 뒤로, 단추 둘을 그렸다")
+	t.eq(spy.hints.size(), 0, "판이 열리면 안내 글은 사라진다 — 판 자체가 이제 안내다")
 
 	# 「연 슬롯이 띠에서 밝고 나머지는 어둡다」, now that one actually is.
 	var lit := (spy.slot_boxes[0]["bg"] as Color)
@@ -228,6 +270,21 @@ func _the_strip_and_the_board(t) -> void:
 	# The strip stays drawn on step two, and the boxes do not move.
 	t.eq(spy.slot_boxes.size(), Rules.summon_slot_count(), "판이 열려도 슬롯 띠는 그대로 둘 다 그려진다")
 
+	# ⚠ 「호버가 테두리만이 아니라 채움도 밝힌다」 — the card screen and the map both carry hover on
+	# TWO channels (border width AND fill brightness); this screen's own slot/cell/held boxes used to
+	# get only the first. `Look.hover_lit` lightens the fill by `PRESS_HOVER_BRIGHTEN`, alpha
+	# untouched, so this reads the RGB and not the alpha the row above already pins.
+	var dim_slot1 := (spy.slot_boxes[1]["bg"] as Color)
+	spy.set_hover(spy.slot_rect_of(1).get_center())
+	spy._fx_step(Look.PRESS_HOVER_SEC)
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	var hovered_slot1 := (spy.slot_boxes[1]["bg"] as Color)
+	t.ok(hovered_slot1.r > dim_slot1.r or hovered_slot1.g > dim_slot1.g or hovered_slot1.b > dim_slot1.b,
+		"어두운 슬롯도 호버하면 채움 색 자체가 밝아진다 — 테두리만 굵어지는 게 아니다")
+	t.ok(is_equal_approx(hovered_slot1.a, dim_slot1.a),
+		"그 밝기 변화는 알파가 아니라 RGB 다 — 위의 알파 비율 행과 다른 채널이다")
+
 	t.root.remove_child(spy)
 	spy.queue_free()
 
@@ -236,12 +293,21 @@ func _the_strip_and_the_board(t) -> void:
 
 ## Walks a fresh `Game` from the title through a win to `REFIT`, taking both cards, and hands back the
 ## `Game` sitting there with `game.refit_view` already swapped for a `RefitSpy`.
-func _reach_refit(t) -> Game:
+## ⚠⚠ `seed` is REQUIRED, not optional with a hidden default — every call site below names one, so
+## which seed produced which card sequence is legible at the call, the same reason `net_cards._won_run`
+## takes one. **Before this, `Run._reset` (`_rng.randomize()`) drove every draw here**, so which held
+## card `_fitting_through_the_shell` pressed, and which dashboard column
+## `_the_dashboard_reads_the_same_function_the_fight_does` watched climb, were a different experiment
+## every round — the BELLY-cell workaround below existed only because of this, and the dashboard row
+## bound only whichever one column the draw happened to move.
+func _reach_refit(t, seed: int) -> Game:
 	var game := Game.new()
 	t.root.add_child(game)
 	await t.pump_frames(2)
 
 	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
+	t.ok(game.run != null, "런이 시작됐다 (자가 점검)")
+	game.run.seed_cards(seed)
 	game._unhandled_input(_press(Look.map_node_pos_px(0)))
 	game._process(Look.MAP_TRAVEL_SEC)
 	t.ok(game.battle != null, "섬이 열렸다 (자가 점검)")
@@ -275,25 +341,33 @@ func _reach_refit(t) -> Game:
 
 
 func _fitting_through_the_shell(t) -> void:
-	var game := await _reach_refit(t)
+	var game := await _reach_refit(t, 1)
 	var spy := game.refit_view as RefitSpy
 
 	game._unhandled_input(_click(Look.refit_slot_hit_rect_px(0).get_center()))
 	t.eq(game.refit_view.open_slot_index(), 0, "0번 슬롯을 눌러 판을 열었다")
 
 	var loadout := game.run.army.loadout
-	# ⚠⚠ **FOUND, NOT FIXED — 「배」(BELLY, part 2) 칸은 이 라운드가 지은 정비 화면 그대로는 못 누른다.**
-	# `Look.refit_cell_rect_px(2)`의 중심(670, 390)이 1번 슬롯의 판정 사각형(452..828, 336..472) 안에
-	# 그대로 들어간다 — 두 사각형이 look.gd 안에서 각자 따로 재던 것이라 서로를 본 적이 없다. 실제로
-	# 눌러 보면 칸이 안 비워지고 대신 1번 슬롯이 열린다. `_refit_input`이 `slot_at`을 칸/더미보다 먼저
-	# 묻기 때문이고, 판이 열려 있어도 다른 슬롯으로 넘어갈 수 있어야 하니 그 순서 자체는 못 바꾼다.
-	# 진짜 고치려면 판 아니면 띠 중 하나를 다시 앉혀야 하는데, 그건 이 칸 하나의 좌표를 옮기는 게
-	# 아니라 두 구역의 배치를 다시 정하는 일이라 — 보고만 하고 다시 그리지는 않는다. 그래서 이 함수는
-	# 배 칸을 피해서 고른다: 배 칸 하나로 이 화면의 나머지 다섯 칸이 실제로 누른 대로 움직인다는 것까지
-	# 가리지는 않기 위해서다.
+
+	# ⚠⚠ **FIXED — every cell, INCLUDING 배(BELLY), presses at the spot it is drawn.**
+	# `Look.refit_cell_rect_px(2)`'s centre (670, 390) used to land inside slot 1's own hit rect
+	# (452..828, 336..472) — `look.gd`'s two regions were laid out with no line ever comparing them —
+	# so a press aimed at the BELLY cell opened slot 1 instead. The strip moved out of the board's way
+	# (see `look.gd`'s `REFIT_SLOT_ORIGIN_PX`); this walks all six cell centres through the real
+	# shell's own hit-test order (`slot_at` asked before `cell_at`, `_refit_input`'s own order, which
+	# does not change) and requires every one of them to resolve to its own cell and to no slot.
+	var slot_bad := 0
+	var cell_bad := 0
+	for p in Rules.part_count():
+		var centre := Look.refit_cell_rect_px(p).get_center()
+		if game.refit_view.slot_at(centre) != -1:
+			slot_bad += 1
+		if game.refit_view.cell_at(centre) != p:
+			cell_bad += 1
+	t.eq(slot_bad, 0, "여섯 칸의 한가운데 중 어느 것도 슬롯 띠 판정 안에 들지 않는다 — 배 칸 포함")
+	t.eq(cell_bad, 0, "여섯 칸의 한가운데를 누르면 그 칸 자신이 열린다 — 배 칸 포함")
+
 	var want_idx := 0
-	if int(loadout.held_part[0]) == Rules.Part.BELLY and int(loadout.held_part[1]) != Rules.Part.BELLY:
-		want_idx = 1
 	var want_part := int(loadout.held_part[want_idx])
 	var want_species := int(loadout.held_species[want_idx])
 	var pile_before := loadout.held_part.size()
@@ -344,7 +418,7 @@ func _fitting_through_the_shell(t) -> void:
 ## every DRAWN value is compared against `loadout.stat_of(slot, col)` directly, so a view that computed
 ## its own (correct, by accident) number would still be caught the day it drifts.
 func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
-	var game := await _reach_refit(t)
+	var game := await _reach_refit(t, 1)
 	var spy := game.refit_view as RefitSpy
 
 	game._unhandled_input(_click(Look.refit_slot_hit_rect_px(0).get_center()))
@@ -427,6 +501,21 @@ func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
 	t.ok(Look.MAP_HEAL_SEC >= 0.30 and Look.MAP_HEAL_SEC <= 1.00,
 		"숫자가 오르는 시간이 0.30~1.00초다 (%.2f)" % Look.MAP_HEAL_SEC)
 
+	# ⚠⚠ **All FIVE columns, not only `moved_col`.** The row above already proved the MOVED column is
+	# `stat_of`'s own value; the seed fixes which held part gets fitted, so which single column moves
+	# would otherwise be a coin flip run to run and only 2 of 6 parts ever move HP — a view that
+	# rendered `Rules.hp_of(type)` for the OTHER four (the exact mutation §8.3 names) would still pass
+	# a check that only re-verified the one column that changed. Every column, moved or not, is
+	# re-read against `loadout.stat_of` here, now that the board is non-empty.
+	var post_fit_bad := 0
+	for col in Rules.PART_COL_TOTAL:
+		var shown := str(spy.stat_values[col]["text"])
+		var want_col_text := "%.1f" % loadout.stat_of(0, col)
+		if shown != want_col_text:
+			post_fit_bad += 1
+	t.eq(post_fit_bad, 0,
+		"낀 뒤에도 다섯 숫자 모두 loadout.stat_of 와 같다 — 움직인 한 칸만이 아니라 다섯 다")
+
 	# And it is the SAME call combat reads — `army.max_hp_of` for the fitted slot's own soldiers.
 	game.run.army.recruit(0)
 	var new_id := game.run.army.type_id.size() - 1
@@ -443,7 +532,7 @@ func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
 ## 「미리보기 몸이 슬롯마다 다르다」 — both channels: radius AND corner rounding, and both slots draw
 ## with a positive radius (so neither is comparing a live shape against a collapsed one).
 func _the_body_differs_per_slot(t) -> void:
-	var game := await _reach_refit(t)
+	var game := await _reach_refit(t, 1)
 	var spy := game.refit_view as RefitSpy
 
 	game._unhandled_input(_click(Look.refit_slot_hit_rect_px(0).get_center()))
@@ -479,7 +568,7 @@ func _the_body_differs_per_slot(t) -> void:
 ## ⚠⚠ Bounded on both ends for the same reason the card reveal is: a beat proven only not to overshoot
 ## can be deleted outright and still pass.
 func _the_cell_flashes_when_a_part_lands(t) -> void:
-	var game := await _reach_refit(t)
+	var game := await _reach_refit(t, 1)
 	var spy := game.refit_view as RefitSpy
 
 	game._unhandled_input(_click(Look.refit_slot_hit_rect_px(0).get_center()))
@@ -523,6 +612,42 @@ func _the_cell_flashes_when_a_part_lands(t) -> void:
 
 	t.root.remove_child(game)
 	game.queue_free()
+
+
+# -- item 7: the screen's own arrival -------------------------------------------------------------------
+
+## ⚠⚠ 「정비 화면도 배경에서 떠오른다」 — both ends, `map_view`'s own scene-wash shape, reused. This
+## screen had no reveal clock of its own before this round (`_reveal_age` is new) — two captures 0.4s
+## apart used to be byte-identical, a hard cut with nothing on screen saying the screen had changed.
+## Floor: right after `bind` the wash is still up, near-full alpha. Ceiling: aged past `SCENE_FADE_SEC`
+## the leaf is not even CALLED (the `if wash > 0.0` guard `map_view`'s own site shares) — bounded only
+## above, a deleted wash would also pass.
+func _the_screen_itself_fades_in(t) -> void:
+	var r := Run.new()
+	t.ok(r.enter_node(0), "0번 칸을 밟는다 (자가 점검)")
+	r.finish_island(true)
+	r.take_card(0)
+	r.take_card(1)
+	t.eq(r.state(), Run.State.REFIT, "정비 화면이 열렸다 (자가 점검)")
+
+	var spy := RefitSpy.new()
+	t.root.add_child(spy)
+	spy.process_mode = Node.PROCESS_MODE_DISABLED
+	spy.bind(r)
+	spy.queue_redraw()
+	await t.pump_frames(2)
+	t.eq(spy.fades.size(), 1, "묶인 직후엔 화면 자체의 흐림이 아직 떠 있다")
+	t.ok((spy.fades[0]["col"] as Color).a > 0.5,
+		"그 흐림의 알파가 절반 넘게 짙다 (%.2f)" % (spy.fades[0]["col"] as Color).a)
+	t.eq(spy.fades[0]["rect"], Rect2(Vector2.ZERO, Look.viewport_size_px()), "흐림이 화면 전체를 덮는다")
+
+	spy._fx_step(Look.SCENE_FADE_SEC)
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	t.eq(spy.fades.size(), 0, "SCENE_FADE_SEC 이 지나면 흐림 호출 자체가 없다 — 다 사라진 뒤에도 계속 그리지 않는다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
 
 
 # -- input helpers, identical shape to net_shell's -----------------------------------------------------

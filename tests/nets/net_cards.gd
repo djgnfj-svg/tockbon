@@ -22,6 +22,7 @@ class RewardSpy extends RewardView:
 	var species := []
 	var marks := []
 	var hints := []
+	var fades := []
 
 	func _draw() -> void:
 		cards.clear()
@@ -29,6 +30,7 @@ class RewardSpy extends RewardView:
 		species.clear()
 		marks.clear()
 		hints.clear()
+		fades.clear()
 		super()
 		draws += 1
 
@@ -47,6 +49,9 @@ class RewardSpy extends RewardView:
 	func _paint_hint(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 		hints.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
 
+	func _paint_fade(rect: Rect2, col: Color) -> void:
+		fades.append({"rect": rect, "col": col})
+
 
 const SCREEN := Rect2(0.0, 0.0, 1280.0, 720.0)
 const SMALLEST_PRESS_BEFORE := Vector2(220.0, 64.0)
@@ -58,6 +63,8 @@ func run(t) -> void:
 	_the_seed(t)
 	_the_geometry(t)
 	_the_alpha_channel(t)
+	_the_species_colours_read(t)
+	await _the_screen_itself_fades_in(t)
 	await _the_leaves_draw_what_they_were_handed(t)
 	await _the_cards_fade_in_staggered(t)
 
@@ -225,6 +232,74 @@ func _the_alpha_channel(t) -> void:
 			% [pressable.a, not_pressable.a, pressable.a / not_pressable.a])
 	fresh_view.free()
 	view.free()
+
+
+## ⚠⚠ 「종 글자가 카드 위에서 읽힌다」 — WCAG relative-luminance contrast, both halves. `COL_SPECIES`
+## used to be picked for PAIRWISE separation alone (`look.gd`'s own old comment said so) and never
+## against `COL_CARD`, the one surface it is ever drawn on (`reward_view._paint_card_species`,
+## `refit_view._paint_cell_species`) — the three landed at 1.03:1 / 1.16:1 / 1.56:1 against the card,
+## under WCAG's own 3:1 floor for large text, while every pairwise ratio still cleared 1.4. Mutation:
+## restore the old triple `[Color(0.796,0.596,0.322), Color(0.451,0.780,0.851), Color(0.373,0.596,0.941)]`
+## — every one of those fails the card-contrast row below and none fail the pairwise row, which is
+## exactly why a check that only ever compared species to species could not see this.
+func _the_species_colours_read(t) -> void:
+	var low := 0
+	for a in Rules.species_count():
+		for b in range(a + 1, Rules.species_count()):
+			if _contrast(Look.COL_SPECIES[a], Look.COL_SPECIES[b]) < 1.4:
+				low += 1
+	t.eq(low, 0, "종 색 세 개가 서로 대비 1.4:1 이상이다 (자가 점검 — 카드 위 대비와는 다른 값이다)")
+
+	var unreadable := 0
+	for s in Rules.species_count():
+		if _contrast(Look.COL_SPECIES[s], Look.COL_CARD) < 3.0:
+			unreadable += 1
+	t.eq(unreadable, 0,
+		"종 색 세 개 전부 카드 배경(COL_CARD)과 WCAG 대비 3:1 이상이다 — 이름은 안 읽히면 아무 값도 아니다")
+
+
+## WCAG 2.x relative-luminance contrast ratio, `(L_light + 0.05) / (L_dark + 0.05)`.
+func _contrast(a: Color, b: Color) -> float:
+	var la := _relative_luminance(a)
+	var lb := _relative_luminance(b)
+	var hi := maxf(la, lb)
+	var lo := minf(la, lb)
+	return (hi + 0.05) / (lo + 0.05)
+
+
+func _relative_luminance(c: Color) -> float:
+	return 0.2126 * _linear(c.r) + 0.7152 * _linear(c.g) + 0.0722 * _linear(c.b)
+
+
+func _linear(c: float) -> float:
+	return c / 12.92 if c <= 0.03928 else pow((c + 0.055) / 1.055, 2.4)
+
+
+## ⚠⚠ 「카드 화면도 배경에서 떠오른다」 — both ends, `map_view`'s own scene-wash shape, reused. Floor:
+## right after `bind` the wash is still up, near-full alpha. Ceiling: aged past `SCENE_FADE_SEC` the
+## leaf is not even CALLED (the `if wash > 0.0` guard `map_view`'s own `_paint_fade` site shares) — a
+## duty bounded only above (never overlaps X) is a duty a deleted effect also satisfies; both ends are
+## what a beat this section warns about needs.
+func _the_screen_itself_fades_in(t) -> void:
+	var r := _won_run()
+	var spy := RewardSpy.new()
+	t.root.add_child(spy)
+	spy.process_mode = Node.PROCESS_MODE_DISABLED
+	spy.bind(r)
+	spy.queue_redraw()
+	await t.pump_frames(2)
+	t.eq(spy.fades.size(), 1, "묶인 직후엔 화면 자체의 흐림이 아직 떠 있다")
+	t.ok((spy.fades[0]["col"] as Color).a > 0.5,
+		"그 흐림의 알파가 절반 넘게 짙다 (%.2f)" % (spy.fades[0]["col"] as Color).a)
+	t.eq(spy.fades[0]["rect"], Rect2(Vector2.ZERO, Look.viewport_size_px()), "흐림이 화면 전체를 덮는다")
+
+	spy._fx_step(Look.SCENE_FADE_SEC)
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	t.eq(spy.fades.size(), 0, "SCENE_FADE_SEC 이 지나면 흐림 호출 자체가 없다 — 다 사라진 뒤에도 계속 그리지 않는다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
 
 
 # -- the leaves, treed and pumped ----------------------------------------------------------------------

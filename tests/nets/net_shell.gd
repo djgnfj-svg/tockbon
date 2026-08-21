@@ -1361,6 +1361,7 @@ func run(t) -> void:
 	_speed_steps_survives_read_by_nobody(t)
 	_every_lose_reason_reads_differently(t)
 	_the_panel_holds_every_soldier_a_run_can_field(t)
+	await _the_roster_line_reads_max_hp_of(t)
 
 
 ## Presses a map node the way a hand does — through `_unhandled_input`, then the ring's walk run out
@@ -1906,6 +1907,63 @@ func _the_panel_holds_every_soldier_a_run_can_field(t) -> void:
 	var hit := pv.soldier_id_at(last_rect.position + Vector2(4.0, 4.0))
 	t.eq(hit, int(ids[21]), "그 자리를 누르면 스물두 번째 병사가 잡힌다")
 	pv.free()
+
+
+## ⚠⚠ item 4's panel half: the roster line reads `Army.max_hp_of`, never `Rules.hp_of(type)` — the
+## exact mutation `panel_view.gd`'s own comment above `_entry_text` promises it does not make.
+## MUTATION CONFIRMED GREEN by the plan's own audit before this row existed: `a.max_hp_of(i)` ->
+## `Rules.hp_of(t)` left the whole suite green, because nothing anywhere compared the TEXT a roster
+## line actually drew against the function combat itself reads. A 가슴 part fitted into slot 0 raises
+## `max_hp_of` for every body that slot fields without moving the type's own base number — the one
+## state where the two reads print different digits — so this drives the panel through exactly that.
+func _the_roster_line_reads_max_hp_of(t) -> void:
+	var r := Run.new()
+	r.army.loadout.take_card(Rules.Part.CHEST, Rules.Species.MAMMAL)
+	r.army.loadout.fit(0, 0)
+	t.ok(r.enter_node(0), "0번 칸을 밟는다 (자가 점검)")
+	r.finish_island(true)
+	_take_two_and_close_refit(r)
+	t.ok(r.enter_node(2), "부리 칸을 밟는다 (자가 점검)")
+	r.finish_island(true)
+	t.eq(r.state(), Run.State.REWARD, "보상 화면이 열렸다 (자가 점검)")
+
+	var a := r.army
+	t.ok(not is_equal_approx(a.max_hp_of(0), Rules.hp_of(int(a.type_id[0]))),
+		"0번 슬롯 병사의 만피가 종류 기본값과 실제로 다르다 (자가 점검 — 가슴을 낀 판이 낀 슬롯이다)")
+
+	var spy := PanelSpy.new()
+	t.root.add_child(spy)
+	spy.bind(r, null)
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	t.ok(spy.entries.size() > 0, "명단 항목을 그렸다 (자가 점검)")
+
+	# ⚠⚠ Only slot 0's bodies can tell the two denominators apart — slot 1's board is untouched, so
+	# `max_hp_of` and `Rules.hp_of` AGREE there and a text match on THAT row is neutral: it would read
+	# the same whether `_entry_text` used `a.max_hp_of(i)` or the mutation's `Rules.hp_of(t)`.
+	# Comparing every row against a "wrong" text and counting matches (the first draft of this check)
+	# flags those neutral rows as false positives regardless of which function `panel_view.gd` calls —
+	# it measures nothing on rows that cannot differ. This compares each DIVERGING row against the
+	# CORRECT text instead, which only reads as green when `_entry_text` actually used `max_hp_of`.
+	var checked := 0
+	var bad := 0
+	for e in spy.entries.size():
+		# Nobody has died yet, so living-id order is 0..N-1 and the entry index IS the soldier id.
+		var i := e
+		var t_id := int(a.type_id[i])
+		if is_equal_approx(a.max_hp_of(i), Rules.hp_of(t_id)):
+			continue
+		checked += 1
+		var text := str(spy.entries[e]["text"])
+		var want_text := "%d  %s  %.0f/%.0f" % [i, HudView.type_label(t_id), a.hp[i], a.max_hp_of(i)]
+		if text != want_text:
+			bad += 1
+	t.ok(checked > 0, "실제로 갈리는 줄이 적어도 하나 있다 (자가 점검) — 0번 슬롯 병사들이다")
+	t.eq(bad, 0,
+		"그 줄들이 army.max_hp_of 가 내놓는 그 숫자를 그대로 찍는다 — 종류 기본값이 아니다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
 
 
 func _every_lose_reason_reads_differently(t) -> void:

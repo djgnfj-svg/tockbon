@@ -83,9 +83,15 @@ var _stat_tracked_slot := -1
 var _filled_part := -1
 var _filled_age := 0.0
 
+## The screen's own age, since `bind` — `map_view._reveal_age`'s and `reward_view._reveal_age`'s own
+## shape, reused for the scene wash below. This screen has no reveal stagger of its own to piggyback
+## on the way the reward screen's card fade does, so this is the only clock driving it.
+var _reveal_age := 0.0
+
 
 func bind(r: Run) -> void:
 	run = r
+	_reveal_age = 0.0
 	_open_slot = -1
 	_hover_slot = -1
 	_hover_age = 0.0
@@ -293,6 +299,7 @@ func _press_of(v: float) -> float:
 
 
 func _fx_step(delta: float) -> void:
+	_reveal_age += delta
 	if _hover_slot >= 0:
 		_hover_age += delta
 	if _press_slot >= 0:
@@ -360,18 +367,30 @@ func _draw() -> void:
 
 	# The strip is drawn on BOTH steps and the boxes do not move — the open one stays legible even
 	# once the board covers the rest of the screen.
+	#
+	# ⚠ **`lit` is "not dimmed", not "is the open one".** Before any slot is opened both boxes ARE
+	# pressable — pressing either one opens it — so `Look.dimmed` (the SAME tone the title screen
+	# uses for a slot that CANNOT be pressed at all) painted on both would say the opposite of what
+	# is true. Once one is open, the OTHER dims to say "you are looking at slot N, not this one" —
+	# still pressable, just not the one on screen — never "locked".
 	for s in Rules.summon_slot_count():
-		var lit := s == _open_slot
+		var lit := s == _open_slot or _open_slot < 0
 		var fill := Look.COL_BUTTON if lit else Look.dimmed(Look.COL_BUTTON)
 		fill.a = Look.PRESS_ALPHA_ON if lit else Look.PRESS_ALPHA_OFF
-		var edge_w := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX,
-			_hover_of(_hover_age, _hover_slot, s))
+		var hover_k := _hover_of(_hover_age, _hover_slot, s)
+		fill = Look.hover_lit(fill, hover_k)
+		var edge_w := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX, hover_k)
 		_paint_slot_box(slot_rect_of(s), fill, Look.COL_HUD_TEXT, edge_w)
 		_paint_slot_label(face, slot_rect_of(s).position + Look.CARD_PART_OFFSET_PX,
 			"슬롯 %d" % (s + 1), Look.REFIT_CELL_PART_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
 	if is_board_open():
 		_draw_board(face)
+	else:
+		# The one line of text on this screen while nothing is open yet — without it, this is the
+		# only screen the player stands on where everything pressable is unlabelled.
+		_paint_hint(face, Look.REFIT_HINT_POS_PX, "슬롯을 눌러 부위를 낍니다",
+			Look.REFIT_HINT_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
 	var done_label := "완료"
 	var done_col := Look.press_dipped(Look.hover_lit(Look.COL_START, 1.0 if _hover_done else 0.0),
@@ -383,6 +402,13 @@ func _draw() -> void:
 		_paint_button(face, back_rect(), Look.COL_BUTTON, "뒤로",
 			back_rect().position + Vector2(70.0, 50.0), Look.REFIT_STAT_LABEL_FONT_SIZE_PX,
 			Look.COL_HUD_TEXT)
+
+	# The scene wash, last and over everything — `map_view`'s own shape. Without it this screen has
+	# no arrival at all: two captures 0.4s apart used to be byte-identical, a hard cut with nothing on
+	# screen saying the screen had just changed.
+	var wash := clampf(1.0 - _reveal_age / Look.SCENE_FADE_SEC, 0.0, 1.0)
+	if wash > 0.0:
+		_paint_fade(Rect2(Vector2.ZERO, Look.viewport_size_px()), Look.scene_fade_colour(wash))
 
 
 ## The cell's own fill colour — item 5's flash, folded into the same channel the filled/empty story
@@ -406,9 +432,9 @@ func _draw_board(face: Font) -> void:
 	for p in Rules.part_count():
 		var species := loadout.fitted_species(_open_slot, p)
 		var filled := species >= 0
-		var fill := _cell_fill(p, filled)
-		var edge_w := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX,
-			_hover_of(_hover_cell_age, _hover_cell, p))
+		var hover_k := _hover_of(_hover_cell_age, _hover_cell, p)
+		var fill := Look.hover_lit(_cell_fill(p, filled), hover_k)
+		var edge_w := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX, hover_k)
 		var box := cell_rect_of(p)
 		var scale := lerpf(1.0, Look.PRESS_DOWN_SCALE, _press_of(_press_cell_age) if _press_cell == p else 0.0)
 		var inner := Rect2(box.position + box.size * (1.0 - scale) * 0.5, box.size * scale)
@@ -425,9 +451,9 @@ func _draw_board(face: Font) -> void:
 		var part := int(loadout.held_part[row])
 		var species := int(loadout.held_species[row])
 		var rect := held_rect_of(row)
-		var edge_w := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX,
-			_hover_of(_hover_held_age, _hover_held, row))
-		_paint_held_row(rect, Look.COL_BUTTON, Look.COL_HUD_TEXT, edge_w)
+		var hover_k := _hover_of(_hover_held_age, _hover_held, row)
+		var edge_w := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX, hover_k)
+		_paint_held_row(rect, Look.hover_lit(Look.COL_BUTTON, hover_k), Look.COL_HUD_TEXT, edge_w)
 		_paint_held_part(face, rect.position + Vector2(8.0, 22.0), str(PART_LABELS[part]),
 			Look.REFIT_CELL_SPECIES_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 		_paint_held_species(face, rect.position + Vector2(8.0, 42.0), str(SPECIES_LABELS[species]),
@@ -510,6 +536,14 @@ func _paint_button(face: Font, rect: Rect2, bg: Color, text: String, at: Vector2
 		col: Color) -> void:
 	draw_rect(rect, bg, true)
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
+
+
+func _paint_hint(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
+
+
+func _paint_fade(rect: Rect2, col: Color) -> void:
+	draw_rect(rect, col, true)
 
 
 ## 0 draws — geometry built for `_paint_body`, the `_spark_points` precedent.

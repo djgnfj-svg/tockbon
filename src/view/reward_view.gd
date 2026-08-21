@@ -227,6 +227,13 @@ func _draw() -> void:
 	var hint := "%d / %d 골랐습니다" % [_picks_made(), Rules.CARD_PICKS]
 	_paint_hint(face, Look.CARD_HINT_POS_PX, hint, Look.CARD_HINT_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
+	# The scene wash, last and over everything — `map_view`'s own shape, reused rather than a second
+	# fade invented for this screen. Without it the reward screen is a hard cut with no arrival of its
+	# own; the card stagger covers the CARDS, this covers the SCREEN they sit on.
+	var wash := clampf(1.0 - _reveal_age / Look.SCENE_FADE_SEC, 0.0, 1.0)
+	if wash > 0.0:
+		_paint_fade(Rect2(Vector2.ZERO, Look.viewport_size_px()), Look.scene_fade_colour(wash))
+
 
 # --- hooks. Each one's draw_* count is pinned by net_draw_leaf's `_table()`, and every parameter is
 # used in the body: a leaf that quietly drops one of its arguments is invisible on screen and green in
@@ -251,3 +258,7 @@ func _paint_taken_mark(centre: Vector2, radius: float, col: Color) -> void:
 
 func _paint_hint(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
+
+
+func _paint_fade(rect: Rect2, col: Color) -> void:
+	draw_rect(rect, col, true)

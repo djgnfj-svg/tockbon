@@ -40,6 +40,12 @@ func _the_board_survives_the_body(t) -> void:
 	var next_id := a.recruit(0)
 	t.eq(a.max_hp_of(next_id), fitted_hp,
 		"그리고 다음에 그 슬롯에서 나온 병사가 끼워진 숫자를 그대로 읽는다")
+	# ⚠⚠ 「그 병사는 그 숫자에서 태어난다」 — `max_hp_of` 자체가 아니라 `recruit`가 실제로 WRITE 한
+	# `hp[next_id]`. Mutation: `army.gd`의 `hp[id] = max_hp_of(id)` -> `hp[id] = Rules.hp_of(t)` —
+	# 위 줄만으로는 못 잡는다: `max_hp_of`는 여전히 올바른 값을 답하고, `hp[next_id]`만 기본값에서
+	# 태어나 영원히 「다쳤다」로 읽힌다.
+	t.eq(a.hp[next_id], fitted_hp,
+		"그리고 실제로 그 숫자로 태어났다 — recruit 가 WRITE 한 hp[next_id] 자체를 잰다")
 
 
 ## ⚠ 「모든 명부 줄에 슬롯이 적혀 있다」. Mutation: `slot_id.append(slot)` -> `slot_id.append(-1)`.
@@ -93,36 +99,76 @@ func _the_beak_still_adds_to_range(t) -> void:
 	t.eq(a.range_of(id), with_head + Rules.BEAK_RANGE, "부리도 그 위에 그대로 얹힌다")
 
 
-## 「전투가 병사 숫자를 Army 에서 읽는다」 — a fitted board moves the DPS a `Battle` produces; the enemy's
-## own numbers do not move with it. Mutation: `battle.gd`'s soldier attack reading `Rules.damage_of(st)`
-## / `Rules.period_of(st)` instead of `army.damage_of(i)` / `army.period_of(i)`.
+## ⚠⚠ 「전투가 병사 숫자를 Army 에서 읽는다」 — driven THROUGH `battle.step`, never by calling an
+## `Army` accessor and comparing it against itself (`plain.army.damage_of(0) / plain.army.period_of(0)`
+## asserts `Army.damage_of != Army.damage_of` and proves nothing about `battle.gd` — the shape this row
+## used to be). A melee soldier stands one tile from a stationary bison; `Battle.setup` zeroes both
+## cooldowns, and `REACH_BONUS` (1.5) clears the one-tile gap even at base range 0.0, so ONE sub-step
+## lands exactly one blow each way — the same fixture shape `net_battle._no_friendly_fire` already
+## drives for the identical reason. Three lookups, three rows, matching the plan's three named
+## mutations inside `battle.gd`'s soldier attack branch.
 func _battle_reads_the_army(t) -> void:
-	var plain := _one_soldier_battle(false)
-	var armed := _one_soldier_battle(true)
-	var plain_dps := plain.army.damage_of(0) / plain.army.period_of(0)
-	var armed_dps := armed.army.damage_of(0) / armed.army.period_of(0)
-	t.ok(armed_dps > plain_dps,
-		"팔을 낀 군대의 초당 피해가 더 크다 (%.2f > %.2f) — 전투가 Army 에서 숫자를 읽는다"
-			% [armed_dps, plain_dps])
+	# -- army.damage_of(i): a fitted 팔 moves the FIRST blow the sub-step actually threw ------------
+	var plain := _adjacent_bison_battle(-1)
+	var armed := _adjacent_bison_battle(Rules.Part.ARM)
+	var plain_hit := Rules.hp_of(Rules.BISON) - plain.enemy_hp[0]
+	var armed_hit := Rules.hp_of(Rules.BISON) - armed.enemy_hp[0]
+	t.eq(plain_hit, Rules.damage_of(Rules.CELL_MELEE), "빈 판 병사는 종류값 그대로 때린다 (자가 점검)")
+	t.ok(armed_hit > plain_hit,
+		"팔을 낀 병사가 첫 타격에서 더 큰 피해를 준다 (%.1f > %.1f) — battle.step 이 army.damage_of 를 읽는다"
+			% [armed_hit, plain_hit])
+	t.eq(armed_hit, plain_hit + Rules.part_bonus(Rules.Part.ARM, Rules.PART_COL_DAMAGE),
+		"차이가 정확히 팔 부위의 공격력 보너스다")
 	# The enemy's own hp/type never moved — a fitted board must not leak onto the other side.
-	t.eq(plain.enemy_hp[0], armed.enemy_hp[0], "적 체력은 양쪽 다 같은 값에서 시작한다")
+	t.eq(plain.enemy_type[0], armed.enemy_type[0], "적 종류는 양쪽 다 같다 (자가 점검)")
+
+	# -- army.period_of(i): a fitted 손 moves the cooldown `step` actually WROTE after that blow ----
+	var handed := _adjacent_bison_battle(Rules.Part.HAND)
+	t.ok(is_equal_approx(plain._soldier_cd[0], Rules.period_of(Rules.CELL_MELEE)),
+		"빈 판 병사의 쿨타임은 종류값 그대로 다시 찬다 (자가 점검)")
+	t.ok(handed._soldier_cd[0] < plain._soldier_cd[0],
+		"손을 낀 병사는 더 짧은 쿨타임으로 다시 찬다 (%.3f < %.3f) — battle.step 이 army.period_of 를 읽는다"
+			% [handed._soldier_cd[0], plain._soldier_cd[0]])
+	t.ok(is_equal_approx(handed._soldier_cd[0], handed.army.period_of(0)),
+		"그 쿨타임이 정확히 army.period_of(0) 이다")
+
+	# -- army.speed_of(i): a fitted 다리 moves how far a soldier OUT of reach walks in one sub-step --
+	var plain_walk := _walk_probe(-1)
+	var leg_walk := _walk_probe(Rules.Part.LEG)
+	var plain_moved := _WALK_START.distance_to(plain_walk.soldier_pos[0])
+	var leg_moved := _WALK_START.distance_to(leg_walk.soldier_pos[0])
+	t.ok(plain_moved <= Rules.speed_of(Rules.CELL_MELEE) * Rules.SIM_SUBSTEP_SEC + Rules.EPS,
+		"빈 판 병사는 종류값 그대로의 속도로, 딱 한 서브스텝만큼만 걸었다 (자가 점검)")
+	t.ok(leg_moved > plain_moved,
+		"다리를 낀 병사가 한 서브스텝에 더 멀리 걷는다 (%.4f > %.4f) — battle.step 이 army.speed_of 를 읽는다"
+			% [leg_moved, plain_moved])
+	t.ok(leg_moved <= leg_walk.army.speed_of(0) * Rules.SIM_SUBSTEP_SEC + Rules.EPS,
+		"그리고 그 거리가 army.speed_of(0) 을 넘지 않는다 — 딱 한 서브스텝만큼만 걸었다")
 
 
-## ⚠ 「적 숫자는 종류에서 그대로 읽는다」 — the opposite direction: a fitted board moves NOTHING about
-## the enemies. Mutation: `Rules.damage_of(et)` -> `army.damage_of(e)` inside the enemy attack branch.
+## ⚠ 「적 숫자는 종류에서 그대로 읽는다」 — the opposite direction: a fitted PLAYER board must move
+## NOTHING about what an enemy blow takes off a soldier. Driven through `battle.step`, comparing an
+## unfitted army against one with 팔 fitted (which raises the PLAYER's own damage and nothing else) —
+## if the enemy's damage read `army.loadout.bonus(0, PART_COL_DAMAGE)` by mistake, the armed soldier
+## would take MORE from an identical enemy than the plain one does. **Two branches**, because the
+## mutation this row guards against has two homes in `battle.gd`'s enemy attack code: the instant-hit
+## path (any enemy without a wind-up — driven here with the bison) and the wind-up-complete path
+## (driven here with the lion, the only type that carries one).
 func _enemies_stay_type_keyed(t) -> void:
-	var a := Army.new()
-	a.recruit(0)
-	a.loadout.take_card(Rules.Part.ARM, Rules.Species.MAMMAL)
-	a.loadout.fit(0, 0)
-	# The enemy attack path only ever reads `Rules.*_of(enemy_type[e])`, which a fitted PLAYER board
-	# cannot reach — asserted structurally: fitting a card never moves the TABLE `Rules.damage_of` reads.
-	var before := Rules.damage_of(Rules.BISON)
-	t.eq(Rules.damage_of(Rules.BISON), before, "적 종류(들소)의 공격력은 플레이어 판을 끼워도 그대로다")
-	var b := _one_soldier_battle(true)
-	t.eq(b.enemy_hp.size(), 1, "적 하나로 전투를 짰다 (자가 점검)")
-	var e_dmg_before := Rules.damage_of(int(b.enemy_type[0]))
-	t.eq(e_dmg_before, Rules.damage_of(Rules.BISON), "판이 끼워진 전투 안에서도 적 공격력은 종류 표 그대로다")
+	var plain := _adjacent_bison_battle(-1)
+	var armed := _adjacent_bison_battle(Rules.Part.ARM)
+	t.eq(plain.army.hp[0], Rules.hp_of(Rules.CELL_MELEE) - Rules.damage_of(Rules.BISON),
+		"안 낀 병사는 들소의 종류값 그대로 맞는다 (자가 점검 — 즉시 타격 갈래)")
+	t.eq(armed.army.hp[0], plain.army.hp[0],
+		"팔을 낀 판이어도 들소가 주는 피해는 그대로다 — 적은 플레이어 판을 안 읽는다 (즉시 타격 갈래)")
+
+	var plain_lion := _adjacent_lion_battle(-1)
+	var armed_lion := _adjacent_lion_battle(Rules.Part.ARM)
+	t.ok(plain_lion.army.hp[0] < Rules.hp_of(Rules.CELL_MELEE), "예고가 끝나자 사자가 실제로 때렸다 (자가 점검)")
+	t.eq(plain_lion.army.hp[0], Rules.hp_of(Rules.CELL_MELEE) - Rules.damage_of(Rules.LION),
+		"안 낀 병사는 사자의 종류값 그대로 맞는다 (자가 점검 — 예고 갈래)")
+	t.eq(armed_lion.army.hp[0], plain_lion.army.hp[0],
+		"팔을 낀 판이어도 사자가 주는 피해는 그대로다 — 적은 플레이어 판을 안 읽는다 (예고 갈래)")
 
 
 ## 「슬롯 예비 병력은 슬롯으로 걸러진다」. Mutation: `army.slot_id[i] == slot` -> `army.type_id[i] == want`.
@@ -145,16 +191,92 @@ func _slot_reserves_are_filtered_by_slot(t) -> void:
 	t.eq(slot1, [id1], "슬롯 1의 예비 명단은 타입이 근접이어도 슬롯 1로 라벨된 몸을 담는다")
 
 
-func _one_soldier_battle(fit_arm: bool) -> Battle:
+## A hand-built open arena — never the real islands, the same reasoning `net_battle`'s own header
+## gives: a fixture that moves when someone edits an island measures the island, not the rule.
+const _ARENA_W := 20
+const _ARENA_H := 10
+
+func _open_arena() -> Array:
+	var rows := []
+	for y in _ARENA_H:
+		if y == 0 or y == _ARENA_H - 1:
+			rows.append("~".repeat(_ARENA_W))
+		else:
+			rows.append("~" + ".".repeat(_ARENA_W - 2) + "~")
+	return rows
+
+
+## Puts a soldier on the island the way a landing would — state, position AND goal, plus the tile
+## reservation `battle` writes on unload. `net_battle._ashore`'s own shape.
+func _ashore_at(b: Battle, i: int, p: Vector2) -> void:
+	b.soldier_state[i] = Battle.SoldierState.ASHORE
+	b.soldier_pos[i] = p
+	b._soldier_goal[i] = p
+	var claimed := b.grid.reserved
+	claimed[_tile_key(p, b.grid.w)] = i
+	b.grid.reserved = claimed
+
+
+func _tile_key(p: Vector2, w: int) -> int:
+	return int(round(p.y)) * w + int(round(p.x))
+
+
+## One melee soldier one tile from a stationary bison, `part` (a `Rules.Part`, or -1 for none) fitted
+## into slot 0's board, driven exactly one sub-step through the real `battle.step`.
+func _adjacent_bison_battle(part: int) -> Battle:
+	var b := _adjacent_battle(part, Rules.BISON)
+	b.begin_frame()
+	b.step(Rules.SIM_SUBSTEP_SEC)
+	return b
+
+
+## The same fixture with a lion — which announces before it strikes — driven until its wind-up ends
+## and the blow actually lands. `net_battle`'s own "wait the wind-up out" shape: nobody here walks
+## while it runs, so the 1-tile gap the fixture was built at is still the one the blow lands at.
+func _adjacent_lion_battle(part: int) -> Battle:
+	var b := _adjacent_battle(part, Rules.LION)
+	var whole := Rules.hp_of(Rules.CELL_MELEE)
+	for _f in 40:
+		b.begin_frame()
+		b.step(0.05)
+		if b.army.hp[0] < whole:
+			break
+	return b
+
+
+func _adjacent_battle(part: int, enemy_type: int) -> Battle:
 	var a := Army.new()
 	a.recruit(0)
-	if fit_arm:
-		a.loadout.take_card(Rules.Part.ARM, Rules.Species.MAMMAL)
+	if part >= 0:
+		a.loadout.take_card(part, Rules.Species.MAMMAL)
 		a.loadout.fit(0, 0)
 	var grid := Grid.new()
-	grid.load_rows(Islands.rows_of(0))
+	grid.load_rows(_open_arena())
 	var b := Battle.new()
-	b.setup(grid, a, [{"type_id": Rules.BISON, "tile": 0}], 10.0)
+	b.setup(grid, a, [{"type_id": enemy_type, "tile": _tile_key(Vector2(10, 5), _ARENA_W)}], 999.0)
+	b._committed = true
+	_ashore_at(b, 0, Vector2(9, 5))
+	return b
+
+
+## The soldier starts far enough from the (stationary, harmless-at-this-range) enemy that one
+## sub-step is pure movement — no attack can land on either side yet.
+const _WALK_START := Vector2(2.0, 5.0)
+
+func _walk_probe(part: int) -> Battle:
+	var a := Army.new()
+	a.recruit(0)
+	if part >= 0:
+		a.loadout.take_card(part, Rules.Species.MAMMAL)
+		a.loadout.fit(0, 0)
+	var grid := Grid.new()
+	grid.load_rows(_open_arena())
+	var b := Battle.new()
+	b.setup(grid, a, [{"type_id": Rules.BISON, "tile": _tile_key(Vector2(18, 5), _ARENA_W)}], 999.0)
+	b._committed = true
+	_ashore_at(b, 0, _WALK_START)
+	b.begin_frame()
+	b.step(Rules.SIM_SUBSTEP_SEC)
 	return b
 
 

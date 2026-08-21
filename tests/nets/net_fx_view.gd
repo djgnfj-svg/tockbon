@@ -175,6 +175,8 @@ func run(t) -> void:
 	await _destination_marker_both_legs(t)
 	await _contact(t)
 	await _tracer(t)
+	await _a_fitted_head_switches_lunge_to_tracer(t)
+	await _the_hp_bar_reads_max_hp_of(t)
 	await _the_reaction_waits_for_the_bullet(t)
 	await _spark_over_body_under_burst(t)
 	await _target_lines(t)
@@ -1024,6 +1026,61 @@ func _tracer(t) -> void:
 	t.eq(fv.shots.size(), 0, "SHOT_SEC 이 지나면 예광선 호출이 0이다")
 	t.ok(_num(_at(_rings_of(fv, Look.body_colour_of(true)), 0), "radius") > was + 1.0,
 			"그 사이 파열은 계속 커졌다")
+	_drop(t, fv)
+
+
+## ⚠⚠ A melee body wearing a fitted 머리 part attacks from range now, and the picture has to say so.
+## `_phase_attacks` still throws through `army.damage_of`/`army.period_of`, unrelated to which visual
+## fires — the branch this row pins is field_view's own `if Rules.range_of(atk_type) > 0.0`, which
+## reads the TYPE's base range and would play the melee lunge on a body that just became ranged.
+## Mutation: `army.range_of(from_id) if not from_enemy else Rules.range_of(atk_type)` back to the bare
+## `Rules.range_of(atk_type)` — a 근접 type's base range is 0.0, so this soldier would fire zero shots
+## and lunge instead.
+func _a_fitted_head_switches_lunge_to_tracer(t) -> void:
+	var army := _army_of([Rules.CELL_MELEE])
+	army.loadout.take_card(Rules.Part.HEAD, Rules.Species.BIRD)
+	army.loadout.fit(0, 0)
+	t.ok(army.range_of(0) > 0.0, "머리를 낀 근접 병사의 사거리가 0보다 크다 (자가 점검)")
+	var b := _battle_of(_open(), army, [_spawn(Rules.BISON, 9, 5)], 999.0)
+	_ashore(b, 0, Vector2(8, 5))
+	var fv := _view_of(t, b, army)
+
+	await _frame(t, b, fv, TICK_ONE, 0.001)
+	t.eq(b.soldier_target[0], 0, "병사가 적을 표적 삼았다 (자가 점검)")
+	t.eq(fv.shots.size(), 1, "머리를 낀 근접 병사도 예광선을 쐈다 — 근접 몸통 돌진이 아니다")
+	_drop(t, fv)
+
+
+## ⚠⚠ item 4's field half: the HP bar's fill width reads `Army.max_hp_of`, never `Rules.hp_of(type)`
+## — MUTATION CONFIRMED GREEN by the plan's own audit before this row existed, on both draw sites
+## (`field_view.gd`'s soldier bar, drawn once ashore and once in transit; only the ashore one needs a
+## fixture here, the two share one formula). A fitted 가슴 raises a slot's max without moving a body's
+## CURRENT hp (this round's own recorded default for question C's answer), so a body that slot fields
+## reads LESS than full — the one state where the two denominators disagree. At an untouched max the
+## two are the same number and the bug is invisible, which is exactly how it shipped unmeasured.
+func _the_hp_bar_reads_max_hp_of(t) -> void:
+	var army := _army_of([Rules.CELL_MELEE])
+	army.loadout.take_card(Rules.Part.CHEST, Rules.Species.MAMMAL)
+	army.loadout.fit(0, 0)
+	t.ok(army.max_hp_of(0) > Rules.hp_of(Rules.CELL_MELEE),
+		"가슴을 낀 슬롯의 만피가 종류 기본값보다 크다 (자가 점검)")
+	t.ok(army.hp[0] < army.max_hp_of(0),
+		"현재 체력은 그 만피보다 낮다 (자가 점검 — 낄 때 현재 체력은 안 오른다는 이 라운드의 기본값)")
+
+	var b := _battle_of(_open(), army, [], 999.0)
+	_ashore(b, 0, Vector2(5, 5))
+	var fv := _view_of(t, b, army)
+	await _frame(t, b, fv, TICK_ONE, 0.001)
+
+	t.eq(fv.hps.size(), 1, "HP 막대를 하나 그렸다 (자가 점검)")
+	var bar := _at(fv.hps, 0)
+	var back: Rect2 = _rect(bar, "back")
+	var fill: Rect2 = _rect(bar, "fill")
+	var ratio := fill.size.x / back.size.x
+	t.ok(ratio < 0.99,
+		"막대가 다 안 찼다 (%.3f) — 분모가 army.max_hp_of 라면 14/18 이지 14/14(다 참)가 아니다" % ratio)
+	t.ok(is_equal_approx(ratio, army.hp[0] / army.max_hp_of(0)),
+		"그 비율이 정확히 army.hp[0] / army.max_hp_of(0) 다")
 	_drop(t, fv)
 
 

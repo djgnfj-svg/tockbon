@@ -322,6 +322,9 @@ func _table() -> Dictionary:
 			"_paint_card_species": 1,
 			"_paint_taken_mark": 1,
 			"_paint_hint": 1,
+			# The scene wash, `map_view`'s own shape reused rather than a second fade invented for
+			# this screen — see that file's own comment beside its `_paint_fade` entry.
+			"_paint_fade": 1,
 		},
 		# `refit-board` stage 5's new screen: the slot strip, then a 3x2 board, a held pile, a
 		# five-number dashboard and a body preview. `_rounded_square` is 0 draws and NOT a leaf --
@@ -376,6 +379,11 @@ func _table() -> Dictionary:
 			"_paint_body": 2,
 			"_paint_button": 2,
 			"_rounded_square": 0,
+			# The scene wash — this screen had no reveal of its own to piggyback on until now, so
+			# `_reveal_age` was added purely to drive this one call.
+			"_paint_fade": 1,
+			# Step one's hint — the only screen with a pressable strip and no line saying so.
+			"_paint_hint": 1,
 		},
 	}
 
@@ -447,8 +455,16 @@ func run(t) -> void:
 	# `refit_view` (43 -> 46), all three pure, and the card reveal stagger added `_reveal_alpha_of` to
 	# `reward_view` (21 -> 22), also pure. The total is re-derived by hand from the seven tables, not
 	# nudged by four.
-	t.eq(total_funcs, 197, "일곱 파일의 함수는 모두 197개다 (43 + 18 + 21 + 18 + 29 + 22 + 46)")
-	t.eq(total_leaves, 50, "그중 draw 를 실제로 부르는 잎은 50개다 (12 + 6 + 4 + 4 + 7 + 5 + 12)")
+	# ⚠ **Neither new screen had a scene wash — the verify-run pass on this round measured two
+	# captures 0.4s apart byte-identical on the refit screen.** Both got `map_view`'s own
+	# `_paint_fade` shape: `reward_view` added the leaf alone (22 -> 23, 5 -> 6 leaves), riding its
+	# existing `_reveal_age`; `refit_view` had no reveal clock of its own to piggyback on, so
+	# `_reveal_age` (a var, not a function — does not move this table) and `_paint_fade` both landed
+	# there (46 -> 47, 12 -> 13 leaves). The same pass found the refit screen's step one had a
+	# pressable strip and no line of text saying so — `_paint_hint` added the same round (47 -> 48,
+	# 13 -> 14 leaves), the reward screen's own `_paint_hint` shape.
+	t.eq(total_funcs, 200, "일곱 파일의 함수는 모두 200개다 (43 + 18 + 21 + 18 + 29 + 23 + 48)")
+	t.eq(total_leaves, 53, "그중 draw 를 실제로 부르는 잎은 53개다 (12 + 6 + 4 + 4 + 7 + 6 + 14)")
 
 	# -- 3b. the array leaves hand their array WHOLE to one native call -----------------------------
 	# ⚠⚠ **THIS SECTION EXISTS BECAUSE THE COUNT ABOVE CANNOT SEE THE DIFFERENCE, AND THAT WAS
