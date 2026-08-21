@@ -309,6 +309,7 @@ func _table() -> Dictionary:
 			"_hover_of": 0,
 			"_press_of": 0,
 			"_taken_of": 0,
+			"_reveal_alpha_of": 0,
 			"_card_box": 0,
 			"_card_fill": 0,
 			"_fx_step": 0,
@@ -351,8 +352,11 @@ func _table() -> Dictionary:
 			"note_cell_press": 0,
 			"note_held_press": 0,
 			"note_done_press": 0,
+			"note_fitted": 0,
 			"_hover_of": 0,
 			"_press_of": 0,
+			"_stat_shown": 0,
+			"_cell_fill": 0,
 			"_fx_step": 0,
 			"_process": 0,
 			"_draw": 0,
@@ -439,7 +443,11 @@ func run(t) -> void:
 	# Round 2 of `sea-summon` added `_chip_tint` to `hud_view` (17 -> 18) — the tint half of item 8,
 	# which had been written inline in `_chip_colour` and so reached the start button alone while
 	# `_chip_offset` already served both. Pure, so the leaf count does not move.
-	t.eq(total_funcs, 193, "일곱 파일의 함수는 모두 193개다 (43 + 18 + 21 + 18 + 29 + 21 + 43)")
+	# `refit-board` stage 7's climb and flash added `_stat_shown`, `note_fitted` and `_cell_fill` to
+	# `refit_view` (43 -> 46), all three pure, and the card reveal stagger added `_reveal_alpha_of` to
+	# `reward_view` (21 -> 22), also pure. The total is re-derived by hand from the seven tables, not
+	# nudged by four.
+	t.eq(total_funcs, 197, "일곱 파일의 함수는 모두 197개다 (43 + 18 + 21 + 18 + 29 + 22 + 46)")
 	t.eq(total_leaves, 50, "그중 draw 를 실제로 부르는 잎은 50개다 (12 + 6 + 4 + 4 + 7 + 5 + 12)")
 
 	# -- 3b. the array leaves hand their array WHOLE to one native call -----------------------------

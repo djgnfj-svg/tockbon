@@ -38,6 +38,10 @@ var _press_age := 0.0
 ## first mark's growth. Keyed by card index.
 var _taken_age: Dictionary = {}
 
+## The screen's own age, since `bind`. Drives the card reveal stagger below — `map_view._reveal_age`'s
+## exact shape, reused rather than re-invented: the screen arrived, it was not always there.
+var _reveal_age := 0.0
+
 
 func bind(r: Run) -> void:
 	run = r
@@ -46,7 +50,17 @@ func bind(r: Run) -> void:
 	_press_card = -1
 	_press_age = 0.0
 	_taken_age.clear()
+	_reveal_age = 0.0
 	queue_redraw()
+
+
+## 0..1, how far card `k` has faded in. `k` cards apart, `MAP_REVEAL_STEP_SEC` apart, each taking
+## `MAP_NODE_FADE_SEC` — `map_view._reveal_alpha_of`'s own constants, reused rather than redeclared,
+## for the reason `look.gd`'s own header on that pair gives: the map already answered "how fast does
+## one thing among several fade in" and a second answer here would be the same fact chosen twice.
+func _reveal_alpha_of(k: int) -> float:
+	var start := float(k) * Look.MAP_REVEAL_STEP_SEC
+	return clampf((_reveal_age - start) / Look.MAP_NODE_FADE_SEC, 0.0, 1.0)
 
 
 func card_rect_of(k: int) -> Rect2:
@@ -146,6 +160,7 @@ func _card_fill(k: int) -> Color:
 
 
 func _fx_step(delta: float) -> void:
+	_reveal_age += delta
 	if _hover_card >= 0:
 		_hover_age += delta
 	if _press_card >= 0:
@@ -183,15 +198,25 @@ func _draw() -> void:
 		return
 
 	for k in Rules.CARDS_PER_WIN:
+		# ⚠⚠ **The reveal is the FILL's alpha alone, multiplied in — not a second colour.** The fill
+		# already carries the pressable/taken/hover story on its own alpha; multiplying the reveal
+		# factor on top is "not yet arrived" riding the exact channel "not yet pressable" already
+		# uses, so the two never have to agree on a second rule about what a low alpha means.
+		var reveal := _reveal_alpha_of(k)
 		var box := _card_box(k)
 		var edge_width := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX,
 			_hover_of(k))
-		_paint_card(box, _card_fill(k), edge_width)
+		var fill := _card_fill(k)
+		fill.a *= reveal
+		_paint_card(box, fill, edge_width)
 		var part := int(run.cards[2 * k])
 		var species := int(run.cards[2 * k + 1])
+		var part_col := Look.COL_HUD_TEXT
+		part_col.a *= reveal
 		_paint_card_part(face, box.position + Look.CARD_PART_OFFSET_PX,
-			str(PART_LABELS[part]), Look.CARD_PART_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+			str(PART_LABELS[part]), Look.CARD_PART_FONT_SIZE_PX, part_col)
 		var species_col: Color = Look.COL_SPECIES[species]
+		species_col.a *= reveal
 		_paint_card_species(face, box.position + Look.CARD_SPECIES_OFFSET_PX,
 			str(SPECIES_LABELS[species]), Look.CARD_SPECIES_FONT_SIZE_PX, species_col)
 		if int(run.cards_taken[k]) != 0:

@@ -59,6 +59,7 @@ func run(t) -> void:
 	_the_geometry(t)
 	_the_alpha_channel(t)
 	await _the_leaves_draw_what_they_were_handed(t)
+	await _the_cards_fade_in_staggered(t)
 
 
 ## Wins island 0, at a fixed seed unless `seed` is < 0, and hands back the `Run` sitting in `PICK`.
@@ -327,3 +328,58 @@ func _the_leaves_draw_what_they_were_handed(t) -> void:
 	t.ok(str(fresh_spy.hints[0]["text"]).contains("1"), "한 장을 고르면 안내 글이 1로 바뀐다")
 	t.root.remove_child(fresh_spy)
 	fresh_spy.queue_free()
+
+
+# -- item: the reveal --------------------------------------------------------------------------------
+
+## 「카드 화면이 열리면 카드가 하나씩 나타난다」 — floor: every card starts effectively invisible, not
+## snapped straight to its resting alpha; the stagger: card 0 is already ahead of card 5 mid-reveal;
+## ceiling: every card settles at its full, un-revealed alpha (read off `_card_fill` directly), so the
+## beat never gets stuck dim. `MAP_NODE_FADE_SEC` / `MAP_REVEAL_STEP_SEC` are `map_view`'s own reveal
+## constants, reused rather than redeclared.
+##
+## ⚠⚠ Bounded on BOTH ends on purpose — `combat-juice`'s own header names four beats this repo shipped
+## bounded only above once, and deleting the whole animation stayed green under that shape.
+func _the_cards_fade_in_staggered(t) -> void:
+	var r := _won_run()
+	var spy := RewardSpy.new()
+	t.root.add_child(spy)
+	spy.process_mode = Node.PROCESS_MODE_DISABLED
+	spy.bind(r)
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	var alpha_bad := 0
+	for k in Rules.CARDS_PER_WIN:
+		if (spy.cards[k]["bg"] as Color).a > 0.05:
+			alpha_bad += 1
+	t.eq(alpha_bad, 0, "화면이 열린 첫 프레임에는 카드 여섯이 전부 알파 0에 가깝다 — 튀어나오지 않는다")
+
+	# The stagger: age past card 0's own fade window, nowhere near card 5's start.
+	spy._fx_step(Look.MAP_NODE_FADE_SEC * 0.6)
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	var a0 := (spy.cards[0]["bg"] as Color).a
+	var a5 := (spy.cards[5]["bg"] as Color).a
+	t.ok(a0 > a5,
+		"0번 카드가 5번 카드보다 먼저, 더 진하게 나타났다 (%.2f > %.2f) — 한꺼번에 안 뜬다" % [a0, a5])
+	t.ok(a5 <= 0.05, "5번 카드는 이 시점에 아직 시작도 안 했다 (%.2f)" % a5)
+
+	# The ceiling: age past the LAST card's own fade window entirely.
+	var full := float(Rules.CARDS_PER_WIN - 1) * Look.MAP_REVEAL_STEP_SEC + Look.MAP_NODE_FADE_SEC
+	spy._fx_step(full)
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	var settle_bad := 0
+	for k in Rules.CARDS_PER_WIN:
+		var shown := (spy.cards[k]["bg"] as Color).a
+		var want := spy._card_fill(k).a
+		if not is_equal_approx(shown, want):
+			settle_bad += 1
+	t.eq(settle_bad, 0, "다 나타나면 카드 여섯 다 원래 알파로 정확히 도착한다 — 흐린 채로 안 남는다")
+	t.ok(Look.MAP_NODE_FADE_SEC >= 0.084 and Look.MAP_NODE_FADE_SEC <= 0.40,
+		"카드 한 장의 등장이 다섯 프레임~0.40초다 (%.2f)" % Look.MAP_NODE_FADE_SEC)
+	t.ok(Look.MAP_REVEAL_STEP_SEC >= 0.03 and Look.MAP_REVEAL_STEP_SEC < 0.084,
+		"카드 사이 간격이 0.03초 이상, 다섯 프레임 밑이다 (%.2f) — 간격은 박자가 아니라 사이다" % Look.MAP_REVEAL_STEP_SEC)
+
+	t.root.remove_child(spy)
+	spy.queue_free()

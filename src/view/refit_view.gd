@@ -60,6 +60,29 @@ var _hover_done_age := 0.0
 var _press_done := false
 var _press_done_age := 0.0
 
+## The dashboard's own chase, one triple per `Rules.PART_COL_*` — `map_view`'s `_force_from` /
+## `_force_to` / `_force_age` shape, reused per column instead of once for the pool. ⚠⚠ **Without
+## this, fitting a part and not fitting it look identical on screen** — the number would simply BE the
+## new value, one frame apart from the old one, and nothing on the picture would say a change had just
+## landed. `_stat_tracked_slot` is what tells a NEW SUBJECT (a different slot opened) from a RISE (the
+## same slot's own number moved): the first snaps, only the second climbs.
+## ⚠ **`Array[float]`, never `PackedFloat32Array`.** `Loadout.stat_of` returns a 64-bit `float`, and a
+## packed array of 32-bit floats truncates every value written into it — measured: a period of exactly
+## `0.85` round-trips through `PackedFloat32Array` at a hair off `0.85`, which is enough to flip which
+## side of a `%.1f` rounding boundary it lands on between the value this file computed and the value
+## the dashboard's own test re-derives independently. The five columns never need packing for speed;
+## the loss bought nothing and cost the one thing this file exists to get right.
+var _stat_from: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
+var _stat_to: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
+var _stat_age: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
+var _stat_tracked_slot := -1
+
+## The cell a part just landed in, or -1 — the shell's own `note_press` shape, called from
+## `game.gd`'s `_refit_input` on an ACCEPTED fit and nowhere else. Keyed by part, not by slot: the
+## board showing is already the open slot's own, so one index is enough.
+var _filled_part := -1
+var _filled_age := 0.0
+
 
 func bind(r: Run) -> void:
 	run = r
@@ -80,7 +103,18 @@ func bind(r: Run) -> void:
 	_hover_done_age = 0.0
 	_press_done = false
 	_press_done_age = 0.0
+	_stat_tracked_slot = -1
+	_filled_part = -1
+	_filled_age = 0.0
 	queue_redraw()
+
+
+## Called by `game.gd`'s `_refit_input`, and only on a fit that actually landed — a refused press
+## (an empty held row, an out-of-range slot) must never start this beat, or a cell that did nothing
+## would flash exactly like one that did.
+func note_fitted(part: int) -> void:
+	_filled_part = part
+	_filled_age = 0.0
 
 
 func open_slot(s: int) -> void:
@@ -90,6 +124,21 @@ func open_slot(s: int) -> void:
 		_open_slot = s
 	_hover_cell = -1
 	_hover_held = -1
+	# Switching slots (or closing the board) leaves any in-flight flash behind — it belongs to a cell
+	# on the board that just left the screen, not to whatever opens next.
+	_filled_part = -1
+	_filled_age = 0.0
+	# A newly opened slot's numbers arrive already settled — there is nothing to have climbed FROM.
+	# `_stat_shown` below reads `_stat_age >= MAP_HEAL_SEC` as "arrived", so this is the one place both
+	# ends of the triple are set equal and the age is pinned at the ceiling.
+	if _open_slot >= 0 and _open_slot != _stat_tracked_slot and run != null:
+		_stat_tracked_slot = _open_slot
+		var loadout := run.army.loadout
+		for col in Rules.PART_COL_TOTAL:
+			var v := loadout.stat_of(_open_slot, col)
+			_stat_from[col] = v
+			_stat_to[col] = v
+			_stat_age[col] = Look.MAP_HEAL_SEC
 
 
 func is_board_open() -> bool:
@@ -268,6 +317,31 @@ func _fx_step(delta: float) -> void:
 		_press_done_age += delta
 		if _press_done_age >= Look.PRESS_DOWN_SEC:
 			_press_done = false
+	if _filled_part >= 0:
+		_filled_age = minf(_filled_age + delta, Look.REFIT_CELL_FILL_SEC)
+	# The dashboard chase. Read at whatever point a fit or an unfit actually landed — never re-derived
+	# from `_open_slot` alone — so a column that did not move keeps its own `_stat_to` and reads back
+	# byte-identical, and a column that did starts its climb from where the picture ALREADY was, not
+	# from the value it was chasing before (a second fit mid-climb does not restart at the first fit's
+	# own start).
+	if _open_slot >= 0 and run != null:
+		var loadout := run.army.loadout
+		for col in Rules.PART_COL_TOTAL:
+			_stat_age[col] = minf(_stat_age[col] + delta, Look.MAP_HEAL_SEC)
+			var live := loadout.stat_of(_open_slot, col)
+			if not is_equal_approx(live, _stat_to[col]):
+				_stat_from[col] = _stat_shown(col)
+				_stat_to[col] = live
+				_stat_age[col] = 0.0
+
+
+## 0..1 chase read back as the actual number, column by column -- `map_view`'s own `lerpf` line,
+## reused. `_stat_age >= MAP_HEAL_SEC` answers "arrived" so a column that never moved (age pinned at
+## the ceiling by `open_slot`) returns `_stat_to` exactly rather than a lerp that happens to land there.
+func _stat_shown(col: int) -> float:
+	if _stat_age[col] >= Look.MAP_HEAL_SEC:
+		return _stat_to[col]
+	return lerpf(_stat_from[col], _stat_to[col], clampf(_stat_age[col] / Look.MAP_HEAL_SEC, 0.0, 1.0))
 
 
 func _process(delta: float) -> void:
@@ -311,13 +385,28 @@ func _draw() -> void:
 			Look.COL_HUD_TEXT)
 
 
+## The cell's own fill colour — item 5's flash, folded into the same channel the filled/empty story
+## already uses. ⚠⚠ **Without this, fitting a part and not fitting it look identical on screen** —
+## the cell would simply BE filled, one frame apart from empty. A cell that is NOT the one that just
+## landed reads exactly as before this beat existed; only `_filled_part`'s own cell climbs instead of
+## snapping, over `REFIT_CELL_FILL_SEC`.
+func _cell_fill(p: int, filled: bool) -> Color:
+	if filled and p == _filled_part and _filled_age < Look.REFIT_CELL_FILL_SEC:
+		var t := clampf(_filled_age / Look.REFIT_CELL_FILL_SEC, 0.0, 1.0)
+		var fill := Look.dimmed(Look.COL_BUTTON).lerp(Look.COL_BUTTON, t)
+		fill.a = lerpf(Look.PRESS_ALPHA_OFF, Look.PRESS_ALPHA_ON, t)
+		return fill
+	var fill := Look.COL_BUTTON if filled else Look.dimmed(Look.COL_BUTTON)
+	fill.a = Look.PRESS_ALPHA_ON if filled else Look.PRESS_ALPHA_OFF
+	return fill
+
+
 func _draw_board(face: Font) -> void:
 	var loadout := run.army.loadout
 	for p in Rules.part_count():
 		var species := loadout.fitted_species(_open_slot, p)
 		var filled := species >= 0
-		var fill := Look.COL_BUTTON if filled else Look.dimmed(Look.COL_BUTTON)
-		fill.a = Look.PRESS_ALPHA_ON if filled else Look.PRESS_ALPHA_OFF
+		var fill := _cell_fill(p, filled)
 		var edge_w := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX,
 			_hover_of(_hover_cell_age, _hover_cell, p))
 		var box := cell_rect_of(p)
@@ -344,9 +433,13 @@ func _draw_board(face: Font) -> void:
 		_paint_held_species(face, rect.position + Vector2(8.0, 42.0), str(SPECIES_LABELS[species]),
 			Look.REFIT_CELL_SPECIES_FONT_SIZE_PX, Look.COL_SPECIES[species])
 
-	# ⚠⚠ The dashboard reads `loadout.stat_of` directly — the same call `Army`'s five lookups make.
+	# ⚠⚠ The dashboard's TARGET is `loadout.stat_of` and nothing else — the same call `Army`'s five
+	# lookups make — but the drawn NUMBER is `_stat_shown(col)`, the chase toward that target. The two
+	# agree the instant a slot opens and the instant a climb finishes; between those two moments the
+	# picture is honestly mid-flight, and that gap is item 6's whole point — without it a fitted part
+	# and an unfitted one look identical on screen for exactly one frame less than forever.
 	for col in Rules.PART_COL_TOTAL:
-		var value := loadout.stat_of(_open_slot, col)
+		var value := _stat_shown(col)
 		_paint_stat_label(face, Look.refit_stat_origin_px(col), str(STAT_LABELS[col]),
 			Look.REFIT_STAT_LABEL_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 		_paint_stat_value(face, Look.refit_stat_origin_px(col) + Vector2(0.0, 30.0),

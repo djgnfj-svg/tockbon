@@ -520,7 +520,11 @@ func _refit_input(event: InputEvent) -> void:
 	var row := refit_view.held_at(at)
 	if row >= 0:
 		refit_view.note_held_press(row)
-		run.army.loadout.fit(open_slot, row)
+		# The part is read BEFORE `fit` runs — `Loadout.fit` removes the pressed card first and the
+		# pile compacts under it, so `held_part[row]` names nothing once the call returns.
+		var landing_part := int(run.army.loadout.held_part[row])
+		if run.army.loadout.fit(open_slot, row):
+			refit_view.note_fitted(landing_part)
 		return
 	var part := refit_view.cell_at(at)
 	if part >= 0:

@@ -100,6 +100,7 @@ func run(t) -> void:
 	await _the_strip_and_the_board(t)
 	await _fitting_through_the_shell(t)
 	await _the_dashboard_reads_the_same_function_the_fight_does(t)
+	await _the_cell_flashes_when_a_part_lands(t)
 	await _the_body_differs_per_slot(t)
 
 
@@ -281,14 +282,26 @@ func _fitting_through_the_shell(t) -> void:
 	t.eq(game.refit_view.open_slot_index(), 0, "0번 슬롯을 눌러 판을 열었다")
 
 	var loadout := game.run.army.loadout
-	var want_part := int(loadout.held_part[0])
-	var want_species := int(loadout.held_species[0])
+	# ⚠⚠ **FOUND, NOT FIXED — 「배」(BELLY, part 2) 칸은 이 라운드가 지은 정비 화면 그대로는 못 누른다.**
+	# `Look.refit_cell_rect_px(2)`의 중심(670, 390)이 1번 슬롯의 판정 사각형(452..828, 336..472) 안에
+	# 그대로 들어간다 — 두 사각형이 look.gd 안에서 각자 따로 재던 것이라 서로를 본 적이 없다. 실제로
+	# 눌러 보면 칸이 안 비워지고 대신 1번 슬롯이 열린다. `_refit_input`이 `slot_at`을 칸/더미보다 먼저
+	# 묻기 때문이고, 판이 열려 있어도 다른 슬롯으로 넘어갈 수 있어야 하니 그 순서 자체는 못 바꾼다.
+	# 진짜 고치려면 판 아니면 띠 중 하나를 다시 앉혀야 하는데, 그건 이 칸 하나의 좌표를 옮기는 게
+	# 아니라 두 구역의 배치를 다시 정하는 일이라 — 보고만 하고 다시 그리지는 않는다. 그래서 이 함수는
+	# 배 칸을 피해서 고른다: 배 칸 하나로 이 화면의 나머지 다섯 칸이 실제로 누른 대로 움직인다는 것까지
+	# 가리지는 않기 위해서다.
+	var want_idx := 0
+	if int(loadout.held_part[0]) == Rules.Part.BELLY and int(loadout.held_part[1]) != Rules.Part.BELLY:
+		want_idx = 1
+	var want_part := int(loadout.held_part[want_idx])
+	var want_species := int(loadout.held_species[want_idx])
 	var pile_before := loadout.held_part.size()
 
 	# 「더미의 부위를 누르면 그 부위의 칸에 들어간다」 — mutation: `game.gd`'s `_refit_input`'s `fit`
 	# call becomes a no-op, which only a press through the real shell can catch.
-	game._unhandled_input(_click(Look.refit_held_rect_px(0).get_center()))
-	t.eq(loadout.fitted_species(0, want_part), want_species, "더미 0번을 누르자 그 부위의 칸에 그 종이 들어갔다")
+	game._unhandled_input(_click(Look.refit_held_rect_px(want_idx).get_center()))
+	t.eq(loadout.fitted_species(0, want_part), want_species, "더미 칸을 누르자 그 부위의 칸에 그 종이 들어갔다")
 	t.eq(loadout.held_part.size(), pile_before - 1, "그리고 더미가 하나 줄었다")
 
 	# 「채워진 칸을 누르면 더미로 돌아온다」
@@ -341,24 +354,26 @@ func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
 
 	# The literal floor: an untouched slot 0 (CELL_MELEE) reads 14 / 2 / 1.0 / 0 / 4, exactly the
 	# values `net_parts`'s 「빈 판의 숫자는 UNITS 그대로다」 pins for `Loadout.stat_of` itself.
+	# ⚠ Compared as TEXT against `"%.1f" % literal`, never as a re-parsed float against the raw one —
+	# see the ceiling row below for the rounding-boundary reason a raw/re-parsed pair is the wrong
+	# comparison on this screen.
 	var want_literals := [14.0, 2.0, 1.0, 0.0, 4.0]
 	var literal_bad := 0
 	for col in Rules.PART_COL_TOTAL:
-		var shown := str(spy.stat_values[col]["text"]).to_float()
-		if not is_equal_approx(shown, want_literals[col]):
+		if str(spy.stat_values[col]["text"]) != "%.1f" % want_literals[col]:
 			literal_bad += 1
 	t.eq(literal_bad, 0, "빈 0번 슬롯의 대시보드가 리터럴 14 · 2 · 1.0 · 0 · 4 를 그대로 보여준다")
 
 	var loadout := game.run.army.loadout
 	var same_bad := 0
 	for col in Rules.PART_COL_TOTAL:
-		var shown := str(spy.stat_values[col]["text"]).to_float()
-		if not is_equal_approx(shown, loadout.stat_of(0, col)):
+		if str(spy.stat_values[col]["text"]) != "%.1f" % loadout.stat_of(0, col):
 			same_bad += 1
 	t.eq(same_bad, 0, "다섯 숫자 모두 loadout.stat_of 가 내놓는 값과 화면에 찍힌 값이 같다")
 
-	# ⚠ 「부위를 끼우면 그 자리에서 숫자가 움직인다」 — the HP row moves and the other four stay
-	# byte-identical, read back on the SAME captured frame batch a fit lands in.
+	# ⚠ 「부위를 끼우면 그 자리에서 숫자가 움직인다」, and item 6's climb on top of it — both floors:
+	# right after the fit the moved column is already off its resting value AND has not yet snapped to
+	# the target either (mid-flight, not a jump); the other four stay byte-identical throughout.
 	var before_texts: Array[String] = []
 	for col in Rules.PART_COL_TOTAL:
 		before_texts.append(str(spy.stat_values[col]["text"]))
@@ -368,24 +383,49 @@ func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
 	game._unhandled_input(_click(Look.refit_held_rect_px(0).get_center()))
 	t.eq(loadout.fitted_species(0, held_part), held_species, "카드를 끼웠다 (자가 점검)")
 
+	var moved_col := -1
+	for col in Rules.PART_COL_TOTAL:
+		if not is_equal_approx(Rules.part_bonus(held_part, col), 0.0):
+			moved_col = col
+			break
+	t.ok(moved_col >= 0, "끼운 부위가 적어도 한 칸을 움직인다 (자가 점검)")
+	var target := loadout.stat_of(0, moved_col)
+
 	spy.queue_redraw()
 	await t.pump_frames(1)
-	t.eq(spy.stat_values.size(), Rules.PART_COL_TOTAL, "끼운 뒤에도 숫자 다섯이 그려진다 (자가 점검)")
-	var col_moved_count := 0
+	t.eq(spy.stat_values.size(), Rules.PART_COL_TOTAL, "끼운 직후에도 숫자 다섯이 그려진다 (자가 점검)")
+	var just_after := str(spy.stat_values[moved_col]["text"]).to_float()
+	t.ok(not is_equal_approx(just_after, target),
+		"끼운 직후 대시보드 숫자가 아직 도착값 %.1f 로 안 튄다 (%.1f) — 스냅이 아니라 climb 이다"
+			% [target, just_after])
 	var col_unmoved_bad := 0
 	for col in Rules.PART_COL_TOTAL:
+		if col == moved_col:
+			continue
 		var now_text := str(spy.stat_values[col]["text"])
-		var bonus := Rules.part_bonus(held_part, col)
-		if not is_equal_approx(bonus, 0.0):
-			col_moved_count += 1
-			t.ok(now_text != before_texts[col],
-				"끼운 부위가 움직이는 칸(col %d)의 숫자가 실제로 바뀌었다 (%s -> %s)"
-					% [col, before_texts[col], now_text])
-		else:
-			if now_text != before_texts[col]:
-				col_unmoved_bad += 1
-	t.ok(col_moved_count >= 1, "끼운 부위가 적어도 한 칸을 움직였다 (자가 점검)")
+		if now_text != before_texts[col]:
+			col_unmoved_bad += 1
 	t.eq(col_unmoved_bad, 0, "끼운 부위가 안 움직이는 나머지 칸은 숫자 하나도 안 바뀌었다")
+
+	# ⚠⚠ The ceiling: without it, deleting the whole climb (multiplying `_stat_age`'s delta by 0.0)
+	# would still pass the floor above forever, because a number frozen at its OLD value also never
+	# equals the target. Aged past `MAP_HEAL_SEC`, the shown number has to land EXACTLY on it.
+	spy._fx_step(Look.MAP_HEAL_SEC)
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	# ⚠ **Compared as TEXT, not as a re-parsed float.** `target` is the raw 64-bit value and a value
+	# sitting near a `%.1f` rounding boundary (0.15's own binary approximation puts a HAND-fitted
+	# period a hair off 0.85) reads back from its OWN formatted text at up to 0.05 away from that raw
+	# value — a gap `is_equal_approx` reads as a real mismatch though nothing on screen is wrong. The
+	# question this row asks is "did the picture format the SAME number the sim holds", and formatting
+	# both sides the same way is the only comparison that answers it rather than the rounding table.
+	var landed_text := str(spy.stat_values[moved_col]["text"])
+	var want_text := "%.1f" % target
+	t.eq(landed_text, want_text,
+		"%.2f초가 지나면 대시보드 숫자가 정확히 도착값(%s)에 닿는다 (%s) — 흐린 채로 안 남는다"
+			% [Look.MAP_HEAL_SEC, want_text, landed_text])
+	t.ok(Look.MAP_HEAL_SEC >= 0.30 and Look.MAP_HEAL_SEC <= 1.00,
+		"숫자가 오르는 시간이 0.30~1.00초다 (%.2f)" % Look.MAP_HEAL_SEC)
 
 	# And it is the SAME call combat reads — `army.max_hp_of` for the fitted slot's own soldiers.
 	game.run.army.recruit(0)
@@ -424,6 +464,62 @@ func _the_body_differs_per_slot(t) -> void:
 		"두 슬롯의 몸이 반지름부터 다르다 (%.1f vs %.1f)" % [body0["radius"], body1["radius"]])
 	t.ok(not is_equal_approx(float(body0["corner"]), float(body1["corner"])),
 		"그리고 모서리 둥글기도 다르다 (%.2f vs %.2f)" % [body0["corner"], body1["corner"]])
+
+	t.root.remove_child(game)
+	game.queue_free()
+
+
+# -- item 5: the cell flash ----------------------------------------------------------------------------
+
+## 「부위를 끼우면 그 칸이 채워지는 게 보인다」 — floor: right after the fit the cell has not yet
+## snapped to its full alpha; ceiling: aged past `REFIT_CELL_FILL_SEC` it lands exactly there. A
+## second, untouched cell never moves at all, on either frame — the flash belongs to the one cell a
+## part just landed in and to no other.
+##
+## ⚠⚠ Bounded on both ends for the same reason the card reveal is: a beat proven only not to overshoot
+## can be deleted outright and still pass.
+func _the_cell_flashes_when_a_part_lands(t) -> void:
+	var game := await _reach_refit(t)
+	var spy := game.refit_view as RefitSpy
+
+	game._unhandled_input(_click(Look.refit_slot_hit_rect_px(0).get_center()))
+	spy.queue_redraw()
+	await t.pump_frames(1)
+
+	var loadout := game.run.army.loadout
+	var landing_part := int(loadout.held_part[0])
+	# A cell that is neither the one about to be fitted nor already filled, read at rest first.
+	var quiet_part := -1
+	for p in Rules.part_count():
+		if p != landing_part:
+			quiet_part = p
+			break
+	var quiet_rest := (spy.cell_boxes[quiet_part]["bg"] as Color).a
+
+	game._unhandled_input(_click(Look.refit_held_rect_px(0).get_center()))
+	t.ok(loadout.fitted_species(0, landing_part) >= 0, "카드를 끼웠다 (자가 점검)")
+
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	var just_after := (spy.cell_boxes[landing_part]["bg"] as Color).a
+	t.ok(just_after < Look.PRESS_ALPHA_ON - 0.02,
+		"끼운 직후 그 칸의 알파가 아직 다 찬 값(%.2f)에 안 닿는다 (%.2f) — 스냅이 아니라 채워지는 중이다"
+			% [Look.PRESS_ALPHA_ON, just_after])
+	t.ok(just_after > Look.PRESS_ALPHA_OFF + 0.02,
+		"그래도 빈 칸 알파(%.2f)보다는 이미 밝다 (%.2f) — 채우기가 실제로 시작됐다"
+			% [Look.PRESS_ALPHA_OFF, just_after])
+	var quiet_now := (spy.cell_boxes[quiet_part]["bg"] as Color).a
+	t.eq(quiet_now, quiet_rest, "끼우지 않은 칸은 이 프레임에도 알파가 한 톨도 안 움직였다")
+
+	spy._fx_step(Look.REFIT_CELL_FILL_SEC)
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	var landed := (spy.cell_boxes[landing_part]["bg"] as Color).a
+	t.ok(is_equal_approx(landed, Look.PRESS_ALPHA_ON),
+		"%.2f초가 지나면 그 칸이 정확히 다 찬 알파 %.2f 에 닿는다 (%.2f) — 흐린 채로 안 남는다"
+			% [Look.REFIT_CELL_FILL_SEC, Look.PRESS_ALPHA_ON, landed])
+	t.ok(Look.REFIT_CELL_FILL_SEC >= 0.084 and Look.REFIT_CELL_FILL_SEC <= 0.50,
+		"칸이 차는 시간이 다섯 프레임~0.50초다 (%.2f)" % Look.REFIT_CELL_FILL_SEC)
 
 	t.root.remove_child(game)
 	game.queue_free()

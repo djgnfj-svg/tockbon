@@ -620,6 +620,12 @@ const REFIT_CELL_SIZE_PX := Vector2(220.0, 140.0)
 const REFIT_CELL_GAP_PX := 20.0
 ## `80 + 700 = 780 ≤ 800` (clear of the pile column); `320 + 2×140 + 20 = 620`, hit bottom 628.
 const REFIT_BOARD_ORIGIN_PX := Vector2(80.0, 320.0)
+
+## A part landing in its cell fills over this — `MAP_CLEAR_FILL_SEC`'s sibling, same bound and same
+## reason: without it, fitting a part and not fitting it look identical on screen for exactly one
+## frame less than forever. Its own constant, not a re-read of the map's, because the two screens'
+## clocks are never compared against each other and a shared name would suggest they could be.
+const REFIT_CELL_FILL_SEC := 0.25         # >= 0.084 (five frames); <= 0.50
 const REFIT_CELL_PART_FONT_SIZE_PX := 26      # > HUD_FONT_SIZE_PX 22; ≤ 34
 const REFIT_CELL_SPECIES_FONT_SIZE_PX := 18   # ≥ 16; ≤ the part font − 6
 
