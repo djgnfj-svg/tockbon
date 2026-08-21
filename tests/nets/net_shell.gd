@@ -248,6 +248,49 @@ class PanelSpy extends PanelView:
 			"at": at, "fsize": fsize, "col": col})
 
 
+## ⚠⚠ Item 4's own spy — `net_cards`' `RewardSpy` shape copied rather than re-invented. Swapped in for
+## `game.reward_view` right before a second win reaches `PICK`, so what this file can measure is not
+## only `run.state()` (which the SIM writes on its own and no shell function can move) but whether the
+## SCREEN was actually rebound fresh: `bind()` zeroes `_reveal_age` and clears `_taken_age`, and neither
+## moves unless `reward_view.bind(run)` itself runs.
+class RewardSpy extends RewardView:
+	var draws := 0
+	var cards := []
+	var parts := []
+	var species := []
+	var marks := []
+	var hints := []
+	var fades := []
+
+	func _draw() -> void:
+		cards.clear()
+		parts.clear()
+		species.clear()
+		marks.clear()
+		hints.clear()
+		fades.clear()
+		super()
+		draws += 1
+
+	func _paint_card(rect: Rect2, bg: Color, edge_width: float) -> void:
+		cards.append({"rect": rect, "bg": bg, "width": edge_width})
+
+	func _paint_card_part(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+		parts.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
+
+	func _paint_card_species(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+		species.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
+
+	func _paint_taken_mark(centre: Vector2, radius: float, col: Color) -> void:
+		marks.append({"centre": centre, "radius": radius, "col": col})
+
+	func _paint_hint(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+		hints.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
+
+	func _paint_fade(rect: Rect2, col: Color) -> void:
+		fades.append({"rect": rect, "col": col})
+
+
 func run(t) -> void:
 	var game := QuitGame.new()
 
@@ -400,19 +443,28 @@ func run(t) -> void:
 	t.ok(game.panel_view.run == game.run, "panel_view 가 셸과 같은 Run 을 본다")
 
 	# -- swap in the spies and re-open the island --------------------------------------------------
-	for v: Node2D in [game.field_view, game.hud_view, game.panel_view]:
+	# ⚠⚠ `reward_view` is swapped in HERE too, before island 0's own win ever reaches `PICK` — not
+	# later, right before item 4's own check. A spy created fresh right there would start every field
+	# at its own neutral default and could never tell "rebound" from "never bound in the first place".
+	# Swapped in this early, it is the SAME spy that gets genuinely dirtied by island 0's own two-card
+	# pick (real `_taken_age` entries, a real climbing `_reveal_age`) — which is what makes "did the
+	# SECOND pick screen actually rebind" a question with a real answer instead of a coin flip.
+	for v: Node2D in [game.field_view, game.hud_view, game.panel_view, game.reward_view]:
 		game.remove_child(v)
 		v.queue_free()
 	var fs := FieldSpy.new()
 	var hs := HudSpy.new()
 	var ps := PanelSpy.new()
+	var rs := RewardSpy.new()
 	game.field_view = fs
 	game.hud_view = hs
 	game.panel_view = ps
+	game.reward_view = rs
 	game.add_child(fs)
 	game.add_child(hs)
 	game.add_child(ps)
-	t.ok(fs.battle == null and hs.battle == null and ps.run == null,
+	game.add_child(rs)
+	t.ok(fs.battle == null and hs.battle == null and ps.run == null and rs.run == null,
 		"바꿔 끼운 스파이는 아직 아무것도 모른다 — 배선은 _open_island 가 한다")
 	game._open_island()
 	t.ok(fs.battle == game.battle and fs.army == game.run.army,
@@ -1131,6 +1183,14 @@ func run(t) -> void:
 	t.eq(game.run.state(), Run.State.MAP, "카드를 고르고 정비를 닫으면 지도다")
 	t.ok(not game.panel_view.panel_active(), "지도에서는 패널이 안 뜬다")
 
+	# ⚠⚠ Item 4's own fixture — `rs` is `game.reward_view` and its clock (`_fx_step`) runs every real
+	# frame regardless of screen, so a few pumped frames HERE, while `run.cards_taken` still carries
+	# 0번's own two picks (nothing clears it until the NEXT `_draw_cards()`), grow real `_taken_age`
+	# entries. Without this the staleness row far below would be proving nothing — a check that never
+	# gets dirtied cannot tell "rebound" from "never bound at all".
+	await t.pump_frames(3)
+	t.ok(not rs._taken_age.is_empty(), "0번 칸에서 고른 두 카드가 화면에 실제로 자국을 남겼다 (자가 점검)")
+
 	# 「지도에서 칸을 누르면 섬이 열린다」, on the floor-2 node that pays the BEAK — which is what puts
 	# the reward panel on screen below. Its sibling pays cells; that fork is `net_map`'s.
 	t.eq(Rules.map_reward_of(2), Rules.Reward.BEAK, "2번 칸은 부리 칸이다 (자가 점검)")
@@ -1255,17 +1315,38 @@ func run(t) -> void:
 	# A second pick during the hold would overwrite the first while it is still being stained.
 	game._unhandled_input(_click(Look.roster_entry_rect_px(5).get_center()))
 	t.eq(game._pending_beak, 3, "hold 중에는 판넬 클릭이 안 먹는다 — 고른 병사가 안 바뀐다")
+
+	# ⚠⚠ `rs` is the SAME spy that has been `game.reward_view` since before island 0's own win — it
+	# was genuinely dirtied by that first pick (two real `_taken_age` entries, a `_reveal_age` well
+	# past `SCENE_FADE_SEC`), so the staleness this row measures below is real staleness carried
+	# forward, not a fresh spy's own neutral defaults answering by accident.
+	t.ok(rs == game.reward_view, "reward_view 가 여전히 그 스파이다 (자가 점검)")
+
 	game._process(Look.HOLD_BEAK_SEC)
 	t.eq(game._pending_beak, -1, "hold 가 끝나면서 셸이 손을 놓았다")
 	t.eq(int(game.run.army.has_beak[3]), 1, "그제서야 3번 병사에게 부리가 붙었다")
-	# 「부리를 달고 나면 지도가 아니라 카드 화면이다」 — mutation: `_release_hold`'s beak branch calls
-	# `_enter_map_screen()` directly instead of `_show_state()`, the one place that already knows a win
-	# with cards still undrawn from lands in `PICK` rather than `MAP` — 2번 칸의 승리도 여섯 장을 냈고
-	# `apply_beak` 는 그 카드를 건드리지 않는다.
-	t.eq(game.run.state(), Run.State.PICK, "부리를 달고 나면 지도가 아니라 카드 화면이다")
+	# ⚠⚠ 「부리를 달고 나면 지도가 아니라 카드 화면이다」 — both halves. `run.state()` alone is NOT
+	# enough: it is written by the SIM's own `_advance` inside `apply_beak`, so it reads `PICK` whether
+	# or not the SHELL ever rebinds the screen — mutation: `_release_hold`'s beak branch calls
+	# `_enter_map_screen()` directly instead of `_show_state()`. Under that mutation `run.state()` still
+	# says `PICK` (the line right below stays green) while `reward_view.bind(run)` never runs at all:
+	# the screen the player actually sees would still be carrying whatever island 0's card screen left
+	# behind.
+	t.eq(game.run.state(), Run.State.PICK, "부리를 달고 나면 지도가 아니라 카드 화면이다 (자가 점검 — 셸 함수는 이걸 못 움직인다)")
 	t.ok(game.battle == null, "그래서 섬이 닫혔다")
 	t.eq(game.run.map.at(), 2, "서 있는 칸은 부리 칸 그대로다")
-	await t.pump_frames(2)
+
+	rs.queue_redraw()
+	await t.pump_frames(1)
+	t.ok(rs._reveal_age < Look.SCENE_FADE_SEC * 0.5,
+		"그리고 화면이 실제로 다시 묶였다 — 나이가 0에 가깝다 (%.3f), 지난 카드 화면의 나이가 그대로 남지 않았다"
+			% rs._reveal_age)
+	t.ok(rs._taken_age.is_empty(),
+		"묶인 화면에 가져간 표 자국이 하나도 없다 — 0번 칸에서 골랐던 두 장의 흔적이 새 카드 위에 안 남는다")
+	t.eq(rs.cards.size(), Rules.CARDS_PER_WIN, "카드 여섯 장이 실제로 다시 그려졌다")
+	t.eq(rs.marks.size(), 0, "그리고 어느 카드에도 가져간 표가 없다")
+
+	await t.pump_frames(1)
 	t.eq(ps.panels.size(), 0, "패널이 사라졌다")
 	t.eq(fs.tiles.size(), 0, "그리고 지형이 한 칸도 안 그려진다 — 카드 화면 밑에 지난 섬이 안 남는다")
 

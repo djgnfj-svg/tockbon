@@ -748,6 +748,15 @@ static func refit_stat_origin_px(col: int) -> Vector2:
 	return REFIT_STAT_ORIGIN_PX + Vector2(col * REFIT_STAT_PITCH_PX, 0.0)
 
 
+## Column `col`'s own bounding rect — label and value stacked, `PITCH` wide (minus a hair of clearance
+## from its neighbour) and tall enough to cover both lines. Not a press — this screen's numbers are
+## read, never pressed — so it carries no hit pad; it exists only so a net can prove the row lands on
+## screen and clear of the board without re-deriving its own copy of this arithmetic.
+static func refit_stat_rect_px(col: int) -> Rect2:
+	return Rect2(refit_stat_origin_px(col),
+		Vector2(REFIT_STAT_PITCH_PX - 4.0, 30.0 + REFIT_STAT_VALUE_FONT_SIZE_PX))
+
+
 # ---------------------------------------------------------------------------------------------
 # The title screen
 # ---------------------------------------------------------------------------------------------

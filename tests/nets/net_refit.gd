@@ -113,6 +113,8 @@ func run(t) -> void:
 	await _the_cell_flashes_when_a_part_lands(t)
 	await _the_body_differs_per_slot(t)
 	await _the_screen_itself_fades_in(t)
+	await _the_text_layer_is_read(t)
+	await _pressing_past_the_pile_end_does_nothing(t)
 
 
 # -- geometry: can it be aimed at ------------------------------------------------------------------
@@ -182,6 +184,24 @@ func _the_geometry(t) -> void:
 		t.eq(view.cell_hit_rect_of(p), Look.refit_cell_hit_rect_px(p), "%d번 칸 판정이 look.gd 값이다" % p)
 	t.eq(view.cell_rect_of(-1), Rect2(), "없는 칸의 사각형은 빈 Rect2 다")
 	t.eq(view.cell_rect_of(Rules.part_count()), Rect2(), "범위 밖 칸도 빈 Rect2 다")
+
+	# ⚠⚠ item 7 — 「대시보드 다섯 줄이 화면 안이고 판의 칸과 안 겹친다」. `REFIT_STAT_ORIGIN_PX`/
+	# `REFIT_STAT_PITCH_PX` used to stack the five numbers straight down the board's own left edge,
+	# starting at the board's own y — two of the five landed on top of board cells and the fifth sat
+	# past the bottom of a 720 px screen. Mutation A (off-screen): `REFIT_STAT_ORIGIN_PX` ->
+	# `Vector2(80.0, 700.0)`. Mutation B (on the board): `REFIT_STAT_ORIGIN_PX` -> `Vector2(80.0, 340.0)`.
+	var stat_outside := 0
+	var stat_on_board := 0
+	for col in Rules.PART_COL_TOTAL:
+		var row_rect := Look.refit_stat_rect_px(col)
+		if not SCREEN.encloses(row_rect):
+			stat_outside += 1
+		for p in Rules.part_count():
+			if row_rect.intersects(view.cell_rect_of(p)):
+				stat_on_board += 1
+	t.eq(stat_outside, 0, "대시보드 다섯 줄이 전부 화면 안이다")
+	t.eq(stat_on_board, 0, "그리고 어느 줄도 판의 칸과 안 겹친다")
+
 	view.free()
 
 
@@ -648,6 +668,114 @@ func _the_screen_itself_fades_in(t) -> void:
 
 	t.root.remove_child(spy)
 	spy.queue_free()
+
+
+# -- item 3: the text layer is captured AND read -----------------------------------------------------
+
+## `RefitSpy` was already storing `cell_parts` · `cell_species` · `slot_labels` · `stat_labels` ·
+## `held_parts` · `held_species`, but nothing anywhere read a single "text" field back — `.size()` on
+## five of them, nothing on `stat_labels`/`held_parts`/`held_species` at all. Four independent
+## mutations, each caught by its own row, `net_cards`' own shape (compare the drawn text against the
+## label table) copied rather than re-invented.
+func _the_text_layer_is_read(t) -> void:
+	var game := await _reach_refit(t, 3)
+	var spy := game.refit_view as RefitSpy
+	var loadout := game.run.army.loadout
+
+	game._unhandled_input(_click(Look.refit_slot_hit_rect_px(0).get_center()))
+	spy.queue_redraw()
+	await t.pump_frames(1)
+
+	# 「칸마다 부위 글자가 자기 칸의 부위다」 — mutation: `_paint_cell_part`'s text argument becomes
+	# `PART_LABELS[0]` for every cell — all six drawn as 「머리」.
+	var cell_bad := 0
+	for p in Rules.part_count():
+		if str(spy.cell_parts[p]["text"]) != str(RefitView.PART_LABELS[p]):
+			cell_bad += 1
+	t.eq(cell_bad, 0, "여섯 칸의 부위 글자가 저마다 자기 칸의 부위 이름이다")
+	var cell_text_set := {}
+	for p in Rules.part_count():
+		cell_text_set[str(spy.cell_parts[p]["text"])] = true
+	t.eq(cell_text_set.size(), Rules.part_count(), "그리고 여섯 글자가 서로 다 다르다 — 하나로 뭉치지 않았다")
+
+	# 「대시보드 다섯 이름표가 저마다 자기 줄이다」 — mutation: `_paint_stat_label`'s text argument
+	# becomes `STAT_LABELS[0]` for every row — all five drawn as 「체력」.
+	var stat_bad := 0
+	for col in Rules.PART_COL_TOTAL:
+		if str(spy.stat_labels[col]["text"]) != str(RefitView.STAT_LABELS[col]):
+			stat_bad += 1
+	t.eq(stat_bad, 0, "다섯 줄의 이름표가 저마다 자기 칸의 이름이다")
+	var stat_text_set := {}
+	for col in Rules.PART_COL_TOTAL:
+		stat_text_set[str(spy.stat_labels[col]["text"])] = true
+	t.eq(stat_text_set.size(), Rules.PART_COL_TOTAL, "그리고 다섯 글자가 서로 다 다르다")
+
+	# 「더미 줄이 실제 더미 크기만큼 그려진다」 — mutation: `_draw_board`'s held loop becomes
+	# `for row in 0`, so the held pile vanishes from the screen while the sim still holds it.
+	t.ok(loadout.held_part.size() > 0, "더미에 카드가 있다 (자가 점검)")
+	t.eq(spy.held_rows.size(), loadout.held_part.size(),
+		"더미 줄이 실제 더미 크기만큼 그려진다 — 강제로 0으로 줄지 않았다")
+
+	# 「더미 줄마다 부위 글자가 자기 부위다」 — mutation: `_paint_held_part` reads
+	# `SPECIES_LABELS[species]` instead of `PART_LABELS[part]` — every row labelled by its species.
+	var held_bad := 0
+	for row in mini(loadout.held_part.size(), spy.held_parts.size()):
+		var want := str(RefitView.PART_LABELS[int(loadout.held_part[row])])
+		if str(spy.held_parts[row]["text"]) != want:
+			held_bad += 1
+	t.eq(held_bad, 0, "더미 줄마다 부위 글자가 자기 부위다 — 종 이름으로 안 바뀌지 않았다")
+
+	# 「빈 칸은 '-', 낀 칸은 자기 종」 — mutation: `_paint_cell_species`'s text argument is pinned to
+	# "-" regardless of `filled`, so a fitted species never actually shows.
+	var empty_bad := 0
+	for p in Rules.part_count():
+		if str(spy.cell_species[p]["text"]) != "-":
+			empty_bad += 1
+	t.eq(empty_bad, 0, "아직 아무 것도 안 낀 칸 여섯은 전부 '-' 다 (자가 점검)")
+
+	var landing_part := int(loadout.held_part[0])
+	var landing_species := int(loadout.held_species[0])
+	game._unhandled_input(_click(Look.refit_held_rect_px(0).get_center()))
+	t.eq(loadout.fitted_species(0, landing_part), landing_species, "한 칸에 카드를 꼈다 (자가 점검)")
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	t.eq(str(spy.cell_species[landing_part]["text"]), str(RefitView.SPECIES_LABELS[landing_species]),
+		"낀 칸의 종 글자가 실제로 낀 종이다 — '-' 로 안 눌러앉는다")
+
+	t.root.remove_child(game)
+	game.queue_free()
+
+
+# -- item 5: the pile's twin of the board's own empty-cell row ----------------------------------------
+
+## 「더미 자리가 실제 더미보다 많을 때, 넘치는 자리를 눌러도 아무 일도 안 난다」 — the board already
+## carries this row for an empty CELL (「빈 칸을 눌러도 아무 일도 안 난다」); the pile never had its own,
+## and the pile is the one side where "the row exists as a geometric target" and "the row names a real
+## card" can disagree — `refit_held_capacity()` is 10, a fresh pick pays 2. Mutation: `refit_view.gd`'s
+## `held_at` bound `mini(n, Look.refit_held_capacity())` -> `Look.refit_held_capacity()`.
+func _pressing_past_the_pile_end_does_nothing(t) -> void:
+	var game := await _reach_refit(t, 3)
+	var loadout := game.run.army.loadout
+
+	game._unhandled_input(_click(Look.refit_slot_hit_rect_px(0).get_center()))
+	var pile_n := loadout.held_part.size()
+	t.ok(pile_n > 0 and pile_n < Look.refit_held_capacity(),
+		"더미가 차 있지만 다 안 찼다 (자가 점검, %d / %d)" % [pile_n, Look.refit_held_capacity()])
+
+	t.eq(game.refit_view.held_at(Look.refit_held_rect_px(pile_n).get_center()), -1,
+		"더미 크기 바로 다음 자리는 아무 것도 판정되지 않는다 — 카드가 없는 자리다")
+
+	var board_before := loadout.board.duplicate()
+	var pile_part_before := loadout.held_part.duplicate()
+	var pile_species_before := loadout.held_species.duplicate()
+	game._unhandled_input(_click(Look.refit_held_rect_px(pile_n).get_center()))
+	t.eq(loadout.held_part.size(), pile_n, "그 자리를 눌러도 더미 크기가 그대로다")
+	t.eq(loadout.held_part, pile_part_before, "더미의 부위 줄도 그대로다")
+	t.eq(loadout.held_species, pile_species_before, "더미의 종 줄도 그대로다")
+	t.eq(loadout.board, board_before, "그리고 어느 칸도 안 바뀌었다")
+
+	t.root.remove_child(game)
+	game.queue_free()
 
 
 # -- input helpers, identical shape to net_shell's -----------------------------------------------------
