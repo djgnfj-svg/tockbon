@@ -327,7 +327,7 @@ func _draw_board(face: Font) -> void:
 		_paint_cell_part(face, box.position + Look.CARD_PART_OFFSET_PX * 0.7,
 			str(PART_LABELS[p]), Look.REFIT_CELL_PART_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 		var species_text := str(SPECIES_LABELS[species]) if filled else "-"
-		var species_col := Look.COL_SPECIES[species] if filled else Look.dimmed(Look.COL_HUD_TEXT)
+		var species_col: Color = Look.COL_SPECIES[species] if filled else Look.dimmed(Look.COL_HUD_TEXT)
 		_paint_cell_species(face, box.position + Look.CARD_SPECIES_OFFSET_PX * 0.7,
 			species_text, Look.REFIT_CELL_SPECIES_FONT_SIZE_PX, species_col)
 
