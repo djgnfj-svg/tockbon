@@ -32,6 +32,8 @@ exactly that reason.
   resolves one ticket
 - ***"MVP잖아"*** (row 70) — a detail the MVP does not need answered is not a ticket
 - **Anything the user says in passing goes into `docs/idea-inbox.md` that turn**, verbatim, dated
+- ⚠⚠ **Ticket 10 「이 게임을 계속하나」 sits ABOVE this whole map** (2026-08-22). Until it is answered,
+  **01–07 are on hold** — they settle a game that may be deleted. 08 and the answer to 09 survive either way
 - ⚠ **Ticket 09 is taken first, ahead of its number.** It asks where a settled decision lives, and until it
   is answered **nobody knows how fully to write any other ticket's `## Answer`.** It was charted after 01–08,
   so 「번호 빠른 순」 would otherwise put it last, which is backwards
