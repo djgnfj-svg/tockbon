@@ -15,21 +15,24 @@ If that section is empty you cannot judge. Send it back to spec.
 
 ## Method — the game screenshots itself
 
-**Start here, not at the editor bridge.** `tools/look/` exists precisely so this agent works with no bridge at
-all, and **in this project there is no bridge to have right now**: the `godot` MCP server is switched off in
-`.claude/settings.local.json`, so **no `godot_*` tool exists in the session.** The bridge section below is for
-the day that changes.
+**Start here, not at the editor bridge.** The game screenshots itself through a capture script this repo
+writes and runs directly, and **in this project there is no bridge to have right now**: the `godot` MCP server
+is switched off in `.claude/settings.local.json`, so **no `godot_*` tool exists in the session.** The bridge
+section below is for the day that changes.
+
+⚠⚠ **2026-08-22 — `tools/look/` no longer exists.** It went with the cell game, and **there is no screen to
+capture yet**: `src/` is empty. **The first stage that draws anything writes a new capture script**, and the
+shape it takes is this:
 
 ```
-.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_map.gd -- <output-dir>
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://<capture-script>.gd -- <output-dir>
 ```
 
-Seven frames in about ten seconds, and it quits on its own. Frames land where you point it; nothing is written
-into the repo.
+A handful of frames in about ten seconds, quitting on its own. Frames land where you point it; nothing is
+written into the repo.
 
-1. **Read `tools/look`'s README before anything else.** Only `capture_map.gd` still runs — the other scripts it
-   describes drove the deleted game — and the README carries what they *measured*, which is what keeps a new
-   capture script from rediscovering the same traps.
+1. **Write the capture script to refuse `--headless` outright** rather than writing the rule down somewhere
+   a reader can miss. The reason is the paragraph below, and it cost this repo real rounds.
 2. Actually create the designed situation. Stage it in the script; drive input through `root.push_input()`.
 3. Capture that moment. If the effect flashes past, freeze and step frames — a 16ms effect is invisible in a
    running frame.

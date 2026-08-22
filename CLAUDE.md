@@ -10,6 +10,26 @@ them eat each other. `circle-rune-glyph`.
 ⚠ **There is no GDD yet and no `run/main_scene`.** The cell game was folded on 2026-08-22 and is whole at
 commit `62ff57d`. **What is being made is read out of `.scratch/spell-circle/`** — a map and five tickets.
 
+# Where everything is — **read this before deciding what this repo is**
+
+⚠⚠ **`main` is not the whole repo, and on 2026-08-22 a session forgot that and lost a day's direction.**
+It read `main` only, concluded the cell game was still live, and rebuilt docs around a game that had already
+been folded on another branch. **The branch was right there.**
+
+⇒ **Run `git ls-remote --heads origin` before you conclude anything about direction.** What is on `main`
+is what was merged, never what exists.
+
+| Where | What is in it |
+|---|---|
+| `main` | **Everything current.** All of the above is merged here as of 2026-08-22 |
+| `62ff57d` | **The cell game, whole** — `src/`, twenty nets, its GDD. Folded, not deleted |
+| `salvage/cell-harness` | Seven commits that polished the cell game's docs on 2026-08-22, **discarded on purpose** when the fold was found. Kept only so nothing was thrown away silently |
+| `archive-full-history` | The full history from before the resets |
+
+**The user's own words about a game are in `acceptance-debt` under 「본 것」, and they are never deleted** —
+they went missing once already, inside design docs that were deleted, and they are the only judgement this
+repo has ever received about whether a game of its own was any good.
+
 # Language
 
 **Replies to the user are 한국어. Docs, comments and prompts are English.**
