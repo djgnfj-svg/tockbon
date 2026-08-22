@@ -7,7 +7,8 @@
 and the socket size and band radii do not match the spec (368 · 288 · 192) — four batches still did not match.
 => What needs art is only the **pattern** (glyph rings, rune symbols); **the frame is coordinates.**
 
-The spec reference is `docs/design/circle-art.md`. This is the code that uses those values.
+⚠ **`docs/design/circle-art.md` no longer exists and is in no branch** — it was lost before the archive
+branch was cut. **The values it held are the ones in this file**, and this file is now their only home.
 """
 
 import math

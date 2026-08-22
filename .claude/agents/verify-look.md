@@ -16,9 +16,10 @@ If that section is empty you cannot judge. Send it back to spec.
 ## Method — the game screenshots itself
 
 **Start here, not at the editor bridge.** The game screenshots itself through a capture script this repo
-writes and runs directly, and **in this project there is no bridge to have right now**: the `godot` MCP server
-is switched off in `.claude/settings.local.json`, so **no `godot_*` tool exists in the session.** The bridge
-section below is for the day that changes.
+writes and runs directly, and **in this project there is no bridge to have right now**: **this repo's committed settings do not attach the
+`godot` MCP server**, so no `godot_*` tool exists unless a machine-local settings file adds one. ⚠ **That
+local file is not in the repo**, so check the session's own tool list rather than assuming either way. The
+bridge section below is for when it is attached.
 
 ⚠⚠ **2026-08-22 — `tools/look/` no longer exists.** It went with the cell game, and **there is no screen to
 capture yet**: `src/` is empty. **The first stage that draws anything writes a new capture script**, and the
@@ -116,7 +117,7 @@ This isolation is why this agent exists separately. Expensive observation is dig
 # The godot MCP bridge — only if the server is turned back on
 
 **Documented here rather than on everybody, because you are the only agent that would use it.**
-**Right now it is switched off in `.claude/settings.local.json` and `godot_*` does not exist in the session** —
+**Right now it is switched off in the machine-local settings file (**not in the repo — check the session's own tool list**) and `godot_*` does not exist in the session** —
 `capture_map.gd` was written on 2026-08-17 under exactly that condition and is the supported path. Read this
 section only when the user has re-enabled the server.
 

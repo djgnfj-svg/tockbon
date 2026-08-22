@@ -21,7 +21,7 @@ Fake code shows up as one of these two. That is why both exist.
 ## Do not launch the game
 
 **No `godot_*` MCP tools.** They are not yours, and **in this project they are not anybody's right now** —
-the `godot` MCP server is switched off in `.claude/settings.local.json`, so no session has those tools at all.
+the `godot` MCP server is switched off in the machine-local settings file (**not in the repo — check the session's own tool list**), so no session has those tools at all.
 Seeing the screen belongs to verify-look and the long version of why lives on that agent.
 Reading code is the job; when checking whether a net actually measures anything, run `tests/run_nets.ps1` (headless).
 

@@ -26,7 +26,7 @@ Failure in this repo is usually silent. So "no error" is not grounds for a pass.
 
 **No `godot_*` MCP tools.** Seeing the screen is verify-look's, and the long version of why lives on that
 agent. **In this project they are nobody's right now** — the `godot` MCP server is switched off in
-`.claude/settings.local.json`, so no session has those tools at all. Launch the game directly with
+the machine-local settings file (**not in the repo — check the session's own tool list**), so no session has those tools at all. Launch the game directly with
 `Godot_*.exe --headless --script` (same as `tests/run_nets.ps1`). That script prints the values.
 
 ### Measuring a click headless: drive `root.push_input`, never `_gui_input`
