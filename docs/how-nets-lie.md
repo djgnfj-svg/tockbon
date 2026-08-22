@@ -155,3 +155,23 @@ These survive **even after you confirm every mutation goes red**:
 A `push_error` message and the `t.expect_error` that forgives it are **one unit**, matched by plain
 substring. Translating one side and not the other leaves the bark undeclared — the net reds on a bark
 nobody changed, or worse, forgives one it was never meant to.
+
+## Two the arrangement caused, not the check
+
+**Moved here 2026-08-22 from `implement-plan`, which was deleted.** Everything else that skill had measured
+about verification was already on this page; these two were not. ⚠ **Both were measured on the cell game**,
+whose `src/` is gone — they are kept because they are about **who verifies and when**, which the next game
+arranges the same way.
+
+- ⚠⚠ **NUMBERS CANNOT SEE A PICTURE.** Screen verification was held back to the last stage. With **279
+  checks green**, it found three defects in minutes: the field had **no floor colour at all** (the constant
+  was read in zero places, and the engine key that would have set it was nested inside its own section so
+  nobody read it), the victory beat was **a still frame for 62% of its length** while the HUD still read the
+  pre-battle count, and the game filled **44% of the window**. **Five of the previous round's seven surviving
+  mutations were the same family** — a headline in the wrong band, labels 10,000px off, six rows past the
+  left edge. **All green.** ⇒ **Look at the screen in the FIRST round that draws anything**, not at the end.
+  This repo measured the same thing four separate times.
+- ⚠ **A verification that overlapped an edit measured nothing, and it does not announce itself.** The tree was
+  broken **three times** while the runtime verifier was observing — two parse errors and one broken table,
+  all of them intermediate saves by whoever was building. ⇒ **One chunk → nets green → report → halt.**
+  That halt is the verification window; without it the verdict is void whichever colour it came back.

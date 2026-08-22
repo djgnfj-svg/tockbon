@@ -30,6 +30,9 @@ Answer, then stop.
   자꾸 나오는 건지 잘 모르겠네"*). It used to be a required third part and it turned every recommendation
   into a thing the user had to re-decide. **If the case against is strong enough to matter, it is not a
   recommendation — put the fork in the one closing question instead**
+- ⚠ **Never recommend a technique the user has not named themselves without first checking how others do
+  it** — named techniques, and who ships them. This was a skill until 2026-08-22 and the skill was deleted;
+  **the guard is what was worth keeping**
 - **No emoji.** Bold is the only emphasis
 - **No file paths, no line numbers, no code locations in chat** — say what the thing is, not where it lives
 - **No word only you understand.** A doc name or a net name standing in for the thing is not an answer
@@ -54,12 +57,13 @@ label says is worse than a red. If you can't do it, say you can't.**
 
 # The docs
 
-**`docs/` is one folder and five loose files, and planning lives outside it in `.scratch/`.**
+**`docs/` is two folders and five loose files, and planning lives outside it in `.scratch/`.**
 **Open a folder's README, not the folder.**
 
 | Path | What it holds |
 |---|---|
 | `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **There is no GDD right now** — the cell one went with the game and the new one waits on the map. When one is written it is **one page** — 넘어가면 아무도 안 읽는다. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
+| `docs/agents/` | **What the imported skills read before they act, and the only configuration in `docs/`.** Issues are files under `.scratch/`; the five triage labels are unchanged; the domain is single-context, so `CONTEXT.md` at the root is the glossary. ⚠ **Not reading matter** — `to-spec` · `to-tickets` · `triage` · `code-review-mp` load it |
 | `.scratch/<일>/` | **Where planning lives.** `map.md` is the map; `issues/NN-이름.md` are its tickets. **Status is a `Status:` line inside the file — files never move between folders.** `wayfinder` owns this |
 | `lessons-from-two-dead-games` | **What the two games that died actually measured.** The only survivor of both resets besides `planning-principles` |
 | `idea-inbox` | **What the user said, before anyone decided what to do with it.** One row per remark, verbatim, dated, with a state |

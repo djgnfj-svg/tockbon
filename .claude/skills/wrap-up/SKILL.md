@@ -42,12 +42,14 @@ In order of how easily each is missed:
   lower, which reads as "still fine" on a file that is not.
 - ⚠ **Acceptance — ask once, and the answer decides.** *"확인했어?"* **The user always answers one way or
   the other, so do not infer it from anything else.**
-  - **They looked and it read right** → write the verdict under that design doc's `Accepted` section now,
-    and delete its row from `acceptance-debt` if it had one
+  - **They looked** → **their own words go into `acceptance-debt` that turn, verbatim**, under 「본 것」,
+    and the open row for it is struck. ⚠⚠ **Verbatim, not a paraphrase** — the sentences that lived only
+    inside design docs died with them on 2026-08-22, and they were the only measurement this repo had of
+    whether a game of its own was any good
   - **They did not look, or the session put something on screen and they said nothing** → **add a row to
-    `acceptance-debt`**: what shipped · **how to see it** · which design doc takes the verdict · when it
-    landed. ⚠ **Silence is a row, not a pass**
-  - **They looked and it was wrong** → that closes a row too. The story goes into the design doc
+    `acceptance-debt`**: what shipped · **how to see it** · when it landed. ⚠ **Silence is a row, not a pass**
+  - **They looked and it was wrong** → that closes a row exactly as a pass does, and **the wrong words are
+    the valuable ones** — write them down the same way
   ⚠ **The "how to see it" column is the whole point** — the user works this list off **in one sitting**,
   weeks later, and will not re-derive how to reach each thing. Name the screen, the key, and what should
   look different
