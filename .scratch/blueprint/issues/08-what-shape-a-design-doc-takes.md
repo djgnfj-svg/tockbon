@@ -1,6 +1,6 @@
 Type: grilling
 Status: open
-Blocked by: 01, 02, 03, 04
+Blocked by: 01, 02, 03, 04, 09
 
 # 기획 문서는 어떤 양식을 갖나
 
@@ -37,6 +37,10 @@ designs turn out to be, not before.
 
 1. **What replaces `Implemented` / `Accepted`**, given that what is built is now read out of `src/` and
    `tests/nets/` and what the user has judged is read out of `acceptance-debt`
-2. Whether a settled detailed design is **a doc at all**, or a resolved ticket plus a line in the GDD
-3. **What language.** The GDD's exception was made on one argument — **the user is the one who reads it** —
+2. **What language.** The GDD's exception was made on one argument — **the user is the one who reads it** —
    and if that argument covers design docs too, only the user can say so
+3. What a **coming** design looks like before it is settled, if that is a different shape from a settled one
+
+⚠ **Whether a settled design is a document at all is NOT this ticket** — it moved to **09 정해진 것은
+어디에 사는가**, which is unblocked and comes first. This ticket only decides the **form**, once 09 has said
+what the form is for.
