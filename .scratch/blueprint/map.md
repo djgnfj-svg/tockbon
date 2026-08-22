@@ -43,7 +43,9 @@ exactly that reason.
 
 <!-- one line per closed ticket: the gist, then the link. Nothing is restated here — the ticket holds it -->
 
-**Nothing yet.** Charting decides nothing; the first resolution lands here.
+- **정해진 것은 어디에 사는가** (`issues/09-where-a-decision-lives.md`): **티켓 안에 산다**, 그리고
+  기획문서는 다 정해진 뒤 `to-spec`이 한 장 뽑는다 — 정한다(`wayfinder`) → 문서 한 장(`to-spec`) →
+  개발 티켓(`to-tickets`) → 만든다(`implement-plan`). ⇒ **인박스 76번 ②와 77번이 같이 닫혔다**
 
 ## Not yet specified
 
@@ -54,11 +56,10 @@ exactly that reason.
   is in front of the user when they sit, and when in the route it happens **cannot be phrased yet**: the
   thing they would play does not exist in a settled form until the fight's hand-count and the reward/refit
   loop are decided. ⚠ This is the destination's own reason for existing, so it graduates last, not never
-- **개발은 어떤 단위로 하나** (row 77, the user's own open question). The proposed shape was 청사진 → 직접
-  해봐야 아는 것만 throwaway prototype → one plan → the five agents. ⚠ **The case against is on the record
-  and unanswered**: this game already runs, so **a temporary thing inside the real game may beat a separate
-  prototype**, and every reference cited assumes a project with nothing built. Hangs on how large the settled
-  designs turn out to be. Row 65 (배치냐 일괄이냐) is the same family and leans, undecided
+- ⚠ **개발은 어떤 단위로 하나 (row 77) is ANSWERED and left here only as a pointer**: 티켓 09 settled the
+  chain, so the unit is `to-tickets`'. **What stays open is row 65 — 배치냐 일괄이냐** (검증을 회차마다
+  하나, 몰아서 하나). Measured over ten rounds: **rounds started by a net going red = 0.** ⇒ **그물은 몰아도
+  되고, 사용자가 보는 것은 못 몬다**
 - **속도 조절.** In the code, taken off the screen. Only sharp once the fight's hand-count is settled — a
   speed control is either a comfort or the fifth hand-movement, and which it is depends on ticket 01
 - **맵이 한 화면을 넘어가도 되나** (row 21). It **removes a constraint the map arithmetic was built on** —

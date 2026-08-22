@@ -1,5 +1,5 @@
 Type: grilling
-Status: open
+Status: resolved
 
 # 정해진 것은 어디에 사는가
 
@@ -53,3 +53,36 @@ folders**, which is the exact drift the Korean twins were deleted for on 2026-08
    and 정해진 것 become one category in one place?
 3. If **ⓑ** — **what stops the new documents from becoming the ten concept docs again?** An answer that does
    not name the thing that stops it is not an answer
+
+## Answer
+
+**ⓐ — 결정은 티켓 안에 산다.** 사용자, 2026-08-22: ***"티켓에서 사는 걸로 하는데"***.
+
+**그리고 기획문서는 마지막에 한 장 뽑는다.** 들여온 스킬 넷이 이미 사슬이라서 그렇다:
+
+1. **`wayfinder`** — 정한다. 답은 티켓 안. 스킬이 직접 못박아뒀다: ***"a decision lives in exactly one
+   place, its ticket"***, 지도는 색인이라 절대 다시 안 적는다
+2. **`to-spec`** — 인터뷰 없이 **이미 정해진 것만** 합쳐서 기획문서 한 장을 뽑는다
+3. **`to-tickets`** — 그 문서를 **개발 티켓**으로 쪼갠다 (위아래를 관통하는 얇은 한 줄씩)
+4. **`implement-plan`** — 티켓 하나를 다섯 에이전트로 만든다
+
+## 왜 이게 개념 문서 열 개를 다시 안 만드나
+
+**개념 문서가 죽은 이유는 「계속 바뀌는 게임을 미리 서술해서 삭고 거짓말이 됐다」였다.** 이 순서는
+**문서를 마지막에, 정해진 것에서만** 뽑으므로 미리 서술하는 단계가 아예 없다.
+
+## 이 답이 같이 닫는 것
+
+- **인박스 76번 ②「기획문서 양식」** — 양식은 `to-spec`의 것이 된다. 티켓 08은 이제 **그 양식을 이
+  저장소에 맞게 고치는 일**이지, 처음부터 정하는 일이 아니다
+- **인박스 77번「개발은 어떻게 하는게 좋을까」** — 개발 단위는 `to-tickets`의 것이 된다. 지도의 안개에서
+  내려온다
+
+## ⚠ 남은 것 둘, 08로 넘긴다
+
+1. **`to-spec`의 「User Stories」 절이 이 게임에 안 맞는다** — ***"As an <actor>, I want a <feature>, so
+   that <benefit>"***. 게임에서 `so that` 칸은 「재미있으라고」로 무너지는데, **계획이 재미를 정할 수 없다**는
+   게 이 저장소의 두 번째 원칙이다. 그리고 행위자가 플레이어 하나뿐이라 모든 줄이 똑같이 시작한다
+2. **`to-spec`이 「extremely extensive」를 요구한다** — GDD가 한 장인 것과 정면으로 부딪힌다
+
+⚠ **접은 갈래와 풀린 티켓이 같은 모양이라는 충돌은 아직 안 풀렸다.** 08이 가져간다.
