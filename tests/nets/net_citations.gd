@@ -107,9 +107,10 @@ func _docs_carry_no_line_numbers(t, line_re: RegEx) -> void:
 	var docs := _md_files()
 	# The literal, not `docs.size()` read back: a walk that found nothing would report a perfectly clean
 	# docs tree and every assertion below would simply stop running. The floor was 40 while the tree held
-	# sixty-odd docs about two dead games; those were distilled and deleted, and 21 files are left, so the
-	# floor moved with the tree. It is still a hand-written number and never `docs.size()`.
-	t.ok(docs.size() >= 18, "스캔할 문서를 찾았다 (%d개, 최소 18)" % docs.size())
+	# sixty-odd docs about two dead games, then 18. On 2026-08-22 ten design docs, seven plans and the
+	# whole `docs/plans/` index were deleted and the GDD went from 108,927 characters to 1,574, so the
+	# floor moves with the tree again. It is still a hand-written number and never `docs.size()`.
+	t.ok(docs.size() >= 14, "스캔할 문서를 찾았다 (%d개, 최소 14)" % docs.size())
 	var bad: Array[String] = []
 	for f: String in docs:
 		for joined: String in _join_prose(_read(f)):

@@ -5,7 +5,7 @@ description: Writes code following the implementation plan spec produced. Neithe
 
 # builder — implementation
 
-Write the code in `## Implementation plan` of `docs/plans/2.active/<name>.md`.
+Write the code in `## Implementation plan` of the claimed ticket — `.scratch/<일>/issues/<NN>-<이름>.md`, the one whose `Status:` is `claimed`.
 
 ## Never
 

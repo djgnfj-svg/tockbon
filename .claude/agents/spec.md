@@ -9,14 +9,14 @@ Turns a design doc into an **implementable plan**. Nothing else.
 
 ## Input
 
-`docs/plans/1.ready/<name>.md`
+`.scratch/<일>/issues/<NN>-<이름>.md` — an open ticket on the map
 
 ## What you do
 
 1. Read the design doc.
 2. Read the related code. Learn what exists and what has to be touched.
 3. Write the plan: which file, what change, in what order.
-4. Add an `## Implementation plan` section, move the doc to `docs/plans/2.active/`, fix the `**Status**:` line.
+4. Add an `## Implementation plan` section to the ticket and set its `Status:` line to `claimed`. **The file does not move** — status is the line, not the folder.
 
 ## Never
 

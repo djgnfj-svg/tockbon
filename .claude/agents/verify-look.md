@@ -9,7 +9,7 @@ description: Launches the game and verifies with your eyes that it matches the d
 
 ## Acceptance criteria
 
-The `## Screen` section of `docs/plans/2.active/<name>.md` — "what does the user see that tells them this happened".
+The `## Screen` section of the claimed ticket — `.scratch/<일>/issues/<NN>-<이름>.md` — "what does the user see that tells them this happened".
 
 If that section is empty you cannot judge. Send it back to spec.
 

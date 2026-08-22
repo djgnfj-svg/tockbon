@@ -9,7 +9,7 @@ description: Closes out the session. Reflects what actually finished into the do
 
 **The work finishes and the state never changes.** That is the failure that repeats every time.
 
-A feature is built and left in `2.active/`; a file is deleted and the doc pointing at it isn't fixed;
+A feature is built and its ticket is still `claimed`; a file is deleted and the doc pointing at it isn't fixed;
 something learned never reaches memory. The next session starts believing all of it.
 
 So wrap-up is not "commit" — it is **making the docs match reality.** The commit is the last line.
@@ -26,7 +26,7 @@ Walk back through the conversation and list **what is genuinely done.** Built, f
 
 In order of how easily each is missed:
 
-- **`docs/plans/` status moves** — is a finished doc still sitting in `2.active/`. If you moved it, did you fix the `**Status**:` line inside too
+- **Ticket status** — is a finished ticket still `claimed`. If you resolved it, did the map's Decisions-so-far get its line too
 - **Dead references** — does any doc or comment still point at what you deleted or renamed this session
 - ⚠ **`CLAUDE.md` — do NOT edit it here.** It loads into every session and every agent, so it grows every
   time a wrap-up decides something "belongs" in it. **Only the user adds to it, and only when they say so.**

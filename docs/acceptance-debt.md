@@ -1,7 +1,7 @@
 # acceptance-debt — what shipped and nobody has looked at
 
 **The user cannot look at every round.** A round that ships without being looked at used to leave no trace
-at all, so the next session read `3.done/` as "accepted" and built on top of it. **This file is that trace**,
+at all, so the next session read a resolved ticket as "accepted" and built on top of it. **This file is that trace**,
 and it exists to be worked off **in one sitting**, not one item at a time.
 
 ⚠ **A row here is not a bug.** It is a thing that is built, green, and unwitnessed.

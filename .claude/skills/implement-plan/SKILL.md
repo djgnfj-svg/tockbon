@@ -1,6 +1,6 @@
 ---
 name: implement-plan
-description: Implements one design doc with a team. Use when the user says "이거 구현하자" "만들어줘" "개발 시작" "let's build this", or points at a doc in docs/plans/1.ready/. Spawns and coordinates five agents — spec, builder, verify-run, verify-look, verify-read. Also used for retries, resuming, and re-running verification only.
+description: Implements one ticket with a team. Use when the user says "이거 구현하자" "만들어줘" "개발 시작" "let's build this", or points at a ticket under .scratch/. Spawns and coordinates five agents — spec, builder, verify-run, verify-look, verify-read. Also used for retries, resuming, and re-running verification only.
 ---
 
 # Running the feature team
@@ -78,15 +78,15 @@ Skip it and builder finishes the whole implementation with no report reaching me
 
 ```
 0. Scale           ask: sequential or workflow. WAIT for the answer
-1. Pick design     choose a doc in 1.ready/
-2. spec            plan → move to 2.active/
+1. Pick ticket     take a frontier ticket: open, unblocked, unclaimed
+2. spec            plan into the ticket → Status: claimed
                    stuck → question to main → I ask the user
 3. builder         implement per plan
 4. Verifiers       verify-read · verify-run always
                    verify-look THE MOMENT the stage puts anything on screen — not at the end
 5. Mutation sweep  sequential: the verifiers do it inline
                    workflow: fan out, one worktree per mutation (below)
-6. Judgment        all pass → 3.done/
+6. Judgment        all pass → Status: resolved
                    any fail → batch the findings into ONE message to builder (back to 4)
 7. Round report    ONE block per round, appended to the plan doc. NOT optional (below)
 ```
@@ -184,7 +184,7 @@ it anchors them and they are no longer independent eyes. Pass only **what was wr
 
 **1. Before starting**
 
-- If something is already in `docs/plans/2.active/`, finish that first. Never run two at once.
+- If a ticket is already `Status: claimed`, finish that first. Never run two at once.
 - If the doc's `## Acceptance` and `## Screen` are empty, stop here. The verifiers have no grounds to judge.
 
 **2. spec**
@@ -313,14 +313,13 @@ causes the "editing during verification" problem above.
 
 **5. Judgment**
 
-- **All pass** → move the doc to `3.done/` and fix `**Status**:`. Report to the user.
+- **All pass** → set the ticket's `Status:` to `resolved`, append the answer under `## Answer`, and add one line to the map's Decisions-so-far. Report to the user.
 - **Fail** → summarize the failures and `SendMessage(to: "builder")`. Back to 4.
 - **Cannot judge** (criteria empty or ambiguous) → return to spec, or ask the user.
 
 **6. The round report — you write it, in the main tree, after every round**
 
-Not at the end. Not by the builder. **Append one block to the plan doc's `## Round log` and travel with it
-to `3.done`.** Sources: `changed` from `git show --numstat` · `why` from the previous round's red check labels ·
+Not at the end. Not by the builder. **Append one block to the ticket's `## Round log`.** It stays in the ticket when the ticket resolves. Sources: `changed` from `git show --numstat` · `why` from the previous round's red check labels ·
 `closed` is whether that label is green now. **"closed / not closed" is the whole point of the table** —
 print `not closed` even when it is empty, because an absent line reads as an absent problem.
 ⚠ **An agent's own summary is not the report** — measuring your own work reads favourably. The shape:
@@ -365,7 +364,7 @@ Keep going and builder starts bending the code to get past verification. That is
 
 ## Resuming
 
-- A `2.active/` doc exists and the team is dead: read the doc's progress and spawn only the agents you need.
+- A `claimed` ticket exists and the team is dead: read its progress and spawn only the agents you need.
 - Want to re-verify only: spawn the three verifiers. Leave builder alone.
 - Team is alive: just `SendMessage`.
 

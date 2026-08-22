@@ -9,6 +9,10 @@
 
 **Replies to the user are 한국어. Docs, comments and prompts are English.**
 
+**One exception: the GDD is 한국어** (2026-08-22, decided by the user). It is one page and **the user is
+the one who reads it** — an English GDD they never open is not a GDD. ⚠ **No twin.** Korean twins existed
+and the user deleted them on 2026-08-19 because the same fact living in two files drifts.
+
 # Reply rule — **the core, and nothing else**
 
 **The answer goes in the first line. Reasons after it, never before.** Every line load-bearing.
@@ -29,19 +33,16 @@ Answer, then stop.
 **Code that pretends to work is worse than code that doesn't, and a green that measures less than its
 label says is worse than a red. If you can't do it, say you can't.**
 
-# No `git push` until 2026-08-22 (decided by the user)
-
-Local commits are normal; only the remote is frozen. `gh-pages` redeploy counts as a push. **`wrap-up` stops
-at the commit.** Delete this section once the date passes.
-
 # The docs
 
-**`docs/` is two folders and four loose files. Open a folder's README, not the folder.**
+**`docs/` is one folder and five loose files, and planning lives outside it in `.scratch/`.**
+**Open a folder's README, not the folder.**
 
 | Path | What it holds |
 |---|---|
-| `docs/design/` | **Concepts, and the forks that were rejected.** Every doc's header carries `Implemented` and `Accepted` as **two separate axes.** The GDD lives here |
-| `docs/plans/` `1.ready` `2.active` `3.done` | **The only folder that moves.** One doc per implementation |
+| `docs/design/` | **The GDD, and the forks that were rejected.** The GDD is **one page** — 넘어가면 아무도 안 읽는다. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
+| `.scratch/<일>/` | **Where planning lives.** `map.md` is the map; `issues/NN-이름.md` are its tickets. **Status is a `Status:` line inside the file — files never move between folders.** `wayfinder` owns this |
+| `lessons-from-two-dead-games` | **What the two games that died actually measured.** The only survivor of both resets besides `planning-principles` |
 | `idea-inbox` | **What the user said, before anyone decided what to do with it.** One row per remark, verbatim, dated, with a state |
 | `acceptance-debt` | **What shipped and nobody has looked at.** Filled at `wrap-up`; a row leaves only when the user says they looked |
 | `how-nets-lie` | **Every green measured to be false.** Read it before writing a check and before believing a green round |
@@ -49,11 +50,15 @@ at the commit.** Delete this section once the date passes.
 
 - **What the user says in passing goes into `idea-inbox` that turn** — verbatim, dated, with a state.
   **Nothing is deleted from it**
-- **A picked idea grows into a `docs/design/` doc with one row in that README**, headed `Implemented` and
-  `Accepted` — without them, "written down" reads as "exists"
+- **A picked idea becomes a ticket on the map**, not a design doc. ⚠ **The `Implemented` / `Accepted`
+  headers are gone** — ten concept docs carried them and were deleted on 2026-08-22 because nobody could
+  read them. **What is built is read out of `src/` and `tests/nets/`**, and what the user has judged is
+  read out of `acceptance-debt`
 - **When a fork is taken, record the rejected branch in `docs/design/`**
-- **When the user says they looked at something, the verdict goes under that design doc's `Accepted`
-  section that turn.** The rest of acceptance is `wrap-up`'s
+- **When the user says they looked at something, their own words go into `acceptance-debt` that turn** —
+  ⚠⚠ **verbatim.** On 2026-08-22 the design docs were deleted and 「잘되네」「조작감이 너무 ㅈ같음」
+  「참 애매하네」 went with them. **Those quotes were the only measurement this repo had of whether the
+  game is any good.** The rest of acceptance is `wrap-up`'s
 - **Skeleton first, flesh later.** Do not demand every `TBD` be filled before implementing
 
 # How the code is laid out
@@ -70,3 +75,6 @@ game headless in seconds.
 
 **`net_draw_leaf` enforces the drawing half and both constant halves. The `sim`/`view` halves are scanned by
 nobody — write those when the folder can drift.**
+
+**`CONTEXT.md` at the root holds the words** — 세포 vs 병사, 슬롯, 소환 띠, 그물 — in 한국어 and in code,
+**and the three agreed test seams.** `tdd` will not write a test at a seam that is not named there.
