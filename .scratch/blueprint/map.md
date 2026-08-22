@@ -1,5 +1,10 @@
 # 청사진 — the detailed designs, re-settled
 
+> ## ⚠⚠ 이 지도는 닫혔다 (2026-08-22)
+>
+> **세포 게임을 접고 마법사 게임으로 간다** — 티켓 10의 답. **01–07은 범위 밖으로 나갔다.**
+> 살아남은 것은 티켓 09의 답(결정은 티켓 안에 산다)과 하네스뿐이다. **새 일은 새 지도로 그린다.**
+
 **Charted 2026-08-22, the first map in this repo.** The idea is the user's own, and it is row 76 of the idea
 inbox: ***"지금 내가 원하는건 이 프로젝트의 청사진하고 세부 기획들을 다시 잡는 것이고 그다음에 완료된
 기획이나 앞으로의 기획문서의 양식을 좀 정할 생각이야"***.
@@ -49,6 +54,9 @@ exactly that reason.
   기획문서는 다 정해진 뒤 `to-spec`이 한 장 뽑는다 — 정한다(`wayfinder`) → 문서 한 장(`to-spec`) →
   개발 티켓(`to-tickets`) → 만든다(`implement-plan`). ⇒ **인박스 76번 ②와 77번이 같이 닫혔다**
 
+- **이 게임을 계속하나** (`issues/10-is-this-the-game-at-all.md`): **접는다 — 마법사 게임으로 간다.**
+  사용자의 근거 둘: 지금까지 만든 게 재미가 없고, **마법사 쪽 아이디어가 재밌다.** ⇒ **이 지도가 닫힌다**
+
 ## Not yet specified
 
 <!-- in-scope fog: seen coming, not yet sharp enough to phrase as one question. Graduates into tickets -->
@@ -81,6 +89,9 @@ exactly that reason.
 - **아티팩트와 보물섬 — the third reward axis** (the GDD's second undecided line). Row 72 made **every node a
   fight node** by the user's decision and the chest is already gone from `Rules.NodeKind`. A third axis needs
   a node type that does not exist, so it is past this destination
+- ⚠⚠ **세포 게임의 세부 전부 — 전투 중 손 · 섬이 무엇을 주나 · 종별 착용 · 정비 판 · 안 보이는 세 부위 ·
+  지형 · 히트감 (티켓 01–07)**. **틀려서가 아니라 게임이 접혔기 때문이다.** 티켓은 그대로 남겨뒀고, 세포
+  게임이 돌아오면 여기서부터 다시 읽으면 된다
 - **하네스 — 아웃바운드 질문 경로, `grilling`의 세 구멍, `grill-me` 껍데기** (rows 2 · 15 · 74). Tooling, not
   this project's blueprint. ⚠ Row 24 records the user's own instruction that these are being handled
   elsewhere and are not to be raised again
