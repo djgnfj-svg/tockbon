@@ -1,5 +1,5 @@
 Type: grilling
-Status: claimed
+Status: open
 
 # 진은 어디에 몇 개 박히나
 
