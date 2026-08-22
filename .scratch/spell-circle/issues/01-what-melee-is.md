@@ -1,5 +1,5 @@
 Type: grilling
-Status: open
+Status: claimed
 
 # 근접 전투가 무엇인가
 
