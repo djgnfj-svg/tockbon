@@ -1,590 +1,187 @@
-# Circle · rune · glyph — what each of the three axes holds
+# 진 · 룬 · 문양 — 셋이 각각 무엇을 쥐나
 
-> ## ⚠⚠ 2026-08-22 — 되살렸다. 아래 경고 상자는 낡았다
->
-> **이 문서는 2026-08-17에 지워졌고, 오늘 git 기록에서 그대로 꺼냈다.** 사용자가 찾아달라고 해서 찾았다.
->
-> **아래 경고 상자는 「마법진은 통째로 접혔다 · 이 문서를 원칙 하나의 증거로만 읽어라」고 말한다.
-> 그 전제가 오늘 뒤집혔다** — 마법진이 다시 만드는 게임이다. **상자는 안 지웠다**: 그때 왜 접었는지가
-> 남아야 같은 자리에서 다시 안 막힌다.
->
-> ⚠ **그래도 그대로는 못 쓴다. 지금 확인된 것 셋:**
->
-> 1. **v1 코드는 이 저장소에 없다.** 기록이 2026-08-14부터 시작한다. 이 문서가 인용하는
->    `glyph_defs` · `spell_circle` · `sim_tuning` · `fx_tuning` 값은 **전부 확인 불가**다.
->    ⚠ 태그 `v1-sim` · `v2-openfield`도 **로컬에도 원격에도 없다**
-> 2. **이 문서가 가리키는 이웃 문서는 하나도 없다** — `circle-art.md` · `rune-lock-and-receiving.md` ·
->    `stage1-bosses.md` · `glyph-condense.md` · `spell-circle-minimum.md`. **이 문서가 유일한 생존자다**
-> 3. **틀이 다르다.** 이 문서와 「탑이 쏜다」 갈래는 **타워 디펜스** 위에 서 있다. 2026-08-22 사용자의
->    한 줄은 **스컬·데드셀식 로그라이크**다. **탑은 사용자가 다시 말한 적이 없다**
->
-> **30,701자다.** 오늘 GDD를 1,574자로 줄인 저장소에 이 크기를 되돌리는 것은 결 반대다.
-> ⇒ **참고 자료로 둔다. 무엇을 만드는가는 여기서 읽지 않는다.**
+**한 줄**: **진은 쏘는 순간을, 룬은 떠난 뒤를, 문양은 떨어진 뒤를 쥔다.**
 
-
-
-**One line**: the circle owns the moment of firing, the rune owns what happens after it leaves, the glyph owns what is added on top.
-
-**Implemented**: **none.** The game this ran in was deleted on 2026-08-12. `src/` does not exist
-**Accepted**: **the three-axis split itself is confirmed** — the user saw on screen that **order changes the
-kind of result** (spread ↔ blast). Nothing else here has been looked at
-
-> ⚠ **The magic circle was dropped entirely** ([why](../decisions/magic-circle-dropped.md)) — including
-> "a magic-circle Vampire-Survivors", which this box used to name as the reason to keep the file. **That
-> reason died later the same day it was written.**
->
-> **Exactly one sentence survives into the current game: order changes the kind of result** — the user saw
-> it on screen (spread ↔ blast), and it is the live evidence behind planning principle 8.
-> **Everything else below is the deleted game's rule set**: seventeen glyphs, a side view, a 20Hz tick,
-> integer determinism, water and fire cells, manual aim, and a `docs/GDD.md` that no longer exists.
-> There is no circle, no rune and no glyph in what is being built.
->
-> **Read it as evidence for one principle and for nothing else.** The current game is in
-> [Cell game](cell-game.md), [Stages and evolution](stages-and-evolution.md) and
-> [Hunting and the boss](hunting-and-the-boss-ko.md).
+> **2026-08-22에 30,701자에서 여기까지 줄였다** (사용자: *"핵심만 남겨서 정리"*).
+> **원본은 지운 게 아니라 git에 있다** — 커밋 `a2b06e46`의 부모, 경로 `docs/design/circle-rune-glyph.md`.
+> 버린 것: 탑 디펜스 틀 · 삭제된 v1 코드의 상수 인용 · 탄 머리 아트 스펙과 시드 · 픽셀 정합 측정 ·
+> 물·불 틱 시뮬을 전제한 부분. **전부 지금 확인할 수 없거나, 사용자가 오늘 안 만들기로 한 것들이다.**
 
 ---
 
-## Why this needed sorting out
-
-**If the circle decides the shape, the rune dies.**
-
-The GDD's original split was "circle = firing shape (straight or spreading) · rune = element · glyph = impact effect".
-That means **fire, water and lightning all fly identically under the same circle.** The rune changes only color and trail.
-
-Lightning that arcs slowly through the air **is not lightning.**
-The GDD line "a glyph's picture varies by rune. **The rule is the same**" was pinning the rune to a color axis.
-
-⇒ **Behavior moves to the rune.** That forces a redefinition of what the circle holds, and this doc is the answer.
-
----
-
-## The three axes — cut along time
+## 왜 셋으로 자르나 — **시간으로 자른다**
 
 ```
-     circle              rune                  glyph
+     진                 룬                    문양
 ─────────────    ──────────────      ────────────────────
-the moment of  →  after it leaves  →  after it lands
-firing                                (+ while travelling)
+쏘는 순간      →   떠난 뒤          →   떨어진 뒤
+                                        (+ 날아가는 동안)
 
-how many go out   what it is          what else happens
-and grouped how   how it travels
-how many layers   what it leaves in the world
+몇 발이 나가고     무엇이며             그 위에 뭐가 더 얹히나
+어떻게 묶이나      어떻게 나는가
+층이 몇이나        세상에 뭘 남기나
 ```
 
-**The three don't overlap in time.** Overlap and the lists eat each other — "does the circle spread"
-and "the spread glyph spreads" overlapped exactly that way.
+⚠ **셋이 시간에서 안 겹친다. 겹치면 서로를 잡아먹는다.**
+문양이 원소를 바꾸면 룬이 필요 없어지고, 문양이 발수를 늘리면 진이 필요 없어진다.
+
+**행동은 진이 정하지 않는다 — 룬이 가져갔다.** 진이 정하는 건 **나가는 배치**다.
+이 갈래가 원래 뒤집었던 것이 *"진 = 직선이냐 퍼짐이냐 · 룬 = 원소"* 였고, 그러면 **불·물·번개가 전부
+똑같이 날고 룬은 색깔 축이 된다.** 천천히 호를 그리는 번개는 번개가 아니다.
 
 ---
 
-## Circle — the frame
+## 진 — 틀
 
-There is one circle. **It decides the shape and size of the vessel.**
+### 진이 쥐는 것 넷
 
-**The circle does not decide how things fly.** The rune took that.
-The circle decides **the departing arrangement.**
-
-### The four things a circle holds
-
-| What | Meaning |
+| 무엇 | 뜻 |
 |---|---|
-| **Layer count** | How many glyphs can be placed |
-| **Rune slots** | How many runes fit |
-| **How runes combine** | Fusion · parallel · sequential |
-| **Glyphs per-rune or shared** | See "Two layer concepts" |
+| **층 수** | 문양을 몇 개 놓나 |
+| **룬 칸** | 룬이 몇 개 들어가나 |
+| **룬을 어떻게 합치나** | 융합 · 병렬 · 순차 |
+| **문양이 룬별인가 공유인가** | 아래 「층의 두 뜻」 |
 
-### The three ways runes combine
+### 룬을 합치는 세 가지
 
-| Mode | What | Result |
+| 방식 | 무엇 | 결과 |
 |---|---|---|
-| **Fusion** | Runes merge into **one new element** | water + fire = 1 steam shot |
-| **Parallel** | Runes go out **separately** | fire · water · lightning, 3 shots at once |
-| **Sequential** | Runes go out **in turn** | fire, then water. Becomes rapid fire |
+| **융합** | 룬이 **하나의 새 원소**로 합쳐진다 | 물+불 = 수증기 한 발 |
+| **병렬** | 룬이 **따로따로** 나간다 | 불·물·번개 세 발 동시에 |
+| **순차** | 룬이 **차례로** 나간다 | 불, 그다음 물. 연사가 된다 |
 
-**The circle does not separately set the shot count — it falls out of the rune arrangement.**
-That is why something like a "3-shot fan circle" becomes unnecessary. Three runes in parallel *is* three shots,
-and those three carry **different elements**, which is far more interesting than three of the same.
+**발수는 진이 따로 안 정한다 — 룬 배치에서 떨어져 나온다.** 그래서 「3발 부채 진」 같은 게 필요 없다.
+룬 셋 병렬이 곧 세 발이고, 그 셋은 **서로 다른 원소**를 들고 나간다. ⚠ **융합만 조합표가 필요하다.**
 
-Fusion **needs a combination table** (water+fire=steam). Parallel and sequential don't.
-The GDD's TBD "rune combination table" is the fusion circle's prerequisite.
+### 「층」의 두 뜻 — 항상 갈라 쓴다
 
-### Two layer concepts — always separate them
-
-"The circle is 2-layer" carries **two meanings** once there are multiple runes.
-
-| Concept | Meaning | What it sets |
+| 개념 | 뜻 | 무엇을 정하나 |
 |---|---|---|
-| **Total glyph slots** | How many glyphs fit in the assembly window | **Variety** |
-| **Layers per bolt** | Pipeline depth one bolt experiences | **Permutation depth** |
+| **문양 칸 총수** | 문양이 몇 개 들어가나 | **다양성** |
+| **한 발이 지나는 층** | 한 발이 겪는 파이프라인 깊이 | **순열 깊이** |
 
 ```
-3 runes · 1 layer each   3 slots, 1 layer/bolt    Three spells at once. No concept of order
-3 runes · 2 shared       2 slots, 2 layers/bolt   Three of the same spell. Order lives
-1 rune  · 4 layers       4 slots, 4 layers/bolt   One deep spell. 24 permutations
+룬 3 · 각 1층    칸 3, 발당 1층    세 마법 동시. 순서 개념이 없다
+룬 3 · 2층 공유   칸 2, 발당 2층    같은 마법 셋. 순서가 산다
+룬 1 · 4층       칸 4, 발당 4층    깊은 마법 하나. 순열 24가지
 ```
 
-**Layers per bolt are the raw material for the GDD thesis ("different order, different result").**
-A circle with one layer per rune has no concept of order at all — that is not a defect, it is **a different kind of circle.**
+⚠ **「발당 층」이 「순서가 다르면 결과가 다르다」의 재료다.** 룬마다 1층인 진은 순서 개념이 아예 없고,
+**그건 결함이 아니라 다른 종류의 진이다.**
 
-As a picture:
+### 진 셋 — 사다리가 아니다
 
-```
-glyphs per rune                    glyphs shared
-╭───────────────╮                ╭───────────────╮
-│  ⬢      ⬢     │                │   ╭───────╮   │
-│  ○      ○     │                │   │ ⬢ ⬢ ⬢ │   │
-│      ⬢        │                │   ╰───────╯   │
-│      ○        │                │      ○○       │
-╰───────────────╯                ╰───────────────╯
- fire→blast water→spread          fire·water·lightning all spread→blast
- lightning→home
-```
-
-⇒ **The rune-slot layout is the circle's picture.** Fusion has two interlocked slots, parallel has them apart,
-per-rune layers give multiple rings. **The picture states the rule** —
-the GDD line "if order isn't visible on screen the player never learns the rule" extends this far.
-
-### Circles differ in character
-
-- **Deep circle** — 1 rune, 4 layers. Assemble one spell deeply
-- **Wide circle** — 3 runes, 1 layer each. Throw three spells at once
-- **Middle** — 2 runes fused, 2 shared layers
-
-**This is what makes it a real choice in a roguelike.** More layers isn't strictly better; it becomes
-**what you give up for what you gain.** If only the layer count differs, that is an upgrade, not a choice.
-
-### The circle list — **three of them** (decided by the user)
-
-| Circle | Rune slots | Layers | Rune combining | Character |
+| 진 | 룬 칸 | 층 | 합치는 법 | 성격 |
 |---|---|---|---|---|
-| **Basic** | 1 | 2 shared | — | **Deep** — permutation lives |
-| **Fusion** | 2 | 1 shared | Fusion | **Middle** — two merge into one new element |
-| **Triangle** | 3 | **1 per rune** (3 slots total) | Sequential | **Wide** — **no permutation** |
+| **기본** | 1 | 2 공유 | — | **깊다** — 순열이 산다 |
+| **융합** | 2 | 1 공유 | 융합 | **중간** — 둘이 새 원소로 |
+| **삼각** | 3 | **룬마다 1** | 순차 | **넓다** — **순열이 없다** |
 
-**The three are not a ladder.** The triangle has three runes but **cannot use order combinations** — one layer per
-rune means a bolt passes through **exactly one** layer, and then there is no material for the GDD thesis.
-⇒ **A different kind, not an upgrade over basic.** This is where "if only the layer count differs it's an upgrade"
-was dodged, and the dodge was **adding runes instead of layers, and taking the layers away.**
+⚠⚠ **삼각은 기본의 상위가 아니다.** 룬이 셋이지만 **한 발이 정확히 한 층만 지나므로 순서 재료가 없다.**
+⇒ **「층 수만 다르면 그건 선택이 아니라 업그레이드」를 피한 방법이 이것** — 층을 늘리는 대신 **룬을 늘리고
+층을 뺐다.** 로그라이크에서 진짜 선택이 되려면 **얻는 것과 포기하는 것이 짝이어야 한다.**
 
-**The triangle's "sequential" sets firing order, not glyph order.** The three runes go out in turn, and each bolt
-carries **only its own socket's glyph.** "1 → 2 → 3" is **clockwise from 12 o'clock**, and the picture
-**does not indicate that order** (user decision — "the picture doesn't state the order" below).
-
-**Three is not the end.** The user pinned "more will be added later" — **three is what gets built now.**
-Art specs and generation live in `circle-art.md`.
-
-### The picture doesn't state the order — a contract broken knowingly
-
-The triangle's clockwise order is **shown by neither arrow nor number** (decided by the user:
-"no indication at all. The user just plays and learns it. The answer is clockwise").
-
-**This breaks the GDD's "if order isn't visible on screen the player never learns the rule" head-on.**
-⇒ It was **chosen knowing that line**, not in ignorance of it, so if "nobody knows the order" is ever observed,
-**this is the cause and this is what reopens.** Only two safeguards remain:
-
-1. **There is a socket at 12 o'clock** — the picture states at least the starting point (that is why the △ layout was chosen)
-2. **Onboarding** — the GDD says "the rule itself is taught in onboarding". **Whether the triangle goes there is TBD**
-
-### Visually they are all circles
-
-The difference is **the picture inside the ring**, not the ring itself.
-It is a magic circle, so it doesn't stray far from being a circle.
+⚠ **셋이 끝이 아니다** — 사용자가 그때 「나중에 더 추가」로 못박았다.
 
 ---
 
-## Rune — the element
+## 룬 — 원소
 
-A rune is an **element**. And **being an element, it flies accordingly.**
+**룬을 계수 묶음으로 보지 말고 「물질」로 봐라.** 그러면 플레이어가 표를 안 외운다 —
+「번개는 빠르고 직선」은 상식이다.
 
-Don't see a rune as a bundle of coefficients; see it as **matter**. Then the player never memorizes a table —
-"lightning is fast and straight" is common sense.
+**룬이 정하는 셋**: ① 무엇인가 ② 어떻게 나는가 ③ 세상에 뭘 남기나
 
-### The three things a rune sets
+**룬 열** — 불 · 물 · 번개 · 바람 · 땅 · 풀 · 얼음 · **무** · 빛 · 어둠.
+**처음 여는 넷은 불 · 물 · 무 · 번개.** 나머지 여섯 순서는 미정.
+⚠ 「한꺼번에 다 열지 않는다」가 목록과 함께 온 조건이다.
 
-1. **What it is** — fire · water · lightning · wind …
-2. **How it travels** — whatever is natural for that element
-3. **What it leaves in the world** — ignition · wetting · shock …
+### 행동은 두 단계로 갈린다
 
-### The rune list — **ten of them** (decided by the user)
+**1단계 — 같은 종류, 계수만 다름.** 전부 날아가는 탄이고 속도·처짐·사거리만 다르다.
+불은 덩어리로 느리게 호를 그리고, 번개는 아주 빠르고 거의 직선, 물은 무겁게 빨리 떨어지고, 바람은 안 처진다.
 
-**fire · water · lightning · wind · earth · grass · ice · none · light · dark**
+**2단계 — 아예 다른 종류로 난다.** 번개는 **선**이라 즉시 그려지고 날지 않는다. 물은 **쏟아짐**,
+바람은 **밂**. ⚠ **2단계는 룬 하나가 코드 경로 하나가 된다.** 그리고 문양의 뜻이 룬마다 갈라진다 —
+번개가 선이면 「퍼짐」이 선 끝에서 8방향인가, 선 전체에서 갈라지는가. **6문양 × 4룬 = 24가지를 정의해야
+하는 함정이 여기 있다.**
 
-**"Not all at once" came with the list as a condition.** Ten are not being opened; **the list is ten**,
-and which opens when is decided separately.
+⇒ **1단계부터 시작하고 2단계는 하나씩 연다.** 1단계만으로도 「모든 원소가 똑같이 난다」는 사라진다.
 
-**This list is the left side of the multiplication.** "Circle × rune multiply" above and "6 glyphs × 4 runes = 24"
-below were **written assuming 4 runes** — with ten it is 6 circle types × 10 runes = **60 firings**, and every rune
-opened to stage 2 requires redefining six glyphs. **That is why "start with stage 1" became a premise, not a choice.**
-
-**Some runes need a world sim to have an identity** — water (flow · wetness), ice (freezing) and grass (fuel)
-all fall under the GDD's "natural law", and without that sim they are **bolts with different coefficients.**
-**That is order, not defect** — it is the criterion when deciding what opens when.
-
-**"None" is already in code** — `sim_tuning.ELEM_NONE`, the starting rune, purple on screen (`fx_tuning.ELEM_FX`).
-It didn't join the list; **it got a name.**
-
-### How you come to have a rune (`rune-lock-and-receiving.md`)
-
-**The starting kit owns only none.** Fire, water and the other seven are all visible in the palette (they
-exist, the player can see them) but **veiled**: drawn, unpickable, until granted. A rune that simply vanished
-from the palette would say nothing; a rune the player can see but not yet take is legible as "the way forward"
-before it is earned. This is the actual lock — the seat itself defaults to none (`spell_circle.DEFAULT_RUNE`),
-but that alone does not stop the player from placing fire; the palette veiling it does.
-
-**Granting is a boss reward.** Killing the bull grants fire — the reward is the rune itself, not a stat or a
-consumable. Placing it still goes through the assembly window (`circle_window.gd`), the same door every rune
-already went through; receiving adds ownership, it does not add a second placement path.
-
-**This is one of three shapes that were open, and it is the one built** (`stage1-bosses.md`'s own TBD):
-auto-equip on kill, or the corpse burning so you pick the rune out of the wall, were the other two. **Both
-remain live** — nothing about the lock (which rune the palette will let you place) depends on which of the
-three grants it.
-
-### Bolt-head art — spec and four colors (the user picked by eye)
-
-**Spec.** **Additive blending is the whole spec** — `spell_view._ready()` uses `BLEND_MODE_ADD`, so black pixels
-are transparent for free but **dark colors never appear on screen at all.**
-⇒ Outlines and shading are impossible in principle. The art must be **light**, not a solid.
-
-| Item | Value | Reason |
-|---|---|---|
-| Canvas | **32×16** | The head alone fills 16×16 (`bolt_px` 8 = diameter 16) ⇒ 16px on the left for the tail |
-| Core center | **(24, 8)** | **This is the rotation pivot.** Off by any amount and **the head orbits** as the bolt turns |
-| Direction | right = angle 0 | Code rotates by the `prev → cur` vector. Per-direction art means 10 runes × N directions |
-| Glow | **Not in the art** | `BOLT_GLOW_RATIO` already draws a halo — putting it in the art makes two sources |
-| Tail | Art keeps it **short only** | Long trails are drawn in code (`trail_ticks` 12/8). Long art doubles up, and since fire droops, **a straight painted tail disagrees with the trajectory** |
-
-**AI generation would not produce a "short tail"** — even with `short` in the prompt the model fills the canvas.
-**Pick then crop is the right order.** Aligning the core to (24,8) is also done by hand.
-
-#### Measured — did the core actually land in the center (headless)
-
-**First measurement of whether "core center = rotation pivot" was honored.** Brightness² centroid:
-
-| Rune | From center | Vs width |
-|---|---|---|
-| fire | **(−1.49, +0.49) px** | 9.3% |
-| none | (−0.59, −0.09) px | 3.7% |
-| water | (−0.89, −0.30) px | 5.6% |
-
-**Even though `crop_head.py` cropped to the centroid, 1.5px remains** — cropping is integer-pixel, so half a pixel
-is unavoidable in principle. Generation 1 is half the size (8px), so **the same ratio is 0.75px.**
-⇒ `tests/nets/net_bolt_sprite.gd` draws the line at **15% of width.**
-
-**Color — the four are far apart.** Fire orange (30°) · water blue (210°) · lightning white-cyan · none **achromatic.**
-
-**Confirmed by measurement**: fire saturation 0.92 · water 0.92 · **none 0.03**. Color distance 0.64–1.29.
-⇒ **The runes are clearly distinguishable from each other.** **But the "knowingly broken contract" below still stands** —
-what "none" must be distinguishable from is not another rune but **the grey of "can't fire"**, and saturation 0.03
-confirms that worry numerically.
-
-**And a new disagreement appeared — only "none" has a head color different from its trail.**
-
-```
-        head art (mean)          glow drawn in code
- fire   (0.98, 0.69, 0.08)      (1.00, 0.48, 0.12)   agrees
- none   (0.59, 0.60, 0.60) grey (0.55, 0.35, 1.00) **purple**   disagrees
- water  (0.08, 0.67, 0.99)      (0.20, 0.62, 0.95)   agrees
-```
-
-It appeared in the change that made the trail use `glow` instead of `core`
-(`docs/plans/3.done/bolt-head-sprite.md`, "Result (3)"). **Nobody has looked at it on screen.**
-
-**Making "none" grey is a contract broken knowingly** (user: "make none grey? pink is a bit much").
-The `fx_tuning.ELEM_FX` comment records **why grey was rejected as a candidate** —
-"**when a rune slot is empty the staff tip is already grey.** 'Can't fire' and 'firing with none' become identical
-on screen, and that distinction is the entire warning `spell-circle-minimum` §3.5 built."
-
-⇒ **If "I can't tell whether it failed to fire or it's none-element" is ever observed, this is the cause and this reopens.**
-Only three safeguards remain:
-
-1. The staff-tip grey is an **empty ring**; a none bolt is a **solid mass**
-2. They are **in different places on screen** — one at the fingertip, one flying away
-3. **If something is flying, it fired** — a failed fire produces nothing at all
-
-And **rejecting purple has one more price** — being achromatic, it **shares a brightness axis with lightning (white-cyan).**
-What separates them is not color but **silhouette** (lightning is jagged, none is round). Break that silhouette and they merge.
-
-**The chosen four — reproduced by seed.** `tools/pixel/out/` is gitignored, so **the files disappear.**
-This table is all that remains, and preset `bolt` plus the seeds below **regenerate the same art.**
-
-| Rune | Folder / file | Seed |
-|---|---|---|
-| **fire** | `fire_head/fire_head_08` | `1407674110` |
-| **water** | `bolt_water/bolt_water_01` | `1930186274` |
-| **lightning** | `bolt_thunder/bolt_thunder_08` | `2008885172` |
-| **none** | `bolt_none3/bolt_none3_04` | `1465894749` |
-
-**Do not trust the sheet labels as seeds** — `sheet.py` prints only the **last 14 characters** of the stem,
-so three of the four lost a leading digit (`930186274` ← actually `1930186274`). **Read the filename.**
-
-**Weak fire is not being made** (user decision). The spec "weakness via color and brightness" is still alive —
-"the starting point of power" below is that place; **the art simply hasn't been generated.**
-
-### Behavior splits into two stages
-
-**Stage 1 — same kind, different coefficients**
-
-All projectiles. Only speed, droop and range differ.
-
-| Rune | How it looks |
-|---|---|
-| fire | A mass, slow, arcing |
-| lightning | Very fast, nearly straight |
-| water | Heavy, dropping fast |
-| wind | Fast and far, no droop |
-
-Cheap. Drag and gravity are **global constants** in the current code (`src/sim/sim_tuning.gd`);
-they just need to be carried per bolt.
-
-**Stage 2 — it flies as an entirely different kind**
-
-| Rune | What it is |
-|---|---|
-| fire | **A mass** — flies and hits |
-| lightning | **A line** — drawn instantly. It does not fly |
-| water | **A pour** — many droplets scatter and fall |
-| wind | **A push** — an area is shoved |
-
-**Stage 2 makes one rune into one code path.** Lightning as a line skips the trajectory code entirely.
-
-**And a glyph's meaning changes per element.** If lightning is a line, does "spread" mean 8 directions at the
-line's end, or splitting along the whole line? ⇒ The GDD's "a glyph's picture varies by rune, **the rule is the same**"
-breaks here. **The trap of having to define 6 glyphs × 4 runes = 24 cases lives here.**
-
-### ⇒ Start at stage 1 and open stage 2 one at a time
-
-Two reasons.
-
-1. **Stage 1 alone removes "every element flies identically".** Lightning at twice the speed with no droop
-   is already a different spell on screen
-2. **Opening all of stage 2 multiplies what must be defined.** Define it all up front and most of it goes stale before it's built
-
-⇒ **Open exceptions one at a time, like "only lightning becomes a line".** Lightning as a line is a strong identity
-and worth it; water pouring follows naturally once the water sim arrives. Coefficients suffice for the rest.
-
-### Circle and rune multiply
-
-```
-fan layout (3 shots) × fire       = three fireballs leave in a fan, each drooping
-fan layout (3 shots) × lightning  = three bolts leave in a fan, each going straight
-```
-
-6 circle types × 4 rune types = 24 firings out of **two tables.**
-Put behavior in the circle and all 24 rows would be written by hand.
+⚠⚠ **2026-08-22 — 물·얼음·풀은 원래 세상 시뮬(젖음·흐름·불탐)이 있어야 정체성이 생긴다고 여기 적혀
+있었고, 그 시뮬은 안 만들기로 했다.** ⇒ **그 셋은 계수만으로 정체성을 세우거나, 나중으로 밀린다.**
 
 ---
 
-## Glyph — what is added
+## 문양 — 얹히는 것
 
-**A glyph creates nothing new. It layers onto what exists.**
+**문양은 새로 만들지 않는다. 있는 것 위에 얹는다.**
 
-If a glyph can do anything, it eats the other two — an "apply fire element" glyph makes runes unnecessary,
-and a "split into 3 shots" glyph makes circles unnecessary.
-
-| A glyph can | A glyph cannot |
+| 문양이 할 수 있는 것 | 할 수 없는 것 |
 |---|---|
-| Increase speed | Change the element — the rune's job |
-| Curve the direction | Change the firing arrangement — the circle's job |
-| Split an existing bolt | Create a new element |
-| Add a blast at the impact point | Add layers — the circle's job |
+| 속도를 올린다 | **원소를 바꾼다** — 룬의 일 |
+| 방향을 휜다 | **나가는 배치를 바꾼다** — 진의 일 |
+| 있는 탄을 쪼갠다 | 새 원소를 만든다 |
+| 착탄점에 폭발을 더한다 | 층을 늘린다 — 진의 일 |
 
-### The glyph list — **seventeen** (decided by the user)
+### 문양 세 종류 — **이 구분이 파이프라인 전부다**
 
-| # | Glyph | Which of three | Defined? |
-|---|---|---|---|
-| 1 | **spread** | spawn | ✅ in code (`glyph_defs`) |
-| 2 | **blast** | finish | ✅ in code |
-| 3 | **condense** | finish | ✅ in code (`glyph_defs.CONDENSE_C/R/U`) — a pillar that shoots **up** from the impact point, two characters tall, leaving no material (**and writing no cells at all** — it neither cuts nor ignites). **Screen unseen** → `glyph-condense.md` |
-| 4 | **accelerate** | modify | Example in docs only |
-| 5 | **home** | modify | Example in docs only |
-| 6 | **spin** | modify | Name only — **the integer-rotation cost is unresolved** (below) |
-| 7 | **split** | ❓ | **How it differs from spread** is the first question |
-| 8 | **refract** | ❓ | Name only |
-| 9 | **amplify** | ❓ | **How it differs from empower** |
-| 10 | **emit** | ❓ | Name only |
-| 11 | **empower** | ❓ | **How it differs from amplify** |
-| 12 | **distort** | ❓ | Name only |
-| 13 | **absorb** | ❓ | Name only |
-| 14 | **manipulate** | ❓ | **How it differs from control** |
-| 15 | **control** | ❓ | **How it differs from manipulate** |
-| 16 | **deploy** | ❓ | Name only |
-| 17 | **convert** | ❓ | **If it changes the element it eats the rune** (below) |
-
-**Eleven are names only. That is normal** — the GDD's "skeleton first" pins down that "TBD means it isn't its turn yet".
-**But the two below are new risks created by the list reaching seventeen.**
-
-**① Three pairs of names overlap** — amplify/empower · manipulate/control · spread/split.
-**If the meanings don't separate, the player has two of the same glyph.** The list gets longer without gaining depth.
-⇒ When defining them, write **what differs first.** If the answer is "both make it stronger", merge them.
-
-**② "Convert" can eat the rune.** The table above pins "a glyph cannot change the element — the rune's job".
-If convert means "fire → water", **runes become unnecessary.**
-⇒ Convert survives only by **changing something that isn't the element** (direction · order · generation). That is the gate.
-
-**Permutations barely grow.** The circle's layer count is the ceiling, so even at 17 a 2-layer circle still gives
-**permutations of 2.**
-**What 17 grows is not permutation but the variety of "what did I get"**, and that is roguelike value.
-
-### Three kinds of glyph
-
-**This distinction is the entire pipeline.**
-
-| Name | When | What | The next glyph | Example |
+| 이름 | 언제 | 무엇 | 다음 문양은 | 예 |
 |---|---|---|---|---|
-| **Modify** | **Immediately** on being reached in the list | Alters how it flies | Continues right after | accelerate · home · spin |
-| **Spawn** | After landing | Creates new bolts | **Each new bolt carries it** | spread |
-| **Finish** | After landing | Happens there and ends | Continues at the same spot | blast |
+| **바꿈** | 목록에서 닿는 **즉시** | 나는 방식을 바꾼다 | 바로 이어서 | 가속 · 유도 · 회전 |
+| **낳음** | 착탄 후 | 새 탄을 만든다 | **새 탄이 각각 들고 간다** | 퍼짐 |
+| **끝냄** | 착탄 후 | 거기서 일어나고 끝 | 같은 자리에서 이어서 | 폭발 |
 
-**Modify is the new kind.** The current code (`src/sim/glyph_defs.gd`) has only spawn and finish.
-Modify doesn't wait for impact; it is consumed the moment it is reached in the list.
+**룬이 기본값을 주고 문양이 그걸 고친다 — 덮어쓰지 않고 얹는다.**
+가속은 「속도를 직선으로 만든다」가 아니라 **「지금 속도가 뭐든 그걸 올린다」**다.
+불에 가속 = 빠른 호, 번개에 가속 = 더 긴 직선.
 
-### Behavior = per-tick rule + coefficients. Rune gives defaults, glyph modifies
-
-**Layered, not overwritten.** Overwriting kills the rune; modifying keeps both alive.
-
-Accelerate is not "make the velocity straight" but **"increase whatever the velocity currently is".**
-Accelerate on fire gives a fast arc; on lightning, a longer straight line.
-
-| Coefficient | Rune default (example) | Which glyph touches it |
-|---|---|---|
-| Initial speed | fire 10 · lightning 40 · water 6 | accelerate |
-| Drag | fire 240 · lightning 256 (no decay) | accelerate · pierce |
-| Gravity | fire 64 · lightning 0 · water 128 | float |
-| Homing force | all 0 | home |
-| Spin force | all 0 | spin |
-
-⇒ **Rune = one row of this table. Glyph = a rule that edits that row.** They don't overlap.
-
-### Order lives in "modify" too
+### 순서는 「바꿈」에서도 산다
 
 ```
-[accelerate, spread]  → flies fast, lands, 8 bolts there       (the 8 are not fast)
-[spread, accelerate]  → lands, 8 bolts, each of them accelerates   ← a different spell
+[가속, 퍼짐]  → 빠르게 날아가 착탄, 거기서 8발      (그 8발은 안 빠르다)
+[퍼짐, 가속]  → 착탄, 8발, 그 8발이 각각 가속한다   ← 다른 마법이다
 ```
+
+**문양은 열일곱을 정해뒀고 셋만 정의돼 있었다** (퍼짐 · 폭발 · 응축). 열하나는 이름뿐.
+⚠ **두 가지 위험이 목록이 열일곱이 되면서 생겼다.**
+
+1. **이름이 겹치는 쌍 셋** — 증폭/강화 · 조작/제어 · 퍼짐/분열. **뜻이 안 갈리면 같은 문양이 둘이다.**
+   정의할 때 **무엇이 다른지를 먼저 써라.** 답이 「둘 다 세게 한다」면 합쳐라
+2. **「변환」이 룬을 잡아먹는다.** 불→물이면 룬이 필요 없어진다. **원소가 아닌 것(방향·순서·세대)을
+   바꿔야만 살아남는다**
 
 ---
 
-## Combining numbers — multiplication kills order
-
-Most games combine power as a multiplication chain. **Here that kills the thesis.**
+## ★ 곱셈은 순서를 죽인다
 
 ```
-spread(×0.5) → blast(×1.2)  =  ×0.6
-blast(×1.2) → spread(×0.5)  =  ×0.6      ← identical
+퍼짐(×0.5) → 폭발(×1.2)  =  ×0.6
+폭발(×1.2) → 퍼짐(×0.5)  =  ×0.6      ← 똑같다
 ```
 
-**Multiplication commutes, which makes order meaningless.**
-The current system keeps order alive **structurally, not numerically** — spread creates bolts, blast ends in place.
-The moment a formula is introduced, the first question is how to preserve that property.
+**곱셈은 교환법칙이 성립하므로 순서가 뜻을 잃는다.** 이 설계는 순서를 **숫자가 아니라 구조로** 살려뒀다 —
+퍼짐은 탄을 낳고 폭발은 그 자리에서 끝난다. **수식을 넣는 순간 첫 질문은 이 성질을 어떻게 지키느냐다.**
 
-Ways to combine without killing order:
-
-- **Mix non-commutative operations** — `(x+3)×2 ≠ (x×2)+3`. If glyphs split into add and multiply, order survives numerically
-- **Positional rules** — "a modify glyph applies only to the **next** thing". Order *is* the target
-- **Structure-only order dependence** — the current approach. Numbers see only the generation
-
-And `src/sim/` **forbids float.** Carry fixed point all the way and divide once at the end —
-dividing at each step accumulates truncation and kills small values to 0.
-That becomes **"a 4-layer spell is inexplicably weak"**, with no error, visible only in the numbers.
+순서를 안 죽이고 합치는 법: **교환 안 되는 연산을 섞는다**(`(x+3)×2 ≠ (x×2)+3`) · **자리 규칙**
+(바꿈 문양은 **바로 다음** 것에만 적용) · **구조로만 순서를 태운다**(지금 방식).
 
 ---
 
-## Not decided yet
+## ★ 화면에서 확인된 단 하나
 
-**Do not force these full** (GDD "build order — skeleton first"). TBD is the normal state.
-
-**Circle**
-- ~~The concrete circle list~~ → **decided** ("the circle list — three of them"). **The max layer count is still TBD** —
-  the deepest of the three is 2 layers, so `circle-art.md`'s "7-layer problem" simply hasn't been reached
-- **What an aiming circle is** — candidates: ① detonates directly at the aimed point ② spread converges instead of scattering ③ range increases
-- **Whether trigger timing goes in the circle** — impact / timer / placed. It makes circles interesting at a large complexity cost
-- **Cost · cooldown** — the game has no concept of cost at all. This opens a whole new axis
-- **What the triangle's sequencing counts** — **how many ticks apart** the three shots leave. Zero is effectively parallel,
-  too long reads as "broken". **This value directly sets the size of the explosion below**
-
-**The explosion constraint — the hole narrowed, it didn't close**
-
-```
-3 runes parallel × spread each = 3 × 8 = 24 bolts
-4 players = 96 — the current cap is 32 (src/sim/sim_tuning.gd)
-```
-
-The GDD blocked 8→64 with "only one spread per circle", but **parallel runes walk around it.**
-There is one spread, but effectively three circles.
-
-**Triangle being sequential halves this.** The three don't leave **on the same tick**, so impacts scatter,
-and scattered impacts scatter the 8 spread bolts too ⇒ the worst case of 24 simultaneous rarely arrives.
-**But it doesn't vanish** — three bolts flying abreast into similar walls still gives 24, and what sets that
-"similar" is the TBD **sequence interval** above.
-
-And **the unit of "only one per circle" wobbles.** The triangle has **separate glyph slots per rune**, so what is
-"one circle" — per slot means all three can hold spread and the full explosion returns; per circle means three runes
-with spread on **only one socket.**
-**Picking the latter makes the picture lie** — three identical-looking sockets, one of which gets spread.
-
-Candidates: circles with many rune slots can't take spread / pin a total shot cap per circle / widen the sequence interval
-
-**Rune**
-- ~~The rune list and count~~ → **decided** ("the rune list — ten of them")
-- ~~Opening order~~ → **the first four are decided**: **fire · water · none · lightning** (decided by the user).
-  The order of the remaining six (wind · earth · grass · ice · light · dark) is **still TBD**
-  **The user overturned the "water later" criterion above** — water went early despite being a coefficient-only bolt
-  without its sim. **So the moment water opens it must carry its whole identity on "heavy, drops fast"** (stage-1 table above).
-  Until wetness and flow arrive, that is all it has
-- **Combination table** — the fusion circle's prerequisite. The GDD has exactly one entry, "water+fire = steam".
-  **Ten runes makes the table up to 45 pairs** — the TBD got bigger
-- Which runes open to stage 2 (flying as a different kind)
-
-**The starting point of power**
-- **The first blast you get is weak** (decided by the user). It is a roguelike, so **power growing** is a premise,
-  and the start is below the current value (`rd` 8 in `sim_tuning` = 32px hole radius)
-- **How weak, and what it grows along, is TBD** — the same place as "how to combine" above
-- **The screen must follow.** `fx_tuning` hand-tuned "flash = hole radius × 2.25" and **no net measures that ratio** ⇒
-  lowering `rd` must lower `flash_px` with it. Otherwise **only the hole shrinks while the blast stays**,
-  which is the exact shape this repo calls "the signature fake"
-- **Weakness is not expressed by size — by color and brightness** (decided by the user).
-
-  ```
-  existing axis   gen 0 → gen 1          split smaller by spread     (size)
-  new axis        starting spell → grown spell   stronger as it goes  (color · brightness)
-  ```
-
-  **Two different axes sharing the size knob become identical on screen** — draw the starting spell small and
-  the player has **no way to tell** "a weak spell" from "a fragment split off by spread".
-  Color and brightness are an axis the generation table (`FX_SIZES`) doesn't use, so they don't collide, and
-  **additive blending means faint really does look faint** (`spell_view._ready()`).
-
-**Glyph**
-- ~~**Definition of condense**~~ → **answered** (`glyph-condense.md`): **finish**, a column upward, no residue.
-  **Width, damage and duration are still open there.** **deploy** is still a name only — start with which of the
-  three (modify/spawn/finish) it belongs to
-- **Spin's integer cost** — `sin` and `cos` are forbidden, so vectors can't be rotated.
-  90°/45° snapping is free but coarse (one revolution in 8 ticks); integer rational approximate rotation works but
-  **the length drifts** (it speeds up or dies while spinning). ⇒ Whether spin becomes a glyph at all depends on this cost
-
-**Formulas**
-- **The spec list** — how many numbers is a spell's spec. Code has four (`speed` · `rd` · `ignite_r` · `rune_r`) and
-  **no damage.** **The reason it was absent (no health) is gone** — `character-damage-minimum` set health 100 and
-  base damage 10. **Damage becomes the fifth spec**
-- **Who provides the defaults** — the user decided "**rune · glyph · gear can all take part**".
-  **How they take part is still undecided**
-- **How they combine** — **still TBD.** "Multiplication kills order" above stands unchanged.
-
-  **"Spread raises the generation" did not solve this.** That mechanism preserves order only in **pairs bracketing
-  a bolt-spawning glyph** — a combination like `[blast, blast]` where neither spawns is identical reversed,
-  and so are two modify glyphs. **And the generation table says nothing about how runes and gear fold in.**
+**순서를 바꾸면 결과의 「종류」가 바뀌는 것을 사용자가 화면에서 봤다** — 퍼짐 ↔ 폭발.
+**두 게임을 통틀어 살아남은 유일한 관찰이고**, 「조합은 순서에 따라 결과가 달라져야 한다」는 원칙의 근거다.
 
 ---
 
-## Relationship to the GDD
+## 아직 안 정한 것
 
-This write-up overturned two GDD lines, **and the GDD was fixed in the same commit.**
-
-| What the GDD said | Now |
-|---|---|
-| The circle sets the **firing shape** (straight · spreading · placed) | The circle sets the **frame.** The rune sets the firing shape |
-| A glyph's picture varies by rune. **The rule is the same** | True for coefficient-only runes. **For runes that fly as a different kind, the rule differs too** |
-
-**The GDD records only the face visible from the game side and points here for detail.**
-Duplicate it and the two docs diverge, and then nobody knows which to trust.
+- **최대 층 수** — 셋 중 제일 깊은 게 2층이라 아직 안 닿았다
+- **비용 · 재사용 대기** — 이 게임에는 비용 개념이 아예 없다. 열면 축이 하나 새로 생긴다
+- **삼각의 순차 간격** — 몇 틱 벌어져 나가나. 0이면 사실상 병렬, 길면 고장 난 것으로 읽힌다
+- **융합 조합표** — 룬이 열이면 최대 45쌍. 지금 정해진 건 「물+불 = 수증기」 하나
+- **폭발 상한** — 룬 3 병렬 × 각 퍼짐 = 24발. 「진마다 퍼짐 하나」로 막았는데 **병렬 룬이 그걸 우회한다**
+- ⚠⚠ **2026-08-22에 새로 열린 것: 진이 어디에 들어가나.** 사용자 — *"무기마다 마법진을 넣고 장비에도
+  마법진을 넣는 형식."* **이 문서는 진이 독립된 물건이라고 전제하고 쓰였다.** 무기·장비에 박히면
+  **진의 개수와 성격이 장비 슬롯 수에 묶이고**, 위의 「진 셋」이 그대로 서는지 다시 봐야 한다
