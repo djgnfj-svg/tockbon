@@ -39,11 +39,13 @@ into the repo.
 no error anywhere** — and one of the deleted tools *hung* there instead, waiting on a `frame_post_draw` that
 never comes. `capture_map.gd` refuses `--headless` outright rather than writing the rule down.
 
-**A capture harness is an instrument, so invert it before trusting it.** `capture_map.gd` takes a known-answer
-frame first for exactly this: `FieldView.setup()` opens every island at `Look.ZOOM_MIN` with the camera home, and
-`_clamp_cam()` re-centres whichever axis the map is narrower than — **either can quietly undo a staged camera
-between the write and the shutter, and the failure looks exactly like a change that had no effect.** Stage the
-camera by writing `cam_px`/`zoom` and letting `FieldView._process` compose them, **never** by writing `position` —
+**A capture harness is an instrument, so invert it before trusting it.** ⚠⚠ **2026-08-22 — the capture
+harness this paragraph described went with the cell game, and so did every name it pinned** (`capture_map.gd`,
+`FieldView.setup()`, `Look.ZOOM_MIN`, `_clamp_cam()`). **The rule those names taught is what survives, and it
+is general**: take a **known-answer frame first**, because anything that re-centres or re-zooms between the
+write and the shutter **quietly undoes a staged camera, and the failure looks exactly like a change that had
+no effect.** Stage a camera through the values the view composes each frame, **never** by writing `position`
+directly — and **rebuild this paragraph's concrete half the day a capture tool exists again.**
 that node reserves the composition for one place.
 
 **Is there a path for the thing you want to see to reach the screen?** The most common miss, and it reads as a

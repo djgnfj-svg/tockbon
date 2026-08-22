@@ -1,45 +1,37 @@
-# docs/design — the GDD, and the forks that were rejected
+# docs/design — 지금 만드는 것, 그리고 접은 갈래
 
-**Cleared on 2026-08-22 by the user.** Ten concept docs were deleted; the GDD and the eight fork records
-stayed. **Everything deleted is still in git** — it was removed because nobody could read it, not because it
-was wrong.
+**2026-08-22에 두 번 갈렸다.** 아침에 세포 게임의 개념 문서 열 개가 지워지고 접은 갈래 여덟만 남았고,
+저녁에 **세포 게임 자체가 접히면서 그 갈래 여덟과 GDD도 같이 나갔다.** 전부 커밋 `62ff57d`에 있다.
 
-**Why the forks stayed and the concepts did not**: a concept doc describes a game that keeps changing, so it
-goes stale and then lies. **A fork record describes a decision that was already made, and it does not go
-stale — it only gets reversed, and a reversal is written onto the same doc.** Without these, a branch that
-was beaten once comes back and gets argued about again.
-
-⚠ **Some of these are marked REVERSED. That is not a reason to delete them.** The reasoning is kept beside
-the reversal so the same wrong turn is not taken twice.
+**접은 갈래가 개념 문서보다 오래 사는 이유**: 개념 문서는 계속 바뀌는 게임을 서술하므로 삭고 거짓말이
+된다. **접은 갈래는 이미 내려진 결정을 서술하므로 안 삭는다 — 뒤집힐 뿐이고, 뒤집힘은 같은 문서 위에
+쓴다.** 이게 없으면 한 번 진 갈래가 돌아와서 다시 논쟁이 된다.
 
 ---
 
-## The live design
+## 지금 만드는 것
 
-| Doc | What it is |
+| 문서 | 무엇 |
 |---|---|
-| **[The cell army GDD](cell-army-gdd.md)** | **「먹을 것을 고르러 간다」.** An autobattler on a node map of islands. A squad of square cells lands by boat on the coastline; combat is automatic; soldiers carry across islands, HP included, and a dead one is dead for good. ⚠ **Its `Implemented` and `Accepted` headers now describe deleted docs.** They are stale until the blueprint is charted again |
+| **[진 · 룬 · 문양](circle-rune-glyph.md)** | **셋을 시간으로 자른 정의.** 진은 쏘는 순간, 룬은 떠난 뒤, 문양은 떨어진 뒤. 진 셋 · 룬 열 · 문양 세 종류, 그리고 **곱셈이 순서를 죽인다**. ⚠ 2026-08-17에 지워졌다가 **2026-08-22에 되살려 30,701자 → 10,170자로 줄였다** |
 
-## The forks — what was rejected, and why
+⚠ **GDD가 없다.** 세포 게임 것이 접히면서 나갔고, **마법진 게임 것은 아직 안 썼다** — 지도의 티켓
+다섯이 풀려야 쓸 내용이 생긴다. **무엇을 만드는가는 지금 `.scratch/spell-circle/`에서 읽는다.**
 
-| Doc | The fork | State |
+## 접은 갈래
+
+| 문서 | 무엇을 접었나 | 상태 |
 |---|---|---|
-| **[하늘에서 떨군다](dropped-from-the-sky-not-landed-by-boat.md)** | Cells drop from the sky instead of landing by boat | ⚠ **뒤집힘 (2026-08-17)** — 배로 상륙한다. 버린 근거 자체가 틀렸다: *「배는 도착한다의 그림」* 이었는데 **침략하러 가는 배는 도착이 아니다** |
-| **[해안선 전체에 상륙한다](open-coastline-over-fixed-docks.md)** | Fixed docks, N per island | **유효 (2026-08-17)** — 막힌 곳이 아니면 해안선 어디로든. 같은 날 먼저 내린 「선착장 N개」를 뒤집는다 |
-| **[배는 무한하다](unlimited-boats-not-a-five-boat-cap.md)** | Five boats, one seat each, as a cap | **유효 (2026-08-18)** — 상한을 배로 만들지 않는다. 같은 날 앞선 결정 14번을 뒤집는다 |
-| **[커밋은 전투 전에](commit-before-the-fight-not-during.md)** | Decide during the fight | ⚠⚠ **일부 뒤집힘 (2026-08-19)** — ***「저 배만 좀 참여하는 걸로」***. 전투 중에 손이 움직이되 **배에만**. 상륙한 병사는 여전히 못 건드린다 |
-| **[빌드는 정비 화면에서 설계한다](build-is-designed-not-inherited.md)** | What you ate becomes the build | **유효 (2026-08-18)** — 레벨 디자인 비용으로 기각. ⚠ **GDD의 「경로가 곧 빌드」를 뒤집는다.** 단 이 문서가 설계 대상으로 적은 「다섯 칸」은 같은 날 나중에 사라졌다 |
-| **[층마다 하나](one-node-per-floor-not-two-columns.md)** | Two columns, one taken from each | **유효 (2026-08-19)** — ***「층마다 둘 중 하나」***. 슬더슬 모양 |
-| **[몸은 코드가 그리는 선](the-body-is-a-line-drawn-by-code.md)** | The body is a sprite | **유효** — 둥근 사각형 외곽선에 가운데 점 하나, 코드로 그린다. **그림으로 갈아끼우는 건 나중에 열어둠** |
-| **[메타는 해금이지 수치가 아니다](meta-unlocks-not-stat-boosts.md)** | Between-run progress raises numbers | ⚠ **뒤집힘 (2026-08-16)** — 둘 다 들어간다. **함정 자체는 안 사라져서** 근거를 남겨뒀다. 지금은 없는 게임을 위해 정해진 것 |
+| **[마법진을 접는다](magic-circle-dropped.md)** | 마법진을 게임에서 통째로 뺀다 | ⚠⚠ **뒤집힘 (2026-08-22)** — 접은 근거가 *「사용자 머릿속에 그림이 안 잡힌다」*였는데, **사용자가 한 줄로 그렸다.** 근거가 사라졌다 |
+| **[진은 탑이 쏘는 걸 바꾼다](circle-modifies-the-tower-not-fires.md)** | 진 자체가 포탑이 되는 것 | ⚠ **틀이 죽었다 (2026-08-22)** — 타워 디펜스가 아니게 됐다. **탑 자리에 플레이어가 들어간다.** 「진은 스스로 안 쏘고 나가는 것을 바꾼다」는 뼈대는 그대로 산다 |
 
 ---
 
-## What a doc in here looks like
+## 이 폴더의 문서가 생긴 모양
 
-**Every fork doc opens with a `Status:` line** — `valid`, `REVERSED`, or `partially reversed` — with the
-date and who decided it. **A reversal is written onto the existing doc, never by deleting it.**
+**접은 갈래는 `Status:` 줄로 시작한다** — `valid` · `REVERSED` · `partially reversed`, 날짜와 누가
+정했는지까지. **뒤집힘은 기존 문서 위에 쓴다. 지워서 뒤집지 않는다.**
 
-⚠ **This folder no longer carries `Implemented` / `Accepted`.** Those two axes tracked concept docs against
-the running game, and the concept docs are gone. **Whatever replaces them will be decided when the blueprint
-is charted again** — until then, what is built is read out of `src/` and `tests/nets/`, not out of here.
+⚠ **`Implemented` / `Accepted` 두 축은 없다.** 세포 게임의 개념 문서를 재던 축이고 그 문서들이 없다.
+**무엇이 지어졌나는 `src/`와 `tests/nets/`에서, 무엇을 사용자가 봤나는 `acceptance-debt`에서 읽는다.**
+⇒ **무엇이 이걸 대신하나는 아직 안 정했다** — 지도의 안개에 있다.

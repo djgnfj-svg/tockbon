@@ -1,9 +1,14 @@
-# tockbon — a **cell autobattler**, and it runs
+# tockbon — a **magic-circle roguelike**, and `src/` is empty
 
-**A node map of islands, a squad of square cells landed by boat.** 「먹을 것을 고르러 간다」
-`run/main_scene` is `src/shell/game.tscn`, and the GDD is `cell-army-gdd`.
+**Runes fused into a circle make a custom spell; you carry that circle into melee and clear a dungeon.**
+The user's own references are **Skul** and **Dead Cells**.
 
-**Only the user adds to this file.**
+**The root of the design is three axes cut along time** — the **circle** owns the moment of firing, the
+**rune** owns after it leaves, the **glyph** owns after it lands. They do not overlap, and overlap makes
+them eat each other. `circle-rune-glyph`.
+
+⚠ **There is no GDD yet and no `run/main_scene`.** The cell game was folded on 2026-08-22 and is whole at
+commit `62ff57d`. **What is being made is read out of `.scratch/spell-circle/`** — a map and five tickets.
 
 # Language
 
@@ -54,7 +59,7 @@ label says is worse than a red. If you can't do it, say you can't.**
 
 | Path | What it holds |
 |---|---|
-| `docs/design/` | **The GDD, and the forks that were rejected.** The GDD is **one page** — 넘어가면 아무도 안 읽는다. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
+| `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **There is no GDD right now** — the cell one went with the game and the new one waits on the map. When one is written it is **one page** — 넘어가면 아무도 안 읽는다. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
 | `.scratch/<일>/` | **Where planning lives.** `map.md` is the map; `issues/NN-이름.md` are its tickets. **Status is a `Status:` line inside the file — files never move between folders.** `wayfinder` owns this |
 | `lessons-from-two-dead-games` | **What the two games that died actually measured.** The only survivor of both resets besides `planning-principles` |
 | `idea-inbox` | **What the user said, before anyone decided what to do with it.** One row per remark, verbatim, dated, with a state |
@@ -83,12 +88,16 @@ game headless in seconds.
 | Path | The rule it obeys |
 |---|---|
 | `src/sim/` | **Never touches the tree.** No `Node`, no `_draw`, no `Input`, no `get_node`, no `$`. Every file is constructible and drivable with `.new()` and nothing else |
-| `src/view/` | **Reads `sim`, never writes it.** Everything that is a Node or draws lives here, and **each drawing file exposes a hook** (`_paint_cell`, `_paint_text`) so a net can assert the arguments |
+| `src/view/` | **Reads `sim`, never writes it.** Everything that is a Node or draws lives here, and **each drawing file exposes a `_paint_*` hook** so a net can assert the arguments |
 | `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. It builds its children in code, so a net calling `_ready()` exercises the real wiring |
 | `src/look.gd` | **Every presentation constant, in exactly one file.** `src/sim/rules.gd` holds every constant that changes what happens |
 
-**`net_draw_leaf` enforces the drawing half and both constant halves. The `sim`/`view` halves are scanned by
-nobody — write those when the folder can drift.**
+⚠⚠ **Nothing scans this table right now.** `net_draw_leaf` enforced the drawing half and both constant
+halves, and **it went with the cell game on 2026-08-22** — it pinned that game's own constants by literal
+(`Look.ZOOM_MIN`, nine above a floor and three below), so it could not survive the deletion.
+**Two nets are left and neither reads `src/`: `net_citations` and `net_process`.**
+⇒ **The folder rule is honour-based today. Rebuild the scan when `src/` has something to drift.**
 
-**`CONTEXT.md` at the root holds the words** — 세포 vs 병사, 슬롯, 소환 띠, 그물 — in 한국어 and in code,
+**`CONTEXT.md` at the root holds the words** — 진 vs 룬 vs 문양, 층, 근접, 그물 — in 한국어 and in code,
 **and the three agreed test seams.** `tdd` will not write a test at a seam that is not named there.
+⚠ **Every word in it is a design, not a measurement, until `src/` holds it** — the file says so itself.

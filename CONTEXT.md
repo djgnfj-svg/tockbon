@@ -1,60 +1,66 @@
 # CONTEXT — the words this repo uses
 
-**Written 2026-08-22** because `tdd` and `domain-modeling` both read this file for the vocabulary that test
-names and interfaces are built out of, and it did not exist. **Terms are taken from the code, not invented
-here** — every one below is a name that appears in `src/`.
+**Rewritten 2026-08-22** when the cell game was folded and the magic-circle game came back. `tdd` and
+`domain-modeling` both read this file for the vocabulary that test names and interfaces are built from.
 
 ⚠ **The user speaks Korean and the code speaks English.** Both columns are load-bearing: **an answer that
 uses only the English word is not an answer to the user**, and a symbol named in Korean is not a symbol.
 
+⚠⚠ **Nothing here is taken from code yet — `src/` is empty.** Every term below comes from
+`docs/design/circle-rune-glyph.md`, which is a design and not a measurement. **The moment a name reaches
+`src/`, this file is corrected to match the code, not the other way round.**
+
 ---
 
-## The army
+## The spell — three axes, cut along time
+
+**They do not overlap in time. Overlap and they eat each other.**
 
 | 한국어 | Code | What it is |
 |---|---|---|
-| 세포 | **cell** | The currency you spend to summon. Eating an island grows the **pool**, not the roster |
-| 병사 | **soldier** | One body on the field. **Carries across islands, HP included. Dead is dead** |
-| 군대 | **army** | Every soldier in the run. Owns `living_count`, and combat reads it |
-| 슬롯 | **slot** | A summon template. Press it, spend cells, a body of that shape comes out. **There are two** |
-| 부품 | **part** | What a slot's body is built from. Six body places: 머리 가슴 배 팔 손 다리 |
+| 진 (마법진) | **circle** | **The moment of firing.** How many go out, how they are grouped, how many layers |
+| 룬 | **rune** | **After it leaves.** What it is, how it travels, what it leaves in the world |
+| 문양 | **glyph** | **After it lands** (and while travelling). What is added on top |
 
-⚠ **A cell is not a soldier.** Cells are the pool; a soldier is what a slot turns them into. Collapsing
-these two is the oldest vocabulary mistake in this repo.
+⚠ **A glyph cannot change the element** — that is the rune's. **A glyph cannot change the arrangement** —
+that is the circle's. Break either and the axis it stole from becomes unnecessary.
 
-## The field
+## Inside a circle
 
 | 한국어 | Code | What it is |
 |---|---|---|
-| 섬 | **island** | One combat map. A `grid` of tiles plus the rows that fill it |
-| 판 | **grid** | The tile map itself — land, water, cliff |
-| 소환 띠 | **band** | The strip of sea you may press. **Six tiles off the shore, minimum** |
-| 배 | **boat** | Carries a summoned soldier from the band to the nearest shore. **It sails itself** |
-| 항구 | **harbour** | A shore tile a boat can arrive at |
+| 층 | **layer** | A glyph seat. ⚠ **Two different meanings** — total glyph seats (variety) vs layers one bolt passes (permutation depth). **Never collapse them** |
+| 룬 칸 | **rune slot** | Where a rune sits |
+| 융합 · 병렬 · 순차 | **fuse · parallel · sequence** | The three ways runes combine. **Only fusion needs a table** |
 
-⚠ **`harbour` survives from the deleted drag control.** It is now an arrival point the sim picks, **never a
-thing the player aims at.** A design that makes the player choose a harbour is re-importing a rejected fork.
+⚠ **Shot count is not set by the circle** — it falls out of the rune arrangement. Three runes in parallel
+**is** three shots, and they carry different elements.
 
-## The run
+## What a glyph does, by when
 
-| 한국어 | Code | What it is |
+| 한국어 | Code | When |
 |---|---|---|
-| 판(한 회차) | **run** | Title to boss. Holds `State`: MAP · BATTLE · REWARD · PICK · REFIT · WON · LOST |
-| 노드 | **node** | One stop on the map. Five floors, seven nodes |
-| 파트 루프 | — | One island |
-| 세션 루프 | — | One run, between islands |
-| 메인 루프 | — | Outside a run |
+| 바꿈 | **modify** | **Immediately** on being reached. Alters how it flies |
+| 낳음 | **spawn** | After landing. Creates new bolts, **each carrying the rest of the list** |
+| 끝냄 | **finish** | After landing. Happens there and ends |
 
-⚠ **The three loop names are the user's own** and they beat any other naming. Outside in: **main → session
-→ part.**
+## The fight
+
+⚠⚠ **Every row here is UNDECIDED and is on the map as a live ticket.** They are named so the words exist,
+not because the thing does.
+
+| 한국어 | Code | State |
+|---|---|---|
+| 근접 | **melee** | **What the player presses is not decided.** 패링 · 휘두르기 · 대시 · 피격 are the candidates |
+| 방아쇠 | **trigger** | **What fires a circle is not decided** — 얹힘 · 행동 · 전용 키 |
 
 ## The tools
 
 | 한국어 | Code | What it is |
 |---|---|---|
 | 그물 | **net** | A test. Lives in `tests/nets/`. **A green that measures less than its label says is worse than a red** |
-| 잎 | **leaf** | A drawing hook a net can assert the arguments of |
-| 프로브 | **probe** | Drives whole runs headless and prints numbers |
+| 지도 | **map** | One effort's plan under `.scratch/<일>/`. `wayfinder` owns it |
+| 티켓 | **ticket** | One question. Its answer, once written, **is** the design |
 
 ---
 
@@ -69,3 +75,6 @@ folder rule in `CLAUDE.md`:
 - **`src/shell/`** — the only reader of `Input`. **Seam is `_ready()`**, which builds the real wiring
 
 **Do not add a seam inside a file.** If something is hard to test, it is in the wrong folder.
+
+⚠ **These three survived two deletions and are not re-decided per game.** They are what lets a net drive a
+whole game headless in seconds.
