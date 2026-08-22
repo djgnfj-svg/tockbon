@@ -44,3 +44,12 @@ designs turn out to be, not before.
 ⚠ **Whether a settled design is a document at all is NOT this ticket** — it moved to **09 정해진 것은
 어디에 사는가**, which is unblocked and comes first. This ticket only decides the **form**, once 09 has said
 what the form is for.
+
+## ⚠ 하네스는 지금 안 건드린다 (2026-08-22, 사용자)
+
+***"하네스는 최대한 건드리고 싶지 않은 게 추후에 맞춰서 바꿀 생각은 있는데, 지금부터 변경하기엔 내가
+구조도 잘 모르는 상태여서 그래서 최대한 유지를 하고 싶은데"***
+
+⇒ **`to-spec`을 지금 고치지 않는다.** 걸리는 점 둘(사용자 스토리 절, 「extremely extensive」)은 위에
+적혀 있으니 안 잃는다. **`to-spec`은 티켓을 다 푼 뒤에 쓰는 스킬이므로**, 실제로 한 번 돌려보고 나온
+문서를 보고 고치는 것이 순서다. **미리 고치면 안 써본 것을 고치는 것이다.**
