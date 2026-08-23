@@ -166,7 +166,7 @@ func run(t) -> void:
 	t.eq(min_region_floor, 23, "가장 좁아도 되는 상륙지 바닥은 23칸이다 (최대 병력 22 + 여유 1) — 자가 점검")
 	t.eq(Rules.roster_start_count()
 		+ Rules.map_max_count_nodes_on_a_route() * (Rules.roster_reward_count()), 22,
-		"그 최대 병력 22가 10 + 짐승 칸 넷 x 3 이다 — 4층 칸도 짐승를 내면서 최대가 하나 늘었다 (자가 점검)")
+		"그 최대 병력 22가 10 + 짐승 칸 넷 x 3 이다 — 4층 칸도 짐승을 내면서 최대가 하나 늘었다 (자가 점검)")
 	_the_floor_actually_rejects_something(t, min_region_floor)
 
 	var walker_pairs := 0

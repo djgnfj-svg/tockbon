@@ -305,7 +305,7 @@ func _every_route_walked(t) -> void:
 		"경로에 따라 짐승 칸 수가 %d~%d 로 갈린다 — 두 칸 이상 차이가 나야 고를 이유가 있다"
 			% [counts_min, counts_max])
 	t.ok(beaks_max - beaks_min >= 2, "부리 칸 수도 %d~%d 로 갈린다" % [beaks_min, beaks_max])
-	t.eq(beaks_min, 0, "부리를 하나도 안 지나는 경로가 있다 — 짐승를 넷 다 먹는 길이 바로 그 길이다")
+	t.eq(beaks_min, 0, "부리를 하나도 안 지나는 경로가 있다 — 짐승을 넷 다 먹는 길이 바로 그 길이다")
 
 	# 「`map_max_count_nodes_on_a_route()` 가 그 최대와 같다」 — the accessor is walked over the table
 	# and never written as a literal 4, because `net_islands`'s region floor and the roster capacity
@@ -871,7 +871,7 @@ func _the_picture(t) -> void:
 	# the ex-chest) pays COUNT exactly like node 0 — so their glyphs MATCH now, which is the inverse of
 	# what this row used to assert.
 	t.ok(_shapes_match(_glyph_shape(spy, 0), _glyph_shape(spy, 5)),
-		"짐승를 내는 두 칸(0번과 5번)의 무늬가 같다 — 같은 보상은 같은 무늬다")
+		"짐승을 내는 두 칸(0번과 5번)의 무늬가 같다 — 같은 보상은 같은 무늬다")
 	t.ok(not _shapes_match(_glyph_shape(spy, 2), _glyph_shape(spy, 5)),
 		"부리 칸과 짐승 칸의 무늬는 다르다")
 	# ⚠⚠ **The case that fails the CHECK rather than the tree.** Nodes 1 and 4 both pay cells and sit at

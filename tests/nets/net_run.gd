@@ -195,7 +195,7 @@ func _rewards(t) -> void:
 	# Node 2 is the floor-2 node that pays the beak. Its sibling pays cells — that is the fork, and it
 	# is the reason the reward is the NODE's and not the KIND's.
 	t.eq(Rules.map_reward_of(2), Rules.Reward.BEAK, "2번 칸은 부리를 낸다 (자가 점검)")
-	t.eq(Rules.map_reward_of(1), Rules.Reward.COUNT, "그 옆 1번 칸은 짐승를 낸다 (자가 점검)")
+	t.eq(Rules.map_reward_of(1), Rules.Reward.COUNT, "그 옆 1번 칸은 짐승을 낸다 (자가 점검)")
 	# 0번 칸의 승리도 여섯 장을 냈다 — 카드를 고르고 정비를 닫아야 `enter_node` 가 다시 먹는다.
 	_take_two_and_close_refit(r)
 	t.ok(r.enter_node(2), "부리 칸을 밟는다")
@@ -308,7 +308,7 @@ func _the_route_is_what_the_run_takes(t) -> void:
 		"짐승 경로 병사가 10 + 보상 넷 x 3 = 22명이다")
 	t.eq(int(beaks["living"]), Rules.roster_start_count()
 		+ 2 * (Rules.roster_reward_count()),
-		"부리 경로 병사는 10 + 보상 두 번 x 3 = 16명이다 — 4층 칸도 짐승를 낸다")
+		"부리 경로 병사는 10 + 보상 두 번 x 3 = 16명이다 — 4층 칸도 짐승을 낸다")
 	t.ok(int(cells["living"]) - int(beaks["living"]) >= 6,
 		"두 경로의 병사 수가 %d명이나 갈린다 — 한 명 차이면 고를 이유가 없다"
 			% (int(cells["living"]) - int(beaks["living"])))
