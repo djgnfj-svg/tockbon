@@ -18,7 +18,7 @@ uses only the English word is not an answer to the user**, and a symbol named in
 | 한국어 | Code | What it is |
 |---|---|---|
 | 짐승 | **beast** | **One creature on the field.** The thing that lands, walks, and hits |
-| 종족 | **species** | Which beast the run is played as. **늑대 (wolf)** is the first |
+| 종족 | **species** | Which beast the run is played as. **늑대 (wolf)** is the first, and **근접 위주**다 |
 | 빌드 | **build** | How one species grows inside a run. **목표는 종족마다 둘** |
 
 ⚠⚠ **「세포」는 죽은 낱말이다.** 게임이 세포에서 늑대로 바뀌었다(2026-08-22 저녁).
@@ -70,7 +70,10 @@ uses only the English word is not an answer to the user**, and a symbol named in
 | 한국어 | Code | 상태 |
 |---|---|---|
 | 아기 | **pup** | **아기 짐승으로 시작해 자란다.** 자람이 **크기**로 보인다 — 스케일이라 그림 값이 0 |
-| 빌드가 보이는 법 | — | **미정.** 색조 · 이펙트 · 공격이 나가는 모양 · 수와 대형 · 크기 · 덧붙임 하나 |
+| 속도 | **swift** | 늑대 빌드 하나. **움직임이 빨라진다 — 그림 값 0** |
+| 출혈 | **bleed** | 늑대 빌드 하나. **문 자리에 피가 남는다 — 이펙트 하나** |
+| 무리사냥 | **pack** | 늑대 빌드 하나. **여럿이 한 표적으로 모인다 — 대형이 바뀐다, 그림 값 0** |
+| 빌드가 보이는 법 | — | ⚠ **위 셋이 서로 다른 채널을 쓴다** — 움직임 · 색 · 대형. **안 겹쳐서 한눈에 갈린다** |
 | 성장 | — | **미정.** 부위 여섯 조립은 **2026-08-22 저녁에 빠졌다** — 아트 예산 때문이다 |
 
 ⚠⚠ **`Loadout`·`RefitView`·「부리」는 빠진 조립의 것이다.** 코드에는 아직 있고, **무엇이 그 자리에
