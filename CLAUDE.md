@@ -1,20 +1,26 @@
-# tockbon — a **magic-circle roguelike**, and `src/` is empty
+# tockbon — a **cell-army roguelike**, and `src/` is empty
 
-**Runes fused into a circle make a custom spell; you carry that circle into melee and clear a dungeon.**
-The user's own references are **Skul** and **Dead Cells**.
+**Ten square cells eat one island at a time; what you eat becomes parts you bolt onto their bodies.**
+**Hands do not move during a fight** — where you land decides who you fight, and that is the decision.
+⚠ **The hook is that the assembled body reads on screen** (2026-08-22, the user). The parts exist; the body
+does not show them yet. **Everything else hangs off that.**
 
-**The root of the design is three axes cut along time** — the **circle** owns the moment of firing, the
-**rune** owns after it leaves, the **glyph** owns after it lands. They do not overlap, and overlap makes
-them eat each other. `circle-rune-glyph`.
+**The frame, decided 2026-08-22**: a **demo in December**, not a release · **roguelike** · **funding** after
+the demo. **Whether December is also a release is decided the day the demo stands.**
 
-⚠ **There is no GDD yet and no `run/main_scene`.** The cell game was folded on 2026-08-22 and is whole at
-commit `62ff57d`. **What is being made is read out of `.scratch/spell-circle/`** — a map and five tickets.
+⚠ **No GDD here, no `run/main_scene`, and the code is not restored** — the cell game is whole at commit
+`62ff57d` and the user chose to settle the idea first. **What is being made is read out of
+`.scratch/cell-hook/`** — a map and five tickets.
+
+⚠⚠ **The magic-circle game was picked the morning of 2026-08-22 and dropped that evening.** The deadline
+dropped it: with one, **the side whose concept already stands wins.** **Its design was kept as an idea.**
 
 # Where everything is — **read this before deciding what this repo is**
 
-⚠⚠ **`main` is not the whole repo, and on 2026-08-22 a session forgot that and lost a day's direction.**
-It read `main` only, concluded the cell game was still live, and rebuilt docs around a game that had already
-been folded on another branch. **The branch was right there.**
+⚠⚠ **`main` is not the whole repo, and on 2026-08-22 two sessions collided on it twice.** The first read
+`main` only, concluded the cell game was still live, and rebuilt docs around a game folded on another
+branch. The second wrote to `main` while this one worked, and the two had different games in mind.
+**Nothing was lost the second time — both sides were merged.**
 
 ⇒ **Run `git ls-remote --heads origin` before you conclude anything about direction.** What is on `main`
 is what was merged, never what exists.
@@ -22,7 +28,7 @@ is what was merged, never what exists.
 | Where | What is in it |
 |---|---|
 | `main` | **Everything current.** All of the above is merged here as of 2026-08-22 |
-| `62ff57d` | **The cell game, whole** — `src/`, twenty nets, its GDD. Folded, not deleted |
+| `62ff57d` | **The cell game, whole** — `src/`, twenty nets, its GDD, its eight dropped forks. **This is what is being made**, and restoring it is a live decision, not a rollback |
 | `salvage/cell-harness` | Seven commits that polished the cell game's docs on 2026-08-22, **discarded on purpose** when the fold was found. Kept only so nothing was thrown away silently |
 | `archive-full-history` | The full history from before the resets |
 
@@ -82,7 +88,7 @@ label says is worse than a red. If you can't do it, say you can't.**
 
 | Path | What it holds |
 |---|---|
-| `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **There is no GDD right now** — the cell one went with the game and the new one waits on the map. When one is written it is **one page** — 넘어가면 아무도 안 읽는다. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
+| `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **It is nearly empty and that is a defect** — the cell game's GDD and its eight dropped forks are at `62ff57d` and were not brought back. ⚠ **There is no GDD right now** — the cell one went with the game and the new one waits on the map. When one is written it is **one page** — 넘어가면 아무도 안 읽는다. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
 | `docs/agents/` | **What the imported skills read before they act, and the only configuration in `docs/`.** Issues are files under `.scratch/`; the five triage labels are unchanged; the domain is single-context, so `CONTEXT.md` at the root is the glossary. ⚠ **Not reading matter** — `to-spec` · `to-tickets` · `triage` · `code-review-mp` load it |
 | `.scratch/<일>/` | **Where planning lives.** `map.md` is the map; `issues/NN-이름.md` are its tickets. **Status is a `Status:` line inside the file — files never move between folders.** `wayfinder` owns this |
 | `lessons-from-two-dead-games` | **What the two games that died actually measured.** The only survivor of both resets besides `planning-principles` |
@@ -122,6 +128,7 @@ halves, and **it went with the cell game on 2026-08-22** — it pinned that game
 **Two nets are left and neither reads `src/`: `net_citations` and `net_process`.**
 ⇒ **The folder rule is honour-based today. Rebuild the scan when `src/` has something to drift.**
 
-**`CONTEXT.md` at the root holds the words** — 진 vs 룬 vs 문양, 층, 근접, 그물 — in 한국어 and in code,
+⚠⚠ **`CONTEXT.md` still holds the magic-circle words and is wrong** — it is rewritten when the cell game
+comes back. **It holds the words** — 그물, and the cell game's own — in 한국어 and in code,
 **and the three agreed test seams.** `tdd` will not write a test at a seam that is not named there.
 ⚠ **Every word in it is a design, not a measurement, until `src/` holds it** — the file says so itself.
