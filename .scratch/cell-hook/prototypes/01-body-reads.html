@@ -1,267 +1,196 @@
-<title>조립한 몸이 읽히나</title>
+<title>먹은 것이 몸에 남나</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
 
 <style>
 :root{
-  --panel:#12171f;
-  --panel-2:#0c1016;
-  --land:#344230;
-  --line:#22303f;
-  --ally:#73d8ff;
-  --beak:#ffdc73;
-  --ink:#eaeff5;
-  --ink-dim:#8b9bad;
-  --ink-faint:#5d6d7e;
-  --warn:#ffb04d;
-  --enemy:#ff6b5c;
+  --panel:#12171f; --panel-2:#0c1016; --land:#344230; --line:#22303f;
+  --ally:#73d8ff; --enemy:#ff6b5c; --beak:#ffdc73;
+  --ink:#eaeff5; --ink-dim:#8b9bad; --ink-faint:#5d6d7e; --warn:#ffb04d;
   --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",monospace;
 }
 *{box-sizing:border-box}
-body{
-  margin:0;background:var(--panel-2);color:var(--ink);
-  font-family:var(--f-body);font-size:15px;line-height:1.65;
-  -webkit-font-smoothing:antialiased;
-}
+body{margin:0;background:var(--panel-2);color:var(--ink);font-family:var(--f-body);
+  font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1140px;margin:0 auto;padding:0 24px 96px}
 
-header{padding:56px 0 28px;border-bottom:1px solid var(--line)}
-.eyebrow{
-  font-family:var(--f-mono);font-size:11px;letter-spacing:.18em;
-  text-transform:uppercase;color:var(--ink-faint);margin:0 0 14px;
-}
-h1{
-  font-size:clamp(28px,4.2vw,42px);font-weight:700;line-height:1.2;
-  letter-spacing:-.02em;margin:0 0 16px;text-wrap:balance;
-}
+header{padding:56px 0 30px;border-bottom:1px solid var(--line)}
+.eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--ink-faint);margin:0 0 14px}
+h1{font-size:clamp(28px,4.2vw,42px);font-weight:700;line-height:1.2;
+  letter-spacing:-.02em;margin:0 0 16px;text-wrap:balance}
 .lede{max-width:64ch;color:var(--ink-dim);margin:0;font-size:16px}
 .lede strong{color:var(--ink);font-weight:600}
 .lede q{color:var(--beak);font-style:normal}
 
-.measure{
-  margin:28px 0 0;display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
-  gap:1px;background:var(--line);border:1px solid var(--line);
-  border-radius:2px;overflow:hidden;
-}
-.measure div{background:var(--panel);padding:14px 16px}
-.measure dt{
-  font-family:var(--f-mono);font-size:10.5px;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--ink-faint);margin:0 0 6px;
-}
-.measure dd{
-  margin:0;font-family:var(--f-mono);font-size:20px;font-weight:600;
-  font-variant-numeric:tabular-nums;color:var(--ink);
-}
-.measure dd small{font-size:12px;font-weight:400;color:var(--ink-dim);margin-left:4px}
-.measure dd.hot{color:var(--warn)}
-.measure dd.ok{color:var(--ally)}
-
-.finding{
-  margin:26px 0 0;padding:18px 20px;background:var(--panel);
-  border-left:3px solid var(--warn);border-radius:0 2px 2px 0;
-}
+.finding{margin:26px 0 0;padding:18px 20px;background:var(--panel);
+  border-left:3px solid var(--warn);border-radius:0 2px 2px 0}
 .finding.good{border-left-color:var(--ally)}
-.finding h3{
-  margin:0 0 10px;font-size:14px;font-weight:600;letter-spacing:.01em;
-}
+.finding h3{margin:0 0 10px;font-size:14px;font-weight:600}
 .finding p{margin:0;max-width:72ch;font-size:14.5px;color:var(--ink-dim)}
 .finding p+p{margin-top:10px}
 .finding strong{color:var(--ink);font-weight:600}
 .finding q{color:var(--beak);font-style:normal}
+.finding a{color:var(--ally);text-decoration:none;border-bottom:1px solid #1d3c4a}
+.finding a:hover{border-bottom-color:var(--ally)}
 
-.bar{
-  position:sticky;top:0;z-index:20;
+.bar{position:sticky;top:0;z-index:20;
   background:color-mix(in srgb,var(--panel-2) 92%,transparent);
   backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
-  margin:36px 0 0;padding:12px 0;
-  display:flex;flex-wrap:wrap;gap:20px;align-items:center;
-}
+  margin:36px 0 0;padding:12px 0;display:flex;flex-wrap:wrap;gap:20px;align-items:center}
 .ctl{display:flex;align-items:center;gap:10px}
-.ctl>span{
-  font-family:var(--f-mono);font-size:10.5px;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--ink-faint);
-}
+.ctl>span{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-faint)}
 .seg{display:flex;border:1px solid var(--line);border-radius:2px;overflow:hidden}
-.seg button{
-  appearance:none;border:0;background:var(--panel);color:var(--ink-dim);
-  font-family:var(--f-mono);font-size:12px;letter-spacing:.03em;
-  padding:7px 13px;cursor:pointer;border-right:1px solid var(--line);
-  transition:background .12s,color .12s;
-}
+.seg button{appearance:none;border:0;background:var(--panel);color:var(--ink-dim);
+  font-family:var(--f-mono);font-size:12px;letter-spacing:.03em;padding:7px 13px;
+  cursor:pointer;border-right:1px solid var(--line);transition:background .12s,color .12s}
 .seg button:last-child{border-right:0}
 .seg button:hover{color:var(--ink)}
 .seg button[aria-pressed="true"]{background:var(--ally);color:#06121b;font-weight:600}
 .seg button:focus-visible{outline:2px solid var(--beak);outline-offset:-2px}
 
 section.block{padding:40px 0;border-bottom:1px solid var(--line)}
-section.block>h2{
-  font-size:21px;font-weight:700;margin:0 0 6px;letter-spacing:-.01em;
-  display:flex;align-items:baseline;gap:10px;
-}
-section.block>h2 em{
-  font-family:var(--f-mono);font-style:normal;font-size:12px;
-  color:var(--ink-faint);letter-spacing:.1em;
-}
-section.block>p.sub{margin:0 0 22px;color:var(--ink-dim);max-width:70ch;font-size:14.5px}
+section.block>h2{font-size:21px;font-weight:700;margin:0 0 6px;letter-spacing:-.01em;
+  display:flex;align-items:baseline;gap:10px}
+section.block>h2 em{font-family:var(--f-mono);font-style:normal;font-size:12px;
+  color:var(--ink-faint);letter-spacing:.1em}
+section.block>p.sub{margin:0 0 22px;color:var(--ink-dim);max-width:72ch;font-size:14.5px}
 section.block>p.sub strong{color:var(--ink);font-weight:600}
+section.block>p.sub q{color:var(--beak);font-style:normal}
 
-.strip{
-  display:grid;grid-template-columns:repeat(7,minmax(0,1fr));
-  gap:1px;background:var(--line);border:1px solid var(--line);
-  border-radius:2px;overflow:hidden;
-}
-@media(max-width:820px){.strip{grid-template-columns:repeat(4,minmax(0,1fr))}}
-.step{
-  background:var(--land);padding:12px 6px 10px;
-  display:flex;flex-direction:column;align-items:center;gap:8px;
-  min-height:228px;justify-content:center;
-}
-.step canvas{display:block}
-.step .n{
-  font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;
-  color:#93a58f;text-align:center;
-}
-.step .added{
-  font-family:var(--f-mono);font-size:11px;letter-spacing:.04em;
-  color:#d3e2cf;text-align:center;font-weight:600;
-}
-.step.last{background:#3b4a36;box-shadow:inset 0 0 0 1px #56684f}
+.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.pane{background:var(--land);padding:16px 10px 12px;display:flex;flex-direction:column;
+  align-items:center;gap:8px;justify-content:center;min-height:236px}
+.pane canvas{display:block}
+.pane .nm{font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;
+  color:#d3e2cf;font-weight:600;text-align:center}
+.pane .sub{font-family:var(--f-mono);font-size:10px;letter-spacing:.06em;
+  color:#93a58f;text-align:center}
 
-.variant-head{
-  display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;margin:26px 0 12px;
-}
-.variant-head h3{margin:0;font-size:16px;font-weight:600}
-.variant-head p{margin:0;color:var(--ink-dim);font-size:13.5px;max-width:56ch}
-.tag{
-  font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;
-  text-transform:uppercase;padding:3px 8px;border-radius:2px;
-  background:#10222b;color:var(--ally);border:1px solid #1d3c4a;
-}
-.tag.old{background:#2a1c10;color:var(--warn);border-color:#4a3316}
+.grid18{display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));
+  gap:1px;background:var(--line);border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.hcell{background:var(--panel);padding:10px 12px;display:flex;align-items:center;
+  justify-content:center;font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;
+  color:var(--ink-dim);font-weight:600}
+.hcell.corner{color:var(--ink-faint);font-weight:400}
+.rcell{background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:2px}
+.rcell .lbl{font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;color:var(--ink-dim)}
+.rcell .doe{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.04em;color:var(--ink-faint)}
+.pcell{background:var(--land);padding:8px;display:flex;align-items:center;justify-content:center}
+.pcell canvas{display:block}
 
-.swarm{
-  border:1px solid var(--line);border-radius:2px;background:var(--land);
-  padding:12px;display:flex;flex-direction:column;gap:8px;overflow-x:auto;
-}
+.swarm{border:1px solid var(--line);border-radius:2px;background:var(--land);
+  padding:12px;display:flex;flex-direction:column;gap:8px;overflow-x:auto}
 .swarm canvas{display:block}
-.swarm .cap{
-  font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;color:#93a58f;
-}
+.swarm .cap{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;color:#93a58f}
 .swarm-pair{display:grid;gap:16px}
 @media(min-width:900px){.swarm-pair{grid-template-columns:1fr 1fr}}
 
-.qlist{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.qlist{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);
+  border-radius:2px;overflow:hidden}
 .qlist article{background:var(--panel);padding:18px 20px}
 .qlist h3{margin:0 0 6px;font-size:15px;font-weight:600;display:flex;align-items:baseline;gap:10px}
-.qlist h3 em{font-family:var(--f-mono);font-style:normal;font-size:11px;color:var(--ink-faint);letter-spacing:.1em}
+.qlist h3 em{font-family:var(--f-mono);font-style:normal;font-size:11px;
+  color:var(--ink-faint);letter-spacing:.1em}
 .qlist p{margin:0;color:var(--ink-dim);font-size:14px;max-width:72ch}
 .qlist p+p{margin-top:8px}
 .qlist strong{color:var(--ink);font-weight:600}
 .qlist q{color:var(--beak);font-style:normal}
 
-footer{
-  margin-top:40px;padding-top:20px;border-top:1px solid var(--line);
-  font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);letter-spacing:.04em;
-}
+footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);letter-spacing:.04em}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
 <div class="wrap">
 <header>
-  <p class="eyebrow">cell-hook · 티켓 01 · 프로토타입 v2</p>
-  <h1>조립한 몸이 읽히나</h1>
-  <p class="lede">v1은 네모에 표시를 얹는 안 넷을 그렸고 <q>넷 다 아닌데</q>로 잘렸다.
-  사용자가 말한 것은 다른 것이다 — <strong>부품이 하나씩 물리적으로 붙어서, 나중에는 세포의 네모가
-  안 남는다.</strong> 부리는 부리고 몸은 몸이다. 아래는 그걸 그린 것이다.
-  상수는 전부 접힌 코드의 실제 값이다.</p>
-
-  <dl class="measure">
-    <div><dt>타일</dt><dd>40<small>px</small></dd></div>
-    <div><dt>전투 줌</dt><dd class="hot">0.45<small>× 고정</small></dd></div>
-    <div><dt>맨몸 지름</dt><dd class="hot">12.6<small>px</small></dd></div>
-    <div><dt>여섯 다 붙은 지름</dt><dd class="ok" id="mFull">—</dd></div>
-    <div><dt>커진 배수</dt><dd class="ok" id="mRatio">—</dd></div>
-    <div><dt>외곽선 굵기</dt><dd>5<small>px → 2.25px</small></dd></div>
-  </dl>
-
-  <div class="finding good">
-    <h3>⚠⚠ 이 방향이 크기 문제를 같이 푼다</h3>
-    <p>섬은 <strong>전투 줌 0.45에 고정돼서 열린다.</strong> 거기서 맨 세포는
-    <strong>지름 12.6px에 선 굵기 2.25px</strong>다 — v1의 안 넷이 전부 여기서 죽었다.
-    네모 위에 얹는 표시는 3px짜리가 되기 때문이다.</p>
-    <p><strong>그런데 부품이 실제로 붙으면 몸이 커진다.</strong> 부리가 앞으로 나오고 다리가 밑으로
-    뻗으면 실루엣이 통째로 자란다 — <strong>표시를 얹는 게 아니라 몸이 자라는 것이라</strong>
-    12.6px 안에 우겨넣을 필요가 없다. <strong>여섯 다 붙으면 <span id="fFull">—</span>이 된다.</strong></p>
-    <p>⇒ <strong>「조립이 읽힌다」와 「전투 줌에서 보인다」가 같은 답을 갖는다.</strong>
-    그리고 성장 자체가 화면에 나온다 — 섬을 먹을수록 내 부대가 커진다.</p>
-  </div>
+  <p class="eyebrow">cell-hook · 티켓 01 · 프로토타입 v3</p>
+  <h1>먹은 것이 몸에 남나</h1>
+  <p class="lede">v2에서 <q>파츠로 붙이는 것도 맞는데 너무 특색이 없네, 그냥 세포 진화 같음.
+  먹어서 얻은 느낌이어야 하는데</q>가 나왔다. <strong>그 판정이 맞고, 원인이 하나로 짚인다 —
+  부품에 출처가 없다.</strong> 지금 다리는 그냥 다리다. 들소한테서 뜯은 건지 까마귀한테서 뜯은
+  건지 몸에 안 적혀 있다.</p>
 
   <div class="finding">
-    <h3>⚠⚠ 대신 결정 셋을 건드린다 — 뒤집자는 게 아니라, 걸린다는 뜻이다</h3>
-    <p><strong>1. 「몸은 코드가 그리는 선」이 흔들린다.</strong> 접힌 문서가 사각형·점·굵기 셋으로
-    몸을 정의했다. 부리와 팔다리가 각자 모양을 가지면 그리는 코드가 여섯 배가 되거나 그림을 사야 한다.
-    ⚠ <strong>그 문서가 그림을 나중에 갈아끼우는 것은 열어뒀다.</strong></p>
-    <p><strong>2. 접힌 문서가 이 안을 한 번 잘랐다.</strong> 그 이유가
-    <q>턱은 몸에서 잘라내도 살아남는데 다리는 안 그렇다 — 떼어놓은 다리는 갈색 막대기다</q>였다.
-    ⇒ <strong>부품이 몸에서 자라난 것처럼 보여야 하지, 붙여놓은 것처럼 보이면 안 된다.</strong>
-    아래 그림이 그래서 부품도 같은 색 윤곽선으로 그려져 있다.</p>
-    <p><strong>3. 부품은 지금 몸에 없다.</strong> 접힌 코드에서 부품은 정비 화면의 판에만 살고,
-    전장에서 몸을 그리는 함수는 조립 상태를 <strong>아예 안 읽는다.</strong>
-    이건 뒤집는 게 아니라 <strong>새로 만드는 것이다</strong> — 판과 몸을 잇는 선이 없다.</p>
+    <h3>⚠⚠ 그리고 그 앞에 더 큰 게 있다 — 지금은 적도 전부 네모다</h3>
+    <p><q>몬스터가 나오면 되려나?</q>에 대한 답이 여기 있다. <strong>몬스터는 이미 나온다.</strong>
+    들소도 까마귀도 사자도 이미 게임에 있다. <strong>그런데 셋 다 둥근 사각형이다</strong> —
+    접힌 코드에서 적을 구별하는 건 <strong>반지름과 모서리 둥글기 두 숫자뿐이고</strong>,
+    들소는 조금 큰 네모, 까마귀는 작고 동그란 네모, 사자는 크고 각진 네모다.</p>
+    <p>⇒ <strong>부품이 들소처럼 생길 수가 없다. 들소가 들소처럼 안 생겼기 때문이다.</strong>
+    「먹어서 얻은 느낌」은 몸의 문제가 아니라 <strong>먹은 쪽과 먹힌 쪽이 같이 걸린 문제</strong>다.
+    아래 첫 줄이 오늘의 적 셋이다.</p>
+  </div>
+
+  <div class="finding good">
+    <h3>남들이 이걸 어떻게 하나 — 셋 다 같은 장치를 쓴다</h3>
+    <p><strong>커비의 모자.</strong> 적을 먹으면 능력이 오는데, <strong>화면에서 그걸 말하는 건
+    모자다</strong> — 위키의 표현으로 <q>보통 복사한 캐릭터의 눈에 띄는 부위를 그대로 쓴 모자</q>.
+    ⚠ <strong>커비의 몸은 안 바뀐다. 출처만 얹힌다.</strong></p>
+    <p><strong>Fresh Body</strong> — 상점 문구가 <q>적을 쓰러뜨리고 그 부위로 내 것을 갈아 끼운다 ·
+    몬스터 몸 180종 이상 · 머리와 팔과 다리로 나만의 캐릭터를 만든다</q>다.
+    <strong>180종이 그 게임의 특색 그 자체다.</strong>
+    <strong>SWAPMEAT</strong>는 외계 적의 팔다리를 뜯어 즉석에서 갈아 끼운다.</p>
+    <p>⇒ <strong>공통점 하나: 부품이 그 몬스터의 것으로 보인다.</strong>
+    그리고 ⚠ <strong>가짓수가 그 게임의 훅이다.</strong> 지금 이 게임의 적은 <strong>셋</strong>이다.</p>
   </div>
 </header>
 
 <div class="bar">
   <div class="ctl">
-    <span>배율</span>
+    <span>배율 — 섬은 0.45로 열린다</span>
     <div class="seg" id="zoomSeg">
-      <button data-z="0.45" aria-pressed="true">전투 줌 0.45×</button>
-      <button data-z="1" aria-pressed="false">최대 1.0×</button>
+      <button data-z="1" aria-pressed="true">게임 최대 1.0×</button>
+      <button data-z="0.45" aria-pressed="false">실제 전투 줌 0.45×</button>
       <button data-z="1.6" aria-pressed="false">돋보기 1.6×</button>
-    </div>
-  </div>
-  <div class="ctl">
-    <span>붙는 순서</span>
-    <div class="seg" id="orderSeg">
-      <button data-o="0" aria-pressed="true">머리부터</button>
-      <button data-o="1" aria-pressed="false">다리부터</button>
     </div>
   </div>
 </div>
 
 <section class="block">
-  <h2>하나씩 붙는다<em>조립 진행</em></h2>
-  <p class="sub">섬을 하나 먹을 때마다 카드 둘을 고르고 부위 여섯 칸에 채운다.
-  <strong>왼쪽이 시작하는 세포, 오른쪽이 여섯 다 채운 몸이다.</strong>
-  두 갈래의 차이는 하나뿐 — <strong>원래의 네모를 남기나.</strong></p>
+  <h2>오늘의 적 셋<em>접힌 코드의 실제 값</em></h2>
+  <p class="sub">숫자는 진짜다 — 반지름 비율과 모서리 비율을 그대로 넣었다.
+  <strong>구별되는 건 크기와 둥글기뿐이다.</strong> 뿔도 부리도 갈기도 없다.</p>
+  <div class="row3" id="enemiesNow"></div>
+</section>
 
-  <div class="variant-head">
-    <h3>E1 · 네모가 남는다</h3>
-    <span class="tag">몸통은 계속 세포</span>
-    <p>사각 윤곽이 끝까지 몸통으로 남고 부품이 거기서 뻗어 나온다. 어느 판이든 「세포」로 읽힌다.</p>
-  </div>
-  <div class="strip" id="stripE1"></div>
+<section class="block">
+  <h2>적이 적처럼 생기면<em>제안</em></h2>
+  <p class="sub">같은 규칙을 지켰다 — <strong>윤곽선만, 아무것도 안 채운다.</strong>
+  들소는 뿔과 혹, 까마귀는 부리와 날개, 사자는 갈기와 꼬리.
+  <strong>이게 있어야 뜯어낸 부품이 어디서 왔는지 말할 수 있다.</strong></p>
+  <div class="row3" id="enemiesNew"></div>
+</section>
 
-  <div class="variant-head">
-    <h3>E2 · 네모가 사라진다</h3>
-    <span class="tag">사용자가 말한 것</span>
-    <p>네모는 <strong>시작 상태일 뿐</strong>이다. 부품이 붙을수록 줄어들다가 여섯째에 없어진다 —
-    남는 것은 부리와 몸과 다리로 된 짐승이다.</p>
-  </div>
-  <div class="strip" id="stripE2"></div>
+<section class="block">
+  <h2>같은 부위, 다른 출처<em>부위 여섯 × 적 셋 = 열여덟</em></h2>
+  <p class="sub">이게 「먹어서 얻은 느낌」의 실체다.
+  <strong>다리 칸에 뭐가 붙었느냐가 아니라, 누구 다리가 붙었느냐가 보인다.</strong>
+  ⚠ 대가도 여기 있다 — <strong>모양이 여섯이 아니라 열여덟이 된다.</strong>
+  적을 넷째로 늘리면 스물넷이다.</p>
+  <div class="grid18" id="partGrid"></div>
+</section>
+
+<section class="block">
+  <h2>다 채운 몸 셋<em>같은 여섯 칸, 다른 식단</em></h2>
+  <p class="sub">여섯 칸을 전부 채운 몸이다. <strong>칸은 같고 먹은 것이 다르다.</strong>
+  이게 갈리면 <q>그냥 세포 진화</q>가 아니라 <strong>내가 뭘 먹었는지가 보이는 몸</strong>이 된다.
+  몸통 모양도 많이 먹은 쪽으로 딸려 간다.</p>
+  <div class="row3" id="bodies"></div>
 </section>
 
 <section class="block">
   <h2>마흔 마리가 겹쳐도 읽히나<em>숏에 찍히는 그림</em></h2>
-  <p class="sub">속이 빈 이유가 이것이었다 — <strong>마흔 마리가 겹쳐도 안 뭉개진다.</strong>
-  부품도 채우지 않고 윤곽선으로만 그려서 그 성질을 지켰다.
-  왼쪽이 오늘 화면(맨 세포 마흔), 오른쪽이 여섯 다 붙은 부대다.</p>
+  <p class="sub">전부 윤곽선이라 겹쳐도 안 뭉개진다 — 속이 빈 이유가 그거였다.
+  왼쪽이 오늘 화면, 오른쪽이 <strong>섞어 먹은 부대</strong>다.</p>
   <div class="swarm-pair">
-    <div class="swarm"><span class="cap">오늘 — 맨 세포 마흔 마리</span><canvas id="swA"></canvas></div>
-    <div class="swarm"><span class="cap">E2 — 조립이 섞인 부대 마흔 마리</span><canvas id="swB"></canvas></div>
+    <div class="swarm"><span class="cap">오늘 — 맨 세포 마흔 마리 · 전투 줌 0.45 고정</span><canvas id="swA"></canvas></div>
+    <div class="swarm"><span class="cap">제안 — 식단이 제각각인 부대 마흔 마리 · 전투 줌 0.45 고정</span><canvas id="swB"></canvas></div>
   </div>
 </section>
 
@@ -269,268 +198,358 @@ footer{
   <h2>이제 답이 필요한 것<em>티켓 01</em></h2>
   <div class="qlist">
     <article>
-      <h3><em>1</em>E1인가 E2인가</h3>
-      <p>사용자가 말한 것은 <q>나중에는 세포의 모양은 안 남지</q>이므로 <strong>E2다.</strong>
-      확인만 필요하다. ⚠ <strong>E2의 대가</strong>: 다 큰 몸이 「세포」로 안 읽힌다.
-      제목과 한 줄이 세포를 말하고 있으면(티켓 02) 그림과 어긋난다 —
-      <strong>혹은 그게 오히려 훅일 수도 있다: 네모에서 시작해 짐승이 된다.</strong></p>
+      <h3><em>1</em>적을 몇 종까지 늘리나</h3>
+      <p><strong>가짓수가 훅이다</strong> — 이웃 게임이 180종으로 그걸 판다.
+      지금은 셋이고, 셋이면 세 판째에 볼 게 없다.
+      ⚠ <strong>그런데 적 하나가 부품 여섯 세트를 데려온다</strong> — 넷째 적은 모양 여섯,
+      여섯째 적이면 모양 서른여섯이다. <strong>19주에 몇이 가능한지가 이 답을 자른다.</strong></p>
     </article>
     <article>
-      <h3><em>2</em>부품 여섯이 각자 모양을 갖나, 종마다 또 갈리나</h3>
-      <p>지금 그림은 <strong>부위마다 모양 하나</strong>다 — 머리는 부리, 다리는 다리.
-      기획서에는 종이 셋(포유류·조류·어류) 더 있어서, 종까지 갈리면
-      <strong>모양이 여섯이 아니라 열여덟이 된다.</strong>
-      ⚠ 접힌 문서가 종 색을 없애면서 <q>부품끼리 안 맞을 걱정</q>을 같이 없앴는데,
-      <strong>모양으로 갈리면 그 걱정이 돌아온다.</strong></p>
+      <h3><em>2</em>모든 적이 여섯 부위를 다 주나</h3>
+      <p>까마귀한테 굵은 앞다리를 뜯을 수는 없다. <strong>적마다 주는 부위를 두셋으로 제한하면</strong>
+      모양 수가 열여덟에서 여덟아홉으로 내려가고, <strong>「이 부위가 필요하면 저놈을 잡아야 한다」가
+      생긴다</strong> — 어디에 내리느냐가 결정이라는 이 게임의 논지와 같은 방향이다.</p>
     </article>
     <article>
-      <h3><em>3</em>먹은 것의 색은 계속 안 남기나</h3>
-      <p>2026-08-18에 눈으로 보고 자른 결정이다 — <q>먹은 것이 먹은 것처럼 생겨서 오지 않는다</q>.
-      <strong>모양으로 이미 「먹은 것처럼」 보이게 되므로, 색까지 남길 이유가 오히려 줄었다.</strong>
-      이 그림은 결정을 그대로 두고 그렸다.</p>
+      <h3><em>3</em>⚠ 그리고 이건 몸 밖의 문제다 — 지금은 먹는 순간이 없다</h3>
+      <p>이긴 뒤에 <strong>카드 여섯 장 중 둘</strong>을 고른다. 카드는 「먹었다」가 아니라
+      <strong>「받았다」</strong>이다. 커비가 먹는 느낌을 주는 건 모자가 아니라 <strong>삼키는 동작</strong>이고,
+      모자는 그 뒤에 남는 증거다. <strong>이 티켓 밖이라 지도의 안개에 넣었다.</strong></p>
     </article>
   </div>
 </section>
 
-<footer>모든 상수는 커밋 62ff57d의 실제 값 · 버리는 프로토타입 · 2026-08-23</footer>
+<footer>적의 반지름·모서리·색은 커밋 62ff57d의 실제 값 · 버리는 프로토타입 · 2026-08-23</footer>
 </div>
 
 <script>
 // ---------------------------------------------------------------------------
 // Real constants from the folded code at 62ff57d.
 // ---------------------------------------------------------------------------
-const TILE_PX = 40.0;
-const R_BASE = 0.35 * TILE_PX;   // BODY_RADIUS_RATIO[CELL_MELEE] -> 14 px
-const CORNER = 0.25;             // BODY_CORNER_RATIO[CELL_MELEE]
+const TILE = 40.0;
+const R_CELL = 0.35 * TILE;      // BODY_RADIUS_RATIO[CELL_MELEE] -> 14 px
+const CORNER_CELL = 0.25;        // BODY_CORNER_RATIO[CELL_MELEE]
 const OUTLINE = 5.0;             // BODY_OUTLINE_WIDTH_PX
 const DOT = 3.0;                 // BODY_DOT_RADIUS_PX
 const ALLY = "#73d8ff";          // Color(0.451, 0.847, 1.0)
+const ENEMY = "#ff6b5c";         // Color(1.0, 0.420, 0.361)
 const SEGS = 6;                  // CORNER_SEGMENTS
 
-// Parts attach one at a time. Each grows the torso a little and adds its own shape.
-const ORDERS = [
-  ["head","arm","leg","chest","hand","belly"],   // 머리부터
-  ["leg","belly","arm","head","chest","hand"],   // 다리부터
+// The three enemies exactly as the folded code draws them today: two numbers each.
+const FOES = [
+  { id:"bison", ko:"들소", r:0.40*TILE, corner:0.30, has:"뿔 · 혹 · 발굽" },   // BODY_*_RATIO[BISON]
+  { id:"crow",  ko:"까마귀", r:0.25*TILE, corner:0.90, has:"부리 · 날개 · 발톱" },  // [CROW]
+  { id:"lion",  ko:"사자",  r:0.55*TILE, corner:0.20, has:"갈기 · 앞발 · 꼬리" },   // [LION]
 ];
-const KO = { head:"머리", chest:"가슴", belly:"배", arm:"팔", hand:"손", leg:"다리" };
+
+const SLOTS = ["head","chest","belly","arm","hand","leg"];
+const KO   = { head:"머리", chest:"가슴", belly:"배", arm:"팔", hand:"손", leg:"다리" };
 const DOES = { head:"사거리", chest:"체력", belly:"체력", arm:"공격력", hand:"공격주기", leg:"이동속도" };
 
 // ---------------------------------------------------------------------------
-// Drawing. Everything is an OUTLINE — nothing is filled — so forty overlapping
-// bodies still read, which is the whole reason the cell is hollow.
+// Outline helpers. NOTHING is ever filled except the 3 px centre dot — that is
+// the whole reason forty overlapping bodies still read.
 // ---------------------------------------------------------------------------
 function roundedSquare(cx,cy,radius,cornerPx,sqx,sqy){
-  const r = Math.max(0,Math.min(cornerPx,radius));
-  const inner = radius - r;
-  const piv = [[inner,-inner],[inner,inner],[-inner,inner],[-inner,-inner]];
-  const pts = [];
-  for (let k=0;k<4;k++){
-    const [px,py]=piv[k], start=-Math.PI/2+k*Math.PI/2;
-    for (let s=0;s<=SEGS;s++){
-      const a=start+Math.PI/2*(s/SEGS);
+  const r=Math.max(0,Math.min(cornerPx,radius)), inner=radius-r;
+  const piv=[[inner,-inner],[inner,inner],[-inner,inner],[-inner,-inner]], pts=[];
+  for(let k=0;k<4;k++){
+    const [px,py]=piv[k], st=-Math.PI/2+k*Math.PI/2;
+    for(let s=0;s<=SEGS;s++){
+      const a=st+Math.PI/2*(s/SEGS);
       pts.push([cx+(px+Math.cos(a)*r)*sqx, cy+(py+Math.sin(a)*r)*sqy]);
     }
   }
-  pts.push(pts[0]);
-  return pts;
+  pts.push(pts[0]); return pts;
 }
-function stroke(ctx,pts,w,close){
-  ctx.beginPath();
-  ctx.moveTo(pts[0][0],pts[0][1]);
+function stroke(ctx,pts,w,col){
+  ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
   for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0],pts[i][1]);
-  if(close) ctx.closePath();
-  ctx.strokeStyle=ALLY; ctx.lineWidth=w; ctx.lineJoin="round"; ctx.lineCap="round";
+  ctx.strokeStyle=col; ctx.lineWidth=Math.max(w,0.8); ctx.lineJoin="round"; ctx.lineCap="round";
   ctx.stroke();
 }
-
-// Torso grows 9% per fitted part: assembly is visible as SIZE, not as a badge.
-const GROW = 0.09;
-function torsoRadius(n){ return R_BASE * (1 + GROW*n); }
-
-// How far the whole silhouette reaches, worst case, at n parts. Used for the readout.
-function extentRadius(n, order){
-  const r = torsoRadius(n);
-  let reach = r;
-  const on = new Set(order.slice(0,n));
-  if (on.has("head")) reach = Math.max(reach, r*2.15);
-  if (on.has("leg"))  reach = Math.max(reach, r*2.05);
-  if (on.has("arm"))  reach = Math.max(reach, r*1.95);
-  if (on.has("hand")) reach = Math.max(reach, r*2.45);
-  if (on.has("belly"))reach = Math.max(reach, r*1.55);
-  if (on.has("chest"))reach = Math.max(reach, r*1.45);
-  return reach;
+function arcPts(cx,cy,rx,ry,a0,a1,n){
+  const out=[];
+  for(let i=0;i<=n;i++){ const a=a0+(a1-a0)*(i/n); out.push([cx+Math.cos(a)*rx, cy+Math.sin(a)*ry]); }
+  return out;
 }
 
-// --- the six parts, each drawn as an outline that grows OUT of the torso ---
-// Every part is thinner than the torso outline: a beak is not as heavy as a body, and at
-// OUTLINE 5.0 against radius 14 the torso stroke is already 36% of its own radius — parts at
-// the same weight close the whole shape into a blob, which is the folded file's own ceiling.
-const PW = 0.62;   // part stroke, as a fraction of the torso stroke
+// ---------------------------------------------------------------------------
+// Parts: eighteen shapes. Six slots x three sources. The slot says what it DOES;
+// the source says where it CAME FROM, and the source is the half that is missing today.
+// Parts are 0.62 of the torso stroke — a beak is not as heavy as a body, and at
+// OUTLINE 5.0 against radius 14 the torso stroke is already 36% of its own radius.
+// ---------------------------------------------------------------------------
+const PW = 0.62;
+let COL = ALLY;      // parts draw in whatever colour the caller is painting
+const P = {};
 
-function drawHead(ctx,cx,cy,r,z,w){          // 부리 — a beak growing forward off the torso
-  const tip=[cx, cy-r*2.30*z], l=[cx-r*0.44*z, cy-r*0.98*z], rt=[cx+r*0.44*z, cy-r*0.98*z];
-  stroke(ctx,[l,tip,rt],w*PW,false);
-}
-function drawArm(ctx,cx,cy,r,z,w){           // 팔 — two limbs, elbow out
-  for(const s of [-1,1]){
-    stroke(ctx,[
-      [cx+s*r*0.98*z, cy-r*0.10*z],
-      [cx+s*r*1.52*z, cy-r*0.52*z],
-      [cx+s*r*2.00*z, cy-r*0.26*z],
-    ],w*PW,false);
-  }
-}
-function drawHand(ctx,cx,cy,r,z,w){          // 손 — three prongs at each limb end
-  for(const s of [-1,1]){
-    const hx=cx+s*r*2.00*z, hy=cy-r*0.26*z;
-    for(const a of [-0.62,-0.05,0.52]){
-      stroke(ctx,[[hx,hy],[hx+s*Math.cos(a)*r*0.46*z, hy+Math.sin(a)*r*0.46*z]],w*PW*0.82,false);
+// --- 들소: 굵고 각지고 뿔이 있다 -------------------------------------------------
+P.bison = {
+  head(c,x,y,r,z,w){                                    // 뿔 두 개
+    for(const s of [-1,1]) stroke(c,[
+      [x+s*r*0.34*z, y-r*0.96*z],[x+s*r*0.96*z, y-r*1.62*z],[x+s*r*1.62*z, y-r*1.30*z],
+    ],w*PW,COL);
+    stroke(c,[[x-r*0.34*z,y-r*1.06*z],[x+r*0.34*z,y-r*1.06*z]],w*PW*0.8,COL);
+  },
+  chest(c,x,y,r,z,w){                                   // 어깨 혹
+    stroke(c,arcPts(x,y-r*0.62*z, r*1.16*z, r*0.72*z, Math.PI, 2*Math.PI, 12),w*PW,COL);
+  },
+  belly(c,x,y,r,z,w){                                   // 크고 둥근 몸통
+    stroke(c,arcPts(x,y+r*0.46*z, r*1.14*z, r*1.20*z, 0, Math.PI, 14),w*PW,COL);
+  },
+  arm(c,x,y,r,z,w){                                     // 굵고 짧은 앞다리
+    for(const s of [-1,1]) stroke(c,[
+      [x+s*r*0.92*z, y-r*0.08*z],[x+s*r*1.58*z, y-r*0.20*z],[x+s*r*1.72*z, y+r*0.30*z],
+    ],w*PW*1.35,COL);
+  },
+  hand(c,x,y,r,z,w){                                    // 발굽
+    for(const s of [-1,1]){
+      const hx=x+s*r*1.72*z, hy=y+r*0.30*z;
+      stroke(c,arcPts(hx,hy, r*0.30*z, r*0.26*z, 0, 2*Math.PI, 10),w*PW*1.1,COL);
     }
-  }
-}
-function drawLeg(ctx,cx,cy,r,z,w){           // 다리 — two legs down, with feet
-  for(const s of [-1,1]){
-    stroke(ctx,[
-      [cx+s*r*0.46*z, cy+r*0.92*z],
-      [cx+s*r*0.74*z, cy+r*1.62*z],
-      [cx+s*r*0.50*z, cy+r*2.16*z],
-    ],w*PW,false);
-    stroke(ctx,[[cx+s*r*0.28*z,cy+r*2.16*z],[cx+s*r*0.86*z,cy+r*2.16*z]],w*PW*0.82,false);
-  }
-}
-function drawChest(ctx,cx,cy,r,z,w){         // 가슴 — two shoulder plates, outside the torso
-  for(const s of [-1,1]){
-    stroke(ctx,[
-      [cx+s*r*0.30*z, cy-r*1.18*z],
-      [cx+s*r*1.02*z, cy-r*1.02*z],
-      [cx+s*r*1.26*z, cy-r*0.42*z],
-    ],w*PW,false);
-  }
-}
-function drawBelly(ctx,cx,cy,r,z,w){         // 배 — a closed mass hanging under the torso
-  const pts=[];
-  for(let i=0;i<=16;i++){
-    const a=Math.PI*(i/16);
-    pts.push([cx-Math.cos(a)*r*0.94*z, cy+r*0.52*z+Math.sin(a)*r*1.06*z]);
-  }
-  stroke(ctx,pts,w*PW,false);
-}
-const PART_DRAW = { head:drawHead, arm:drawArm, hand:drawHand, leg:drawLeg, chest:drawChest, belly:drawBelly };
+  },
+  leg(c,x,y,r,z,w){                                     // 굵은 다리 + 발굽
+    for(const s of [-1,1]){
+      stroke(c,[[x+s*r*0.52*z,y+r*0.92*z],[x+s*r*0.66*z,y+r*1.86*z]],w*PW*1.45,COL);
+      stroke(c,arcPts(x+s*r*0.66*z, y+r*2.02*z, r*0.28*z, r*0.22*z, 0, 2*Math.PI, 10),w*PW,COL);
+    }
+  },
+};
 
-// --- the two variants ---
-// E1: the torso stays a boxy rounded square. Every stage still reads as "a cell".
-// E2: the torso MORPHS — corner rounding runs 0.25 -> 1.00 and it stretches tall, so by the
-//     sixth part the square is gone and what is left is a creature with a beak and legs.
-//     ⚠ The user's sentence is "나중에는 세포의 모양은 안 남지" — the SQUARE does not survive.
-//     A torso still does; a beak floating with no body attached is the "detached leg is a brown
-//     stick" failure the folded design doc already named.
-function drawUnit(ctx,cx,cy,n,order,variant,z){
-  const r = torsoRadius(n);
-  const w = OUTLINE * z;
-  const on = order.slice(0,n);
+// --- 까마귀: 가늘고 뾰족하고 날개가 있다 -------------------------------------------
+P.crow = {
+  head(c,x,y,r,z,w){                                    // 부리
+    stroke(c,[[x-r*0.34*z,y-r*0.96*z],[x,y-r*2.24*z],[x+r*0.34*z,y-r*0.96*z]],w*PW,COL);
+  },
+  chest(c,x,y,r,z,w){                                   // 좁은 가슴 깃
+    for(const s of [-1,1]) stroke(c,[
+      [x+s*r*0.16*z, y-r*1.06*z],[x+s*r*0.66*z, y-r*0.86*z],[x+s*r*0.82*z, y-r*0.24*z],
+    ],w*PW*0.9,COL);
+  },
+  belly(c,x,y,r,z,w){                                   // 작고 갸름한 배
+    stroke(c,arcPts(x,y+r*0.50*z, r*0.72*z, r*1.06*z, 0, Math.PI, 12),w*PW*0.9,COL);
+  },
+  arm(c,x,y,r,z,w){                                     // 날개 — 깃 셋으로 갈라진다
+    for(const s of [-1,1]){
+      stroke(c,[[x+s*r*0.86*z,y-r*0.24*z],[x+s*r*1.90*z,y-r*0.86*z]],w*PW,COL);
+      stroke(c,[[x+s*r*1.10*z,y-r*0.16*z],[x+s*r*2.02*z,y-r*0.34*z]],w*PW*0.8,COL);
+      stroke(c,[[x+s*r*1.02*z,y+r*0.14*z],[x+s*r*1.78*z,y+r*0.22*z]],w*PW*0.7,COL);
+    }
+  },
+  hand(c,x,y,r,z,w){                                    // 가는 발톱
+    for(const s of [-1,1]){
+      const hx=x+s*r*1.90*z, hy=y-r*0.86*z;
+      for(const a of [-0.85,-0.30,0.28]) stroke(c,
+        [[hx,hy],[hx+s*Math.cos(a)*r*0.50*z, hy+Math.sin(a)*r*0.50*z]],w*PW*0.62,COL);
+    }
+  },
+  leg(c,x,y,r,z,w){                                     // 가는 새다리 + 세 발가락
+    for(const s of [-1,1]){
+      stroke(c,[[x+s*r*0.40*z,y+r*0.90*z],[x+s*r*0.56*z,y+r*1.94*z]],w*PW*0.72,COL);
+      for(const a of [-0.9,-0.1,0.75]) stroke(c,[
+        [x+s*r*0.56*z, y+r*1.94*z],
+        [x+s*r*0.56*z+Math.cos(a)*r*0.42*z*s, y+r*1.94*z+Math.abs(Math.sin(a))*r*0.26*z],
+      ],w*PW*0.60,COL);
+    }
+  },
+};
+
+// --- 사자: 크고 갈기가 있고 발톱이 굵다 --------------------------------------------
+P.lion = {
+  head(c,x,y,r,z,w){                                    // 갈기 — 방사형
+    for(let i=0;i<9;i++){
+      const a=-Math.PI*0.94+ (Math.PI*0.88)*(i/8);
+      stroke(c,[
+        [x+Math.cos(a)*r*0.94*z, y+Math.sin(a)*r*0.94*z],
+        [x+Math.cos(a)*r*1.72*z, y+Math.sin(a)*r*1.72*z],
+      ],w*PW*0.72,COL);
+    }
+    stroke(c,arcPts(x,y-r*1.02*z, r*0.36*z, r*0.30*z, 0, 2*Math.PI, 10),w*PW,COL);
+  },
+  chest(c,x,y,r,z,w){                                   // 넓은 가슴
+    stroke(c,arcPts(x,y-r*0.48*z, r*1.30*z, r*0.62*z, Math.PI, 2*Math.PI, 12),w*PW*1.1,COL);
+  },
+  belly(c,x,y,r,z,w){                                   // 근육진 몸통 + 꼬리
+    stroke(c,arcPts(x,y+r*0.44*z, r*1.02*z, r*1.14*z, 0, Math.PI, 14),w*PW,COL);
+    stroke(c,[[x+r*0.90*z,y+r*1.00*z],[x+r*1.70*z,y+r*1.34*z],[x+r*1.86*z,y+r*0.72*z]],w*PW*0.7,COL);
+  },
+  arm(c,x,y,r,z,w){                                     // 두꺼운 앞발
+    for(const s of [-1,1]) stroke(c,[
+      [x+s*r*0.94*z, y-r*0.14*z],[x+s*r*1.66*z, y-r*0.56*z],[x+s*r*2.06*z, y-r*0.18*z],
+    ],w*PW*1.25,COL);
+  },
+  hand(c,x,y,r,z,w){                                    // 굵은 세 갈퀴
+    for(const s of [-1,1]){
+      const hx=x+s*r*2.06*z, hy=y-r*0.18*z;
+      for(const a of [-0.62,-0.02,0.56]) stroke(c,
+        [[hx,hy],[hx+s*Math.cos(a)*r*0.58*z, hy+Math.sin(a)*r*0.58*z]],w*PW*1.0,COL);
+    }
+  },
+  leg(c,x,y,r,z,w){                                     // 굽은 뒷다리
+    for(const s of [-1,1]){
+      stroke(c,[
+        [x+s*r*0.48*z,y+r*0.90*z],[x+s*r*0.92*z,y+r*1.50*z],[x+s*r*0.56*z,y+r*2.06*z],
+      ],w*PW*1.15,COL);
+      stroke(c,[[x+s*r*0.30*z,y+r*2.10*z],[x+s*r*0.92*z,y+r*2.10*z]],w*PW*0.8,COL);
+    }
+  },
+};
+
+// ---------------------------------------------------------------------------
+// The torso. Confirmed in v2: the SQUARE does not survive, but a body does.
+// Here it also leans toward whichever source the build ate the most of.
+// ---------------------------------------------------------------------------
+const PROFILE = {                       // sqx, sqy, corner at full assembly
+  bison:{ sqx:1.20, sqy:0.90, corner:0.42 },
+  crow: { sqx:0.80, sqy:1.30, corner:0.88 },
+  lion: { sqx:1.10, sqy:1.08, corner:0.96 },
+};
+const GROWTH = { bison:0.13, crow:0.05, lion:0.11 };   // a bison part bulks you up more
+
+function torsoOf(fit){
+  const src = SLOTS.map(s=>fit[s]).filter(Boolean);
+  const n = src.length;
+  let r = R_CELL, sqx=1, sqy=1, corner=CORNER_CELL;
+  if(!n) return {r,sqx,sqy,corner};
+  for(const s of src) r += R_CELL*GROWTH[s];
   const t = n/6;
+  let ax=0, ay=0, ac=0;
+  for(const s of src){ ax+=PROFILE[s].sqx; ay+=PROFILE[s].sqy; ac+=PROFILE[s].corner; }
+  ax/=n; ay/=n; ac/=n;
+  return { r, sqx:1+(ax-1)*t, sqy:1+(ay-1)*t, corner:CORNER_CELL+(ac-CORNER_CELL)*t };
+}
 
-  let corner = CORNER, sqx = 1, sqy = 1, tr = r;
-  if (variant === "E2"){
-    corner = CORNER + (1.00 - CORNER) * t;   // boxy -> round
-    sqx = 1 - 0.16*t;                        // narrows
-    sqy = 1 + 0.20*t;                        // and lengthens
-    tr  = r * (1 - 0.06*t);
-  }
-  stroke(ctx, roundedSquare(cx,cy,tr*z,corner*tr*z,sqx,sqy), w, false);
-  for (const p of on) PART_DRAW[p](ctx,cx,cy,r,z,w);
+function drawUnit(ctx,cx,cy,fit,z){
+  COL = ALLY;
+  const t = torsoOf(fit), w = OUTLINE*z;
+  stroke(ctx, roundedSquare(cx,cy,t.r*z,t.corner*t.r*z,t.sqx,t.sqy), w, ALLY);
+  for(const slot of SLOTS){ const s=fit[slot]; if(s) P[s][slot](ctx,cx,cy,t.r,z,w); }
+  ctx.beginPath(); ctx.arc(cx,cy,DOT*z,0,Math.PI*2); ctx.fillStyle=ALLY; ctx.fill();
+}
 
-  // the centre dot — the one thing that says "alive"
-  ctx.beginPath(); ctx.arc(cx,cy,DOT*z,0,Math.PI*2);
-  ctx.fillStyle = ALLY; ctx.fill();
+// ---------------------------------------------------------------------------
+// The enemies. Left: exactly what the code draws today. Right: the proposal.
+// ---------------------------------------------------------------------------
+function drawFoeNow(ctx,cx,cy,foe,z){
+  stroke(ctx, roundedSquare(cx,cy,foe.r*z,foe.corner*foe.r*z,1,1), OUTLINE*z, ENEMY);
+  ctx.beginPath(); ctx.arc(cx,cy,DOT*z,0,Math.PI*2); ctx.fillStyle=ENEMY; ctx.fill();
+}
+function drawFoeNew(ctx,cx,cy,foe,z){
+  COL = ENEMY;
+  const r=foe.r, w=OUTLINE*z, p=PROFILE[foe.id];
+  stroke(ctx, roundedSquare(cx,cy,r*z,p.corner*r*z,p.sqx,p.sqy), w, ENEMY);
+  // a bison IS a full set of bison parts — the same eighteen shapes, in enemy red
+  for(const slot of SLOTS) P[foe.id][slot](ctx,cx,cy,r,z,w);
+  ctx.beginPath(); ctx.arc(cx,cy,DOT*z,0,Math.PI*2); ctx.fillStyle=ENEMY; ctx.fill();
 }
 
 // ---------------------------------------------------------------------------
 // Rendering
 // ---------------------------------------------------------------------------
-let ZOOM = 0.45, ORDER_I = 0;
-const STEP_W = 180, STEP_H = 180;
-const SW_W = 500, SW_H = 230;
+let ZOOM = 1.0;   // opens at the game's max zoom so shape is judgeable; 0.45 is the truth
+const PANE_W=220, PANE_H=190, PART_W=150, PART_H=120, SW_W=500, SW_H=230;
+const CAT_Z = 1.30;   // the parts grid is a catalogue, not the battlefield
+const SWARM_Z = 0.45; // the overlap question only means anything at the real battle zoom
 
 function prep(cv,w,h){
-  const dpr = Math.min(window.devicePixelRatio||1,2);
+  const dpr=Math.min(window.devicePixelRatio||1,2);
   cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
   cv.style.width=w+"px"; cv.style.height=h+"px";
-  const ctx=cv.getContext("2d");
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.clearRect(0,0,w,h);
-  return ctx;
+  const c=cv.getContext("2d"); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,w,h); return c;
 }
 function rng(seed){ let s=seed>>>0; return ()=>(s=(s*1664525+1013904223)>>>0)/4294967296; }
 
-function strip(hostId, variant){
-  const host = document.getElementById(hostId);
-  host.innerHTML = "";
-  const order = ORDERS[ORDER_I];
-  for (let n=0;n<=6;n++){
-    const cell = document.createElement("div");
-    cell.className = "step" + (n===6 ? " last" : "");
-    const cv = document.createElement("canvas");
-    cell.append(cv);
-    const added = document.createElement("span");
-    added.className = "added";
-    added.textContent = n===0 ? "맨 세포" : KO[order[n-1]] + " +";
-    const nn = document.createElement("span");
-    nn.className = "n";
-    nn.textContent = n===0 ? "부품 0/6" : `부품 ${n}/6 · ${DOES[order[n-1]]}`;
-    cell.append(added, nn);
-    host.append(cell);
-    const ctx = prep(cv, STEP_W, STEP_H);
-    drawUnit(ctx, STEP_W/2, STEP_H/2 + (n>0?4:0), n, order, variant, ZOOM);
+function enemyRow(hostId, mode){
+  const host=document.getElementById(hostId); host.innerHTML="";
+  for(const foe of FOES){
+    const d=document.createElement("div"); d.className="pane";
+    const cv=document.createElement("canvas"); d.append(cv);
+    const nm=document.createElement("span"); nm.className="nm"; nm.textContent=foe.ko;
+    const sb=document.createElement("span"); sb.className="sub";
+    sb.textContent = mode==="now"
+      ? `반지름 ${foe.r.toFixed(0)} · 모서리 ${foe.corner.toFixed(2)}`
+      : foe.has;
+    d.append(nm,sb); host.append(d);
+    const ctx=prep(cv,PANE_W,PANE_H);
+    if(mode==="now") drawFoeNow(ctx,PANE_W/2,PANE_H/2,foe,ZOOM);
+    else drawFoeNew(ctx,PANE_W/2,PANE_H/2,foe,ZOOM);
   }
 }
 
-function drawSwarm(cv, mixed){
-  const ctx = prep(cv, SW_W, SW_H);
-  const order = ORDERS[ORDER_I];
-  const rand = rng(20260823);
-  const pts = [];
-  for (let i=0;i<40;i++){
-    pts.push([34+rand()*(SW_W-68), 40+rand()*(SW_H-80), Math.floor(rand()*7)]);
+function partGrid(){
+  const host=document.getElementById("partGrid"); host.innerHTML="";
+  const corner=document.createElement("div");
+  corner.className="hcell corner"; corner.textContent="부위 \\ 출처"; host.append(corner);
+  for(const foe of FOES){
+    const h=document.createElement("div"); h.className="hcell"; h.textContent=foe.ko; host.append(h);
   }
-  pts.sort((p,q)=>p[1]-q[1]);   // painter's order, so the back rank sits behind
-  for (const [x,y,k] of pts){
-    const n = mixed ? Math.max(3, k) : 0;   // an assembled squad is mostly built
-    drawUnit(ctx, x, y, n, order, "E2", ZOOM);
+  for(const slot of SLOTS){
+    const rc=document.createElement("div"); rc.className="rcell";
+    const l=document.createElement("span"); l.className="lbl"; l.textContent=KO[slot];
+    const d=document.createElement("span"); d.className="doe"; d.textContent=DOES[slot];
+    rc.append(l,d); host.append(rc);
+    for(const foe of FOES){
+      const pc=document.createElement("div"); pc.className="pcell";
+      const cv=document.createElement("canvas"); pc.append(cv); host.append(pc);
+      const ctx=prep(cv,PART_W,PART_H);
+      const z=CAT_Z, cx=PART_W/2, cy=PART_H/2;
+      // a ghost torso, so it reads as "this part, on a body" rather than a floating mark
+      COL = ALLY;
+      ctx.globalAlpha = 0.22;
+      stroke(ctx, roundedSquare(cx,cy,R_CELL*z,CORNER_CELL*R_CELL*z,1,1), OUTLINE*z, ALLY);
+      ctx.globalAlpha = 1;
+      P[foe.id][slot](ctx,cx,cy,R_CELL,z,OUTLINE*z);
+    }
   }
 }
 
-function readout(){
-  const order = ORDERS[ORDER_I];
-  const bare = R_BASE * 2 * 0.45;
-  const full = extentRadius(6, order) * 2 * 0.45;
-  document.getElementById("mFull").innerHTML =
-    full.toFixed(1) + '<small>px</small>';
-  document.getElementById("mRatio").innerHTML =
-    (full/bare).toFixed(1) + '<small>×</small>';
-  document.getElementById("fFull").textContent =
-    `전투 줌에서 지름 ${full.toFixed(0)}px — 맨몸의 ${(full/bare).toFixed(1)}배`;
+const DIETS = [
+  { nm:"들소만 먹었다", sub:"묵직하고 각지다", fit:Object.fromEntries(SLOTS.map(s=>[s,"bison"])) },
+  { nm:"까마귀만 먹었다", sub:"가늘고 길다", fit:Object.fromEntries(SLOTS.map(s=>[s,"crow"])) },
+  { nm:"섞어 먹었다", sub:"들소 셋 · 까마귀 둘 · 사자 하나",
+    fit:{ head:"lion", chest:"bison", belly:"bison", arm:"crow", hand:"crow", leg:"bison" } },
+];
+function bodies(){
+  const host=document.getElementById("bodies"); host.innerHTML="";
+  for(const d of DIETS){
+    const p=document.createElement("div"); p.className="pane";
+    const cv=document.createElement("canvas"); p.append(cv);
+    const nm=document.createElement("span"); nm.className="nm"; nm.textContent=d.nm;
+    const sb=document.createElement("span"); sb.className="sub"; sb.textContent=d.sub;
+    p.append(nm,sb); host.append(p);
+    drawUnit(prep(cv,PANE_W,PANE_H), PANE_W/2, PANE_H/2, d.fit, ZOOM);
+  }
+}
+
+function drawSwarm(cv, built){
+  const ctx=prep(cv,SW_W,SW_H), rand=rng(20260823), pts=[];
+  for(let i=0;i<40;i++) pts.push([34+rand()*(SW_W-68), 40+rand()*(SW_H-80), rand()]);
+  pts.sort((a,b)=>a[1]-b[1]);
+  for(const [x,y,k] of pts){
+    if(!built){ drawUnit(ctx,x,y,{},SWARM_Z); continue; }
+    const src = FOES[Math.floor(k*3)%3].id;
+    const alt = FOES[(Math.floor(k*7)+1)%3].id;
+    const fit = {};
+    SLOTS.forEach((s,i)=>{ if(k*11%1 < 0.9 || i<4) fit[s] = (i%3===0)? alt : src; });
+    drawUnit(ctx,x,y,fit,SWARM_Z);
+  }
 }
 
 function render(){
-  strip("stripE1","E1");
-  strip("stripE2","E2");
+  enemyRow("enemiesNow","now");
+  enemyRow("enemiesNew","new");
+  partGrid();
+  bodies();
   drawSwarm(document.getElementById("swA"), false);
   drawSwarm(document.getElementById("swB"), true);
-  readout();
 }
 
-function wire(id, key, apply){
-  const seg = document.getElementById(id);
-  seg.addEventListener("click", e => {
-    const btn = e.target.closest("button"); if(!btn) return;
-    for (const b of seg.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b===btn));
-    apply(btn.dataset[key]);
-    render();
-  });
-}
-wire("zoomSeg","z", v => { ZOOM = parseFloat(v); });
-wire("orderSeg","o", v => { ORDER_I = parseInt(v,10); });
+document.getElementById("zoomSeg").addEventListener("click", e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  for(const x of e.currentTarget.querySelectorAll("button")) x.setAttribute("aria-pressed",String(x===b));
+  ZOOM=parseFloat(b.dataset.z); render();
+});
 
 render();
 </script>
