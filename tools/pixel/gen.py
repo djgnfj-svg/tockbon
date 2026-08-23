@@ -40,7 +40,8 @@ OUT = ROOT / "out"
 # **Things that appear on one screen together are generated with one preset** — circle, rune and glyph are all `sigil`.
 #  **The seed is not this axis.** Generating the same prompt with 6 seeds gave six compositions and
 #   six identical textures => the seed decides **composition**, the preset decides **texture**.
-#  Detail is in `docs/design/circle-art.md`, "matching texture is the seed's job — it was not one big piece".
+#  ⚠ The doc that held the detail is gone (see `draw_circle.py`). What it said: "matching texture is the
+#  seed's job — it was not one big piece".
 #
 # `style` is appended **after** the prompt. Put it in front and the model draws only style and drops the content.
 # `size` is the **generation resolution** and `down` is the **final pixel size**. They are different axes —
@@ -69,9 +70,9 @@ PRESETS = {
     #  its own preset => **the prompt speaks the silhouette, and the preset holds only the texture**
     #  (line weight, ground, the character of the ornament).
     #
-    # **`down` being 0 is deliberate.** The adopted candidate (`docs/mockups/fusion-circle-ref.png`) is
+    # **`down` being 0 is deliberate.** The adopted candidate (a reference image that is gone with its doc) is
     #  the 1024 **original as-is**, not the `_560px` downscaled version — it is line art, so passing it through
-    #  k_centroid breaks thin lines. The size reference is **circle 1024** in `docs/design/circle-art.md`.
+    #  k_centroid breaks thin lines. The size reference is **circle 1024**, and this line is now where it lives.
     #
     # **`size` is 1024, so one image is 4x heavier than a 512 one.** Measure one image before queuing a big batch.
     "sigil": {
@@ -83,7 +84,7 @@ PRESETS = {
         #   chevron pattern`, and with it **even the circle filled up with pattern.**
         #  If the circle is ornate there is **no room to lay a glyph on it** — laid on, it drowns in the circle's
         #   pattern and the GDD's "if the order is not visible on screen the player will never learn the rule" dies.
-        #   => **The glyph carries the ornateness. The circle gives up an empty band** (`docs/design/circle-art.md`).
+        #   => **The glyph carries the ornateness. The circle gives up an empty band.**
         #  So do not put a density word back into this string — the preset applies to circle, rune and glyph
         #   **all three**, and one word here makes all three ornate at once.
         # **`bold` is weight, not density.** Removing the density words (`ornate` · `repeating pattern`) also

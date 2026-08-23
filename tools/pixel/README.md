@@ -81,7 +81,10 @@ One entry in `gen.py`'s `PRESETS` holds the style phrasing, the LoRA strength an
 
 ## Sizes — read before generating
 
-**The reference document is `docs/design/circle-art.md`.** Why these sizes and what is unresolved live there.
+⚠⚠ **The reference document is gone.** `docs/design/circle-art.md` held why these sizes and what was
+unresolved, and it is **in no branch** — lost before the archive branch was cut. **The sizes survive only in
+`draw_circle.py` and `gen.py`**, and the reasoning behind them survives nowhere. ⇒ **Write it down again the
+first time this tool is used on the new game**, before the numbers become folklore a second time.
 This holds **only the numbers** used when generating.
 
 | What | File size | Generate -> downscale |
