@@ -1,5 +1,5 @@
 Type: grilling
-Status: claimed
+Status: open
 
 # 무엇이 병사를 강하게 하나
 
