@@ -58,12 +58,16 @@ func _setup_opens_at_zoom_min(t) -> void:
 	# `setup()` does, since it would reproduce the SAME bug.
 	# ⚠ **Re-measured for `ZOOM_MIN` 0.45** (`plan-then-watch`, 6.3 — the user asked for the camera
 	# further back: 「조금 더 카메라를 뒤로 빼야 될」). The visible world is now 1280/0.45 = **2844.44** px
-	# wide and 720/0.45 = **1600.00** px tall, and BOTH are bigger than the map's 1920 x 1280 — so the
-	# clamp centres BOTH axes: (1920 - 2844.44)/2 = **-462.22** and (1280 - 1600)/2 = **-160.00**. At the
+	# wide and 720/0.45 = **1600.00** px tall, and BOTH are bigger than the map — so the clamp centres
+	# BOTH axes.
+	# ⚠⚠ **RE-MEASURED 2026-08-24 when the board was laid back 40 degrees.** A row is `TILE_H_PX`
+	# 30.64176 px tall, so the map is **1920 x 980.54** and not 1920 x 1280: the y half-gap grew from
+	# (1280 - 1600)/2 = -160.00 to **(980.54 - 1600)/2 = -309.73**. The x half-gap is unchanged at
+	# (1920 - 2844.44)/2 = **-462.22**, because nothing touched the width. At the
 	# old 0.5625 the y band was exactly 720 px and the island touched both screen edges, which is the
 	# framing that moved. Without the clamp call `cam_px` would still be the (0, 0) set above.
-	t.ok(fv.cam_px.distance_to(Vector2(-462.22, -160.0)) < 0.1,
-		"setup 뒤 cam_px 가 정확히 (-462.22, -160.00) 이다 — 리터럴로 확인한다 (%.2f, %.2f)"
+	t.ok(fv.cam_px.distance_to(Vector2(-462.22, -309.73)) < 0.1,
+		"setup 뒤 cam_px 가 정확히 (-462.22, -309.73) 이다 — 리터럴로 확인한다 (%.2f, %.2f)"
 		% [fv.cam_px.x, fv.cam_px.y])
 	# ⚠ Read directly off `fv` right after `setup()` — NOT after calling `_clamp_cam()` a second time
 	# here, which would measure the function again instead of the state `setup()` actually left.
@@ -96,7 +100,12 @@ func _process_writes_scale_from_zoom(t) -> void:
 func _pan_by_moves_at_the_right_rate(t) -> void:
 	var fv := _fv()
 	fv.zoom = 0.8
-	fv.cam_px = Vector2(300.0, 300.0)
+	# ⚠ **y was 300 and it stopped being reachable when the board was laid back.** At zoom 0.8 the
+	# visible world is 900 px tall against a map that went 1280 -> 980.54, so the whole y range is
+	# now [0, 80.54] and a `cam_px.y` of 300 is clamped before the pan is even measured — the rate
+	# this row exists to pin would have been read off a clamp instead. 40 sits inside the band, and
+	# 40 - 8/0.8 = 30 is still inside it after the pan.
+	fv.cam_px = Vector2(300.0, 40.0)
 	var before: Vector2 = fv.cam_px
 	fv.pan_by(Vector2(16.0, 8.0))
 	var want := before - Vector2(16.0, 8.0) / 0.8
@@ -195,7 +204,11 @@ func _shake_is_inside_the_same_expression(t) -> void:
 ## Zooming about `at` keeps the WORLD point under it fixed, to well under a pixel.
 func _zoom_holds_the_cursor(t) -> void:
 	var fv := _fv()
-	fv.zoom = 0.7
+	# ⚠ **0.7 stopped working when the board was laid back.** At 0.7 the visible world is 1028.6 px
+	# tall against a 980.54 px map, so the y axis is CENTRED — `cam_px.y` has no freedom at all and
+	# the clamp moves the point this row says stays put. At 0.9 the map is taller than the view
+	# (980.54 > 800), the y band is [0, 180.54], and 90 sits inside it before and after the notch.
+	fv.zoom = 0.9
 	fv.cam_px = Vector2(150.0, 90.0)
 	fv.position = fv._compose_position()
 	var at := Vector2(500.0, 300.0)
@@ -203,7 +216,7 @@ func _zoom_holds_the_cursor(t) -> void:
 	fv.zoom_at(at, 1.15)
 	fv.position = fv._compose_position()
 	var world_after := fv.screen_to_world_px(at)
-	t.ok(fv.zoom > 0.7, "실제로 확대됐다 (자가 점검, %.4f)" % fv.zoom)
+	t.ok(fv.zoom > 0.9, "실제로 확대됐다 (자가 점검, %.4f)" % fv.zoom)
 	t.ok(world_before.distance_to(world_after) < 0.01,
 		"커서 밑의 월드 점이 줌 노치를 건너도 그대로다 (%.4f px 차)"
 		% world_before.distance_to(world_after))
@@ -254,7 +267,8 @@ func _zoom_min_shows_the_whole_map(t) -> void:
 ##   48 x 32  = 1920 x 1280 px — NARROWER than the view, so x is CENTRED at (1920-2844.44)/2 = -462.22
 ##   144 x 32 = 5760 x 1280 px — WIDER than the view, so x is CLAMPED into [0, 2915.56] and `setup`'s
 ##              `cam_px = ZERO` survives it at **0.00**
-## Both have y centred at (1280-1600)/2 = -160.00, because only the width moved.
+## Both have y centred at (980.54-1600)/2 = -309.73, because only the width moved between the two
+## maps — 980.54 is 32 rows at `TILE_H_PX`, the laid-back row height.
 ## ⇒ **The x coordinate is the whole check**: -462.22 against 0.00 is a difference nothing but reading
 ## the grid can produce.
 func _a_wider_grid_moves_the_clamp(t) -> void:
@@ -270,8 +284,8 @@ func _a_wider_grid_moves_the_clamp(t) -> void:
 	var fv := _fv()
 	fv.setup(b, army, long_rows)
 	t.eq(fv._map_tiles(), Vector2i(144, 32), "field_view 가 격자에게 크기를 묻는다")
-	t.ok(fv.cam_px.distance_to(Vector2(0.0, -160.0)) < 0.1,
-		"긴 지도에서 setup 뒤 cam_px 가 (0.00, -160.00) 이다 — x 는 가운데 맞춤이 아니라 물려서 잡힌다 (%.2f, %.2f)"
+	t.ok(fv.cam_px.distance_to(Vector2(0.0, -309.73)) < 0.1,
+		"긴 지도에서 setup 뒤 cam_px 가 (0.00, -309.73) 이다 — x 는 가운데 맞춤이 아니라 물려서 잡힌다 (%.2f, %.2f)"
 			% [fv.cam_px.x, fv.cam_px.y])
 
 	# The self-check that makes the number above a claim: on the shipped 48 x 32 grid the same call
@@ -342,18 +356,21 @@ func _the_cull_never_cuts_anything_visible(t) -> void:
 	t.eq(checked, 40, "두 크기 x 네 줌 x 다섯 위치, 마흔 번을 실제로 쟀다 (자가 점검)")
 	t.eq(bad.size(), 0, "어느 경우에도 잘라낸 칸이 화면 안에 없었다 %s" % str(bad))
 
-	# The ceiling. At `ZOOM_MIN` on the long map the loop walks 76 x 44 = 3344 tiles against a ring of
-	# 168 x 56 = 9408 — the literals are hand arithmetic, and without them "the cull is on" is a
+	# The ceiling. At `ZOOM_MIN` on the long map the loop walks 76 x 58 = 4408 tiles against a ring of
+	# 176 x 64 = 11264 — the literals are hand arithmetic, and without them "the cull is on" is a
 	# sentence nothing measures.
+	# ⚠ **Re-done for the laid-back board and `WATER_MARGIN_TILES` 16.** y: the visible world is
+	# -309.73 .. 1290.27, grown by 80 px to -389.73 .. 1370.27, divided by `TILE_H_PX` 30.64176 and
+	# floored/ceiled to **-13 .. 45 = 58 rows**, and the [-16, 48) clamp does not bite either end.
 	var fv_long := _fv()
 	fv_long.setup(long_battle, army, long_rows)
 	var long_span := fv_long._visible_tile_rect(margin)
-	t.eq(long_span.position, Vector2i(-2, -6), "긴 지도의 ZOOM_MIN 구간은 (-2, -6) 에서 시작한다")
-	t.eq(long_span.size, Vector2i(76, 44), "그리고 76 x 44 칸이다")
-	t.eq(long_span.size.x * long_span.size.y, 3344, "곧 3344칸이다")
-	t.ok(3344 < (144 + 2 * margin) * (32 + 2 * margin),
-		"여백까지 통째로 칠하면 9408칸이니, 컬링이 %d칸을 덜어냈다"
-			% ((144 + 2 * margin) * (32 + 2 * margin) - 3344))
+	t.eq(long_span.position, Vector2i(-2, -13), "긴 지도의 ZOOM_MIN 구간은 (-2, -13) 에서 시작한다")
+	t.eq(long_span.size, Vector2i(76, 58), "그리고 76 x 58 칸이다")
+	t.eq(long_span.size.x * long_span.size.y, 4408, "곧 4408칸이다")
+	t.ok(4408 < (144 + 2 * margin) * (32 + 2 * margin),
+		"여백까지 통째로 칠하면 11264칸이니, 컬링이 %d칸을 덜어냈다"
+			% ((144 + 2 * margin) * (32 + 2 * margin) - 4408))
 	fv_long.battle = null
 
 

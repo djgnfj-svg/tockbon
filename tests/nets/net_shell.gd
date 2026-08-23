@@ -88,12 +88,13 @@ class FieldSpy extends FieldView:
 	func _paint_dock(rect: Rect2, colour: Color, outline_width: float) -> void:
 		docks.append({"seq": _bump(), "rect": rect, "colour": colour, "width": outline_width})
 
-	# ⚠ `squash` is the seventh parameter and it was appended, not inserted. An override that kept the
-	# old six-arg form does not bind at all.
+	# ⚠ `squash` is the seventh parameter and `tex` the eighth, and both were appended, not inserted.
+	# An override that kept an older, shorter form does not bind at all.
 	func _paint_body(centre: Vector2, radius: float, corner: float, colour: Color,
-			outline_width: float, dot_radius: float, squash: Vector2) -> void:
+			outline_width: float, dot_radius: float, squash: Vector2, tex: Texture2D) -> void:
 		bodies.append({"seq": _bump(), "centre": centre, "radius": radius, "corner": corner,
-			"colour": colour, "width": outline_width, "dot": dot_radius, "squash": squash})
+			"colour": colour, "width": outline_width, "dot": dot_radius, "squash": squash,
+			"is_picture": tex != null})
 
 	func _paint_beak(tip: Vector2, left: Vector2, right: Vector2, colour: Color) -> void:
 		beaks.append({"seq": _bump(), "tip": tip, "left": left, "right": right, "colour": colour})
@@ -525,27 +526,33 @@ func run(t) -> void:
 	# ⚠⚠ **THE TERRAIN PASS IS CULLED NOW**, so the count is the VISIBLE span rather than the whole
 	# margin ring. The island is sitting exactly where `field_view.setup()` left it — `ZOOM_MIN` 0.45,
 	# `cam_px` (-462.22, -160.00) — and the arithmetic, done by hand and not read off the code:
-	#   visible world  x -462.22 .. 2382.22  ·  y -160.00 .. 1440.00
-	#   + CULL_PAD_TILES 2 (80 px)   x -542.22 .. 2462.22  ·  y -240.00 .. 1520.00
-	#   floor/ceil to tiles          x -14 .. 62           ·  y -6 .. 38
-	#   clamped to [-12, 48+12) x [-12, 32+12)   ⇒ **x -12 .. 60, y -6 .. 38 = 72 x 44 = 3168**
-	# The x axis is not culled at all (72 is the full ring) and the y axis loses 12 rows, which is the
-	# shape of this framing: the visible world is wider than the map and shorter than it.
+	# ⚠⚠ **RE-DONE 2026-08-24 when the board was laid back 40 degrees.** A row is `TILE_H_PX` 30.64176
+	# px tall now, so the map is 980.54 px from top to bottom instead of 1280 and the camera centres
+	# the y axis lower. `WATER_MARGIN_TILES` went 12 -> 16 in the same edit.
+	#   map                          x 48 * 40 = 1920      ·  y 32 * 30.64176 = 980.54
+	#   both axes centred at ZOOM_MIN   cam_px (-462.22, -309.73)
+	#   visible world  x -462.22 .. 2382.22  ·  y -309.73 .. 1290.27
+	#   + CULL_PAD_TILES 2 (80 px)   x -542.22 .. 2462.22  ·  y -389.73 .. 1370.27
+	#   floor/ceil to tiles          x -14 .. 62           ·  y -13 .. 45   (y divides by 30.64176)
+	#   clamped to [-16, 48+16) x [-16, 32+16)   ⇒ **x -14 .. 62, y -13 .. 45 = 76 x 58 = 4408**
+	# ⚠ **Neither axis is culled by the clamp any more** — the visible world is now wider AND taller
+	# than the map, so both spans are the view's own and the margin is what stops them.
+	# **The cull still bites**: 4408 against a full ring of 5120.
 	#
 	# ⚠ **3168, 4032 and 1536 are LITERALS.** Deriving any of them from `WATER_MARGIN_TILES` or
 	# `CULL_PAD_TILES` would move the expectation and the reality together, and the margin could vanish
 	# with the round green.
-	const CULL_X0 := -12
-	const CULL_Y0 := -6
-	const CULL_W := 72
-	const CULL_H := 44
-	t.eq((Look.GRID_W + 2 * margin) * (Look.GRID_H + 2 * margin), 4032,
-		"물 여백까지 다 세면 4032칸이다 (72 x 56) — 여백 상수가 0이 되면 여기가 문다")
+	const CULL_X0 := -14
+	const CULL_Y0 := -13
+	const CULL_W := 76
+	const CULL_H := 58
+	t.eq((Look.GRID_W + 2 * margin) * (Look.GRID_H + 2 * margin), 5120,
+		"물 여백까지 다 세면 5120칸이다 (80 x 64) — 여백 상수가 0이 되면 여기가 문다")
 	t.eq(Look.GRID_W * Look.GRID_H, 1536, "격자 자체는 1536칸이다")
-	t.eq(fs.tiles.size(), 3168, "지형은 보이는 만큼만 3168칸 그린다 (72 x 44)")
+	t.eq(fs.tiles.size(), 4408, "지형은 보이는 만큼만 4408칸 그린다 (76 x 58)")
 	# The ceiling that makes the cull mean something: it has to be strictly less than painting the lot.
-	t.ok(fs.tiles.size() < 4032,
-		"그리고 그건 4032보다 적다 — 컬링이 실제로 문다 (%d칸을 안 그렸다)" % (4032 - fs.tiles.size()))
+	t.ok(fs.tiles.size() < 5120,
+		"그리고 그건 5120보다 적다 — 컬링이 실제로 문다 (%d칸을 안 그렸다)" % (5120 - fs.tiles.size()))
 	var tile_bad := 0
 	var inner_rects: Array[Rect2] = []
 	var painted := Rect2()
@@ -558,7 +565,7 @@ func run(t) -> void:
 		painted = got if i == 0 else painted.merge(got)
 		if tx >= 0 and tx < Look.GRID_W and ty >= 0 and ty < Look.GRID_H:
 			inner_rects.append(got)
-	t.eq(tile_bad, 0, "3168칸이 전부 자기 자리의 사각형을 받았다 (행 우선, 잘라낸 구간 안에서)")
+	t.eq(tile_bad, 0, "4408칸이 전부 자기 자리의 사각형을 받았다 (행 우선, 잘라낸 구간 안에서)")
 	t.eq(inner_rects.size(), 1536, "그중 격자 안쪽이 1536칸이다 — 섬 자체는 한 칸도 안 잘렸다")
 	# ⚠⚠ **THE FLOOR UNDER THE CULL, and it is the only thing that makes the ceiling above safe.**
 	# "Fewer tiles" is also what a cull that ate the screen would say. What must never happen is a
@@ -567,8 +574,11 @@ func run(t) -> void:
 	t.ok(painted.encloses(seen),
 		"칠한 영역이 보이는 세계를 전부 덮는다 — 잘라낸 칸은 전부 화면 밖이었다 (칠함 %s ⊇ 보임 %s)"
 			% [str(painted), str(seen)])
-	t.eq(painted.size, Vector2(CULL_W, CULL_H) * Look.TILE_PX,
-		"칠한 영역이 2880 x 1760 px 다 (72 x 44 칸)")
+	# ⚠ **The two axes no longer share a multiplier.** A tile is `TILE_PX` wide and `TILE_H_PX` tall,
+	# and writing `Vector2(CULL_W, CULL_H) * TILE_PX` here would be the flat board asserted against a
+	# laid-back one.
+	t.eq(painted.size, Vector2(CULL_W * Look.TILE_PX, CULL_H * Look.TILE_H_PX),
+		"칠한 영역이 3040 x 1777.22 px 다 (76 x 58 칸)")
 	# ⚠ The margin is why the tiles below are filtered before the on-screen check: `tile_rect_px(-1,
 	# -1)` really is at (-40, -40), so feeding all 680 in would break "everything lands inside
 	# 1280x720" for the 104 that are supposed to be outside it — and widening the screen rectangle
@@ -621,7 +631,7 @@ func run(t) -> void:
 	# than along the north edge, which is why this checks "not on the south edge" and not "on the
 	# north edge" — a strictly-north requirement would misflag those two as wrong.
 	var north_y := Look.tile_rect_px(2, 2).position.y
-	var south_y := north_y + Look.TILE_PX
+	var south_y := north_y + Look.TILE_H_PX
 	var wrong_side := 0
 	var zero_len := 0
 	for si in seg_count:
@@ -629,10 +639,15 @@ func run(t) -> void:
 		var p1: Vector2 = cliff_pts[si * 2 + 1]
 		if absf(p0.y - south_y) < 0.01 and absf(p1.y - south_y) < 0.01:
 			wrong_side += 1
-		if p0.distance_to(p1) < Look.TILE_PX - 0.01:
+		# ⚠ **A segment along the north edge is `TILE_PX` long; one running north-to-south is
+		# `TILE_H_PX` long, because the board is laid back.** The old form asked every segment to be
+		# at least a tile WIDE and the two end segments stopped being that the moment the rows
+		# shortened. Checking the exact length per direction is stronger than what it replaced.
+		var want_len := Look.TILE_PX if absf(p0.y - p1.y) < 0.01 else Look.TILE_H_PX
+		if absf(p0.distance_to(p1) - want_len) > 0.01:
 			zero_len += 1
 	t.eq(wrong_side, 0, "어떤 단면도 육지 쪽(남쪽) 가장자리에 있지 않다")
-	t.eq(zero_len, 0, "그리고 모든 단면이 실제로 타일 폭만큼 길다 — 길이 0인 선이 없다")
+	t.eq(zero_len, 0, "그리고 모든 단면이 자기 방향의 칸 길이만큼 길다 — 길이 0인 선이 없다")
 
 	# The bodies are the enemies the sim says are alive, in the sim's own order, at the sim's own
 	# positions. Nothing here is recomputed from a screen coordinate — the comparison runs the other

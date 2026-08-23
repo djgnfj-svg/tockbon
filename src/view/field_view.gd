@@ -47,6 +47,11 @@ const CORNER_SEGMENTS := 6
 ## parameter" check and buy nothing, because "does the arc look faceted" is not a design value.
 const RING_SEGMENTS := 24
 
+## How finely a shadow ellipse is sampled. Same reason as the two above. **20 and not 24** because a
+## shadow is 24 px across at most and filled rather than stroked — a facet on a solid shape at that
+## size is under a pixel, where a facet on a stroked ring is the stroke's own width.
+const SHADOW_SEGMENTS := 20
+
 ## The four ORTHOGONAL offsets, used ONLY by the cliff-face pass below — which walks a cliff tile's
 ## seaward EDGES, and a tile has four edges however many neighbours it has.
 ##
@@ -109,6 +114,12 @@ var _shake_left := 0.0
 ## (`screen_to_world_px`) instead of a second copy drifting somewhere else on screen at once.
 var cam_px := Vector2.ZERO
 var zoom := 1.0
+
+## The wolf, facing each way. **`load` and not `preload`, because `preload` demands a string literal
+## and the path would then live in this file as well as in `look.gd`** — which is the one thing
+## `look.gd` exists to stop. Loaded once at construction, not per frame.
+var _tex_wolf_r: Texture2D = load(Look.BEAST_WOLF_R)
+var _tex_wolf_l: Texture2D = load(Look.BEAST_WOLF_L)
 
 ## The summon aim (`sea-summon`). `_summon_slot` is the slot a number key has armed, or -1;
 ## `_summon_aim` is the tile under the cursor, or -1. **Both are set by `game.gd` through one call**,
@@ -195,7 +206,7 @@ func screen_to_world_px(at: Vector2) -> Vector2:
 
 
 func world_to_tile(world: Vector2) -> Vector2i:
-	return Vector2i(int(floor(world.x / Look.TILE_PX)), int(floor(world.y / Look.TILE_PX)))
+	return Vector2i(int(floor(world.x / Look.TILE_PX)), int(floor(world.y / Look.TILE_H_PX)))
 
 
 ## Moves the camera by a SCREEN-space delta (e.g. mouse motion) and re-clamps.
@@ -223,7 +234,9 @@ func zoom_at(at: Vector2, factor: float) -> void:
 ## than the visible world (every zoom below 0.667 horizontally, and always vertically at these
 ## dimensions) is CENTRED on that axis instead of clamped to an empty range.
 func _clamp_cam() -> void:
-	var map_px := Vector2(_map_tiles()) * Look.TILE_PX
+	# ⚠ The board is laid back, so a row is `TILE_H_PX` tall and not `TILE_PX`. Clamping against the
+	# square height would leave a band below the island that the camera could still pan into.
+	var map_px := Vector2(float(_map_tiles().x) * Look.TILE_PX, float(_map_tiles().y) * Look.TILE_H_PX)
 	var visible := Look.viewport_size_px() / zoom
 	var out := cam_px
 	for axis in 2:
@@ -271,9 +284,9 @@ func _visible_tile_rect(margin: int) -> Rect2i:
 	var tiles := _map_tiles()
 	var world := _visible_world_rect().grow(Look.CULL_PAD_TILES * Look.TILE_PX)
 	var x0 := maxi(-margin, int(floor(world.position.x / Look.TILE_PX)))
-	var y0 := maxi(-margin, int(floor(world.position.y / Look.TILE_PX)))
+	var y0 := maxi(-margin, int(floor(world.position.y / Look.TILE_H_PX)))
 	var x1 := mini(tiles.x + margin, int(ceil(world.end.x / Look.TILE_PX)))
-	var y1 := mini(tiles.y + margin, int(ceil(world.end.y / Look.TILE_PX)))
+	var y1 := mini(tiles.y + margin, int(ceil(world.end.y / Look.TILE_H_PX)))
 	return Rect2i(Vector2i(x0, y0), Vector2i(maxi(0, x1 - x0), maxi(0, y1 - y0)))
 
 
@@ -663,7 +676,8 @@ func _draw() -> void:
 						Look.ghost_tint(),
 						Look.BODY_OUTLINE_WIDTH_PX,
 						Look.BODY_DOT_RADIUS_PX,
-						Vector2.ONE)
+						Vector2.ONE,
+						null)
 		else:
 			# The return leg is the outbound path reversed by the sim, so its last waypoint IS the
 			# home harbour — asking `battle.harbour_tile(boat["home"])` for it again would be the
@@ -689,6 +703,8 @@ func _draw() -> void:
 			# pass above reads it that way, and one fact written two different ways is the shape this
 			# file's own `_body_offset_of` comment warns about.
 			var scentre := Look.tile_point_px(battle.soldier_pos[i]) + _body_offset_of(skey)
+			# On deck there is nothing to face yet, so the wolf faces right.
+			_paint_shadow(_shadow_points(scentre, sradius), Look.COL_BODY_SHADOW)
 			_paint_body(
 				scentre,
 				sradius,
@@ -696,7 +712,8 @@ func _draw() -> void:
 				Look.body_colour_of(false).lerp(Look.COL_FLASH, _flash_of(skey)),
 				Look.BODY_OUTLINE_WIDTH_PX,
 				Look.BODY_DOT_RADIUS_PX,
-				_gait_squash(skey))
+				_gait_squash(skey),
+				_tex_wolf_r)
 			if army.has_beak[i] != 0:
 				var ttri := _beak_points(scentre, sradius, _facing_of(i, false))
 				_paint_beak(ttri[0], ttri[1], ttri[2], Look.COL_BEAK)
@@ -728,6 +745,7 @@ func _draw() -> void:
 		# the body alone leaves the HP bar standing where the body used to be, and `net_draw_leaf`
 		# can never see that — every per-function count and every argument is unchanged.
 		var ecentre := Look.tile_point_px(battle.enemy_pos[e]) + _body_offset_of(ekey)
+		_paint_shadow(_shadow_points(ecentre, Look.body_radius_of(et)), Look.COL_BODY_SHADOW)
 		_paint_body(
 			ecentre,
 			Look.body_radius_of(et),
@@ -735,7 +753,8 @@ func _draw() -> void:
 			Look.body_colour_of(true).lerp(Look.COL_FLASH, _flash_of(ekey)),
 			Look.BODY_OUTLINE_WIDTH_PX,
 			Look.BODY_DOT_RADIUS_PX,
-			_gait_squash(ekey))
+			_gait_squash(ekey),
+			null)
 		var ebars := _hp_rects(ecentre, et, battle.enemy_hp[e] / Rules.hp_of(et))
 		var eback: Rect2 = ebars[0]
 		var efill: Rect2 = ebars[1]
@@ -748,6 +767,14 @@ func _draw() -> void:
 		var skey := "s%d" % i
 		var sradius := Look.body_radius_of(st)
 		var scentre := Look.tile_point_px(battle.soldier_pos[i]) + _body_offset_of(skey)
+		# The wolf faces what it is walking at. `_facing_of` already returns RIGHT when there is no
+		# target, so an idle body faces right rather than flipping on a zero vector.
+		# ⚠ **Drawn here and not in a pass of its own**, which means an ally's shadow can land on an
+		# enemy body drawn earlier in the frame. At alpha 0.32 that is a smudge and not a hole, and a
+		# separate pass would need the body loop split in two — the same restructuring the depth
+		# ordering needs, and that one overturns a written rule. **Both wait for 티켓 07 together.**
+		var stex: Texture2D = _tex_wolf_r if _facing_of(i, false).x >= 0.0 else _tex_wolf_l
+		_paint_shadow(_shadow_points(scentre, sradius), Look.COL_BODY_SHADOW)
 		_paint_body(
 			scentre,
 			sradius,
@@ -755,7 +782,8 @@ func _draw() -> void:
 			Look.body_colour_of(false).lerp(Look.COL_FLASH, _flash_of(skey)),
 			Look.BODY_OUTLINE_WIDTH_PX,
 			Look.BODY_DOT_RADIUS_PX,
-			_gait_squash(skey))
+			_gait_squash(skey),
+			stex)
 		if army.has_beak[i] != 0:
 			var tri := _beak_points(scentre, sradius, _facing_of(i, false))
 			var tip: Vector2 = tri[0]
@@ -845,10 +873,31 @@ func _paint_tile(rect: Rect2, fill: Color, line_colour: Color, line_width: float
 ## PULSE — "pressed along the direction of travel and spread across it" cannot be said with one
 ## number at all. Only the outline is squashed; the centre dot keeps its radius, so the body reads as
 ## deforming rather than shrinking.
+## ⚠⚠ **3 call sites, and only ever two of them run.** `tex` null draws the rounded square; `tex` set
+## draws the animal INSTEAD, in the same place, at the same gait. Every other argument keeps its
+## meaning either way, which is the whole reason the picture went in here rather than into a leaf of
+## its own: the centre, the flinch, the gait and the side colour are asserted by nets that must not
+## stop measuring the ally the moment it stops being a square.
+##
+## **The facing is baked into WHICH texture arrives**, never into a transform here — a mirrored png on
+## disk costs nothing at runtime and adds no `draw_*` call site to count.
 func _paint_body(centre: Vector2, radius: float, corner: float, colour: Color,
-		outline_width: float, dot_radius: float, squash: Vector2) -> void:
+		outline_width: float, dot_radius: float, squash: Vector2, tex: Texture2D) -> void:
+	if tex != null:
+		draw_texture_rect(tex, _beast_rect(centre, radius, squash, tex), false,
+			Look.beast_tint(colour))
+		return
 	draw_polyline(_rounded_square(centre, radius, corner, squash), colour, outline_width)
 	draw_circle(centre, dot_radius, colour)
+
+
+## 1 call. The patch of ground a body stands on, drawn BEFORE it. `points` arrives finished so the
+## leaf decides nothing and a net can assert the ellipse it was handed.
+##
+## ⚠ **The landing ghost gets none.** It is a plan, not a body, and a plan casting a shadow claims
+## something is already standing there.
+func _paint_shadow(points: PackedVector2Array, colour: Color) -> void:
+	draw_colored_polygon(points, colour)
 
 
 ## 1 call. A triangle poking out past the outline, so which soldier carries the beak is readable
@@ -966,6 +1015,19 @@ func _hull_rect(at: Vector2) -> Rect2:
 	var w := Look.BOAT_SLOT_PX + 2.0 * Look.BOAT_HULL_PAD_PX
 	var h := Look.BOAT_HULL_H_PX
 	return Rect2(at - Vector2(w, h) * 0.5, Vector2(w, h))
+
+
+## Where the wolf goes: a rectangle centred on the body, **as wide as `BEAST_SPRITE_W_RATIO` body
+## radii**, with the height taken from the texture's own aspect so the animal is never stretched.
+##
+## `squash` is the SAME gait vector the rounded square was squashed by, applied to the rectangle's
+## size about its centre. ⚠ **Dropping it here would have made the ally the only thing on the field
+## that stands still while it fights** — 「붙어서 가만히 있으면 재미가 죽는다」 — and no per-function
+## count or argument in `net_draw_leaf` would have changed.
+func _beast_rect(centre: Vector2, radius: float, squash: Vector2, tex: Texture2D) -> Rect2:
+	var w := radius * Look.BEAST_SPRITE_W_RATIO * squash.x
+	var h := w * float(tex.get_height()) / float(tex.get_width()) * squash.y
+	return Rect2(centre - Vector2(w, h) * 0.5, Vector2(w, h))
 
 
 ## Back rectangle first, filled rectangle second. The fill shrinks from the right, so the bar's left
@@ -1362,6 +1424,23 @@ func _gait_squash(key: String) -> Vector2:
 ## **The fan opens along the TANGENT of the two touching faces**, three shards to each side. That is
 ## the only axis on which every point moves away from BOTH centres: opened along ±facing, every one
 ## of the ten points lands back inside the striker's own outline, because the contact point is always
+## The ellipse a body's shadow fills. **A circle of radius `r` lying on ground tipped by
+## `MAP_TILT_DEG` projects to an ellipse `r` wide and `r * MAP_TILT_COS` tall** — the same cosine the
+## tiles themselves shrink by, so the shadow lies in the ground's own plane rather than beside it.
+##
+## ⚠ **The gait is deliberately NOT applied.** The body squashes because it is moving; the patch of
+## ground it stands on does not. Squashing both was tried in the head and rejected: a shadow that
+## breathes with the body reads as a second body.
+func _shadow_points(centre: Vector2, radius: float) -> PackedVector2Array:
+	var rx := radius * Look.SHADOW_R_RATIO
+	var ry := rx * Look.MAP_TILT_COS
+	var out := PackedVector2Array()
+	for k in SHADOW_SEGMENTS:
+		var a := TAU * float(k) / float(SHADOW_SEGMENTS)
+		out.append(centre + Vector2(cos(a) * rx, sin(a) * ry))
+	return out
+
+
 ## `(HIT_HALO_MUL - 1) * own radius` deep inside the striker's own halo. The shards are NOT claimed
 ## to escape the target's halo — what carries this effect is that they move while everything under
 ## them stands still.

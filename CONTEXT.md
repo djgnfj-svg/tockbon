@@ -18,8 +18,12 @@ uses only the English word is not an answer to the user**, and a symbol named in
 | 한국어 | Code | What it is |
 |---|---|---|
 | 짐승 | **beast** | **One creature on the field.** The thing that lands, walks, and hits |
-| 종족 | **species** | Which beast the run is played as. **늑대 (wolf)** is the first, and **근접 위주**다 |
-| 빌드 | **build** | How one species grows inside a run. **목표는 종족마다 둘** |
+| 종족 | **species** | **What the run is started as.** **늑대 (wolf)** is the first, and **근접 위주**다 |
+| 빌드 | **build** | **Which beasts the horde is filled with.** Wolves make it fast and many; bears make it few and strong |
+
+⚠⚠ **「캐릭터」도 죽은 낱말이다** (2026-08-24, 사용자: *"뭔가 캐리터는 아님"*). **그 말이 가리키던 것은
+종족**이고, 낱말이 죽은 이유는 **티켓 01이 빌드를 「무리 구성」으로 바꾸면서 캐릭터와 빌드가 같은 축이
+됐기 때문**이다. ⇒ **「종족 하나 × 빌드 하나」로 읽는다** — 무엇으로 시작하나 × 무엇으로 채웠나.
 
 ⚠⚠ **「세포」는 죽은 낱말이다.** 게임이 세포에서 늑대로 바뀌었다(2026-08-22 저녁).
 **종족은 데이터지 타입이 아니다** — 코드는 **짐승**을 알고, **늑대는 종족 값 한 줄**이다. 목표가 캐릭터

@@ -147,7 +147,10 @@ func _the_band_is_on_screen_from_frame_one(t, game: Game, fs: FieldSpy) -> void:
 	for raw: Dictionary in fs.tiles:
 		var rect: Rect2 = raw["rect"]
 		var tx := int(round(rect.position.x / Look.TILE_PX))
-		var ty := int(round(rect.position.y / Look.TILE_PX))
+		# ⚠ `TILE_H_PX` and not `TILE_PX`: the board is laid back, so a row is 30.64 px tall and
+		# dividing by 40 puts every tile in the wrong row — silently, and every band tile then reads
+		# as plain sea.
+		var ty := int(round(rect.position.y / Look.TILE_H_PX))
 		if tx < 0 or ty < 0 or tx >= g.w or ty >= g.h:
 			continue
 		var tile := g.tile_index(tx, ty)

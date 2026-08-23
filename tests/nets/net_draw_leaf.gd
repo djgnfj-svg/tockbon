@@ -112,7 +112,18 @@ func _table() -> Dictionary:
 			"note_refusal": 0,
 			"_draw": 0,
 			"_paint_tile": 2,
-			"_paint_body": 2,
+			# ⚠⚠ **2 -> 3, and the third is an EITHER/OR** (「지금 아직 세포여서 보기가 힘드네」,
+			# 2026-08-24, the user). A body with a texture draws `draw_texture_rect` and returns; a
+			# body without one draws the polyline and the dot. **This table counts call SITES, so it
+			# reads 3 while only ever two of them run** — the same blindness the route comment below
+			# names, and the reason 「그림인가 네모인가」 is asserted at RUNTIME in `net_fx_view`
+			# instead, off the eighth argument.
+			"_paint_body": 3,
+			"_beast_rect": 0,
+			# 「음... 이게 잘모르겠네..」 was the verdict on the tilt with no shadow under anything
+			# (2026-08-24). 1 call, a filled ellipse, drawn BEFORE the body it belongs to.
+			"_paint_shadow": 1,
+			"_shadow_points": 0,
 			"_paint_beak": 1,
 			"_paint_hp": 2,
 			"_paint_shot": 1,
@@ -463,8 +474,16 @@ func run(t) -> void:
 	# there (46 -> 47, 12 -> 13 leaves). The same pass found the refit screen's step one had a
 	# pressable strip and no line of text saying so — `_paint_hint` added the same round (47 -> 48,
 	# 13 -> 14 leaves), the reward screen's own `_paint_hint` shape.
-	t.eq(total_funcs, 200, "일곱 파일의 함수는 모두 200개다 (43 + 18 + 21 + 18 + 29 + 23 + 48)")
-	t.eq(total_leaves, 53, "그중 draw 를 실제로 부르는 잎은 53개다 (12 + 6 + 4 + 4 + 7 + 6 + 14)")
+	# ⚠ **44 -> 46**: the shadow added `_paint_shadow` (the leaf) and `_shadow_points` (the ellipse it
+	# is handed), the same leaf-plus-pure-shape pair every other drawn thing in this file uses.
+	# ⚠ **43 -> 44**: the wolf added exactly one name, `_beast_rect` — the pure rectangle the picture
+	# goes in. **No new leaf**: the texture went into `_paint_body`'s own arguments so that every net
+	# already measuring the ally kept measuring it. Re-derived by hand, not trusted for having moved
+	# by the number expected.
+	t.eq(total_funcs, 203, "일곱 파일의 함수는 모두 203개다 (46 + 18 + 21 + 18 + 29 + 23 + 48)")
+	# ⚠ **12 -> 13 in `field_view`**: `_paint_shadow` is a new leaf. The wolf added none — its
+	# `draw_texture_rect` went inside `_paint_body`, which was already a leaf.
+	t.eq(total_leaves, 54, "그중 draw 를 실제로 부르는 잎은 54개다 (13 + 6 + 4 + 4 + 7 + 6 + 14)")
 
 	# -- 3b. the array leaves hand their array WHOLE to one native call -----------------------------
 	# ⚠⚠ **THIS SECTION EXISTS BECAUSE THE COUNT ABOVE CANNOT SEE THE DIFFERENCE, AND THAT WAS

@@ -41,6 +41,24 @@ const VIEWPORT_W_PX := 1280.0
 const VIEWPORT_H_PX := 720.0
 const TILE_PX := 40.0
 
+## **The board is laid back 40 degrees** (2026-08-24, the user picked the angle by eye off the horde
+## sheet and then named the camera as the 애매함 티켓 04 had been asking about since 2026-08-18).
+## A tile is still `TILE_PX` wide and is `TILE_H_PX` tall, so **it is the same world seen from a lower
+## chair** — nothing in the sim moved, and every drawing site that already went through
+## `tile_point_px` / `tile_rect_px` followed for free.
+##
+## ⚠ **The cosine is written out because GDScript cannot fold `cos()` into a `const`.** The angle
+## beside it is the truth; `0.766044` is `cos(40°)`, and the two are changed together or not at all.
+##
+## ⚠⚠ **A body is NOT laid back.** Its radius is untouched: the animals are boards that face the
+## camera, so they keep their height while the ground under them loses a quarter of its.
+## ⚠ **Still round when it should be an ellipse**: the area rings, the hit halos and the landing ring.
+## They lie ON the ground, and a circle on a laid-back ground is an ellipse. **Not done**, and it is
+## written on 티켓 07 as not done rather than left to be discovered.
+const MAP_TILT_DEG := 40.0
+const MAP_TILT_COS := 0.766044
+const TILE_H_PX := TILE_PX * MAP_TILT_COS
+
 ## ⚠⚠ **THESE ARE A DEFAULT NOW AND NOT THE MAP SIZE.** They were `const 48` / `32` read directly by
 ## `field_view._draw` and `_clamp_cam`, which made **two maps of different sizes unrepresentable** —
 ## the blocker `idea-inbox` row 52 names. Both of those now go through `field_view._map_tiles()`, which
@@ -250,6 +268,21 @@ const COL_SPARK := Color(1.0, 0.855, 0.600)
 ## entire case for existing is that it is legible on top of this circle — stops being legible.
 const COL_HIT_HALO := Color(1.0, 1.0, 1.0, 0.35)
 
+## The patch of dark under a body. **This is what makes the laid-back board read as laid back**
+## (2026-08-24): the tilt alone squashes the ground by 23% and the user's verdict on that was
+## 「음... 이게 잘모르겠네..」. What told the eye in the horde sheet they DID pass was the shadow and
+## the overlap, not the squash.
+##
+## ⚠ **Alpha, not a colour.** It multiplies whatever ground it lands on — water, sand, cliff — so one
+## value works everywhere and no tone has to be invented per terrain.
+const COL_BODY_SHADOW := Color(0.0, 0.0, 0.0, 0.32)
+
+## The shadow's half-width as a fraction of the body's own radius, and it is **under 1 on purpose**:
+## a shadow as wide as the body reads as a hole, not as contact. The half-HEIGHT is this times
+## `MAP_TILT_COS` — a circle on the ground seen from 40 degrees IS that ellipse, so the shadow is the
+## one thing in this file whose shape is derived rather than chosen.
+const SHADOW_R_RATIO := 0.85
+
 
 # ---------------------------------------------------------------------------------------------
 # Bodies — an outline, a centre dot, nothing between
@@ -282,6 +315,32 @@ const BODY_CORNER_RATIO := [0.25, 0.85, 0.30, 0.90, 0.20]
 ## are drawn on rectangles 40 px and wider — neither of them is what bounds this number.
 const BODY_OUTLINE_WIDTH_PX := 5.0
 const BODY_DOT_RADIUS_PX := 3.0
+
+## The wolf. **The ally ashore is a picture now, not a rounded square** (2026-08-24, the user:
+## 「지금 아직 세포여서 보기가 힘드네」). Two files and not one plus a flip, because flipping inside
+## `_draw` costs a `draw_set_transform` and `net_draw_leaf` counts every `draw_*` call site — a
+## mirrored copy on disk keeps the leaf at exactly one call.
+##
+## ⚠ **The enemy is still a square, and so is the landing ghost.** The enemies are 들소·까마귀·사자 and
+## none of them has art; the ghost is a PLAN and reads better as the abstract shape.
+const BEAST_WOLF_R := "res://assets/beast/wolf_r.png"
+const BEAST_WOLF_L := "res://assets/beast/wolf_l.png"
+
+## How far the body's own colour is mixed INTO the wolf. **0 is the raw grey animal and 1 is a solid
+## cyan silhouette**; 0.45 keeps the fur readable while the side stays unmistakable at `ZOOM_MIN`.
+##
+## ⚠⚠ **This is what keeps friend and foe apart after the picture arrives.** The rule above this file
+## has always been 「friend and foe by COLOUR, unit type by SIZE」, and a picture that ignored the
+## colour would have quietly deleted the first half of it. **It also keeps the hit flash working**:
+## the colour handed to the body is already mixed toward `COL_FLASH` (white), so a hit pulls the tint
+## toward white and the animal brightens back to its own fur. A flat white modulate could not have
+## done that — multiply can only darken.
+const BEAST_TEAM_TINT := 0.45
+
+## Sprite WIDTH as a multiple of the body radius. `0.35 * 40 = 14 px` radius at TILE_PX, so 2.4 puts
+## the wolf at **34 px across** — just under one tile, which is what a body that walks a tile grid can
+## be without the horde reading as a solid mat. The height follows the texture's own aspect.
+const BEAST_SPRITE_W_RATIO := 2.4
 
 ## The beak is a triangle poking OUT past the outline, so it reads at a glance which soldier is
 ## carrying it. Length is measured from the body edge outward, not from the centre.
@@ -1289,9 +1348,18 @@ const SHAKE_B_FREQ := 47.0
 ## 4032, and `_paint_tile` is 2 draw calls, so 4872 -> 8064 immediate-mode calls a frame. This repo's
 ## "300 Node2Ds cost 0.065 ms" measurement is about NODES and may NOT be cited for this. If the frame
 ## time moved, the alternative is one filled rect behind the grid instead of a per-tile loop.
-const WATER_MARGIN_TILES := 12        # >= 12 (11.6 tiles of bare ground at ZOOM_MIN 0.45, plus
-                                      # SHAKE_MAX_PX 6 px = 0.15 tile); <= 16, or 80 x 64 = 5120
-                                      # tiles is 10240 draw calls a frame
+## ⚠⚠ **RAISED 12 -> 16 when the board was laid back** (2026-08-24, the user: 「밖에 물을 더 그리고
+## 좀 더 넓어도 돼 어차피 확대할 수 있어가지고」). **12 was the minimum that covered the screen on a
+## FLAT board**, and it stopped covering the moment a row went from 40 px to `TILE_H_PX` 30.64:
+## `12 * 40 = 480 px` of cover became `12 * 30.64 = 368 px` against the same 480 that has to be
+## covered. `480 / 30.64 = 15.7`, so **16 rows**, and the same number is used on the wide axis
+## because the alternative is a per-axis margin threaded through `_visible_tile_rect` for a picture
+## nobody would see — the user asked for more water on both sides in the same breath.
+## ⚠ **The old ceiling of 16 was written for an UNCULLED loop and no longer binds.** The loop is
+## intersected with the visible rect, so what is actually drawn is bounded by the screen and not by
+## this number: at `ZOOM_MIN` the visible world is 2844 x 1600 px = 72 x 53 tiles, so the pass grew
+## from 3168 to about 3800 tiles — not from 4032 to 5120.
+const WATER_MARGIN_TILES := 16
 
 ## ⚠⚠ **The terrain pass is CULLED to the visible rect now, and this is how far past it the loop still
 ## goes.** The "cost, measured rather than assumed" paragraph above is what forced it: at 48 x 32 the
@@ -1366,6 +1434,13 @@ static func fx_gain_of(item_no: int) -> float:
 	return float(FX_GAIN[item_no - 1])
 
 
+## The modulate a body's picture is drawn with: its own side colour mixed `BEAST_TEAM_TINT` of the way
+## into white. **It lives here and not in `field_view` because every colour in this game lives here**,
+## and `net_draw_leaf` reddens on a `Color.` written anywhere else.
+static func beast_tint(colour: Color) -> Color:
+	return Color.WHITE.lerp(colour, BEAST_TEAM_TINT)
+
+
 static func body_colour_of(is_enemy: bool) -> Color:
 	return COL_ENEMY if is_enemy else COL_ALLY
 
@@ -1413,7 +1488,7 @@ static func viewport_size_px() -> Vector2:
 ## a bare `p * TILE_PX` instead puts every body on a tile corner and the half-tile error is small
 ## enough to look like a rendering wobble rather than a bug.
 static func tile_point_px(p: Vector2) -> Vector2:
-	return (p + Vector2(0.5, 0.5)) * TILE_PX
+	return Vector2((p.x + 0.5) * TILE_PX, (p.y + 0.5) * TILE_H_PX)
 
 
 static func tile_centre_px(tx: int, ty: int) -> Vector2:
@@ -1421,7 +1496,7 @@ static func tile_centre_px(tx: int, ty: int) -> Vector2:
 
 
 static func tile_rect_px(tx: int, ty: int) -> Rect2:
-	return Rect2(Vector2(tx, ty) * TILE_PX, Vector2(TILE_PX, TILE_PX))
+	return Rect2(Vector2(tx * TILE_PX, ty * TILE_H_PX), Vector2(TILE_PX, TILE_H_PX))
 
 
 ## Top-left of the HP bar for a body whose centre is at `centre_px`. The bar hangs below the body,

@@ -98,10 +98,15 @@ class FieldSpy extends FieldView:
 		docks.append({"rect": rect, "colour": colour, "width": outline_width, "seq": seq})
 		seq += 1
 
+	# ⚠ `tex` is the eighth parameter, appended not inserted — an override that kept the seven-arg
+	# form does not bind at all. **It is recorded as a bool**: what a net asks is 「이 몸이 그림인가
+	# 네모인가」, and holding the Texture2D itself would let an assertion compare two loaded resources
+	# for identity, which is not a fact about the picture.
 	func _paint_body(centre: Vector2, radius: float, corner: float, colour: Color,
-			outline_width: float, dot_radius: float, squash: Vector2) -> void:
+			outline_width: float, dot_radius: float, squash: Vector2, tex: Texture2D) -> void:
 		bodies.append({"centre": centre, "radius": radius, "corner": corner, "colour": colour,
-			"width": outline_width, "dot": dot_radius, "squash": squash, "seq": seq})
+			"width": outline_width, "dot": dot_radius, "squash": squash, "seq": seq,
+			"is_picture": tex != null})
 		seq += 1
 
 	func _paint_beak(tip: Vector2, left: Vector2, right: Vector2, colour: Color) -> void:
@@ -415,9 +420,14 @@ func _the_engine_really_drives_it(t) -> void:
 	# has to drop nothing the old loop would have drawn inside the view, which is exactly this.
 	# (On the real 48 x 32 islands the ring does cover the view — `net_camera` pins that, and
 	# `net_shell` asserts the stronger form against the shipped grid.)
-	var ring_px := Look.WATER_MARGIN_TILES * Look.TILE_PX
-	var ring := Rect2(Vector2(-ring_px, -ring_px),
-		Vector2(fv.battle.grid.w, fv.battle.grid.h) * Look.TILE_PX + Vector2(ring_px, ring_px) * 2.0)
+	# ⚠ **The ring is not square any more.** The board is laid back, so a margin row is `TILE_H_PX`
+	# tall while a margin column is `TILE_PX` wide — building it off `TILE_PX` on both axes would
+	# claim a ring taller than the loop could ever paint, and this row would redden on the yardstick.
+	var ring_x := Look.WATER_MARGIN_TILES * Look.TILE_PX
+	var ring_y := Look.WATER_MARGIN_TILES * Look.TILE_H_PX
+	var ring := Rect2(Vector2(-ring_x, -ring_y),
+		Vector2(float(fv.battle.grid.w) * Look.TILE_PX, float(fv.battle.grid.h) * Look.TILE_H_PX)
+			+ Vector2(ring_x, ring_y) * 2.0)
 	var want := ring.intersection(fv._visible_world_rect())
 	t.ok(want.size.x > 0.0 and want.size.y > 0.0, "그 교집합이 비어 있지 않다 (자가 점검)")
 	t.ok(painted.encloses(want),
