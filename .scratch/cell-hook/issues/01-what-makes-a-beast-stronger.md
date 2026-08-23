@@ -1,5 +1,5 @@
 Type: grilling
-Status: open
+Status: claimed
 
 # 무엇이 병사를 강하게 하나
 
@@ -48,3 +48,35 @@ Status: open
 1. **넷 중 무엇인가** — 또는 둘을 겹치나
 2. **한 번에 몇 가지를 여나.** ⚠ **넷을 다 열면 12월에 못 낸다**
 3. **고른 것이 병사 하나에 붙나, 무리 전체에 붙나**
+
+## Comments
+
+### 2026-08-23 — two findings before the fork is put to the user
+
+**Read out of the code**: the cell of a board holds a SPECIES, and species moves no number at all.
+`Loadout.bonus` sums `Rules.part_bonus(part, col)` over filled cells, so the bonus is the sum of six
+fixed per-part rows (`PART_STATS`) and the species in the cell only picks the look. `Rules.Species`
+says so itself: *"It does NOTHING this round and that is decided, not forgotten: the user took set
+effects out and left the species in as the place they will attach."*
+⇒ **Picking the species fork means the numbers need a new home**; picking the equipment fork keeps
+the numbers where they are and re-opens the art cost.
+
+**Also read out of the code**: the third open question — one soldier or the whole pack — is already
+answered by the structure. `Army` holds one `Loadout` for its whole life and the board is keyed by
+SLOT, so an upgrade outlives the body that dies. **It attaches to the slot, i.e. every soldier that
+slot sends out.**
+
+**How others ship it** (required by the repo's guard against recommending an unnamed technique):
+
+| Game | What it hands the player | Does it need art per combination |
+|---|---|---|
+| **Bad North** (Plausible Concepts, 2018) | Three classes — infantry, pike, archer — plus four items: bomb, squad-size upgrade, war-horn, hammer | **No.** The four items are *activated*, not worn: they do not sit on the body, so no silhouette combines |
+| **Mechabellum** (Game River, 2023) | Buy a unit type, or upgrade a unit you already own to double HP and damage for half the price of a new one | **No.** The upgrade moves numbers; the body stays the same model |
+
+⇒ **Neither ships worn, combinable equipment.** Both still give the player something to fiddle with
+between fights, and both keep the art count flat by putting the choice in *which unit* and *how many*,
+not in *what it is wearing*.
+
+Sources: [Bad North review](https://saveorquit.com/2019/05/14/review-bad-north/) ·
+[Bad North: Jotunn Edition patch notes](https://www.badnorth.com/news/patch/2-00-jotunn-edition) ·
+[Mechabellum: upgrade or build more?](https://steamcommunity.com/app/669330/discussions/0/600766248738929634/)
