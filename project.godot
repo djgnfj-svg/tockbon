@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="tockbon"
-; run/main_scene — 세포 게임이 접히면서 비었다 (2026-08-22). 새 게임의 첫 화면이 생기면 채운다.
+run/main_scene="res://src/shell/game.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [autoload]

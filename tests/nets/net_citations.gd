@@ -110,9 +110,7 @@ func _docs_carry_no_line_numbers(t, line_re: RegEx) -> void:
 	# sixty-odd docs about two dead games, then 18. On 2026-08-22 ten design docs, seven plans and the
 	# whole `docs/plans/` index were deleted and the GDD went from 108,927 characters to 1,574, so the
 	# floor moves with the tree again. It is still a hand-written number and never `docs.size()`.
-	# 2026-08-22, 두 번째로 내린다. 세포 게임이 접히면서 GDD 하나와 접은 갈래 여덟이 지워졌다.
-	# 남은 것은 docs/ 다섯 · docs/design/ 넷 = 9. **바닥이 9면 한 장만 지워도 빨개지므로 8로 둔다.**
-	t.ok(docs.size() >= 8, "스캔할 문서를 찾았다 (%d개, 최소 8)" % docs.size())
+	t.ok(docs.size() >= 14, "스캔할 문서를 찾았다 (%d개, 최소 14)" % docs.size())
 	var bad: Array[String] = []
 	for f: String in docs:
 		for joined: String in _join_prose(_read(f)):
@@ -219,25 +217,31 @@ func _join_comments(text: String) -> Array[String]:
 ## stderr, so it reddens twice over. ⚠ **Loading is not running**: both files `extend SceneTree` and are
 ## never instantiated, so nothing here opens a window or plays a run.
 ##
-## ⚠⚠ **2026-08-22 — 이 검사는 반으로 줄었다. 프로브가 지워졌기 때문이다.**
-##
-## 원래 여기서 프로브의 **모양**까지 못박았다 — `_make_plan` 과 `_play_island` 가 아직 있는지. 그건
-## 「계획을 먼저 짜고 본다」는 세포 게임의 설계였고, **그 게임이 접혔으므로 그 이름들은 잴 것이 없다.**
-## `tools/` 에 남은 것은 파이썬뿐이라 `.gd` 바닥도 못 세운다.
-##
-## ⇒ **남은 것은 「tools/ 의 .gd 가 전부 파싱된다」 하나뿐이고, 지금은 파일이 0개라 아무것도 안 잰다.**
-## **라벨이 개수를 찍는 이유가 그거다 — 색깔이 아니라 숫자를 읽어야 한다.** 새 게임의 도구가 생기면
-## 그때부터 실제로 잰다.
+## ⚠ **Loading is not enough on its own** — a file emptied to `extends SceneTree` parses perfectly. So the
+## probe's shape is pinned too: the two functions that make it a plan-then-watch probe rather than a
+## summon-and-launch one have to still be in it. **Naming them here is what catches an API deletion that
+## leaves a stub behind.**
 func _tools_still_parse(t) -> void:
 	var tool_files: Array[String] = []
 	_walk("res://tools", tool_files)
+	t.ok(tool_files.size() >= 2, "tools/ 아래 .gd 를 찾았다 (%d개, 최소 2)" % tool_files.size())
 	var unloadable: Array[String] = []
+	var probe_shape := PackedStringArray()
 	for f: String in tool_files:
-		if ResourceLoader.load(f) == null:
+		var scr := ResourceLoader.load(f)
+		if scr == null:
 			unloadable.append(f)
+			continue
+		if f.ends_with("run_run.gd"):
+			for m: Dictionary in (scr as GDScript).get_script_method_list():
+				probe_shape.append(str(m["name"]))
 	t.eq(unloadable.size(), 0,
-		"tools/ 의 .gd %d개가 전부 파싱된다 — 아무 넷도 안 부르는 파일이라 여기서만 잡힌다 %s"
-		% [tool_files.size(), str(unloadable)])
+		"tools/ 의 .gd 가 전부 파싱된다 — 아무 넷도 안 부르는 파일이라 여기서만 잡힌다 %s" % str(unloadable))
+	t.ok(probe_shape.size() > 0, "그중에 프로브가 있고 함수 목록을 읽었다 (%d개, 자가 점검)"
+		% probe_shape.size())
+	t.ok(probe_shape.has("_make_plan"),
+		"프로브가 계획을 먼저 짠다 (_make_plan — 전투 중에 손이 움직이면 이 이름이 없다)")
+	t.ok(probe_shape.has("_play_island"), "그리고 그 계획을 커밋한 뒤 판정까지 본다 (_play_island)")
 
 
 func _gd_files() -> Array[String]:
