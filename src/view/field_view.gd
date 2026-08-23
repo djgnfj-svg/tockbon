@@ -1,294 +1,954 @@
 class_name FieldView
 extends Node2D
-## The island itself: terrain, docks, boats at sea, bodies, beaks, HP bars — and nine of the twelve
-## combat effects.
+## The field. **A 3D space wearing 2D pictures** — 티켓 08, 2026-08-24.
 ##
-## **Reads `Battle` and never writes it.** There is no assignment into any sim object anywhere in
-## this file — that is the `src/view/` half of the folder contract, and it is what keeps "the screen
-## changed but the sim did not" from being expressible here at all. The lunge and the flinch are
-## DRAWING offsets and never `soldier_pos`: reach tests read positions directly and the grid reserves
-## one body per tile, so writing either into the sim would change who is inside whose reach and the
-## decoration would rewrite the rules it exists to decorate.
+## ⚠⚠ **This file used to paint the whole fight by hand on a canvas.** Terrain, cliff faces, bodies,
+## hulls, rings, halos, tracers, sparks and bursts were 537 lines of `_draw()` and fourteen `_paint_*`
+## leaves. **The engine does the first three now**, and the rest is not ported yet — see "What is not
+## here yet" at the bottom of this comment. The move was measured before it was made: of the 1033
+## checks tied to painting in 2D, about 550 survive it and about 480 do not.
 ##
-## **`_draw()` calls the `_paint_*` hooks and nothing else**, and every `draw_*` call in the file
-## lives inside one of those thirteen hooks, in the exact per-function counts `net_draw_leaf._table()`
-## pins (`combat-juice`'s original eleven, plus `_paint_route` for stage 4's drag and `_paint_hull` /
-## `_paint_cliff_face` for stage 5's fleet — `_paint_boat` is gone, replaced by `_paint_hull`, and
-## `_paint_overlay` is gone with the green coast wash it drew). A net overrides a hook and reads its
-## arguments back; the per-function count is
-## what stops a hook from quietly throwing its drawing away, because **argument capture proves a
-## value was computed and handed on, never that it was used** — a `draw_circle(p, 0.0, col)` inside
-## a leaf once turned forty rocks invisible with the whole round green. See
-## lessons-from-two-dead-games.
+## **It is still a `Node2D`.** A `Node3D` subtree parented under a `Node2D` renders exactly as it
+## would anywhere else, and every canvas item in the shell still draws ON TOP of it — probed before a
+## line of this was written (`probe_3d_under_2d`). So the shell's child order, and every check that
+## reads it, is untouched: field, hud, map, reward, refit, title, panel still means what it meant,
+## with the 3D world sitting under all seven.
 ##
-## Every helper below returns a value and calls no `draw_*`: a drawing call outside the eleven hooks
-## is exactly what `net_draw_leaf` reddens on, and a function written tomorrow is red until it is in
-## the table.
+## **What the engine took over, and what that bought:**
 ##
-## No colour literal and no named colour constant appears here — every colour and every pixel value
-## is read from `look.gd`, because a presentation number kept in two files diverges and the
-## divergence is invisible on screen. The scan that enforces it greps this file's raw text, so even
-## the sentence you are reading avoids writing the forbidden shape out.
+## | It used to be | Now | What that gets |
+## |---|---|---|
+## | rows drawn `TILE_H_PX` tall on a flat canvas | a real camera at 40 degrees | height reads at all |
+## | a face line along every seaward cliff edge | a box 2.4 tall | the cliff IS tall |
+## | a squashed ellipse under every body | one directional light | shadows nobody draws |
+## | `position = -cam_px * zoom` | `Camera3D`, orthogonal | it can turn |
 ##
-## **The effects keep their own clock and their own drawers, and that is a requirement rather than a
-## convenience**: the shell skips `battle.step` entirely while a panel is up, so an effect hung off
-## the sim's clock freezes mid-play behind the win screen — which is the exact moment the death burst
-## and the transition are supposed to be running. See `combat-juice`, "what the view owns".
+## **The camera contract did not change, and that is deliberate.** `cam_px` is still the world-px
+## corner of the visible ground, `zoom` is still the same ladder between `ZOOM_MIN` and `ZOOM_MAX`,
+## and `screen_to_world_px` still answers in world px. `pan_by` / `zoom_at` / `_clamp_cam` are the
+## same pure functions they were, so the shell needed no edit at all and the checks that drove them
+## through `.new()` still drive them. **What is new inside them is one axis**: the ground is no longer
+## square on screen, so a screen-y px covers `1 / cos(pitch)` ground px, and the two conversions say
+## so in one place each.
+##
+## ⚠ **Orthogonal, not perspective.** This game is read off a grid; a perspective camera draws two
+## tiles of one size at two sizes, and that reading is the thing it cannot lose.
+##
+## **What is not here yet** (they were 210 of the checks that died, and they are the next step):
+## the summon aim ring and its route, target lines, area and landing rings, hit halos, tracers,
+## sparks, death bursts, the beak, and the refusal mark. `_fx_step` and `_drain_events` below still
+## run and still fill `_fx` every frame — **the effects are being simulated, nobody is drawing them.**
+## That is stated here rather than left to be discovered from a quiet screen.
 
 
-## How finely one rounded corner of a body outline is sampled. **Not a design value** — the shape
-## the player reads comes from `Look.BODY_CORNER_RATIO`, and this only decides whether the arc
-## between two of its points is visibly faceted. It is not in `look.gd` because nothing outside this
-## file's polygon builder can see it.
+## Kept because `_rounded_square` is gone but the baked picture wants the same corner it drew.
 const CORNER_SEGMENTS := 6
 
-## How finely a ring is sampled. Same reason as `CORNER_SEGMENTS`, and deliberately NOT an argument
-## to `_paint_ring`: made an argument it would add one more entry to `net_draw_leaf`'s "unused
-## parameter" check and buy nothing, because "does the arc look faceted" is not a design value.
-const RING_SEGMENTS := 24
-
-## How finely a shadow ellipse is sampled. Same reason as the two above. **20 and not 24** because a
-## shadow is 24 px across at most and filled rather than stroked — a facet on a solid shape at that
-## size is under a pixel, where a facet on a stroked ring is the stroke's own width.
-const SHADOW_SEGMENTS := 20
-
-## The four ORTHOGONAL offsets, used ONLY by the cliff-face pass below — which walks a cliff tile's
-## seaward EDGES, and a tile has four edges however many neighbours it has.
-##
-## ⚠ **These four moved here out of `Grid.ORTHO`, which is deleted.** `Grid`'s copy existed for the
-## `landable` predicate ("a tile touching water only at a corner is not landable"), and
-## `speed-off-open-landing` deleted that whole rule — the coast is 8-way now. This is a DRAWING
-## question, not a rule one: an edge is an edge. It is not in `look.gd` because it is not a number
-## anyone would tune; it is the geometry of a square.
-const CLIFF_SIDES := [[0, -1], [0, 1], [-1, 0], [1, 0]]
-
-## What lives in the transient drawer. Anything bolted to a BODY lives in `_body` instead, keyed by
-## body, which is why "drop the oldest" and "one flash per body, age reset rather than stacked" never
-## eat each other — they are rules of two different drawers.
-## ⚠ `REFUSE` is the one entry here that is NOT born in `_drain_events`. Every other kind is drained
-## out of `battle.events`; a refusal produces no event because `Battle.send` refuses with **nothing at
-## all changed** — that is the whole of its contract — so the shell pushes this one in through
-## `note_refusal` off `send`'s own -1. See that function.
-enum FxKind { SHOT, SPARK, BURST, AREA, LAND, REFUSE }
+const WATER_SHADER := "res://src/view/water.gdshader"
 
 
-## The fight being drawn. Null until `setup`, and `_draw` paints nothing while it is.
+# --- what it reads, and never writes ---------------------------------------------------------------
+
 var battle: Battle = null
-
-## The roster. **It must be the same object `battle` was set up with** — the shell hands both from
-## one place for that reason. A fresh `Grid` and a fresh `Battle` are built per island and the army
-## is not, which is how HP and the beak carry, so the view reads *who a soldier is* from here and
-## *where it is standing* from `battle`.
 var army: Army = null
-
-## The island's 18 legend rows, straight from `Islands.rows_of`. **The rows are the only place water
-## and a hole can be told apart**: `grid.passable` stores one byte and both are 0 in it, so a view
-## coloured from passability alone paints the sea and the pits the same tone and the map reads as one
-## shape. `look.gd`'s terrain lookup takes the legend character for exactly this reason.
 var rows: Array = []
 
 
-## The transient drawer: shots, sparks, bursts, area rings, landing rings. Each entry carries
-## `age`, `delay`, `life` and whatever geometry was FROZEN when it was born — a tracer that re-read
-## `soldier_target` every frame would bend onto the next enemy the instant its target died, and a
-## spark whose root followed its striker would walk backwards as the lunge returned.
+# --- its own clock. Unchanged by the move: an effect ages in seconds whatever draws it -------------
+
 var _fx: Array = []
-
-## The per-body drawer, keyed `"e3"` / `"s7"`. Flash, flinch, lunge, gait phase and last position.
-## **A Dictionary and not a list on purpose**: the key is the body, so a body hit twice in one frame
-## has its age reset instead of stacking a second entry, and stacked halos would multiply their alpha
-## until the body was simply white.
 var _body: Dictionary = {}
-
-## Screen shake. `_shake_amp` is the peak in px and `_shake_left` counts down; the offset is ASSIGNED
-## to `position` and never added, because in the last game a `+=` became the basis of the next
-## frame's lerp and compounded roughly 9x, so a 28 px cap stopped nothing at all.
 var _shake_amp := 0.0
 var _shake_left := 0.0
 
-## The camera. `cam_px` is the world-space (canvas px) top-left corner of what is visible; `zoom` is
-## the runtime float `Look.ZOOM_MIN`..`Look.ZOOM_MAX` the wheel changes. **There is still no
-## `Camera2D`** — this node composes the whole transform itself in one expression
-## (`position = -cam_px * zoom + shake_offset()`, `scale = Vector2(zoom, zoom)`), which is what keeps
-## every screen->world conversion going through the one function beside it
-## (`screen_to_world_px`) instead of a second copy drifting somewhere else on screen at once.
+
+# --- the camera ------------------------------------------------------------------------------------
+
+## World px of the visible ground's top-left corner, exactly as before the move.
 var cam_px := Vector2.ZERO
 var zoom := 1.0
+## ⚠ **The new axis, and the only piece of state this move added.** 0 is the view the flat board
+## always had. **Nothing turns it yet** — what turns it, and whether a hand is allowed to during a
+## fight, is 티켓 07, which is open precisely because turning IS the hand moving.
+var cam_yaw_deg := Look.CAM_YAW_DEG
 
-## The wolf, facing each way. **`load` and not `preload`, because `preload` demands a string literal
-## and the path would then live in this file as well as in `look.gd`** — which is the one thing
-## `look.gd` exists to stop. Loaded once at construction, not per frame.
+
+# --- pictures ---------------------------------------------------------------------------------------
+
 var _tex_wolf_r: Texture2D = load(Look.BEAST_WOLF_R)
 var _tex_wolf_l: Texture2D = load(Look.BEAST_WOLF_L)
+## The rounded square, baked once. Every enemy wears it, tinted — the same two marks `_paint_body`
+## drew by hand (the outline and the centre dot) with nothing filled between them.
+var _tex_body: Texture2D = null
+## One white texel, for the two halves of an HP bar.
+var _tex_flat: Texture2D = null
 
-## The summon aim (`sea-summon`). `_summon_slot` is the slot a number key has armed, or -1;
-## `_summon_aim` is the tile under the cursor, or -1. **Both are set by `game.gd` through one call**,
-## `set_summon_aim`, exactly as the drag's two fields are — "armed", "moved" and "cleared" all go
-## through it, so the two can never disagree about whether the aim marks should be showing.
-##
-## ⚠ **Neither of them gates the BAND.** The green ribbon is drawn from the moment the island opens
-## with nothing armed at all: the region on screen at frame one is what says a press belongs there,
-## and that is the answer to 「뭐 어떻게 동작시키는지 전혀모르겠는데?」.
+
+# --- the 3D subtree, all of it built in code -------------------------------------------------------
+
+var _world: Node3D = null
+var _cam: Camera3D = null
+var _terrain: MeshInstance3D = null
+var _sea: MeshInstance3D = null
+var _ring: MeshInstance3D = null
+var _sun: DirectionalLight3D = null
+var _sprites: Array[Sprite3D] = []
+var _hulls: Array[MeshInstance3D] = []
+var _sprites_used := 0
+var _hulls_used := 0
+## What the terrain in the mesh was built for. Rebuilding 5120 boxes every frame is waste; the island
+## only changes when it opens, and the summonable band only when the plan is committed.
+var _built_for := ""
+
+
+# --- the plan being authored -------------------------------------------------------------------------
+
 var _summon_slot := -1
 var _summon_aim := -1
-
-## P7's stalled-boat blink clock (`boat-and-landing` stage 5). A boat's OWN age is not the right
-## clock for this — a boat that just arrived and a boat that has been stuck for ten seconds must
-## blink in the same phase, or the mark would read as counting something instead of as a warning.
-## One shared clock, like `_shake_offset`'s own, deterministic so a net can drive it by hand.
 var _wait_clock := 0.0
+
+
+func _ready() -> void:
+	_build_world()
+
+
+## Everything under here is made in code and never from a scene file, the same rule `game.gd` keeps
+## for its seven children and for the same reason: a node parked in a `.tscn` lets the line that makes
+## it be deleted with nothing going red.
+func _build_world() -> void:
+	if _world != null:
+		return
+	_tex_body = _make_body_tex()
+	_tex_flat = _make_flat_tex()
+
+	_world = Node3D.new()
+	add_child(_world)
+
+	# ⚠ **The sea goes in FIRST so it is under everything**, and it is a single quad rather than more
+	# tiles: see `SEA_SPAN_TILES`. It carries no band and never changes, so it is built once here and
+	# only ever moved to the middle of whatever island opens.
+	_sea = MeshInstance3D.new()
+	var sea_mesh := PlaneMesh.new()
+	sea_mesh.size = Vector2(Look.SEA_SPAN_TILES, Look.SEA_SPAN_TILES)
+	_sea.mesh = sea_mesh
+	# The sea is a shader, not a flat colour and not a bought texture — see `water.gdshader`.
+	var sea_mat := ShaderMaterial.new()
+	sea_mat.shader = load(WATER_SHADER)
+	sea_mat.set_shader_parameter("trough", Look.COL_WATER)
+	sea_mat.set_shader_parameter("crest", Look.COL_WATER_CREST)
+	sea_mat.set_shader_parameter("wave_scale", Look.WATER_WAVE_SCALE)
+	sea_mat.set_shader_parameter("wave_speed", Look.WATER_WAVE_SPEED)
+	_sea.material_override = sea_mat
+	# ⚠⚠ **The sea casts nothing, and that is a fix rather than an optimisation.** A flat quad 400
+	# tiles across shadows ITSELF at grazing angles, and the whole sea drew as diagonal stripes — the
+	# capture that added the quad shows them. A flat sea has nothing to cast anyway; the island still
+	# casts onto it, which is the only shadow out there that means something.
+	_sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_world.add_child(_sea)
+
+	# One mesh, one material, one draw call for the whole island — see `_rebuild_terrain`.
+	_terrain = MeshInstance3D.new()
+	_world.add_child(_terrain)
+
+	# The ring: where a boat may be put down. Built once, moved and resized per island.
+	_ring = MeshInstance3D.new()
+	var ring_mat := StandardMaterial3D.new()
+	ring_mat.albedo_color = Look.COL_SUMMON_RING
+	ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# Unshaded: it is a MARK on the water, not a thing floating on it, and a mark that dims when the
+	# sun goes round is a mark that stops answering the question it was drawn for.
+	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_ring.material_override = ring_mat
+	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_world.add_child(_ring)
+
+	_sun = DirectionalLight3D.new()
+	_sun.rotation_degrees = Vector3(Look.SUN_PITCH_DEG, Look.SUN_YAW_DEG, 0.0)
+	_sun.light_energy = Look.SUN_ENERGY
+	# ⚠ **The whole point of the light.** Without this the boxes are shaded but nothing is cast, and a
+	# cliff standing 2.4 tall is told apart from land only by its own face being darker — which is what
+	# the flat board already did with a line, at the cost of a leaf and a width constant.
+	_sun.shadow_enabled = true
+	_sun.directional_shadow_max_distance = Look.SUN_SHADOW_DIST_TILES
+	# ⚠ **One split, not four.** The default cascade splits its range into four shadow maps, and the
+	# seam between two of them drew as **a hard line straight across the sea** in this port's first
+	# capture — cascades exist to spend detail near a perspective camera, and this camera is
+	# orthogonal, so every tile on screen is the same distance from it in the only sense that matters.
+	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	# The same acne the sea showed, on the island's own long flat stretches. Pushed off the surface
+	# along its normal rather than along the light, so a slope and a flat face need one number.
+	_sun.shadow_normal_bias = Look.SUN_SHADOW_NORMAL_BIAS
+	_world.add_child(_sun)
+
+	# The fill. See `FILL_ENERGY`: it casts nothing, so it costs one more pass over the shaded faces and
+	# nothing else.
+	var fill := DirectionalLight3D.new()
+	fill.rotation_degrees = Vector3(Look.FILL_PITCH_DEG, Look.FILL_YAW_DEG, 0.0)
+	fill.light_energy = Look.FILL_ENERGY
+	fill.shadow_enabled = false
+	_world.add_child(fill)
+
+	var e := Environment.new()
+	e.background_mode = Environment.BG_COLOR
+	e.background_color = Look.COL_SKY
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	e.ambient_light_color = Look.COL_AMBIENT
+	e.ambient_light_energy = Look.AMBIENT_ENERGY
+	var env := WorldEnvironment.new()
+	env.environment = e
+	_world.add_child(env)
+
+	_cam = Camera3D.new()
+	_cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	# KEEP_WIDTH so `size` is the visible WIDTH in tiles and the existing zoom ladder converts across
+	# with one division. Under the default KEEP_HEIGHT the same number would mean the visible height,
+	# and every camera literal measured against a 1280-wide viewport would quietly mean something else.
+	_cam.keep_aspect = Camera3D.KEEP_WIDTH
+	_world.add_child(_cam)
+	_place_camera()
+
+
+## A white rounded-square OUTLINE with a white centre dot and nothing in between — the two marks
+## `_paint_body` used to draw with `draw_polyline` and `draw_circle`. White, so the one modulate on the
+## sprite carries the body's own colour; baked, because a billboard wears a picture and cannot be
+## handed a polyline.
+func _make_body_tex() -> Texture2D:
+	var n := Look.BODY_TEX_PX
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	img.fill(Color(1.0, 1.0, 1.0, 0.0))
+	var half := float(n) * 0.5
+	var edge := half - float(Look.BODY_TEX_OUTLINE_PX) * 0.5
+	var corner := edge * 0.45
+	for y in n:
+		for x in n:
+			var p := Vector2(float(x) + 0.5 - half, float(y) + 0.5 - half)
+			# Distance to a rounded square, the usual box-minus-corner form: push the point into the
+			# straight part and measure what is left over.
+			var q := Vector2(absf(p.x), absf(p.y)) - Vector2(edge - corner, edge - corner)
+			var d := Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() + minf(maxf(q.x, q.y), 0.0) - corner
+			if absf(d) <= float(Look.BODY_TEX_OUTLINE_PX) * 0.5:
+				img.set_pixel(x, y, Color.WHITE)
+			elif p.length() <= float(Look.BODY_TEX_DOT_PX):
+				img.set_pixel(x, y, Color.WHITE)
+	return ImageTexture.create_from_image(img)
+
+
+func _make_flat_tex() -> Texture2D:
+	var img := Image.create(1, 1, false, Image.FORMAT_RGBA8)
+	img.fill(Color.WHITE)
+	return ImageTexture.create_from_image(img)
+
 
 @warning_ignore("shadowed_variable")
 func setup(battle: Battle, army: Army, rows: Array) -> void:
 	self.battle = battle
 	self.army = army
 	self.rows = rows
-	# **Both drawers are emptied here.** Without it island 2 opens with island 1's explosions still
-	# in flight over bodies that no longer exist, and every id in them means a different unit now.
+	# **Both drawers are emptied here.** Without it island 2 opens with island 1's explosions still in
+	# flight over bodies that no longer exist, and every id in them means a different unit now.
 	_fx = []
 	_body = {}
 	_shake_amp = 0.0
 	_shake_left = 0.0
-	# A drag in flight on the island that just ended must not survive onto the one that just opened —
-	# its soldier id would now name a stranger standing at a different harbour.
-	# Same argument as the drag one line up: a slot armed on island 1 must not survive onto island 2,
-	# and the tile index it was aiming at would name a different piece of water there.
+	# A slot armed on island 1 must not survive onto island 2, and the tile index it was aiming at
+	# would name a different piece of water there.
 	_summon_slot = -1
 	_summon_aim = -1
 	_wait_clock = 0.0
 	# The survey: an island opens zoomed all the way out, so the WHOLE island is on screen before
 	# anything is planned — `plan-then-watch` 6.3, on the user's 「조금 더 카메라를 뒤로 빼야 될」.
-	# `_clamp_cam` centres any axis whose map is narrower than the visible world, and at `ZOOM_MIN`
-	# 0.45 that is now BOTH axes, which is the whole of the framing change.
 	zoom = Look.ZOOM_MIN
 	cam_px = Vector2.ZERO
+	cam_yaw_deg = Look.CAM_YAW_DEG
 	_clamp_cam()
-	position = _compose_position()
-	scale = Vector2(zoom, zoom)
-	queue_redraw()
+	# ⚠ **Forces a terrain rebuild even when the same island re-opens.** `_built_for` is a fingerprint
+	# of the rows, and re-entering island 0 from the map would otherwise keep the mesh from the last
+	# time — which is right for the boxes and wrong for the band, because the plan has been reset.
+	_built_for = ""
+	_build_world()
+	_rebuild_terrain()
+	_place_camera()
 
 
-## The sim moves every frame and a `Node2D` only repaints when it is asked to. Without this line the
-## picture freezes on the first frame while `battle.step` keeps running — the signature fake, with
-## the sim and the screen the wrong way round.
+## The sim moves every frame and the picture has to follow it.
 ##
-## **The order of these three is load-bearing.** Ageing first and draining second means an effect
-## born this frame is drawn at full amplitude on the frame it was born, so the flinch really does
-## reach `HIT_KNOCK_PX` and the shake really does reach `dmg * SHAKE_PER_DAMAGE_PX` once. Draining
-## first would shave one frame's delta off every effect before anyone saw it.
+## **The order is load-bearing and it is the order it always was.** Ageing first and draining second
+## means an effect born this frame is at full amplitude on the frame it was born, so the flinch really
+## does reach `HIT_KNOCK_PX` once and the shake really does reach its peak once.
 ##
-## ⚠ **Every clock in this file is aged by the BARE frame delta**, `_wait_clock` included.
-## `set_time_scale` and `_time_scale` are deleted with the speed ladder
-## (`speed-off-open-landing`, item 1): with no multiplier the only honest value the field could hand
-## its own drawers is a constant 1.0, and a leaf handed a constant is the shape 「No fake code」 names.
-## Every duration in `look.gd` is budgeted against real seconds, which is where they were written.
+## ⚠ **Every clock here is aged by the BARE frame delta**, `_wait_clock` included — there is no speed
+## multiplier to fold in, and a leaf handed a constant 1.0 is the shape "No fake code" names.
 func _process(delta: float) -> void:
 	_fx_step(delta)
 	_drain_events()
 	_wait_clock += delta
-	position = _compose_position()
-	scale = Vector2(zoom, zoom)
-	queue_redraw()
+	# ⚠ **A visibility flip, not a rebuild.** The plan used to be painted into the terrain's own
+	# colours, so committing meant building the whole mesh a second time; it is a ring of its own now.
+	if _ring != null:
+		_ring.visible = _band_on()
+	_place_camera()
+	_paint_bodies()
 
 
-# --- the camera: one transform, in one place ------------------------------------------------------
+# --- the camera: still one transform, still in one place -------------------------------------------
 
-## `position = -cam_px * zoom + shake_offset()` — the pan, the zoom and the shake compose in exactly
-## this one expression, and nothing else in the tree may write `position` for this node.
-func _compose_position() -> Vector2:
-	return -cam_px * zoom + _shake_offset()
+## How much GROUND, in world px, the viewport covers at this zoom.
+##
+## ⚠⚠ **The two axes no longer share a divisor and that is the whole of what tilting cost.** A screen
+## px across is a ground px across; a screen px DOWN is `1 / cos(pitch)` ground px, because the ground
+## is leaning away. Written once, here, and both conversions below read it — computed at each call
+## site instead, the two would drift and the drift would look like a mis-aimed click.
+func _visible_ground_px() -> Vector2:
+	var v := Look.viewport_size_px() / zoom
+	return Vector2(v.x, v.y / cos(deg_to_rad(Look.CAM_PITCH_DEG)))
 
 
-## The inverse of the node's own transform: a screen (viewport) px back to world (canvas) px. Every
-## click, and every future drag, goes through this rather than a second hand-rolled conversion.
+## The two ground axes the screen's own axes lie along, at this yaw. `_right` is screen-right,
+## `_down` is screen-down. At yaw 0 they are +x and +y, which is what the flat board had.
+func _ground_right() -> Vector2:
+	var a := deg_to_rad(cam_yaw_deg)
+	return Vector2(cos(a), sin(a))
+
+
+func _ground_down() -> Vector2:
+	var a := deg_to_rad(cam_yaw_deg)
+	return Vector2(-sin(a), cos(a))
+
+
+## The ground point at the middle of the screen, in world px. `cam_px` is a corner, and a corner is
+## what the clamp and every check about it speak in; the camera needs the middle.
+func _ground_centre_px() -> Vector2:
+	return cam_px + _visible_ground_px() * 0.5
+
+
+## A screen (viewport) px back to a ground point in world px. **The one conversion every click goes
+## through**, the same promise the flat board's `(at - position) / zoom` made.
+##
+## ⚠ At yaw 0 and pitch 0 this IS that expression. The pitch divides the vertical, the yaw turns the
+## two axes, and nothing else about it moved.
 func screen_to_world_px(at: Vector2) -> Vector2:
-	return (at - position) / zoom
+	var span := _visible_ground_px()
+	var u := at.x / Look.VIEWPORT_W_PX - 0.5
+	var v := at.y / Look.VIEWPORT_H_PX - 0.5
+	return _ground_centre_px() + _ground_right() * (u * span.x) + _ground_down() * (v * span.y)
 
 
 func world_to_tile(world: Vector2) -> Vector2i:
-	return Vector2i(int(floor(world.x / Look.TILE_PX)), int(floor(world.y / Look.TILE_H_PX)))
+	return Vector2i(int(floor(world.x / Look.TILE_PX)), int(floor(world.y / Look.TILE_PX)))
 
 
-## Moves the camera by a SCREEN-space delta (e.g. mouse motion) and re-clamps.
+## Moves the camera by a SCREEN-space delta (mouse motion) and re-clamps. The ground under the cursor
+## keeps up with the cursor, which is the only thing a drag has to promise.
 func pan_by(delta_screen: Vector2) -> void:
-	cam_px -= delta_screen / zoom
+	var span := _visible_ground_px()
+	var on_ground := _ground_right() * (delta_screen.x / Look.VIEWPORT_W_PX * span.x) \
+		+ _ground_down() * (delta_screen.y / Look.VIEWPORT_H_PX * span.y)
+	cam_px -= on_ground
 	_clamp_cam()
 
 
-## Multiplies `zoom` by `factor` (clamped to `Look.ZOOM_MIN`..`Look.ZOOM_MAX`) while keeping the WORLD
-## point under `at` fixed on screen — `boat-and-landing`, 7.1: `position' = at - (at - position) *
-## zoom' / zoom`. Computed against the UNSHAKEN position deliberately: locking the zoom centre to a
-## jittering shake offset would make the zoom itself judder while nothing is being zoomed.
+## Multiplies `zoom` by `factor` (clamped to `ZOOM_MIN`..`ZOOM_MAX`) while keeping the ground point
+## under `at` fixed on screen.
+##
+## ⚠ **It asks `screen_to_world_px` twice rather than re-deriving the old closed form.** The closed
+## form was true of a square, unturned ground; asking the conversion itself stays true at every yaw,
+## and there is then exactly one place where the screen-to-ground mapping is written down.
 func zoom_at(at: Vector2, factor: float) -> void:
 	var new_zoom := clampf(zoom * factor, Look.ZOOM_MIN, Look.ZOOM_MAX)
 	if new_zoom == zoom:
 		return
-	var unshaken := -cam_px * zoom
-	var world_at := (at - unshaken) / zoom
+	var before := screen_to_world_px(at)
 	zoom = new_zoom
-	cam_px = world_at - at / new_zoom
+	cam_px += before - screen_to_world_px(at)
 	_clamp_cam()
 
 
-## `cam_px` clamped per axis to `[0, map_px - viewport_px / zoom]`; an axis where the map is narrower
-## than the visible world (every zoom below 0.667 horizontally, and always vertically at these
-## dimensions) is CENTRED on that axis instead of clamped to an empty range.
+## Keeps the camera over the island. **It bounds the ground point at the MIDDLE of the screen**, not
+## the corners of a screen-shaped rectangle.
+##
+## ⚠⚠ **That change is what let the board turn.** The old rule clamped `cam_px` into
+## `[0, map - visible]`, which is only a bound while the visible ground is a screen-aligned rectangle;
+## a turned view sees a DIAMOND and a rectangle's corners stop meaning anything about it. Bounding the
+## centre is true at every yaw, and **at yaw 0 it is the same rule it always was** — the arithmetic
+## below reduces to the old one term for term, which is why the pan and zoom checks that drove it
+## still describe it.
+##
+## An axis whose map is narrower than the visible ground is CENTRED on it rather than clamped to an
+## empty range — that is the survey framing an island opens at.
 func _clamp_cam() -> void:
-	# ⚠ The board is laid back, so a row is `TILE_H_PX` tall and not `TILE_PX`. Clamping against the
-	# square height would leave a band below the island that the camera could still pan into.
-	var map_px := Vector2(float(_map_tiles().x) * Look.TILE_PX, float(_map_tiles().y) * Look.TILE_H_PX)
-	var visible := Look.viewport_size_px() / zoom
-	var out := cam_px
+	var map_px := Vector2(float(_map_tiles().x), float(_map_tiles().y)) * Look.TILE_PX
+	var visible := _visible_ground_px()
+	var centre := cam_px + visible * 0.5
 	for axis in 2:
 		if map_px[axis] < visible[axis]:
-			out[axis] = (map_px[axis] - visible[axis]) * 0.5
+			centre[axis] = map_px[axis] * 0.5
 		else:
-			out[axis] = clampf(out[axis], 0.0, map_px[axis] - visible[axis])
-	cam_px = out
+			centre[axis] = clampf(centre[axis], visible[axis] * 0.5, map_px[axis] - visible[axis] * 0.5)
+	cam_px = centre - visible * 0.5
 
 
-func _visible_world_rect() -> Rect2:
-	return Rect2(cam_px, Look.viewport_size_px() / zoom)
-
-
-## **The grid's own size in tiles, and the one place anything here asks for it.**
+## Turns the board by `deg` about the point in the middle of the screen.
 ##
-## ⚠⚠ **Nothing that draws or clamps may read `Look.GRID_W` / `GRID_H` directly any more.** They were
-## `const 48` / `32` and `_draw` and `_clamp_cam` read them instead of the grid, so **two maps of
-## different sizes were unrepresentable** — a long map and a small one could not both exist. The
-## constants survive only as the answer for a view that has no grid yet (`setup(Battle.new(), …)`, and
-## the frames between the shell building the node and opening an island), and that fallback is what
-## keeps every camera literal measured against 48 x 32 still true.
-func _map_tiles() -> Vector2i:
-	if battle != null and battle.grid != null and battle.grid.w > 0 and battle.grid.h > 0:
-		return Vector2i(battle.grid.w, battle.grid.h)
-	return Vector2i(Look.GRID_W, Look.GRID_H)
+## ⚠⚠ **This is 티켓 07's question wearing a keyboard.** 「전투 중엔 손이 안 움직인다」 is the rule this
+## game is built on, and turning the board IS the hand moving — so whether this survives, and whether
+## it survives during a fight or only while planning, is a decision and not a knob. **It is here so the
+## decision can be made by trying it instead of by arguing about it** (2026-08-24, the user: 「3D 회전
+## 회전 버튼이 내가 돌려봐야 될 듯」).
+##
+## The ground point at the centre of the screen is held fixed, so the island turns in place rather
+## than swinging out of view.
+func turn_by(deg: float) -> void:
+	var held := _ground_centre_px()
+	cam_yaw_deg = fmod(cam_yaw_deg + deg, 360.0)
+	cam_px = held - _visible_ground_px() * 0.5
+	_clamp_cam()
 
 
-## The half-open tile span the terrain pass walks: what is on screen, padded, and clamped to the grid
-## plus its water margin. **`end` is exclusive**, so `range(position.x, end.x)` is the loop.
+## Points the real camera at what `cam_px` / `zoom` / `cam_yaw_deg` describe. **The one place any of
+## those three reach the engine**, the same rule `_compose_position` used to keep for `position`.
+func _place_camera() -> void:
+	if _cam == null:
+		return
+	var pitch := deg_to_rad(Look.CAM_PITCH_DEG)
+	var yaw := deg_to_rad(cam_yaw_deg)
+	# The shake was an offset on a canvas; it is an offset on the ground now, in the screen's own two
+	# axes so a shake still reads as the screen jerking rather than as the island sliding.
+	var shake := _shake_offset()
+	var centre := _ground_centre_px() + _ground_right() * shake.x + _ground_down() * shake.y
+	var target := Vector3(centre.x / Look.TILE_PX, 0.0, centre.y / Look.TILE_PX)
+	var back := Vector3(-sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch))
+	_cam.size = _visible_ground_px().x / Look.TILE_PX
+	_cam.look_at_from_position(target + back * Look.CAM_DIST_TILES, target, Vector3.UP)
+
+
+# --- the island, as a landscape ----------------------------------------------------------------------
+## ⚠⚠ **This was 5120 boxes in a `MultiMesh` for one afternoon and the user judged it: 「너무 딱딱해서
+## 재미가 없을까?」.** A box per tile gives the ground a HEIGHT and no SHAPE — every rise is a step and
+## every ramp is a stair. It is one mesh now, built from the same legend, with tile corners JOINED, so
+## a rise is a slope and a ramp really is diagonal.
 ##
-## ⚠⚠ **Without this the terrain loop paints the whole map every frame whatever is visible.** Measured
-## at 48 x 32 with a 12-tile margin: 72 x 56 = **4,032 tiles = 8,064 immediate-mode calls a frame**,
-## of which the zoomed-out camera can see about three quarters. At 144 columns the same loop is
-## 168 x 56 = 9,408, and the long map is unplayable before anything about it can be judged.
+## **What joins and what does not** is the whole design of this pass. A corner is averaged only across
+## tiles of the same KIND: land with land, water with water. Where two kinds meet, the corner stays put
+## on each side and a skirt drops from the higher one — which is what keeps a cliff a wall rather than
+## a helpful ramp up it, and what keeps the coast an edge instead of a beach that slides into the sea.
 ##
-## The pad is `Look.CULL_PAD_TILES`, and it is arithmetic rather than slack — see its own comment: the
-## shake is added to `position` AFTER this is computed, so the world can slide under the camera by
-## `SHAKE_MAX_PX / ZOOM_MIN` px without `cam_px` moving at all.
+## ⚠ **Colours stay per tile even though heights are shared.** Every tile owns its own vertices, so the
+## corner it shares with its neighbour is at the same HEIGHT (no crack) and its own COLOUR (no smear).
+## Averaging colour as well would turn the legend into a gradient, and the legend is how the player
+## reads what is walkable.
 ##
-## ⚠ **The clamp to the margin is the reason this can never cut anything.** `WATER_MARGIN_TILES` is
-## already sized so the margin rect contains the whole zoomed-out visible world (`net_camera` pins
-## that), so intersecting the two can only ever drop tiles that were off screen.
-func _visible_tile_rect(margin: int) -> Rect2i:
+## ⚠ **Flat shading, deliberately.** Every facet keeps its own plane, so a slope reads as a slope and a
+## step reads as a step. Smoothed normals would round the two into each other and the ground would stop
+## saying which of them it is.
+
+enum Kind { WATER, HOLE, CLIFF, RAMP, LAND }
+
+
+## The kind a legend character belongs to. **Not the colour and not the height** — it is the question
+## "does this join to that", and it is the only thing the joining rule reads.
+##
+## ⚠ **The ramp is its own kind now** (2026-08-24, the user: 「경사로 가능함?」). It used to fall through
+## to LAND, which joined it to the field below and walled it off from the cliff above — **a doorway
+## through a cliff drawn as a step.** It is the one character whose whole job is to be a slope.
+func _kind_of(ch: String) -> int:
+	match ch:
+		"~":
+			return Kind.WATER
+		"H":
+			return Kind.WATER
+		"#":
+			return Kind.HOLE
+		"^":
+			return Kind.CLIFF
+		"/":
+			return Kind.RAMP
+		_:
+			return Kind.LAND
+
+
+## **Whether two kinds share a corner — the whole shape of the island is in this one function.**
+##
+## | pair | joins | what that draws |
+## |---|---|---|
+## | land / land | yes | the rolling hills |
+## | land / water | **yes** | **a shore that shelves into the sea instead of a wall around the island** |
+## | land / ramp, ramp / cliff | **yes** | **a real diagonal from the field up through the cliff wall** |
+## | cliff / cliff | yes | a ridge that undulates instead of a row of identical blocks |
+## | anything / hole | no | a pit stays a pit |
+## | cliff / land, cliff / water | no | **the wall stays a wall** |
+##
+## ⚠⚠ **`land / water` joining is what makes the coast look like a coast**, and it is the one row that
+## trades something away: the shoreline is no longer a hard edge, so where exactly the water starts is
+## read off the COLOUR rather than off a cliff. That is the right trade — the legend was always what
+## said where you can walk, and a wall around an entire island is not what an island looks like.
+##
+## ⚠ **`cliff / land` deliberately does NOT join**, or every cliff would grow a helpful ramp up it on
+## all four sides and the one character whose job is to be that ramp would mean nothing.
+func _joins(a: int, b: int) -> bool:
+	if a == b:
+		return a != Kind.HOLE
+	if a == Kind.HOLE or b == Kind.HOLE:
+		return false
+	if a == Kind.RAMP or b == Kind.RAMP:
+		var other := b if a == Kind.RAMP else a
+		return other == Kind.LAND or other == Kind.CLIFF
+	if a == Kind.CLIFF or b == Kind.CLIFF:
+		return false
+	return true
+
+
+## The legend character at a tile, with everything off the island reading as open water — the same
+## fallback the colour lookup makes, made in one place so the two cannot disagree about where the
+## island ends.
+func _char_at(tx: int, ty: int) -> String:
+	if ty < 0 or ty >= rows.size():
+		return "~"
+	var row: String = String(rows[ty])
+	if tx < 0 or tx >= row.length():
+		return "~"
+	return row[tx]
+
+
+## Smooth value noise, deterministic, in `[0, 1]`. **Written out rather than pulled from
+## `FastNoiseLite`** for one reason: this has to give the same island on every machine and every run,
+## and that reproducibility is the point (see `HILL_SEED`).
+func _noise_at(x: float, y: float, cell: float) -> float:
+	var fx := x / cell
+	var fy := y / cell
+	var ix := int(floor(fx))
+	var iy := int(floor(fy))
+	var tx := fx - float(ix)
+	var ty := fy - float(iy)
+	# Smoothstep on both axes, so the value has no creases along the lattice — a linear blend leaves a
+	# visible fold down every cell boundary and the land reads as folded paper.
+	var sx := tx * tx * (3.0 - 2.0 * tx)
+	var sy := ty * ty * (3.0 - 2.0 * ty)
+	var a := _hash_at(ix, iy)
+	var b := _hash_at(ix + 1, iy)
+	var c := _hash_at(ix, iy + 1)
+	var d := _hash_at(ix + 1, iy + 1)
+	return lerpf(lerpf(a, b, sx), lerpf(c, d, sx), sy)
+
+
+func _hash_at(x: int, y: int) -> float:
+	var n := x * 374761393 + y * 668265263 + Look.HILL_SEED
+	n = (n ^ (n >> 13)) * 1274126177
+	return float((n ^ (n >> 16)) & 0xFFFF) / 65535.0
+
+
+## How high a tile stands: its legend height, plus the swell if it is land. **Two octaves**, the second
+## finer and smaller, so a hillside has a shoulder instead of being one clean dome.
+func _tile_h(tx: int, ty: int) -> float:
+	var ch := _char_at(tx, ty)
+	var base := Look.terrain_height_of_char(ch)
+	var kind := _kind_of(ch)
+	if kind == Kind.LAND or kind == Kind.RAMP:
+		return base + _swell_at(tx, ty) * Look.HILL_AMP_TILES
+	# A cliff takes a fraction of the same swell, so a ridge is a ridge and not a row of identical
+	# blocks. It reads the SAME noise as the land under it, so the ridge follows the ground it stands on.
+	if kind == Kind.CLIFF:
+		return base + _swell_at(tx, ty) * Look.HILL_AMP_TILES * Look.HILL_CLIFF_RATIO
+	return base
+
+
+## How far up the swell this tile sits, in `[0, 1]`. **Two octaves**, the second finer and smaller, so
+## a hillside has a shoulder instead of being one clean dome.
+##
+## ⚠ **The height and the colour read the SAME number.** Computing the tint from its own noise would
+## put the light patch next to the hill instead of on it, and nothing on screen would say so.
+func _swell_at(tx: int, ty: int) -> float:
+	var big := _noise_at(float(tx), float(ty), Look.HILL_CELL_TILES)
+	var fine := _noise_at(float(tx), float(ty), Look.HILL_CELL_TILES * Look.HILL_DETAIL_RATIO)
+	return big * (1.0 - Look.HILL_DETAIL_RATIO) + fine * Look.HILL_DETAIL_RATIO
+
+
+## The height of one corner of one tile. `dx`/`dy` are 0 or 1 and name which corner.
+##
+## ⚠⚠ **The join happens here and nowhere else.** The four tiles touching this corner are averaged, but
+## only the ones of the SAME kind — so two land tiles meet smoothly while land meeting water does not
+## drag the coast down into the sea. A tile always counts itself, so the average is never empty.
+func _corner_h(tx: int, ty: int, dx: int, dy: int) -> float:
+	var kind := _kind_of(_char_at(tx, ty))
+	var sum := 0.0
+	var n := 0
+	for oy in [dy - 1, dy]:
+		for ox in [dx - 1, dx]:
+			if not _joins(kind, _kind_of(_char_at(tx + ox, ty + oy))):
+				continue
+			sum += _tile_h(tx + ox, ty + oy)
+			n += 1
+	if n == 0:
+		return _tile_h(tx, ty)
+	return sum / float(n)
+
+
+## What a body standing on this tile stands ON: the middle of its four corners, so a wolf on a hillside
+## is at the height of the ground under it rather than at the height the legend would give a box.
+func _ground_h(tx: int, ty: int) -> float:
+	return (_corner_h(tx, ty, 0, 0) + _corner_h(tx, ty, 1, 0)
+		+ _corner_h(tx, ty, 0, 1) + _corner_h(tx, ty, 1, 1)) * 0.25
+
+
+## Whether any of the four tiles orthogonally next to this one is open water. **Four and not eight**:
+## a diagonal touch is a corner, and colouring a tile that only meets the sea at one point puts sand
+## where the eye sees none.
+func _touches_water(tx: int, ty: int) -> bool:
+	for d in [[0, -1], [0, 1], [-1, 0], [1, 0]]:
+		if _kind_of(_char_at(tx + int(d[0]), ty + int(d[1]))) == Kind.WATER:
+			return true
+	return false
+
+
+## Whether the summonable band is showing: before the commit, and never after it.
+##
+## ⚠⚠ **It goes with the slot boxes at the commit.** After the commit `Battle.summon` refuses
+## everything and `hud_view` stops drawing the slots, so a sea still wearing "your hand goes here"
+## would be the only mark on the field that lies. Measured on the flat board: adding this test ran the
+## whole round green, which is why `net_slots` reads the band's tile count on both sides of `commit()`.
+func _band_on() -> bool:
+	return battle != null and not battle.committed()
+
+
+## The colour a tile is painted, band and all. The band is a BLEND into the tile's own colour and never
+## a second surface on top of it: a second surface costs a depth fight, and a blend is what a check
+## reads as two fills being different.
+## ⚠⚠ **The `band` argument is gone and so is the green wash it painted** (2026-08-24, the user:
+## 「초록색이 있을 필요는 없다」). Where a boat may be put down is a RING on the water now, drawn by
+## `_rebuild_ring`, and the rule behind it became a circle to match (`Rules.SUMMON_RADIUS_TILES`).
+## ⇒ **Nothing about a tile's colour depends on the plan any more**, which is also why the terrain mesh
+## no longer has to be rebuilt at the commit.
+func _tile_colour(tx: int, ty: int) -> Color:
+	var ch := _char_at(tx, ty)
+	var col := Look.terrain_colour_of_char(ch)
+	# High ground drifts lighter. See `COL_LAND_HIGH`: from 40 degrees at `ZOOM_MIN` this is what makes
+	# a hill a hill, and the geometry alone is not.
+	if _kind_of(ch) == Kind.LAND:
+		col = col.lerp(Look.COL_LAND_HIGH, _swell_at(tx, ty))
+		# ...and land that touches the sea takes the shore's tone on top of that. Applied AFTER the
+		# height tint so a high headland still reads as a coast rather than as a bright inland field.
+		if _touches_water(tx, ty):
+			col = col.lerp(Look.COL_SHORE, Look.SHORE_BLEND)
+	return col
+
+
+## One mesh for the whole island, `WATER_MARGIN_TILES` wider than the grid on every side so no zoom
+## shows bare background at its edge.
+##
+## ⚠ **Built once per island and once more at the commit**, never per frame — it is tens of thousands
+## of triangles, and the only thing about it that changes mid-island is the band.
+func _rebuild_terrain() -> void:
+	if _terrain == null:
+		return
 	var tiles := _map_tiles()
-	var world := _visible_world_rect().grow(Look.CULL_PAD_TILES * Look.TILE_PX)
-	var x0 := maxi(-margin, int(floor(world.position.x / Look.TILE_PX)))
-	var y0 := maxi(-margin, int(floor(world.position.y / Look.TILE_H_PX)))
-	var x1 := mini(tiles.x + margin, int(ceil(world.end.x / Look.TILE_PX)))
-	var y1 := mini(tiles.y + margin, int(ceil(world.end.y / Look.TILE_H_PX)))
-	return Rect2i(Vector2i(x0, y0), Vector2i(maxi(0, x1 - x0), maxi(0, y1 - y0)))
 
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# -1 is "no smoothing group": every triangle keeps its own normal. See the header.
+	st.set_smooth_group(-1)
+
+	# ⚠⚠ **Water is not in this mesh at all, and the margin ring is gone with it.** The sea is one
+	# shaded quad under everything (`water.gdshader`), so a water tile here would be a second flat
+	# surface fighting it for the same pixels — which is exactly what it was, and it is what made the
+	# sea draw as stripes. Skipping them also cuts the mesh to the island itself: on the shipped maps
+	# that is 1536 tiles instead of 5120, with the water half of those gone too.
+	# ⚠ A hole (`#`) is NOT water and stays: it is a pit in the land, and the sea showing through one
+	# would say it can be sailed.
+	for ty in range(tiles.y):
+		for tx in range(tiles.x):
+			if _kind_of(_char_at(tx, ty)) == Kind.WATER:
+				continue
+			var col := _tile_colour(tx, ty)
+			var h00 := _corner_h(tx, ty, 0, 0)
+			var h10 := _corner_h(tx, ty, 1, 0)
+			var h01 := _corner_h(tx, ty, 0, 1)
+			var h11 := _corner_h(tx, ty, 1, 1)
+			var x0 := float(tx)
+			var z0 := float(ty)
+			var a := Vector3(x0, h00, z0)
+			var b := Vector3(x0 + 1.0, h10, z0)
+			var c := Vector3(x0 + 1.0, h11, z0 + 1.0)
+			var d := Vector3(x0, h01, z0 + 1.0)
+			_quad(st, col, a, b, c, d)
+
+			# The four skirts. **A skirt is what a box's side used to be**, and it is emitted only
+			# where the neighbour is genuinely lower — a slope that already meets its neighbour needs
+			# no wall, and emitting one anyway would put a hairline seam down every hillside.
+			_skirt(st, col, tx, ty, 0, -1, a, b)
+			_skirt(st, col, tx, ty, 0, 1, c, d)
+			_skirt(st, col, tx, ty, -1, 0, d, a)
+			_skirt(st, col, tx, ty, 1, 0, b, c)
+
+	st.generate_normals()
+	_terrain.mesh = st.commit()
+	# The sea sits at the water's own surface height, so it and the margin tiles are one flat plane
+	# rather than two at a hairline apart.
+	_sea.position = Vector3(float(tiles.x) * 0.5,
+		Look.TERRAIN_H_WATER - Look.SEA_DROP_TILES, float(tiles.y) * 0.5)
+	_rebuild_ring()
+	_terrain.material_override = _terrain_material()
+	_built_for = "%dx%d:%d" % [tiles.x, tiles.y, rows.size()]
+
+
+## The ring on the water: **the outer edge of where a boat may be put down, drawn as the circle it now
+## is.**
+##
+## ⚠⚠ **The centre and the radius are read off the SIM, never chosen here.** `Grid.summon_centre()` and
+## `Grid.summon_radius()` are the same two numbers `can_summon_at` tests against, so the drawn
+## circle cannot promise a tile the sim then refuses. That guarantee used to belong to the green wash
+## (which asked `can_summon_at` per tile); it belongs to these two lines now, and it is the reason the
+## wash could be deleted rather than merely restyled.
+##
+## ⚠ **It says nothing about the INNER edge.** A boat still has to be `SUMMON_BAND_MIN_TILES` off the
+## shore, and that bound is a distance from the coast rather than from the middle — it is not a circle
+## and it cannot be drawn as one. **Not drawn at all today**, and written down here as missing rather
+## than left to be discovered by pressing just off a beach and being refused.
+func _rebuild_ring() -> void:
+	if _ring == null or battle == null or battle.grid == null:
+		return
+	var centre := battle.grid.summon_centre()
+	var r := battle.grid.summon_radius()
+	var half := Look.SUMMON_RING_W_TILES * 0.5
+	var y := Look.TERRAIN_H_WATER + Look.SEA_DROP_TILES
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_smooth_group(-1)
+	var n := Look.SUMMON_RING_SEGMENTS
+	for k in n:
+		var a0 := TAU * float(k) / float(n)
+		var a1 := TAU * float(k + 1) / float(n)
+		var i0 := Vector3(cos(a0) * (r - half), y, sin(a0) * (r - half))
+		var o0 := Vector3(cos(a0) * (r + half), y, sin(a0) * (r + half))
+		var i1 := Vector3(cos(a1) * (r - half), y, sin(a1) * (r - half))
+		var o1 := Vector3(cos(a1) * (r + half), y, sin(a1) * (r + half))
+		_quad(st, Look.COL_SUMMON_RING, i0, o0, o1, i1)
+	st.generate_normals()
+	_ring.mesh = st.commit()
+	_ring.position = Vector3(centre.x, 0.0, centre.y)
+	_ring.visible = _band_on()
+
+
+## Two triangles, wound so the face points up, with one colour on all four corners.
+func _quad(st: SurfaceTool, col: Color, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
+	for v in [a, c, b, a, d, c]:
+		st.set_color(col)
+		st.add_vertex(v)
+
+
+## Drops a wall from this tile's edge to whatever the neighbour's edge sits at, when the neighbour is
+## lower. The neighbour's own corner heights are asked for rather than guessed, so the wall lands
+## exactly on the surface below it and no gap opens at the join.
+func _skirt(st: SurfaceTool, col: Color, tx: int, ty: int, dx: int, dy: int, a: Vector3, b: Vector3) -> void:
+	var nx := tx + dx
+	var ny := ty + dy
+	# The neighbour's two corners along the shared edge, named by which side the edge is on.
+	var na := 0.0
+	var nb := 0.0
+	if dy == -1:
+		na = _corner_h(nx, ny, 0, 1)
+		nb = _corner_h(nx, ny, 1, 1)
+	elif dy == 1:
+		na = _corner_h(nx, ny, 1, 0)
+		nb = _corner_h(nx, ny, 0, 0)
+	elif dx == -1:
+		na = _corner_h(nx, ny, 1, 1)
+		nb = _corner_h(nx, ny, 1, 0)
+	else:
+		na = _corner_h(nx, ny, 0, 0)
+		nb = _corner_h(nx, ny, 0, 1)
+	if na >= a.y - 0.001 and nb >= b.y - 0.001:
+		return
+	var pad := Look.TERRAIN_SKIRT_PAD
+	# Darkened so a wall is told from the top face it hangs off even when the sun is straight on it —
+	# the cliff-face line the flat board drew did the same job with a leaf and a width constant.
+	_quad(st, col.darkened(0.15),
+		a, b, Vector3(b.x, nb - pad, b.z), Vector3(a.x, na - pad, a.z))
+
+
+func _terrain_material() -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	# ⚠ Two-sided: a skirt's winding depends on which way it faces, and a one-sided wall seen from
+	# behind is a hole in the island.
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return mat
+
+
+# --- the bodies, as billboards ------------------------------------------------------------------------
+
+## A pooled `Sprite3D`. **Pooled and never freed per frame**: making and freeing forty nodes a frame is
+## the one shape that turns a MultiMesh's saving straight back into garbage.
+func _sprite() -> Sprite3D:
+	if _sprites_used < _sprites.size():
+		var reused := _sprites[_sprites_used]
+		_sprites_used += 1
+		reused.visible = true
+		return reused
+	var s := Sprite3D.new()
+	s.pixel_size = 1.0 / Look.TILE_PX
+	s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	# ⚠ **Both of these, or the animals are cardboard.** DISCARD gives the sprite a real depth value so
+	# a wolf behind a cliff is hidden by it and casts a shaped shadow instead of a rectangle; without
+	# it a billboard is one transparent quad that neither occludes nor is occluded.
+	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	s.shaded = false
+	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	_world.add_child(s)
+	_sprites.append(s)
+	_sprites_used += 1
+	return s
+
+
+func _hull_box() -> MeshInstance3D:
+	if _hulls_used < _hulls.size():
+		var reused := _hulls[_hulls_used]
+		_hulls_used += 1
+		reused.visible = true
+		return reused
+	var m := MeshInstance3D.new()
+	m.mesh = BoxMesh.new()
+	var mat := StandardMaterial3D.new()
+	m.material_override = mat
+	_world.add_child(m)
+	_hulls.append(m)
+	_hulls_used += 1
+	return m
+
+
+## Puts one billboard at a body's feet. `centre_px` is the same world px the flat board drew at, so
+## every offset that already went through `_body_offset_of` follows across for free.
+func _put_body(centre_px: Vector2, radius: float, colour: Color, squash: Vector2, tex: Texture2D) -> void:
+	var s := _sprite()
+	var pic: Texture2D = tex if tex != null else _tex_body
+	s.texture = pic
+	s.modulate = Look.beast_tint(colour) if tex != null else colour
+	var wide := radius * Look.BEAST_SPRITE_W_RATIO if tex != null else radius * 2.0
+	var sx := wide * squash.x / float(pic.get_width())
+	var sy := sx * squash.y / maxf(squash.x, 0.001)
+	s.scale = Vector3(sx, sy, 1.0)
+	var tall := float(pic.get_height()) * sy / Look.TILE_PX
+	var tile := Vector2i(int(floor(centre_px.x / Look.TILE_PX)), int(floor(centre_px.y / Look.TILE_PX)))
+	var foot := _ground_h(tile.x, tile.y) + Look.BODY_LIFT_PX / Look.TILE_PX
+	s.position = Vector3(centre_px.x / Look.TILE_PX, foot + tall * 0.5, centre_px.y / Look.TILE_PX)
+
+
+## The two halves of an HP bar, standing above the body rather than below it — a bar UNDER a
+## billboard is inside the ground the billboard is standing on.
+func _put_hp(centre_px: Vector2, radius: float, type_id: int, frac: float) -> void:
+	var rects := _hp_rects(centre_px, type_id, frac)
+	var back: Rect2 = rects[0]
+	var fill: Rect2 = rects[1]
+	var tile := Vector2i(int(floor(centre_px.x / Look.TILE_PX)), int(floor(centre_px.y / Look.TILE_PX)))
+	var y := _ground_h(tile.x, tile.y) + (radius * 2.0 + Look.HP_BAR_GAP_PX * 2.0) / Look.TILE_PX
+	for k in 2:
+		var r: Rect2 = back if k == 0 else fill
+		if r.size.x <= 0.0:
+			continue
+		var s := _sprite()
+		s.texture = _tex_flat
+		s.modulate = Look.hp_bar_colour(k == 1)
+		s.scale = Vector3(r.size.x, r.size.y, 1.0)
+		# Left edges share an origin so a short fill shrinks from the right, exactly as the flat bar
+		# did — centring the fill would make a wounded body read as two bars.
+		var cx := r.position.x + r.size.x * 0.5
+		s.position = Vector3(cx / Look.TILE_PX, y + float(k) * 0.001, centre_px.y / Look.TILE_PX)
+
+
+## Every body, every frame. **This is what pass 6, 7 and 8 of the old `_draw` were**, minus the marks
+## that are not ported yet.
+func _paint_bodies() -> void:
+	_sprites_used = 0
+	_hulls_used = 0
+	if battle == null or army == null or battle.grid == null:
+		_hide_unused()
+		return
+
+	# Enemies first, allies after, so an ally on the same tile reads on top of what it is fighting.
+	# ⚠ **In 3D the depth buffer decides that now, not the order** — the order is kept because it costs
+	# nothing and because whoever reads this next should see where the rule went.
+	for e in battle.enemy_alive.size():
+		if battle.enemy_alive[e] == 0:
+			continue
+		var et := int(battle.enemy_type[e])
+		var ekey := "e%d" % e
+		var ecentre := Look.tile_point_px(battle.enemy_pos[e]) + _body_offset_of(ekey)
+		var eradius := Look.body_radius_of(et)
+		_put_body(ecentre, eradius,
+			Look.body_colour_of(true).lerp(Look.COL_FLASH, _flash_of(ekey)),
+			_gait_squash(ekey), null)
+		_put_hp(ecentre, eradius, et, battle.enemy_hp[e] / Rules.hp_of(et))
+
+	for raw_id in battle.ashore_ids():
+		var i := int(raw_id)
+		_put_soldier(i, battle.soldier_pos[i])
+
+	# The boats: a hull on the water and its passengers standing on it. Before the commit there is no
+	# hull — a boat that has not left is its PLAN, and thirteen hulls stacked on one harbour is a blob
+	# that says nothing. ⚠ **The plan's own picture (the route, the ring, the ghost fan) is NOT ported
+	# yet**, so before the commit the field shows the band and nothing else.
+	for bk in battle.boats.size():
+		var boat: Dictionary = battle.boats[bk]
+		if not battle.committed():
+			continue
+		var anchor := Look.tile_point_px(Vector2(boat["pos"]))
+		var arrived := float(boat["t"]) * float(boat["speed"]) + Rules.EPS >= float(boat["dist"])
+		var waiting := int(boat["phase"]) == Battle.Phase.OUTBOUND and arrived
+		var hull_col := Look.COL_BOAT
+		if waiting:
+			hull_col = hull_col.lerp(Look.COL_HULL_WAIT, _wait_blend())
+		_put_hull(anchor, hull_col)
+		var soldiers: Array = boat["soldiers"]
+		for k in soldiers.size():
+			_put_soldier(int(soldiers[k]), Vector2(boat["pos"]))
+
+	_hide_unused()
+
+
+## One soldier at a tile position, ashore or on a deck. Both call sites want the same body, the same
+## gait and the same facing, and splitting them was how the deck soldier lost its HP bar once already.
+func _put_soldier(i: int, at: Vector2) -> void:
+	var st := int(army.type_id[i])
+	var skey := "s%d" % i
+	var sradius := Look.body_radius_of(st)
+	var scentre := Look.tile_point_px(at) + _body_offset_of(skey)
+	# The wolf faces what it is walking at. `_facing_of` returns RIGHT when there is no target, so an
+	# idle body faces right rather than flipping on a zero vector.
+	var stex: Texture2D = _tex_wolf_r if _facing_of(i, false).x >= 0.0 else _tex_wolf_l
+	_put_body(scentre, sradius,
+		Look.body_colour_of(false).lerp(Look.COL_FLASH, _flash_of(skey)),
+		_gait_squash(skey), stex)
+	_put_hp(scentre, sradius, st, army.hp[i] / army.max_hp_of(i))
+
+
+func _put_hull(anchor: Vector2, colour: Color) -> void:
+	var r := _hull_rect(anchor)
+	var m := _hull_box()
+	var box: BoxMesh = m.mesh
+	box.size = Vector3(r.size.x / Look.TILE_PX, Look.HULL_H_TILES, r.size.y / Look.TILE_PX)
+	var mat: StandardMaterial3D = m.material_override
+	mat.albedo_color = colour
+	m.position = Vector3(anchor.x / Look.TILE_PX,
+		Look.TERRAIN_H_WATER + Look.HULL_H_TILES * 0.5,
+		anchor.y / Look.TILE_PX)
+
+
+## ⚠ **Hidden, never freed.** A pool that shrinks is a pool that reallocates on the next busy frame,
+## and a stale sprite left visible is a body that died and stayed on screen — the exact failure the
+## per-frame drawer could not have.
+func _hide_unused() -> void:
+	for k in range(_sprites_used, _sprites.size()):
+		_sprites[k].visible = false
+	for k in range(_hulls_used, _hulls.size()):
+		_hulls[k].visible = false
+
+
+# --- the effect drawers, carried across the move unchanged -------------------------------------------
+## ⚠⚠ **Everything below this line is the file as it was.** The effects were never drawing code: they
+## are a little simulation of their own with its own clock, and moving the picture into 3D did not
+## touch one line of it. That is why `_fx` is still filling every frame while nothing paints it.
+
+enum FxKind { SHOT, SPARK, BURST, AREA, LAND, REFUSE }
 
 ## Called by `game.gd` whenever a slot is armed or disarmed, whenever the cursor moves with one armed,
 ## and on the release. `slot == -1` clears the whole aim. **0 draw calls** — the same shape the
@@ -297,7 +957,6 @@ func _visible_tile_rect(margin: int) -> Rect2i:
 func set_summon_aim(slot: int, tile: int) -> void:
 	_summon_slot = slot
 	_summon_aim = tile
-
 
 ## One mark at `at_px` (world px) saying the sim REFUSED this drop. **0 draw calls** — it pushes one
 ## entry into the transient drawer and the ground-ring block paints it on the next frame, the same
@@ -320,665 +979,18 @@ func note_refusal(at_px: Vector2) -> void:
 		"at": at_px,
 	})
 
-
-func _draw() -> void:
-	if battle == null or army == null or battle.grid == null:
-		return
-	if battle.grid.w <= 0:
-		return
-
-	# --- 1. terrain, one margin ring wider than the grid ----------------------------------------
-	# The grid is deliberately SMALLER than the zoomed-out visible world (48 x 32 tiles = 1920 px wide
-	# against 2844.4 px of view at the new ZOOM_MIN 0.45), so the margin has to cover the whole
-	# zoomed-out edge, not just a shake — `Look.WATER_MARGIN_TILES` is 12 for exactly that reason, and
-	# it was re-measured in the same edit that lowered the zoom. The margin tiles are
-	# painted COL_WATER DIRECTLY rather than through `terrain_colour_of_char`: that lookup takes a
-	# legend character and there is no legend outside the grid, so inventing one would put the island
-	# legend in two places.
-	# ⚠ **The bounds come from `battle.grid` through `_map_tiles()`, never from `Look.GRID_W`/`GRID_H`,
-	# and the span is CULLED to what is on screen.** Read off the constants this loop could only ever
-	# paint one map size; painted whole it was 4,032 tiles a frame at 48 x 32 and would be 9,408 at 144.
-	var margin := Look.WATER_MARGIN_TILES
-	var tile_span := _visible_tile_rect(margin)
-	# Answered ONCE for the whole pass rather than per tile: it is a fact about the fight, not about
-	# a tile, and asking it 3168 times would invite the next reader to fold it into the tile predicate
-	# where it would read as part of `can_summon_at`. See the band block inside the loop.
-	var band_on := not battle.committed()
-	for ty in range(tile_span.position.y, tile_span.end.y):
-		for tx in range(tile_span.position.x, tile_span.end.x):
-			var fill := Look.COL_WATER
-			if ty >= 0 and ty < rows.size() and tx >= 0:
-				var row: String = rows[ty]
-				if tx < row.length():
-					fill = Look.terrain_colour_of_char(row[tx])
-			# --- the summonable band (sea-summon) ---------------------------------------------
-			# ⚠⚠ **A BLEND INTO THE EXISTING FILL, not a second pass, and that is what makes it
-			# checkable.** A `_paint_band` leaf would add a leaf, a draw call per band tile and a new
-			# width row; as a blend it costs zero extra draw calls, and a spy on `_paint_tile` sees the
-			# `fill` argument — so "the band was drawn" is measured by two fills being DIFFERENT, and
-			# dropping the blend makes the behaviour VANISH rather than diverge.
-			# ⚠ **The predicate is `grid.can_summon_at` and nothing else** — the same call
-			# `Battle.summon` refuses on — so the green cannot promise a tile the sim then denies. That
-			# is the guarantee the deleted coast wash carried and the reason it was trusted at all.
-			# The bounds test is here because this loop runs `WATER_MARGIN_TILES` wider than the grid
-			# and `tile_index` off the map would compute an in-range index for a tile that is not there.
-			# ⚠⚠ **AND IT GOES WITH THE BOXES AT THE COMMIT.** The paragraph above says the green
-			# cannot promise a tile the sim then denies, and without `band_on` it did exactly that for
-			# the whole fight: after the commit `Battle.summon` refuses everything, `hud_view` stops
-			# drawing the five slot boxes, and the sea went on wearing **the only mark on the field
-			# that says 「your hand goes here」**. That is the deleted coast wash's failure with the
-			# tint on the other side of the commit. ⚠ Measured before it was fixed: adding this test
-			# ran the whole round GREEN — no check could tell the two behaviours apart, which is why
-			# `net_slots` now reads the band's tile count on both sides of `commit()`.
-			if band_on and tx >= 0 and ty >= 0 and tx < battle.grid.w and ty < battle.grid.h:
-				if battle.grid.can_summon_at(battle.grid.tile_index(tx, ty)):
-					fill = fill.blend(Look.COL_SUMMON_BAND)
-			_paint_tile(
-				Look.tile_rect_px(tx, ty),
-				fill,
-				Look.COL_GRID_LINE,
-				Look.GRID_LINE_WIDTH_PX)
-
-	# --- 1b. cliff faces (boat-and-landing stage 5, P10) --------------------------------------------
-	# A line along a cliff tile's SEAWARD edge — whichever ortho side touches water — the only thing
-	# that turns "coloured like a hole" into "reads as height" with no elevation axis at all (3.2: a
-	# cliff is exactly as impassable as a hole and differs only in how it is drawn).
-	#
-	# The geometry is built HERE and handed to the leaf as ONE FLAT ARRAY, consecutive pairs being one
-	# segment's two endpoints — the same shape `_paint_spark` already uses for its six shards, drawn
-	# with a SINGLE `draw_multiline` call rather than a loop of `draw_line`. That shape is not a style
-	# choice: a loop indexing `seg[0]` / `seg[1]` inside the leaf can drop the second endpoint
-	# (`draw_line(seg[0], seg[0], …)`, every face collapsed to a point) and no scanner catches it —
-	# `segments` reads as "used" the moment `seg[0]` appears once, and a spy overriding the whole leaf
-	# never runs its body at all. A flat array hands `draw_multiline` everything in one native call;
-	# there is no per-segment indexing left inside the leaf for that mutation to hide in.
-	# Same two rules as the terrain pass above: the size comes from the grid, and the walk is culled to
-	# what is on screen. The span is clamped to the grid itself here (margin 0) — a cliff is a legend
-	# character and there is no legend outside the rows.
-	var cliff_points := PackedVector2Array()
-	var cliff_span := _visible_tile_rect(0)
-	for ty2 in range(cliff_span.position.y, cliff_span.end.y):
-		var row2: String = rows[ty2] if ty2 < rows.size() else ""
-		for tx2 in range(cliff_span.position.x, cliff_span.end.x):
-			if tx2 >= row2.length() or row2[tx2] != "^":
-				continue
-			var crect := Look.tile_rect_px(tx2, ty2)
-			for k in CLIFF_SIDES.size():
-				var dx := int(CLIFF_SIDES[k][0])
-				var dy := int(CLIFF_SIDES[k][1])
-				var nx := tx2 + dx
-				var ny := ty2 + dy
-				if nx < 0 or ny < 0 or nx >= battle.grid.w or ny >= battle.grid.h:
-					continue
-				if battle.grid.water[ny * battle.grid.w + nx] == 0:
-					continue
-				if dy == -1:
-					cliff_points.append(crect.position)
-					cliff_points.append(crect.position + Vector2(crect.size.x, 0.0))
-				elif dy == 1:
-					cliff_points.append(crect.position + Vector2(0.0, crect.size.y))
-					cliff_points.append(crect.end)
-				elif dx == -1:
-					cliff_points.append(crect.position)
-					cliff_points.append(crect.position + Vector2(0.0, crect.size.y))
-				else:
-					cliff_points.append(crect.position + Vector2(crect.size.x, 0.0))
-					cliff_points.append(crect.end)
-	# ⚠⚠ **AN EMPTY ARRAY IS A BARK, NOT A NO-OP.** `canvas_item_add_multiline` fails on
-	# `p_points.is_empty() || p_points.size() % 2 != 0`, and it fails on stderr while the frame carries
-	# on looking fine. Culling made this reachable: zoom in anywhere with no water-touching cliff edge
-	# in view and the loop above produces nothing. Verify-look caught eight of them in one capture run
-	# **while this round's own report said stderr was clean** — the nets had never driven the camera
-	# into a cliff-free view, so a green round said nothing about it.
-	# ⚠ The guard is at the CALL SITE and not inside the leaf: a leaf that sometimes draws nothing is a
-	# leaf `net_draw_leaf` can no longer pin at one call, and "it drew" would stop meaning anything.
-	if not cliff_points.is_empty():
-		_paint_cliff_face(cliff_points, Look.COL_CLIFF_FACE, Look.CLIFF_FACE_WIDTH_PX)
-
-	# --- 2. ⚠⚠ THE HARBOUR MARKERS AND THE DRAG CANDIDATE ARE BOTH DELETED ------------------------
-	# The user pointed at a screenshot of the yellow harbour outlines and the stack of reserve bodies
-	# on the shore and said ***"ㅇㅇ 지워줘"***. Both belong to the DRAG, and the drag is what they said
-	# was not fun (*"이걸 드래그해서 저기까지 이렇게 끌고 가는 게 그렇게 play가 재밌진 않아"*,
-	# `idea-inbox` row 26). The sea summon replaced it and **they accepted the gesture**
-	# (*"동작방식은 맞음"*), so the whole gesture and everything drawn for it goes.
-	#
-	# What went from this file with it: `_paint_dock` (the harbour outline), `set_drag` /
-	# `_drag_soldier` / `_drag_tile`, the candidate ring, the `water_route` preview line, the reserve
-	# stack in pass 6b, and `idle_soldier_rect`.
-	#
-	# ⚠ **`Grid.start_harbour`, `home_harbour_for`, `sendable` and `Battle.send` are NOT deleted**, and
-	# that is not an oversight — see `Battle.send`'s own comment. Nothing in `src/` reads them any more;
-	# `tools/probe/run_run.gd` is their last reader and it is the instrument that grades every design
-	# decision in this repo.
-	#
-	# ⚠ The `Look.COL_WIN` / `COL_LOSE` candidate-ring pair went with the drag. The summon aim below
-	# draws its own ring in the same two tones, so the concept survives where the gesture does.
-
-	if not battle.committed():
-		# --- 2c. the summon aim (sea-summon) -------------------------------------------------------
-		# The same two leaves the drag uses, and nothing new. **A dry slot draws NEITHER** — the absence
-		# is the answer, and it arrives before the press instead of after it.
-		if _summon_slot >= 0 and _summon_aim >= 0 \
-				and not battle.slot_reserve_ids(_summon_slot).is_empty():
-			# ⚠ **The predicate is `can_summon_at`, the call `Battle.summon` itself refuses on** — not
-			# 「does this water tile have a landing at all」, which answers yes 534 tiles out to sea on
-			# island 0 and would promise a crossing the sim will not make.
-			var aim_ok := battle.grid.can_summon_at(_summon_aim)
-			var aim_landing := battle.grid.summon_landing_of(_summon_aim)
-			# ⚠⚠ **The ring sits on the DERIVED LANDING and not on the pressed tile.** The landing is
-			# the thing the player is choosing; the pressed tile is only how they said it. Off the band
-			# there is no landing to point at, so the refusal ring goes where the hand is.
-			var aim_at := _summon_aim if not aim_ok or aim_landing < 0 else aim_landing
-			_paint_ring(
-				Look.tile_point_px(battle.grid.tile_point(aim_at)),
-				Look.TARGET_RING_R_PX,
-				Look.COL_WIN if aim_ok else Look.COL_LOSE,
-				Look.AREA_RING_WIDTH_PX)
-			if aim_ok:
-				# ⚠ **Built from `grid.summon_route` — the same call `Battle.summon` builds its boat
-				# from** — so the screen cannot promise a crossing the sim does not make. Inherited from
-				# the drag's own route above rather than re-derived.
-				var summon_px := PackedVector2Array()
-				for wp in battle.grid.summon_route(_summon_aim):
-					summon_px.append(Look.tile_point_px(wp))
-				_paint_route(summon_px, Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
-
-	# --- 3. target lines -----------------------------------------------------------------------
-	# ENEMY side only, and none at all above the count: this is the one effect of the twelve that
-	# can be a net loss in readability. It sits under the boats and the bodies because a line
-	# crossing a body is the "cloud of visual effects and particles" Riot explicitly deleted.
-	if Look.fx_gain_of(6) > 0.0 and battle.enemies_left() <= Look.TARGET_LINE_MAX_COUNT:
-		for e in battle.enemy_alive.size():
-			if battle.enemy_alive[e] == 0:
-				continue
-			var aim := int(battle.enemy_target[e])
-			if aim < 0 or not battle.is_hittable(aim):
-				continue
-			_paint_target_line(
-				Look.tile_point_px(battle.enemy_pos[e]),
-				Look.tile_point_px(battle.soldier_pos[aim]),
-				Look.COL_TARGET_LINE,
-				Look.TARGET_LINE_WIDTH_PX)
-
-	# --- 4. ground rings: the lion's telegraph, area rings, landing rings ------------------------
-	# All three are marks on the FLOOR rather than events on a body, so they go under everything
-	# that stands on it.
-	#
-	# The telegraph is drawn from sim STATE and not from an event: `enemy_windup` counts down inside
-	# the sim, and a view-side clock started by an event would be a second copy of that countdown —
-	# two clocks drift and the ring would stop naming the frame the blow lands.
-	if Look.fx_gain_of(5) > 0.0:
-		for e in battle.enemy_windup.size():
-			if battle.enemy_alive[e] == 0 or battle.enemy_windup[e] <= 0.0:
-				continue
-			var aimed := int(battle.enemy_windup_at[e])
-			if aimed < 0:
-				continue
-			var span := Rules.area_of(int(battle.enemy_type[e])) * Look.TILE_PX
-			if span <= 0.0:
-				continue
-			# It grows to the REAL area radius and arrives there exactly as the blow lands, so the
-			# ring the player read and the tiles that take damage are the same circle.
-			var wound := clampf(
-				1.0 - float(battle.enemy_windup[e]) / Rules.LION_WINDUP_SEC, 0.0, 1.0)
-			_paint_ring(
-				Look.tile_point_px(battle.soldier_pos[aimed]),
-				span * lerpf(Look.AREA_RING_START_RATIO, 1.0, wound),
-				Look.COL_AREA_RING,
-				Look.AREA_RING_WIDTH_PX)
-
-	for raw_ground in _fx:
-		var ground: Dictionary = raw_ground
-		var ground_kind := int(ground["kind"])
-		# ⚠ An ALLOWLIST and never a denylist. Written as "skip the three that are not ground marks",
-		# a sixth kind added tomorrow would fall through into the `else` below and be drawn as a
-		# refusal ring, silently, with every check green.
-		var is_ground := ground_kind == FxKind.AREA or ground_kind == FxKind.LAND
-		is_ground = is_ground or ground_kind == FxKind.REFUSE
-		if not is_ground:
-			continue
-		var ground_at := clampf(
-			(float(ground["age"]) - float(ground["delay"])) / float(ground["life"]), 0.0, 1.0)
-		if ground_kind == FxKind.AREA:
-			var area_col := Look.COL_AREA_RING
-			area_col.a = area_col.a * (1.0 - ground_at)
-			_paint_ring(
-				ground["at"],
-				float(ground["radius"]) * lerpf(Look.AREA_RING_START_RATIO, 1.0, ground_at),
-				area_col,
-				Look.AREA_RING_WIDTH_PX)
-		elif ground_kind == FxKind.LAND:
-			var land_col := Look.COL_LAND_RING
-			land_col.a = land_col.a * (1.0 - ground_at)
-			_paint_ring(
-				ground["at"],
-				Look.LAND_RING_R_PX * ground_at,
-				land_col,
-				Look.LAND_RING_WIDTH_PX)
-		else:
-			# The refusal mark (2.5). It fades out at a FIXED radius rather than growing like the
-			# landing ring: growth reads as "something is happening here", and a refusal is the
-			# statement that nothing happened. Drawn through the same `_paint_ring` leaf as the other
-			# three so no new leaf enters `net_draw_leaf`'s table for one more circle.
-			var refuse_col := Look.COL_LOSE
-			refuse_col.a = refuse_col.a * (1.0 - ground_at)
-			_paint_ring(
-				ground["at"],
-				Look.REFUSE_MARK_R_PX,
-				refuse_col,
-				Look.REFUSE_MARK_WIDTH_PX)
-
-	# ⚠ **`_deck_slots` is gone and there is no `transit_pos` table any more.** A boat carries exactly
-	# one soldier (결정 14R), the hull is centred on `boat["pos"]`, and a TRANSIT soldier's
-	# `soldier_pos` IS `boat["pos"]` — so the deck slot and `Look.tile_point_px(soldier_pos[i])` were
-	# always the same point, computed twice. One fact, one expression, and the halo can no longer walk
-	# away from the body it belongs to.
-
-	# --- 5. hit halos, ALL of them, before any body -----------------------------------------------
-	# A body here is a 2 px outline plus a 3 px dot, so a white tint has no AREA to paint and reads
-	# as no flash at all — the halo is what makes item 3 exist. It has to be under EVERY body and not
-	# just its own: drawn per body it would cover the neighbour's outline, and a filled 1.35x circle
-	# over a 2 px outline erases that body with the whole round green.
-	for e in battle.enemy_alive.size():
-		if battle.enemy_alive[e] == 0:
-			continue
-		var ehalo_key := "e%d" % e
-		if _flash_of(ehalo_key) <= 0.0:
-			continue
-		_paint_halo(
-			Look.tile_point_px(battle.enemy_pos[e]) + _body_offset_of(ehalo_key),
-			Look.body_radius_of(int(battle.enemy_type[e])) * Look.HIT_HALO_MUL,
-			Look.COL_HIT_HALO)
-	for raw_halo_id in battle.ashore_ids():
-		var hi := int(raw_halo_id)
-		var shalo_key := "s%d" % hi
-		if _flash_of(shalo_key) <= 0.0:
-			continue
-		_paint_halo(
-			Look.tile_point_px(battle.soldier_pos[hi]) + _body_offset_of(shalo_key),
-			Look.body_radius_of(int(army.type_id[hi])) * Look.HIT_HALO_MUL,
-			Look.COL_HIT_HALO)
-	# A soldier still aboard a boat is `is_hittable` (a coastal crow already reaches it) and the
-	# tracer already flies to it — P4's whole fix is that the body finally has somewhere to catch
-	# the flash it was always tracking. Same halo, same trigger, only the position is a deck slot.
-	for raw_tid in battle.transit_ids():
-		var ti := int(raw_tid)
-		var thalo_key := "s%d" % ti
-		if _flash_of(thalo_key) <= 0.0:
-			continue
-		_paint_halo(
-			Look.tile_point_px(battle.soldier_pos[ti]) + _body_offset_of(thalo_key),
-			Look.body_radius_of(int(army.type_id[ti])) * Look.HIT_HALO_MUL,
-			Look.COL_HIT_HALO)
-
-	# --- 6. the plan, and then the plan running (P5/P6/P7, plan-then-watch) -----------------------
-	# **This one loop draws both screens**, and that is the point: 「a different picture means the plan
-	# lied」. Before the commit each entry is a route from a harbour to a landing, a ring on the
-	# landing, and a ghost standing on it; after the commit the same entry is a hull moving along the
-	# same line with the same ring still on it. Nothing is added at the start button and nothing is
-	# taken away — which is also why 「the unspent plan stays visible」 needs no code of its own: a
-	# route is drawn while its boat is in `boats` and vanishes with the boat.
-	#
-	# ⚠ **The fan counter is per LANDING TILE, not per boat.** `boats` index is the drop order across
-	# the whole plan, and fanning by it walks a ghost off the ring it belongs to the moment two boats
-	# aim at two different beaches: with `GHOST_FAN_PX` 9 px and `TARGET_RING_R_PX` 18 px the fourth
-	# boat's ghost is already 38 px from its own ring, and the thirteenth is 3.8 tiles away — over
-	# other terrain, possibly on top of another boat's landing. The order the fan has to show is
-	# 「who stands in front at THIS beach」 (`plan-then-watch`, 4.4), which is the order among the
-	# boats sharing one target and nothing wider.
-	var fan_rank := {}
-	for bk in battle.boats.size():
-		var boat: Dictionary = battle.boats[bk]
-		var anchor := Look.tile_point_px(Vector2(boat["pos"]))
-		var phase := int(boat["phase"])
-		# "Waiting" is read from state that already exists — arrived, but still OUTBOUND means
-		# `_try_unload` refused this frame and will try again next frame (4.5) — no new sim field.
-		var arrived := float(boat["t"]) * float(boat["speed"]) + Rules.EPS >= float(boat["dist"])
-		var waiting := phase == Battle.Phase.OUTBOUND and arrived
-		# ⚠ **No hull before the commit.** A boat that has not left is drawn as its PLAN — the route,
-		# the ring and the ghost at the far end — and thirteen hulls stacked on one harbour point
-		# would be one blob saying nothing at all. OPEN question B in `plan-then-watch` picks the
-		# ghost over the hull for exactly this reason: the ghost is at the LANDING, which is the fact
-		# the player is authoring.
-		if battle.committed():
-			var hull_col := Look.COL_BOAT
-			if waiting:
-				hull_col = hull_col.lerp(Look.COL_HULL_WAIT, _wait_blend())
-			_paint_hull(_hull_rect(anchor), hull_col, Look.BODY_OUTLINE_WIDTH_PX)
-
-		# P5 / P6: the whole crossing is on screen, both legs, not only the outbound one — without
-		# this a boat TELEPORTS home and the player never learns 4.3's relocation rule exists.
-		if phase == Battle.Phase.OUTBOUND:
-			var target_px := Look.tile_point_px(battle.grid.tile_point(int(boat["target"])))
-			_paint_ring(target_px, Look.TARGET_RING_R_PX, Look.COL_ROUTE, Look.AREA_RING_WIDTH_PX)
-			_paint_route(_route_ahead(boat), Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
-			# P7 — the ghost fan. The rank is how many EARLIER boats aim at this same tile, so the
-			# fan spreads in the order the player dropped and the FRONT of it is the front of the
-			# landing. That is exactly and only what the order decides: every boat departs on the
-			# commit frame, so 「어느 순서로」 carries no timing at all, and the fan is the one picture
-			# allowed to claim anything about it. Ranking by the boat's index in `boats` instead
-			# would spread one beach's fan across the whole plan — see the note above the loop.
-			# The offsets are built HERE and handed to the leaf as a finished centre — a constant fan
-			# (`rank * 0`) is the fake this shape exists to make impossible to write invisibly.
-			if not battle.committed():
-				var tgt := int(boat["target"])
-				var rank := int(fan_rank.get(tgt, 0))
-				fan_rank[tgt] = rank + 1
-				var ghosts: Array = boat["soldiers"]
-				for gk in ghosts.size():
-					var gid := int(ghosts[gk])
-					var gtype := int(army.type_id[gid])
-					var gcentre := target_px + Look.GHOST_FAN_PX * float(rank)
-					_paint_body(
-						gcentre,
-						Look.body_radius_of(gtype),
-						Look.body_corner_radius_of(gtype),
-						Look.ghost_tint(),
-						Look.BODY_OUTLINE_WIDTH_PX,
-						Look.BODY_DOT_RADIUS_PX,
-						Vector2.ONE,
-						null)
-		else:
-			# The return leg is the outbound path reversed by the sim, so its last waypoint IS the
-			# home harbour — asking `battle.harbour_tile(boat["home"])` for it again would be the
-			# same fact read from two places, and the whole reason the sim reverses rather than
-			# recomputes is to keep it one.
-			_paint_route(_route_ahead(boat), Look.COL_ROUTE, Look.ROUTE_WIDTH_PX)
-
-		# P3: the passenger, on deck, with its own HP bar — RETURNING boats carry nobody, so this loop
-		# is a no-op for them, which is itself half of what draws the return leg as empty.
-		#
-		# ⚠ **Gated on the commit, and it is the same `if` the ghost is gated on, inverted.** Before
-		# the start button this soldier is drawn ONCE, as a ghost at its landing; after it, ONCE, as a
-		# body on its hull. Drop the gate and every planned soldier appears twice — at the harbour it
-		# has not left and at the beach it has not reached.
-		var soldiers: Array = boat["soldiers"] if battle.committed() else []
-		for k in soldiers.size():
-			var i := int(soldiers[k])
-			var st := int(army.type_id[i])
-			var skey := "s%d" % i
-			var sradius := Look.body_radius_of(st)
-			# `Look.tile_point_px(battle.soldier_pos[i])` and not `anchor`, even though a TRANSIT
-			# soldier's `soldier_pos` IS its boat's `pos` and the two are numerically equal: the halo
-			# pass above reads it that way, and one fact written two different ways is the shape this
-			# file's own `_body_offset_of` comment warns about.
-			var scentre := Look.tile_point_px(battle.soldier_pos[i]) + _body_offset_of(skey)
-			# On deck there is nothing to face yet, so the wolf faces right.
-			_paint_shadow(_shadow_points(scentre, sradius), Look.COL_BODY_SHADOW)
-			_paint_body(
-				scentre,
-				sradius,
-				Look.body_corner_radius_of(st),
-				Look.body_colour_of(false).lerp(Look.COL_FLASH, _flash_of(skey)),
-				Look.BODY_OUTLINE_WIDTH_PX,
-				Look.BODY_DOT_RADIUS_PX,
-				_gait_squash(skey),
-				_tex_wolf_r)
-			if army.has_beak[i] != 0:
-				var ttri := _beak_points(scentre, sradius, _facing_of(i, false))
-				_paint_beak(ttri[0], ttri[1], ttri[2], Look.COL_BEAK)
-			var tbars := _hp_rects(scentre, st, army.hp[i] / army.max_hp_of(i))
-			_paint_hp(tbars[0], Look.hp_bar_colour(false), tbars[1], Look.hp_bar_colour(true))
-
-	# --- 6b. ⚠⚠ THE RESERVE STACK IS DELETED ------------------------------------------------------
-	# Thirteen bodies stood on the water at the start harbour and the player dragged them off one at a
-	# time. The user pointed at them and said ***"ㅇㅇ 지워줘"*** — see pass 2. **Where the roster shows
-	# now is the five slot boxes**: each draws a bar of how many bodies it can still send, so the number
-	# goes down as you hold, which is `sea-summon`'s own recommendation.
-	#
-	# ⚠⚠ **ONE THING WENT WITH IT AND HAS NO HOME: per-soldier HP.** The stack drew an HP bar under
-	# every reserve body, and its comment said why — *「which of these thirteen is nearly gone」 is a
-	# planning fact, and it is only readable before anything is dropped* — because soldiers carry damage
-	# between islands and a dead one is dead for good. **The slot bar is a COUNT, not a health readout.**
-	# `sea-summon` §6 raised this as its Open 4 and did not answer it; it is unanswered here too, and it
-	# is a real loss rather than a tidy deletion.
-	
-
-	# --- 7. enemies ------------------------------------------------------------------------------
-	# Drawn before the soldiers so an ally on the same tile reads on top of what it is fighting.
-	for e in battle.enemy_alive.size():
-		if battle.enemy_alive[e] == 0:
-			continue
-		var et := int(battle.enemy_type[e])
-		var ekey := "e%d" % e
-		# ONE offset, computed once and handed to the body, the halo and the bar alike. Riding it on
-		# the body alone leaves the HP bar standing where the body used to be, and `net_draw_leaf`
-		# can never see that — every per-function count and every argument is unchanged.
-		var ecentre := Look.tile_point_px(battle.enemy_pos[e]) + _body_offset_of(ekey)
-		_paint_shadow(_shadow_points(ecentre, Look.body_radius_of(et)), Look.COL_BODY_SHADOW)
-		_paint_body(
-			ecentre,
-			Look.body_radius_of(et),
-			Look.body_corner_radius_of(et),
-			Look.body_colour_of(true).lerp(Look.COL_FLASH, _flash_of(ekey)),
-			Look.BODY_OUTLINE_WIDTH_PX,
-			Look.BODY_DOT_RADIUS_PX,
-			_gait_squash(ekey),
-			null)
-		var ebars := _hp_rects(ecentre, et, battle.enemy_hp[e] / Rules.hp_of(et))
-		var eback: Rect2 = ebars[0]
-		var efill: Rect2 = ebars[1]
-		_paint_hp(eback, Look.hp_bar_colour(false), efill, Look.hp_bar_colour(true))
-
-	# --- 8. soldiers ashore -----------------------------------------------------------------------
-	for raw_id in battle.ashore_ids():
-		var i := int(raw_id)
-		var st := int(army.type_id[i])
-		var skey := "s%d" % i
-		var sradius := Look.body_radius_of(st)
-		var scentre := Look.tile_point_px(battle.soldier_pos[i]) + _body_offset_of(skey)
-		# The wolf faces what it is walking at. `_facing_of` already returns RIGHT when there is no
-		# target, so an idle body faces right rather than flipping on a zero vector.
-		# ⚠ **Drawn here and not in a pass of its own**, which means an ally's shadow can land on an
-		# enemy body drawn earlier in the frame. At alpha 0.32 that is a smudge and not a hole, and a
-		# separate pass would need the body loop split in two — the same restructuring the depth
-		# ordering needs, and that one overturns a written rule. **Both wait for 티켓 07 together.**
-		var stex: Texture2D = _tex_wolf_r if _facing_of(i, false).x >= 0.0 else _tex_wolf_l
-		_paint_shadow(_shadow_points(scentre, sradius), Look.COL_BODY_SHADOW)
-		_paint_body(
-			scentre,
-			sradius,
-			Look.body_corner_radius_of(st),
-			Look.body_colour_of(false).lerp(Look.COL_FLASH, _flash_of(skey)),
-			Look.BODY_OUTLINE_WIDTH_PX,
-			Look.BODY_DOT_RADIUS_PX,
-			_gait_squash(skey),
-			stex)
-		if army.has_beak[i] != 0:
-			var tri := _beak_points(scentre, sradius, _facing_of(i, false))
-			var tip: Vector2 = tri[0]
-			var left: Vector2 = tri[1]
-			var right: Vector2 = tri[2]
-			_paint_beak(tip, left, right, Look.COL_BEAK)
-		var sbars := _hp_rects(scentre, st, army.hp[i] / army.max_hp_of(i))
-		var sback: Rect2 = sbars[0]
-		var sfill: Rect2 = sbars[1]
-		_paint_hp(sback, Look.hp_bar_colour(false), sfill, Look.hp_bar_colour(true))
-
-	# --- 9. tracers, then hit sparks. Both above every body ---------------------------------------
-	# A bullet passes over what it is crossing, and the spark has to clear BOTH outlines: the contact
-	# point is by definition between them, and the halo it is meant to read against is at layer 5.
-	# Under the bodies the shard would slide back under the very outlines it exists to escape.
-	for raw_shot in _fx:
-		var shot: Dictionary = raw_shot
-		if int(shot["kind"]) != FxKind.SHOT:
-			continue
-		var muzzle: Vector2 = shot["from"]
-		var landing: Vector2 = shot["to"]
-		var flight := muzzle.distance_to(landing)
-		if flight <= Rules.EPS:
-			continue
-		var travelled := flight * clampf(float(shot["age"]) / float(shot["life"]), 0.0, 1.0)
-		var heading := (landing - muzzle) / flight
-		# A stub, not the whole line — the whole line IS item 6. Its tail is clamped to the muzzle so
-		# the first frames grow out of the shooter instead of starting inside it.
-		_paint_shot(
-			muzzle + heading * maxf(0.0, travelled - Look.SHOT_LEN_PX),
-			muzzle + heading * travelled,
-			Look.COL_SHOT,
-			Look.SHOT_WIDTH_PX)
-
-	for raw_spark in _fx:
-		var spark: Dictionary = raw_spark
-		if int(spark["kind"]) != FxKind.SPARK:
-			continue
-		if float(spark["age"]) < float(spark["delay"]):
-			continue
-		# **The points are built HERE and handed to the leaf.** Built inside the leaf they never leave
-		# it, and `net_draw_leaf`'s unused-argument check skips any function whose draw count is 0 —
-		# so a leaf holding `draw_multiline(PackedVector2Array(), ...)` would be green with nothing on
-		# screen. `_beak_points` -> `_paint_beak` is the same shape for the same reason.
-		_paint_spark(
-			_spark_points(
-				spark["at"],
-				spark["facing"],
-				clampf((float(spark["age"]) - float(spark["delay"])) / float(spark["life"]),
-					0.0, 1.0)),
-			Look.COL_SPARK,
-			Look.SPARK_WIDTH_PX)
-
-	# --- 10. death bursts, above everything -------------------------------------------------------
-	# On the floor a 10 px crow burst is buried under a 22 px lion.
-	for raw_burst in _fx:
-		var burst: Dictionary = raw_burst
-		if int(burst["kind"]) != FxKind.BURST:
-			continue
-		var grown := clampf(float(burst["age"]) / float(burst["life"]), 0.0, 1.0)
-		var burst_col: Color = burst["colour"]
-		burst_col.a = burst_col.a * (1.0 - grown)
-		_paint_ring(
-			burst["at"],
-			float(burst["radius"]) * lerpf(1.0, Look.BURST_GROWTH, grown),
-			burst_col,
-			Look.BURST_WIDTH_PX)
-
-
-# --- the eleven hooks. Every draw_* call in this file is inside one of them ----------------------
-
-## 2 calls. **One is not enough and that is why the table says two**: the terrain tone and the faint
-## grid are separate layers, and a game where position is the decision needs the grid visible or the
-## player cannot pick a position.
-func _paint_tile(rect: Rect2, fill: Color, line_colour: Color, line_width: float) -> void:
-	draw_rect(rect, fill)
-	draw_rect(rect, line_colour, false, line_width)
-
-
-## 2 calls: the rounded-square outline, then the centre dot.
+## **The grid's own size in tiles, and the one place anything here asks for it.**
 ##
-## **Friend and foe are told apart by `colour`; the unit type by `radius` and `corner`.** Encoding
-## the type in colour too would mean five ally tones and five enemy tones that have to stay legible
-## against each other, and nothing on screen would say which side a new body is on.
-##
-## `squash` is the gait, and it is a `Vector2` rather than a scalar because a single radius can only
-## PULSE — "pressed along the direction of travel and spread across it" cannot be said with one
-## number at all. Only the outline is squashed; the centre dot keeps its radius, so the body reads as
-## deforming rather than shrinking.
-## ⚠⚠ **3 call sites, and only ever two of them run.** `tex` null draws the rounded square; `tex` set
-## draws the animal INSTEAD, in the same place, at the same gait. Every other argument keeps its
-## meaning either way, which is the whole reason the picture went in here rather than into a leaf of
-## its own: the centre, the flinch, the gait and the side colour are asserted by nets that must not
-## stop measuring the ally the moment it stops being a square.
-##
-## **The facing is baked into WHICH texture arrives**, never into a transform here — a mirrored png on
-## disk costs nothing at runtime and adds no `draw_*` call site to count.
-func _paint_body(centre: Vector2, radius: float, corner: float, colour: Color,
-		outline_width: float, dot_radius: float, squash: Vector2, tex: Texture2D) -> void:
-	if tex != null:
-		draw_texture_rect(tex, _beast_rect(centre, radius, squash, tex), false,
-			Look.beast_tint(colour))
-		return
-	draw_polyline(_rounded_square(centre, radius, corner, squash), colour, outline_width)
-	draw_circle(centre, dot_radius, colour)
-
-
-## 1 call. The patch of ground a body stands on, drawn BEFORE it. `points` arrives finished so the
-## leaf decides nothing and a net can assert the ellipse it was handed.
-##
-## ⚠ **The landing ghost gets none.** It is a plan, not a body, and a plan casting a shadow claims
-## something is already standing there.
-func _paint_shadow(points: PackedVector2Array, colour: Color) -> void:
-	draw_colored_polygon(points, colour)
-
-
-## 1 call. A triangle poking out past the outline, so which soldier carries the beak is readable
-## without clicking anything.
-func _paint_beak(tip: Vector2, left: Vector2, right: Vector2, colour: Color) -> void:
-	draw_colored_polygon(PackedVector2Array([tip, left, right]), colour)
-
-
-## 2 calls: the empty bar, then the filled part on top of it.
-##
-## **The empty half is drawn on purpose.** A bar that is only ever as long as the HP left has no
-## length to lose, so nothing on screen goes down — and "no moment was fun" in the last game came
-## partly from exactly that.
-func _paint_hp(back: Rect2, back_colour: Color, fill: Rect2, fill_colour: Color) -> void:
-	draw_rect(back, back_colour)
-	draw_rect(fill, fill_colour)
-
-
-## 2 calls: the filled hull, then a darker outline so its edge reads even sitting on same-toned
-## water. `colour.darkened(...)` is a METHOD CALL on the argument, not a new stored literal — it
-## matches neither half of the "no `Color(` / no `Color.`" rule the rest of this file lives under.
-## Replaces `_paint_boat` (`boat-and-landing` stage 5, 7.3): a flat rect said nothing about which
-## boat this was or whether it was carrying anyone.
-func _paint_hull(rect: Rect2, colour: Color, outline_width: float) -> void:
-	draw_rect(rect, colour, true)
-	draw_rect(rect, colour.darkened(0.35), false, outline_width)
-
-
-## 1 call — `draw_polyline`, over however many waypoints the caller built. The water route from a
-## harbour to the candidate tile while a drag is in flight (P8), the REMAINING route under a crossing
-## hull, and the remaining route home on the return leg (P5 / P6) — one hook, three call sites in
-## `_draw()`, same shape.
-##
-## ⚠⚠ **This was `draw_line(from, to, ...)` and the change is invisible to every scanner.**
-## `net_draw_leaf` counts call SITES, so a polyline and a straight line between the same endpoints are
-## both "1 call, every argument used" — and a `draw_line(points[0], points[points.size() - 1], ...)`
-## written in here would put the route back over the island with the whole round green. What catches
-## it is a RUNTIME check in `net_shell` reading the captured `points` back and asserting the drag over
-## a bent route hands this more than two of them. `speed-off-open-landing`'s S4 is that row.
-func _paint_route(points: PackedVector2Array, colour: Color, width: float) -> void:
-	draw_polyline(points, colour, width)
-
-
-## 1 call. `draw_multiline` — the same shape `_paint_spark` uses, and for the same reason: a loop
-## indexing pairs INSIDE the leaf can drop the second endpoint of one pair with no scanner catching
-## it, and a flat array handed straight to one native call leaves no index inside the leaf to drop.
-## P10: a line along each SEAWARD edge of a cliff tile (whichever ortho side touches water), the only
-## thing that reads as height with no elevation axis at all (3.2).
-func _paint_cliff_face(points: PackedVector2Array, colour: Color, width: float) -> void:
-	draw_multiline(points, colour, width)
-
-
-## 1 call. The tracer stub for item 1.
-func _paint_shot(from: Vector2, to: Vector2, colour: Color, width: float) -> void:
-	draw_line(from, to, colour, width)
-
-
-## 1 call, FILLED — the whole point of item 3's halo is that it has area where the body has none.
-func _paint_halo(centre: Vector2, radius: float, colour: Color) -> void:
-	draw_circle(centre, radius, colour)
-
-
-## 1 call, shared by the death burst (4), the area ring and the lion's telegraph (5) and the landing
-## ring (7). They differ in colour, radius, width and layer, and nothing else — three leaves would be
-## three copies of one `draw_arc`.
-func _paint_ring(centre: Vector2, radius: float, colour: Color, width: float) -> void:
-	draw_arc(centre, radius, 0.0, TAU, RING_SEGMENTS, colour, width)
-
-
-## 1 call.
-func _paint_target_line(from: Vector2, to: Vector2, colour: Color, width: float) -> void:
-	draw_line(from, to, colour, width)
-
-
-## 1 call. `draw_multiline` paints all six shards at once, so raising `SPARK_COUNT` never moves this
-## file's per-function count — which is why the count is safe to pin.
-func _paint_spark(points: PackedVector2Array, colour: Color, width: float) -> void:
-	draw_multiline(points, colour, width)
-
-
-# --- pure helpers. None of these calls draw_* ---------------------------------------------------
+## ⚠⚠ **Nothing that draws or clamps may read `Look.GRID_W` / `GRID_H` directly any more.** They were
+## `const 48` / `32` and `_draw` and `_clamp_cam` read them instead of the grid, so **two maps of
+## different sizes were unrepresentable** — a long map and a small one could not both exist. The
+## constants survive only as the answer for a view that has no grid yet (`setup(Battle.new(), …)`, and
+## the frames between the shell building the node and opening an island), and that fallback is what
+## keeps every camera literal measured against 48 x 32 still true.
+func _map_tiles() -> Vector2i:
+	if battle != null and battle.grid != null and battle.grid.w > 0 and battle.grid.h > 0:
+		return Vector2i(battle.grid.w, battle.grid.h)
+	return Vector2i(Look.GRID_W, Look.GRID_H)
 
 ## The part of a boat's route it has NOT sailed yet, in canvas px: where the hull is standing now,
 ## then every waypoint strictly past the segment it is on. **Draw 0** — it builds geometry and hands
@@ -997,11 +1009,9 @@ func _route_ahead(boat: Dictionary) -> PackedVector2Array:
 		out.append(Look.tile_point_px(path[k]))
 	return out
 
-
 func _tile_xy(tile: int) -> Vector2i:
 	var w := battle.grid.w
 	return Vector2i(tile % w, tile / w)
-
 
 ## The hull rectangle, centred on world point `at` (`boat["pos"]`). **One size for every boat**: the
 ## capacity column died with `Rules.BOATS` (`plan-then-watch`, 결정 14R), a boat carries the one
@@ -1016,7 +1026,6 @@ func _hull_rect(at: Vector2) -> Rect2:
 	var h := Look.BOAT_HULL_H_PX
 	return Rect2(at - Vector2(w, h) * 0.5, Vector2(w, h))
 
-
 ## Where the wolf goes: a rectangle centred on the body, **as wide as `BEAST_SPRITE_W_RATIO` body
 ## radii**, with the height taken from the texture's own aspect so the animal is never stretched.
 ##
@@ -1029,7 +1038,6 @@ func _beast_rect(centre: Vector2, radius: float, squash: Vector2, tex: Texture2D
 	var h := w * float(tex.get_height()) / float(tex.get_width()) * squash.y
 	return Rect2(centre - Vector2(w, h) * 0.5, Vector2(w, h))
 
-
 ## Back rectangle first, filled rectangle second. The fill shrinks from the right, so the bar's left
 ## edge stays put and a body's HP can be compared to its neighbour's at a glance.
 func _hp_rects(centre: Vector2, type_id: int, frac: float) -> Array:
@@ -1037,16 +1045,6 @@ func _hp_rects(centre: Vector2, type_id: int, frac: float) -> Array:
 	var span := Look.hp_bar_size_px()
 	var f := clampf(frac, 0.0, 1.0)
 	return [Rect2(origin, span), Rect2(origin, Vector2(span.x * f, span.y))]
-
-
-## Tip, then the two base corners. The base sits on the body's EDGE and the length is measured
-## outward from there — `Look.BEAK_LENGTH_PX` is how far it sticks out, not how far it is from the
-## centre, so the same constant reads the same on a 10 px crow and a 22 px lion.
-func _beak_points(centre: Vector2, radius: float, facing: Vector2) -> Array:
-	var edge := centre + facing * radius
-	var side := Vector2(-facing.y, facing.x) * (Look.BEAK_WIDTH_PX * 0.5)
-	return [edge + facing * Look.BEAK_LENGTH_PX, edge + side, edge - side]
-
 
 ## Which way a body is pointing: toward its current target, and to the right when it has none — a
 ## zero vector normalised is zero, which would collapse the beak triangle to a point and aim a lunge
@@ -1074,32 +1072,6 @@ func _facing_of(i: int, is_enemy: bool) -> Vector2:
 	if away.length() <= Rules.EPS:
 		return Vector2.RIGHT
 	return away.normalized()
-
-
-## A closed rounded-square outline, four corner arcs joined. `corner` is clamped to `radius`, so a
-## corner ratio of 1.0 degenerates to a circle rather than folding the polygon inside out.
-## `squash` scales every vertex about the centre, component-wise: `Vector2.ONE` is the rest shape.
-func _rounded_square(centre: Vector2, radius: float, corner: float, squash: Vector2) -> PackedVector2Array:
-	var r := clampf(corner, 0.0, radius)
-	var inner := radius - r
-	var pivots := [
-		Vector2(inner, -inner),
-		Vector2(inner, inner),
-		Vector2(-inner, inner),
-		Vector2(-inner, -inner),
-	]
-	var out := PackedVector2Array()
-	for k in pivots.size():
-		var pivot: Vector2 = pivots[k]
-		var start := -PI * 0.5 + k * PI * 0.5
-		for s in CORNER_SEGMENTS + 1:
-			var a := start + PI * 0.5 * (float(s) / float(CORNER_SEGMENTS))
-			out.append(centre + (pivot + Vector2(cos(a), sin(a)) * r) * squash)
-	# Closes the loop. draw_polyline does not close for you, and an open outline leaves a notch in
-	# the top-right corner of every body in the game.
-	out.append(out[0])
-	return out
-
 
 ## Ages both drawers by one frame and drops what has finished, then walks every body that can be on
 ## screen so the gait phase advances by DISTANCE rather than by time.
@@ -1166,7 +1138,6 @@ func _fx_step(delta: float) -> void:
 				float(b["gait"]) + TAU * moved / Look.GAIT_PERIOD_TILES, TAU)
 			b["head"] = (here - last).normalized()
 		b["last"] = here
-
 
 ## Turns one frame of sim FACTS into effects. Everything geometric is frozen here, on the frame the
 ## fact happened, because every one of these outlives the frame that produced it.
@@ -1318,7 +1289,6 @@ func _drain_events() -> void:
 	while _fx.size() > Look.FX_MAX_COUNT:
 		_fx.remove_at(0)
 
-
 ## The shake, as an ABSOLUTE offset to assign to `position`.
 ##
 ## The phase runs off the shake's OWN age rather than a wall clock, which makes it deterministic —
@@ -1336,20 +1306,17 @@ func _shake_offset() -> Vector2:
 	var raw := Vector2(sin(age * Look.SHAKE_A_FREQ), sin(age * Look.SHAKE_B_FREQ))
 	return (raw * mag).limit_length(mag)
 
-
 ## P7. 0..1, one full on/off cycle every `HULL_WAIT_BLINK_SEC` — a raised cosine rather than a raw
 ## sine, so it sits at exactly 0 and 1 at the ends of each half-cycle instead of sweeping through
 ## every value with no rest, which reads as a pulse rather than a smear.
 func _wait_blend() -> float:
 	return 0.5 - 0.5 * cos(TAU * _wait_clock / Look.HULL_WAIT_BLINK_SEC)
 
-
 ## The one place a body's drawing offset is computed, so the body, the halo, the beak and the HP bar
 ## are all handed the same number. Split across call sites, one of them is eventually forgotten and
 ## the body walks out from under its own health bar with the whole round green.
 func _body_offset_of(key: String) -> Vector2:
 	return _lunge_offset(key) + _knock_offset(key)
-
 
 ## Item 2①. A triangle: exactly 0 at both ends and full push at the halfway point, so no body is ever
 ## left sitting displaced when it finishes.
@@ -1363,7 +1330,6 @@ func _lunge_offset(key: String) -> Vector2:
 	var dir: Vector2 = b["lunge_dir"]
 	var at := 1.0 - left / Look.LUNGE_SEC
 	return dir * (float(b["push"]) * (1.0 - absf(2.0 * at - 1.0)))
-
 
 ## Item 3③. Full `HIT_KNOCK_PX` on the frame the blow is felt, decaying to 0.
 ##
@@ -1380,7 +1346,6 @@ func _knock_offset(key: String) -> Vector2:
 	var dir: Vector2 = b["knock_dir"]
 	return dir * (Look.HIT_KNOCK_PX * Look.fx_gain_of(3) * (left / Look.HIT_KNOCK_SEC))
 
-
 ## Item 3①. How much white is mixed into this body's colour, 0.0 when it is not being hit.
 ##
 ## It does NOT ramp: `HIT_FLASH_STRENGTH` is held for the whole window and then drops out. Fading it
@@ -1394,7 +1359,6 @@ func _flash_of(key: String) -> float:
 	if left <= 0.0 or left > Look.HIT_FLASH_SEC:
 		return 0.0
 	return Look.HIT_FLASH_STRENGTH * Look.fx_gain_of(3)
-
 
 ## Item 12. `1 - s*sin(phase)` along the heading and `1 + s*sin(phase)` across it, delivered in
 ## SCREEN axes because that is all `_rounded_square` can apply.
@@ -1417,29 +1381,6 @@ func _gait_squash(key: String) -> Vector2:
 	if absf(head.x) >= absf(head.y):
 		return Vector2(1.0 - s, 1.0 + s)
 	return Vector2(1.0 + s, 1.0 - s)
-
-
-## Item 2②. The six shards as twelve points, inner end then outer end, ready for `draw_multiline`.
-##
-## **The fan opens along the TANGENT of the two touching faces**, three shards to each side. That is
-## the only axis on which every point moves away from BOTH centres: opened along ±facing, every one
-## of the ten points lands back inside the striker's own outline, because the contact point is always
-## The ellipse a body's shadow fills. **A circle of radius `r` lying on ground tipped by
-## `MAP_TILT_DEG` projects to an ellipse `r` wide and `r * MAP_TILT_COS` tall** — the same cosine the
-## tiles themselves shrink by, so the shadow lies in the ground's own plane rather than beside it.
-##
-## ⚠ **The gait is deliberately NOT applied.** The body squashes because it is moving; the patch of
-## ground it stands on does not. Squashing both was tried in the head and rejected: a shadow that
-## breathes with the body reads as a second body.
-func _shadow_points(centre: Vector2, radius: float) -> PackedVector2Array:
-	var rx := radius * Look.SHADOW_R_RATIO
-	var ry := rx * Look.MAP_TILT_COS
-	var out := PackedVector2Array()
-	for k in SHADOW_SEGMENTS:
-		var a := TAU * float(k) / float(SHADOW_SEGMENTS)
-		out.append(centre + Vector2(cos(a) * rx, sin(a) * ry))
-	return out
-
 
 ## `(HIT_HALO_MUL - 1) * own radius` deep inside the striker's own halo. The shards are NOT claimed
 ## to escape the target's halo — what carries this effect is that they move while everything under

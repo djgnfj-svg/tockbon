@@ -29,7 +29,12 @@ extends RefCounted
 ## 256 / 256 / 256 — which is what a `>=` moved by two reads as.
 ## ⚠⚠ **THE CEILING IS 10 AND IT IS A CLIFF, not taste**: at `>= 12` the band is 48 tiles and resolves
 ## to **2 distinct landings on every island**. `rules.gd` carries the sweep.
-const BAND_AT_MIN_6 := [360, 360, 366]
+## ⚠⚠ **RE-MEASURED 2026-08-24 when the band gained an OUTER edge** (`Rules.SUMMON_RADIUS_RATIO`, on
+## the user's 「섬 기준으로 동그랗게」). It was `[360, 360, 366]` while the band had a floor and no
+## ceiling. **The cost is stated rather than argued down: 78 band tiles per island, and 4 of the 34
+## landings each island could be attacked from.** The old numbers are kept in this comment because the
+## drop is the price of the decision and not a bug to be found again later.
+const BAND_AT_MIN_6 := [282, 282, 288]
 
 ## How many LANDINGS the band can reach, against how many coast tiles the drag can reach.
 ##
@@ -40,13 +45,19 @@ const BAND_AT_MIN_6 := [360, 360, 366]
 ## `>= 10`, and **2 / 2 / 2 at `>= 12`**. Moving the band out
 ## really does cost the player addressable coastline, which is the trade `sea-summon` §3.3 predicted
 ## and the user's decision overrode.
-const LANDINGS_FROM_BAND := [34, 35, 34]
+## ⚠⚠ **RE-MEASURED 2026-08-24 with the ring** (see `BAND_AT_MIN_6`). It was `[34, 35, 34]`.
+## **Four landings per island stopped being reachable** — that is what the outer edge costs, and it is
+## written here rather than smoothed away because it is the one number that says how much of an island
+## the player can still choose to attack.
+const LANDINGS_FROM_BAND := [30, 31, 30]
 const SENDABLE_COAST := [84, 76, 82]
 
-## Water on island 0 that is CLOSER to the coast than the band allows — the tiles a press must be
-## refused on. ⚠ **The refusal arm flipped with the band**: it used to be the open ocean and it is the
-## shoreline now. A self-check for that arm: at 0 it would be vacuous.
-const NEAR_WATER_ISLAND_0 := 364
+## Water on island 0 a press must be REFUSED on. ⚠⚠ **It is both ends again as of 2026-08-24**: the
+## shoreline inside `SUMMON_BAND_MIN_TILES`, AND the open ocean outside the ring
+## (`Rules.SUMMON_RADIUS_RATIO`). It was 364 while the band had no outer edge and only the shore could
+## refuse; the ring put 78 ocean tiles back on the refusing side. A self-check for that arm: at 0 it
+## would be vacuous.
+const NEAR_WATER_ISLAND_0 := 442
 
 
 func run(t) -> void:
@@ -159,12 +170,12 @@ func _a_lake_no_boat_can_leave(t) -> void:
 	# The floor: the OUTER sea on the same grid is summonable, so the refusal above is not "this grid
 	# has no band at all".
 	var band := _band_tiles(g)
-	t.eq(band.size(), 351, "같은 격자의 바깥 바다는 351칸이 소환 지점이다")
+	t.eq(band.size(), 152, "같은 격자의 바깥 바다는 152칸이 소환 지점이다 (고리 밖은 이제 띠가 아니다 — 옛 값 351)")
 	var no_landing := 0
 	for raw in band:
 		if g.summon_landing_of(int(raw)) < 0:
 			no_landing += 1
-	t.eq(no_landing, 0, "그리고 그 351칸은 전부 갈 상륙지가 있다 — 띠는 언제나 상륙지의 부분집합이다")
+	t.eq(no_landing, 0, "그리고 그 152칸은 전부 갈 상륙지가 있다 — 띠는 언제나 상륙지의 부분집합이다")
 
 
 ## ⚠⚠ **THE 144 x 32 MAP, because the band that changed is the one thing a long map is FOR.** The user's
@@ -184,7 +195,7 @@ func _the_long_map_band(t) -> void:
 	g.load_rows(Islands.rows_of(Islands.LONG_ISLAND_INDEX))
 	t.eq(g.w, 144, "긴 지도가 144칸 폭으로 실렸다 (자가 점검)")
 	var band := _band_tiles(g)
-	t.eq(band.size(), 1128, "긴 지도의 띠가 1128칸이다")
+	t.eq(band.size(), 1038, "긴 지도의 띠가 1038칸이다 (옛 값 1128 — 고리가 지도 크기에 비례하므로 긴 섬도 끝까지 닿는다)")
 	var reached := {}
 	var no_route := 0
 	var longest := 0.0
@@ -199,8 +210,8 @@ func _the_long_map_band(t) -> void:
 		for k in range(1, route.size()):
 			d += route[k - 1].distance_to(route[k])
 		longest = maxf(longest, d)
-	t.eq(no_route, 0, "그 1128칸 전부에서 항로가 나온다 — 띠 안에 못 가는 칸이 없다")
-	t.eq(reached.size(), 138, "그리고 그 띠가 닿는 상륙지가 138곳이다")
+	t.eq(no_route, 0, "그 1038칸 전부에서 항로가 나온다 — 띠 안에 못 가는 칸이 없다")
+	t.eq(reached.size(), 132, "그리고 그 띠가 닿는 상륙지가 132곳이다 (옛 값 138 — 고리가 비례하지 않으면 43곳까지 떨어졌다)")
 	# ⚠ **The whole point of a long map, as a number**: the longest crossing here is three times the
 	# longest on a 48-column island (5.96 tiles-per-second-worth), which is what the user asked the band
 	# to buy. The bound is a literal derived outside Godot, not read back off the route.
@@ -251,7 +262,7 @@ func _the_landing_of_every_band_tile(t) -> void:
 				continue
 			if not _touches_water(g, landing):
 				inland += 1
-	t.eq(seen, 360 + 360 + 366, "세 섬의 띠 칸 1086개를 전부 봤다 (자가 점검)")
+	t.eq(seen, 282 + 282 + 288, "세 섬의 띠 칸 852개를 전부 봤다 (자가 점검)")
 	t.eq(bad, 0, "띠의 모든 칸이 상륙할 수 있는 육지 칸을 가리킨다")
 	t.eq(inland, 0, "그리고 그 육지 칸은 전부 물에 닿아 있다 — 내륙을 가리키는 칸이 없다")
 
@@ -280,9 +291,9 @@ func _what_the_derivation_costs(t) -> void:
 	# `sea-summon` §3.3 predicted this and measured the shape of it (the four biggest catchments are
 	# corner landings, 40 / 40 / 72 / 84 tiles at this distance against a MEDIAN catchment of 8); the
 	# user's decision overrides its verdict, and the price is written here where it can be re-measured.
-	t.eq(SENDABLE_COAST[0] - LANDINGS_FROM_BAND[0], 50, "섬 0 에서 도출이 잃는 것은 50칸이다 — 해안의 60%")
-	t.eq(SENDABLE_COAST[1] - LANDINGS_FROM_BAND[1], 41, "섬 1 에서는 41칸")
-	t.eq(SENDABLE_COAST[2] - LANDINGS_FROM_BAND[2], 48, "섬 2 에서는 48칸")
+	t.eq(SENDABLE_COAST[0] - LANDINGS_FROM_BAND[0], 54, "섬 0 에서 도출이 잃는 것은 54칸이다 — 해안의 64%")
+	t.eq(SENDABLE_COAST[1] - LANDINGS_FROM_BAND[1], 45, "섬 1 에서는 45칸")
+	t.eq(SENDABLE_COAST[2] - LANDINGS_FROM_BAND[2], 52, "섬 2 에서는 52칸")
 
 
 # -- G5 --------------------------------------------------------------------------------------------
@@ -325,7 +336,7 @@ func _every_route_is_water_then_one_beach(t) -> void:
 				var wt := int(wp.y) * g.w + int(wp.x)
 				if wt < 0 or wt >= g.water.size() or g.water[wt] == 0:
 					dry_waypoints += 1
-	t.eq(seen, 360 + 360 + 366, "세 섬의 띠 칸 1086개의 항로를 전부 걸었다 (자가 점검)")
+	t.eq(seen, 282 + 282 + 288, "세 섬의 띠 칸 852개의 항로를 전부 걸었다 (자가 점검)")
 	t.eq(short_routes, 0, "띠의 모든 칸에서 항로가 최소 두 점이다")
 	t.eq(wrong_start, 0, "항로의 첫 점이 누른 그 칸이다 — 배는 거기서 태어난다")
 	t.eq(wrong_end, 0, "항로의 끝 점이 도출된 상륙지다")

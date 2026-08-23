@@ -363,6 +363,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	# no `[input]` section in `project.godot` and none is added, so what a net drives is the shell
 	# rather than a settings file. Numpad keycodes and rebinding are out of scope.
 	if event is InputEventKey and (event as InputEventKey).pressed:
+		# ⚠⚠ **Turning comes FIRST and it is not gated on the commit.** Every other key here only arms a
+		# slot while the plan is open; this one answers during the fight too, on purpose — 티켓 07 asks
+		# whether a hand may move the board mid-fight, and gating it before the question is decided
+		# would answer it by omission (2026-08-24, the user: 「3D 회전 회전 버튼이 내가 돌려봐야 될 듯」).
+		if _on_turn_key(event as InputEventKey):
+			return
 		_on_summon_key(event as InputEventKey)
 		return
 	if event is InputEventMouseButton:
@@ -712,6 +718,24 @@ func _on_left_release(at: Vector2) -> void:
 ## same sentence to the player. The refusal goes to the HUD as a shake on that slot's own box, which
 ## is the only thing separating "that key did nothing because the slot is empty" from "that key did
 ## nothing because the game is not listening".
+## Q turns the board one notch anticlockwise, E one notch clockwise. **Returns whether it took the
+## key**, so the summon keys below never see one that was already spent.
+##
+## ⚠ **Raw keycodes and no `[input]` action**, the same rule the summon keys keep: there is no
+## `[input]` section in `project.godot` and none is added, so what a check drives is this shell rather
+## than a settings file.
+func _on_turn_key(key: InputEventKey) -> bool:
+	if key.echo:
+		return false
+	if key.keycode == KEY_Q:
+		field_view.turn_by(-Look.CAM_YAW_STEP_DEG)
+		return true
+	if key.keycode == KEY_E:
+		field_view.turn_by(Look.CAM_YAW_STEP_DEG)
+		return true
+	return false
+
+
 func _on_summon_key(key: InputEventKey) -> void:
 	if key.echo:
 		return

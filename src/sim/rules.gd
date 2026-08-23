@@ -228,6 +228,35 @@ const _SLOT_COL_REWARD := 2
 ## again, which is what the user asked to end. **Ceiling 10, from the cliff above** — not from taste.
 const SUMMON_BAND_MIN_TILES := 6
 
+## ⚠⚠ **The OUTER edge of the band, and it is new** (2026-08-24, the user: 「내가 바다면 그 일정
+## 동그랗게 섬 기준으로 동그랗게 해서」). Until now the band had a floor and no ceiling: every reachable
+## water tile at least `SUMMON_BAND_MIN_TILES` from the shore was summonable, **including the whole open
+## ocean out to the edge of the map**. That is why it drew as huge slabs of sea rather than as a place.
+##
+## ⚠⚠ **A RATIO OF THE MAP AND NOT A FIXED DISTANCE, and that was measured the hard way.** It was a
+## flat 22 tiles for one round. On the shipped 48 x 32 islands that was right — the band went 360 tiles
+## to 280 and the landings it can reach 34 to 30. **On the long map it was a disaster**: 144 wide, and a
+## 22-tile circle about the middle left 280 band tiles of 1128 and **43 reachable landings of 138**, so
+## two thirds of that island could not be attacked at all. A circle 「섬 기준으로」 has to be a circle
+## about THAT island, so it is sized by the island.
+##
+## **0.46 of the longer side.** On 48 x 32 that is 22.1 — the value that was measured good by eye — and
+## on the 144-wide map it is 66.2, which reaches its ends again.
+## Floor 0.30 — under it the ring closes inside `SUMMON_BAND_MIN_TILES` on a square map and the band
+## pinches shut. Ceiling 0.75 — past it the ring leaves the water entirely on the shipped maps and the
+## rule is the old no-ceiling one wearing a number.
+##
+## ⚠ **Measured from the middle of the GRID, not from the land.** An island is not a disc and its centre
+## of mass wanders per map; the grid's middle is the same point every check and every player can point
+## at, and the ring drawn on screen is a circle about exactly it.
+const SUMMON_RADIUS_RATIO := 0.46
+
+
+## The radius that ratio comes to on a given grid, in tiles. **One function, so the predicate and the
+## ring cannot compute it two ways.**
+static func summon_radius_of(w: int, h: int) -> float:
+	return float(maxi(w, h)) * SUMMON_RADIUS_RATIO
+
 
 static func summon_slot_count() -> int:
 	return SUMMON_SLOTS.size()

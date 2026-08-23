@@ -1,6 +1,9 @@
-# tockbon — a **cell-army roguelike**, and `src/` is empty
+# tockbon — a **beast roguelike**, and `src/` runs
 
-**Ten square cells eat one island at a time; what you eat becomes parts you bolt onto their bodies.**
+**Ten beasts take one island at a time from the humans who hold it.** ⚠ **The lines below still describe
+the cell game**, which the user left behind on 2026-08-22 — **eating for parts is out** (the art could not
+carry it) and **the player's side is wolves, the enemy is humans, the first of them cavemen.**
+**The map under `.scratch/cell-hook/` is what this repo is making; this file is behind it.**
 **Hands do not move during a fight** — where you land decides who you fight, and that is the decision.
 ⚠ **The hook is that the assembled body reads on screen** (2026-08-22, the user). The parts exist; the body
 does not show them yet. **Everything else hangs off that.**
@@ -8,9 +11,10 @@ does not show them yet. **Everything else hangs off that.**
 **The frame, decided 2026-08-22**: a **demo in December**, not a release · **roguelike** · **funding** after
 the demo. **Whether December is also a release is decided the day the demo stands.**
 
-⚠ **No GDD here, no `run/main_scene`, and the code is not restored** — the cell game is whole at commit
-`62ff57d` and the user chose to settle the idea first. **What is being made is read out of
-`.scratch/cell-hook/`** — a map and five tickets.
+⚠⚠ **This was measured false on 2026-08-24 and is replaced.** It said there was no `run/main_scene` and
+the code was not restored. **The code is restored and the game launches**; `run/main_scene` points at the
+shell scene; **twenty nets run green (2841 checks, 4.6s).** **There is still no GDD** — that one stands.
+**What is being made is read out of `.scratch/cell-hook/`** — a map and eight tickets, three of them closed.
 
 ⚠⚠ **The magic-circle game was picked the morning of 2026-08-22 and dropped that evening.** The deadline
 dropped it: with one, **the side whose concept already stands wins.** **Its design was kept as an idea.**
@@ -118,15 +122,23 @@ game headless in seconds.
 | Path | The rule it obeys |
 |---|---|
 | `src/sim/` | **Never touches the tree.** No `Node`, no `_draw`, no `Input`, no `get_node`, no `$`. Every file is constructible and drivable with `.new()` and nothing else |
-| `src/view/` | **Reads `sim`, never writes it.** Everything that is a Node or draws lives here, and **each drawing file exposes a `_paint_*` hook** so a net can assert the arguments |
+| `src/view/` | **Reads `sim`, never writes it.** Everything that is a Node or draws lives here. ⚠ **The six 2D views still expose a `_paint_*` hook** so a net can assert the arguments; **the field does not any more** — it builds a 3D world instead, and what replaces the hook is ticket 09's first question |
 | `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. It builds its children in code, so a net calling `_ready()` exercises the real wiring |
 | `src/look.gd` | **Every presentation constant, in exactly one file.** `src/sim/rules.gd` holds every constant that changes what happens |
 
-⚠⚠ **Nothing scans this table right now.** `net_draw_leaf` enforced the drawing half and both constant
-halves, and **it went with the cell game on 2026-08-22** — it pinned that game's own constants by literal
-(`Look.ZOOM_MIN`, nine above a floor and three below), so it could not survive the deletion.
-**Two nets are left and neither reads `src/`: `net_citations` and `net_process`.**
-⇒ **The folder rule is honour-based today. Rebuild the scan when `src/` has something to drift.**
+⚠⚠ **The paragraph that used to sit here was measured false on 2026-08-24 and is replaced.** It said
+`net_draw_leaf` had gone with the cell game, that two nets were left, and that the folder rule was
+honour-based. **`src/` and all twenty nets are back**, and **the whole round was run twice that day:
+2841 checks, 0 failures, 4.6s, stderr clean.** `net_draw_leaf` runs and does scan `src/view/` — the
+per-function `draw_*` table, the closed function class, the leaf arguments, and both constant halves.
+
+⚠ **What is honestly weak is different, and it is measured** (ticket 08 counted it): **1033 of the 2841
+are tied to drawing in 2D.** About **550 of those survive a move to 3D and about 480 do not** —
+`net_camera` dies whole (46, it pins one 2D expression), `net_fx_view` almost whole (210 of 227, it
+asserts `_paint_*` arguments in pixels). **The two that mostly survive, `net_shell` and `net_slots`,
+survive because they measure input → state, not paint.** ⇒ **When writing a new check, prefer the shape
+that survives: assert what the hand did to the state, and reach for pixels only when the pixels are the
+subject.**
 
 ⚠⚠ **`CONTEXT.md` still holds the magic-circle words and is wrong** — it is rewritten when the cell game
 comes back. **It holds the words** — 그물, and the cell game's own — in 한국어 and in code,

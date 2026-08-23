@@ -531,7 +531,25 @@ func can_summon_at(t: int) -> bool:
 		return false
 	if summon_hops[t] == UNREACHABLE:
 		return false
-	return summon_hops[t] >= Rules.SUMMON_BAND_MIN_TILES
+	if summon_hops[t] < Rules.SUMMON_BAND_MIN_TILES:
+		return false
+	# ⚠⚠ **The outer edge.** See `Rules.SUMMON_RADIUS_TILES`: without it the band has a floor and no
+	# ceiling, and the open ocean out to the edge of the map is all summonable. **The ring the field
+	# draws is a circle about this same centre with this same radius** — the picture is not an
+	# illustration of the rule, it is the rule's own two numbers.
+	return summon_centre().distance_to(tile_point(t)) <= summon_radius()
+
+
+## The middle of the grid, in tile units. **The one place the centre of the ring is decided**, so the
+## predicate above and whatever draws the ring cannot disagree about where it is.
+func summon_centre() -> Vector2:
+	return Vector2(float(w) * 0.5, float(h) * 0.5)
+
+
+## How far that ring reaches on THIS grid. See `Rules.SUMMON_RADIUS_RATIO` — it is a ratio of the map
+## and not a fixed distance, because a 144-wide island and a 48-wide one do not share a circle.
+func summon_radius() -> float:
+	return Rules.summon_radius_of(w, h)
 
 
 ## The LAND tile a boat born at `t` sails to, or -1. Answered for any water tile the BFS reached, not

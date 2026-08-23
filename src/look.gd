@@ -57,7 +57,146 @@ const TILE_PX := 40.0
 ## written on 티켓 07 as not done rather than left to be discovered.
 const MAP_TILT_DEG := 40.0
 const MAP_TILT_COS := 0.766044
-const TILE_H_PX := TILE_PX * MAP_TILT_COS
+
+## ⚠⚠ **THE SQUASH MOVED OUT OF THIS FILE AND INTO THE ENGINE** (2026-08-24, 티켓 08). It used to be
+## `TILE_PX * MAP_TILT_COS`, which laid the board back by drawing every row 30.64 px tall on a flat
+## canvas. **The field is a 3D space now and a real camera does the laying back**, so a tile is square
+## again in world space and the foreshortening happens where foreshortening belongs.
+## ⚠ **The constant is kept rather than deleted** because the two numbers above it are still true —
+## `MAP_TILT_DEG` is now the CAMERA's pitch — and because four nets still read this name. Deleting it
+## would stop them parsing, which turns a measurable red into a silent absence.
+const TILE_H_PX := TILE_PX
+
+
+# =================================================================================================
+# The 3D field — everything the engine needs to stand the island up
+# =================================================================================================
+## ⚠ **One world unit is one tile**, so a length in this file's px divided by `TILE_PX` is a length in
+## world units and nothing else has to be converted. `Sprite3D.pixel_size` is set to `1 / TILE_PX` for
+## the same reason: a picture sized in canvas px lands at the size this file already says it is.
+
+## How high each legend character stands, in tiles. **This table is the whole terrain port** — the
+## islands are text grids in `islands.gd` and nothing new is authored; the legend simply gains a
+## height column next to the colour column `terrain_colour_of_char` already owns.
+## ⚠ **Water is not 0.** A sea at zero height and a hole at zero height would be the same box, and the
+## boat has to sit ON something.
+const TERRAIN_H_WATER := 0.15
+const TERRAIN_H_HOLE := 0.02
+const TERRAIN_H_LAND := 1.00
+const TERRAIN_H_RAMP := 1.60
+const TERRAIN_H_CLIFF := 2.40
+
+## The camera. **Orthogonal, not perspective**: the game is read off a grid, and a perspective camera
+## makes two tiles of the same size draw at two sizes, which is exactly the reading this game cannot
+## afford to lose. `size` is the visible WIDTH in tiles (`keep_aspect` is set to KEEP_WIDTH), so the
+## existing `zoom` ladder converts straight across — `VIEWPORT_W_PX / zoom / TILE_PX`.
+const CAM_PITCH_DEG := MAP_TILT_DEG
+const CAM_YAW_DEG := 0.0
+## Far enough back that the tallest cliff never crosses the near plane at any yaw, and the ortho
+## projection makes the distance itself cost nothing in size.
+const CAM_DIST_TILES := 90.0
+
+## One light. It is what makes the height read: a box 2.4 tall throws a shadow a box 1.0 tall does
+## not, and that difference is the whole reason the field moved into 3D.
+const SUN_PITCH_DEG := -52.0
+const SUN_YAW_DEG := -35.0
+const SUN_ENERGY := 1.15
+## ⚠ **How far from the camera shadows are still cast, in tiles, and it is not decoration.** Godot's
+## default is 100 and the camera sits `CAM_DIST_TILES` back, so the far half of the island fell outside
+## it and the boundary drew as **a hard line straight across the sea** — seen in the first capture of
+## this port before anything else was judged. It has to clear the camera distance plus the whole island.
+const SUN_SHADOW_DIST_TILES := 220.0
+## ⚠ **Higher than Godot's default 1.0**, because one world unit here is a whole tile: the default is
+## tuned for a metre and this world's metre is forty pixels of island.
+const SUN_SHADOW_NORMAL_BIAS := 2.5
+## ⚠⚠ **A second light, dim, from the other side, casting nothing.** With one sun every surface facing
+## away from it gets ambient only, and on this island that is **the entire south-west coast as one
+## black slab** — the cliff there is 2.25 tiles of wall and every capture of the port shows it as a
+## hole rather than as rock. Raising the ambient instead would flatten the hills, which are the thing
+## the lighting exists to show. A fill light lifts the shaded faces and leaves the lit ones alone.
+const FILL_PITCH_DEG := -22.0
+const FILL_YAW_DEG := 155.0
+const FILL_ENERGY := 0.45
+
+const COL_SKY := Color(0.055, 0.055, 0.075)
+const COL_AMBIENT := Color(0.520, 0.580, 0.680)
+const AMBIENT_ENERGY := 0.75
+
+## How far above its tile's top face a body's FEET sit. Zero would let a billboard's bottom row sink
+## into the box it stands on at some yaws; a hair of lift costs nothing and never does.
+const BODY_LIFT_PX := 1.0
+
+## The body picture that is NOT a wolf — the rounded square the 2D field drew with `draw_polyline`,
+## baked once into a texture so a billboard can wear it. Texels, not px: it is scaled to the body's
+## own radius wherever it is used.
+const BODY_TEX_PX := 64
+const BODY_TEX_OUTLINE_PX := 6
+const BODY_TEX_DOT_PX := 5
+
+## The hull, as a box on the water rather than a rectangle on a canvas.
+const HULL_H_TILES := 0.22
+
+
+## **The hills** (2026-08-24, the user: 「뭔가 대각선으로 올라가는 건 있나 혹시? 뭔가 지금 너무 딱딱해서
+## 재미가 없을까?」). The first port gave every tile a box, so land was one flat slab and a ramp was a
+## step — **the ground had a height and no SHAPE.** The land now carries a smooth rise on top of its
+## legend height, and the mesh joins tile corners rather than stacking boxes, so the rise is a slope.
+##
+## ⚠⚠ **THE SIM DOES NOT KNOW ABOUT ANY OF THIS.** Passability, reach, ranges and every distance are
+## the flat grid they always were; a hill is something the eye climbs and a wolf walks straight
+## through. That is the whole reason it is affordable — it is drawing, and it is only drawing.
+##
+## ⚠ **Only land rises.** Water stays flat or the coast breathes, a cliff stays its own height or it
+## stops reading as a wall you cannot climb, and a hole stays a hole.
+const HILL_AMP_TILES := 2.60
+## How wide one swell is, in tiles. Under about 6 the land reads as noise rather than as terrain; over
+## about 20 an island 48 wide holds one bump and might as well be flat.
+const HILL_CELL_TILES := 11.0
+## A second, finer swell at a fraction of the first, so a hillside is not a single clean dome.
+const HILL_DETAIL_RATIO := 0.35
+## Fixed, so two runs of the same island are the same island. **Not `randi()`** — a landscape nobody
+## can reproduce is a landscape nobody can measure.
+const HILL_SEED := 1743
+## ⚠⚠ **The tone the high ground drifts toward, and it is not decoration.** The game is READ from 40
+## degrees at `ZOOM_MIN`, and from up there a hill's shading is a few pixels of gradient — the shape is
+## in the geometry and the eye cannot find it. Tinting by height is what makes a rise legible from the
+## chair the game is actually played in. **Lighter and slightly warmer**, the way distance and altitude
+## both wash colour out.
+const COL_LAND_HIGH := Color(0.322, 0.365, 0.243)
+
+## The tone land takes where it meets the sea. **A coast is not the same green as an inland field** and
+## the eye knows it before it knows anything else about a picture of an island — bleached, sandier, and
+## it is what turns a green slab into a piece of land with a shore.
+## ⚠ It says nothing about walking: the legend still decides that, and this is only the tile's colour.
+const COL_SHORE := Color(0.416, 0.400, 0.290)
+## How far the shore tone reaches into the tile that touches water. Under about 0.3 nothing reads; at
+## 1.0 the coast row stops being green at all and the island grows a painted outline.
+const SHORE_BLEND := 0.62
+
+## How much of the land's swell a cliff gets. **Not zero** — a ridge of flat-topped cliff blocks all at
+## exactly one height is the blockiest thing left on the island once the land is rolling. **Not one** —
+## a cliff has to stay a wall and a wall that undulates as much as a meadow stops reading as one.
+const HILL_CLIFF_RATIO := 0.35
+
+## ⚠⚠ **How wide the open sea is, in tiles, and it exists because the board turns.** The terrain mesh
+## runs `WATER_MARGIN_TILES` past the grid, which was enough while the view was a screen-aligned
+## rectangle — turn it 45 degrees and the view's corners reach past that square, and **the first turned
+## capture of this port had black wedges in all four corners.** One flat quad under everything at the
+## water's own height costs two triangles and covers every yaw at every zoom.
+const SEA_SPAN_TILES := 400.0
+## ⚠ **How far the open sea sits BELOW the water tiles, and it is not zero for a measured reason.** At
+## exactly the same height the quad and the tiles fight for the depth buffer and the sea draws as a
+## hatched stripe — seen in the capture that added it. Low enough that the step where the two meet is
+## under a pixel at `ZOOM_MAX`, high enough that no card gets the comparison wrong.
+const SEA_DROP_TILES := 0.03
+
+## How far a skirt hangs below the tile it belongs to when its neighbour is lower. It only has to
+## reach the neighbour; the extra keeps a seam from opening where two slopes meet at an angle.
+const TERRAIN_SKIRT_PAD := 0.05
+
+## How far one key press turns the board. **The board turning is the hand moving during a fight**, and
+## that is 티켓 07's whole question — this is the knob that lets it be answered by trying it.
+const CAM_YAW_STEP_DEG := 15.0
 
 ## ⚠⚠ **THESE ARE A DEFAULT NOW AND NOT THE MAP SIZE.** They were `const 48` / `32` read directly by
 ## `field_view._draw` and `_clamp_cam`, which made **two maps of different sizes unrepresentable** —
@@ -147,7 +286,12 @@ const COL_GRID_LINE := Color(1.0, 1.0, 1.0, 0.07)
 # saying the two are the same terrain. `COL_CLIFF_FACE` is the seaward-edge line, one tone darker so
 # it reads as a drop rather than a second outline. `/` (ramp) is passable land with its own tint so
 # the one doorway through a cliff wall does not read as ordinary ground.
-const COL_CLIFF := Color(0.098, 0.098, 0.114)
+## ⚠⚠ **RAISED for the 3D field** (2026-08-24). It was 0.098 — near black — and that was right on a flat
+## canvas where a cliff was a FILL and the eye only had to tell it from land. Standing up as a real wall
+## it is a large lit surface, and near-black reads as **a hole cut in the island** rather than as rock:
+## the first captures of the port show the whole south coast as one black slab. Rock grey, still the
+## darkest thing on the island, still unmistakably not walkable.
+const COL_CLIFF := Color(0.243, 0.235, 0.251)
 const COL_CLIFF_FACE := Color(0.020, 0.020, 0.027)
 const COL_RAMP := Color(0.361, 0.310, 0.235)
 
@@ -201,7 +345,31 @@ const COL_ROUTE := Color(0.851, 0.780, 0.600, 0.55)
 ## "fixed".** Measured on all three islands (`sea-summon`, 2.1): water a boat cannot reach the shore
 ## from is **0 / 0 / 0**, so a sea DENYLIST would draw nothing and refuse nothing. The two answer
 ## different questions — 「어디에 상륙하나」 stays a denylist, 「어디에 손을 대나」 is a place.
+## ⚠⚠ **NOTHING READS THIS ANY MORE** (2026-08-24). It washed every summonable water tile green, and
+## the user cut it: 「초록색이 있을 필요는 없다? 내가 놓을 수 있는 위치는 그냥 원 기준에 눈에 보이면 될
+## 거 같고」. **The band is a drawn circle now** — see `COL_SUMMON_RING` — because the rule itself became
+## a circle (`Rules.SUMMON_RADIUS_TILES`). Kept only so the checks that still name it keep parsing.
 const COL_SUMMON_BAND := Color(0.353, 0.769, 0.475, 0.35)
+
+## **The ring on the water: where a boat may be put down.** Pale and cool rather than green — it is a
+## boundary drawn ON the sea, and a tinted sea was exactly what it replaced. It has to read against
+## `COL_WATER` at `ZOOM_MIN` and against nothing else, because it never crosses land.
+const COL_SUMMON_RING := Color(0.706, 0.902, 1.0, 0.85)
+## How thick that ring is, in tiles. Under about 0.2 it disappears at `ZOOM_MIN`; over about 0.8 it
+## stops being a line and starts being a band, which is the picture it exists to replace.
+const SUMMON_RING_W_TILES := 0.45
+## How finely the circle is sampled. Not a design value — it only decides whether the ring is visibly
+## a polygon.
+const SUMMON_RING_SEGMENTS := 96
+
+## **The sea, as two tones a shader moves between.** `COL_WATER` is the trough; this is the crest.
+## ⚠ Close together on purpose: the sea is the background this whole game is read against, and water
+## that draws attention is water that competes with the ten bodies fighting on top of it.
+const COL_WATER_CREST := Color(0.145, 0.231, 0.361)
+## How wide one swell is (in tiles, inverted) and how fast it travels. Slow — a fast sea reads as a
+## flowing river, and this one is meant to sit still enough to plan on.
+const WATER_WAVE_SCALE := 0.22
+const WATER_WAVE_SPEED := 0.18
 
 # HUD and panel.
 const COL_HUD_TEXT := Color(0.918, 0.937, 0.961)
@@ -1477,6 +1645,25 @@ static func terrain_colour_of_char(c: String) -> Color:
 			return COL_RAMP
 		_:
 			return COL_LAND
+
+
+## The height column of the same legend `terrain_colour_of_char` reads, and it is kept beside it on
+## purpose: a character that gains a colour and not a height would stand at land height and look like
+## a bug in the sim rather than a hole in this table.
+static func terrain_height_of_char(c: String) -> float:
+	match c:
+		"~":
+			return TERRAIN_H_WATER
+		"H":
+			return TERRAIN_H_WATER
+		"#":
+			return TERRAIN_H_HOLE
+		"^":
+			return TERRAIN_H_CLIFF
+		"/":
+			return TERRAIN_H_RAMP
+		_:
+			return TERRAIN_H_LAND
 
 
 static func viewport_size_px() -> Vector2:
