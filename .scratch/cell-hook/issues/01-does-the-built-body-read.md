@@ -1,5 +1,5 @@
 Type: prototype
-Status: open
+Status: claimed
 
 # 종족별 빌드가 화면에서 보이나
 
