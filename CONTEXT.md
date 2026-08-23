@@ -1,66 +1,83 @@
 # CONTEXT — the words this repo uses
 
-**Rewritten 2026-08-22** when the cell game was folded and the magic-circle game came back. `tdd` and
-`domain-modeling` both read this file for the vocabulary that test names and interfaces are built from.
+**Rewritten 2026-08-22 저녁** when the magic-circle game was dropped and the island game came back as a
+**wolf** game. `tdd` and `domain-modeling` both read this file for the vocabulary that test names and
+interfaces are built from.
 
 ⚠ **The user speaks Korean and the code speaks English.** Both columns are load-bearing: **an answer that
 uses only the English word is not an answer to the user**, and a symbol named in Korean is not a symbol.
 
-⚠⚠ **Nothing here is taken from code yet — `src/` is empty.** Every term below comes from
-`docs/design/circle-rune-glyph.md`, which is a design and not a measurement. **The moment a name reaches
-`src/`, this file is corrected to match the code, not the other way round.**
+⚠⚠ **`src/` is restored, so most of this file is now taken from code and not from a design.**
+**Where the code and this file disagree, the code wins and this file is corrected.**
+**Rows still marked 미정 are designs, and they say so.**
 
 ---
 
-## The spell — three axes, cut along time
-
-**They do not overlap in time. Overlap and they eat each other.**
+## 짐승과 종족 — **the one that was renamed**
 
 | 한국어 | Code | What it is |
 |---|---|---|
-| 진 (마법진) | **circle** | **The moment of firing.** How many go out, how they are grouped, how many layers |
-| 룬 | **rune** | **After it leaves.** What it is, how it travels, what it leaves in the world |
-| 문양 | **glyph** | **After it lands** (and while travelling). What is added on top |
+| 짐승 | **beast** | **One creature on the field.** The thing that lands, walks, and hits |
+| 종족 | **species** | Which beast the run is played as. **늑대 (wolf)** is the first |
+| 빌드 | **build** | How one species grows inside a run. **목표는 종족마다 둘** |
 
-⚠ **A glyph cannot change the element** — that is the rune's. **A glyph cannot change the arrangement** —
-that is the circle's. Break either and the axis it stole from becomes unnecessary.
+⚠⚠ **「세포」는 죽은 낱말이다.** 게임이 세포에서 늑대로 바뀌었다(2026-08-22 저녁).
+**종족은 데이터지 타입이 아니다** — 코드는 **짐승**을 알고, **늑대는 종족 값 한 줄**이다. 목표가 캐릭터
+둘이므로, 코드에 늑대를 박으면 둘째를 넣는 날 전부 다시 고친다.
 
-## Inside a circle
+### ⚠ 코드가 지금 실제로 쓰는 이름 — **아직 안 바꿨다**
+
+| 정한 말 | 코드가 지금 쓰는 것 | 상태 |
+|---|---|---|
+| 짐승 · beast | **`soldier` · `army` · `unit`** | ✅ **이미 종족 중립이다. 바꿀 이유가 없다** |
+| 근접 짐승 · 원거리 짐승 | **`cell_melee` · `cell_ranged`** | ⚠ **여기만 세포가 박혀 있다.** 고도가 도는 데서 바꾼다 |
+| — | **`cell_at` · `cells` · `_cell_centre`** | ✅ **격자 칸이다. 생물이 아니다 — 건드리지 않는다** |
+| — | **`title_cell_*` · `refit_cell_*`** | ✅ **화면의 칸이다. 건드리지 않는다** |
+
+⚠⚠ **한국어 「세포」가 주석과 그물 라벨에 쉰 곳 남아 있다** — 대부분 그물 넷(`net_title`·`net_run`·
+`net_map`·`net_summon`)이다. **코드를 안 깨는 자리다.**
+
+## 한 판 — **the loop, and it is in code**
 
 | 한국어 | Code | What it is |
 |---|---|---|
-| 층 | **layer** | A glyph seat. ⚠ **Two different meanings** — total glyph seats (variety) vs layers one bolt passes (permutation depth). **Never collapse them** |
-| 룬 칸 | **rune slot** | Where a rune sits |
-| 융합 · 병렬 · 순차 | **fuse · parallel · sequence** | The three ways runes combine. **Only fusion needs a table** |
+| 회차 | **`Run`** | 한 판. 지도의 어느 노드에 서 있고 무슨 보상이 기다리는가 |
+| 지도 | **`RunMap`** | 5층 7노드. 갈라졌다 합쳐지고 전체가 늘 보인다. 마지막은 보스 |
+| 섬 | **`Islands`** · **`Grid`** | 싸우는 판. 격자에 통행·물·해안·상륙 거리가 얹혀 있다 |
+| 전투 | **`Battle`** | 한 섬의 싸움. `step(dt)` 하나가 배·상륙·조준·이동·공격을 전부 민다 |
+| 명부 | **`Army`** | 섬을 건너 살아남는 병력. **죽으면 영영 죽는다** |
+| 정비 판 | **`Loadout`** | 소환 슬롯마다 하나. 카드가 여기에 값을 치른다 |
 
-⚠ **Shot count is not set by the circle** — it falls out of the rune arrangement. Three runes in parallel
-**is** three shots, and they carry different elements.
+⚠ **전투 중에는 손이 안 움직인다.** 시작 전에 다 정하고, 그다음은 구경한다.
+⇒ **어디에 내리느냐가 누구와 붙느냐를 정한다. 이게 이 게임의 결정이다.**
 
-## What a glyph does, by when
-
-| 한국어 | Code | When |
-|---|---|---|
-| 바꿈 | **modify** | **Immediately** on being reached. Alters how it flies |
-| 낳음 | **spawn** | After landing. Creates new bolts, **each carrying the rest of the list** |
-| 끝냄 | **finish** | After landing. Happens there and ends |
-
-## The fight
-
-⚠⚠ **Every row here is UNDECIDED and is on the map as a live ticket.** They are named so the words exist,
-not because the thing does.
-
-| 한국어 | Code | State |
-|---|---|---|
-| 근접 | **melee** | **What the player presses is not decided.** 패링 · 휘두르기 · 대시 · 피격 are the candidates |
-| 방아쇠 | **trigger** | **What fires a circle is not decided** — 얹힘 · 행동 · 전용 키 |
-
-## The tools
+## 화면 — **and where the seam is**
 
 | 한국어 | Code | What it is |
 |---|---|---|
-| 그물 | **net** | A test. Lives in `tests/nets/`. **A green that measures less than its label says is worse than a red** |
-| 지도 | **map** | One effort's plan under `.scratch/<일>/`. `wayfinder` owns it |
-| 티켓 | **ticket** | One question. Its answer, once written, **is** the design |
+| 섬 화면 | **`FieldView`** | 지형·해안·바다의 배·몸·체력 |
+| 지도 화면 | **`MapView`** | 어디를 지나왔고 어디로 갈 수 있나 |
+| 보상 화면 | **`RewardView`** | 이긴 뒤 **카드 여섯 장 중 둘** |
+| 껍데기 | **`Game`** | **입력을 읽는 유일한 파일**이고 `sim`과 `view`를 잇는 유일한 자리 |
+
+## 미정 — **⚠ 아래는 설계이고 코드에 없다**
+
+| 한국어 | Code | 상태 |
+|---|---|---|
+| 아기 | **pup** | **아기 짐승으로 시작해 자란다.** 자람이 **크기**로 보인다 — 스케일이라 그림 값이 0 |
+| 빌드가 보이는 법 | — | **미정.** 색조 · 이펙트 · 공격이 나가는 모양 · 수와 대형 · 크기 · 덧붙임 하나 |
+| 성장 | — | **미정.** 부위 여섯 조립은 **2026-08-22 저녁에 빠졌다** — 아트 예산 때문이다 |
+
+⚠⚠ **`Loadout`·`RefitView`·「부리」는 빠진 조립의 것이다.** 코드에는 아직 있고, **무엇이 그 자리에
+오는지는 안 정해졌다.**
+
+## 도구
+
+| 한국어 | Code | What it is |
+|---|---|---|
+| 그물 | **net** | 시험 하나. **라벨이 말하는 것보다 적게 재는 초록은 빨강보다 나쁘다** |
+| 지도 | **map** | 한 갈래의 계획. `wayfinder`가 갖는다 |
+| 티켓 | **ticket** | 질문 하나. 그 답이 **곧** 설계다 |
 
 ---
 
@@ -76,5 +93,4 @@ folder rule in `CLAUDE.md`:
 
 **Do not add a seam inside a file.** If something is hard to test, it is in the wrong folder.
 
-⚠ **These three survived two deletions and are not re-decided per game.** They are what lets a net drive a
-whole game headless in seconds.
+⚠ **These three survived three deletions and are not re-decided per game.**
