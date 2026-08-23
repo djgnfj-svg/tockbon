@@ -34,8 +34,13 @@ uses only the English word is not an answer to the user**, and a symbol named in
 | — | **`cell_at` · `cells` · `_cell_centre`** | ✅ **격자 칸이다. 생물이 아니다 — 건드리지 않는다** |
 | — | **`title_cell_*` · `refit_cell_*`** | ✅ **화면의 칸이다. 건드리지 않는다** |
 
-⚠⚠ **한국어 「세포」가 주석과 그물 라벨에 쉰 곳 남아 있다** — 대부분 그물 넷(`net_title`·`net_run`·
-`net_map`·`net_summon`)이다. **코드를 안 깨는 자리다.**
+⚠ **한국어 「세포」는 2026-08-22 저녁에 서른한 곳을 「짐승」으로 바꿨다.** 주석과 그물 라벨이라
+코드를 안 깬다. **열일곱 곳은 일부러 남겼다**:
+
+- **사용자가 한 말을 그대로 인용한 두 줄** (`look.gd`·`rules.gd`). ⚠⚠ **인용은 낱말이 바뀌면 인용이
+  아니다.** 이 저장소가 사용자 말을 잃은 적이 한 번 있고, 그래서 인용은 절대 안 고친다
+- **타이틀 화면의 떠다니는 배경 열다섯 곳** (`net_title`). **상수가 `Look.TITLE_CELL_*`이라 라벨만
+  바꾸면 라벨과 상수가 어긋난다.** ⇒ **상수를 바꾸는 날 같이 바꾼다**
 
 ## 한 판 — **the loop, and it is in code**
 

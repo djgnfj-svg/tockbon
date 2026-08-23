@@ -646,7 +646,7 @@ func _seven_refusals(t) -> void:
 	t.eq(Rules.summon_type_of(Rules.SUMMON_SLOTS.size()), Rules.SUMMON_UNBOUND,
 		"표 끝 너머는 비어 있다고 답한다 (자가 점검 — 위 줄이 거절하는 이유가 이것이다)")
 	t.eq(Rules.CELL_MELEE, 0,
-		"그리고 근접 세포의 번호는 0 이다 — 이 줄이 `<= 0` 이 왜 슬롯 1을 죽이는지의 전부다 (자가 점검)")
+		"그리고 근접 짐승의 번호는 0 이다 — 이 줄이 `<= 0` 이 왜 슬롯 1을 죽이는지의 전부다 (자가 점검)")
 
 	# 5 — a land tile.
 	var land := -1
@@ -776,9 +776,9 @@ func _the_slot_table(t) -> void:
 		if want >= 2:
 			enemy_typed += 1
 	t.eq(bound, Rules.SUMMON_SLOTS.size(), "그리고 그 두 줄이 전부 채워져 있다 — 빈 슬롯이 없다")
-	t.eq(enemy_typed, 0, "들소·까마귀·사자가 들어간 슬롯은 하나도 없다 — 세포 경제는 아직 안 열렸다")
-	t.eq(Rules.summon_type_of(0), Rules.CELL_MELEE, "1번은 근접 세포다")
-	t.eq(Rules.summon_type_of(1), Rules.CELL_RANGED, "2번은 원거리 세포다")
+	t.eq(enemy_typed, 0, "들소·까마귀·사자가 들어간 슬롯은 하나도 없다 — 짐승 경제는 아직 안 열렸다")
+	t.eq(Rules.summon_type_of(0), Rules.CELL_MELEE, "1번은 근접 짐승다")
+	t.eq(Rules.summon_type_of(1), Rules.CELL_RANGED, "2번은 원거리 짐승다")
 	t.eq(Rules.summon_type_of(-1), Rules.SUMMON_UNBOUND, "범위 밖은 비어 있다고 답한다")
 	t.eq(Rules.summon_type_of(9), Rules.SUMMON_UNBOUND, "위쪽 범위 밖도 마찬가지다")
 

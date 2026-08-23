@@ -195,7 +195,7 @@ func _rewards(t) -> void:
 	# Node 2 is the floor-2 node that pays the beak. Its sibling pays cells — that is the fork, and it
 	# is the reason the reward is the NODE's and not the KIND's.
 	t.eq(Rules.map_reward_of(2), Rules.Reward.BEAK, "2번 칸은 부리를 낸다 (자가 점검)")
-	t.eq(Rules.map_reward_of(1), Rules.Reward.COUNT, "그 옆 1번 칸은 세포를 낸다 (자가 점검)")
+	t.eq(Rules.map_reward_of(1), Rules.Reward.COUNT, "그 옆 1번 칸은 짐승를 낸다 (자가 점검)")
 	# 0번 칸의 승리도 여섯 장을 냈다 — 카드를 고르고 정비를 닫아야 `enter_node` 가 다시 먹는다.
 	_take_two_and_close_refit(r)
 	t.ok(r.enter_node(2), "부리 칸을 밟는다")
@@ -257,7 +257,7 @@ func _rewards(t) -> void:
 	_take_two_and_close_refit(r)
 	t.eq(r.state(), Run.State.MAP, "둘째 부리도 카드를 고르고 정비를 닫아야 지도다")
 
-	# ⚠⚠ 「4층 칸(옛 상자 자리)도 섬을 열고, 이기면 세포 보상을 낸다」 — the chest is gone; node 5 is a
+	# ⚠⚠ 「4층 칸(옛 상자 자리)도 섬을 열고, 이기면 짐승 보상을 낸다」 — the chest is gone; node 5 is a
 	# fight now, exactly like every other node.
 	var before_living := r.army.living_count()
 	t.ok(r.enter_node(5), "4층 칸(옛 상자 자리)을 밟는다")
@@ -265,7 +265,7 @@ func _rewards(t) -> void:
 	t.eq(r.island_index, Rules.map_island_of(5), "이 섬의 번호가 5번 칸이 가리키는 섬이다")
 	r.finish_island(true)
 	t.eq(r.state(), Run.State.PICK, "COUNT 보상은 고를 게 없어도 카드 고르기부터 연다")
-	t.eq(r.pending_reward(), Rules.Reward.NONE, "그리고 기다리는 세포 보상은 없다")
+	t.eq(r.pending_reward(), Rules.Reward.NONE, "그리고 기다리는 짐승 보상은 없다")
 	t.ok(r.army.living_count() > before_living, "COUNT 보상으로 병력이 늘었다")
 	_take_two_and_close_refit(r)
 	t.eq(r.state(), Run.State.MAP, "카드를 고르고 정비를 닫으면 지도로 돌아온다")
@@ -289,34 +289,34 @@ func _rewards(t) -> void:
 ## routes all produce the same roster is a corridor with pictures on it, and that is the exact shape
 ## that killed this repo's second game — an advantage with no cost is not a decision.
 func _the_route_is_what_the_run_takes(t) -> void:
-	var cells := _walk_route(t, ROUTE_ALL_CELLS, "세포 경로")
+	var cells := _walk_route(t, ROUTE_ALL_CELLS, "짐승 경로")
 	var beaks := _walk_route(t, ROUTE_TWO_BEAKS, "부리 경로")
 
-	t.eq(cells["state"], Run.State.WON, "세포 경로로도 런이 끝난다")
+	t.eq(cells["state"], Run.State.WON, "짐승 경로로도 런이 끝난다")
 	t.eq(beaks["state"], Run.State.WON, "부리 경로로도 런이 끝난다")
 	t.ok(int(cells["living"]) > int(beaks["living"]),
-		"세포 경로가 병사가 더 많다 (%d명 > %d명) — 세포 칸을 셋 다 지났다"
+		"짐승 경로가 병사가 더 많다 (%d명 > %d명) — 짐승 칸을 셋 다 지났다"
 			% [int(cells["living"]), int(beaks["living"])])
 	t.ok(int(beaks["beaks"]) > int(cells["beaks"]),
 		"부리 경로가 부리가 더 많다 (%d개 > %d개)" % [int(beaks["beaks"]), int(cells["beaks"])])
-	t.eq(int(cells["beaks"]), 0, "세포 경로는 부리를 하나도 안 받는다 — 그게 그 갈래의 대가다")
+	t.eq(int(cells["beaks"]), 0, "짐승 경로는 부리를 하나도 안 받는다 — 그게 그 갈래의 대가다")
 	t.eq(int(beaks["beaks"]), 2, "부리 경로는 부리를 둘 받는다")
 	# ⚠⚠ **3 -> 4 COUNT nodes on ROUTE_ALL_CELLS, 1 -> 2 on ROUTE_TWO_BEAKS**: node 5 (floor 4, the
 	# ex-chest) pays `Reward.COUNT` now and every route steps on it, so both counts moved by one.
 	t.eq(int(cells["living"]), Rules.roster_start_count()
 		+ 4 * (Rules.roster_reward_count()),
-		"세포 경로 병사가 10 + 보상 넷 x 3 = 22명이다")
+		"짐승 경로 병사가 10 + 보상 넷 x 3 = 22명이다")
 	t.eq(int(beaks["living"]), Rules.roster_start_count()
 		+ 2 * (Rules.roster_reward_count()),
-		"부리 경로 병사는 10 + 보상 두 번 x 3 = 16명이다 — 4층 칸도 세포를 낸다")
+		"부리 경로 병사는 10 + 보상 두 번 x 3 = 16명이다 — 4층 칸도 짐승를 낸다")
 	t.ok(int(cells["living"]) - int(beaks["living"]) >= 6,
 		"두 경로의 병사 수가 %d명이나 갈린다 — 한 명 차이면 고를 이유가 없다"
 			% (int(cells["living"]) - int(beaks["living"])))
 	# The pool, because a soldier and a beak are not the same currency and the number the map prints
 	# is the pool. Both routes are healed at the chest, so this compares like with like.
 	t.ok(float(cells["pool"]) > float(beaks["pool"]),
-		"HP 총합도 세포 경로 쪽이 크다 (%.0f > %.0f)" % [float(cells["pool"]), float(beaks["pool"])])
-	t.eq(cells["path"], PackedInt32Array(ROUTE_ALL_CELLS), "세포 경로가 손이 고른 그 칸들을 그대로 걸었다")
+		"HP 총합도 짐승 경로 쪽이 크다 (%.0f > %.0f)" % [float(cells["pool"]), float(beaks["pool"])])
+	t.eq(cells["path"], PackedInt32Array(ROUTE_ALL_CELLS), "짐승 경로가 손이 고른 그 칸들을 그대로 걸었다")
 	t.eq(beaks["path"], PackedInt32Array(ROUTE_TWO_BEAKS), "부리 경로도 손이 고른 그대로다")
 
 
@@ -373,7 +373,7 @@ func _walk_route(t, route: Array, label: String, fit_into_slot0: bool = false, s
 ## flakily. Unseeded, this is the exact same "two runs, overwhelmingly likely to disagree" shape
 ## `_the_route_is_what_the_run_takes` right above already accepts for the roster and the pool.
 func _the_route_is_what_the_board_holds(t) -> void:
-	var cells := _walk_route(t, ROUTE_ALL_CELLS, "세포 경로 (끼우며)", true)
+	var cells := _walk_route(t, ROUTE_ALL_CELLS, "짐승 경로 (끼우며)", true)
 	var beaks := _walk_route(t, ROUTE_TWO_BEAKS, "부리 경로 (끼우며)", true)
 	var cells_board: PackedInt32Array = cells["board"]
 	var beaks_board: PackedInt32Array = beaks["board"]
@@ -391,7 +391,7 @@ func _the_route_is_what_the_board_holds(t) -> void:
 	t.ok(cells_filled > 0 and beaks_filled > 0,
 		"두 판 다 실제로 뭔가 끼워져 있다 (%d칸, %d칸) — 빈 판끼리는 다를 수 없다" % [cells_filled, beaks_filled])
 	t.ok(cells_board != beaks_board,
-		"같은 정책으로 끼워도 세포 경로와 부리 경로의 0번 슬롯 판이 서로 다르다 — 경로가 판에도 닿는다")
+		"같은 정책으로 끼워도 짐승 경로와 부리 경로의 0번 슬롯 판이 서로 다르다 — 경로가 판에도 닿는다")
 
 
 # -- losing ------------------------------------------------------------------------------------------

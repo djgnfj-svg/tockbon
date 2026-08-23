@@ -1957,7 +1957,7 @@ func _the_speed_ladder_is_gone(t) -> void:
 func _the_panel_holds_every_soldier_a_run_can_field(t) -> void:
 	var demand := Rules.roster_start_count() \
 		+ Rules.map_max_count_nodes_on_a_route() * Rules.roster_reward_count()
-	t.eq(demand, 22, "이 판이 낼 수 있는 최대 명부가 스물둘이다 (10 + 세포 넷 x 3)")
+	t.eq(demand, 22, "이 판이 낼 수 있는 최대 명부가 스물둘이다 (10 + 짐승 넷 x 3)")
 	t.ok(Look.roster_capacity() >= 22,
 		"명부 판이 그 스물둘을 전부 담을 자리가 있다 (%d칸)" % Look.roster_capacity())
 

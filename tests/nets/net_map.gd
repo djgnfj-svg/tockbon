@@ -10,7 +10,7 @@ extends RefCounted
 ##
 ## ⚠⚠ **One row the plan asked for is NOT here, and its absence is a finding rather than an
 ## omission.** `title-and-map` section 8.1 asks for 「어느 경로도 부리 칸을 하나 이상 지난다」 with a
-## floor of 1, **and it contradicts the row directly above it** (「한 경로가 지나는 세포 칸은 최대
+## floor of 1, **and it contradicts the row directly above it** (「한 경로가 지나는 짐승 칸은 최대
 ## 셋이다」, floor 3). The proof is one line: every route steps on exactly three FIGHT nodes, so a
 ## route with three `COUNT` nodes is a route with zero `BEAK` nodes, and the two rows cannot both
 ## hold on any table with this shape. **The three rows that replace it are below** — the fight count
@@ -241,7 +241,7 @@ func _every_route_walked(t) -> void:
 		% Rules.map_floor_count())
 
 	# ⚠⚠ **The row that replaces the plan's self-contradicting pair.** Every route steps on exactly
-	# three FIGHT nodes, and that is what makes 「세포 칸 최대 셋」 and 「부리 칸 최소 하나」 mutually
+	# three FIGHT nodes, and that is what makes 「짐승 칸 최대 셋」 and 「부리 칸 최소 하나」 mutually
 	# exclusive: four fights all paying cells is a route with no beak on it at all. ⚠⚠ **The chest is
 	# gone and node 5 (floor 4) is a fight now, so every route steps on FOUR fight nodes, not three.**
 	var fights_min := 99
@@ -285,13 +285,13 @@ func _every_route_walked(t) -> void:
 		counts_max = maxi(counts_max, c)
 		# The two are complementary on every single route, which is the arithmetic above stated per
 		# row rather than as an aggregate.
-		t.eq(b + c, 4, "경로 %s 는 부리 %d + 세포 %d = 싸우는 칸 넷이다" % [str(route), b, c])
+		t.eq(b + c, 4, "경로 %s 는 부리 %d + 짐승 %d = 싸우는 칸 넷이다" % [str(route), b, c])
 
-	# ⚠⚠ 「한 경로가 지나는 세포 칸은 최대 넷이다」 — node 5 (floor 4, the ex-chest) pays COUNT now, so
+	# ⚠⚠ 「한 경로가 지나는 짐승 칸은 최대 넷이다」 — node 5 (floor 4, the ex-chest) pays COUNT now, so
 	# the ceiling this repo watched rot once already moved from 3 to 4 with it. ⚠ **the FLOOR is the
 	# half that proves the fork exists**: a table where nobody can reach four count nodes has no
 	# cells-heavy branch at all.
-	t.ok(counts_max >= 4, "세포 칸만 넷 지나는 경로가 실제로 있다 (최대 %d) — 갈림길의 세포 쪽 답이다"
+	t.ok(counts_max >= 4, "짐승 칸만 넷 지나는 경로가 실제로 있다 (최대 %d) — 갈림길의 짐승 쪽 답이다"
 		% counts_max)
 	t.ok(counts_max <= 4, "그리고 넷을 넘는 경로는 없다 (최대 %d) — 명부 상한이 이 수에 걸려 있다"
 		% counts_max)
@@ -302,10 +302,10 @@ func _every_route_walked(t) -> void:
 	# fork would be a decoration: every route would pay the same thing and the map would be a corridor
 	# with pictures on it — this repo's second game died of exactly that shape.
 	t.ok(counts_max - counts_min >= 2,
-		"경로에 따라 세포 칸 수가 %d~%d 로 갈린다 — 두 칸 이상 차이가 나야 고를 이유가 있다"
+		"경로에 따라 짐승 칸 수가 %d~%d 로 갈린다 — 두 칸 이상 차이가 나야 고를 이유가 있다"
 			% [counts_min, counts_max])
 	t.ok(beaks_max - beaks_min >= 2, "부리 칸 수도 %d~%d 로 갈린다" % [beaks_min, beaks_max])
-	t.eq(beaks_min, 0, "부리를 하나도 안 지나는 경로가 있다 — 세포를 넷 다 먹는 길이 바로 그 길이다")
+	t.eq(beaks_min, 0, "부리를 하나도 안 지나는 경로가 있다 — 짐승를 넷 다 먹는 길이 바로 그 길이다")
 
 	# 「`map_max_count_nodes_on_a_route()` 가 그 최대와 같다」 — the accessor is walked over the table
 	# and never written as a literal 4, because `net_islands`'s region floor and the roster capacity
@@ -441,7 +441,7 @@ func _the_fourth_floor_opens_an_island_too(t) -> void:
 	var r := Run.new()
 	t.ok(r.enter_node(0), "0번 칸을 밟는다")
 	r.finish_island(true)
-	t.eq(r.state(), Run.State.PICK, "0번은 세포 칸이라 지도 전에 카드 고르기부터 연다 (자가 점검)")
+	t.eq(r.state(), Run.State.PICK, "0번은 짐승 칸이라 지도 전에 카드 고르기부터 연다 (자가 점검)")
 	_take_two_and_close_refit(r)
 	t.eq(r.state(), Run.State.MAP, "카드를 고르고 정비를 닫아야 지도다 (자가 점검)")
 
@@ -565,7 +565,7 @@ func _the_picture(t) -> void:
 	# glyph's own arithmetic: its squares are `2 x 0.28 x r` on a side, so at r = 12 they are 6.7 px
 	# against a 3 px stroke and fill solid.
 	t.ok(Look.MAP_GLYPH_R_PX >= 12.0,
-		"무늬 반지름이 12px 이상이다 (%.0f) — 밑이면 세포 칸 네모 세 개가 획으로 꽉 찬다"
+		"무늬 반지름이 12px 이상이다 (%.0f) — 밑이면 짐승 칸 네모 세 개가 획으로 꽉 찬다"
 			% Look.MAP_GLYPH_R_PX)
 	# The ceiling is the widest glyph fitting inside the SMALLEST drawn node. The COUNT glyph reaches
 	# `0.80 + 0.28 = 1.08` radii out, half the stroke goes outside that, and the smallest node on the
@@ -871,9 +871,9 @@ func _the_picture(t) -> void:
 	# the ex-chest) pays COUNT exactly like node 0 — so their glyphs MATCH now, which is the inverse of
 	# what this row used to assert.
 	t.ok(_shapes_match(_glyph_shape(spy, 0), _glyph_shape(spy, 5)),
-		"세포를 내는 두 칸(0번과 5번)의 무늬가 같다 — 같은 보상은 같은 무늬다")
+		"짐승를 내는 두 칸(0번과 5번)의 무늬가 같다 — 같은 보상은 같은 무늬다")
 	t.ok(not _shapes_match(_glyph_shape(spy, 2), _glyph_shape(spy, 5)),
-		"부리 칸과 세포 칸의 무늬는 다르다")
+		"부리 칸과 짐승 칸의 무늬는 다르다")
 	# ⚠⚠ **The case that fails the CHECK rather than the tree.** Nodes 1 and 4 both pay cells and sit at
 	# different centres. If the four rows above were comparing POSITIONS again, this one would go red —
 	# it is the inversion of the instrument, not of the subject.

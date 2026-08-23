@@ -162,7 +162,7 @@ const LION_WINDUP_SEC := 0.6
 ## ⚠ **The unbound slots were deliberately NOT `BISON` / `CROW` / `LION`** and deleting them does not
 ## change that: `TYPE_LABELS` has five entries and nothing range-checks it, so binding a slot to an
 ## enemy type reads as done and ships enemy bodies as the player's army. **Re-binding a slot at runtime
-## IS the 세포 economy**, blocked twice in `session-loop`, and it is not this table's business.
+## IS the 짐승 economy**, blocked twice in `session-loop`, and it is not this table's business.
 ##
 ## ⚠⚠ **AND WHAT THE USER DECIDED THAT ECONOMY WILL BE IS RECORDED HERE, because it lands on this
 ## table**: ***"슬롯에 세포를 넣음 대신 슬롯자체를 강화하는거임"*** — a cell goes into a slot and **what
