@@ -53,9 +53,18 @@ extends Node2D
 ## written down twice diverges.
 ##
 ## ⚠ **Nothing on the HUD reads it any more** — the roster strip it was written for is deleted. It
-## survives because `panel_view` names soldiers in the reward list, which is the one place in the
-## game a unit still has to be named in words.
-const TYPE_LABELS := ["근접", "원거리", "들소", "까마귀", "사자"]
+## survives because `panel_view` names soldiers in the reward list and `refit_view` labels the beast
+## strip with it (티켓 11).
+##
+## ⚠⚠ **The first two are the BEASTS THE ART DRAWS, no longer the cell-game roles** (2026-08-24,
+## verify-look: 「근접·원거리」 on the refit strip failed the beast-name acceptance). Type 0 draws the
+## wolf and type 1 draws the crow — `field_view._beast_tex`'s own player branch is the authority —
+## so the words follow the picture. ⚠ **That makes 까마귀 appear TWICE (types 1 and 3)**: the ranged
+## soldier borrows the crow's body while the CROW row is the enemy species itself. **The duplicate is
+## USER-APPROVED as the interim state** (2026-08-24: 「구지? 그냥 까마귀라고 하면 되는거 아니야?」 —
+## no suffix, plain 까마귀 on both); the five-species roster migration (다람쥐·늑대·소·곰·까마귀) is
+## another ticket's scope and is what actually dissolves it.
+const TYPE_LABELS := ["늑대", "까마귀", "들소", "까마귀", "사자"]
 
 ## `_chip_fx` slot ids. **The start button is 0 and the five summon boxes are 1..5**, so one drawer
 ## and one `_chip_offset` serve both — one concept, one value. Named rather than written as bare

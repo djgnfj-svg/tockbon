@@ -34,7 +34,7 @@ files drifts.
 - ⚠ **No 「반대 근거」 attached to a recommendation** (2026-08-22, the user: *"추천 이후 반대 저 부분은 왜
   자꾸 나오는 건지 잘 모르겠네"*). It used to be a required third part and it turned every recommendation
   into a thing the user had to re-decide. **If the case against is strong enough to matter, it is not a
-  recommendation — put the fork in the one closing question instead**
+  recommendation — put the fork in a closing question instead**
 - ⚠ **Never recommend a technique the user has not named without first checking how others do it**
 - **No emoji.** Bold is the only emphasis
 - **No file paths, no line numbers, no code locations in chat** — say what the thing is, not where it lives
@@ -42,28 +42,44 @@ files drifts.
 - **A reply covering more than one subject is a list**
 - **The user is new to making games. Their agreement is the absence of anything to disagree with**
 
-## ⚠ **Every reply ends with exactly one question**
+## ⚠ **Every reply ends with a grilling round**
 
-**One.** 2026-08-22, the user: *"지금 질문이 뭐야 그래서 내가 정해야 될 게 뭐고 하나 씩 하나 씩 해줘 하나 씩."*
+**Grilling is how this repo asks** (2026-08-24, the user: *"그릴링 쓰자"*). ⚠⚠ **This replaces
+「exactly one question」**, which the user set 2026-08-22 (*"하나 씩 하나 씩 해줘 하나 씩"*) and
+reversed here. **The record of the reversal lives in `idea-inbox`, never in this file.**
 
-- **It is the last line**, and it is the **one thing the user must decide next** — not a status check
-- **Never two.** Whatever is second waits for the next reply. ⚠ **This replaces 「Don't ask」**, which
-  produced replies with nothing to answer
+**Hold the open decisions as a tree.** The **frontier** is every decision whose prerequisites are already
+settled — the questions askable **now**, without guessing at an answer you have not heard yet.
+**Ask the whole frontier in one round, then wait.**
 
-⚠⚠ **The closing block has a fixed shape, given by the user 2026-08-24** (*"질문 추천 왜 / 질문 : /
-추천 : / 왜: / 이렇게가 맞는데.."*). **A horizontal rule, then three labelled lines and nothing else:**
+- ⚠ **A question whose answer depends on another question still open in this round belongs to a LATER
+  round.** That is the one thing that keeps a round from being a wall
+- ⚠⚠ **Finding facts is your job, never the user's.** A frontier question needing a fact from the repo,
+  the code, or the web — **go get it.** Dispatch a subagent and **do not block**: only the questions
+  downstream of it wait. Ask the rest of the frontier now
+- **The decisions are the user's.** Put each one to them and wait
+- **Done when the frontier is empty** — every branch visited, nothing silently assumed
+- ⚠ **A frontier of one is a round of one.** Never pad a round to look like grilling
+
+⚠⚠ **The shape of each question is the user's, given 2026-08-24** (*"질문 추천 왜 / 질문 : /
+추천 : / 왜: / 이렇게가 맞는데.."*). **A horizontal rule, then numbered blocks of three labelled lines:**
 
 ```
 ---
-**질문** : <one line>
+**질문 1** : <one line>
+**추천** : <one line>
+**왜** : <one line>
+
+**질문 2** : <one line>
 **추천** : <one line>
 **왜** : <one line>
 ```
 
-- **One line each.** The reasoning that does not fit belongs in the body above, not in these three lines
+- **One line each.** The reasoning that does not fit belongs in the body above, not in these lines
+- ⚠ **Only ask what has a recommendation and a reason.** A confirmation check is not a question
 - ⚠ **Do not bury the recommendation in prose above and leave a bare question at the bottom** — that is
   what this replaces. The user: *"질문이 너무 길어서 그래서 정확하게 뭘 말하는 건지 잘 모르겠네"*
-- ⚠ **Only ask what has a recommendation and a reason.** A confirmation check is not a question
+- ⚠ **No emoji, still.** The imported grilling template uses them; **this repo's no-emoji rule wins**
 
 # Nothing pretends to work
 

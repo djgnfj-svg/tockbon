@@ -57,7 +57,12 @@ const LOOK_PATH := "res://src/look.gd"
 ## layout number free to be written in `field_view.gd`. `alpha` already covered `GHOST_ALPHA`, which
 ## was CHECKED rather than assumed; the plan flagged both names as possibly invisible and only one of
 ## them was.
-const PIXEL_SUFFIXES := "px|width|radius|size|margin|alpha|ratio|offset|gap|font_size|cols"
+## ⚠ **`ratio` moved OUT of this list and into `TIME_SUFFIXES`** — the same narrowing the header
+## describes for the whole wide list, arriving one suffix later: `rules.gd` grew
+## `SUMMON_RADIUS_RATIO`, a SIM rule (it decides where a boat may be placed) that must not be
+## dragged into `look.gd`, and a ratio in a VIEW is still caught because the wide list sweeps
+## `src/view/` + `src/shell/`.
+const PIXEL_SUFFIXES := "px|width|radius|size|margin|alpha|offset|gap|font_size|cols"
 
 ## What `combat-juice` added on top of it, for `src/view/` + `src/shell/` only.
 ##
@@ -67,7 +72,7 @@ const PIXEL_SUFFIXES := "px|width|radius|size|margin|alpha|ratio|offset|gap|font
 ## `tiles growth squash count` are here because without them eight of the forty-four constants
 ## `combat-juice` adds — `BURST_GROWTH`, `TARGET_LINE_MAX_COUNT`, `SHAKE_A_FREQ`, `SHAKE_B_FREQ`,
 ## `GAIT_PERIOD_TILES`, `GAIT_SQUASH`, `WATER_MARGIN_TILES`, `FX_MAX_COUNT` — matched nothing at all.
-const TIME_SUFFIXES := "sec|dur|time|speed|freq|mul|strength|gain|tiles|growth|squash|count|deg"
+const TIME_SUFFIXES := "sec|dur|time|speed|freq|mul|strength|gain|tiles|growth|squash|count|deg|ratio"
 
 ## The per-file, per-function `draw_*` count. It is `combat-juice`'s hook table, holding EVERY
 ## function in each file — a composer at 0 is as load-bearing as a leaf at 2, because 0 is what
@@ -78,83 +83,80 @@ const TIME_SUFFIXES := "sec|dur|time|speed|freq|mul|strength|gain|tiles|growth|s
 ## bitten by twice. Nothing is gained by risking it here.
 func _table() -> Dictionary:
 	return {
+		# ⚠⚠ **RE-DERIVED WHOLE for the 3D field** (ticket 09, step 2 — the old table was the flat
+		# board's and not one line of it was kept). **Every count is 0, and that zero is the table's
+		# whole claim now**: the field draws through the ENGINE (pooled `Sprite3D`s, one terrain mesh,
+		# two `ImmediateMesh` fx layers) and a `draw_*` call appearing anywhere in this file would be
+		# a 2D stroke painted OVER the 3D world — exactly the bare-call leak this scan exists to
+		# redden. What the per-function counts used to certify (each mark reaches the screen) moved
+		# to the runtime nets: `net_shell` / `net_slots` read the pooled node state and the fx
+		# buffers, and `net_fx_view` (its own round) re-measures the twelve effects there.
 		"field_view.gd": {
+			"_ready": 0,
+			"_build_world": 0,
+			# The two baked textures. Their colours come from `look.gd` (`COL_BAKE_MARK` /
+			# `COL_BAKE_CLEAR`) — the colour scan below is what pushed them there.
+			"_make_body_tex": 0,
+			"_make_flat_tex": 0,
 			"setup": 0,
 			"_process": 0,
-			# `boat-and-landing`'s camera. One transform, composed in `_compose_position`, and every
-			# screen<->world conversion goes through `screen_to_world_px` beside it — all of them pure.
-			# `screen_to_world_px` and `world_to_tile` (below) are now called from `game.gd::_tile_at`
-			# too, as of stage 4's drag — still 0 draws here, because "pure" and "used" are different
-			# claims and this table only ever measures the first.
-			"_compose_position": 0,
+			# The camera: pure functions, all of them, driven by `net_camera` with `.new()`.
+			"_visible_ground_px": 0,
+			"_ground_right": 0,
+			"_ground_down": 0,
+			"_ground_centre_px": 0,
 			"screen_to_world_px": 0,
 			"world_to_tile": 0,
 			"pan_by": 0,
 			"zoom_at": 0,
 			"_clamp_cam": 0,
-			"_visible_world_rect": 0,
-			# The variable grid. `_map_tiles` is the ONE place the drawing and the camera ask how big
-			# the map is — `Look.GRID_W`/`GRID_H` are a fallback for a view with no grid and nothing
-			# else — and `_visible_tile_rect` is the culled span the terrain loop walks. Both pure.
-			"_map_tiles": 0,
-			"_visible_tile_rect": 0,
-			# `sea-summon`: the one call site "a slot was armed", "the cursor moved" and "the press
-			# ended" all go through, so the two aim fields cannot disagree. 0 draws — the band is a
-			# BLEND into the existing `_paint_tile` fill and adds no leaf and no draw call, which is
-			# why "the band was drawn" has to be a RUNTIME row in `net_slots` and cannot come from here.
+			"turn_by": 0,
+			"tilt_by": 0,
+			"_place_camera": 0,
+			# The landscape: one mesh, built by SurfaceTool — no canvas stroke anywhere in it.
+			"_kind_of": 0,
+			"_joins": 0,
+			"_char_at": 0,
+			"_noise_at": 0,
+			"_hash_at": 0,
+			"_tile_key": 0,
+			"_tile_h": 0,
+			"_tile_h_uncached": 0,
+			"_swell_at": 0,
+			"_corner_h": 0,
+			"_ground_h": 0,
+			"_touches_water": 0,
+			"_band_on": 0,
+			"_tile_colour": 0,
+			"_rebuild_terrain": 0,
+			"_rebuild_ring": 0,
+			"_quad": 0,
+			"_skirt": 0,
+			"_terrain_material": 0,
+			# The bodies, as pooled billboards. `_put_*` writes node fields the engine consumes —
+			# that is the 3D leaf, and `net_shell` reads those fields back per enemy.
+			"_sprite": 0,
+			"_hull_box": 0,
+			"_put_body": 0,
+			"_put_hp": 0,
+			"_paint_bodies": 0,
+			"_put_halo": 0,
+			"_beast_tex": 0,
+			"_put_soldier": 0,
+			"_put_hull": 0,
+			"_hide_unused": 0,
+			# The effect SIMULATION — carried across the move unchanged, still 0 draws each.
 			"set_summon_aim": 0,
-			# `speed-off-open-landing` 2.5: the shell pushes the sim's OWN refusal in through this,
-			# and the ground-ring block paints it next frame through the existing `_paint_ring` leaf.
-			# 0 draws — it appends one entry to `_fx` — which is exactly why the refusal mark needs a
-			# RUNTIME check in `net_shell` and cannot be certified from this table.
-			# ⚠ `set_time_scale` left in the same edit: the speed ladder is deleted, and a leaf handed
-			# a constant 1.0 is the shape 「No fake code」 names.
 			"note_refusal": 0,
-			"_draw": 0,
-			"_paint_tile": 2,
-			# ⚠⚠ **2 -> 3, and the third is an EITHER/OR** (「지금 아직 세포여서 보기가 힘드네」,
-			# 2026-08-24, the user). A body with a texture draws `draw_texture_rect` and returns; a
-			# body without one draws the polyline and the dot. **This table counts call SITES, so it
-			# reads 3 while only ever two of them run** — the same blindness the route comment below
-			# names, and the reason 「그림인가 네모인가」 is asserted at RUNTIME in `net_fx_view`
-			# instead, off the eighth argument.
-			"_paint_body": 3,
-			"_beast_rect": 0,
-			# 「음... 이게 잘모르겠네..」 was the verdict on the tilt with no shadow under anything
-			# (2026-08-24). 1 call, a filled ellipse, drawn BEFORE the body it belongs to.
-			"_paint_shadow": 1,
-			"_shadow_points": 0,
-			"_paint_beak": 1,
-			"_paint_hp": 2,
-			"_paint_shot": 1,
-			"_paint_halo": 1,
-			"_paint_ring": 1,
-			"_paint_target_line": 1,
-			"_paint_spark": 1,
-			# ⚠ **1 call, and `draw_polyline` and `draw_line` are BOTH 1 call.** This scan counts call
-			# SITES; it cannot tell a polyline from a straight line between the same two endpoints, so
-			# the corner-cut it would let through is caught at RUNTIME in `net_shell` instead (the
-			# drawn `points` on a bent route must hold more than two entries).
-			# ⚠ `_paint_overlay` left with the green coast wash it drew (question C).
-			"_paint_route": 1,
-			"_paint_hull": 2,
-			"_paint_cliff_face": 1,
+			"_map_tiles": 0,
+			# Fed to the ground fx buffer by `_paint_boat_routes` — the caller it lost in the 3D
+			# move, re-wired in step 4.
+			"_route_ahead": 0,
 			"_tile_xy": 0,
 			"_hull_rect": 0,
-			# `plan-then-watch` 결정 14R: `idle_hull_rect` became `idle_soldier_rect` — what stands at
-			# the harbour before the start button is the ARMY, not the fleet — and `_deck_slots` died
-			# outright, because a one-soldier deck is the hull's own centre and computing it was one
-			# fact written twice. **`field_view`'s count does not move (43 -> 43) while one function is
-			# added, one deleted and one renamed**, which is exactly why it has to be re-derived by hand
-			# rather than trusted for having stayed still.
-			# ⚠⚠ **AND IT DID NOT MOVE AGAIN.** `speed-off-open-landing` deleted `set_time_scale` and
-			# `_paint_overlay` and added `note_refusal` and `_route_ahead` — 43 -> 43 once more, while
-			# the LEAF count went 14 -> 13. Two files' totals were re-derived by hand from the five
-			# tables below rather than nudged by whatever the last edit happened to be.
+			"_beast_rect": 0,
 			"_hp_rects": 0,
-			"_beak_points": 0,
 			"_facing_of": 0,
-			"_rounded_square": 0,
 			"_fx_step": 0,
 			"_drain_events": 0,
 			"_shake_offset": 0,
@@ -164,14 +166,37 @@ func _table() -> Dictionary:
 			"_knock_offset": 0,
 			"_flash_of": 0,
 			"_gait_squash": 0,
-			# draw 0: it builds the remaining-route polyline out of the boat's own `path` and `leg`
-			# and hands it to `_paint_route`, the same split `_spark_points` uses one line below.
-			"_route_ahead": 0,
-			# draw 0 and NOT a leaf on purpose: the points are built here and handed to
-			# `_paint_spark` as an argument. Built inside the leaf they never leave it, and the
-			# unused-argument check below skips every function whose count is 0 — so a leaf holding
-			# `draw_multiline(PackedVector2Array(), ...)` would be green with nothing on screen.
 			"_spark_points": 0,
+			# The effect GEOMETRY: two vertex buffers committed to `ImmediateMesh` surfaces.
+			# `net_slots` reads the buffers AND the surface count — buffers alone stay green when
+			# `_fx_flush` is deleted, which is why both are runtime rows and none is a count here.
+			"_fx_layer": 0,
+			"_fx_begin": 0,
+			"_fx_flush": 0,
+			"_fx_commit": 0,
+			"_ground_y_px": 0,
+			"_g_tri": 0,
+			"_g_quad": 0,
+			"_g_seg": 0,
+			"_g_line": 0,
+			"_g_ring": 0,
+			"_g_disc": 0,
+			"_air_at": 0,
+			"_a_quad": 0,
+			"_a_seg": 0,
+			"_a_ring": 0,
+			"_a_disc": 0,
+			"_body_anchor": 0,
+			"_halo_of": 0,
+			"_a_seg3": 0,
+			"_fx_point3": 0,
+			"_paint_fx": 0,
+			"_paint_plan": 0,
+			# Step 4's revival: the caller `_route_ahead` had lost. 0 draws — it feeds the fx buffer.
+			"_paint_boat_routes": 0,
+			"_paint_ghosts": 0,
+			"_paint_intent": 0,
+			"_paint_transients": 0,
 		},
 		# ⚠ **Seven names left this file in one edit and one arrived** (`plan-then-watch`, 6.5).
 		# `key_slot_count` · `key_type_of` · `reserve_count` — the 1/2 key roster, which spawned a body
@@ -199,7 +224,9 @@ func _table() -> Dictionary:
 			# start button has had since it shipped — one shake AND one tint, both shared, which is
 			# the two channels `combat-juice` asked for. Pure.
 			"_chip_tint": 0,
-			"_paint_timer": 1,
+			# ⚠ `_paint_timer` is DELETED with the countdown it drew (2026-08-24) — nothing loses by
+			# the clock any more, so a number ticking down would be the loudest lie on screen. The
+			# hook went with its call site, not just the call: 18 -> 17 names, 6 -> 5 leaves.
 			# 2 calls. ⚠ **The start button is its ONLY call site now** — the five speed chips were the
 			# other five and they are deleted. It stays a hook rather than being inlined into `_draw`,
 			# because a bare `draw_rect` in `_draw` is precisely what this whole table exists to redden.
@@ -306,9 +333,10 @@ func _table() -> Dictionary:
 			# leaf draws one; without it 시작하기 cuts to the map, which reads as a glitch.
 			"_paint_fade": 1,
 		},
-		# `refit-board` stage 4's new screen: six cards after a won fight. It holds no `Run` state of
-		# its own beyond the hover/press pair every screen carries -- `run.cards` and `run.cards_taken`
-		# are read straight off the sim.
+		# `refit-board` stage 4's new screen, re-cut by 티켓 06/12: three cards after a won fight,
+		# take one. It holds no `Run` state of its own beyond the hover/press pair every screen
+		# carries -- `run.cards` (one item id per card) and `run.cards_taken` are read straight off
+		# the sim.
 		"reward_view.gd": {
 			"bind": 0,
 			"card_rect_of": 0,
@@ -327,8 +355,25 @@ func _table() -> Dictionary:
 			"_process": 0,
 			"_picks_made": 0,
 			"_draw": 0,
+			# 티켓 12's five pure helpers: the item textures loaded once, the deal-in slide (riding
+			# `_reveal_alpha_of`, applied to the drawn box only), the rarity pulse (a sine on
+			# `_reveal_age` — no second clock), the art square, and the burst geometry handed WHOLE
+			# to its leaf (`_spark_points`'s split; see `_whole_array_leaves` below, which pins it).
+			"_load_item_art": 0,
+			"_deal_offset_of": 0,
+			"_pulse_of": 0,
+			"_art_rect": 0,
+			"_burst_points": 0,
 			# fill + border, the same shape every other pressable box in this repo draws.
 			"_paint_card": 2,
+			# 티켓 12's three leaves. The art is 1 `draw_texture_rect`, SKIPPED at the call site when
+			# the item's `ITEM_ART` row is empty — no picture rather than a wrong one. The frame is 1
+			# stroked `draw_rect` in a layer loop (the glow is the frame layered outward), so one call
+			# SITE serves every rarity and COMMON's 0-layer row means it is not called at all. The
+			# burst is 1 `draw_multiline`, called iff LEGENDARY.
+			"_paint_card_art": 1,
+			"_paint_rarity_frame": 1,
+			"_paint_legendary_burst": 1,
 			"_paint_card_name": 1,
 			"_paint_card_effect": 1,
 			"_paint_taken_mark": 1,
@@ -378,13 +423,19 @@ func _table() -> Dictionary:
 			"_paint_slot_box": 2,
 			"_paint_slot_label": 1,
 			"_paint_cell_box": 2,
-			"_paint_cell_part": 1,
-			"_paint_cell_species": 1,
+			# Renamed with the equipment re-cut: a cell shows an item's NAME and its EFFECT line now,
+			# not a part and a species. Same two leaves, one call each; re-counted, not assumed.
+			"_paint_cell_name": 1,
+			"_paint_cell_effect": 1,
 			"_paint_held_row": 2,
-			"_paint_held_part": 1,
-			"_paint_held_species": 1,
+			"_paint_held_name": 1,
+			"_paint_held_effect": 1,
 			"_paint_stat_label": 1,
 			"_paint_stat_value": 1,
+			# 티켓 11's aggregate: one line per tag, drawn on both steps, and its pure reader of the
+			# horde-wide count and the tier tables.
+			"_paint_tag_row": 1,
+			"_tag_state_of": 0,
 			# `draw_polyline` + `draw_circle`, the outline-and-dot shape `field_view._paint_body`
 			# already draws -- this screen's own scale, no part drawn on it.
 			"_paint_body": 2,
@@ -480,10 +531,24 @@ func run(t) -> void:
 	# goes in. **No new leaf**: the texture went into `_paint_body`'s own arguments so that every net
 	# already measuring the ally kept measuring it. Re-derived by hand, not trusted for having moved
 	# by the number expected.
-	t.eq(total_funcs, 203, "일곱 파일의 함수는 모두 203개다 (46 + 18 + 21 + 18 + 29 + 23 + 48)")
-	# ⚠ **12 -> 13 in `field_view`**: `_paint_shadow` is a new leaf. The wolf added none — its
-	# `draw_texture_rect` went inside `_paint_body`, which was already a leaf.
-	t.eq(total_leaves, 54, "그중 draw 를 실제로 부르는 잎은 54개다 (13 + 6 + 4 + 4 + 7 + 6 + 14)")
+	# ⚠ **23 -> 31 in `reward_view`** (티켓 12): five pure names (`_load_item_art` ·
+	# `_deal_offset_of` · `_pulse_of` · `_art_rect` · `_burst_points`) and three leaves
+	# (`_paint_card_art` · `_paint_rarity_frame` · `_paint_legendary_burst`). Both totals re-derived
+	# from the seven per-file tables, not nudged by eight and three.
+	# ⚠⚠ **BOTH totals were re-derived from the seven per-file tables for the 3D field** (ticket 09,
+	# step 2), and three files moved at once: `field_view` was re-censused from scratch against the
+	# 3D file — **46 -> 91 names and 13 -> 0 leaves**, because the engine draws everything the canvas
+	# used to; `hud_view` lost `_paint_timer` with the deleted countdown (18 -> 17, 6 -> 5); and
+	# `refit_view` renamed four leaves for the equipment re-cut (part/species -> name/effect, counts
+	# unchanged).
+	# ⚠ **48 -> 50 in `refit_view`** (티켓 11): the tag aggregate added `_paint_tag_row` (the leaf,
+	# 14 -> 15) and `_tag_state_of` (its pure reader). Both totals re-derived from the seven per-file
+	# tables, not nudged by two: 91 + 17 + 21 + 18 + 29 + 31 + 50 and 0 + 5 + 4 + 4 + 7 + 9 + 15,
+	# summed by hand.
+	# ⚠ 91 -> 92 in `field_view` (step 4): `_paint_boat_routes`, the caller `_route_ahead` lost in the
+	# 3D move. 0 draws — the route is fx-buffer geometry — so the leaf total does not move.
+	t.eq(total_funcs, 258, "일곱 파일의 함수는 모두 258개다 (92 + 17 + 21 + 18 + 29 + 31 + 50)")
+	t.eq(total_leaves, 44, "그중 draw 를 실제로 부르는 잎은 44개다 (0 + 5 + 4 + 4 + 7 + 9 + 15) — 필드는 0이고, 0이 주장이다")
 
 	# -- 3b. the array leaves hand their array WHOLE to one native call -----------------------------
 	# ⚠⚠ **THIS SECTION EXISTS BECAUSE THE COUNT ABOVE CANNOT SEE THE DIFFERENCE, AND THAT WAS
@@ -513,7 +578,7 @@ func run(t) -> void:
 				continue
 			shape_checked += 1
 			shape_bad.append_array(_shape_hits(fname, f2["body"], want_shapes[fname]))
-	t.eq(shape_checked, 3, "배열을 받는 잎 셋을 실제로 봤다 (자가 점검 — 0개면 깨끗한 게 아니라 안 돈 것이다)")
+	t.eq(shape_checked, 1, "배열을 받는 잎 하나를 실제로 봤다 (자가 점검 — 0개면 깨끗한 게 아니라 안 돈 것이다)")
 	t.eq(shape_bad.size(), 0,
 		"배열을 받는 잎은 그 배열을 통째로 네이티브 호출에 넘긴다 — 안을 색인하지 않는다 %s" % str(shape_bad))
 
@@ -573,47 +638,45 @@ func run(t) -> void:
 ## draws with that this table does not hold is red, and a row here that the file no longer draws with
 ## is red too. That is this repo's own named failure — a per-function table that scans the names it
 ## HOLDS leaked twice, the second time out of the fix for the first — written as a closure instead.
+## ⚠ **Four names left this table with the 3D field, re-derived against `field_view.gd`'s own text**:
+## `BODY_OUTLINE_WIDTH_PX` (a body is a baked texture on a billboard now), `CLIFF_FACE_WIDTH_PX` (a
+## cliff is a real wall in the terrain mesh), `GRID_LINE_WIDTH_PX` (no grid lines are drawn at all)
+## and `BEAK_WIDTH_PX` (the beak was never this layer's — the 열둘 list was wrong on that point, per
+## the ticket). The closure below is what forced the re-derivation, both ways.
 func _world_widths() -> Dictionary:
 	return {
-		"BODY_OUTLINE_WIDTH_PX": "",
 		"SHOT_WIDTH_PX": "",
 		"BURST_WIDTH_PX": "",
 		"AREA_RING_WIDTH_PX": "",
 		"LAND_RING_WIDTH_PX": "",
 		"ROUTE_WIDTH_PX": "",
-		"CLIFF_FACE_WIDTH_PX": "",
 		"REFUSE_MARK_WIDTH_PX": "",
-		# A polygon base, not a stroke, and it clears the floor at 8.0 (3.60 px) without being raised.
-		"BEAK_WIDTH_PX": "",
-		"GRID_LINE_WIDTH_PX":
-			"격자선은 읽는 표시가 아니라 바탕이다 — COL_GRID_LINE 은 알파 0.07 이고 지도의 모든 칸에 깔린다."
-			+ " 2.25px 로 올리면 격자가 그 위의 지형보다 시끄러워진다. 조준하는 표시(후보 링·거절 표시·절벽 선)는"
-			+ " 셋 다 따로 있고 셋 다 바닥을 넘는다",
 		"TARGET_LINE_WIDTH_PX":
 			"의도선은 알파 0.12 이고 한 번에 최대 14개가 섬 전체를 가로지른다 — 열두 연출 중 유일하게"
 			+ " 가독성에 손해일 수 있는 항목이라 look.gd 가 이미 적어 두었다. 굵히면 그 두 제한이 막으려던"
 			+ " 바로 그 어수선함이 된다",
 		"SPARK_WIDTH_PX":
 			"파편은 혼자 못 올린다 — 천장이 제 길이의 절반(SPARK_LEN_PX 5.0 / 2 = 2.5)이고 그 천장이"
-			+ " 바닥 4.45 보다 낮다. 올리려면 SPARK_LEN_PX 와 SPARK_REACH_PX 가 같이 움직여야 하고,"
+			+ " 바닥 4.0 보다 낮다. 올리려면 SPARK_LEN_PX 와 SPARK_REACH_PX 가 같이 움직여야 하고,"
 			+ " 그건 굵기 수정이 아니라 항목 2 를 눈으로 다시 재는 일이다",
 	}
 
 
 func _world_width_table(t) -> void:
-	# ⚠ **2.0 and 0.45 are LITERALS here.** The floor is `look.gd`'s snap floor and the zoom is the one
-	# an island opens at; reading either back off `Look` would let a mutation move the expectation and
-	# the reality together — this repo's own named false green.
+	# ⚠ **2.0 and 0.50 are LITERALS here.** The floor is `look.gd`'s snap floor and the zoom is the
+	# lowest the wheel can reach (an island OPENS at the survey zoom, which never goes under it);
+	# reading either back off `Look` would let a mutation move the expectation and the reality
+	# together — this repo's own named false green.
 	var floor_px := 2.0
-	var zoom_min := 0.45
-	t.eq(Look.ZOOM_MIN, zoom_min, "섬이 열리는 줌은 0.45 다 (이 표의 바닥 계산이 쓰는 값)")
+	var zoom_min := 0.50
+	t.eq(Look.ZOOM_MIN, zoom_min, "휠이 닿는 가장 먼 줌은 0.50 이다 (이 표의 바닥 계산이 쓰는 값)")
 
 	var table := _world_widths()
 	var consts: Dictionary = Look.new().get_script().get_script_constant_map()
 
 	# The closure, and it runs FIRST: a table checked against nothing is a list.
 	var drawn := _look_width_names(_read(VIEW_DIR + "/field_view.gd"))
-	t.eq(drawn.size(), 12, "field_view 가 그리는 데 쓰는 Look.*_WIDTH_PX 이름이 열둘이다 %s" % str(drawn))
+	t.eq(drawn.size(), 8, "field_view 가 그리는 데 쓰는 Look.*_WIDTH_PX 이름이 여덟이다 %s" % str(drawn))
 	var outside: Array[String] = []
 	for name: String in drawn:
 		if not table.has(name):
@@ -648,8 +711,8 @@ func _world_width_table(t) -> void:
 				"%s 는 일부러 바닥 밑이다 (%.2fpx) — 올렸다면 표의 이유가 낡은 것이니 여기서 문다"
 					% [name, on_glass])
 			t.ok(why.length() >= 40, "%s 가 바닥 밑인 이유가 적혀 있다" % name)
-	t.eq(above, 9, "바닥 위가 아홉이다")
-	t.eq(below, 3, "일부러 바닥 밑인 것이 셋이다 — 격자선·의도선·파편")
+	t.eq(above, 6, "바닥 위가 여섯이다")
+	t.eq(below, 2, "일부러 바닥 밑인 것이 둘이다 — 의도선·파편")
 
 
 # -- the scanner turned on itself ----------------------------------------------------------------
@@ -756,6 +819,12 @@ func _invert_the_scanner(t) -> void:
 	# The ninth: an angle. It matched none of the other twenty-two suffixes.
 	t.ok(_literal_hits("const SPARK_SPREAD_DEG := 12.0\n").size() > 0,
 		"넓힌 목록이 SPARK_SPREAD_DEG 를 잡는다 — deg 를 빼먹으면 이 줄이 문다 (스캐너 자가 점검)")
+	# `ratio` moved from the narrow list to the wide one — a view-file ratio is still caught, and the
+	# sim's `SUMMON_RADIUS_RATIO` (a rule, not presentation) stops being bitten by the src-wide sweep.
+	t.ok(_literal_hits("const SHADOW_R_RATIO := 0.85\n").size() > 0,
+		"넓힌 목록이 ratio 를 잡는다 — 뷰의 비율 상수는 여전히 물린다 (스캐너 자가 점검)")
+	t.eq(_pixel_hits("const SUMMON_RADIUS_RATIO := 0.46\n").size(), 0,
+		"좁은 목록은 ratio 를 안 문다 — sim 의 규칙 비율이 look.gd 로 끌려오지 않는다 (스캐너 자가 점검)")
 	# The tenth, and it is the pattern's VALUE side rather than its name side: an array literal starts
 	# with `[`, so `FX_GAIN` was the one constant of the forty-four that no suffix could ever reach.
 	# Writing "all forty-four are caught" without this case is how the one hole stays invisible.
@@ -799,10 +868,14 @@ func _invert_the_scanner(t) -> void:
 ## on its NAME — so it cannot arrive unnoticed and then silently skip this scan too.
 func _whole_array_leaves() -> Dictionary:
 	return {
-		"field_view.gd": {
-			"_paint_route": ["draw_polyline", "points"],
-			"_paint_cliff_face": ["draw_multiline", "points"],
-			"_paint_spark": ["draw_multiline", "points"],
+		# ⚠ **`field_view`'s three rows left with the leaves themselves** (the 3D move): `_paint_route`,
+		# `_paint_cliff_face` and `_paint_spark` no longer exist — the route and the spark build
+		# vertices straight into the fx buffers and the cliff is mesh geometry. The corner-cut this
+		# table caught there is caught at RUNTIME now: `net_slots` demands a vertex beside EVERY
+		# waypoint of the aim's route, which a straightened polyline cannot produce.
+		# 티켓 12's burst — the rays are built in `_burst_points` and must reach `draw_multiline` whole.
+		"reward_view.gd": {
+			"_paint_legendary_burst": ["draw_multiline", "points"],
 		},
 	}
 

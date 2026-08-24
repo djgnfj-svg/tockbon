@@ -175,3 +175,33 @@ arranges the same way.
   broken **three times** while the runtime verifier was observing — two parse errors and one broken table,
   all of them intermediate saves by whoever was building. ⇒ **One chunk → nets green → report → halt.**
   That halt is the verification window; without it the verdict is void whichever colour it came back.
+
+## net_cards died silently at baseline, and the ledger blamed the wrong ticket (2026-08-24)
+
+The reward-card net crashed with an out-of-bounds get in a leaf check — the wrapper marked it [failed],
+but it still counted 63 passes, and the map's ledger attributed ALL 13 baseline reds to the 3D-move
+ticket. One of them was this crash. **A crashed net is a vanished-check variant**: the checks after the
+crash line ran zero times while the ledger read as if only stale expectations were red. Found when the
+card-screen build rewrote the dead assertion (the old check asserted a guide-text state that cannot
+render under three-pick-one) and the pass count moved 1904 → 1905 for no apparently related reason —
+the +1 was the crash healing. **Lesson**: when a red round's failure list is attributed wholesale to one
+cause, verify each item — a crash and a stale expectation look identical in the total.
+
+## Green buffers, invisible picture — the death burst (2026-08-24)
+
+The 3D fx nets measure two things per effect: the geometry buffers (proof it was built) and the committed
+surface count (proof the flush ran). Both were green for the death burst, and the effect log showed it
+alive for its whole 0.32 s. **It was still invisible in play.** The ring started at the SIM body radius
+(10-22 px) while the drawn bodies are 84 px billboards, and this game's fights are always packed — the
+ring was swallowed whole by the sprite pile every time. **Nothing in the net was wrong; the net measured
+the drawing, and the drawing was too small to see.** Fixed by deriving the start radius from the sprite
+width ratio, so it grows when the art grows. **Lesson**: a buffer-and-commit net proves an effect was
+drawn, never that it can be SEEN. Anything sized off sim units while the art is sized off sprite units
+needs an eye, and this is what verify-look is for.
+
+## The orphan list was stale the moment it was written (2026-08-24)
+
+A hand enumeration of zero-reader constants reached seven. A full re-derivation found EIGHTEEN — and one
+of the five that survived (`FX_SETTLE_FRAMES`) had a real reader the hand list had missed, in `tools/`.
+**Lesson**: sweep, never copy a list; and put `tools/` inside the sweep — a script that drives the game
+is a reader like any other.

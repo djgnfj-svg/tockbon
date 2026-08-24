@@ -4,6 +4,11 @@
 when a round gets slow. ⚠ **The skill that used to drive this team was deleted on 2026-08-22** as 394 lines
 whose verification half was already in `how-nets-lie`. **This page is what was worth keeping.**
 
+✅ **A driver came back on 2026-08-24: the `build-loop` skill**, and it is deliberately thin — it reads
+this page's order and calls the agents, nothing more. **The user says 「짜줘」 and it runs.**
+⚠⚠ **It is model-invocable on purpose**: the imported planning skills are human-typed-only, which is
+what kept this team from ever being called. **The one place it stops is after the plan, for the user to read.**
+
 ## The order
 
 ```

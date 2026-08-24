@@ -1,20 +1,24 @@
 extends RefCounted
-## The reward screen: six cards after a won fight, take two. `run.cards` is `Rules.CARDS_PER_WIN`
-## `(part, species)` pairs, flat, drawn by `Run._draw_cards`; `RewardView` reads them and writes
+## The reward screen: three cards after a won fight, take one. `run.cards` is `Rules.CARDS_PER_WIN`
+## item ids, one int per card, drawn by `Run._draw_cards`; `RewardView` reads them and writes
 ## nothing back. See `parts-on-a-board-not-on-the-body`.
 ##
-## ⚠ **`RewardView` holds a `Run` and this file drives both halves**: the SIM half (six cards drawn,
-## two takeable, the seed determinism) through `Run`'s own verbs, and the PICTURE half (the rectangles,
-## the press ramp, what each leaf was actually handed) through a spy, exactly as `net_title` splits the
-## two for the screen it set the pattern with.
+## ⚠ **`RewardView` holds a `Run` and this file drives both halves**: the SIM half (three cards
+## drawn, one takeable, the seed determinism) through `Run`'s own verbs, and the PICTURE half (the
+## rectangles, the press ramp, what each leaf was actually handed) through a spy, exactly as
+## `net_title` splits the two for the screen it set the pattern with.
 ##
 ## ⚠⚠ **The view's own clock is stopped and `_fx_step(dt)` is called by hand**, for the same reason
 ## `net_title` gives: a headless frame cannot pin a ramp to a fraction of a second.
 
 
-## Every one of the five leaves is overridden. A hook left out binds to nothing, the REAL `draw_*` runs
-## headless, the capture array stays empty, and every check about it reads as "nothing was drawn"
-## rather than as a failure.
+## Every leaf this file makes a claim about is overridden. A hook left out binds to nothing, the REAL
+## `draw_*` runs headless, the capture array stays empty, and every check about it reads as "nothing
+## was drawn" rather than as a failure.
+## ⚠ 티켓 12's three new leaves (`_paint_card_art` · `_paint_rarity_frame` ·
+## `_paint_legendary_burst`) are NOT spied yet — their runtime rows come after the build, per the
+## 2026-08-24 screen-work rule — so their real bodies run headless here, which draws nothing anyone
+## reads and crashes nothing.
 class RewardSpy extends RewardView:
 	var draws := 0
 	var cards := []
@@ -40,8 +44,10 @@ class RewardSpy extends RewardView:
 	func _paint_card_name(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 		parts.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
 
-	func _paint_card_effect(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
-		species.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
+	func _paint_card_effect(face: Font, at: Vector2, text: String, width: float, fsize: int,
+			col: Color) -> void:
+		species.append({"face": face, "at": at, "text": text, "width": width, "fsize": fsize,
+			"col": col})
 
 	func _paint_taken_mark(centre: Vector2, radius: float, col: Color) -> void:
 		marks.append({"centre": centre, "radius": radius, "col": col})
@@ -58,8 +64,8 @@ const SMALLEST_PRESS_BEFORE := Vector2(220.0, 64.0)
 
 
 func run(t) -> void:
-	_the_six_cards(t)
-	_taking_two(t)
+	_the_three_cards(t)
+	_taking_one(t)
 	_the_seed(t)
 	_the_geometry(t)
 	_the_alpha_channel(t)
@@ -81,8 +87,8 @@ func _won_run(seed: int = 1) -> Run:
 
 # -- the sim: what the cards ARE ---------------------------------------------------------------------
 
-func _the_six_cards(t) -> void:
-	# 「이기면 카드가 여섯 장 나온다」 — floor: six pairs; ceiling: none taken yet.
+func _the_three_cards(t) -> void:
+	# 「이기면 카드가 세 장 나온다」 — floor: three item ids; ceiling: none taken yet.
 	var r := _won_run()
 	t.eq(r.state(), Run.State.PICK, "이기면 카드 고르기가 열린다 (자가 점검)")
 	# ⚠ **One int per card, not two** (2026-08-24): a card was a (part, species) pair and is an item id.
@@ -98,9 +104,9 @@ func _the_six_cards(t) -> void:
 		t.ok(Rules.item_name_of(item) != "", "%d번 카드에 이름이 있다" % k)
 
 
-## 「둘을 고르면 정비로 넘어간다」 · 「같은 카드를 두 번 못 고른다」 · 「고른 카드가 더미에 그대로
+## 「한 장을 고르면 정비로 넘어간다」 · 「같은 카드를 두 번 못 고른다」 · 「고른 카드가 더미에 그대로
 ## 들어간다」, in one walk — each reads the state right after the call it claims about.
-func _taking_two(t) -> void:
+func _taking_one(t) -> void:
 	var r := _won_run()
 	var want_item := int(r.cards[0])
 	var pile_before := r.army.loadout.held.size()
@@ -122,13 +128,13 @@ func _taking_two(t) -> void:
 	t.ok(not r.take_card(99), "범위 밖 인덱스도 거절한다")
 
 
-## ⚠⚠ 「같은 씨앗이면 여섯 장이 똑같고, 씨앗이 다르면 어딘가 다르다」. Mutation:
-## `_rng.randi_range(0, Rules.ITEM_CELLS - 1)` -> `0`.
+## ⚠⚠ 「같은 씨앗이면 세 장이 똑같고, 씨앗이 다르면 어딘가 다르다」. Mutation: the item draw pinned
+## to a constant id.
 ##
-## ⚠ 「씨앗을 여럿 돌리면 부위 여섯과 종 셋이 전부 나온다」 is the row that structurally catches that
-## exact mutation — a same/different-seed comparison of the WHOLE array can still see two seeds differ
-## on the SPECIES half alone while every part reads 머리, so it is this row, and not the one above, that
-## has to fail when a part goes constant.
+## ⚠ 「씨앗을 여럿 돌리면 장비 열여덟과 등급 넷이 전부 나온다」 is the row that structurally catches
+## that exact mutation — a same/different-seed comparison of the WHOLE array can go green while one
+## rarity never appears at all, so it is this row, and not the one above, that has to fail when the
+## draw goes constant.
 func _the_seed(t) -> void:
 	var a := _won_run(42)
 	var b := _won_run(42)
@@ -161,7 +167,7 @@ func _the_seed(t) -> void:
 
 func _the_geometry(t) -> void:
 	var view := RewardView.new()
-	# 「카드 여섯의 사각형이 안 겹치고 화면 안이다」 — floor: every hit rect inside the literal screen;
+	# 「카드 셋의 사각형이 안 겹치고 화면 안이다」 — floor: every hit rect inside the literal screen;
 	# ceiling: no two hit rects intersect.
 	var outside := 0
 	var overlapping := 0
@@ -175,7 +181,7 @@ func _the_geometry(t) -> void:
 		for j in range(k + 1, Rules.CARDS_PER_WIN):
 			if hit.intersects(view.card_hit_rect_of(j)):
 				overlapping += 1
-	t.eq(outside, 0, "카드 여섯의 판정 사각형이 전부 1280x720 안이고 넓이가 0이 아니다")
+	t.eq(outside, 0, "카드 셋의 판정 사각형이 전부 1280x720 안이고 넓이가 0이 아니다")
 	t.eq(overlapping, 0, "어느 두 카드의 판정 사각형도 안 겹친다")
 
 	# 「판정 사각형이 그림보다 사방 8px 크다」
@@ -213,13 +219,12 @@ func _the_alpha_channel(t) -> void:
 	var view := RewardView.new()
 	view.bind(r)
 
-	# 「고를 수 있는 카드와 못 고르는 카드의 알파가 3배 넘게 다르다」 — take both picks first, so card 2
-	# reads as genuinely unreachable rather than merely untaken.
+	# 「고를 수 있는 카드와 못 고르는 카드의 알파가 3배 넘게 다르다」 — take the one pick first, so
+	# card 2 reads as genuinely unreachable rather than merely untaken.
 	r.take_card(0)
-	r.take_card(1)
 	var live := view._card_fill(2)
 	t.ok(live.a <= Look.PRESS_ALPHA_OFF + Rules.EPS,
-		"둘을 다 고른 뒤 셋째 칸도 알파 %.2f 로 못 고르는 칸과 같은 흐림이다" % live.a)
+		"한 장을 고른 뒤 셋째 칸도 알파 %.2f 로 못 고르는 칸과 같은 흐림이다" % live.a)
 
 	var fresh_run := _won_run()
 	var fresh_view := RewardView.new()
@@ -416,7 +421,10 @@ func _the_leaves_draw_what_they_were_handed(t) -> void:
 	fresh_run.take_card(0)
 	fresh_spy.queue_redraw()
 	await t.pump_frames(1)
-	t.ok(str(fresh_spy.hints[0]["text"]).contains("1"), "한 장을 고르면 안내 글이 1로 바뀐다")
+	# ⚠ **The old row here read the hint saying 「1」 — a dead claim under `CARD_PICKS` = 1**: the one
+	# pick IS the transition to REFIT, `_draw` gates on `PICK`, and the hint is never on screen with a
+	# 1 in it. What is claimable is the other half: the screen stops drawing the moment the pick lands.
+	t.eq(fresh_spy.hints.size(), 0, "한 장을 고르면 화면이 정비로 넘어가 안내 글 자체가 더는 안 그려진다")
 	t.root.remove_child(fresh_spy)
 	fresh_spy.queue_free()
 
@@ -424,8 +432,8 @@ func _the_leaves_draw_what_they_were_handed(t) -> void:
 # -- item: the reveal --------------------------------------------------------------------------------
 
 ## 「카드 화면이 열리면 카드가 하나씩 나타난다」 — floor: every card starts effectively invisible, not
-## snapped straight to its resting alpha; the stagger: card 0 is already ahead of card 5 mid-reveal;
-## ceiling: every card settles at its full, un-revealed alpha (read off `_card_fill` directly), so the
+## snapped straight to its resting alpha; the stagger: card 0 is already ahead of the last card
+## mid-reveal; ceiling: every card settles at its full, un-revealed alpha (read off `_card_fill`), so the
 ## beat never gets stuck dim. `MAP_NODE_FADE_SEC` / `MAP_REVEAL_STEP_SEC` are `map_view`'s own reveal
 ## constants, reused rather than redeclared.
 ##
@@ -443,9 +451,9 @@ func _the_cards_fade_in_staggered(t) -> void:
 	for k in Rules.CARDS_PER_WIN:
 		if (spy.cards[k]["bg"] as Color).a > 0.05:
 			alpha_bad += 1
-	t.eq(alpha_bad, 0, "화면이 열린 첫 프레임에는 카드 여섯이 전부 알파 0에 가깝다 — 튀어나오지 않는다")
+	t.eq(alpha_bad, 0, "화면이 열린 첫 프레임에는 카드 셋이 전부 알파 0에 가깝다 — 튀어나오지 않는다")
 
-	# The stagger: age past card 0's own fade window, nowhere near card 5's start.
+	# The stagger: age past card 0's own fade window, nowhere near the last card's start.
 	spy._fx_step(Look.MAP_NODE_FADE_SEC * 0.6)
 	spy.queue_redraw()
 	await t.pump_frames(1)
@@ -466,7 +474,7 @@ func _the_cards_fade_in_staggered(t) -> void:
 		var want := spy._card_fill(k).a
 		if not is_equal_approx(shown, want):
 			settle_bad += 1
-	t.eq(settle_bad, 0, "다 나타나면 카드 여섯 다 원래 알파로 정확히 도착한다 — 흐린 채로 안 남는다")
+	t.eq(settle_bad, 0, "다 나타나면 카드 셋 다 원래 알파로 정확히 도착한다 — 흐린 채로 안 남는다")
 	t.ok(Look.MAP_NODE_FADE_SEC >= 0.084 and Look.MAP_NODE_FADE_SEC <= 0.40,
 		"카드 한 장의 등장이 다섯 프레임~0.40초다 (%.2f)" % Look.MAP_NODE_FADE_SEC)
 	t.ok(Look.MAP_REVEAL_STEP_SEC >= 0.03 and Look.MAP_REVEAL_STEP_SEC < 0.084,

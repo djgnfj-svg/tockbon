@@ -32,13 +32,12 @@ var has_beak := PackedByteArray()
 var alive := PackedByteArray()
 
 ## Which summon slot this body belongs to. Written once, by `recruit`, and never again.
-## ⚠⚠ **A body belongs to a slot from BIRTH and not from the moment it is summoned.** Bound at summon, a
-## reserve body's numbers would be the base ones while it waits and the slot's ones once it sails — so a
-## fresh body would arrive at less than full HP the first time a 체력 part was fitted, with the bar
-## saying it was wounded when nothing had hurt it.
+## ⚠⚠ **It stays although the five stat lookups below key on `type_id` now** (티켓 11 moved the board
+## from the slot to the type): boarding and the reserve filter are SLOT facts — two slots bound to one
+## type must not draw from one pool — and `Battle.slot_reserve_ids` reads exactly this column.
 var slot_id := PackedInt32Array()
 
-## The boards, one per summon slot. Hangs off the ARMY and not off `Run`: `Battle` is handed `army` and
+## The boards, one per beast type. Hangs off the ARMY and not off `Run`: `Battle` is handed `army` and
 ## nothing else, so this is what lets `damage_of(i)` reach a board without a new argument on
 ## `Battle.setup`. It also makes the design's own sentence structural — a body dies and its parts die
 ## with it, the board does not — because `Army` outlives every `Battle` and no code has to remember to
@@ -46,7 +45,7 @@ var slot_id := PackedInt32Array()
 var loadout := Loadout.new()
 
 
-## Appends one soldier of `slot`'s type, born at that slot's own current maximum HP, no beak, alive.
+## Appends one soldier of `slot`'s type, born at that type's own current maximum HP, no beak, alive.
 ## Returns its id — its index, which never changes again.
 ##
 ## ⚠ The HP is read back off `max_hp_of`, the same function combat reads, so a body is never born on a
@@ -63,9 +62,9 @@ func recruit(slot: int) -> int:
 	return id
 
 
-## Marks a soldier dead. The row stays; only `alive` and `hp` move. **The slot's board is untouched** —
-## it belongs to the slot, not to the body, so the next body `recruit`ed from that slot arrives with the
-## same parts.
+## Marks a soldier dead. The row stays; only `alive` and `hp` move. **The type's board is untouched** —
+## it belongs to the type, not to the body, so the next body `recruit`ed of that type arrives with the
+## same equipment.
 func kill(i: int) -> void:
 	if alive[i] == 0:
 		return
@@ -100,33 +99,33 @@ func _hp_desc(a: int, b: int) -> bool:
 	return hp[a] > hp[b]
 
 
-## Attack range in tiles: the slot's board (base + any head part), plus the beak's bonus if this
-## soldier is wearing one. The beak is added HERE and never inside `loadout.stat_of`, which knows
-## nothing about a per-soldier reward.
+## Attack range in tiles: the type's board (base + any fitted range item and the lit 범위 tier), plus
+## the beak's bonus if this soldier is wearing one. The beak is added HERE and never inside
+## `loadout.stat_of`, which knows nothing about a per-soldier reward.
 func range_of(i: int) -> float:
-	var base := loadout.stat_of(int(slot_id[i]), Rules.ITEM_COL_RANGE)
+	var base := loadout.stat_of(int(type_id[i]), Rules.ITEM_COL_RANGE)
 	var bonus: float = Rules.BEAK_RANGE if has_beak[i] != 0 else 0.0
 	return base + bonus
 
 
-## The five per-soldier lookups. Each is one line reading `loadout.stat_of(slot_id[i], COL)` — the same
-## call the dashboard reads, so the screen and the fight can never disagree about what a fitted part is
-## worth. ⚠⚠ **This is what makes two soldiers of one type able to differ**: before this round every
-## stat downstream read `Rules.*_of(type_id)`, keyed on the TYPE and identical for every body of it.
+## The five per-soldier lookups. Each is one line reading `loadout.stat_of(type_id[i], COL)` — the same
+## call the dashboard reads, so the screen and the fight can never disagree about what a fitted item is
+## worth. ⚠ **Keyed on `type_id`, never `slot_id`** (티켓 11): the board is the type's, and a body of a
+## species no slot summons still has to read its own board.
 func max_hp_of(i: int) -> float:
-	return loadout.stat_of(int(slot_id[i]), Rules.ITEM_COL_HP)
+	return loadout.stat_of(int(type_id[i]), Rules.ITEM_COL_HP)
 
 
 func damage_of(i: int) -> float:
-	return loadout.stat_of(int(slot_id[i]), Rules.ITEM_COL_DAMAGE)
+	return loadout.stat_of(int(type_id[i]), Rules.ITEM_COL_DAMAGE)
 
 
 func period_of(i: int) -> float:
-	return loadout.stat_of(int(slot_id[i]), Rules.ITEM_COL_PERIOD)
+	return loadout.stat_of(int(type_id[i]), Rules.ITEM_COL_PERIOD)
 
 
 func speed_of(i: int) -> float:
-	return loadout.stat_of(int(slot_id[i]), Rules.ITEM_COL_SPEED)
+	return loadout.stat_of(int(type_id[i]), Rules.ITEM_COL_SPEED)
 
 
 ## Living soldiers of one SLOT, **highest HP first**. Mirrors `living_ids_of_type`'s shape and its

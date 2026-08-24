@@ -54,6 +54,16 @@ func run(t) -> void:
 	_a_soldier_at_sea_does_hold_it_open(t)
 	_the_gate_itself(t)
 	_wiped_wins_when_both_are_true(t)
+	# -- ticket 11: the status table reaches the fight ---------------------------------------------
+	_bleed_drips_after_the_blow(t)
+	_bleed_off_below_threshold(t)
+	_bleed_refreshes_and_never_stacks(t)
+	_bleed_death_passes_the_same_substep(t)
+	_status_rides_the_splash(t)
+	_slow_makes_the_hit_enemy_walk_less(t)
+	_slow_expires_back_to_full_speed(t)
+	_slow_refreshes_and_never_stacks(t)
+	_enemy_blows_carry_no_status(t)
 
 
 # -- the one bark this file owns -------------------------------------------------------------------
@@ -638,6 +648,281 @@ func _in_transit_is_hit_but_cannot_hit(t) -> void:
 	t.ok(b.enemy_pos[1].distance_to(ashore_target) < ashore_target.distance_to(bison_start) - 0.3,
 			"움직인 방향이 상륙한 병사 쪽이다 (남은 거리 %.2f칸, 시작 5.00칸) — 배 쪽으로 얼어붙지 않고 이름 붙은 그 칸을 향해 실제로 걸었다는 뜻이다"
 			% b.enemy_pos[1].distance_to(ashore_target))
+
+
+# -- ticket 11: statuses — the table rows reach the fight, measured through step -------------------
+
+## Fixture item ids, pinned with what each is for and asserted below to carry that tag.
+## ⚠ **The boards they land on are CROW's and LION's** — species nobody summons — so the items' own
+## stat columns cannot move the melee/ranged arithmetic every expectation below is built from, and the
+## rows double as "the count is army-wide" measured through the fight.
+const ITEM_BLEED := 7    # 부싯돌 이빨 — 출혈 딱지, 문턱 3 (0.5/초 · 2초)
+const ITEM_SLOW := 1     # 돌 목걸이 — 디버프(감속) 딱지, 문턱 2 (이동속도 70% · 2초)
+
+
+## `n` copies of `item` onto `beast_type`'s board, through the real take/fit path.
+func _worn(a: Army, item: int, n: int, beast_type: int) -> void:
+	for _i in n:
+		a.loadout.take_card(item)
+		a.loadout.fit(beast_type, 0)
+
+
+## One melee soldier adjacent to one bison, with `bleed_items` copies of the bleed item on the crow's
+## board, driven exactly one sub-step — the blow lands (and, when the tier is lit, the bleed with it).
+func _bled_bison_battle(bleed_items: int) -> Battle:
+	var army := _army_of([Rules.CELL_MELEE])
+	_worn(army, ITEM_BLEED, bleed_items, Rules.CROW)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.BISON, 12, 5)], 999.0)
+	_ashore(b, 0, Vector2(11, 5))
+	b.begin_frame()
+	b.step(TICK_ONE)
+	return b
+
+
+## 「층이 켜진 채 한 대 맞은 적은 손이 떨어져도 피가 흐른다」. Mutation: delete the DOT arm of
+## `_phase_status`. ⚠ 기대값 0.5/초는 리터럴이다 — 표를 되읽으면 검사가 표와 같이 움직인다.
+func _bleed_drips_after_the_blow(t) -> void:
+	var b := _bled_bison_battle(3)
+	t.eq(b.army.loadout.tag_count(Rules.Tag.BLEED), 3, "출혈 딱지가 셋이다 (자가 점검)")
+	var after_blow := b.enemy_hp[0]
+	t.ok(after_blow < Rules.hp_of(Rules.BISON), "첫 타격이 실제로 들어갔다 (자가 점검)")
+	# 30 sub-steps with the hand off: the cooldown is 1.0 s, so no second blow can land inside them.
+	for _f in 30:
+		b.begin_frame()
+		b.step(TICK_ONE)
+	var drained := after_blow - b.enemy_hp[0]
+	t.ok(absf(drained - 0.5 * 30.0 / 60.0) <= 1e-3,
+		"손이 떨어진 30 서브스텝 동안 피가 초당 0.5 로 흘렀다 (%.4f칸)" % drained)
+	t.eq(b.enemy_alive[0], 1, "그리고 그 출혈로는 아직 안 죽었다 (자가 점검)")
+
+
+## 「층이 꺼져 있으면 출혈 0」 — 딱지 둘은 문턱 셋 미달이고, 전투를 지나도 아무것도 흐르지 않는다.
+func _bleed_off_below_threshold(t) -> void:
+	var b := _bled_bison_battle(2)
+	t.eq(b.army.loadout.tag_count(Rules.Tag.BLEED), 2, "출혈 딱지가 둘뿐이다 (자가 점검)")
+	var after_blow := b.enemy_hp[0]
+	t.ok(after_blow < Rules.hp_of(Rules.BISON), "타격 자체는 들어갔다 (자가 점검)")
+	for _f in 30:
+		b.begin_frame()
+		b.step(TICK_ONE)
+	t.eq(b.enemy_hp[0], after_blow, "문턱 미달이면 타격 뒤에 아무것도 흐르지 않는다")
+
+
+## 「두 대 맞아도 크기가 안 는다」 — 갱신이지 누적이 아니다. 두 번째 타격(약 61 서브스텝) 뒤의 흐름이
+## 여전히 초당 0.5 다. Mutation: make the status write ADD the magnitude instead of overwriting it.
+func _bleed_refreshes_and_never_stacks(t) -> void:
+	var b := _bled_bison_battle(3)
+	# through sub-step 70 — the second blow lands at ~61, the third at ~121.
+	for _f in 69:
+		b.begin_frame()
+		b.step(TICK_ONE)
+	var hits := Rules.hp_of(Rules.BISON) - b.enemy_hp[0]
+	t.ok(hits > 2.0 * Rules.damage_of(Rules.CELL_MELEE),
+		"두 번째 타격이 실제로 들어갔다 (자가 점검 — 깎인 피 %.3f > 직격 두 방)" % hits)
+	var at70 := b.enemy_hp[0]
+	for _f in 30:
+		b.begin_frame()
+		b.step(TICK_ONE)
+	var drained := at70 - b.enemy_hp[0]
+	t.ok(absf(drained - 0.5 * 30.0 / 60.0) <= 1e-3,
+		"두 대 맞은 뒤에도 흐름은 초당 0.5 그대로다 — 크기는 갱신이지 누적이 아니다 (%.4f칸)" % drained)
+
+
+## 「출혈로 죽은 적이 같은 서브스텝의 죽음 처리를 지난다」 — alive 가 그 서브스텝에 꺼지고 DEATH 가
+## 그 프레임의 events 에 실린다. Mutation: move `_phase_status` after `_phase_deaths`.
+func _bleed_death_passes_the_same_substep(t) -> void:
+	var b := _bled_bison_battle(3)
+	# under one sub-step's drip (0.5/60 ≈ 0.0083), and the soldier's cooldown blocks a direct blow.
+	b.enemy_hp[0] = 0.004
+	b.begin_frame()
+	b.step(TICK_ONE)
+	t.eq(b.enemy_alive[0], 0, "출혈만으로 그 서브스텝에 죽었다 — 지속피해가 죽음 처리보다 먼저 돈다")
+	var saw := false
+	for ev in b.events:
+		if int(ev["kind"]) == Battle.Event.DEATH and bool(ev["is_enemy"]) and int(ev["id"]) == 0:
+			saw = true
+	t.ok(saw, "그리고 그 프레임의 events 에 DEATH 가 실렸다")
+
+
+## 「상태는 광역의 형제에게도 실린다」 — both status fixtures above are single-target, so the splash
+## arm of the apply walk had no row of its own. A ranged blow catches an orthogonal sibling inside its
+## 1.0 area, and the sibling bleeds like the primary. Mutation: delete the splash loop in
+## `_apply_statuses`.
+func _status_rides_the_splash(t) -> void:
+	var army := _army_of([Rules.CELL_RANGED])
+	_worn(army, ITEM_BLEED, 3, Rules.CROW)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
+		_spawn(ARENA_W, Rules.BISON, 12, 5),   # primary, 4.0 from the soldier
+		_spawn(ARENA_W, Rules.BISON, 13, 5),   # orthogonal sibling — inside the 1.0 splash
+	], 999.0)
+	_ashore(b, 0, Vector2(8, 5))
+	b.begin_frame()
+	b.step(TICK_ONE)
+	var sib: float = b.enemy_hp[1]
+	t.ok(sib < Rules.hp_of(Rules.BISON), "광역이 형제도 실제로 때렸다 (자가 점검)")
+	# 30 sub-steps with the hand off: the soldier's cooldown is 1.0 s, so no second blow lands.
+	for _f in 30:
+		b.begin_frame()
+		b.step(TICK_ONE)
+	var drained: float = sib - b.enemy_hp[1]
+	t.ok(absf(drained - 0.5 * 30.0 / 60.0) <= 1e-3,
+		"광역에 맞은 형제에게도 출혈이 흐른다 (%.4f칸) — 상태는 주 표적만의 것이 아니다" % drained)
+
+
+## A ranged soldier at (4,5) and a bison at (9,5): the gap 5.0 is inside the soldier's 5.5 reach (the
+## blow lands on sub-step 1) and inside the bison's detect 6 (it walks). Distance TRAVELLED is summed
+## per sub-step, so a flow-field zigzag cannot shrink what is measured. Returns tiles travelled over
+## the 30 sub-steps AFTER the blow landed.
+func _slow_probe(slow_items: int) -> float:
+	var army := _army_of([Rules.CELL_RANGED])
+	_worn(army, ITEM_SLOW, slow_items, Rules.LION)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.BISON, 9, 5)], 999.0)
+	_ashore(b, 0, Vector2(4, 5))
+	b.begin_frame()
+	b.step(TICK_ONE)
+	var travelled := 0.0
+	var prev: Vector2 = b.enemy_pos[0]
+	for _f in 30:
+		b.begin_frame()
+		b.step(TICK_ONE)
+		travelled += prev.distance_to(b.enemy_pos[0])
+		prev = b.enemy_pos[0]
+	return travelled
+
+
+## 「층이 켜진 채 맞은 적은 한 서브스텝에 덜 걷는다」 — 같은 fixture 를 딱지 0개와 2개로 돌려 겉는
+## 거리를 잰다. ⚠ 배율 0.7 은 리터럴이다. Mutation: drop the slow multiplier from `_phase_movement`.
+func _slow_makes_the_hit_enemy_walk_less(t) -> void:
+	var plain := _slow_probe(0)
+	var slowed := _slow_probe(2)
+	t.ok(absf(plain - Rules.speed_of(Rules.BISON) * 30.0 / 60.0) <= 0.02,
+		"안 맞은 들소는 30 서브스텝에 제 속도 그대로 걷는다 (자가 점검, %.3f칸)" % plain)
+	t.ok(absf(slowed - 0.7 * Rules.speed_of(Rules.BISON) * 30.0 / 60.0) <= 0.02,
+		"감속 걸린 들소는 그 70%% 만 걷는다 (%.3f칸)" % slowed)
+
+
+## 「시간이 다하면 원래 속도로 돌아온다」. The shooter dies right after the blow so nothing can
+## refresh; a second ranged soldier is parked where the bison keeps walking, and HIS trigger finger is
+## pinned on a second bison inside his own reach, so no friendly blow ever lands on the measured one.
+## Mutation: make the slow permanent (drop the time check from the multiplier).
+func _slow_expires_back_to_full_speed(t) -> void:
+	var army := _army_of([Rules.CELL_RANGED, Rules.CELL_RANGED])
+	_worn(army, ITEM_SLOW, 2, Rules.LION)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
+		_spawn(ARENA_W, Rules.BISON, 12, 5),   # 0 — the measured one, slowed once then left alone
+		_spawn(ARENA_W, Rules.BISON, 6, 9),    # 1 — soldier 1's pinned target, 4.0 from him
+	], 999.0)
+	_ashore(b, 0, Vector2(9, 5))   # the shooter: 3.0 from bison 0 — its nearest, inside 5.5
+	_ashore(b, 1, Vector2(6, 5))   # the bait: bison 1 at 4.0 is his nearest and inside his reach
+	b.begin_frame()
+	b.step(TICK_ONE)
+	t.ok(b.enemy_hp[0] < Rules.hp_of(Rules.BISON), "0번 들소가 한 대 맞았다 (자가 점검)")
+	b.army.hp[0] = 0.0   # the shooter dies — nothing refreshes the slow again
+	# sub-steps 2..89: the shooter's death latches, bison 0 walks west toward soldier 1, slowed.
+	for _f in 88:
+		b.begin_frame()
+		b.step(TICK_ONE)
+	t.eq(b.soldier_state[0], Battle.SoldierState.DEAD, "쏜 병사는 죽었다 (자가 점검)")
+	t.eq(b.soldier_pos[1], Vector2(6, 5), "미끼 병사는 제자리다 (자가 점검 — 제 사거리 안 표적을 쏜다)")
+	# slowed window, sub-steps 90..107 (the slow runs out at ~121).
+	var travelled := 0.0
+	var prev: Vector2 = b.enemy_pos[0]
+	for _f in 18:
+		b.begin_frame()
+		b.step(TICK_ONE)
+		travelled += prev.distance_to(b.enemy_pos[0])
+		prev = b.enemy_pos[0]
+	t.ok(absf(travelled - 0.7 * Rules.speed_of(Rules.BISON) * 18.0 / 60.0) <= 0.02,
+		"감속이 살아 있는 동안은 70%% 로 걷는다 (자가 점검, %.3f칸)" % travelled)
+	# through sub-step 121, where the 2.0 s run out.
+	for _f in 14:
+		b.begin_frame()
+		b.step(TICK_ONE)
+	# full-speed window, sub-steps 122..139 — it stops at reach of the bait only past ~145.
+	travelled = 0.0
+	prev = b.enemy_pos[0]
+	for _f in 18:
+		b.begin_frame()
+		b.step(TICK_ONE)
+		travelled += prev.distance_to(b.enemy_pos[0])
+		prev = b.enemy_pos[0]
+	t.ok(absf(travelled - Rules.speed_of(Rules.BISON) * 18.0 / 60.0) <= 0.02,
+		"시간이 다하면 원래 속도로 돌아온다 (%.3f칸)" % travelled)
+	t.eq(b.enemy_alive[1], 1, "미끼의 들소도 창 밖에서 살아 있다 (자가 점검 — 표적이 안 바뀌었다)")
+
+
+## 「다시 맞아도 배율이 안 겹친다」 — 두 번째 타격(~61 서브스텝) 뒤에도 70% 이지, 70%×70%=49% 가
+## 아니다. Mutation: make the status write MULTIPLY the magnitude onto the stored one.
+func _slow_refreshes_and_never_stacks(t) -> void:
+	var army := _army_of([Rules.CELL_RANGED])
+	_worn(army, ITEM_SLOW, 2, Rules.LION)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.BISON, 9, 5)], 999.0)
+	_ashore(b, 0, Vector2(4, 5))
+	# through sub-step 69 — the second blow lands at ~61 and refreshes.
+	for _f in 69:
+		b.begin_frame()
+		b.step(TICK_ONE)
+	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.BISON) - 2.0 * Rules.damage_of(Rules.CELL_RANGED),
+		"두 번째 타격이 들어갔다 (자가 점검)")
+	var travelled := 0.0
+	var prev: Vector2 = b.enemy_pos[0]
+	for _f in 30:
+		b.begin_frame()
+		b.step(TICK_ONE)
+		travelled += prev.distance_to(b.enemy_pos[0])
+		prev = b.enemy_pos[0]
+	t.ok(absf(travelled - 0.7 * Rules.speed_of(Rules.BISON) * 30.0 / 60.0) <= 0.02,
+		"두 대 맞아도 배율은 70%% 그대로다 — 겹쳐 곱하면 49%% 가 된다 (%.3f칸)" % travelled)
+
+
+## 「적의 타격은 병사에게 아무 상태도 못 건다」 — 출혈과 감속 두 층이 다 켜진 무리에서, 맞은 병사의
+## 피는 흐르지 않고 총 맞은 병사의 걸음은 그대로다. Mutation: apply statuses inside `_hit_soldiers`.
+func _enemy_blows_carry_no_status(t) -> void:
+	# the bleed half: a melee soldier adjacent to a bison takes its blow, and nothing drips afterwards.
+	var army := _army_of([Rules.CELL_MELEE])
+	_worn(army, ITEM_BLEED, 3, Rules.CROW)
+	_worn(army, ITEM_SLOW, 2, Rules.LION)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.BISON, 12, 5)], 999.0)
+	_ashore(b, 0, Vector2(11, 5))
+	b.begin_frame()
+	b.step(TICK_ONE)
+	var after_blow: float = army.hp[0]
+	t.ok(after_blow < Rules.hp_of(Rules.CELL_MELEE), "들소의 타격이 들어갔다 (자가 점검)")
+	# the bison's period is 2.0 s, so 60 sub-steps hold no second blow.
+	for _f in 60:
+		b.begin_frame()
+		b.step(TICK_ONE)
+	t.eq(army.hp[0], after_blow, "맞은 병사의 피는 흐르지 않는다 — 적 타격은 출혈을 못 건다")
+
+	# the slow half: soldier 0 trades blows with the crow (enemy 0), so a SLOW is live at enemy
+	# index 0; the crow dies and the soldier walks to the far bison — a soldier/enemy index confusion
+	# that read the slow onto the walker would bite exactly here, because the indices coincide.
+	var walk_army := _army_of([Rules.CELL_MELEE])
+	_worn(walk_army, ITEM_BLEED, 3, Rules.CROW)
+	_worn(walk_army, ITEM_SLOW, 2, Rules.LION)
+	var w := _battle_of(_open(ARENA_W, ARENA_H), walk_army, [
+		_spawn(ARENA_W, Rules.CROW, 8, 5),     # 0 — adjacent, trades a blow, then dies
+		_spawn(ARENA_W, Rules.BISON, 16, 5),   # 1 — the far target the soldier walks to afterwards
+	], 999.0)
+	_ashore(w, 0, Vector2(7, 5))
+	w.begin_frame()
+	w.step(TICK_ONE)
+	t.ok(walk_army.hp[0] < Rules.hp_of(Rules.CELL_MELEE), "까마귀가 실제로 쐈다 (자가 점검)")
+	t.ok(w.enemy_hp[0] < Rules.hp_of(Rules.CROW), "병사도 까마귀를 때렸다 — 0번 적에 감속이 걸려 있다 (자가 점검)")
+	w.enemy_hp[0] = 0.0
+	for _f in 2:
+		w.begin_frame()
+		w.step(TICK_ONE)
+	t.eq(w.enemy_alive[0], 0, "까마귀가 죽었다 (자가 점검)")
+	var travelled := 0.0
+	var prev: Vector2 = w.soldier_pos[0]
+	for _f in 20:
+		w.begin_frame()
+		w.step(TICK_ONE)
+		travelled += prev.distance_to(w.soldier_pos[0])
+		prev = w.soldier_pos[0]
+	t.ok(absf(travelled - Rules.speed_of(Rules.CELL_MELEE) * 20.0 / 60.0) <= 0.02,
+		"총 맞은 병사의 걸음은 그대로다 — 적 타격은 감속을 못 건다 (%.3f칸)" % travelled)
 
 
 # -- fixtures --------------------------------------------------------------------------------------

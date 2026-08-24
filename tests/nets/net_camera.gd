@@ -1,34 +1,48 @@
 extends RefCounted
-## `field_view`'s camera: one transform, in one place. Every check here drives the pure functions
-## directly — `.new()` and nothing else, no tree, matching `boat-and-landing` section 7.1's own
-## description of what they must do. Nothing here draws; `net_draw_leaf` and `net_shell` cover that
-## half.
+## `field_view`'s 3D camera: pure functions, driven with `.new()` and field writes — no tree, no
+## frames. The old file measured the flat board's `_compose_position` / `_visible_world_rect`, which
+## are gone; every row here is re-derived against the laid-back camera (`ticket 09`, step 1).
 ##
-## `position = -cam_px * zoom + _shake_offset()` is composed in `_process()` in the real game; these
-## checks set `cam_px` / `zoom` / the shake fields by hand and then call `fv.position =
-## fv._compose_position()` themselves, the same one line `_process()` runs, so nothing here can drift
-## from what the game actually does each frame.
+## **The three questions the old net asked survive**: the whole island is visible when an island
+## opens · the ground point under the cursor does not slide when the wheel turns · the camera cannot
+## be pushed off the world. **Two are new with the turn**: at every yaw in the sweep the cursor stays
+## pinned and the clamp holds, and `turn_by` / `tilt_by` hold the ground point at the middle of the
+## screen — which is the number behind 「싸우는 도중에 돌려도 판이 안 흔들리나」.
+##
+## ⚠ **「어느 각도로 돌려도 섬 전체가 보이나」 is deliberately NOT a row.** Measured before writing:
+## at the survey zoom the visible ground is 2208 x 1621 px against a 1920 x 1280 map, and at yaw 45
+## the map corner's projection onto the screen axes is 1131 px against a half-span of 811 — the
+## corners leave the screen, in the real game too, and the user approved that screen. Whole-island
+## is a yaw-0 fact about `setup()`, and it is measured there; the rotated sweep carries the
+## acceptance's own three (커서 고정 · 클램프 · 중심 붙잡기).
+##
+## ⚠ **The clamp bounds the ground point at the MIDDLE of the screen**, not the corners of a
+## screen-shaped rectangle — the addendum on ticket 09 says the new net must measure this rule and
+## not the old one. The rows below read the centre back through `_ground_centre_px()` and pin the
+## stop positions as hand literals.
 
 
 ## Every `FieldView` this net constructs, so `run` can free them all at the end. `FieldView` is a
-## `Node2D` (a real `CanvasItem` RID), never `RefCounted` like `Grid` or `Battle` — left unfreed, the
-## engine reports leaked RIDs and objects at exit, which the wrapper's stderr-is-failure rule catches.
+## `Node2D` (a real `CanvasItem` RID) — left unfreed, the engine reports leaked RIDs at exit, which
+## the wrapper's stderr-is-failure rule catches.
 var _created: Array = []
 
 
 func run(t) -> void:
-	_setup_opens_at_zoom_min(t)
-	_process_writes_scale_from_zoom(t)
-	_pan_by_moves_at_the_right_rate(t)
+	_setup_opens_at_the_survey_zoom(t)
+	_setup_on_the_long_map(t)
+	_visible_ground_divides_by_the_pitch(t)
+	_screen_to_world_at_the_corners(t)
 	_world_to_tile_floors_at_the_boundary(t)
-	_round_trip_at_three_zooms_and_two_pans(t)
-	_shake_is_inside_the_same_expression(t)
-	_zoom_holds_the_cursor(t)
-	_zoom_min_shows_the_whole_map(t)
-	_painted_area_covers_the_viewport(t)
-	_the_clamp_holds_and_the_camera_really_moves(t)
-	_a_wider_grid_moves_the_clamp(t)
-	_the_cull_never_cuts_anything_visible(t)
+	_pan_by_moves_at_the_right_rate(t)
+	_pan_follows_the_turned_axes(t)
+	_zoom_holds_the_cursor_at_every_yaw(t)
+	_zoom_stops_at_both_ends(t)
+	_the_clamp_holds_at_every_yaw(t)
+	_the_clamp_stops_at_hand_literals(t)
+	_turn_and_tilt_hold_the_centre(t)
+	_the_real_camera_obeys_the_pure_functions(t)
+	_the_shake_rides_the_screen_axes(t)
 	_both_ends_of_the_three_constants(t)
 	for raw in _created:
 		var fv: FieldView = raw
@@ -42,236 +56,48 @@ func _fv() -> FieldView:
 	return fv
 
 
-## An island opens zoomed all the way out — section 9's "Survey" acceptance row, and the comment
-## sitting directly above the line in `setup()`. Nothing else in this file drives `setup()` (every
-## other check sets `zoom` / `cam_px` by hand), so without this the opening zoom is only pinned by
-## accident wherever a `net_shell` wheel test happens to start from it.
-func _setup_opens_at_zoom_min(t) -> void:
+## An island opens at the SURVEY zoom — `Look.survey_zoom_of`, a question about the grid in front of
+## it — and never at the `ZOOM_MIN` constant. On 48 x 32 the survey is 1280 / (48 * 40 * 1.15) =
+## **0.57971**, hand arithmetic and not a read-back of the function.
+func _setup_opens_at_the_survey_zoom(t) -> void:
 	var fv := _fv()
 	fv.zoom = Look.ZOOM_MAX          # a stale value from a previous island, on purpose
 	fv.cam_px = Vector2(500.0, 400.0)
+	fv.cam_yaw_deg = 45.0            # a stale turn too — setup must reset the view, not inherit it
 	fv.setup(Battle.new(), Army.new(), [])
-	t.eq(fv.zoom, Look.ZOOM_MIN, "setup 이 줌을 ZOOM_MIN 으로 되돌린다 — 섬은 항상 다 보이는 채로 열린다")
-	# ⚠ **A literal, not `_clamp_cam()` called again here to check against.** `setup()` sets
-	# `cam_px = Vector2.ZERO` and then calls `_clamp_cam()` once — deleting that call is a real,
-	# measured mutation that stays green if this only re-derives the expected value the same way
-	# `setup()` does, since it would reproduce the SAME bug.
-	# ⚠ **Re-measured for `ZOOM_MIN` 0.45** (`plan-then-watch`, 6.3 — the user asked for the camera
-	# further back: 「조금 더 카메라를 뒤로 빼야 될」). The visible world is now 1280/0.45 = **2844.44** px
-	# wide and 720/0.45 = **1600.00** px tall, and BOTH are bigger than the map — so the clamp centres
-	# BOTH axes.
-	# ⚠⚠ **RE-MEASURED 2026-08-24 when the board was laid back 40 degrees.** A row is `TILE_H_PX`
-	# 30.64176 px tall, so the map is **1920 x 980.54** and not 1920 x 1280: the y half-gap grew from
-	# (1280 - 1600)/2 = -160.00 to **(980.54 - 1600)/2 = -309.73**. The x half-gap is unchanged at
-	# (1920 - 2844.44)/2 = **-462.22**, because nothing touched the width. At the
-	# old 0.5625 the y band was exactly 720 px and the island touched both screen edges, which is the
-	# framing that moved. Without the clamp call `cam_px` would still be the (0, 0) set above.
-	t.ok(fv.cam_px.distance_to(Vector2(-462.22, -309.73)) < 0.1,
-		"setup 뒤 cam_px 가 정확히 (-462.22, -309.73) 이다 — 리터럴로 확인한다 (%.2f, %.2f)"
-		% [fv.cam_px.x, fv.cam_px.y])
-	# ⚠ Read directly off `fv` right after `setup()` — NOT after calling `_clamp_cam()` a second time
-	# here, which would measure the function again instead of the state `setup()` actually left.
-	var visible := fv._visible_world_rect()
-	var margin_px := Look.WATER_MARGIN_TILES * Look.TILE_PX
-	var painted := Rect2(Vector2(-margin_px, -margin_px),
-		Vector2(Look.GRID_W, Look.GRID_H) * Look.TILE_PX + Vector2(margin_px, margin_px) * 2.0)
-	t.ok(visible.position.x >= painted.position.x - 0.01 and visible.position.y >= painted.position.y - 0.01
-			and visible.end.x <= painted.end.x + 0.01 and visible.end.y <= painted.end.y + 0.01,
-		"setup 이 남긴 cam_px 그대로도 보이는 세계가 칠한 영역 안에 든다")
+	t.ok(absf(fv.zoom - 0.57971) < 0.001,
+		"setup 이 줌을 서베이 값 0.57971 로 놓는다 (1280 / 2208, 손 산수) — 얻은 값 %.5f" % fv.zoom)
+	t.ok(fv.zoom > Look.ZOOM_MIN + 0.05,
+		"자가 점검 — 그 값은 ZOOM_MIN 상수(%.2f)가 아니다: setup 을 상수로 되돌리면 위가 문다" % Look.ZOOM_MIN)
+	t.eq(fv.cam_yaw_deg, Look.CAM_YAW_DEG, "setup 이 회전을 여는 각도로 되돌린다")
+	t.eq(fv.cam_pitch_deg, Look.CAM_PITCH_DEG, "기울기도 여는 값이다")
+	# ⚠ Literals, hand-derived: visible ground = (2208, 1242 / cos 40° = 1621.32) px; the 48 x 32 map
+	# (1920 x 1280) is narrower than the view on BOTH axes, so the clamp centres both:
+	# cam = (960 - 1104, 640 - 810.66) = (-144.00, -170.66).
+	t.ok(fv.cam_px.distance_to(Vector2(-144.0, -170.66)) < 0.1,
+		"setup 뒤 cam_px 가 정확히 (-144.00, -170.66) 이다 (%.2f, %.2f)" % [fv.cam_px.x, fv.cam_px.y])
+	# The whole island is on screen — the survey's own promise, measured at the yaw it opens at.
+	var visible := Rect2(fv.cam_px, fv._visible_ground_px())
+	t.ok(visible.encloses(Rect2(0.0, 0.0, 1920.0, 1280.0)),
+		"여는 프레임에 섬 전체가 보이는 땅 사각형 안에 든다")
+	fv.battle = null
+
+	# The inversion: at zoom 0.8 the visible ground is 1600 px wide against a 1920 px map, so the
+	# same rectangle CANNOT enclose the island — the row above is measuring the zoom, not itself.
+	var tight := _fv()
+	tight.zoom = 0.8
+	tight.cam_px = Vector2(9999.0, 9999.0)
+	tight._clamp_cam()
+	t.ok(not Rect2(tight.cam_px, tight._visible_ground_px()).encloses(Rect2(0.0, 0.0, 1920.0, 1280.0)),
+		"자가 점검 — 줌 0.8 에서는 섬 전체가 한 번에 안 보인다는 뜻이다")
 
 
-## `scale` is what actually carries the zoom to the screen — every draw call in `field_view.gd` runs
-## in the node's own local space, and Godot applies `scale` to that space on its own. `_process` has
-## to write it every frame, because `zoom_at` and `pan_by` change `zoom` / `cam_px` without touching
-## `scale` themselves (see their own bodies) — nothing else in this file calls `_process` at all.
-func _process_writes_scale_from_zoom(t) -> void:
-	var fv := _fv()
-	fv.zoom = 0.8
-	fv.cam_px = Vector2.ZERO
-	fv.scale = Vector2(1.0, 1.0)   # a stale value `_process` must overwrite
-	fv._process(0.016)
-	t.eq(fv.scale, Vector2(0.8, 0.8), "_process 가 scale 을 zoom 에서 다시 썼다")
-
-
-## A pan by a SMALL screen delta, comfortably inside the clamp range (unlike the corner-drag check
-## below, which only pins the ceiling), moves `cam_px` by exactly `-delta / zoom` — not `-delta`. This
-## is what the clamp checks elsewhere cannot show: they push 4000-50000 px and read only the clamped
-## endpoint, so the RATE never enters them at all.
-func _pan_by_moves_at_the_right_rate(t) -> void:
-	var fv := _fv()
-	fv.zoom = 0.8
-	# ⚠ **y was 300 and it stopped being reachable when the board was laid back.** At zoom 0.8 the
-	# visible world is 900 px tall against a map that went 1280 -> 980.54, so the whole y range is
-	# now [0, 80.54] and a `cam_px.y` of 300 is clamped before the pan is even measured — the rate
-	# this row exists to pin would have been read off a clamp instead. 40 sits inside the band, and
-	# 40 - 8/0.8 = 30 is still inside it after the pan.
-	fv.cam_px = Vector2(300.0, 40.0)
-	var before: Vector2 = fv.cam_px
-	fv.pan_by(Vector2(16.0, 8.0))
-	var want := before - Vector2(16.0, 8.0) / 0.8
-	t.ok(fv.cam_px.distance_to(want) < 0.01,
-		"작게 끌면 cam_px 가 정확히 -delta / zoom 만큼 움직인다 (%.3f px 차)" % fv.cam_px.distance_to(want))
-
-	# ⚠ Dropping the `/ zoom` is the plan's own named mutation for `pan_by` — confirmed to move the
-	# value this check reads, at a zoom where the two answers actually differ.
-	var without_zoom := before - Vector2(16.0, 8.0)
-	t.ok(without_zoom.distance_to(want) > 1.0,
-		"자가 점검 — '/ zoom' 을 빼면 줌 0.8에서 실제로 다른 값이 나온다는 뜻이다")
-
-
-## `world_to_tile` has NO CALLER anywhere in `src/` this round (stage 4's drag is the planned one) and
-## `net_draw_leaf._table()` lists it at 0 draws — true for "pure", but read as "verified" by anyone
-## who does not know it has never actually been driven. This drives it directly: `Rules.TILE_PX` is
-## 40.0, so tile 1 starts exactly at world x=40.0, and `floor` (not `round`) is what the boundary has
-## to use — `round` would put 39.9 in tile 1 instead of tile 0.
-func _world_to_tile_floors_at_the_boundary(t) -> void:
-	var fv := _fv()
-	t.eq(fv.world_to_tile(Vector2(0.0, 0.0)), Vector2i(0, 0), "원점은 (0,0) 타일이다")
-	t.eq(fv.world_to_tile(Vector2(39.9, 0.0)), Vector2i(0, 0),
-		"타일 경계 바로 앞(39.9px)은 아직 0번 타일이다 — round 였다면 1번이 나왔을 것이다 (자가 점검)")
-	t.eq(fv.world_to_tile(Vector2(40.0, 0.0)), Vector2i(1, 0), "정확히 경계(40.0px)부터 1번 타일이다")
-	t.eq(fv.world_to_tile(Vector2(79.9, 12.0)), Vector2i(1, 0), "79.9px 도 아직 1번 타일이다")
-	t.eq(fv.world_to_tile(Vector2(0.0, 80.0)), Vector2i(0, 2), "세로도 같은 규칙이다 — 80.0px 는 2번 행이다")
-
-
-## `at`, converted to world and back through the forward transform (`world * zoom + position`), must
-## return `at` — the only round trip this file trusts, since there is no separate `world_to_screen_px`
-## function to compare against (the plan deliberately keeps one conversion function, not two).
-func _round_trips(fv: FieldView, at: Vector2) -> float:
-	var world := fv.screen_to_world_px(at)
-	var back := world * fv.zoom + fv.position
-	return at.distance_to(back)
-
-
-func _round_trip_at_three_zooms_and_two_pans(t) -> void:
-	var zooms := [0.5625, 0.75, 1.0]
-	var pans := [Vector2(0.0, 0.0), Vector2(400.0, 250.0)]
-	var probes := [Vector2(0.0, 0.0), Vector2(640.0, 360.0), Vector2(1280.0, 720.0)]
-	var bad := 0
-	var checked := 0
-	for z: float in zooms:
-		for p: Vector2 in pans:
-			var fv := _fv()
-			fv.zoom = z
-			fv.cam_px = p
-			fv.position = fv._compose_position()
-			for at: Vector2 in probes:
-				checked += 1
-				if _round_trips(fv, at) > 0.01:
-					bad += 1
-	t.ok(checked >= 6, "줌 셋 x 팬 둘, 적어도 여섯 조합을 쟀다 (%d개)" % checked)
-	t.eq(bad, 0, "화면 좌표가 줌 0.5625 · 0.75 · 1.0 과 두 팬 위치 전부에서 월드로 되돌아온다")
-
-	# Deliberately dropping `/ zoom` in `screen_to_world_px` is the plan's own named mutation —
-	# confirmed here by measuring the SAME shape at a zoom where the two diverge.
-	var broken := _fv()
-	broken.zoom = 0.75
-	broken.cam_px = Vector2.ZERO
-	broken.position = broken._compose_position()
-	var wrong_world := (Vector2(640.0, 360.0) - broken.position)   # no "/ zoom"
-	var right_world := broken.screen_to_world_px(Vector2(640.0, 360.0))
-	t.ok(wrong_world.distance_to(right_world) > 1.0,
-		"자가 점검 — '/ zoom' 을 빼면 줌 0.75에서 실제로 다른 답이 나온다는 뜻이다")
-
-
-## The shake has to be INSIDE `_compose_position`'s one expression, not a second offset applied
-## somewhere else — and this pins the COMPOSED VALUE directly, never a round trip through
-## `screen_to_world_px`. ⚠ A round trip is algebraically incapable of catching this: `world =
-## (at - position) / zoom`, `back = world * zoom + position = at`, for ANY value `position` holds —
-## measured, dropping the shake term from `_compose_position` (that row's own named mutation) left the
-## earlier round-trip version of this check green at 21/21. Only the direct comparison below moves.
-func _shake_is_inside_the_same_expression(t) -> void:
-	var fv := _fv()
-	fv.zoom = 0.75
-	fv.cam_px = Vector2(120.0, 80.0)
-	fv._shake_amp = Look.SHAKE_MAX_PX
-	fv._shake_left = Look.SHAKE_SEC * 0.5
-	var shake := fv._shake_offset()
-	t.ok(shake.length() > 0.0, "흔들리는 중이다 (자가 점검)")
-	fv.position = fv._compose_position()
-	var expected := -fv.cam_px * fv.zoom + shake
-	t.ok(fv.position.distance_to(expected) < 0.001,
-		"position 이 정확히 -cam_px * zoom + shake_offset() 이다 — 흔들림이 그 식 안에 있다는 뜻이다")
-
-	# ⚠ Deleting the shake term from `_compose_position` is the named mutation — confirmed here to
-	# actually move the value this check reads, which the round trip above could never do.
-	var without_shake := -fv.cam_px * fv.zoom
-	t.ok(without_shake.distance_to(expected) > 0.5,
-		"자가 점검 — 흔들림 항을 빼면 실제로 다른 값이 나온다 (%.2f px 차, 그래서 위 검사가 뭔가를 잰다)"
-		% without_shake.distance_to(expected))
-
-
-## Zooming about `at` keeps the WORLD point under it fixed, to well under a pixel.
-func _zoom_holds_the_cursor(t) -> void:
-	var fv := _fv()
-	# ⚠ **0.7 stopped working when the board was laid back.** At 0.7 the visible world is 1028.6 px
-	# tall against a 980.54 px map, so the y axis is CENTRED — `cam_px.y` has no freedom at all and
-	# the clamp moves the point this row says stays put. At 0.9 the map is taller than the view
-	# (980.54 > 800), the y band is [0, 180.54], and 90 sits inside it before and after the notch.
-	fv.zoom = 0.9
-	fv.cam_px = Vector2(150.0, 90.0)
-	fv.position = fv._compose_position()
-	var at := Vector2(500.0, 300.0)
-	var world_before := fv.screen_to_world_px(at)
-	fv.zoom_at(at, 1.15)
-	fv.position = fv._compose_position()
-	var world_after := fv.screen_to_world_px(at)
-	t.ok(fv.zoom > 0.9, "실제로 확대됐다 (자가 점검, %.4f)" % fv.zoom)
-	t.ok(world_before.distance_to(world_after) < 0.01,
-		"커서 밑의 월드 점이 줌 노치를 건너도 그대로다 (%.4f px 차)"
-		% world_before.distance_to(world_after))
-
-	# ⚠ Ignoring `at` in `zoom_at` is the plan's own named mutation for this row.
-	var ignored := _fv()
-	ignored.zoom = 0.7
-	ignored.cam_px = Vector2(150.0, 90.0)
-	ignored.position = ignored._compose_position()
-	var wb := ignored.screen_to_world_px(at)
-	# Simulate the mutation directly: zoom changes, cam_px is left untouched (as `zoom_at` would do
-	# if it dropped the whole re-centring line).
-	ignored.zoom = 0.7 * 1.15
-	ignored.position = ignored._compose_position()
-	var wa := ignored.screen_to_world_px(at)
-	t.ok(wb.distance_to(wa) > 1.0,
-		"자가 점검 — cam_px 를 안 옮기면 커서 밑의 점이 실제로 움직인다는 뜻이다")
-
-
-func _zoom_min_shows_the_whole_map(t) -> void:
-	var fv := _fv()
-	fv.zoom = Look.ZOOM_MIN
-	fv.cam_px = Vector2(9999.0, 9999.0)   # forced far outside, so the clamp has to do the work
-	fv._clamp_cam()
-	var visible := fv._visible_world_rect()
-	var map := Rect2(Vector2.ZERO, Vector2(Look.GRID_W, Look.GRID_H) * Look.TILE_PX)
-	t.ok(visible.position.x <= map.position.x + 0.01 and visible.position.y <= map.position.y + 0.01
-			and visible.end.x >= map.end.x - 0.01 and visible.end.y >= map.end.y - 0.01,
-		"ZOOM_MIN 에서 섬 전체가 보이는 세계 사각형 안에 든다")
-
-	# ⚠ ZOOM_MIN too small (e.g. 0.7) is the plan's own named mutation — the map no longer fits.
-	var too_tight := _fv()
-	too_tight.zoom = 0.7
-	too_tight.cam_px = Vector2(9999.0, 9999.0)
-	too_tight._clamp_cam()
-	var tight_visible := too_tight._visible_world_rect()
-	t.ok(tight_visible.size.x < map.size.x or tight_visible.size.y < map.size.y,
-		"자가 점검 — 줌 0.7에서는 섬 전체가 한 번에 안 보인다는 뜻이다")
-
-
-## ⚠⚠ **THE CAPABILITY CHECK: the camera asks the GRID how big the map is, not `Look.GRID_W`.** Those
-## were `const 48` / `32` and `_clamp_cam` read them, so a map of any other size was unrepresentable —
-## the clamp would have held a 144-column island inside a 48-column box and most of it would have been
-## unreachable, silently, with every check green.
-##
-## The literals, by hand and not read off the code. At `ZOOM_MIN` 0.45 the visible world is
-## 2844.44 x 1600.00 px:
-##   48 x 32  = 1920 x 1280 px — NARROWER than the view, so x is CENTRED at (1920-2844.44)/2 = -462.22
-##   144 x 32 = 5760 x 1280 px — WIDER than the view, so x is CLAMPED into [0, 2915.56] and `setup`'s
-##              `cam_px = ZERO` survives it at **0.00**
-## Both have y centred at (980.54-1600)/2 = -309.73, because only the width moved between the two
-## maps — 980.54 is 32 rows at `TILE_H_PX`, the laid-back row height.
-## ⇒ **The x coordinate is the whole check**: -462.22 against 0.00 is a difference nothing but reading
-## the grid can produce.
-func _a_wider_grid_moves_the_clamp(t) -> void:
+## ⚠⚠ **THE CAPABILITY ROW: the camera asks the GRID how big the map is.** The long map is 144 x 32;
+## its survey (1280 / 6624 = 0.193) is under the wheel's own floor, so it opens clamped at
+## `ZOOM_MIN` 0.50 — visible ground (2560, 1879.79). x is WIDER than the view: the clamp holds the
+## centre in [1280, 4480] and setup's `cam_px = ZERO` survives at **0.00** where the 48-map centres
+## to -144. y is centred at 640 - 939.89 = **-299.89**. Hand literals, both.
+func _setup_on_the_long_map(t) -> void:
 	var army := Army.new()
 	var long_rows := Islands.rows_of(Islands.LONG_ISLAND_INDEX)
 	var g := Grid.new()
@@ -284,176 +110,332 @@ func _a_wider_grid_moves_the_clamp(t) -> void:
 	var fv := _fv()
 	fv.setup(b, army, long_rows)
 	t.eq(fv._map_tiles(), Vector2i(144, 32), "field_view 가 격자에게 크기를 묻는다")
-	t.ok(fv.cam_px.distance_to(Vector2(0.0, -309.73)) < 0.1,
-		"긴 지도에서 setup 뒤 cam_px 가 (0.00, -309.73) 이다 — x 는 가운데 맞춤이 아니라 물려서 잡힌다 (%.2f, %.2f)"
+	t.eq(fv.zoom, Look.ZOOM_MIN, "긴 지도의 서베이는 휠 바닥(0.50)에 걸려 멈춘다 — 다 보일 수 없는 지도다")
+	t.ok(fv.cam_px.distance_to(Vector2(0.0, -299.89)) < 0.1,
+		"긴 지도에서 setup 뒤 cam_px 가 (0.00, -299.89) 이다 — x 는 가운데 맞춤이 아니라 물려서 잡힌다 (%.2f, %.2f)"
 			% [fv.cam_px.x, fv.cam_px.y])
 
-	# The self-check that makes the number above a claim: on the shipped 48 x 32 grid the same call
-	# leaves a DIFFERENT x, and `Look.GRID_W` is still 48 — so this is not two names for one answer.
+	# The self-check that makes the number a claim: the 48-column fixture above landed x at -144, and
+	# `Look.GRID_W` is still 48 — so this is not two names for one answer.
 	t.eq(Look.GRID_W, 48, "Look.GRID_W 는 여전히 48이다 (격자 없는 뷰의 기본값으로만 남았다)")
-	var narrow := _fv()
-	narrow.setup(Battle.new(), Army.new(), [])
-	t.ok(absf(narrow.cam_px.x - fv.cam_px.x) > 400.0,
-		"48칸짜리에서는 x 가 -462.22 로 전혀 다르다 (%.2f vs %.2f) — 상수를 읽었다면 둘이 같았다"
-			% [narrow.cam_px.x, fv.cam_px.x])
+	t.ok(absf(fv.cam_px.x - (-144.0)) > 100.0,
+		"긴 지도의 x 는 48칸짜리의 -144 와 전혀 다르다 — 상수를 읽었다면 둘이 같았다")
 
-	# And the pan really reaches the far end. Under the old constant-fed clamp the ceiling was
-	# 1920 - 2844.44 < 0 and the camera could never leave the centre at all.
+	# And the pan really reaches the far end: centre max = 5760 - 1280 = 4480, so cam_px stops at
+	# 4480 - 1280 = **3200.0** — the middle-ground-point rule's own stop, as a hand literal.
 	fv.pan_by(Vector2(-50000.0, 0.0))
-	t.ok(fv.cam_px.x > 2915.0 and fv.cam_px.x < 2916.0,
-		"동쪽 끝까지 밀면 cam_px.x 가 2915.56 에서 멈춘다 (5760 - 2844.44) — 얻은 값 %.2f" % fv.cam_px.x)
-
-	fv.battle = null   # the shared free() loop at the end of `run` must not hold a live Battle
-
-
-## ⚠⚠ **THE FLOOR UNDER THE CULL.** `_visible_tile_rect` is what the terrain loop walks instead of
-## the whole margin ring, and "fewer tiles" is also exactly what a cull that ate the screen would say.
-## So the span must always CONTAIN what the unculled loop could have painted inside the view — that is
-## the ring intersected with the visible world — at every zoom, at every corner, on both grid sizes.
-##
-## The ceiling beside it: on the long map the span has to be a small fraction of the ring, or there is
-## no cull and the 144-column map is 9,408 tiles a frame.
-func _the_cull_never_cuts_anything_visible(t) -> void:
-	var margin := Look.WATER_MARGIN_TILES
-	var army := Army.new()
-	var long_rows := Islands.rows_of(Islands.LONG_ISLAND_INDEX)
-	var long_grid := Grid.new()
-	long_grid.load_rows(long_rows)
-	var long_battle := Battle.new()
-	long_battle.setup(long_grid, army, [], 999.0)
-
-	var cases := [
-		{"battle": null, "rows": [], "tiles": Vector2i(48, 32), "label": "48 x 32"},
-		{"battle": long_battle, "rows": long_rows, "tiles": Vector2i(144, 32), "label": "144 x 32"},
-	]
-	var pushes := [Vector2.ZERO, Vector2(50000.0, 0.0), Vector2(-50000.0, 0.0),
-		Vector2(0.0, 50000.0), Vector2(0.0, -50000.0)]
-	var zooms := [Look.ZOOM_MIN, 0.7, 0.85, Look.ZOOM_MAX]
-	var bad: Array[String] = []
-	var checked := 0
-	for raw: Dictionary in cases:
-		var tiles: Vector2i = raw["tiles"]
-		var ring_px := margin * Look.TILE_PX
-		var ring := Rect2(Vector2(-ring_px, -ring_px),
-			Vector2(tiles) * Look.TILE_PX + Vector2(ring_px, ring_px) * 2.0)
-		for z: float in zooms:
-			for push: Vector2 in pushes:
-				var fv := _fv()
-				var bt: Battle = raw["battle"]
-				fv.setup(bt if bt != null else Battle.new(), army, raw["rows"])
-				fv.zoom = z
-				fv._clamp_cam()
-				fv.pan_by(push)
-				checked += 1
-				var span := fv._visible_tile_rect(margin)
-				var painted := Rect2(Vector2(span.position) * Look.TILE_PX,
-					Vector2(span.size) * Look.TILE_PX)
-				var want := ring.intersection(fv._visible_world_rect())
-				if not painted.encloses(want):
-					bad.append("%s z=%.2f push=%s: 칠함 %s ⊉ %s"
-						% [str(raw["label"]), z, str(push), str(painted), str(want)])
-				fv.battle = null
-	t.eq(checked, 40, "두 크기 x 네 줌 x 다섯 위치, 마흔 번을 실제로 쟀다 (자가 점검)")
-	t.eq(bad.size(), 0, "어느 경우에도 잘라낸 칸이 화면 안에 없었다 %s" % str(bad))
-
-	# The ceiling. At `ZOOM_MIN` on the long map the loop walks 76 x 58 = 4408 tiles against a ring of
-	# 176 x 64 = 11264 — the literals are hand arithmetic, and without them "the cull is on" is a
-	# sentence nothing measures.
-	# ⚠ **Re-done for the laid-back board and `WATER_MARGIN_TILES` 16.** y: the visible world is
-	# -309.73 .. 1290.27, grown by 80 px to -389.73 .. 1370.27, divided by `TILE_H_PX` 30.64176 and
-	# floored/ceiled to **-13 .. 45 = 58 rows**, and the [-16, 48) clamp does not bite either end.
-	var fv_long := _fv()
-	fv_long.setup(long_battle, army, long_rows)
-	var long_span := fv_long._visible_tile_rect(margin)
-	t.eq(long_span.position, Vector2i(-2, -13), "긴 지도의 ZOOM_MIN 구간은 (-2, -13) 에서 시작한다")
-	t.eq(long_span.size, Vector2i(76, 58), "그리고 76 x 58 칸이다")
-	t.eq(long_span.size.x * long_span.size.y, 4408, "곧 4408칸이다")
-	t.ok(4408 < (144 + 2 * margin) * (32 + 2 * margin),
-		"여백까지 통째로 칠하면 11264칸이니, 컬링이 %d칸을 덜어냈다"
-			% ((144 + 2 * margin) * (32 + 2 * margin) - 4408))
-	fv_long.battle = null
+	t.ok(absf(fv.cam_px.x - 3200.0) < 0.1,
+		"동쪽 끝까지 밀면 cam_px.x 가 3200.00 에서 멈춘다 (얻은 값 %.2f)" % fv.cam_px.x)
+	fv.battle = null
 
 
-## The painted area (map + `WATER_MARGIN_TILES` on every side) covers the visible world rect at
-## every zoom in range — not only at the extremes.
-func _painted_area_covers_the_viewport(t) -> void:
-	var margin_px := Look.WATER_MARGIN_TILES * Look.TILE_PX
-	var painted := Rect2(Vector2(-margin_px, -margin_px),
-		Vector2(Look.GRID_W, Look.GRID_H) * Look.TILE_PX + Vector2(margin_px, margin_px) * 2.0)
-	var zooms := [Look.ZOOM_MIN, 0.7, 0.85, Look.ZOOM_MAX]
-	var bad := 0
-	for z: float in zooms:
-		var fv := _fv()
-		fv.zoom = z
-		fv.cam_px = Vector2(9999.0, 9999.0)
-		fv._clamp_cam()
-		var visible := fv._visible_world_rect()
-		if visible.position.x < painted.position.x - 0.01 or visible.position.y < painted.position.y - 0.01 \
-				or visible.end.x > painted.end.x + 0.01 or visible.end.y > painted.end.y + 0.01:
-			bad += 1
-	t.eq(bad, 0, "모든 줌에서 물 여백까지 칠한 영역이 보이는 세계를 덮는다 — 줌 아웃해도 맨바닥이 안 드러난다")
-
-	# ⚠ WATER_MARGIN_TILES too small is the plan's own named mutation.
-	var thin_margin_px := 1.0 * Look.TILE_PX
-	var thin_painted := Rect2(Vector2(-thin_margin_px, -thin_margin_px),
-		Vector2(Look.GRID_W, Look.GRID_H) * Look.TILE_PX + Vector2(thin_margin_px, thin_margin_px) * 2.0)
-	var fv_min := _fv()
-	fv_min.zoom = Look.ZOOM_MIN
-	fv_min.cam_px = Vector2(9999.0, 9999.0)
-	fv_min._clamp_cam()
-	var visible_min := fv_min._visible_world_rect()
-	t.ok(visible_min.position.x < thin_painted.position.x - 0.01
-			or visible_min.end.x > thin_painted.end.x + 0.01,
-		"자가 점검 — 여백을 1칸으로 좁히면 ZOOM_MIN 에서 맨바닥이 드러난다는 뜻이다")
-
-
-## Pan hard in all four directions: the visible rect never leaves map+margin (the ceiling), AND the
-## camera really moved at some point along the way (the floor — a clamp that never lets go passes
-## the ceiling by doing nothing).
-func _the_clamp_holds_and_the_camera_really_moves(t) -> void:
+## The one thing tilting cost: a screen px DOWN covers `1 / cos(pitch)` ground px. At zoom 1.0 and
+## the opening pitch 40° the visible ground is (1280, 720 / 0.766044 = **939.89**) — hand literals.
+func _visible_ground_divides_by_the_pitch(t) -> void:
 	var fv := _fv()
 	fv.zoom = 1.0
-	fv.cam_px = Vector2(500.0, 400.0)
-	fv._clamp_cam()
-	var start: Vector2 = fv.cam_px
+	var v := fv._visible_ground_px()
+	t.ok(absf(v.x - 1280.0) < 0.01, "가로는 나눗셈이 없다 — 1280 그대로다 (%.2f)" % v.x)
+	t.ok(absf(v.y - 939.89) < 0.01, "세로는 cos(40°) 로 나뉜다 — 939.89 다 (%.2f)" % v.y)
+	# ⚠ The named mutation: delete the `/cos(pitch)` and the answer is 720 — 219.89 px apart, which
+	# the literal above cannot miss.
+	t.ok(absf(939.89 - 720.0) > 1.0, "자가 점검 — 나눗셈을 지우면 실제로 다른 값(720)이 나온다는 뜻이다")
+	# And it reads the RUNTIME pitch, not the constant: tilted to 60° the same call answers
+	# 720 / cos(60°) = 1440.
+	fv.cam_pitch_deg = 60.0
+	t.ok(absf(fv._visible_ground_px().y - 1440.0) < 0.01,
+		"기울기를 60°로 바꾸면 세로가 1440 이 된다 — 상수가 아니라 지금 기울기를 읽는다")
 
-	var margin_px := Look.WATER_MARGIN_TILES * Look.TILE_PX
-	var painted := Rect2(Vector2(-margin_px, -margin_px),
-		Vector2(Look.GRID_W, Look.GRID_H) * Look.TILE_PX + Vector2(margin_px, margin_px) * 2.0)
 
-	var moved := false
+## The conversion's own corners, as hand literals. At yaw 0 screen (0,0) is exactly `cam_px` —
+## centre minus half the span IS the corner — and (1280,720) is `cam_px + visible`. At yaw 90 the
+## screen axes lie along world (+y, -x), so the top-left corner lands at
+## centre + (vis.y/2, -vis.x/2) = **(1209.95, -120.05)** for this fixture.
+func _screen_to_world_at_the_corners(t) -> void:
+	var fv := _fv()
+	fv.zoom = 1.0
+	fv.cam_px = Vector2(100.0, 50.0)
+	t.ok(fv.screen_to_world_px(Vector2(0.0, 0.0)).distance_to(Vector2(100.0, 50.0)) < 0.01,
+		"화면 (0,0) 은 정확히 cam_px 다 — 코너 계약이 그대로다")
+	t.ok(fv.screen_to_world_px(Vector2(1280.0, 720.0)).distance_to(Vector2(1380.0, 989.89)) < 0.01,
+		"화면 (1280,720) 은 cam_px + 보이는 땅이다 (1380.00, 989.89)")
+	t.ok(fv.screen_to_world_px(Vector2(640.0, 360.0)).distance_to(Vector2(740.0, 519.95)) < 0.01,
+		"화면 한가운데는 땅의 한가운데다 (740.00, 519.95)")
+	fv.cam_yaw_deg = 90.0
+	t.ok(fv.screen_to_world_px(Vector2(0.0, 0.0)).distance_to(Vector2(1209.95, -120.05)) < 0.1,
+		"yaw 90 에서 화면 (0,0) 은 (1209.95, -120.05) 다 — 축이 실제로 돌았다 (손 산수)")
+	t.ok(fv.screen_to_world_px(Vector2(640.0, 360.0)).distance_to(Vector2(740.0, 519.95)) < 0.01,
+		"그래도 화면 한가운데는 같은 땅점이다 — 돌리는 것은 축이지 중심이 아니다")
+
+
+func _world_to_tile_floors_at_the_boundary(t) -> void:
+	var fv := _fv()
+	t.eq(fv.world_to_tile(Vector2(0.0, 0.0)), Vector2i(0, 0), "원점은 (0,0) 타일이다")
+	t.eq(fv.world_to_tile(Vector2(39.9, 0.0)), Vector2i(0, 0),
+		"타일 경계 바로 앞(39.9px)은 아직 0번 타일이다 — round 였다면 1번이 나왔을 것이다 (자가 점검)")
+	t.eq(fv.world_to_tile(Vector2(40.0, 0.0)), Vector2i(1, 0), "정확히 경계(40.0px)부터 1번 타일이다")
+	t.eq(fv.world_to_tile(Vector2(79.9, 12.0)), Vector2i(1, 0), "79.9px 도 아직 1번 타일이다")
+	t.eq(fv.world_to_tile(Vector2(0.0, 80.0)), Vector2i(0, 2), "세로도 같은 규칙이다 — 80.0px 는 2번 행이다")
+
+
+## A small drag, comfortably inside the clamp band, moves the ground by exactly `-delta / zoom` on x
+## and `-delta / zoom / cos(pitch)` on y — the ground under the cursor keeps up with the cursor, and
+## the vertical is longer because the ground is leaning away. 16/0.8 = 20.0, 8/0.8/0.766044 = 13.05.
+func _pan_by_moves_at_the_right_rate(t) -> void:
+	var fv := _fv()
+	fv.zoom = 0.8
+	# In-band: at zoom 0.8 cam_px ranges are x [0, 320] and y [0, 105.13]; both the start and the
+	# panned end sit inside, so the rate is read and not the clamp.
+	fv.cam_px = Vector2(150.0, 40.0)
+	var before: Vector2 = fv.cam_px
+	fv.pan_by(Vector2(16.0, 8.0))
+	var want := before - Vector2(20.0, 13.054)
+	t.ok(fv.cam_px.distance_to(want) < 0.01,
+		"작게 끌면 x 는 -delta/zoom, y 는 -delta/zoom/cos(pitch) 만큼 움직인다 (%.3f px 차)"
+			% fv.cam_px.distance_to(want))
+	# ⚠ Named mutations, both axes: drop the `/zoom` and x moves 16 not 20; drop the `/cos` and y
+	# moves 10 not 13.05 — either is over a pixel off the literal above.
+	t.ok(absf(20.0 - 16.0) > 1.0 and absf(13.054 - 10.0) > 1.0,
+		"자가 점검 — 나눗셈 어느 쪽을 지워도 리터럴과 1px 넘게 갈린다")
+
+
+## At yaw 90 a horizontal drag moves the camera along WORLD y: screen-right lies on world +y there,
+## so the same promise (the ground under the cursor follows the cursor) turns with the board.
+func _pan_follows_the_turned_axes(t) -> void:
+	var fv := _fv()
+	fv.zoom = 0.8
+	fv.cam_yaw_deg = 90.0
+	fv.cam_px = Vector2(160.0, 52.0)
+	fv.pan_by(Vector2(16.0, 0.0))
+	t.ok(fv.cam_px.distance_to(Vector2(160.0, 32.0)) < 0.01,
+		"yaw 90 에서 가로 끌기는 세계 y 축으로 20px 움직인다 (%.2f, %.2f)" % [fv.cam_px.x, fv.cam_px.y])
+
+
+## Zooming about `at` keeps the ground point under it fixed — **at every yaw in the sweep**, which is
+## the half the addendum added. The fixture parks the centre mid-map at zoom 0.8 so the clamp has
+## slack on both axes before and after the notch (checked by hand: centre (960,640) against ranges
+## x [800,1120] · y [587.4,692.6], and after the notch x [695.7,1224.3] · y [510.8,769.2]).
+func _zoom_holds_the_cursor_at_every_yaw(t) -> void:
+	var at := Vector2(500.0, 300.0)
 	var bad := 0
-	var pushes := [Vector2(50000.0, 0.0), Vector2(-50000.0, 0.0), Vector2(0.0, 50000.0), Vector2(0.0, -50000.0)]
-	for push: Vector2 in pushes:
-		fv.pan_by(push)
-		if fv.cam_px != start:
-			moved = true
-		var visible := fv._visible_world_rect()
-		if visible.position.x < painted.position.x - 0.01 or visible.position.y < painted.position.y - 0.01 \
-				or visible.end.x > painted.end.x + 0.01 or visible.end.y > painted.end.y + 0.01:
+	for yaw: float in [0.0, 15.0, 45.0, 90.0, 165.0]:
+		var fv := _fv()
+		fv.zoom = 0.8
+		fv.cam_yaw_deg = yaw
+		fv.cam_px = Vector2(960.0, 640.0) - fv._visible_ground_px() * 0.5
+		var world_before := fv.screen_to_world_px(at)
+		fv.zoom_at(at, 1.15)
+		if fv.zoom <= 0.8:
 			bad += 1
-	t.ok(moved, "실제로 카메라가 움직인 적이 있다 (바닥 — 안 움직이는 클램프는 이 검사를 속인다)")
-	t.eq(bad, 0, "아무리 밀어도 지도 + 여백 밖으로 못 나간다")
+		if world_before.distance_to(fv.screen_to_world_px(at)) > 0.01:
+			bad += 1
+	t.eq(bad, 0, "다섯 yaw 전부에서 줌 노치를 건너도 커서 밑의 땅점이 그대로다")
 
-	# ⚠ Deleting the clamp is the plan's own named mutation. `pan_by` always calls `_clamp_cam`
-	# itself, so simulating its absence means writing `cam_px` directly rather than going through it.
-	var unclamped := _fv()
-	unclamped.zoom = 1.0
-	unclamped.cam_px = Vector2(500.0, 400.0) - Vector2(50000.0, 50000.0)
-	var wild := unclamped._visible_world_rect()
-	t.ok(wild.position.x < painted.position.x, "자가 점검 — 클램프를 안 걸면 세계 밖으로 실제로 나간다")
+	# ⚠ The named mutation, simulated at a TURNED yaw: change the zoom and leave `cam_px` alone (the
+	# whole re-centring line deleted) — the point under the cursor must actually move.
+	var broken := _fv()
+	broken.zoom = 0.8
+	broken.cam_yaw_deg = 45.0
+	broken.cam_px = Vector2(960.0, 640.0) - broken._visible_ground_px() * 0.5
+	var wb := broken.screen_to_world_px(at)
+	broken.zoom = 0.8 * 1.15
+	t.ok(wb.distance_to(broken.screen_to_world_px(at)) > 1.0,
+		"자가 점검 — cam_px 를 안 옮기면 yaw 45 에서도 커서 밑의 점이 실제로 밀린다는 뜻이다")
+
+
+func _zoom_stops_at_both_ends(t) -> void:
+	var fv := _fv()
+	fv.zoom = Look.ZOOM_MAX
+	fv.cam_px = Vector2(300.0, 100.0)
+	fv.zoom_at(Vector2(640.0, 360.0), 1.15)
+	t.eq(fv.zoom, Look.ZOOM_MAX, "ZOOM_MAX 에서 더 확대되지 않는다")
+	fv.zoom = Look.ZOOM_MIN
+	fv.zoom_at(Vector2(640.0, 360.0), 0.8)
+	t.eq(fv.zoom, Look.ZOOM_MIN, "ZOOM_MIN 에서 더 축소되지 않는다")
+
+
+## Pushed from far outside at a TURNED yaw, the clamp brings the ground point at the middle of the
+## screen back INSIDE the map — the addendum's rule, read straight off `_ground_centre_px()`.
+## ⚠ ONE turned yaw and not a sweep, deliberately (verify-read D): `_clamp_cam` never reads the yaw,
+## so five yaws were five copies of the same measurement wearing five counts.
+func _the_clamp_holds_at_every_yaw(t) -> void:
+	var map := Rect2(0.0, 0.0, 1920.0, 1280.0)
+	var fv := _fv()
+	fv.zoom = 0.9
+	fv.cam_yaw_deg = 45.0
+	fv.cam_px = Vector2(9999.0, 9999.0)
+	fv._clamp_cam()
+	t.ok(fv.cam_px != Vector2(9999.0, 9999.0),
+		"돌린 yaw 에서도 클램프가 실제로 카메라를 옮겼다 (바닥 — 안 움직이는 클램프는 여기서 문다)")
+	t.ok(map.has_point(fv._ground_centre_px()),
+		"그리고 화면 한가운데 땅점이 지도 안으로 돌아온다 — 모서리가 아니라 중심을 묶는다")
+
+	# ⚠ The named mutation: delete the clamp. `pan_by` always calls it, so its absence is simulated
+	# by writing `cam_px` directly — the centre then really is outside the map.
+	var wild := _fv()
+	wild.zoom = 0.9
+	wild.cam_px = Vector2(-50000.0, -50000.0)
+	t.ok(not map.has_point(wild._ground_centre_px()),
+		"자가 점검 — 클램프를 안 걸면 중심이 실제로 지도 밖이다")
+
+
+## The stops, as hand literals at zoom 1.0 on 48 x 32: visible (1280, 939.89), so the centre may
+## reach x 1920 - 640 = 1280 and y 1280 - 469.95 = 810.05 — cam_px stops at **640.00** east and
+## **340.11** south. 340.11 is `1280 - 720/cos(40°)`, the pitch division reaching the clamp.
+func _the_clamp_stops_at_hand_literals(t) -> void:
+	var fv := _fv()
+	fv.zoom = 1.0
+	fv.cam_px = Vector2(300.0, 100.0)
+	fv.pan_by(Vector2(-50000.0, 0.0))
+	t.ok(absf(fv.cam_px.x - 640.0) < 0.1, "동쪽 끝에서 cam_px.x 가 640.00 이다 (%.2f)" % fv.cam_px.x)
+	fv.pan_by(Vector2(0.0, -50000.0))
+	t.ok(absf(fv.cam_px.y - 340.11) < 0.1, "남쪽 끝에서 cam_px.y 가 340.11 이다 (%.2f)" % fv.cam_px.y)
+	# ⚠ Without the pitch division the south stop would be 1280 - 720 = 560 — 220 px off the literal.
+	t.ok(absf(340.11 - 560.0) > 1.0, "자가 점검 — cos 나눗셈이 빠지면 남쪽 끝이 560 으로 밀린다는 뜻이다")
+	fv.pan_by(Vector2(50000.0, 50000.0))
+	t.ok(absf(fv.cam_px.x - 0.0) < 0.1 and absf(fv.cam_px.y - 0.0) < 0.1,
+		"반대쪽 끝은 (0, 0) 이다 — 양끝이 다 잰 값이다")
+
+
+## 「돌려도 판이 안 흔들리나」, in numbers: Q/E and R/F hold the ground point at the middle of the
+## screen, and the real camera keeps orbiting the SAME world point. The target is recovered off the
+## engine node itself — `position - basis.z * CAM_DIST_TILES` — never re-derived from the formula.
+func _turn_and_tilt_hold_the_centre(t) -> void:
+	var fv := _fv()
+	fv._build_world()
+	fv.zoom = 0.9
+	fv.cam_px = Vector2(300.0, 100.0)
+	fv._place_camera()
+	var centre0 := fv._ground_centre_px()
+	var zoom0 := fv.zoom
+	var target0: Vector3 = fv._cam.position - fv._cam.transform.basis.z * Look.CAM_DIST_TILES
+	t.ok(target0.distance_to(Vector3(centre0.x / 40.0, 0.0, centre0.y / 40.0)) < 0.01,
+		"카메라가 실제로 화면 한가운데 땅점을 보고 있다 (자가 점검)")
+
+	var drift := 0
+	for step: float in [15.0, 30.0, 45.0, 75.0, 135.0]:
+		fv.turn_by(step)
+		fv._place_camera()
+		if fv._ground_centre_px().distance_to(centre0) > 0.01:
+			drift += 1
+		if fv.zoom != zoom0:
+			drift += 1
+		var target: Vector3 = fv._cam.position - fv._cam.transform.basis.z * Look.CAM_DIST_TILES
+		if target.distance_to(target0) > 0.01:
+			drift += 1
+	t.eq(drift, 0, "yaw 15·45·90·165·300 을 지나도록 중심·줌·시선 목표가 한 번도 안 움직였다 — 판이 제자리에서 돈다")
+	t.ok(absf(fv.cam_yaw_deg - 300.0) < 0.01, "각도 자체는 실제로 쌓였다 (자가 점검, %.1f°)" % fv.cam_yaw_deg)
+	fv.turn_by(60.0)
+	t.ok(absf(fv.cam_yaw_deg - 0.0) < 0.01, "한 바퀴를 채우면 0 으로 감긴다 (fmod 360)")
+
+	# The tilt holds the same point while the vertical span changes under it — the half of the
+	# re-centre that is NOT a no-op (the turn leaves the span alone; the tilt does not).
+	fv.tilt_by(5.0)
+	t.ok(fv._ground_centre_px().distance_to(centre0) < 0.01, "기울여도(45°) 중심이 그대로다")
+	fv.tilt_by(-10.0)
+	t.ok(fv._ground_centre_px().distance_to(centre0) < 0.01, "반대로 기울여도(35°) 그대로다")
+	# ⚠ The named mutation: write the pitch WITHOUT the re-centre — the centre really moves, by
+	# half the span change (about 43 px at 0.9 from 35° to 45°).
+	var raw := _fv()
+	raw.zoom = 0.9
+	raw.cam_px = Vector2(300.0, 100.0)
+	var raw_centre := raw._ground_centre_px()
+	raw.cam_pitch_deg = raw.cam_pitch_deg + 15.0
+	t.ok(raw._ground_centre_px().distance_to(raw_centre) > 1.0,
+		"자가 점검 — 재중심을 지우면 기울일 때 중심이 실제로 밀린다는 뜻이다")
+
+	# Both ends of the tilt clamp. ⚠ At 80° the vertical span (4607 px) swallows the map, so the
+	# clamp centres y and the held centre legitimately moves — only the ANGLE is pinned there.
+	fv.tilt_by(-1000.0)
+	t.eq(fv.cam_pitch_deg, Look.CAM_PITCH_MIN_DEG, "아래로는 20° 에서 멈춘다")
+	fv.tilt_by(1000.0)
+	t.eq(fv.cam_pitch_deg, Look.CAM_PITCH_MAX_DEG, "위로는 80° 에서 멈춘다")
+
+
+## ⚠⚠ **The pin that makes the pure rows whole**: measuring a pure function is not measuring that
+## anything calls it. `_place_camera` is the one place `cam_px` / `zoom` / the two angles reach the
+## engine, so the REAL `Camera3D` is read back against hand literals — position, orientation, size.
+## Fixture: zoom 1.0, cam (200,100), yaw 0, pitch 40 ⇒ centre (840, 569.95), target (21, 0, 14.249),
+## back (0, sin40, -cos40), position = target + back * 90 = **(21.00, 57.85, -54.70)**, size 32.0.
+func _the_real_camera_obeys_the_pure_functions(t) -> void:
+	var fv := _fv()
+	fv._build_world()
+	fv.zoom = 1.0
+	fv.cam_px = Vector2(200.0, 100.0)
+	fv._place_camera()
+	t.ok(absf(fv._cam.size - 32.0) < 0.001, "직교 카메라의 size 가 보이는 폭 32 타일이다 (%.3f)" % fv._cam.size)
+	t.ok(fv._cam.position.distance_to(Vector3(21.0, 57.851, -54.695)) < 0.01,
+		"카메라 자리가 손 산수 그대로다 (21.00, 57.85, -54.70)")
+	t.ok(fv._cam.transform.basis.z.distance_to(Vector3(0.0, 0.642788, -0.766044)) < 0.001,
+		"뒤쪽 축이 (0, sin40°, -cos40°) 다 — 시선이 40° 로 내려다본다")
+	fv.zoom = 0.8
+	fv._place_camera()
+	t.ok(absf(fv._cam.size - 40.0) < 0.001, "줌 0.8 이면 size 가 40 타일이다 — size 가 줌을 실어 나른다")
+
+	# ⚠ The named mutation: `_place_camera` reading `Look.CAM_PITCH_DEG` instead of the runtime
+	# field. Tilted to 60° the same fixture must land at (21, 77.94, -24.50) — pitch-40 numbers
+	# (57.85, -54.70) are over 20 tiles away, so the literal cannot be satisfied by the constant.
+	fv.zoom = 1.0
+	fv.cam_pitch_deg = 60.0
+	fv._place_camera()
+	t.ok(fv._cam.position.distance_to(Vector3(21.0, 77.942, -24.5)) < 0.01,
+		"기울기 60° 에서 자리가 (21.00, 77.94, -24.50) 이다 — 상수가 아니라 지금 기울기를 읽는다")
+	t.ok(fv._cam.transform.basis.z.distance_to(Vector3(0.0, 0.866025, -0.5)) < 0.001,
+		"뒤쪽 축도 (0, sin60°, -cos60°) 다")
+	t.ok(Vector3(21.0, 77.942, -24.5).distance_to(Vector3(21.0, 57.851, -54.695)) > 1.0,
+		"자가 점검 — 40° 의 답과 60° 의 답이 실제로 다르다 (그래서 위 리터럴이 뭔가를 잰다)")
+
+
+## The shake is an offset on the GROUND, in the screen's own two axes — the screen jerks, the island
+## does not slide. Read as the delta between the real camera's shaken and unshaken positions, and
+## re-read at yaw 90 where the same screen offset must land on turned world axes.
+func _the_shake_rides_the_screen_axes(t) -> void:
+	var fv := _fv()
+	fv._build_world()
+	fv.zoom = 1.0
+	fv.cam_px = Vector2(200.0, 100.0)
+	fv._place_camera()
+	var still: Vector3 = fv._cam.position
+	var still_basis: Basis = fv._cam.transform.basis
+
+	fv._shake_amp = Look.SHAKE_MAX_PX
+	fv._shake_left = Look.SHAKE_SEC * 0.5
+	var shake := fv._shake_offset()
+	t.ok(shake.length() > 0.5, "흔들리는 중이다 (자가 점검, %.2f px)" % shake.length())
+	fv._place_camera()
+	var delta: Vector3 = fv._cam.position - still
+	t.ok(delta.distance_to(Vector3(shake.x / 40.0, 0.0, shake.y / 40.0)) < 0.001,
+		"yaw 0 에서 카메라가 정확히 (shake.x, shake.y)/타일 만큼 밀린다")
+	t.ok(fv._cam.transform.basis.z.distance_to(still_basis.z) < 0.0001,
+		"그리고 시선 방향은 안 돈다 — 흔들림은 평행이동이다")
+	t.ok(delta.length() > 0.001, "자가 점검 — 흔들림 항을 지우면 델타가 0 이 된다 (%.4f 타일)" % delta.length())
+
+	# At yaw 90 screen-right is world +y and screen-down is world -x, so the SAME screen shake lands
+	# as (-shake.y, shake.x) on the ground — the island jerks with the screen, not with the world.
+	fv._shake_left = 0.0
+	fv.cam_yaw_deg = 90.0
+	fv._place_camera()
+	var still90: Vector3 = fv._cam.position
+	fv._shake_amp = Look.SHAKE_MAX_PX
+	fv._shake_left = Look.SHAKE_SEC * 0.5
+	fv._place_camera()
+	var delta90: Vector3 = fv._cam.position - still90
+	t.ok(delta90.distance_to(Vector3(-shake.y / 40.0, 0.0, shake.x / 40.0)) < 0.001,
+		"yaw 90 에서 같은 흔들림이 돌아간 축으로 밀린다 — 화면이 흔들리지 섬이 미끄러지지 않는다")
 
 
 ## Both ends of `ZOOM_MIN`, `ZOOM_MAX` and `ZOOM_STEP` — six labels, each a direction that must not
-## be crossed, per `boat-and-landing` 7.1's own table.
+## be crossed. ⚠ `ZOOM_MIN` sits ON its own measured ceiling now (0.50, raised from 0.45): above it
+## the 48 x 32 island loses its vertical margin at the wheel's floor.
 func _both_ends_of_the_three_constants(t) -> void:
-	# ⚠ **The ceiling moved from 0.5625 to 0.50 and the REASON moved with it.** 0.5625 was 「the island
-	# still fits」; at that value the island is 1080 x 720 on a 1280 x 720 viewport, i.e. it touches both
-	# screen edges with ZERO vertical margin — which is the framing the user asked to move back from.
-	# 0.50 is the loosest value that still leaves a tile of margin top and bottom.
 	t.ok(Look.ZOOM_MIN <= 0.50 + 1e-6, "ZOOM_MIN 은 0.50 이하다 — 넘으면 섬 위아래 여백이 사라진다")
-	t.ok(Look.ZOOM_MIN >= 0.4 - 1e-6, "ZOOM_MIN 은 0.4 이상이다 — 못 미치면 14px 몸이 6px 밑으로 준다")
+	t.ok(Look.ZOOM_MIN >= 0.4 - 1e-6, "ZOOM_MIN 은 0.4 이상이다 — 못 미치면 작은 몸이 읽히지 않는 크기로 준다")
 	t.ok(Look.ZOOM_MAX >= 1.0 - 1e-6, "ZOOM_MAX 는 1.0 이상이다 — 오늘의 스케일을 잃으면 안 된다")
 	t.ok(Look.ZOOM_MAX <= 1.5 + 1e-6, "ZOOM_MAX 는 1.5 이하다")
 	t.ok(Look.ZOOM_STEP > 1.05, "ZOOM_STEP 은 1.05 보다 커야 한 노치가 뭔가 바뀐다")
 	t.ok(Look.ZOOM_STEP < 1.4, "ZOOM_STEP 은 1.4 보다 작아야 두 노치가 범위를 못 건너뛴다")
+	# The tilt's own pair, because `tilt_by` clamps into them and the clamp rows above read them.
+	t.ok(Look.CAM_PITCH_MIN_DEG >= 15.0 and Look.CAM_PITCH_MIN_DEG <= 30.0,
+		"기울기 바닥이 15~30° 안이다 — 밑이면 땅이 옆모습이 되고 지도가 아니게 된다")
+	t.ok(Look.CAM_PITCH_MAX_DEG >= 70.0 and Look.CAM_PITCH_MAX_DEG <= 85.0,
+		"기울기 천장이 70~85° 안이다 — 넘으면 높이가 다시 안 읽힌다 (3D 로 온 이유가 사라진다)")

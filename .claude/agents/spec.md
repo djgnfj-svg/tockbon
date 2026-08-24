@@ -13,6 +13,9 @@ Turns a design doc into an **implementable plan**. Nothing else.
 
 ## What you do
 
+⚠⚠ **Call the Skill tool with `plan-into-ticket` first.** It holds the shape of the plan and the seams
+step, and it is where the imported `to-spec` was adapted to land inside the ticket instead of beside it.
+
 1. Read the design doc.
 2. Read the related code. Learn what exists and what has to be touched.
 3. Write the plan: which file, what change, in what order.

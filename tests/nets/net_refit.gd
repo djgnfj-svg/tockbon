@@ -37,6 +37,7 @@ class RefitSpy extends RefitView:
 	var buttons := []
 	var fades := []
 	var hints := []
+	var tag_rows := []
 
 	func _draw() -> void:
 		slot_boxes.clear()
@@ -53,6 +54,7 @@ class RefitSpy extends RefitView:
 		buttons.clear()
 		fades.clear()
 		hints.clear()
+		tag_rows.clear()
 		super()
 		draws += 1
 
@@ -68,8 +70,9 @@ class RefitSpy extends RefitView:
 	func _paint_cell_name(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 		cell_parts.append({"at": at, "text": text, "fsize": fsize, "col": col})
 
-	func _paint_cell_effect(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
-		cell_species.append({"at": at, "text": text, "fsize": fsize, "col": col})
+	func _paint_cell_effect(face: Font, at: Vector2, text: String, width: float, fsize: int,
+			col: Color) -> void:
+		cell_species.append({"at": at, "text": text, "width": width, "fsize": fsize, "col": col})
 
 	func _paint_held_row(rect: Rect2, bg: Color, edge: Color, edge_width: float) -> void:
 		held_rows.append({"rect": rect, "bg": bg, "edge": edge, "width": edge_width})
@@ -77,8 +80,9 @@ class RefitSpy extends RefitView:
 	func _paint_held_name(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 		helds.append({"at": at, "text": text, "fsize": fsize, "col": col})
 
-	func _paint_held_effect(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
-		held.append({"at": at, "text": text, "fsize": fsize, "col": col})
+	func _paint_held_effect(face: Font, at: Vector2, text: String, width: float, fsize: int,
+			col: Color) -> void:
+		held.append({"at": at, "text": text, "width": width, "fsize": fsize, "col": col})
 
 	func _paint_stat_label(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 		stat_labels.append({"at": at, "text": text, "fsize": fsize, "col": col})
@@ -99,6 +103,9 @@ class RefitSpy extends RefitView:
 	func _paint_hint(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 		hints.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
 
+	func _paint_tag_row(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+		tag_rows.append({"at": at, "text": text, "fsize": fsize, "col": col})
+
 
 const SCREEN := Rect2(0.0, 0.0, 1280.0, 720.0)
 const SMALLEST_PRESS_BEFORE := Vector2(220.0, 64.0)
@@ -115,6 +122,9 @@ func run(t) -> void:
 	await _the_screen_itself_fades_in(t)
 	await _the_text_layer_is_read(t)
 	await _pressing_past_the_pile_end_does_nothing(t)
+	await _the_tag_rows(t)
+	await _a_boxless_species_takes_a_card_through_the_shell(t)
+	_every_effect_line_fits_its_box(t)
 
 
 # -- geometry: can it be aimed at ------------------------------------------------------------------
@@ -150,7 +160,7 @@ func _the_geometry(t) -> void:
 	var cross := 0
 	for p in Rules.ITEM_CELLS:
 		var hit := view.cell_hit_rect_of(p).grow(1.0)
-		for s in Rules.summon_slot_count():
+		for s in Rules.TYPE_COUNT:
 			if hit.intersects(view.slot_hit_rect_of(s).grow(1.0)):
 				cross += 1
 		if hit.intersects(done_open_hit.grow(1.0)):
@@ -170,9 +180,16 @@ func _the_geometry(t) -> void:
 			and Look.REFIT_SLOT_SIZE_PX.y >= SMALLEST_PRESS_BEFORE.y,
 		"슬롯 띠 상자도 220x64 보다 크다")
 
-	# The strip and the two buttons, inside the screen and clear of each other.
-	for s in Rules.summon_slot_count():
-		t.ok(SCREEN.encloses(view.slot_hit_rect_of(s)), "슬롯 %d번 상자가 화면 안이다" % s)
+	# The strip — five beast boxes now — and the two buttons, inside the screen and clear of each other.
+	for s in Rules.TYPE_COUNT:
+		t.ok(SCREEN.encloses(view.slot_hit_rect_of(s)), "짐승 %d번 상자가 화면 안이다" % s)
+	# The strip boxes themselves never touch each other — the same 1px demand the cells carry.
+	var strip_overlap := 0
+	for s in Rules.TYPE_COUNT:
+		for q in range(s + 1, Rules.TYPE_COUNT):
+			if view.slot_hit_rect_of(s).grow(1.0).intersects(view.slot_hit_rect_of(q).grow(1.0)):
+				strip_overlap += 1
+	t.eq(strip_overlap, 0, "다섯 상자의 판정 사각형이 1px 안으로도 안 붙는다")
 	t.ok(SCREEN.encloses(view.done_hit_rect()), "완료 단추(닫힘)가 화면 안이다")
 	t.ok(SCREEN.encloses(view.done_rect().grow(Look.PRESS_HIT_PAD_PX)), "완료 단추(열림 자리)도 화면 안이다")
 	t.ok(SCREEN.encloses(view.back_hit_rect()), "뒤로 단추가 화면 안이다")
@@ -243,12 +260,22 @@ func _the_strip_and_the_board(t) -> void:
 	spy.queue_redraw()
 	await t.pump_frames(1)
 
-	t.eq(spy.slot_boxes.size(), Rules.summon_slot_count(), "슬롯 띠 상자를 슬롯 수만큼 그렸다")
-	t.eq(spy.slot_labels.size(), Rules.summon_slot_count(), "슬롯 이름표도 그만큼 그렸다")
+	t.eq(spy.slot_boxes.size(), Rules.TYPE_COUNT, "짐승 상자를 다섯 종 전부만큼 그렸다 — 소환 칸 수가 아니다")
+	t.eq(spy.slot_labels.size(), Rules.TYPE_COUNT, "짐승 이름표도 그만큼 그렸다")
+	# 「라벨이 짐승 이름이다」 — mutation: the label text back to "슬롯 %d".
+	var label_bad := 0
+	for s in Rules.TYPE_COUNT:
+		if str(spy.slot_labels[s]["text"]) != HudView.type_label(s):
+			label_bad += 1
+	t.eq(label_bad, 0, "상자마다 그 짐승의 이름이 적힌다 — 슬롯 번호가 아니다")
 	t.eq(spy.cell_boxes.size(), 0, "칸은 아직 하나도 안 열렸다 — 판이 안 보인다")
 	t.eq(spy.held_rows.size(), 0, "더미 줄도 아직 없다")
 	t.eq(spy.stat_values.size(), 0, "대시보드 숫자도 아직 없다")
 	t.eq(spy.bodies.size(), 0, "몸 미리보기도 아직 없다")
+	# The tag aggregate is army-wide, so it is on screen from step one — a 「무리」 header plus one
+	# line per tag, the header being what says these numbers are nobody's single box.
+	t.eq(spy.tag_rows.size(), Rules.tag_kind_count() + 1, "딱지 집계가 띠 단계에서도 머리말+딱지 수만큼 그려진다")
+	t.eq(str(spy.tag_rows[0]["text"]), "무리", "첫 줄이 「무리」 머리말이다 — 이 숫자들은 한 짐승의 것이 아니다")
 
 	# 「아무 것도 안 열렸을 때 안내 글이 있다」 — this screen used to have no line of text anywhere
 	# saying what it is or that a slot presses.
@@ -280,6 +307,7 @@ func _the_strip_and_the_board(t) -> void:
 	t.eq(spy.bodies.size(), 1, "몸 미리보기를 하나 그렸다")
 	t.eq(spy.buttons.size(), 2, "완료와 뒤로, 단추 둘을 그렸다")
 	t.eq(spy.hints.size(), 0, "판이 열리면 안내 글은 사라진다 — 판 자체가 이제 안내다")
+	t.eq(spy.tag_rows.size(), Rules.tag_kind_count() + 1, "판이 열려도 딱지 집계 줄은 그대로 그려진다")
 
 	# 「연 슬롯이 띠에서 밝고 나머지는 어둡다」, now that one actually is.
 	var lit := (spy.slot_boxes[0]["bg"] as Color)
@@ -288,7 +316,7 @@ func _the_strip_and_the_board(t) -> void:
 		"연 슬롯이 나머지보다 알파가 3배 넘게 밝다 (%.2f / %.2f = %.1f배)" % [lit.a, dark.a, lit.a / dark.a])
 
 	# The strip stays drawn on step two, and the boxes do not move.
-	t.eq(spy.slot_boxes.size(), Rules.summon_slot_count(), "판이 열려도 슬롯 띠는 그대로 둘 다 그려진다")
+	t.eq(spy.slot_boxes.size(), Rules.TYPE_COUNT, "판이 열려도 짐승 띠는 다섯 전부 그대로 그려진다")
 
 	# ⚠ 「호버가 테두리만이 아니라 채움도 밝힌다」 — the card screen and the map both carry hover on
 	# TWO channels (border width AND fill brightness); this screen's own slot/cell/held boxes used to
@@ -754,6 +782,11 @@ func _the_text_layer_is_read(t) -> void:
 		"낀 칸에 그 장비의 이름이 뜬다 — '-' 로 안 눌러앉는다")
 	t.eq(str(spy.cell_species[landing_cell]["text"]), Rules.item_effect_text(landing_item),
 		"그리고 그 장비가 하는 일도 같이 뜬다")
+	# 어두운 판 위의 등급 색 — 카드용 어두운 등급 표(COL_RARITY)가 여기서 두 번 가라앉았다.
+	# Mutation: the effect colour back to `COL_RARITY[rarity]`.
+	t.eq(spy.cell_species[landing_cell]["col"] as Color,
+		Look.COL_RARITY_TEXT_DARK[Rules.item_rarity_of(landing_item)] as Color,
+		"낀 칸의 효과 줄 색이 어두운 판용 등급 색이다 — 카드용 어두운 표가 아니다")
 
 	t.root.remove_child(game)
 	game.queue_free()
@@ -789,6 +822,157 @@ func _pressing_past_the_pile_end_does_nothing(t) -> void:
 
 	t.root.remove_child(game)
 	game.queue_free()
+
+
+# -- ticket 11: the tag aggregate lines ---------------------------------------------------------------
+
+## 「딱지 집계가 표의 개수·문턱과 같고, 켜진 줄만 켜짐 색이다」. ⚠ 문턱 기대값은 리터럴이다 —
+## `tag_thresholds_of` 를 되읽으면 검사가 표와 같이 움직인다: 출혈 3 · 공속 3 · 범위 2 · 디버프 2.
+## Mutations: the count pinned to 0 (a line that never moves) · the lit colour painted on every row ·
+## the rows fed `tag_count` of one board instead of the horde.
+func _the_tag_rows(t) -> void:
+	var r := Run.new()
+	t.ok(r.enter_node(0), "0번 칸을 밟는다 (자가 점검)")
+	r.finish_island(true)
+	r.take_card(0)
+	r.take_card(1)
+	t.eq(r.state(), Run.State.REFIT, "정비 화면이 열렸다 (자가 점검)")
+	var spy := RefitSpy.new()
+	t.root.add_child(spy)
+	spy.process_mode = Node.PROCESS_MODE_DISABLED
+	spy.bind(r)
+	spy.queue_redraw()
+	await t.pump_frames(2)
+
+	# At rest nothing is fitted, so every line reads 0 over its own FIRST threshold, unlit. Row 0 is
+	# the 「무리」 header; the tags sit at rows 1..4.
+	t.eq(spy.tag_rows.size(), Rules.tag_kind_count() + 1, "집계 줄이 머리말+딱지 수만큼 있다 (자가 점검)")
+	var first_thresholds := [3, 3, 2, 2]
+	var rest_bad := 0
+	var rest_lit := 0
+	for g in Rules.tag_kind_count():
+		if str(spy.tag_rows[g + 1]["text"]) != "%s 0/%d" % [Rules.tag_label_of(g), first_thresholds[g]]:
+			rest_bad += 1
+	for row in spy.tag_rows:
+		if ((row as Dictionary)["col"] as Color) == Look.COL_TAG_LIT:
+			rest_lit += 1
+	t.eq(rest_bad, 0, "빈 무리의 네 줄이 전부 「이름 0/첫 문턱」이다 — 문턱 리터럴은 3·3·2·2")
+	t.eq(rest_lit, 0, "그리고 켜짐 색인 줄이 하나도 없다 — 머리말 포함")
+
+	# Two range items onto the LION board — a board with no summon slot, so this row doubles as "the
+	# aggregate counts the whole horde".
+	var lo := r.army.loadout
+	for _i in 2:
+		lo.take_card(10)   # 뺏은 창끝 — 범위 딱지
+		lo.fit(Rules.LION, lo.held.size() - 1)
+	t.eq(lo.tag_count(Rules.Tag.RANGE), 2, "범위 딱지 둘을 사자 판에 꼈다 (자가 점검)")
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	var range_row: Dictionary = spy.tag_rows[Rules.Tag.RANGE + 1]
+	t.eq(str(range_row["text"]), "%s 2/4" % Rules.tag_label_of(Rules.Tag.RANGE),
+		"범위 줄이 「2/4」 — 개수와 다음 문턱을 같이 말한다")
+	t.eq(range_row["col"] as Color, Look.COL_TAG_LIT, "1층이 켜진 범위 줄만 켜짐 색이다")
+	var others_lit := 0
+	for g in Rules.tag_kind_count():
+		if g != Rules.Tag.RANGE and (spy.tag_rows[g + 1]["col"] as Color) == Look.COL_TAG_LIT:
+			others_lit += 1
+	t.eq(others_lit, 0, "안 켜진 세 줄은 여전히 켜짐 색이 아니다")
+
+	# Two more — the top tier: the count stands alone, no next threshold to name.
+	for _i in 2:
+		lo.take_card(10)
+		lo.fit(Rules.LION, lo.held.size() - 1)
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	t.eq(str(spy.tag_rows[Rules.Tag.RANGE + 1]["text"]), "%s 4" % Rules.tag_label_of(Rules.Tag.RANGE),
+		"꼭대기 층이 켜지면 「4」 — 다음 문턱이 없으니 숫자만 남는다")
+	t.eq(spy.tag_rows[Rules.Tag.RANGE + 1]["col"] as Color, Look.COL_TAG_LIT, "여전히 켜짐 색이다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+## 「소환 칸에 없는 짐승도 정비에서 장비를 받는다」 — 사용자의 「버리는 것도 주워서 안쓰는 자기
+## 몬스터에게도 넣을 수 있게」가 화면까지 닿았다는 검사. 진짜 셸을 지나 들소 상자를 열고, 카드를
+## 끼우고, 도로 뺀다. Mutation: `game.gd`'s `_refit_input` keying the fit back onto a summon slot.
+func _a_boxless_species_takes_a_card_through_the_shell(t) -> void:
+	var game := await _reach_refit(t, 1)
+	var spy := game.refit_view as RefitSpy
+	game._unhandled_input(_click(Look.refit_slot_hit_rect_px(Rules.BISON).get_center()))
+	t.eq(game.refit_view.open_slot_index(), Rules.BISON, "소환 칸 없는 들소 상자가 눌려 열린다")
+	spy.queue_redraw()
+	await t.pump_frames(1)
+	t.eq(spy.bodies.size(), 1, "들소 판에도 몸 미리보기가 하나 그려진다 (자가 점검)")
+	# ⚠ The preview is keyed on the OPEN TYPE itself — keyed back through `summon_type_of` a slotless
+	# species answers -1 and the preview draws the wrong body.
+	t.ok(is_equal_approx(float((spy.bodies[0] as Dictionary)["radius"]),
+			Look.body_radius_of(Rules.BISON) * Look.REFIT_BODY_SCALE),
+		"그 몸의 반지름이 들소 자신의 것이다 — 소환 칸을 거꾸로 물어본 몸이 아니다")
+
+	var loadout := game.run.army.loadout
+	t.ok(loadout.held.size() > 0, "더미에 카드가 있다 (자가 점검)")
+	var want_item := int(loadout.held[0])
+	var want_cell := loadout.first_empty(Rules.BISON)
+	game._unhandled_input(_click(Look.refit_held_rect_px(0).get_center()))
+	t.eq(loadout.fitted_item(Rules.BISON, want_cell), want_item,
+		"들소 판에 그 장비가 들어갔다 — 버리는 카드가 없다")
+
+	game._unhandled_input(_click(Look.refit_cell_rect_px(want_cell).get_center()))
+	t.eq(loadout.fitted_item(Rules.BISON, want_cell), -1, "그 칸을 누르면 도로 나온다")
+	t.eq(int(loadout.held[loadout.held.size() - 1]), want_item, "그리고 더미로 돌아왔다")
+
+	t.root.remove_child(game)
+	game.queue_free()
+
+
+# -- ticket 11 fix round: no effect line leaves its box -----------------------------------------------
+
+## 「어느 장비의 효과 줄도 제 상자를 안 넘친다」 — 열여덟 전부, 평균이 아니라 전수로 (말린 힘줄의 줄이
+## 더미 상자 밖 배경까지 흘렀다 — verify-look). 가로는 word-wrap 폭, 세로는 폰트 메트릭으로 잰
+## 마지막 줄의 밑선+내림획이 상자 바닥 안이어야 한다. Mutation: `REFIT_HELD_EFFECT_FONT_SIZE_PX`
+## 16 -> 18 — 두 줄이 64px 상자를 못 들어간다. (잎을 도로 `draw_string`으로 되돌리는 변이는
+## `net_draw_leaf`의 안-쓰인-인자 검사가 문다 — width 가 남는다.)
+func _every_effect_line_fits_its_box(t) -> void:
+	var face := HudView.default_font()
+	t.ok(face != null, "폰트를 얻었다 (자가 점검)")
+	if face == null:
+		return
+	var cell_bad := 0
+	var held_bad := 0
+	var wide_bad := 0
+	var multiline_seen := 0
+	for i in Rules.item_count():
+		var text := Rules.item_effect_text(i)
+		for probe in [
+			[Look.REFIT_CELL_EFFECT_WRAP_W_PX, Look.REFIT_CELL_SPECIES_FONT_SIZE_PX,
+				Look.REFIT_CELL_EFFECT_OFFSET_PX.y, Look.REFIT_CELL_SIZE_PX.y, true],
+			[Look.REFIT_HELD_EFFECT_WRAP_W_PX, Look.REFIT_HELD_EFFECT_FONT_SIZE_PX,
+				Look.REFIT_HELD_EFFECT_OFFSET_PX.y, Look.REFIT_HELD_SIZE_PX.y, false],
+		]:
+			var wrap_w := float(probe[0])
+			var fsize := int(probe[1])
+			var first_baseline := float(probe[2])
+			var box_h := float(probe[3])
+			var size := face.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, wrap_w, fsize)
+			var line_h := face.get_height(fsize)
+			var lines := maxi(1, roundi(size.y / line_h))
+			if lines > 1:
+				multiline_seen += 1
+			# The last baseline plus its descenders, against the box bottom.
+			var bottom := first_baseline + float(lines - 1) * line_h + face.get_descent(fsize)
+			if bottom > box_h:
+				if bool(probe[4]):
+					cell_bad += 1
+				else:
+					held_bad += 1
+			if size.x > wrap_w + 1.0:
+				wide_bad += 1
+	t.eq(cell_bad, 0, "열여덟 효과 줄 전부가 칸 상자 세로 안이다")
+	t.eq(held_bad, 0, "열여덟 효과 줄 전부가 더미 상자 세로 안이다")
+	t.eq(wide_bad, 0, "그리고 어느 줄도 감싼 폭을 가로로 안 넘는다 — 낱말 하나가 폭보다 큰 경우가 없다")
+	t.ok(multiline_seen > 0,
+		"실제로 두 줄로 감기는 장비가 있다 (자가 점검, %d건) — 전부 한 줄이면 이 검사는 아무것도 안 잰다"
+			% multiline_seen)
 
 
 # -- input helpers, identical shape to net_shell's -----------------------------------------------------

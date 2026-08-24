@@ -522,21 +522,23 @@ func _refit_input(event: InputEvent) -> void:
 		return
 	if not refit_view.is_board_open():
 		return
-	var open_slot := refit_view.open_slot_index()
+	# ⚠ What the strip opens is a BEAST TYPE, not a summon slot (티켓 11) — this value goes straight
+	# into the type-keyed `fit` / `unfit` / `first_empty`, so all five species take equipment here.
+	var open_beast := refit_view.open_slot_index()
 	var row := refit_view.held_at(at)
 	if row >= 0:
 		refit_view.note_held_press(row)
 		# ⚠ **The CELL is read before `fit` runs**, not after: `first_empty` is where the card is about
 		# to land, and once `fit` returns that cell is full and the answer has changed. (It used to
 		# read the card's own part, which named its target back when cells had names.)
-		var landing_cell := run.army.loadout.first_empty(open_slot)
-		if run.army.loadout.fit(open_slot, row):
+		var landing_cell := run.army.loadout.first_empty(open_beast)
+		if run.army.loadout.fit(open_beast, row):
 			refit_view.note_fitted(landing_cell)
 		return
 	var part := refit_view.cell_at(at)
 	if part >= 0:
 		refit_view.note_cell_press(part)
-		run.army.loadout.unfit(open_slot, part)
+		run.army.loadout.unfit(open_beast, part)
 
 
 ## 시작하기: a brand new run, and the map rather than an island. **`Run.restart()` is not called here**

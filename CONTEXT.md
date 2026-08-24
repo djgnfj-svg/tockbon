@@ -106,9 +106,15 @@ folder rule in `CLAUDE.md`:
 
 - **`src/sim/`** — constructible with `.new()`, never touches the tree. **The main seam.** A net drives the
   whole game here in seconds
-- **`src/view/`** — reads `sim`, never writes it. **Seam is the paint hook**, not the Node
+- **`src/view/`** — reads `sim`, never writes it. **The measuring surface is three-fold**
+  (2026-08-24, user-approved — the old `_paint_*` hook died with the 3D move): **the pure camera
+  functions** (drivable with `.new()`), **pooled node state** (the Sprite3D fields the engine consumes:
+  position, modulate, scale, texture, visible), and **the fx buffers plus committed surface counts**
+  (buffers prove geometry was built; surface count proves the flush committed it — buffers alone stay
+  green when the flush is deleted)
 - **`src/shell/`** — the only reader of `Input`. **Seam is `_ready()`**, which builds the real wiring
 
 **Do not add a seam inside a file.** If something is hard to test, it is in the wrong folder.
 
-⚠ **These three survived three deletions and are not re-decided per game.**
+⚠ **These three survived three deletions and are not re-decided per game.** The 2026-08-24 change
+above moved the view seam's measuring surface, not the seam itself — the folder boundary stands.

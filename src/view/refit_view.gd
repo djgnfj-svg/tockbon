@@ -1,16 +1,22 @@
 class_name RefitView
 extends Node2D
-## The refit screen, two steps: a strip of slot boxes, then — once one is pressed — that slot's 3x2
-## board of part cells beside the held pile, a five-number dashboard and a preview of the slot's body.
+## The refit screen, two steps: a strip of beast boxes, then — once one is pressed — that beast's 3x2
+## board of item cells beside the held pile, a five-number dashboard and a preview of the beast's body.
 ##
-## It READS `run` — `run.army.loadout` for the board and the pile, `run.army` for which type each
-## slot summons — and writes nothing back. Fitting and unfitting are the shell's job: this file answers
-## "what is under this point" and `game.gd` calls `run.army.loadout.fit` / `unfit`.
+## ⚠⚠ **A strip box's index IS the beast type id** (티켓 11 — the board hangs on the TYPE, and all
+## five species take equipment, summon slot or none). The words `slot`/`_open_slot` below name the
+## STRIP BOX, kept from the two-box screen; the value they carry is a `Rules` type id and it is what
+## the shell hands straight to `loadout.fit` / `unfit` / `first_empty`.
 ##
-## ⚠⚠ **The dashboard reads `run.army.loadout.stat_of(slot, col)` and NOTHING else** — the exact call
-## `Army.max_hp_of` / `damage_of` / `period_of` / `speed_of` make. That is what makes "the screen and
-## the sim disagree" unbuildable rather than merely checked: there is no second formula in this file
-## for a part's five numbers to disagree with.
+## It READS `run` — `run.army.loadout` for the boards and the pile — and writes nothing back. Fitting
+## and unfitting are the shell's job: this file answers "what is under this point" and `game.gd`
+## calls `run.army.loadout.fit` / `unfit`.
+##
+## ⚠⚠ **The dashboard reads `run.army.loadout.stat_of(beast_type, col)` and NOTHING else** — the exact
+## call `Army.max_hp_of` / `damage_of` / `period_of` / `speed_of` make. That is what makes "the screen
+## and the sim disagree" unbuildable rather than merely checked: there is no second formula in this
+## file for an item's five numbers to disagree with. The tag aggregate lines walk
+## `loadout.tag_count` and `Rules.tag_thresholds_of` the same way — the tables, never a copy.
 ##
 ## ⚠ **The pile COMPACTS.** `Loadout.fit`/`unfit` may renumber every row after the one that changed, so
 ## this file never caches a held row's index across a frame boundary — it re-reads
@@ -36,7 +42,8 @@ const STAT_LABELS := Rules.ITEM_COL_LABELS
 
 var run: Run = null
 
-## Which slot's board is open, or -1 for the strip alone.
+## Which beast type's board is open, or -1 for the strip alone. See the header: the index is a
+## `Rules` type id.
 var _open_slot := -1
 
 var _hover_slot := -1
@@ -126,7 +133,7 @@ func note_fitted(part: int) -> void:
 
 
 func open_slot(s: int) -> void:
-	if s < 0 or s >= Rules.summon_slot_count():
+	if s < 0 or s >= Rules.TYPE_COUNT:
 		_open_slot = -1
 	else:
 		_open_slot = s
@@ -162,19 +169,19 @@ func open_slot_index() -> int:
 # --- geometry, read straight out of look.gd -----------------------------------------------------
 
 func slot_rect_of(slot: int) -> Rect2:
-	if slot < 0 or slot >= Rules.summon_slot_count():
+	if slot < 0 or slot >= Rules.TYPE_COUNT:
 		return Rect2()
 	return Look.refit_slot_rect_px(slot)
 
 
 func slot_hit_rect_of(slot: int) -> Rect2:
-	if slot < 0 or slot >= Rules.summon_slot_count():
+	if slot < 0 or slot >= Rules.TYPE_COUNT:
 		return Rect2()
 	return Look.refit_slot_hit_rect_px(slot)
 
 
 func slot_at(point: Vector2) -> int:
-	for s in Rules.summon_slot_count():
+	for s in Rules.TYPE_COUNT:
 		if slot_hit_rect_of(s).has_point(point):
 			return s
 	return -1
@@ -375,7 +382,7 @@ func _draw() -> void:
 	# uses for a slot that CANNOT be pressed at all) painted on both would say the opposite of what
 	# is true. Once one is open, the OTHER dims to say "you are looking at slot N, not this one" —
 	# still pressable, just not the one on screen — never "locked".
-	for s in Rules.summon_slot_count():
+	for s in Rules.TYPE_COUNT:
 		var lit := s == _open_slot or _open_slot < 0
 		var fill := Look.COL_BUTTON if lit else Look.dimmed(Look.COL_BUTTON)
 		fill.a = Look.PRESS_ALPHA_ON if lit else Look.PRESS_ALPHA_OFF
@@ -383,15 +390,31 @@ func _draw() -> void:
 		fill = Look.hover_lit(fill, hover_k)
 		var edge_w := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX, hover_k)
 		_paint_slot_box(slot_rect_of(s), fill, Look.COL_HUD_TEXT, edge_w)
+		# The box is a beast, so it says the beast's name — the same words `panel_view` names
+		# soldiers with.
 		_paint_slot_label(face, slot_rect_of(s).position + Look.CARD_PART_OFFSET_PX,
-			"슬롯 %d" % (s + 1), Look.REFIT_CELL_PART_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+			HudView.type_label(s), Look.REFIT_CELL_PART_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+
+	# The tag aggregate, on BOTH steps — the count is army-wide, so it is just as true before any
+	# board is open. A 「무리」 header first (the column sits under one beast's strip box, and without
+	# the word it reads as that beast's own numbers), then one line per tag: label, count, the next
+	# threshold still ahead, and the lit colour the moment any tier is on.
+	_paint_tag_row(face, Look.refit_tag_origin_px(0), "무리", Look.REFIT_TAG_FONT_SIZE_PX,
+		Look.COL_HUD_TEXT)
+	for g in Rules.tag_kind_count():
+		var state := _tag_state_of(g)
+		var text := "%s %d" % [Rules.tag_label_of(g), int(state["count"])]
+		if int(state["next"]) > 0:
+			text += "/%d" % int(state["next"])
+		var col: Color = Look.COL_TAG_LIT if bool(state["lit"]) else Look.dimmed(Look.COL_HUD_TEXT)
+		_paint_tag_row(face, Look.refit_tag_origin_px(g + 1), text, Look.REFIT_TAG_FONT_SIZE_PX, col)
 
 	if is_board_open():
 		_draw_board(face)
 	else:
 		# The one line of text on this screen while nothing is open yet — without it, this is the
 		# only screen the player stands on where everything pressable is unlabelled.
-		_paint_hint(face, Look.REFIT_HINT_POS_PX, "슬롯을 눌러 부위를 낍니다",
+		_paint_hint(face, Look.REFIT_HINT_POS_PX, "짐승을 눌러 장비를 입힙니다",
 			Look.REFIT_HINT_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
 	var done_label := "완료"
@@ -443,13 +466,16 @@ func _draw_board(face: Font) -> void:
 		_paint_cell_box(inner, fill, Look.COL_HUD_TEXT, edge_w)
 		# ⚠ **The cell has no name of its own to draw any more.** It draws what is IN it — the item's
 		# name on the first line, what that item does on the second — and an empty cell draws a dash.
-		_paint_cell_name(face, box.position + Look.CARD_PART_OFFSET_PX * 0.7,
+		_paint_cell_name(face, box.position + Look.REFIT_CELL_NAME_OFFSET_PX,
 			Rules.item_name_of(item) if filled else "-",
 			Look.REFIT_CELL_PART_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 		var effect_text := Rules.item_effect_text(item) if filled else ""
-		var effect_col: Color = Look.COL_RARITY[Rules.item_rarity_of(item)] if filled 			else Look.dimmed(Look.COL_HUD_TEXT)
-		_paint_cell_effect(face, box.position + Look.CARD_SPECIES_OFFSET_PX * 0.7,
-			effect_text, Look.REFIT_CELL_SPECIES_FONT_SIZE_PX, effect_col)
+		# ⚠ The DARK-panel rarity tones, never `COL_RARITY` — that table is dark text for the light
+		# card and it sank here twice (verify-look, and 티켓 12's own record before it).
+		var effect_col: Color = Look.COL_RARITY_TEXT_DARK[Rules.item_rarity_of(item)] if filled 			else Look.dimmed(Look.COL_HUD_TEXT)
+		_paint_cell_effect(face, box.position + Look.REFIT_CELL_EFFECT_OFFSET_PX,
+			effect_text, Look.REFIT_CELL_EFFECT_WRAP_W_PX, Look.REFIT_CELL_SPECIES_FONT_SIZE_PX,
+			effect_col)
 
 	var held_n := mini(loadout.held.size(), Look.refit_held_capacity())
 	for row in held_n:
@@ -458,11 +484,12 @@ func _draw_board(face: Font) -> void:
 		var hover_k := _hover_of(_hover_held_age, _hover_held, row)
 		var edge_w := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX, hover_k)
 		_paint_held_row(rect, Look.hover_lit(Look.COL_BUTTON, hover_k), Look.COL_HUD_TEXT, edge_w)
-		_paint_held_name(face, rect.position + Vector2(8.0, 22.0), Rules.item_name_of(held_item),
-			Look.REFIT_CELL_SPECIES_FONT_SIZE_PX, Look.COL_HUD_TEXT)
-		_paint_held_effect(face, rect.position + Vector2(8.0, 42.0),
-			Rules.item_effect_text(held_item), Look.REFIT_CELL_SPECIES_FONT_SIZE_PX,
-			Look.COL_RARITY[Rules.item_rarity_of(held_item)])
+		_paint_held_name(face, rect.position + Look.REFIT_HELD_NAME_OFFSET_PX,
+			Rules.item_name_of(held_item), Look.REFIT_CELL_SPECIES_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+		_paint_held_effect(face, rect.position + Look.REFIT_HELD_EFFECT_OFFSET_PX,
+			Rules.item_effect_text(held_item), Look.REFIT_HELD_EFFECT_WRAP_W_PX,
+			Look.REFIT_HELD_EFFECT_FONT_SIZE_PX,
+			Look.COL_RARITY_TEXT_DARK[Rules.item_rarity_of(held_item)])
 
 	# ⚠⚠ The dashboard's TARGET is `loadout.stat_of` and nothing else — the same call `Army`'s five
 	# lookups make — but the drawn NUMBER is `_stat_shown(col)`, the chase toward that target. The two
@@ -476,10 +503,10 @@ func _draw_board(face: Font) -> void:
 		_paint_stat_value(face, Look.refit_stat_origin_px(col) + Vector2(0.0, 30.0),
 			"%.1f" % value, Look.REFIT_STAT_VALUE_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
-	# The body preview: which slot you are editing and nothing else — no part is drawn on it. Both the
-	# radius and the corner rounding are the slot's own type at `REFIT_BODY_SCALE`, so two slots read
-	# differently on both channels — 14 px vs 11.2 px radius, 0.25 vs 0.85 corner ratio.
-	var type_id := Rules.summon_type_of(_open_slot)
+	# The body preview: which beast you are editing and nothing else — no item is drawn on it. The
+	# open index IS the type id (see the header), so both the radius and the corner rounding are that
+	# type's own at `REFIT_BODY_SCALE` and any two boxes read differently on both channels.
+	var type_id := _open_slot
 	var radius := Look.body_radius_of(type_id) * Look.REFIT_BODY_SCALE
 	var corner := Look.body_corner_radius_of(type_id) * Look.REFIT_BODY_SCALE
 	_paint_body(Look.REFIT_BODY_CENTRE_PX, radius, corner, Look.COL_ALLY)
@@ -505,8 +532,10 @@ func _paint_cell_name(face: Font, at: Vector2, text: String, fsize: int, col: Co
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
 
 
-func _paint_cell_effect(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
-	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
+## WRAPPED at `width` — `reward_view._paint_card_effect`'s own shape, for the same measured clip.
+func _paint_cell_effect(face: Font, at: Vector2, text: String, width: float, fsize: int,
+		col: Color) -> void:
+	draw_multiline_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, width, fsize, -1, col)
 
 
 func _paint_held_row(rect: Rect2, bg: Color, edge: Color, edge_width: float) -> void:
@@ -518,8 +547,11 @@ func _paint_held_name(face: Font, at: Vector2, text: String, fsize: int, col: Co
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
 
 
-func _paint_held_effect(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
-	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
+## WRAPPED at `width`, like the cell's effect line — the held row is the box it was measured
+## overflowing.
+func _paint_held_effect(face: Font, at: Vector2, text: String, width: float, fsize: int,
+		col: Color) -> void:
+	draw_multiline_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, width, fsize, -1, col)
 
 
 func _paint_stat_label(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
@@ -528,6 +560,25 @@ func _paint_stat_label(face: Font, at: Vector2, text: String, fsize: int, col: C
 
 func _paint_stat_value(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
+
+
+func _paint_tag_row(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
+
+
+## The whole-horde count of `tag`, the next threshold still ahead (0 when the top tier is lit), and
+## whether any tier is on — read off the SAME `tag_count` the sim's tier lookups use, so this line
+## and the effect it announces cannot disagree.
+func _tag_state_of(tag: int) -> Dictionary:
+	var count := run.army.loadout.tag_count(tag)
+	var ths := Rules.tag_thresholds_of(tag)
+	var lit := ths.size() > 0 and count >= ths[0]
+	var next := 0
+	for raw in ths:
+		if count < int(raw):
+			next = int(raw)
+			break
+	return {"count": count, "next": next, "lit": lit}
 
 
 ## The body: an outline and a centre dot, the same shape `field_view._paint_body` draws, at this

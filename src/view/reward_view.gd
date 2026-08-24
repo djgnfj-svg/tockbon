@@ -1,7 +1,7 @@
 class_name RewardView
 extends Node2D
-## The reward screen: six cards after a won fight, take two. Each card carries a part and a species —
-## `run.cards` is `Rules.CARDS_PER_WIN` `(part, species)` pairs, flat, drawn by `Run._draw_cards`.
+## The reward screen: three cards after a won fight, take one. Each card carries an equipment ITEM —
+## `run.cards` is `Rules.CARDS_PER_WIN` item ids, one int per card, drawn by `Run._draw_cards`.
 ##
 ## It READS `run` and writes nothing back — `is_card_pressable` asks `Run.take_card` would accept the
 ## index, the same call the shell makes when the hold expires, so the picture can never offer a card
@@ -26,6 +26,11 @@ extends Node2D
 const RARITY_LABELS := ["일반", "희귀", "영웅", "전설"]
 
 var run: Run = null
+
+## The item pictures, loaded once at init off `Look.ITEM_ART` — the same `load(Look.…)`-at-var-init
+## shape `field_view`'s picture block uses. An empty art row loads as `null` and the art leaf is
+## simply not called for it: **no picture is drawn rather than a wrong one** (티켓 12's closed fork).
+var _art: Array = _load_item_art()
 
 ## The cursor's card and how long it has been there; the pressed card and how long ago. Same shape as
 ## every other screen's hover/press pair.
@@ -145,6 +150,63 @@ func _card_box(k: int) -> Rect2:
 	return Rect2(rect.position + (rect.size - inner) * 0.5, inner)
 
 
+static func _load_item_art() -> Array:
+	var out: Array = []
+	for p in Look.ITEM_ART:
+		out.append(null if str(p) == "" else load(str(p)))
+	return out
+
+
+## How far card `k` still is from its resting place, in px — the deal-in. Eased on the reveal's OWN
+## value (smoothstep, so it arrives without a snap), and ⚠ **applied to the DRAWN box only**:
+## `card_rect_of`/hit rects stay at rest, so input and the sim see nothing move.
+func _deal_offset_of(k: int) -> Vector2:
+	var r := _reveal_alpha_of(k)
+	var eased := r * r * (3.0 - 2.0 * r)
+	return Vector2(0.0, (1.0 - eased) * Look.CARD_DEAL_SLIDE_PX)
+
+
+## 0..1, where card `k`'s rarity pulse is in its breath — a sine on `_reveal_age`, the screen's one
+## clock. 0 for a rarity whose `RARITY_PULSE_SEC` row is 0: no pulse, never a division by it.
+func _pulse_of(k: int) -> float:
+	if run == null:
+		return 0.0
+	var rarity := Rules.item_rarity_of(int(run.cards[k]))
+	var period := float(Look.RARITY_PULSE_SEC[rarity])
+	if period <= 0.0:
+		return 0.0
+	return 0.5 + 0.5 * sin(TAU * _reveal_age / period)
+
+
+## The art square inside card `k`'s DEALT box — it rides the slide with the card it belongs to.
+func _art_rect(k: int) -> Rect2:
+	var box := _card_box(k)
+	return Rect2(box.position + _deal_offset_of(k) + Look.CARD_ART_OFFSET_PX, Look.CARD_ART_SIZE_PX)
+
+
+## The legendary rays, as segment pairs for one `draw_multiline` — built HERE and handed over whole,
+## the `_spark_points` split: built inside the leaf they never leave it, and the census skips
+## 0-draw functions' arguments. Rays grow out from the card's edge over `LEGEND_BURST_SEC` of the
+## card's own reveal window, so the burst arrives WITH its card, never before it.
+func _burst_points(k: int) -> PackedVector2Array:
+	var box := _card_box(k)
+	box.position += _deal_offset_of(k)
+	var centre := box.get_center()
+	var grow := clampf((_reveal_age - float(k) * Look.MAP_REVEAL_STEP_SEC) / Look.LEGEND_BURST_SEC,
+		0.0, 1.0)
+	var out := PackedVector2Array()
+	for i in Look.LEGEND_RAY_COUNT:
+		var ang := TAU * float(i) / float(Look.LEGEND_RAY_COUNT)
+		var dir := Vector2(cos(ang), sin(ang))
+		# From the card's own edge outward: the box is a rectangle, so the edge distance along `dir`
+		# is the smaller of the two half-extent crossings.
+		var half := box.size * 0.5
+		var edge := minf(half.x / maxf(absf(dir.x), 0.001), half.y / maxf(absf(dir.y), 0.001))
+		out.append(centre + dir * edge)
+		out.append(centre + dir * (edge + Look.LEGEND_RAY_LEN_PX * grow))
+	return out
+
+
 ## ⚠⚠ **A taken card and a card that can no longer be taken both fall to `PRESS_ALPHA_OFF`, so alpha
 ## alone cannot tell them apart.** This is the fill's own half of the channel — the mark drawn on top
 ## (`_paint_taken_mark`) is the third.
@@ -197,19 +259,45 @@ func _draw() -> void:
 	if face == null:
 		return
 
+	# The bursts first, in their own pass, so a legendary's rays sit BEHIND every card — one loop
+	# later and a middle card's rays would lie on top of its left neighbour but under its right one.
+	for k in Rules.CARDS_PER_WIN:
+		if Rules.item_rarity_of(int(run.cards[k])) != Rules.Rarity.LEGENDARY:
+			continue
+		var burst_col: Color = Look.COL_RARITY_GLOW[Rules.Rarity.LEGENDARY]
+		burst_col.a *= _reveal_alpha_of(k)
+		_paint_legendary_burst(_burst_points(k), burst_col)
+
 	for k in Rules.CARDS_PER_WIN:
 		# ⚠⚠ **The reveal is the FILL's alpha alone, multiplied in — not a second colour.** The fill
 		# already carries the pressable/taken/hover story on its own alpha; multiplying the reveal
 		# factor on top is "not yet arrived" riding the exact channel "not yet pressable" already
-		# uses, so the two never have to agree on a second rule about what a low alpha means.
+		# uses, so the two never have to agree on a second rule about what a low alpha means. Every
+		# mark below multiplies the same value in — a mark fully lit before its card arrives is the
+		# exact failure the first-frame check shape catches.
 		var reveal := _reveal_alpha_of(k)
 		var box := _card_box(k)
+		box.position += _deal_offset_of(k)
 		var edge_width := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX,
 			_hover_of(k))
 		var fill := _card_fill(k)
 		fill.a *= reveal
 		_paint_card(box, fill, edge_width)
 		var item := int(run.cards[k])
+		var rarity := Rules.item_rarity_of(item)
+		# The rarity frame and its glow, over the card's own border — the ladder tables answer how
+		# loud, and COMMON's 0-layer row means no call at all rather than an invisible one.
+		var layers := int(Look.RARITY_GLOW_LAYERS[rarity])
+		if layers > 0:
+			var glow: Color = Look.COL_RARITY_GLOW[rarity]
+			glow.a = float(Look.RARITY_GLOW_ALPHA[rarity]) \
+				* (1.0 + _pulse_of(k) * float(Look.RARITY_PULSE_GAIN[rarity])) * reveal
+			_paint_rarity_frame(box, glow, float(Look.RARITY_FRAME_WIDTH_PX[rarity]), layers)
+		var art: Texture2D = _art[item]
+		if art != null:
+			var art_col := Look.COL_HUD_TEXT
+			art_col.a *= reveal
+			_paint_card_art(art, _art_rect(k), art_col)
 		var name_col := Look.COL_HUD_TEXT
 		name_col.a *= reveal
 		_paint_card_name(face, box.position + Look.CARD_PART_OFFSET_PX,
@@ -217,12 +305,11 @@ func _draw() -> void:
 		# The rarity is carried by the COLOUR of the effect line and by one word in front of it — a
 		# tone alone cannot be told apart by a player who has seen two cards, and a word alone does not
 		# catch the eye across a spread.
-		var rarity := Rules.item_rarity_of(item)
 		var effect_col: Color = Look.COL_RARITY[rarity]
 		effect_col.a *= reveal
 		_paint_card_effect(face, box.position + Look.CARD_SPECIES_OFFSET_PX,
 			"%s  %s" % [str(RARITY_LABELS[rarity]), Rules.item_effect_text(item)],
-			Look.CARD_SPECIES_FONT_SIZE_PX, effect_col)
+			Look.CARD_EFFECT_WRAP_W_PX, Look.CARD_SPECIES_FONT_SIZE_PX, effect_col)
 		if int(run.cards_taken[k]) != 0:
 			var mark := Look.COL_HUD_TEXT
 			mark.a = Look.PRESS_ALPHA_ON * _taken_of(k)
@@ -248,12 +335,34 @@ func _paint_card(rect: Rect2, bg: Color, edge_width: float) -> void:
 	draw_rect(rect, Look.COL_HUD_TEXT, false, edge_width)
 
 
+func _paint_card_art(tex: Texture2D, rect: Rect2, col: Color) -> void:
+	draw_texture_rect(tex, rect, false, col)
+
+
+## The frame and its glow in one leaf: layer 0 is the frame itself, each further layer the same
+## stroke one width out and linearly fainter — the outermost keeps `1/layers` of the alpha, never
+## zero — the glow IS the frame layered, not a second mark.
+func _paint_rarity_frame(rect: Rect2, col: Color, width: float, layers: int) -> void:
+	for i in layers:
+		var layer_col := col
+		layer_col.a *= 1.0 - float(i) / float(layers)
+		draw_rect(rect.grow(width * float(i)), layer_col, false, width)
+
+
+func _paint_legendary_burst(points: PackedVector2Array, col: Color) -> void:
+	draw_multiline(points, col, Look.LEGEND_RAY_WIDTH_PX)
+
+
 func _paint_card_name(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
 
 
-func _paint_card_effect(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
-	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
+## A MULTILINE string, wrapped at `width` — the longest item line (폭풍의 가죽's) was measured
+## clipping at the card border as a single `draw_string`, and word-wrap makes "no item can clip"
+## true by construction instead of true of the items checked.
+func _paint_card_effect(face: Font, at: Vector2, text: String, width: float, fsize: int,
+		col: Color) -> void:
+	draw_multiline_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, width, fsize, -1, col)
 
 
 func _paint_taken_mark(centre: Vector2, radius: float, col: Color) -> void:

@@ -235,7 +235,7 @@ func _build_world() -> void:
 func _make_body_tex() -> Texture2D:
 	var n := Look.BODY_TEX_PX
 	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
-	img.fill(Color(1.0, 1.0, 1.0, 0.0))
+	img.fill(Look.COL_BAKE_CLEAR)
 	var half := float(n) * 0.5
 	var edge := half - float(Look.BODY_TEX_OUTLINE_PX) * 0.5
 	var corner := edge * 0.45
@@ -247,15 +247,15 @@ func _make_body_tex() -> Texture2D:
 			var q := Vector2(absf(p.x), absf(p.y)) - Vector2(edge - corner, edge - corner)
 			var d := Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() + minf(maxf(q.x, q.y), 0.0) - corner
 			if absf(d) <= float(Look.BODY_TEX_OUTLINE_PX) * 0.5:
-				img.set_pixel(x, y, Color.WHITE)
+				img.set_pixel(x, y, Look.COL_BAKE_MARK)
 			elif p.length() <= float(Look.BODY_TEX_DOT_PX):
-				img.set_pixel(x, y, Color.WHITE)
+				img.set_pixel(x, y, Look.COL_BAKE_MARK)
 	return ImageTexture.create_from_image(img)
 
 
 func _make_flat_tex() -> Texture2D:
 	var img := Image.create(1, 1, false, Image.FORMAT_RGBA8)
-	img.fill(Color.WHITE)
+	img.fill(Look.COL_BAKE_MARK)
 	return ImageTexture.create_from_image(img)
 
 
@@ -859,7 +859,7 @@ func _sprite() -> Sprite3D:
 		reused.visible = true
 		return reused
 	var s := Sprite3D.new()
-	s.pixel_size = 1.0 / Look.TILE_PX
+	s.pixel_size = Look.SPRITE_PIXEL_SIZE
 	s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	# ⚠ **Both of these, or the animals are cardboard.** DISCARD gives the sprite a real depth value so
 	# a wolf behind a cliff is hidden by it and casts a shaped shadow instead of a rectangle; without
@@ -1787,6 +1787,7 @@ func _paint_fx() -> void:
 	if battle == null or army == null or battle.grid == null:
 		return
 	_paint_plan()
+	_paint_boat_routes()
 	_paint_intent()
 	_paint_transients()
 
@@ -1800,6 +1801,12 @@ func _paint_fx() -> void:
 func _paint_plan() -> void:
 	if battle.committed() or _summon_slot < 0 or _summon_aim < 0:
 		return
+	# ⚠ **A DRY slot (no reserve left) draws NOTHING — no ring, no route** (2026-08-24, the user
+	# closed the fork: 「추천대로」, restoring the old rule). A valid-looking mark on a press the sim
+	# will refuse is the screen promising what `Battle.summon` denies; `_paint_ghosts` has kept this
+	# gate all along, and the shell's per-beat refusal mark is what says 「더 없다」 instead.
+	if battle.slot_reserve_ids(_summon_slot).is_empty():
+		return
 	var grid := battle.grid
 	var ok := grid.can_summon_at(_summon_aim)
 	var at := Look.tile_point_px(grid.tile_point(_summon_aim))
@@ -1811,6 +1818,24 @@ func _paint_plan() -> void:
 		_g_line(pts, Look.ROUTE_WIDTH_PX, Look.COL_ROUTE)
 	_g_ring(at, Look.TARGET_RING_R_PX, Look.ROUTE_WIDTH_PX,
 		Look.COL_WIN if ok else Look.COL_LOSE)
+
+
+## **The remaining water route under every boat still crossing** — the part it has NOT sailed, read
+## straight off the sim's own `leg` through `_route_ahead` (whose header owns the argument for why
+## the view never re-walks it). This is the caller `_route_ahead` lost in the 3D move: the line was
+## computed every frame and drawn by nobody, the exact shape ticket 09 exists to close.
+##
+## Only after the commit — before it a boat is its PLAN and `_paint_plan` owns the water — and only
+## while OUTBOUND: an arrived boat has no water left to claim, and a line drawn from its deck reads
+## as a route it is about to sail again.
+func _paint_boat_routes() -> void:
+	if not battle.committed():
+		return
+	for raw_boat in battle.boats:
+		var boat: Dictionary = raw_boat
+		if int(boat["phase"]) != Battle.Phase.OUTBOUND:
+			continue
+		_g_line(_route_ahead(boat), Look.ROUTE_WIDTH_PX, Look.COL_ROUTE)
 
 
 ## The ghosts: **where the bodies this press would send are going to stand.** Painted as real bodies at
@@ -1903,7 +1928,10 @@ func _paint_transients() -> void:
 				for k in range(0, pts.size() - 1, 2):
 					_a_seg(anchor, pts[k], pts[k + 1], Look.SPARK_WIDTH_PX, col)
 			FxKind.BURST:
-				var r := float(fx["radius"]) * lerpf(1.0, Look.BURST_GROWTH, p)
+				# ⚠ The fx carries the SIM radius (the fact frozen at death); the PICTURE starts at
+				# that body's sprite half-width — `BURST_START_MUL`'s own paragraph owns why, and the
+				# anchor keeps the sim radius so the ring hangs at the body's real middle.
+				var r := float(fx["radius"]) * Look.BURST_START_MUL * lerpf(1.0, Look.BURST_GROWTH, p)
 				var col: Color = fx["colour"]
 				col.a = fade
 				_a_ring(_body_anchor(fx["at"], float(fx["radius"])), r, Look.BURST_WIDTH_PX, col)

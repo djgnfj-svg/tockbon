@@ -312,9 +312,10 @@ static func roster_reward_count() -> int:
 ## an UNNAMED cell**, and a summon slot has a row of them. There is no head cell, and therefore no rule
 ## anywhere forbidding a leg in it — the arrangement that needed forbidding does not exist.
 ##
-## ⚠ **The board still belongs to the SLOT and not to the body.** That half was already right: a soldier
-## dying does not touch the slot's equipment, which is 「늑대에게 투구를 끼우면 모든 늑대가 낀다」 said in
-## the code that exists rather than in the code that is planned.
+## ⚠ **The board belongs to the beast TYPE and not to the body** (티켓 11 — it hung on the summon slot
+## until then). A soldier dying does not touch its type's equipment, which is 「늑대에게 투구를 끼우면
+## 모든 늑대가 낀다」 said in the code that exists rather than in the code that is planned — and all
+## five species have a board, summon slot or none, so no card is ever a dead draw.
 
 ## The five columns an item may move — declared in UNITS' own order so the two tables read alike.
 const ITEM_COL_HP := 0
@@ -333,8 +334,29 @@ enum Rarity { COMMON, RARE, EPIC, LEGENDARY }
 ## in this game has been balanced yet and pretending otherwise is worse than saying so.
 const RARITY_WEIGHT := [60, 26, 11, 3]
 
-## One row per item: **name · hp · damage · period · range · speed · rarity**, ADDED to the type's own
-## number. Nothing multiplies: two rules for one column is the second copy that diverges.
+## --- Tags: the combo axis (티켓 11) ---------------------------------------------------------------
+## An item carries at most ONE tag, and the count of one tag across EVERY board — all five species,
+## summoned or not — is what switches a combo on. The four are the user's own list: 출혈 · 공속 ·
+## 범위 · 디버프(감속).
+##
+## ⚠⚠ **Tiers are FLAT and a higher tier REPLACES a lower one. Nothing multiplies per copy.** The
+## unnamed cells already drove an attack period to -0.5 s once by stacking one item six times
+## (`PERIOD_FLOOR_SEC`'s own header); a per-copy multiplier is that same mine one axis over.
+##
+## ⚠ **Two tables, because there are two kinds of effect** — a tag that pushes a stat column
+## (`TAG_STAT_TIERS`) and a tag that leaves a status on whoever the blow hits (`TAG_STATUS_TIERS`).
+## Folding them into one table would leave half the columns as fake zeros in every row.
+const TAG_NONE := -1
+
+enum Tag { BLEED, ATK_SPEED, RANGE, DEBUFF }
+
+## What the card and the refit line print. Korean for the same reason the item names are.
+const TAG_LABELS = ["출혈", "공속", "범위", "디버프"]
+
+## One row per item: **name · hp · damage · period · range · speed · rarity · tag**, ADDED to the
+## type's own number. Nothing multiplies: two rules for one column is the second copy that diverges.
+## The tag column may be `TAG_NONE`; what a lit tag does lives in the two tier tables below, so a new
+## numeric tag line later is a tier-table row plus this column — one file.
 ##
 ## ⚠ **The names are Korean because the user reads them off the card**, and this is the same exception
 ## `hud_view.TYPE_LABELS` already carries. Everything else in `src/` stays English.
@@ -345,30 +367,31 @@ const RARITY_WEIGHT := [60, 26, 11, 3]
 ## ⚠ **A negative column is allowed and one row uses it.** 「질주의 발」 trades health for speed, and a
 ## table where every row is an upgrade is a table where picking is not a decision.
 const ITEMS := [
-	# name              hp    dmg   period  range  speed  rarity
-	["가죽끈",          3.0,  0.0,   0.00,   0.0,   0.0,  Rarity.COMMON],
-	["돌 목걸이",       0.0,  1.0,   0.00,   0.0,   0.0,  Rarity.COMMON],
-	["나무 발톱",       0.0,  0.0,  -0.10,   0.0,   0.0,  Rarity.COMMON],
-	["마른 가죽",       0.0,  0.0,   0.00,   0.0,   0.6,  Rarity.COMMON],
-	["뼛조각",          2.0,  0.5,   0.00,   0.0,   0.0,  Rarity.COMMON],
-	["말린 힘줄",       0.0,  0.0,  -0.05,   0.0,   0.3,  Rarity.COMMON],
-	["무두질 가죽",     6.0,  0.0,   0.00,   0.0,   0.0,  Rarity.RARE],
-	["부싯돌 이빨",     0.0,  2.0,   0.00,   0.0,   0.0,  Rarity.RARE],
-	["사슴 힘줄",       0.0,  0.0,  -0.20,   0.0,   0.0,  Rarity.RARE],
-	["바람 갈기",       0.0,  0.0,   0.00,   0.0,   1.2,  Rarity.RARE],
-	["뺏은 창끝",       0.0,  1.0,   0.00,   1.0,   0.0,  Rarity.RARE],
-	["방패 조각",       4.0,  0.0,   0.00,   0.0,  -0.3,  Rarity.RARE],
-	["청동 판",        10.0,  0.0,   0.00,   0.0,   0.0,  Rarity.EPIC],
-	["늑대 송곳니",     0.0,  3.0,  -0.10,   0.0,   0.0,  Rarity.EPIC],
-	["사냥꾼의 눈",     0.0,  0.0,   0.00,   2.0,   0.0,  Rarity.EPIC],
-	["질주의 발",      -2.0,  0.0,   0.00,   0.0,   2.0,  Rarity.EPIC],
-	["우두머리의 뿔",  12.0,  3.0,   0.00,   0.0,   0.0,  Rarity.LEGENDARY],
-	["폭풍의 가죽",     0.0,  0.0,  -0.25,   0.0,   2.5,  Rarity.LEGENDARY],
+	# name              hp    dmg   period  range  speed  rarity            tag
+	["가죽끈",          3.0,  0.0,   0.00,   0.0,   0.0,  Rarity.COMMON,    TAG_NONE],
+	["돌 목걸이",       0.0,  1.0,   0.00,   0.0,   0.0,  Rarity.COMMON,    Tag.DEBUFF],
+	["나무 발톱",       0.0,  0.0,  -0.10,   0.0,   0.0,  Rarity.COMMON,    Tag.BLEED],
+	["마른 가죽",       0.0,  0.0,   0.00,   0.0,   0.6,  Rarity.COMMON,    TAG_NONE],
+	["뼛조각",          2.0,  0.5,   0.00,   0.0,   0.0,  Rarity.COMMON,    Tag.BLEED],
+	["말린 힘줄",       0.0,  0.0,  -0.05,   0.0,   0.3,  Rarity.COMMON,    Tag.ATK_SPEED],
+	["무두질 가죽",     6.0,  0.0,   0.00,   0.0,   0.0,  Rarity.RARE,      TAG_NONE],
+	["부싯돌 이빨",     0.0,  2.0,   0.00,   0.0,   0.0,  Rarity.RARE,      Tag.BLEED],
+	["사슴 힘줄",       0.0,  0.0,  -0.20,   0.0,   0.0,  Rarity.RARE,      Tag.ATK_SPEED],
+	["바람 갈기",       0.0,  0.0,   0.00,   0.0,   1.2,  Rarity.RARE,      TAG_NONE],
+	["뺏은 창끝",       0.0,  1.0,   0.00,   1.0,   0.0,  Rarity.RARE,      Tag.RANGE],
+	["방패 조각",       4.0,  0.0,   0.00,   0.0,  -0.3,  Rarity.RARE,      Tag.DEBUFF],
+	["청동 판",        10.0,  0.0,   0.00,   0.0,   0.0,  Rarity.EPIC,      TAG_NONE],
+	["늑대 송곳니",     0.0,  3.0,  -0.10,   0.0,   0.0,  Rarity.EPIC,      Tag.BLEED],
+	["사냥꾼의 눈",     0.0,  0.0,   0.00,   2.0,   0.0,  Rarity.EPIC,      Tag.RANGE],
+	["질주의 발",      -2.0,  0.0,   0.00,   0.0,   2.0,  Rarity.EPIC,      TAG_NONE],
+	["우두머리의 뿔",  12.0,  3.0,   0.00,   0.0,   0.0,  Rarity.LEGENDARY, Tag.DEBUFF],
+	["폭풍의 가죽",     0.0,  0.0,  -0.25,   0.0,   2.5,  Rarity.LEGENDARY, Tag.ATK_SPEED],
 ]
 
 const _ITEM_COL_NAME := 0
 const _ITEM_COL_STATS := 1
 const _ITEM_COL_RARITY := 6
+const _ITEM_COL_TAG := 7
 
 ## How many unnamed cells one summon slot's board has.
 ## ⚠ **Six, which is what the board already drew** — the cells stopped being body parts, not stopped
@@ -382,7 +405,131 @@ const ITEM_CELLS := 6
 ## argument**: any item may be fitted six times, and six copies of the biggest period drop in the table
 ## takes a 1.0 s attack to **-0.5 s**. `net_parts` measured exactly that the day the cells were unnamed.
 ## ⇒ The clamp lives in `Loadout.stat_of`, and 0.20 s is the bound that net already carried as a literal.
+## ⚠ The ATK_SPEED tag term below lands on the same column and sits INSIDE that same clamp, because
+## `Loadout.bonus` is where the term is added and `stat_of` clamps after it.
 const PERIOD_FLOOR_SEC := 0.20
+
+
+## --- The numeric tag tiers -------------------------------------------------------------------------
+## One row per stat-pushing tag: tag · the `ITEM_COL_*` it pushes · tiers of [threshold, add].
+## The add is FLAT across the whole horde — every species' `Loadout.stat_of` reads it — and the
+## highest reached tier REPLACES the lower ones (see the Tag header). Tiers are listed ascending;
+## `tag_stat_bonus_at` walks them in order and keeps the last one reached.
+##
+## ⚠ **First values, not measured ones**, like `RARITY_WEIGHT`. The low thresholds went to the tags
+## with the fewest items (범위 2종 · 디버프 3종): a run draws at most one card per non-boss node,
+## `map_max_card_nodes_on_a_route()` of them in total, so a threshold is a real share of a whole run.
+const TAG_STAT_TIERS := [
+	[Tag.ATK_SPEED, ITEM_COL_PERIOD, [[3, -0.10], [5, -0.25]]],
+	[Tag.RANGE, ITEM_COL_RANGE, [[2, 0.5], [4, 1.0]]],
+]
+
+const _TSTAT_COL_TAG := 0
+const _TSTAT_COL_STAT := 1
+const _TSTAT_COL_TIERS := 2
+
+
+static func tag_stat_row_count() -> int:
+	return TAG_STAT_TIERS.size()
+
+
+static func tag_stat_tag_of(r: int) -> int:
+	return int((TAG_STAT_TIERS[r] as Array)[_TSTAT_COL_TAG])
+
+
+static func tag_stat_col_of(r: int) -> int:
+	return int((TAG_STAT_TIERS[r] as Array)[_TSTAT_COL_STAT])
+
+
+## The flat add row `r` puts on its column at `count` copies of its tag: the highest tier whose
+## threshold is reached, 0.0 below the first one. Replacement — never a sum of tiers — happens here
+## and nowhere else, so a caller cannot re-introduce the per-copy multiply by accident.
+static func tag_stat_bonus_at(r: int, count: int) -> float:
+	var add := 0.0
+	for raw in (TAG_STAT_TIERS[r] as Array)[_TSTAT_COL_TIERS]:
+		var tier: Array = raw
+		if count >= int(tier[0]):
+			add = float(tier[1])
+	return add
+
+
+## --- The status table ------------------------------------------------------------------------------
+## ⚠⚠ **Not one-off bleed code** (2026-08-24, the user: 「독부터 해서 정말 많이 있을듯」). A status is a
+## row here plus a generic walk in `battle.gd`; the day poison arrives it is one `Status` entry and one
+## `TAG_STATUS_TIERS` row, and `battle.gd` stays shut — poison is the DOT kind bleed already built.
+## A status of a NEW kind (one that touches a stat, the way SLOW touches enemy speed) also needs the
+## one read site for that stat, which is what SLOW built this round.
+##
+## The KIND decides what the magnitude means: DOT — damage per second; SLOW — a speed multiplier.
+enum Status { BLEED, SLOW }
+enum StatusKind { DOT, SLOW }
+
+## Kind per `Status`, index-aligned. Appended, never inserted — `battle.gd`'s flat status arrays are
+## indexed by these ordinals.
+const STATUS_KIND := [StatusKind.DOT, StatusKind.SLOW]
+
+
+static func status_count() -> int:
+	return STATUS_KIND.size()
+
+
+static func status_kind_of(s: int) -> int:
+	return int(STATUS_KIND[s])
+
+
+## One row per status-carrying tag: tag · the `Status` it leaves · tiers of
+## [threshold, magnitude, duration seconds]. A lit tier makes every allied blow leave that status on
+## everyone the blow actually hit; re-hitting REFRESHES (the lit tier's own values overwrite what is
+## stored) and never accumulates — the -0.5 s mine's cousin lives in the accumulate.
+## ⚠ **First values, not measured ones.**
+const TAG_STATUS_TIERS := [
+	[Tag.BLEED, Status.BLEED, [[3, 0.5, 2.0], [5, 1.5, 3.0]]],
+	[Tag.DEBUFF, Status.SLOW, [[2, 0.7, 2.0], [4, 0.5, 3.0]]],
+]
+
+const _TSTATUS_COL_TAG := 0
+const _TSTATUS_COL_STATUS := 1
+const _TSTATUS_COL_TIERS := 2
+
+
+static func tag_status_row_count() -> int:
+	return TAG_STATUS_TIERS.size()
+
+
+static func tag_status_tag_of(r: int) -> int:
+	return int((TAG_STATUS_TIERS[r] as Array)[_TSTATUS_COL_TAG])
+
+
+static func tag_status_status_of(r: int) -> int:
+	return int((TAG_STATUS_TIERS[r] as Array)[_TSTATUS_COL_STATUS])
+
+
+## The lit tier of row `r` at `count` copies of its tag, as {"mag": .., "sec": ..} — empty below the
+## first threshold. The highest reached tier replaces the lower ones, same rule as the numeric table.
+static func tag_status_tier_at(r: int, count: int) -> Dictionary:
+	var lit := {}
+	for raw in (TAG_STATUS_TIERS[r] as Array)[_TSTATUS_COL_TIERS]:
+		var tier: Array = raw
+		if count >= int(tier[0]):
+			lit = {"mag": float(tier[1]), "sec": float(tier[2])}
+	return lit
+
+
+## Every threshold `tag` can light, ascending, walked over BOTH tier tables — the refit aggregate
+## reads this, so the screen's "count/next" line derives from the same rows the effects do and a new
+## tier is on screen the day its table row lands.
+static func tag_thresholds_of(tag: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for r in tag_stat_row_count():
+		if tag_stat_tag_of(r) == tag:
+			for raw in (TAG_STAT_TIERS[r] as Array)[_TSTAT_COL_TIERS]:
+				out.append(int((raw as Array)[0]))
+	for r in tag_status_row_count():
+		if tag_status_tag_of(r) == tag:
+			for raw in (TAG_STATUS_TIERS[r] as Array)[_TSTATUS_COL_TIERS]:
+				out.append(int((raw as Array)[0]))
+	out.sort()
+	return out
 
 ## ⚠⚠ **THREE CARDS, ONE PICK** (2026-08-24, 티켓 06). It was six and two. **Two of three are left on
 ## the table**, so the pick is a loss as well as a gain — which is the whole of what makes it a decision.
@@ -418,6 +565,11 @@ static func item_effect_text(item: int) -> String:
 		else:
 			shown = "%+.1f" % v
 		parts.append("%s %s" % [str(ITEM_COL_LABELS[col]), shown])
+	# The tag word rides at the end of the same line, so the card and the refit row both carry it with
+	# neither of them typing it.
+	var tag := item_tag_of(item)
+	if tag != TAG_NONE:
+		parts.append(str(TAG_LABELS[tag]))
 	return " · ".join(parts)
 
 
@@ -435,6 +587,24 @@ static func item_rarity_of(item: int) -> int:
 	if item < 0 or item >= ITEMS.size():
 		return Rarity.COMMON
 	return int((ITEMS[item] as Array)[_ITEM_COL_RARITY])
+
+
+## The tag item `item` carries, or `TAG_NONE` — for an untagged item and for an out-of-range id alike,
+## because an id that does not exist counts toward no combo.
+static func item_tag_of(item: int) -> int:
+	if item < 0 or item >= ITEMS.size():
+		return TAG_NONE
+	return int((ITEMS[item] as Array)[_ITEM_COL_TAG])
+
+
+static func tag_kind_count() -> int:
+	return TAG_LABELS.size()
+
+
+static func tag_label_of(tag: int) -> String:
+	if tag < 0 or tag >= TAG_LABELS.size():
+		return ""
+	return str(TAG_LABELS[tag])
 
 
 ## What item `item` adds to column `col`. **The one reader of `ITEMS`' number columns**, so the offset

@@ -47,16 +47,11 @@ const TILE_PX := 40.0
 ## chair** — nothing in the sim moved, and every drawing site that already went through
 ## `tile_point_px` / `tile_rect_px` followed for free.
 ##
-## ⚠ **The cosine is written out because GDScript cannot fold `cos()` into a `const`.** The angle
-## beside it is the truth; `0.766044` is `cos(40°)`, and the two are changed together or not at all.
-##
 ## ⚠⚠ **A body is NOT laid back.** Its radius is untouched: the animals are boards that face the
 ## camera, so they keep their height while the ground under them loses a quarter of its.
-## ⚠ **Still round when it should be an ellipse**: the area rings, the hit halos and the landing ring.
-## They lie ON the ground, and a circle on a laid-back ground is an ellipse. **Not done**, and it is
-## written on 티켓 07 as not done rather than left to be discovered.
+## (`MAP_TILT_COS`, the folded cosine, was deleted with its last reader — the 2D shadow ellipse; the
+## camera takes `cos()` of this angle at runtime.)
 const MAP_TILT_DEG := 40.0
-const MAP_TILT_COS := 0.766044
 
 ## ⚠⚠ **THE SQUASH MOVED OUT OF THIS FILE AND INTO THE ENGINE** (2026-08-24, 티켓 08). It used to be
 ## `TILE_PX * MAP_TILT_COS`, which laid the board back by drawing every row 30.64 px tall on a flat
@@ -147,6 +142,18 @@ const BODY_LIFT_PX := 1.0
 const BODY_TEX_PX := 64
 const BODY_TEX_OUTLINE_PX := 6
 const BODY_TEX_DOT_PX := 5
+
+## The two texels a baked texture is written with: the mark, and the clear ground it sits on. **White
+## on purpose** — the sprite's one modulate carries the body's own colour, so the texture itself must
+## carry none. They live here because every colour in this game lives here; `field_view` writing
+## `Color.WHITE` into its bake loops was caught by `net_draw_leaf`'s own scan.
+const COL_BAKE_MARK := Color(1.0, 1.0, 1.0)
+const COL_BAKE_CLEAR := Color(1.0, 1.0, 1.0, 0.0)
+
+## How big one texel of a `Sprite3D` is in world units. **The inverse of `TILE_PX` and written as that
+## division**, because it is the same fact as "one world unit is one tile" at the top of this section —
+## a picture sized in canvas px lands at the size this file already says it is.
+const SPRITE_PIXEL_SIZE := 1.0 / TILE_PX
 
 ## The hull, as a box on the water rather than a rectangle on a canvas.
 const HULL_H_TILES := 0.22
@@ -286,10 +293,13 @@ static func survey_zoom_of(w_tiles: int, h_tiles: int) -> float:
 ## so a WORLD-space width must be **>= 2.0 / 0.45 = 4.45**, and the two constants that already did
 ## this sum chose **5.0** (= 2.25 px). Every world width in this file is now on one of two sides:
 ##
-##   ABOVE THE FLOOR (5.0 or more)   BODY_OUTLINE · SHOT · BURST · AREA_RING · LAND_RING · ROUTE ·
-##                                   CLIFF_FACE · REFUSE_MARK   (BEAK_WIDTH_PX clears it at 8.0)
-##   DELIBERATELY BELOW              GRID_LINE · TARGET_LINE · SPARK — each carries its own reason
-##                                   on its own line, and the reason is the whole licence
+##   ABOVE THE FLOOR (5.0 or more)   SHOT · BURST · AREA_RING · LAND_RING · ROUTE · REFUSE_MARK
+##   DELIBERATELY BELOW              TARGET_LINE · SPARK — each carries its own reason on its own
+##                                   line, and the reason is the whole licence
+##   (BODY_OUTLINE · CLIFF_FACE · GRID_LINE · BEAK left this table with the 3D move: the field's
+##   body became a baked texture — BODY_OUTLINE_WIDTH_PX lives on for the refit screen's drawn body,
+##   in HUD space where the snap floor bites raw — the cliff line became mesh, and the other two
+##   were deleted with zero readers.)
 ##
 ## ⚠ **This was a table with one row measured and eleven not.** `REFUSE_MARK_WIDTH_PX` did this sum
 ## out loud and `CLIFF_FACE_WIDTH_PX` was re-measured 4.0 -> 5.0 when `ZOOM_MIN` fell; `ROUTE_WIDTH_PX`
@@ -303,14 +313,9 @@ static func survey_zoom_of(w_tiles: int, h_tiles: int) -> float:
 ## deriving its bound from the thing it checks, which is this repo's own named false green. The floor
 ## is written out as a literal in `net_draw_leaf`, once.
 
-## A faint grid, because in a game where position is the decision an invisible grid means the
-## player cannot pick a position. It is drawn low-alpha, not thin-and-bright.
-## ⚠ **DELIBERATELY BELOW the world-width floor** (0.45 px at `ZOOM_MIN`) and it stays there. Nothing
-## is ever READ off a grid line — every mark the player aims with (the drag candidate ring, the
-## refusal mark, the cliff face) is its own mark and all three clear the floor. This is texture, and
-## `COL_GRID_LINE` is alpha 0.07 across every tile on the map: at 2.25 px that lattice is louder than
-## the terrain under it, which is the opposite of what the sentence above asks for.
-const GRID_LINE_WIDTH_PX := 1.0
+## ⚠ **The grid lines are GONE with the flat board and so are their two constants**
+## (`GRID_LINE_WIDTH_PX` · `COL_GRID_LINE`, deleted 2026-08-24 with zero readers left): the 3D field
+## draws no lattice, and position is read off the terrain itself.
 
 
 # ---------------------------------------------------------------------------------------------
@@ -320,11 +325,11 @@ const GRID_LINE_WIDTH_PX := 1.0
 # Terrain. Three tones plus the harbour marker, and the hole has to read as "cannot walk here" at a
 # glance. `boat-and-landing` renamed the dock to a harbour (water a boat sails from, not a fixed
 # port) and deleted the `D` legend character; the colour is the same value under its new name.
+## (`COL_HARBOUR` and `COL_GRID_LINE` were deleted 2026-08-24 — the harbour marker and the lattice
+## both died with the flat board and nothing read either.)
 const COL_WATER := Color(0.086, 0.145, 0.255)
 const COL_LAND := Color(0.203, 0.259, 0.184)
 const COL_HOLE := Color(0.055, 0.067, 0.078)
-const COL_HARBOUR := Color(0.553, 0.443, 0.243)
-const COL_GRID_LINE := Color(1.0, 1.0, 1.0, 0.07)
 
 # Cliff and ramp (`boat-and-landing` stage 5, P10). `^` gets its OWN fill now instead of reusing
 # COL_HOLE — 3.2 still holds (a cliff is exactly as impassable as a hole), only the picture stops
@@ -336,8 +341,9 @@ const COL_GRID_LINE := Color(1.0, 1.0, 1.0, 0.07)
 ## it is a large lit surface, and near-black reads as **a hole cut in the island** rather than as rock:
 ## the first captures of the port show the whole south coast as one black slab. Rock grey, still the
 ## darkest thing on the island, still unmistakably not walkable.
+## (`COL_CLIFF_FACE` was deleted 2026-08-24: the seaward-edge line it painted became a real wall in
+## the terrain mesh, told from the top face by its own darkened skirt.)
 const COL_CLIFF := Color(0.243, 0.235, 0.251)
-const COL_CLIFF_FACE := Color(0.020, 0.020, 0.027)
 const COL_RAMP := Color(0.361, 0.310, 0.235)
 
 # Bodies. Friend and foe are told apart by COLOUR; the unit type is told apart by SIZE and by how
@@ -386,15 +392,10 @@ const COL_ROUTE := Color(0.851, 0.780, 0.600, 0.55)
 ## ⚠ **Deliberately NOT `COL_START` / `COL_WIN` / `COL_NODE_CHEST` re-typed.** Those are a press, a
 ## verdict and a map node; a value shared by two concepts diverges the first time one of them is tuned.
 ##
-## ⚠ **It is an ALLOWLIST and the land's rule is a DENYLIST, and that is not an inconsistency to be
-## "fixed".** Measured on all three islands (`sea-summon`, 2.1): water a boat cannot reach the shore
-## from is **0 / 0 / 0**, so a sea DENYLIST would draw nothing and refuse nothing. The two answer
-## different questions — 「어디에 상륙하나」 stays a denylist, 「어디에 손을 대나」 is a place.
-## ⚠⚠ **NOTHING READS THIS ANY MORE** (2026-08-24). It washed every summonable water tile green, and
-## the user cut it: 「초록색이 있을 필요는 없다? 내가 놓을 수 있는 위치는 그냥 원 기준에 눈에 보이면 될
-## 거 같고」. **The band is a drawn circle now** — see `COL_SUMMON_RING` — because the rule itself became
-## a circle (`Rules.SUMMON_RADIUS_TILES`). Kept only so the checks that still name it keep parsing.
-const COL_SUMMON_BAND := Color(0.353, 0.769, 0.475, 0.35)
+## ⚠ (`COL_SUMMON_BAND` was deleted 2026-08-24. It washed every summonable water tile green; the
+## user cut the wash — 「초록색이 있을 필요는 없다」 — and the band became the drawn circle below.
+## It survived a while 「so the checks that still name it keep parsing」, and the ticket-09 net refit
+## removed the last of those names.)
 
 ## **The ring on the water: where a boat may be put down.** Pale and cool rather than green — it is a
 ## boundary drawn ON the sea, and a tinted sea was exactly what it replaced. It has to read against
@@ -481,20 +482,8 @@ const COL_SPARK := Color(1.0, 0.855, 0.600)
 ## entire case for existing is that it is legible on top of this circle — stops being legible.
 const COL_HIT_HALO := Color(1.0, 1.0, 1.0, 0.35)
 
-## The patch of dark under a body. **This is what makes the laid-back board read as laid back**
-## (2026-08-24): the tilt alone squashes the ground by 23% and the user's verdict on that was
-## 「음... 이게 잘모르겠네..」. What told the eye in the horde sheet they DID pass was the shadow and
-## the overlap, not the squash.
-##
-## ⚠ **Alpha, not a colour.** It multiplies whatever ground it lands on — water, sand, cliff — so one
-## value works everywhere and no tone has to be invented per terrain.
-const COL_BODY_SHADOW := Color(0.0, 0.0, 0.0, 0.32)
-
-## The shadow's half-width as a fraction of the body's own radius, and it is **under 1 on purpose**:
-## a shadow as wide as the body reads as a hole, not as contact. The half-HEIGHT is this times
-## `MAP_TILT_COS` — a circle on the ground seen from 40 degrees IS that ellipse, so the shadow is the
-## one thing in this file whose shape is derived rather than chosen.
-const SHADOW_R_RATIO := 0.85
+## (`COL_BODY_SHADOW` and `SHADOW_R_RATIO` were deleted 2026-08-24: the drawn ellipse they shaped
+## was the flat board's way of faking contact, and the 3D sun casts the real shadow now.)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -600,10 +589,11 @@ const BEAST_SPRITE_W_RATIO := 6.0
 ## does overlap when bodies stand shoulder to shoulder — and overlapping bodies that can be told apart
 ## beat separate bodies that cannot be seen.
 
-## The beak is a triangle poking OUT past the outline, so it reads at a glance which soldier is
-## carrying it. Length is measured from the body edge outward, not from the centre.
-const BEAK_LENGTH_PX := 9.0
-const BEAK_WIDTH_PX := 8.0
+## ⚠ (`BEAK_LENGTH_PX` / `BEAK_WIDTH_PX` were deleted 2026-08-24 with zero readers: the triangle
+## they shaped was the flat board's on-body beak marker and nothing draws one in 3D. **The beak
+## itself is alive** — `Rules.BEAK_RANGE`, `Army.has_beak`, the panel's pick — only its FIELD mark is
+## an unported picture, and that gap is written on ticket 09 rather than hidden by two live-looking
+## constants.)
 
 ## A thin bar under the body. GAP is from the bottom of the body to the top of the bar.
 const HP_BAR_W_PX := 24.0
@@ -635,9 +625,9 @@ const HUD_TIMER_FONT_SIZE_PX := 30    # > HUD_FONT_SIZE_PX, or the clock stops b
                                       # thing on screen; <= 36 or it collides with the enemy count
 const HUD_MARGIN_PX := 12.0
 
-## Remaining time, top centre. The label is 「시간 %.1f」 and NOT 「남은 시간 %.1f」 — one word instead
-## of two, same meaning, and the word count is what the user asked to cut.
-const HUD_TIMER_POS_PX := Vector2(600.0, 38.0)
+## (`HUD_TIMER_POS_PX` was deleted 2026-08-24: the countdown it placed died with the rule that
+## counted to it, and nothing on the HUD draws a clock. `HUD_TIMER_FONT_SIZE_PX` above survives as
+## the ceiling other HUD glyphs are still bounded against.)
 
 ## ⚠ **The berth boxes and the 1/2 key boxes are DELETED, not moved.** Thirteen constants went with
 ## them (`HUD_BERTH_*`, `berth_rect_px`, `HUD_KEY_*`, `key_rect_px`, `HULL_BERTH_OFFSET_PX`,
@@ -875,10 +865,19 @@ const CARD_PART_FONT_SIZE_PX := 34    # > HUD_TIMER_FONT_SIZE_PX 30 — the part
                                       # 280 − 2×24
 const CARD_SPECIES_FONT_SIZE_PX := 20 # ≥ 16 (unreadable below); ≤ CARD_PART_FONT_SIZE_PX − 12, or
                                       # 부위 and 종 read as one line
-const CARD_PART_OFFSET_PX := Vector2(24.0, 84.0)        # x > 0 and y ≥ the part font size; inside
+## ⚠ **The card was relaid for the art** (티켓 12 fix round): name on top, art in the middle, effect
+## at the bottom. The name's descenders end near `44 + 5 = 49`, above the art band at 52.
+const CARD_PART_OFFSET_PX := Vector2(24.0, 44.0)        # x > 0 and y ≥ the part font size; inside
                                       # the card
-const CARD_SPECIES_OFFSET_PX := Vector2(24.0, 132.0)    # y ≥ CARD_PART_OFFSET_PX.y +
-                                      # CARD_PART_FONT_SIZE_PX, or the two lines overlap
+## The effect line WRAPS now (`_paint_card_effect` is a `draw_multiline_string`), because the longest
+## item line — 폭풍의 가죽's 「전설  공격주기 -0.25 · 이동속도 +2.5」 — was measured clipping at the
+## card's right border as a single line. Wrapped at `CARD_EFFECT_WRAP_W_PX` it is two lines: first
+## baseline 160, second ≈ 188, descenders ≈ 194 ≤ 200 — inside the card for the LONGEST string, not
+## an average one. y ≥ art bottom (136) + the font size, or the line overlaps the picture.
+const CARD_SPECIES_OFFSET_PX := Vector2(24.0, 160.0)
+## The wrap width: `280 − 2 × 24` — the same 24 px inset on both sides. A single token never exceeds
+## it (the widest, 공격주기, is 4 glyphs ≈ 80 px), so word-wrap alone guarantees no horizontal clip.
+const CARD_EFFECT_WRAP_W_PX := 232.0
 ## ⚠⚠ **A taken card and a card that can no longer be taken both fall to `PRESS_ALPHA_OFF`, so alpha
 ## alone cannot tell them apart** — the map measured exactly this and answered it with size AND
 ## brightness AND what is drawn on top. This mark is the third channel.
@@ -938,13 +937,127 @@ static func card_hit_rect_px(k: int) -> Rect2:
 	return card_rect_px(k).grow(PRESS_HIT_PAD_PX)
 
 
+## --- the picture on the card (티켓 12) ----------------------------------------------------------
+
+## Item id → texture path, one row per `Rules.ITEMS` row IN THE SAME ORDER — the two tables share
+## their index, and `Rules.item_count()` is the only size either is allowed to have.
+## ⚠⚠ **An empty string means "no honest picture yet" and the view draws NO art there** — never a
+## stand-in. Of the eighteen items only five had a picture that tells the truth about what the card
+## gives; a wolf on a 가죽끈 card is a picture that lies, and the fork was closed on exactly this
+## (2026-08-24, the user: 「그렇게 하자」 — reuse the honest five, generate the other thirteen).
+## The five reused rows point at constants above by NAME, never by a repeated path string, so a
+## moved file breaks one line instead of two.
+## ⚠ **The thirteen `assets/item/` rows are a FIRST-PASS pick** (2026-08-24, the user: 「일단 다
+## 니가 선택해둬 나중에 고를게」). Each carries its candidate id from
+## `.scratch/cell-hook/prototypes/item-cards/`, so a re-pick after the user looks in game is a
+## one-line swap: cut the new candidate with `tools/pixel/cutbg.py` over the same filename.
+const ITEM_ART := [
+	"res://assets/item/strap.png",           # 0  가죽끈 — pick 0-2
+	"res://assets/item/stone_necklace.png",  # 1  돌 목걸이 — pick 1-1
+	"res://assets/item/wood_claw.png",       # 2  나무 발톱 — pick 2-1
+	"res://assets/item/dry_hide.png",        # 3  마른 가죽 — pick 3-1
+	"res://assets/item/bone_shard.png",      # 4  뼛조각 — pick 4-1
+	"res://assets/item/dry_sinew.png",       # 5  말린 힘줄 — pick 5-3
+	"res://assets/item/tanned_hide.png",     # 6  무두질 가죽 — pick 6-2
+	"res://assets/item/flint_tooth.png",     # 7  부싯돌 이빨 — pick 7-1
+	"res://assets/item/deer_sinew.png",      # 8  사슴 힘줄 — pick 8-1
+	"res://assets/item/wind_mane.png",       # 9  바람 갈기 — pick 9-2
+	HUMAN_SPEAR_R,   # 10 뺏은 창끝 — the spearman is carrying exactly this
+	HUMAN_SHIELD_R,  # 11 방패 조각 — the shield soldier's own shield
+	"res://assets/item/bronze_plate.png",    # 12 청동 판 — pick 12-2
+	BEAST_WOLF_R,    # 13 늑대 송곳니 — the wolf the fang came off
+	HUMAN_BOW_R,     # 14 사냥꾼의 눈 — the archer, the one hunter on the field
+	"res://assets/item/sprint_paw.png",      # 15 질주의 발 — pick 15-2
+	BEAST_BULL_R,    # 16 우두머리의 뿔 — the bull the horn came off
+	"res://assets/item/storm_hide.png",      # 17 폭풍의 가죽 — pick 17-2
+]
+
+## The art rectangle inside a card, offset from the card's own origin — the middle band of the
+## relaid card, between the name (descenders end ≈ 49) and the effect block (glyph tops at
+## `160 − 20 = 140`): x `(280 − 84) / 2 = 98`, y 52..136. ⚠ **RAISED from 42 to 84** in the fix
+## round — at 42 the picture read as a badge while the card's lower half sat empty (verify-look),
+## and 「연출은 과할 정도로」 is the standing rule. One-line revert if the user dislikes it.
+## Square on purpose: every wired texture is a body sprite near 1:1, and a stretched body is a
+## different animal.
+const CARD_ART_OFFSET_PX := Vector2(98.0, 52.0)
+const CARD_ART_SIZE_PX := Vector2(84.0, 84.0)
+
+## How far a card slides in while it fades, in HUD px. ⚠ **No duration of its own**: the slide eases
+## on `_reveal_alpha_of(k)`, the fade's own value, so the fade and the slide can never disagree on
+## when a card has arrived. The offset is +y — a dealt card starts BELOW its rest and rises — so
+## ≥ 24 or the slide reads as a twitch; ≤ 60: the grid's bottom is 380, so the moving card's bottom
+## reaches `380 + slide = 420 ≤ 720`, and past 60 the travel reads as the card arriving from
+## somewhere off the panel rather than being dealt onto it.
+const CARD_DEAL_SLIDE_PX := 40.0
+
+## Four BRIGHT tones indexed by `Rules.Rarity`, for the glow AROUND a card. ⚠ **Deliberately NOT
+## `COL_RARITY` reused**: that table is dark text measured 3:1 against `COL_CARD`; this glow is drawn
+## outward from the card's edge onto whatever the 3D field behind the panel shows (the field stays on
+## screen during the pick — `game.gd`'s own header says so), so it needs bright values of its own.
+## LEGENDARY stays the only warm one — the same argument as the text table: warmth is what catches
+## the eye across a spread. COMMON's row exists so the table indexes like its ladder siblings below,
+## and it is never drawn — `RARITY_GLOW_LAYERS` row 0 is 0.
+const COL_RARITY_GLOW := [
+	Color(0.918, 0.937, 0.961),   # COMMON    — never drawn (0 layers)
+	# ⚠ RARE was (0.451, 0.675, 1.000) and read near-white on COL_CARD (verify-look) — the FIRST rung
+	# of the ladder is the one a player learns the ladder from, so it was deepened to a saturated
+	# blue. One-line revert if the user dislikes it.
+	Color(0.216, 0.443, 0.957),   # RARE      — saturated blue
+	Color(0.310, 0.941, 0.867),   # EPIC      — bright teal
+	Color(1.000, 0.780, 0.302),   # LEGENDARY — warm gold
+]
+
+## The rarity TEXT tones for the game's DARK panels — the refit board and the held pile. ⚠
+## `COL_RARITY` above is dark text measured 3:1 against the LIGHT card, and on the dark refit
+## palette it sinks: verify-look read 전설's amber and 희귀's navy as markedly less readable than
+## plain text there, the second time that exact finding was recorded (티켓 12 wrote it first). The
+## bright glow tones are the same ladder the card screen already teaches, so they are POINTED AT
+## rather than copied — one place owns the four values. COMMON's near-white row reads as plain text,
+## which is what COMMON is.
+const COL_RARITY_TEXT_DARK := COL_RARITY_GLOW
+
+## ⚠⚠ **The rarity ladder. Every consumer of 「how loud is this rarity」 reads these tables and
+## nothing else**, indexed by `Rules.Rarity` — one place owns the answer. **COMMON is the zero row on
+## every axis** (no frame, no glow, no pulse), and LEGENDARY is the only row with everything on plus
+## the burst below — that ladder shape, not any single value, is what makes 전설 unmissable
+## (「연출은 과할 정도로」). These are HUD-space px with no zoom under them, so the 2.0 px snap floor
+## is the only width bound that bites: every non-zero frame width is ≥ 2.0.
+const RARITY_FRAME_WIDTH_PX := [0.0, 3.0, 5.0, 8.0]
+## The glow is the frame's own stroke layered outward, each layer one frame-width further out and
+## linearly fainter (the outermost keeps `1/layers` of the alpha — never zero: a zero-alpha stroke
+## would be a call that draws nothing) — layer count is the glow's REACH. 0 layers is no call at
+## all. Alpha is the innermost layer's AT REST, and the pulse swings above it: the drawn value is
+## `alpha × (1 + pulse × RARITY_PULSE_GAIN)`, so LEGENDARY's crest is `0.50 × 1.60 = 0.80`. The
+## ceiling is on that CREST, 0.85 — past it the glow outshines the card it frames — and every row's
+## crest is under it (COMMON 0 · RARE 0.25 · EPIC 0.455 · LEGENDARY 0.80).
+const RARITY_GLOW_LAYERS := [0, 2, 3, 6]
+const RARITY_GLOW_ALPHA := [0.0, 0.25, 0.35, 0.50]
+## The pulse — a sine on the screen's own reveal clock (`_reveal_age`; ⚠ no second clock is
+## invented). SEC is one full breath, and 0.0 means NO pulse — the view returns 0 rather than divide
+## by it. GAIN is how far the glow alpha swings above rest at the crest. SEC floor 0.42 (five frames
+## of visible motion per half-breath); ceiling 2.0 or the pulse reads as a slow fade.
+const RARITY_PULSE_SEC := [0.0, 0.0, 1.4, 0.9]
+const RARITY_PULSE_GAIN := [0.0, 0.0, 0.30, 0.60]
+## The legendary burst — rays out from behind the card, drawn iff LEGENDARY, grown over BURST_SEC of
+## the card's own reveal. Count ≥ 8 or the rays read as stray lines, ≤ 24 or they read as a solid
+## disc. LEN ≤ 60: the row above the cards is clear down to the hint baseline at 120 and the grid top
+## is 180. WIDTH ≥ 2.0 (HUD-space snap floor); ≤ 8 or rays read as bars. BURST ≥ 0.084 (five
+## frames); ≤ 1.0 or the burst is still crawling out after every card has already arrived.
+const LEGEND_RAY_COUNT := 12
+const LEGEND_RAY_LEN_PX := 46.0
+const LEGEND_RAY_WIDTH_PX := 4.0
+const LEGEND_BURST_SEC := 0.60
+
+
 # ---------------------------------------------------------------------------------------------
 # The refit screen (`parts-on-a-board-not-on-the-body`)
 # ---------------------------------------------------------------------------------------------
 
-## The slot strip — drawn on both steps, side by side rather than stacked, because step two also
-## draws the board and the two must never share a pixel of hit rect. `≥ (220, 64)` ·
-## `250×2 + 24 = 524` wide, centred: `(1280 − 524) / 2 = 378`.
+## The beast strip — one box per SPECIES (티켓 11: the board hangs on the type, and all five take
+## equipment), drawn on both steps, side by side rather than stacked, because step two also draws
+## the board and the two must never share a pixel of hit rect. `≥ (220, 64)`, exactly at the width
+## floor — five across is the densest this row can be. `220×5 + 20×4 = 1180` wide, centred:
+## `(1280 − 1180) / 2 = 50`; hit rects span x 42…1238, inside the screen.
 ##
 ## ⚠⚠ **This is the fix for the BELLY cell that could never be pressed.** The strip used to sit at
 ## y 200…464 — squarely on top of the board's y 320…628 — so the BELLY cell's centre landed inside
@@ -952,11 +1065,13 @@ static func card_hit_rect_px(k: int) -> Rect2:
 ## for a press aimed at the board. Laying the strip out ABOVE the board, with its own hit rect
 ## entirely inside y 92…172, removes the two regions' only overlap instead of reordering the input
 ## check that found it (see `_refit_input`'s own comment for why that order cannot change).
-const REFIT_SLOT_SIZE_PX := Vector2(250.0, 64.0)
-const REFIT_SLOT_GAP_PX := 24.0       # ≥ 12; ≤ 60
+const REFIT_SLOT_SIZE_PX := Vector2(220.0, 64.0)
+## ≥ 17 (the same hit-pad arithmetic as `REFIT_CELL_GAP_PX` — at 16 two neighbours' hit rects share
+## an edge); ≤ 25 (`50 + 220×5 + 25×4 = 1250`, hit right edge 1258 ≤ 1280).
+const REFIT_SLOT_GAP_PX := 20.0
 ## y clears the dashboard above it (ends ~78) and the board below it (hit-top 312) by 14 px and
-## 140 px. x centres the 524-wide strip.
-const REFIT_SLOT_ORIGIN_PX := Vector2(378.0, 100.0)
+## 140 px. x centres the 1180-wide strip.
+const REFIT_SLOT_ORIGIN_PX := Vector2(50.0, 100.0)
 const REFIT_BUTTON_SIZE_PX := Vector2(240.0, 64.0)      # ≥ (220, 64); ≤ (360, 120)
 ## `600 + 64 = 664 ≤ 720`, and `600 > 172` so it never touches the strip.
 const REFIT_DONE_ORIGIN_PX := Vector2(520.0, 600.0)
@@ -979,6 +1094,17 @@ const REFIT_CELL_FILL_SEC := 0.25         # >= 0.084 (five frames); <= 0.50
 const REFIT_CELL_PART_FONT_SIZE_PX := 26      # > HUD_FONT_SIZE_PX 22; ≤ 34
 const REFIT_CELL_SPECIES_FONT_SIZE_PX := 18   # ≥ 16; ≤ the part font − 6
 
+## Where a cell's two lines sit, and the wrap that keeps the effect inside a 220-wide cell — the
+## same structure `CARD_EFFECT_WRAP_W_PX` carries, arrived at for the same reason: 뺏은 창끝's line
+## was measured sitting flush against the cell border as a single `draw_string`, and the LONGEST
+## line (폭풍의 가죽's 「공격주기 -0.25 · 이동속도 +2.5 · 공속」) cannot fit one line at all.
+## Wrapped at `220 − 16 − 10` it is two lines: baselines 106 and ≈128, descenders ≈133 ≤ 140. The
+## widest token (공격주기, ≈80 px at 18) never exceeds the width, so word-wrap alone guarantees no
+## horizontal clip.
+const REFIT_CELL_NAME_OFFSET_PX := Vector2(16.0, 30.0)
+const REFIT_CELL_EFFECT_OFFSET_PX := Vector2(16.0, 106.0)
+const REFIT_CELL_EFFECT_WRAP_W_PX := 194.0
+
 ## x > 780 (clear of the board and the dashboard); `800 + 240 + 220 = 1260`, hit right edge 1268.
 const REFIT_HELD_ORIGIN_PX := Vector2(800.0, 300.0)
 ## The exact smallest legal press on this screen.
@@ -986,6 +1112,19 @@ const REFIT_HELD_SIZE_PX := Vector2(220.0, 64.0)
 const REFIT_HELD_GAP_PX := 20.0               # ≥ 17 (the cells' own hit-pad arithmetic); ≤ 32
 ## ≥ 237 (220 + 8 + 8 + 1) or the two columns' hit rects overlap; ≤ 250 from the right edge.
 const REFIT_HELD_COL_PITCH_PX := 240.0
+
+## The held row's two lines inside its 64-tall box, with the effect WRAPPED at `220 − 8 − 8` — 말린
+## 힘줄's line was measured running past the row border into the background as one `draw_string`,
+## and 우두머리의 뿔's touched it. ⚠ **14, not 16, and the first values here were 16/38 and WRONG**:
+## `net_refit._every_effect_line_fits_its_box` measured the real font's line height and four items'
+## second line left the 64 px box — the font's height at a size is bigger than the size, which is
+## exactly why the net measures metrics instead of this comment doing arithmetic with the number 16.
+const REFIT_HELD_NAME_OFFSET_PX := Vector2(8.0, 18.0)
+const REFIT_HELD_EFFECT_OFFSET_PX := Vector2(8.0, 34.0)
+const REFIT_HELD_EFFECT_FONT_SIZE_PX := 14    # ≥ 12; ≤ REFIT_CELL_SPECIES_FONT_SIZE_PX — two
+                                              # wrapped lines have to fit the 64-tall row, and the
+                                              # fit is MEASURED by net_refit, not asserted here
+const REFIT_HELD_EFFECT_WRAP_W_PX := 204.0
 ## ⚠⚠ **`refit_held_capacity()` = 2 × 5 = 10, and it must stay ≥ `Rules.CARD_PICKS *
 ## Rules.map_max_card_nodes_on_a_route()` = 8.** `panel_view.roster_ids` shipped a cap that silently
 ## dropped the overflow and its comment said the cap never bit — it bit. This one is pinned against
@@ -1010,10 +1149,29 @@ const REFIT_STAT_VALUE_FONT_SIZE_PX := 34     # > HUD_TIMER_FONT_SIZE_PX 30; ≤
 const REFIT_HINT_POS_PX := Vector2(400.0, 220.0)
 const REFIT_HINT_FONT_SIZE_PX := 22    # == HUD_FONT_SIZE_PX, the map's own hint-adjacent size
 
-const REFIT_BODY_CENTRE_PX := Vector2(1030.0, 180.0)    # y − radius ≥ 90; y + radius ≤ 300, clear
-                                      # of the pile; x ± radius inside 780…1280
-const REFIT_BODY_SCALE := 5.0         # ≥ 3 — under it the ranged body's corner rounding is
-                                      # invisible; ≤ 8, from 0.35 × 40 × 8 = 112 > the 210 px band
+## ⚠ Re-sat for the five-species strip (티켓 11): the widest body previewed is the LION's now
+## (0.55 × 40), and at the old scale 5 its 110 px radius crossed both the strip above and the pile
+## below. y − radius ≥ 166 (the strip draws to 164) and y + radius ≤ 298 (the pile draws from 300),
+## at the biggest radius 0.55 × 40 × scale = 66; x ± 66 sits right of the tag rows (≤ 950).
+const REFIT_BODY_CENTRE_PX := Vector2(1150.0, 232.0)
+const REFIT_BODY_SCALE := 3.0         # ≥ 3 — under it the ranged body's corner rounding is
+                                      # invisible; ≤ 3.4, from 0.55 × 40 × 3.4 = 74.8 > the 66 px
+                                      # half-band between the strip and the pile
+
+## The tag aggregate — a 「무리」 header line and one line per `Rules.TAG_LABELS` row, drawn on BOTH
+## steps (the count is army-wide, so it is true on the strip step too). ⚠ **The header exists
+## because the column sits under a strip box** (verify-look): without a word saying whose numbers
+## these are, four lines directly beneath one beast's box read as that beast's own. The band between
+## the strip's drawn bottom (164) and the pile's drawn top (300): five baselines 196…292 with the
+## 20 px glyphs hanging above them (top ≈176), descenders ≈296; x 810…~950, clear of the
+## board/dashboard (≤ 780) and the body preview (≥ 1084).
+const REFIT_TAG_ORIGIN_PX := Vector2(810.0, 196.0)
+const REFIT_TAG_ROW_PITCH_PX := 24.0          # ≥ the font size + 4; ≤ 25 (`196 + 4×25 + 4 ≤ 300`)
+const REFIT_TAG_FONT_SIZE_PX := 20            # ≥ 16; ≤ REFIT_STAT_LABEL_FONT_SIZE_PX + 4
+
+## A lit combo line. Gold — the beak's own family — against `dimmed(COL_HUD_TEXT)` for the unlit
+## lines, so "this one is on" reads as colour and not as a symbol nobody explained.
+const COL_TAG_LIT := Color(1.0, 0.843, 0.400)
 
 ## The button has TWO positions: step one reuses `REFIT_DONE_ORIGIN_PX` above (the strip's hit
 ## bottom is 172, and 600 clears it); step two moves it clear of the board, which occupies y
@@ -1035,6 +1193,11 @@ static func refit_slot_rect_px(slot: int) -> Rect2:
 
 static func refit_slot_hit_rect_px(slot: int) -> Rect2:
 	return refit_slot_rect_px(slot).grow(PRESS_HIT_PAD_PX)
+
+
+## Baseline of tag aggregate line `row` (0..`Rules.tag_kind_count()`-1).
+static func refit_tag_origin_px(row: int) -> Vector2:
+	return REFIT_TAG_ORIGIN_PX + Vector2(0.0, row * REFIT_TAG_ROW_PITCH_PX)
 
 
 static func refit_done_rect_px(board_open: bool) -> Rect2:
@@ -1460,12 +1623,20 @@ const HIT_KNOCK_SEC := 0.10
 
 ## 4 — the death burst, in that body's own side colour. It is drawn ABOVE everything: on the floor a
 ## 10 px burst is buried under a 22 px lion.
+##
+## ⚠⚠ **SCALED TO THE SPRITE, NOT THE SIM RADIUS** (2026-08-24, verify-look): the ring used to start
+## at the sim body radius (10-22 px) while the bodies on screen are 84-96 px billboards and deaths
+## happen inside packed melee — the fx log showed it alive, both buffer rows were green, and **no
+## death ever read on the real screen**. `BURST_START_MUL` is the sprite's own half-width ratio,
+## DERIVED from `BEAST_SPRITE_W_RATIO` rather than copied, so the day the animals grow again the
+## burst grows with them instead of sinking back under the pile (연출은 과할 정도로).
 const BURST_SEC := 0.32
-const BURST_GROWTH := 2.2             # lion 22 -> 48.4 px, crow 10 -> 22.0 px
-const BURST_WIDTH_PX := 5.0           # ⚠ RAISED 2.0 -> 5.0 by the world-width table. A death is the
-                                      # thing on screen that must go DOWN — the last game died partly
-                                      # for the want of it — and at `ZOOM_MIN` 2.0 was 0.90 px. <= 5,
-                                      # half the crow's own 10 px start radius
+const BURST_START_MUL := BEAST_SPRITE_W_RATIO * 0.5   # crow starts at 30 px, lion at 66
+const BURST_GROWTH := 2.2             # lion 66 -> 145.2 px, crow 30 -> 66.0 px — past the pile
+const BURST_WIDTH_PX := 9.0           # ⚠ RAISED 5.0 -> 9.0 with the sprite scaling: a 5 px stroke on
+                                      # a 105 px ring over an 84 px sprite pile was a hairline. Snap
+                                      # floor at ZOOM_MIN is 4.5 px; ceiling 15, half the crow's own
+                                      # 30 px start radius, past which the ring closes into a disc
 
 ## 5 — the area ring, grown to the REAL area radius so the screen finally says which attacks splash:
 ## the lion's `area` 1.5 tiles = 60 px, and CELL_RANGED's `area` 1.0 = 40 px, which nothing on screen
@@ -1560,12 +1731,9 @@ const REFUSE_MARK_WIDTH_PX := 5.0     # >= 5, and the 5 is ARITHMETIC: this ring
                                       # and be a hairline exactly where it has to be read.
                                       # <= 8 or the stroke swallows the tile it points at
 
-## The fleet as a picture (`boat-and-landing` stage 5). `CLIFF_FACE_WIDTH_PX` is P10's seaward-edge
-## line. ⚠ **RE-MEASURED when `ZOOM_MIN` fell to 0.45**: the old 4.0 drew at 2.25 px at the old
-## `ZOOM_MIN` and would draw at **1.8 px** at the new one, under this file's own 2.0 px snap floor.
-## 5.0 puts it back at exactly 2.25 px — the value the old floor was derived from in the first place.
 ## `HULL_WAIT_BLINK_SEC` is P7's stalled-boat blink — a full on/off cycle, not a half.
-const CLIFF_FACE_WIDTH_PX := 5.0      # >= 5 (2.25 px at the new ZOOM_MIN); <= 8
+## (`CLIFF_FACE_WIDTH_PX` was deleted 2026-08-24: the seaward-edge line it sized became a real wall
+## in the terrain mesh, and its last readers were two net labels bounding a line nothing drew.)
 const HULL_WAIT_BLINK_SEC := 0.5      # >= 0.3 (under 5 frames at 60fps is unseen); <= 1.0
 
 ## 8 — press feedback, inside 100 ms because that is Swink's bound on input-to-response in a
@@ -1635,20 +1803,8 @@ const SHAKE_B_FREQ := 47.0
 ## from 3168 to about 3800 tiles — not from 4032 to 5120.
 const WATER_MARGIN_TILES := 16
 
-## ⚠⚠ **The terrain pass is CULLED to the visible rect now, and this is how far past it the loop still
-## goes.** The "cost, measured rather than assumed" paragraph above is what forced it: at 48 x 32 the
-## unculled loop was 4,032 tiles = 8,064 immediate-mode calls **every frame**, and `push-inland`'s
-## variable grid takes the same loop to 168 x 56 = 9,408 at 144 columns.
-##
-## **2 is arithmetic, not slack.** Two things move the world under a `cam_px` that has not changed:
-## the SHAKE, added to `position` after the span is computed — `SHAKE_MAX_PX 6 / ZOOM_MIN 0.45 =
-## 13.3 world px = 0.33 tile` — and a tile straddling the edge, which the span's own `floor` / `ceil`
-## already covers. One tile clears both; 2 is one tile of margin on top, and it costs 2 rows and 2
-## columns of a loop that just shed a quarter of itself.
-## Floor 1 — at 0 a shaking frame exposes bare ground along one edge, which is the defect
-## `WATER_MARGIN_TILES` exists to prevent, reintroduced one layer in. Ceiling 6, past which the cull
-## stops paying on the tall axis (the visible world is 40 tiles high against a 56-tile margin rect).
-const CULL_PAD_TILES := 2
+## (`CULL_PAD_TILES` was deleted 2026-08-24: the per-frame terrain loop it padded died with the flat
+## board — the island is one mesh built once per island now, and there is no cull left to pad.)
 
 ## 12 — gait. Phase turns on DISTANCE TRAVELLED, not on time, and that is the whole of "it must not
 ## slide": a body that does not move does not animate. Squash is a Vector2 and not a scalar —

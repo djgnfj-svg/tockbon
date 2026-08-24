@@ -28,125 +28,44 @@ extends RefCounted
 ## a 1280x720 screen quite happily.
 
 
-## Spies. Each one clears at the top of its own `_draw` and then calls `super()`, so what is read back
-## afterwards is exactly ONE frame's worth of hook calls rather than however many frames were pumped.
+## ⚠⚠ **`FieldSpy` IS DELETED WHOLE — the field has no `_paint_*` hooks to override any more.** The
+## thirteen leaves it captured died with the flat board (the 3D move), and a spy class whose `_draw`
+## called `super()` into a parent with no `_draw` was the parse failure that made this net VANISH
+## for a whole round — 490 checks reported as nothing at all.
 ##
-## **Every one of the twenty leaves is overridden here, and that is not bookkeeping.** An override
-## whose signature does not match the parent does not bind — Godot barks a parse error for a mismatch,
-## but a hook simply left out binds to nothing at all and the REAL `draw_*` runs headless while the
-## capture array stays empty and the checks about it read as "nothing was drawn".
+## What replaces the captures is the REAL `FieldView`, read on the two surfaces the plan on ticket
+## 09 names:
+##   surface 2 — the pooled nodes: `_sprites` / `_hulls` up to `_sprites_used` / `_hulls_used`,
+##               with position · scale · modulate · texture · visible. The engine draws exactly
+##               these fields, so they are the 3D leaf the way a `draw_*` argument was the 2D one.
+##   surface 3 — the effect buffers `_g_v`/`_g_c` (ground) and `_a_v`/`_a_c` (air) after `_process`,
+##               plus `_decal`/`_air`'s `mesh.get_surface_count()` — the buffers say "geometry was
+##               built", the surface count says "it was committed", and only the pair closes the
+##               hole where deleting `_fx_flush` stays green.
 ##
-## **`_seq` is the layer contract.** The arrays are per hook, so the order BETWEEN hooks cannot be
-## recovered from them at all — and the order is a contract: a filled halo at 1.35x radius drawn after
-## `_paint_body` covers a 2 px outline and a 3 px dot completely, and the body disappears with the
-## round green. A check that reads only final state can never measure a traversal order.
-class FieldSpy extends FieldView:
-	var draws := 0
-	var seq := 0
-	var tiles := []
-	var docks := []
-	var bodies := []
-	var beaks := []
-	var hps := []
-	var hulls := []
-	var shots := []
-	var halos := []
-	var rings := []
-	var target_lines := []
-	var sparks := []
-	var overlays := []
-	var routes := []
-	var cliff_faces := []
-
-	func _draw() -> void:
-		tiles.clear()
-		docks.clear()
-		bodies.clear()
-		beaks.clear()
-		hps.clear()
-		hulls.clear()
-		shots.clear()
-		halos.clear()
-		rings.clear()
-		target_lines.clear()
-		sparks.clear()
-		overlays.clear()
-		routes.clear()
-		cliff_faces.clear()
-		seq = 0
-		super()
-		draws += 1
-
-	func _bump() -> int:
-		seq += 1
-		return seq - 1
-
-	func _paint_tile(rect: Rect2, fill: Color, line_colour: Color, line_width: float) -> void:
-		tiles.append({"seq": _bump(), "rect": rect, "fill": fill, "line": line_colour,
-			"width": line_width})
-
-	func _paint_dock(rect: Rect2, colour: Color, outline_width: float) -> void:
-		docks.append({"seq": _bump(), "rect": rect, "colour": colour, "width": outline_width})
-
-	# ⚠ `squash` is the seventh parameter and `tex` the eighth, and both were appended, not inserted.
-	# An override that kept an older, shorter form does not bind at all.
-	func _paint_body(centre: Vector2, radius: float, corner: float, colour: Color,
-			outline_width: float, dot_radius: float, squash: Vector2, tex: Texture2D) -> void:
-		bodies.append({"seq": _bump(), "centre": centre, "radius": radius, "corner": corner,
-			"colour": colour, "width": outline_width, "dot": dot_radius, "squash": squash,
-			"is_picture": tex != null})
-
-	func _paint_beak(tip: Vector2, left: Vector2, right: Vector2, colour: Color) -> void:
-		beaks.append({"seq": _bump(), "tip": tip, "left": left, "right": right, "colour": colour})
-
-	func _paint_hp(back: Rect2, back_colour: Color, fill: Rect2, fill_colour: Color) -> void:
-		hps.append({"seq": _bump(), "back": back, "back_colour": back_colour, "fill": fill,
-			"fill_colour": fill_colour})
-
-	func _paint_hull(rect: Rect2, colour: Color, outline_width: float) -> void:
-		hulls.append({"seq": _bump(), "rect": rect, "colour": colour, "width": outline_width})
-
-	func _paint_cliff_face(points: PackedVector2Array, colour: Color, width: float) -> void:
-		cliff_faces.append({"seq": _bump(), "points": points, "colour": colour, "width": width})
-
-	func _paint_shot(from: Vector2, to: Vector2, colour: Color, width: float) -> void:
-		shots.append({"seq": _bump(), "from": from, "to": to, "colour": colour, "width": width})
-
-	func _paint_halo(centre: Vector2, radius: float, colour: Color) -> void:
-		halos.append({"seq": _bump(), "centre": centre, "radius": radius, "colour": colour})
-
-	func _paint_ring(centre: Vector2, radius: float, colour: Color, width: float) -> void:
-		rings.append({"seq": _bump(), "centre": centre, "radius": radius, "colour": colour,
-			"width": width})
-
-	func _paint_target_line(from: Vector2, to: Vector2, colour: Color, width: float) -> void:
-		target_lines.append({"seq": _bump(), "from": from, "to": to, "colour": colour,
-			"width": width})
-
-	func _paint_spark(points: PackedVector2Array, colour: Color, width: float) -> void:
-		sparks.append({"seq": _bump(), "points": points, "colour": colour, "width": width})
-
-	## ⚠ `_paint_overlay` is gone with the green coast wash (question C). `_paint_route` takes a
-	## POLYLINE, and the WHOLE point list is kept: `net_draw_leaf` counts call SITES and cannot tell
-	## `draw_polyline(points)` from `draw_line(points[0], points[-1])` — both are one call with every
-	## argument used — so the point list captured HERE is the only thing that catches a corner cut.
-	func _paint_route(points: PackedVector2Array, colour: Color, width: float) -> void:
-		routes.append({"seq": _bump(), "points": points, "colour": colour, "width": width})
+## ⚠ **The `_seq` layer contract died with the hooks and is NOT re-invented**: between 3D objects
+## the depth buffer decides what covers what, so there is no traversal order left to measure. The
+## HUD / panel / reward spies below are 2D views and keep their hooks and their `_seq`.
+##
+## ⚠ **Fresh `FieldView` instances are still swapped in before `_open_island()`** — a fresh view
+## starts with a null `battle`, so a deleted `field_view.setup(...)` wiring line still leaves every
+## surface-2 read below empty rather than merely different.
 
 
 ## ⚠ **`_paint_berth` / `_paint_load` / `_paint_key` are GONE**, deleted with the berths and the 1/2
 ## keys (`plan-then-watch`, 결정 14R). ⚠⚠ **And the five speed chips are gone too**
 ## (`speed-off-open-landing`, item 1), so `_paint_button` has exactly ONE call site left: the start
 ## button. The array stays an array because the hook is still a hook.
+## ⚠ `_paint_timer` is GONE from `HudView` with the countdown it drew — nothing loses by the clock
+## any more — so the spy stops overriding it: an override of a hook that no longer exists is a dead
+## method that reads as coverage.
 class HudSpy extends HudView:
 	var draws := 0
 	var seq := 0
-	var timers := []
 	var buttons := []
 	var enemies := []
 
 	func _draw() -> void:
-		timers.clear()
 		buttons.clear()
 		enemies.clear()
 		seq = 0
@@ -156,10 +75,6 @@ class HudSpy extends HudView:
 	func _bump() -> int:
 		seq += 1
 		return seq - 1
-
-	func _paint_timer(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
-		timers.append({"seq": _bump(), "face": face, "at": at, "text": text, "fsize": fsize,
-			"col": col})
 
 	func _paint_button(face: Font, rect: Rect2, bg: Color, text: String, at: Vector2, fsize: int,
 			col: Color) -> void:
@@ -257,16 +172,12 @@ class PanelSpy extends PanelView:
 class RewardSpy extends RewardView:
 	var draws := 0
 	var cards := []
-	var parts := []
-	var species := []
 	var marks := []
 	var hints := []
 	var fades := []
 
 	func _draw() -> void:
 		cards.clear()
-		parts.clear()
-		species.clear()
 		marks.clear()
 		hints.clear()
 		fades.clear()
@@ -276,11 +187,9 @@ class RewardSpy extends RewardView:
 	func _paint_card(rect: Rect2, bg: Color, edge_width: float) -> void:
 		cards.append({"rect": rect, "bg": bg, "width": edge_width})
 
-	func _paint_card_part(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
-		parts.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
-
-	func _paint_card_species(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
-		species.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
+	# ⚠ `_paint_card_part` / `_paint_card_species` overrides are gone with the hooks — the card build
+	# renamed them (`_paint_card_name` / `_paint_card_effect`) and no row here ever read the capture,
+	# so the spy stops pretending to. `net_cards` owns the deep card rows.
 
 	func _paint_taken_mark(centre: Vector2, radius: float, col: Color) -> void:
 		marks.append({"centre": centre, "radius": radius, "col": col})
@@ -439,7 +348,10 @@ func run(t) -> void:
 	# SAME `Army` the shell is stepping, or HP carries on one side of the screen and not the other.
 	t.ok(game.field_view.battle == game.battle, "field_view 가 셸과 같은 Battle 을 본다")
 	t.ok(game.field_view.army == game.run.army, "field_view 가 run 의 Army 를 그대로 본다")
-	t.eq(game.field_view.rows.size(), Look.GRID_H, "field_view 가 섬 32줄을 받았다")
+	# ⚠ **The first island is COMPACT now** — node 0 opens `SMALL_ISLANDS[0]`, 26 x 20 (the run walks
+	# the small four before the big grids). 20 is that table's own literal, not `Look.GRID_H`.
+	t.eq(game.battle.grid.h, 20, "첫 섬이 20줄짜리 소형 섬이다 (자가 점검)")
+	t.eq(game.field_view.rows.size(), 20, "field_view 가 그 섬의 20줄을 받았다")
 	t.ok(game.hud_view.battle == game.battle, "hud_view 가 셸과 같은 Battle 을 본다")
 	t.ok(game.panel_view.run == game.run, "panel_view 가 셸과 같은 Run 을 본다")
 
@@ -453,7 +365,9 @@ func run(t) -> void:
 	for v: Node2D in [game.field_view, game.hud_view, game.panel_view, game.reward_view]:
 		game.remove_child(v)
 		v.queue_free()
-	var fs := FieldSpy.new()
+	# ⚠ The field is a FRESH REAL `FieldView`, not a spy — there are no hooks left to spy on, and a
+	# fresh instance still proves the wiring: its `battle` is null until `_open_island` runs setup.
+	var fs := FieldView.new()
 	var hs := HudSpy.new()
 	var ps := PanelSpy.new()
 	var rs := RewardSpy.new()
@@ -497,7 +411,9 @@ func run(t) -> void:
 	t.ok(pumped > 0 and pumped < 60, "%d 프레임 만에 시계가 움직였다 (자가 점검)" % pumped)
 	t.ok(game.battle.elapsed > 0.0, "셸의 _process 가 battle.step 을 진짜 돌렸다 (elapsed %.4f)"
 		% game.battle.elapsed)
-	t.ok(fs.draws >= 1, "field_view 의 _draw 가 트리 위에서 진짜 돌았다 (%d프레임)" % fs.draws)
+	# The field has no `_draw` — its frame work is `_process` filling the sprite pool, so a populated
+	# pool is what "it really ran on the tree" reads as now.
+	t.ok(fs._sprites_used > 0, "field_view 의 _process 가 트리 위에서 진짜 돌았다 (스프라이트 %d장)" % fs._sprites_used)
 	t.ok(hs.draws >= 1, "hud_view 의 _draw 가 진짜 돌았다 (%d프레임)" % hs.draws)
 	t.ok(ps.draws >= 1, "panel_view 의 _draw 가 진짜 돌았다 (%d프레임)" % ps.draws)
 
@@ -518,80 +434,21 @@ func run(t) -> void:
 	# re-drained on every pumped frame and the same blow would flash, shake and lunge forever.
 	t.eq(b.events.size(), 0, "얼린 시점에 사건 목록이 비어 있다 — 뷰가 같은 사건을 매 프레임 다시 퍼가고 있지 않다")
 
-	# -- the field, argument by argument -----------------------------------------------------------
-	# The terrain pass is one margin ring wider than the grid — `boat-and-landing` made the grid
-	# smaller than the zoomed-out camera's own visible world (48 x 32 tiles against up to 2275 px of
-	# view at ZOOM_MIN), so the margin has to cover the whole zoomed-out edge now, not only a shake.
-	var margin := Look.WATER_MARGIN_TILES
-	# ⚠⚠ **THE TERRAIN PASS IS CULLED NOW**, so the count is the VISIBLE span rather than the whole
-	# margin ring. The island is sitting exactly where `field_view.setup()` left it — `ZOOM_MIN` 0.45,
-	# `cam_px` (-462.22, -160.00) — and the arithmetic, done by hand and not read off the code:
-	# ⚠⚠ **RE-DONE 2026-08-24 when the board was laid back 40 degrees.** A row is `TILE_H_PX` 30.64176
-	# px tall now, so the map is 980.54 px from top to bottom instead of 1280 and the camera centres
-	# the y axis lower. `WATER_MARGIN_TILES` went 12 -> 16 in the same edit.
-	#   map                          x 48 * 40 = 1920      ·  y 32 * 30.64176 = 980.54
-	#   both axes centred at ZOOM_MIN   cam_px (-462.22, -309.73)
-	#   visible world  x -462.22 .. 2382.22  ·  y -309.73 .. 1290.27
-	#   + CULL_PAD_TILES 2 (80 px)   x -542.22 .. 2462.22  ·  y -389.73 .. 1370.27
-	#   floor/ceil to tiles          x -14 .. 62           ·  y -13 .. 45   (y divides by 30.64176)
-	#   clamped to [-16, 48+16) x [-16, 32+16)   ⇒ **x -14 .. 62, y -13 .. 45 = 76 x 58 = 4408**
-	# ⚠ **Neither axis is culled by the clamp any more** — the visible world is now wider AND taller
-	# than the map, so both spans are the view's own and the margin is what stops them.
-	# **The cull still bites**: 4408 against a full ring of 5120.
-	#
-	# ⚠ **3168, 4032 and 1536 are LITERALS.** Deriving any of them from `WATER_MARGIN_TILES` or
-	# `CULL_PAD_TILES` would move the expectation and the reality together, and the margin could vanish
-	# with the round green.
-	const CULL_X0 := -14
-	const CULL_Y0 := -13
-	const CULL_W := 76
-	const CULL_H := 58
-	t.eq((Look.GRID_W + 2 * margin) * (Look.GRID_H + 2 * margin), 5120,
-		"물 여백까지 다 세면 5120칸이다 (80 x 64) — 여백 상수가 0이 되면 여기가 문다")
-	t.eq(Look.GRID_W * Look.GRID_H, 1536, "격자 자체는 1536칸이다")
-	t.eq(fs.tiles.size(), 4408, "지형은 보이는 만큼만 4408칸 그린다 (76 x 58)")
-	# The ceiling that makes the cull mean something: it has to be strictly less than painting the lot.
-	t.ok(fs.tiles.size() < 5120,
-		"그리고 그건 5120보다 적다 — 컬링이 실제로 문다 (%d칸을 안 그렸다)" % (5120 - fs.tiles.size()))
-	var tile_bad := 0
-	var inner_rects: Array[Rect2] = []
-	var painted := Rect2()
-	for i in fs.tiles.size():
-		var tx: int = i % CULL_W + CULL_X0
-		var ty: int = i / CULL_W + CULL_Y0
-		var got: Rect2 = fs.tiles[i]["rect"]
-		if got != Look.tile_rect_px(tx, ty):
-			tile_bad += 1
-		painted = got if i == 0 else painted.merge(got)
-		if tx >= 0 and tx < Look.GRID_W and ty >= 0 and ty < Look.GRID_H:
-			inner_rects.append(got)
-	t.eq(tile_bad, 0, "4408칸이 전부 자기 자리의 사각형을 받았다 (행 우선, 잘라낸 구간 안에서)")
-	t.eq(inner_rects.size(), 1536, "그중 격자 안쪽이 1536칸이다 — 섬 자체는 한 칸도 안 잘렸다")
-	# ⚠⚠ **THE FLOOR UNDER THE CULL, and it is the only thing that makes the ceiling above safe.**
-	# "Fewer tiles" is also what a cull that ate the screen would say. What must never happen is a
-	# visible pixel with no tile under it, so the painted area has to CONTAIN the visible world.
-	var seen := fs._visible_world_rect()
-	t.ok(painted.encloses(seen),
-		"칠한 영역이 보이는 세계를 전부 덮는다 — 잘라낸 칸은 전부 화면 밖이었다 (칠함 %s ⊇ 보임 %s)"
-			% [str(painted), str(seen)])
-	# ⚠ **The two axes no longer share a multiplier.** A tile is `TILE_PX` wide and `TILE_H_PX` tall,
-	# and writing `Vector2(CULL_W, CULL_H) * TILE_PX` here would be the flat board asserted against a
-	# laid-back one.
-	t.eq(painted.size, Vector2(CULL_W * Look.TILE_PX, CULL_H * Look.TILE_H_PX),
-		"칠한 영역이 3040 x 1777.22 px 다 (76 x 58 칸)")
-	# ⚠ The margin is why the tiles below are filtered before the on-screen check: `tile_rect_px(-1,
-	# -1)` really is at (-40, -40), so feeding all 680 in would break "everything lands inside
-	# 1280x720" for the 104 that are supposed to be outside it — and widening the screen rectangle
-	# instead would kill that check for the docks, the HP bars and the HUD at the same time.
-	t.ok(Look.tile_rect_px(-margin, -margin).position.x < 0.0,
-		"여백 타일은 화면 밖에서 시작한다 — 그래서 화면-안 검사에서 빼야 한다")
-	t.eq(fs.tiles[0]["fill"], Look.COL_WATER,
-		"여백 칸은 COL_WATER 를 직접 받는다 — 격자 밖에는 범례 문자가 없다")
-	# Tile (0, 0)'s index inside the culled span: `(0 - CULL_Y0) * CULL_W + (0 - CULL_X0)` = 6*72+12.
-	t.eq(fs.tiles[444]["fill"],
-		Look.terrain_colour_of_char(str(game.field_view.rows[0])[0]),
-		"격자 첫 칸의 색은 그 칸의 범례 문자에서 나왔다")
-	t.eq(float(fs.tiles[0]["width"]), Look.GRID_LINE_WIDTH_PX, "격자선 굵기가 look.gd 값이다")
+	# -- ⚠⚠ THE 2D TERRAIN PASS IS DELETED, ROWS AND ALL ------------------------------------------
+	# What stood here: the per-tile capture — the 4408-tile culled span against the 5120-tile margin
+	# ring, row-major rect positions, the margin painted COL_WATER, the legend colour of tile (0,0),
+	# the grid-line width, and the painted-area-covers-the-visible-world floor. **Every one of those
+	# subjects is gone**: the island is ONE mesh built once per island (`_rebuild_terrain`), the open
+	# sea is one shaded quad, there are no per-tile rects, no cull, and no grid lines at all.
+	# Deleted rather than rewritten onto the mesh, because a vertex census of the terrain would be a
+	# second copy of the mesh builder — what survives as a floor is that the mesh EXISTS and holds
+	# real faces, and `verify-look` is what judges the picture (it already did: the user called the
+	# 3D screen done).
+	t.ok(fs._terrain != null and fs._terrain.mesh != null, "지형 메시 노드가 있다 (자가 점검)")
+	t.ok(fs._terrain.mesh.get_surface_count() >= 1, "지형 메시가 실제로 커밋돼 있다")
+	t.ok(fs._terrain.mesh.get_faces().size() >= 1000,
+		"그리고 면이 실제로 들어 있다 (%d 정점) — 빈 섬이 아니다" % fs._terrain.mesh.get_faces().size())
+	t.ok(fs._sea != null and fs._sea.visible, "열린 바다 판이 그 밑에 있다")
 
 	# -- ⚠⚠ THE HARBOUR MARKERS AND THE RESERVE STACK ARE DELETED, AND SO ARE THEIR ROWS -----------
 	# What stood here: `fs.docks.size() == b.harbour_count()` with a rect-per-harbour check, then the
@@ -610,114 +467,76 @@ func run(t) -> void:
 	# reaches for now, and **nothing measures whether the start button overlaps them** — `net_slots`
 	# only checks the boxes against each other and against the viewport. That is a real hole, not a
 	# tidy deletion.
-	t.eq(fs.hulls.size(), 0, "커밋 전에는 선체가 하나도 없다 — 배는 눌러야 생긴다")
-	t.eq(fs.zoom, Look.ZOOM_MIN, "섬이 ZOOM_MIN 으로 열려 있다 (자가 점검)")
+	t.eq(fs._hulls_used, 0, "커밋 전에는 선체가 하나도 없다 — 배는 눌러야 생긴다")
+	# The island opens at the SURVEY zoom. On 26 x 20 the survey (min(1.070, 1.022)) clears the
+	# wheel's own ceiling, so it opens clamped at `ZOOM_MAX` 1.0 — a small island fills the screen
+	# instead of floating in an ocean at one constant. Hand arithmetic; `net_camera` owns the rest.
+	t.eq(fs.zoom, Look.ZOOM_MAX, "소형 첫 섬은 서베이가 천장에 걸려 ZOOM_MAX 로 열린다 (%.5f)" % fs.zoom)
 
+	# ⚠ **The cliff-face rows are DELETED, subject and all.** `_paint_cliff_face` drew a line along
+	# every seaward cliff edge because a flat canvas had no other way to say "tall"; the cliff is a
+	# real 2.4-tile wall in the terrain mesh now, told from land by its own lit faces and its shadow.
+	# A rewritten row would census the mesh builder against itself; the wall's look is verify-look's.
 
-	# P10: `_paint_cliff_face` is called every frame regardless (so the seq-order check above always
-	# has something to compare against), but that alone proves nothing was thrown away INSIDE it —
-	# island 1's row 2 is solid `^` over open water, so the geometry itself has to be non-empty too.
-	t.eq(fs.cliff_faces.size(), 1, "절벽 단면 훅을 한 번 불렀다")
-	var cliff_pts: PackedVector2Array = fs.cliff_faces[0]["points"]
-	t.eq(cliff_pts.size() % 2, 0, "점이 짝수 개다 — 선분마다 두 점 (자가 점검)")
-	var seg_count := cliff_pts.size() / 2
-	t.ok(seg_count >= 40, "그 안에 실제 절벽 단면 선분이 들어 있다 (%d개, 최소 40)" % seg_count)
-	t.eq(fs.cliff_faces[0]["colour"], Look.COL_CLIFF_FACE, "절벽 단면 색이 look.gd 값이다")
-	t.eq(float(fs.cliff_faces[0]["width"]), 5.0, "절벽 단면 굵기가 5.0px 리터럴과 같다")
-	# D: island 1 row 2 (`^`) has water at row 1 (north) and land at row 3 (south), so no segment may
-	# sit on the LANDWARD (south) edge — a mutation flipping the water test draws that edge instead,
-	# and the segment COUNT alone does not move (same 44 tiles), so only checking the SIDE catches it.
-	# Two of the 46 legitimate segments (the strip's own west and east ends) run north-to-south rather
-	# than along the north edge, which is why this checks "not on the south edge" and not "on the
-	# north edge" — a strictly-north requirement would misflag those two as wrong.
-	var north_y := Look.tile_rect_px(2, 2).position.y
-	var south_y := north_y + Look.TILE_H_PX
-	var wrong_side := 0
-	var zero_len := 0
-	for si in seg_count:
-		var p0: Vector2 = cliff_pts[si * 2]
-		var p1: Vector2 = cliff_pts[si * 2 + 1]
-		if absf(p0.y - south_y) < 0.01 and absf(p1.y - south_y) < 0.01:
-			wrong_side += 1
-		# ⚠ **A segment along the north edge is `TILE_PX` long; one running north-to-south is
-		# `TILE_H_PX` long, because the board is laid back.** The old form asked every segment to be
-		# at least a tile WIDE and the two end segments stopped being that the moment the rows
-		# shortened. Checking the exact length per direction is stronger than what it replaced.
-		var want_len := Look.TILE_PX if absf(p0.y - p1.y) < 0.01 else Look.TILE_H_PX
-		if absf(p0.distance_to(p1) - want_len) > 0.01:
-			zero_len += 1
-	t.eq(wrong_side, 0, "어떤 단면도 육지 쪽(남쪽) 가장자리에 있지 않다")
-	t.eq(zero_len, 0, "그리고 모든 단면이 자기 방향의 칸 길이만큼 길다 — 길이 0인 선이 없다")
-
-	# The bodies are the enemies the sim says are alive, in the sim's own order, at the sim's own
-	# positions. Nothing here is recomputed from a screen coordinate — the comparison runs the other
-	# way, from what `battle` holds to what the hook was handed.
+	# -- the bodies, read off SURFACE 2: the pooled nodes the engine draws --------------------------
+	# The comparison still runs from what `battle` holds to what reaches the engine — position,
+	# picture, tint and size are node FIELDS now instead of hook arguments, and the engine consumes
+	# exactly those fields.
 	var live_enemies := []
 	for e in b.enemy_alive.size():
 		if b.enemy_alive[e] != 0:
 			live_enemies.append(e)
 	t.ok(live_enemies.size() > 0, "섬 0에 살아 있는 적이 있다 (%d마리)" % live_enemies.size())
 	t.eq(b.ashore_ids().size(), 0, "아직 상륙한 병사는 없다")
-	# ⚠ **The idle army used to be on this layer too and is deleted**, so the bodies on screen before
-	# the commit are the enemies and nothing else. The offset that skipped past the stack goes with it.
-	t.eq(fs.bodies.size(), live_enemies.size(),
-		"몸통 수 = 살아 있는 적 수 — 항구에 선 예비 병사 무더기가 사라졌다")
-	var enemy_base := 0
+	var bodies := _body_sprites(fs)
+	t.eq(bodies.size(), live_enemies.size(),
+		"몸 스프라이트 수 = 살아 있는 적 수 — 상륙 전에는 적 말고 아무 몸도 없다")
 	var body_bad := 0
 	for k in live_enemies.size():
 		var e: int = live_enemies[k]
 		var et := int(b.enemy_type[e])
-		var got: Dictionary = fs.bodies[enemy_base + k]
-		if got["centre"] != Look.tile_point_px(b.enemy_pos[e]):
+		var s := _sprite_at_xz(bodies, Look.tile_point_px(b.enemy_pos[e]))
+		if s == null:
 			body_bad += 1
-		elif float(got["radius"]) != Look.body_radius_of(et):
+			continue
+		# A textured body wears `beast_tint(side colour)`; the bare rounded square wears the colour
+		# raw — the same fork `_put_body` takes, read back off the one modulate the engine applies.
+		var textured := s.texture != fs._tex_body
+		var want_mod := Look.beast_tint(Look.body_colour_of(true)) if textured \
+			else Look.body_colour_of(true)
+		if s.modulate != want_mod:
 			body_bad += 1
-		elif float(got["corner"]) != Look.body_corner_radius_of(et):
+			continue
+		# The size really is the type's own radius through the sprite-width ratio.
+		var want_sx := Look.body_radius_of(et) * Look.BEAST_SPRITE_W_RATIO / float(s.texture.get_width()) \
+			if textured else Look.body_radius_of(et) * 2.0 / float(s.texture.get_width())
+		if absf(s.scale.x - want_sx) > 0.001:
 			body_bad += 1
-		elif got["colour"] != Look.body_colour_of(true):
-			body_bad += 1
-		elif got["squash"] != Vector2.ONE:
-			body_bad += 1
-	t.eq(body_bad, 0, "몸통마다 중심·반지름·모서리·색·스쿼시가 sim 의 그 적에게서 나왔다")
-	t.eq(fs.hps.size(), fs.bodies.size(), "몸통마다 HP 막대가 하나씩 붙었다")
-	t.eq(fs.beaks.size(), 0, "부리 단 병사가 없으니 부리도 안 그렸다")
-	# Nothing has been hit, nothing has died and no soldier is ashore, so every effect leaf is silent.
-	# This is the floor under every "it drew one" a later net makes: a leaf that fired unconditionally
-	# would be indistinguishable from a leaf that fired for the right reason.
-	t.eq(fs.shots.size() + fs.halos.size() + fs.sparks.size() + fs.rings.size(), 0,
-		"아무 일도 안 일어난 프레임에는 예광선·헤일로·파편·링이 하나도 없다")
-	t.eq(fs.target_lines.size(), 0, "표적이 상륙 전이라 타겟 선도 없다")
+	t.eq(body_bad, 0, "몸마다 자리·색·크기가 sim 의 그 적에게서 나왔다")
+	t.eq(_flat_sprites(fs).size(), 2 * live_enemies.size(),
+		"몸마다 HP 막대 두 장(레일 + 채움)이 붙었다 — 다친 적이 없으니 채움도 전부 살아 있다")
+	var bar_cols := {}
+	for fsp: Sprite3D in _flat_sprites(fs):
+		bar_cols[fsp.modulate] = true
+	t.ok(bar_cols.has(Look.hp_bar_colour(true)) and bar_cols.has(Look.hp_bar_colour(false)),
+		"막대가 채움색과 빈색 두 벌을 다 입었다 — 한 벌뿐이면 레일이나 채움이 죽은 것이다")
+	# Nothing has been hit, nothing has died and no soldier is ashore, so BOTH effect buffers are
+	# silent — surface 3's floor under every "it drew one" a later row makes. The surface counts are
+	# read beside the buffers: an empty buffer must arrive at an EMPTY committed mesh too.
+	t.eq(fs._a_v.size(), 0, "아무 일도 안 일어난 프레임에는 공중 연출 정점이 하나도 없다")
+	t.eq(fs._g_v.size(), 0, "바닥 연출 정점도 없다 — 조준도 의도선도 아직 없다")
+	t.eq(fs._decal.mesh.get_surface_count(), 0, "그리고 바닥 연출 메시도 비어 있다")
+	t.eq(fs._air.mesh.get_surface_count(), 0, "공중 연출 메시도 비어 있다")
 
-	# -- the layer order, through the spies' shared counter ----------------------------------------
-	# The per-hook arrays cannot say which hook ran first, and the layering IS a contract. `_seq` is
-	# the only thing here that measures the PROCESS rather than the final state.
-	var seen_seq := {}
-	var call_total := 0
-	for arr: Array in [fs.tiles, fs.hulls, fs.cliff_faces, fs.bodies, fs.beaks, fs.hps,
-			fs.shots, fs.halos, fs.rings, fs.target_lines, fs.sparks]:
-		for it: Dictionary in arr:
-			seen_seq[int(it["seq"])] = true
-			call_total += 1
-	t.eq(seen_seq.size(), call_total,
-		"훅 호출 %d번이 전부 서로 다른 순번을 들고 있다 — 순번을 안 적은 훅이 없다" % call_total)
-	t.ok(seen_seq.has(0) and seen_seq.has(call_total - 1),
-		"순번이 0에서 시작해 빈칸 없이 끝까지 간다 — _draw 머리에서 되감긴다")
-	t.ok(_seq_max(fs.tiles) < _seq_min(fs.cliff_faces), "층 1 지형이 층 1b 절벽 단면보다 먼저 그려졌다")
-	# ⚠ **There are no hulls on this frame at all** — nothing has been dropped, so `fs.hulls` is empty
-	# and the old 「항구 -> 선체 -> 몸」 pair would be comparing sentinels. The hull's own layer is
-	# re-pinned after the commit, further down, where a hull actually exists.
-	# ⚠ The two rows that ordered the HARBOUR MARKERS between the cliff faces and the bodies are
-	# deleted with the markers themselves.
-	t.ok(_seq_max(fs.cliff_faces) < _seq_min(fs.bodies), "절벽 단면이 층 6b/7 몸보다 먼저 그려졌다")
-	t.ok(_seq_max(fs.bodies) < _seq_max(fs.hps) or fs.hps.is_empty(),
-		"몸과 HP 막대가 같은 층에서 함께 나온다 (자가 점검)")
+	# ⚠ **The `_seq` layer-order rows are DELETED, subject and all.** Between 3D objects the depth
+	# buffer decides what covers what — there is no traversal order left to measure, and re-inventing
+	# one would measure the fixture. (`field_view._paint_bodies`' own comment records where the old
+	# enemies-then-allies rule went.)
 
 	# -- the HUD, and the number on it coming from the sim -----------------------------------------
-	t.eq(hs.timers.size(), 1, "타이머를 한 번 그렸다")
-	# 「시간 %.1f」 and not 「남은 시간 %.1f」 — the user asked for fewer words and bigger type, and this
-	# is the half a net can hold: one word instead of two.
-	t.eq(str(hs.timers[0]["text"]), "시간 %.1f" % b.time_left(), "타이머 글자가 sim 의 남은 시간이다")
-	t.eq(hs.timers[0]["at"], Look.HUD_TIMER_POS_PX, "타이머 위치가 look.gd 값이다")
+	# ⚠ **The timer rows are DELETED with the countdown** — nothing loses by the clock any more, so
+	# `HudView` stopped drawing it and `_paint_timer` is gone. The planning HUD is the start button,
+	# the slot row and the enemy count.
 
 	# ⚠⚠ **The berth boxes, the per-boat load labels, the two key slots AND the five speed chips are
 	# all DELETED.** What is on this layer during planning is ONE start button — one call to the hook —
@@ -751,14 +570,13 @@ func run(t) -> void:
 	t.eq(hs.enemies.size(), 1, "남은 적 수를 한 번 그렸다")
 	t.eq(str(hs.enemies[0]["text"]), "적 %d" % b.enemies_left(), "남은 적 글자가 sim 의 수다")
 	t.eq(ps.panels.size(), 0, "전투 중에는 패널이 한 번도 안 그려졌다")
-	# ⚠ **The counted glyph budget.** It was 8 (timer 1 + start 1 + chip 5 + enemy 1) and
-	# `speed-off-open-landing` took the five chips out: **3 text items on the planning screen**,
-	# against the shipped build's 6 and the user's own 「글자가 너무 많고」. Recorded here so it cannot
-	# drift back up without somebody editing this number on purpose.
-	t.eq(hs.timers.size() + hs.buttons.size() + hs.enemies.size(), 3,
-		"계획 화면의 글자 항목은 셋이다 (타이머 1 + 시작 1 + 적 1)")
-	t.ok(hs.timers[0]["seq"] < start_btn["seq"] and int(start_btn["seq"]) < int(hs.enemies[0]["seq"]),
-		"HUD 는 타이머 -> 시작 버튼 -> 남은 적 순서로 그린다")
+	# ⚠ **The counted glyph budget, re-counted when the countdown died**: it was 3 (timer + start +
+	# enemy) and the timer went with the rule it counted to — **2 text items on the planning
+	# screen**. Recorded here so it cannot drift back up without somebody editing this number.
+	t.eq(hs.buttons.size() + hs.enemies.size(), 2,
+		"계획 화면의 글자 항목은 둘이다 (시작 1 + 적 1) — 시계는 지는 규칙과 함께 죽었다")
+	t.ok(int(start_btn["seq"]) < int(hs.enemies[0]["seq"]),
+		"HUD 는 시작 버튼 -> 남은 적 순서로 그린다")
 
 	# **The resting look of the start button**, captured before any press. Item 8's whole content is
 	# the DIFFERENCE from this, so it has to be read once while nothing has happened yet.
@@ -766,64 +584,24 @@ func run(t) -> void:
 	var rest_key_at: Vector2 = start_btn["at"]
 
 	# -- every rectangle that reached a hook has area, and lands where its own space says it should ---
-	# ⚠ **Field rects are in WORLD (canvas) space now, HUD rects stay in SCREEN space** — `field_view`
-	# composes the camera as a node transform, so `_paint_tile` / `_paint_dock` / `_paint_hp` are handed
-	# raw canvas coordinates while `hud_view` (a sibling, not a child of the camera) still hands out
-	# viewport coordinates directly. Mixing the two into one screen-bound check is exactly the failure
-	# `boat-and-landing` warns about: at ZOOM_MIN most of the field's own rects sit outside 1280x720
-	# on purpose, and widening the bound to admit them would stop it catching a HUD box that walked off
-	# the real screen.
-	var field_rects: Array[Rect2] = []
-	for r: Rect2 in inner_rects:
-		field_rects.append(r)
-	for it: Dictionary in fs.hps:
-		field_rects.append(it["back"])
-	# ⚠ The idle stack used to be added here too, for a bound nothing else gave it. It is deleted.
-	_rects_land_in_world(t, "전투 화면 — 필드", field_rects)
-
+	# ⚠ **The field half of this check is DELETED with its rects** — the field hands the engine 3D
+	# node fields, not rectangles, and the world-bound it was held to died with the canvas. The HUD
+	# half survives: `hud_view` is still a 2D layer in viewport coordinates.
 	var hud_rects: Array[Rect2] = []
 	for it: Dictionary in hs.buttons:
 		hud_rects.append(it["rect"])
 	_rects_land_on_screen(t, "전투 화면 — HUD", hud_rects)
-
-	# -- the plan, authored with the mouse (plan-then-watch, section 7) -------------------------------
-	# ⚠⚠ **`_on_key` is deleted whole and the `InputEventKey` branch of `_unhandled_input` went with
-	# it.** Everything below goes through press / motion / release, which is the only way a landing can
-	# be authored now, and through the start button, which is the only way the clock can be started.
-	#
-	# The camera is parked at a KNOWN state — zoom 1.0, cam_px ZERO, no shake — so canvas (world) px
-	# and screen px coincide and a tile's press position is just `Look.tile_point_px(...)`.
-	fs.zoom = 1.0
-	fs.cam_px = Vector2.ZERO
-	await t.pump_frames(1)
-	t.eq(fs.position, Vector2.ZERO, "카메라를 원점에 세웠다 — 화면 좌표와 세계 좌표가 같다 (자가 점검)")
 
 	# ⚠ The drag's own tile picks (`sendable_tile` / `second_tile` / `refuse_tile`) went with the drag.
 	# What the rows below still need is picked from the SUMMON band, further down.
 	# ⚠ The inland-refusal fixture went with the drag's release, which is what marked a refusal there.
 
 	# ⚠⚠ **초록색 해안이 사라졌다.** The wash used to be drawn from the moment the island opened and
-	# the user asked for its inverse (「못내림만 표시하면 됨 ㅇㅇ」). The hook it went through is gone,
-	# so the spy cannot even capture it — what is asserted here is the CONSEQUENCE on the tile pass:
-	# every `_paint_tile` call is the terrain loop and nothing repaints a tile on top of it. That count
-	# is already pinned at 4032 higher up in this file, which is the floor under this ceiling.
+	# the user asked for its inverse (「못내림만 표시하면 됨 ㅇㅇ」). The hook is gone; the tile-pass
+	# overpaint rows that used to follow are gone WITH the tile pass itself — the terrain is one mesh
+	# built once, so "a second coat per frame" has no per-frame pass left to hide in.
 	t.ok(not fs.has_method("_paint_overlay"),
 		"타일 덧칠 훅 자체가 없다 — 초록 해안을 그릴 방법이 남아 있지 않다")
-	# ⚠ **The claim is NO OVERPAINT, and after the cull a COUNT can no longer carry it** — the camera
-	# has moved since the count higher up in this file, so any number written here would be a second
-	# copy of the cull's arithmetic rather than a statement about the wash. What says it directly is
-	# that no two `_paint_tile` calls in one frame share a rectangle: one coat of terrain, and nothing
-	# painted on top of it.
-	var tile_seen := {}
-	var repainted := 0
-	for entry in fs.tiles:
-		var key := str((entry as Dictionary)["rect"])
-		if tile_seen.has(key):
-			repainted += 1
-		tile_seen[key] = true
-	t.ok(fs.tiles.size() > 0, "지형 칸을 실제로 그렸다 (%d칸 — 0이면 깨끗한 게 아니라 안 돈 것이다)"
-		% fs.tiles.size())
-	t.eq(repainted, 0, "타일은 지형 한 벌만 그린다 — 같은 칸을 두 번 칠하지 않는다 (상륙 구역 덧칠 없음)")
 	# ⚠ The row comparing `send`'s whole domain with one harbour's reach went with the drag. `send` is
 	# still in the sim — `tools/probe/run_run.gd` is its last reader — but nothing on screen answers to
 	# it any more, so a SHELL net is the wrong place to keep measuring it.
@@ -895,7 +673,6 @@ func run(t) -> void:
 			tile_b = int(raw_bt)
 			break
 	t.ok(tile_b >= 0, "상륙지가 서로 다른 바다 칸 둘을 골랐다 (자가 점검)")
-	var sendable_px := Look.tile_point_px(b.grid.tile_point(b.grid.summon_landing_of(tile_a)))
 	var second_px := Look.tile_point_px(b.grid.tile_point(b.grid.summon_landing_of(tile_b)))
 
 	# Two at one beach and one at the other — the fan rank has to be counted among the boats sharing a
@@ -934,58 +711,38 @@ func run(t) -> void:
 	await t.pump_frames(1)
 	t.ok(b.committed(), "시작 버튼이 계획을 확정한다")
 	t.eq(_start_button(hs), {}, "확정한 순간 시작 버튼이 화면에서 사라진다 — 못 누르는 단추는 안 그린다")
+	var ghost_mod := Look.beast_tint(Look.ghost_tint())
 	var ghosts_after := 0
-	for braw3: Dictionary in fs.bodies:
-		if braw3["colour"] == Look.ghost_tint():
+	for sg: Sprite3D in _used_sprites(fs):
+		if sg.modulate == ghost_mod:
 			ghosts_after += 1
-	t.eq(ghosts_after, 0, "유령이 사라진다")
-	t.eq(fs.hulls.size(), b.boats.size(), "대신 배마다 선체가 하나씩 그려진다")
-	t.eq(fs.routes.size(), b.boats.size(), "아직 안 간 배의 항로는 남아 있다")
+	t.eq(ghosts_after, 0, "유령 색을 입은 몸이 하나도 없다 — 유령은 계획의 것이다")
+	t.eq(fs._hulls_used, b.boats.size(), "대신 배마다 선체가 하나씩 그려진다")
+	t.ok(fs._hulls[0].visible, "그 선체가 실제로 켜져 있다 (자가 점검)")
+	t.eq((fs._hulls[0].material_override as StandardMaterial3D).albedo_color, Look.COL_BOAT,
+		"선체 색이 look.gd 값이다 — 기다림 깜박임 전의 쉬는 색")
 	# ⚠⚠ **확정 뒤 HUD 에 상자가 하나도 없다.** The start button goes at the commit and the five speed
 	# chips no longer exist, so this layer answers no press at all — that is 결정 1 without the escape
 	# hatch the chips used to be. The floor for this zero is the `== 1` one section above, measured on
 	# the same HUD a few frames earlier.
-	t.eq(hs.buttons.size(), 0, "확정 뒤 HUD 에 상자가 하나도 안 남는다 (실행 화면의 글자 항목은 둘)")
-	t.eq(hs.timers.size() + hs.buttons.size() + hs.enemies.size(), 2,
-		"실행 화면의 글자 항목은 둘이다 (타이머 1 + 적 1)")
+	t.eq(hs.buttons.size(), 0, "확정 뒤 HUD 에 상자가 하나도 안 남는다")
+	t.eq(hs.buttons.size() + hs.enemies.size(), 1,
+		"실행 화면의 글자 항목은 하나다 (적 1) — 시계는 지는 규칙과 함께 죽었다")
 
-	# -- ⚠⚠ 항해 중인 배의 선은 남은 길만 그린다 --------------------------------------------------------
-	# The view draws from the SIM's own `leg`; a route redrawn whole every frame would show the boat
-	# sailing water it has already crossed. Compared against `path.slice(leg + 1)` and never against a
-	# walk re-derived here — a second copy of the arc-length walk is the drift this split exists to
-	# make impossible.
-	var route_len_first := (fs.routes[0]["points"] as PackedVector2Array).size()
-	var shrank := false
-	var tail_bad := 0
-	var head_bad := 0
-	# ⚠ **80 steps of 0.05 s, and BOTH numbers have a reason.** The drawn line shrinks when the sim's
-	# `leg` advances, and string-pulling leaves a crossing with one long first segment instead of a row
-	# of one-tile hops — so the step has to be small enough that a frame is drawn BETWEEN the leg
-	# advancing and the boat landing, and the loop long enough to reach the advance at all. At 0.15 s
-	# the summon's crossing went from leg 0 to landed inside one step and this row could not see it.
-	# The loop still breaks the moment the boat stops being OUTBOUND, so a short crossing costs nothing.
+	# -- ⚠⚠ 항해 중인 배의 「남은 길」 선은 아직 3D 로 안 돌아왔다 — 행도 그와 함께 내린다 -------------
+	# The rows that stood here read the drawn polyline against `path.slice(leg + 1)` every 0.05 s of
+	# a real crossing. **The picture itself is unported**: `_route_ahead` still computes the
+	# remaining route and NOTHING calls it — the aim's route came back with the twelve, the sailing
+	# boat's did not. A vanished check is worse than a red one, so the absence is stated here AND on
+	# ticket 09 (step 4's fx round owns the revival) instead of the rows being quietly dropped.
+	# The sim's own crossing is still advanced so the rows below start from the same state they did.
 	for _cn2 in 160:
 		game._process(0.05)
-		await t.pump_frames(1)
-		if b.boats.is_empty() or fs.routes.is_empty():
+		if b.boats.is_empty():
 			break
-		var boat0: Dictionary = b.boats[0]
-		if int(boat0["phase"]) != Battle.Phase.OUTBOUND:
+		if int((b.boats[0] as Dictionary)["phase"]) != Battle.Phase.OUTBOUND:
 			break
-		var live: PackedVector2Array = fs.routes[0]["points"]
-		if live.size() < route_len_first:
-			shrank = true
-		if live[0].distance_to(Look.tile_point_px(Vector2(boat0["pos"]))) > 0.01:
-			head_bad += 1
-		var want_tail := PackedVector2Array()
-		for wp2 in (boat0["path"] as PackedVector2Array).slice(int(boat0["leg"]) + 1):
-			want_tail.append(Look.tile_point_px(wp2))
-		if live.slice(1) != want_tail:
-			tail_bad += 1
-	t.eq(head_bad, 0, "항해 중 선의 첫 점은 언제나 선체 자신의 자리다")
-	t.eq(tail_bad, 0, "그리고 나머지는 정확히 path.slice(leg + 1) 이다 — 뷰가 따로 걷지 않는다")
-	t.ok(shrank, "가면서 점 수가 줄어든다 (%d점에서 시작) — 이미 지나온 물을 다시 안 그린다"
-		% route_len_first)
+	await t.pump_frames(1)
 
 	# ⚠⚠ **결정 1 as a check.** All three plan branches are gated, and the three of them are pressed.
 	var boats_snapshot := b.boats.size()
@@ -995,10 +752,14 @@ func run(t) -> void:
 	# band tile with a slot still armed and reads the boat count AND the refusal count.
 	# ⚠ **The gate is on the BRANCH, not on the hit test.** `_ring_hit_at` still answers — it is a pure
 	# geometry lookup — so the row that matters is that pressing there changes nothing.
-	t.ok(game._ring_hit_at(second_px) >= 0, "고리 자체는 여전히 그 자리에 있다 (자가 점검)")
-	t.root.push_input(_press(second_px), true)
+	# ⚠ `second_px` is a WORLD point; the press has to arrive in SCREEN px, and the flat board's
+	# "park at zoom 1 and the two coincide" is gone — the pitch stretches the vertical. `_screen_of`
+	# is the one inverse this file writes, and `net_camera` is what pins the conversion it inverts.
+	var second_screen := _screen_of(fs, second_px)
+	t.ok(game._ring_hit_at(second_screen) >= 0, "고리 자체는 여전히 그 자리에 있다 (자가 점검)")
+	t.root.push_input(_press(second_screen), true)
 	await t.pump_frames(1)
-	t.root.push_input(_release(second_px), true)
+	t.root.push_input(_release(second_screen), true)
 	await t.pump_frames(1)
 	t.eq(b.boats.size(), boats_snapshot, "확정 뒤에는 고리를 눌러도 안 무른다")
 	# ⚠⚠ **THE RELEASE BRANCH'S OWN GATE IS DELETED WITH THE DRAG, and so is the row that reached it
@@ -1106,33 +867,31 @@ func run(t) -> void:
 	# The wheel zooms about the cursor; a left press on the FIELD (never the panel, which is not up
 	# here) begins a pan, motion moves it, release ends it. Docks are gone, so this replaces the old
 	# "dock click corrected by the shake" item 11 — the shake still folds into the SAME expression
-	# (`field_view._compose_position`), and `net_camera` is what pins that directly.
+	# (`field_view._place_camera`), and `net_camera` is what pins that directly.
 	var before_zoom := fs.zoom
 	for _n in 8:
 		game._unhandled_input(_wheel(Vector2(640.0, 360.0), true))
 	t.ok(fs.zoom > before_zoom, "휠을 올리면 확대된다")
 	t.eq(fs.zoom, Look.ZOOM_MAX, "계속 올리면 ZOOM_MAX 에서 멈춘다 — 8번이면 이미 넘친다 (바닥)")
 
-	# Dragged to one corner, then the opposite corner: at ZOOM_MAX the pannable range is not empty on
-	# either axis (map 1920x1280 against a 1280x720 viewport), so the two corners must differ
-	# regardless of where the camera started — a press-anywhere-else assertion would not survive a
-	# camera that happened to start already parked at one of them.
+	# ⚠ **A drag can never MOVE the camera on this island, and that is the framing, not a defect**:
+	# 26 x 20 is 1040 x 800 px against a 1280 x 939.89 px view at the wheel's own ceiling, so
+	# `_clamp_cam` centres both axes at every reachable zoom. What a drag still proves is that the
+	# input path runs — `pan_by` ends in the clamp, so a camera parked OFF the centred point snaps
+	# back to it the moment a drag delivers one motion. The centred literal, by hand:
+	# ((1040 - 1280) / 2, (800 - 939.89) / 2) = **(-120.00, -69.95)**.
+	fs.cam_px = Vector2(300.0, 300.0)
 	game._unhandled_input(_press(Vector2(640.0, 360.0)))
-	game._unhandled_input(_motion(Vector2(640.0, 360.0), Vector2(4000.0, 4000.0)))
-	game._unhandled_input(_release(Vector2(4640.0, 4360.0)))
-	var corner_a: Vector2 = fs.cam_px
+	game._unhandled_input(_motion(Vector2(640.0, 360.0), Vector2(40.0, 40.0)))
+	t.ok(fs.cam_px.distance_to(Vector2(-120.0, -69.95)) < 0.1,
+		"필드를 눌러 끌면 pan_by 가 실제로 돈다 — 소형 섬이라 클램프가 가운데 (-120.00, -69.95) 로 붙든다 (%.2f, %.2f)"
+			% [fs.cam_px.x, fs.cam_px.y])
+	game._unhandled_input(_release(Vector2(680.0, 400.0)))
 
-	game._unhandled_input(_press(Vector2(640.0, 360.0)))
-	game._unhandled_input(_motion(Vector2(640.0, 360.0), Vector2(-4000.0, -4000.0)))
-	var mid_cam: Vector2 = fs.cam_px
-	game._unhandled_input(_release(Vector2(-3360.0, -3640.0)))
-	var corner_b: Vector2 = fs.cam_px
-
-	t.ok(corner_a != corner_b, "필드를 눌러 끌면 카메라가 실제로 움직인다 (양 끝 구석이 서로 다르다)")
-
-	game._unhandled_input(_motion(Vector2(-3360.0, -3640.0), Vector2(500.0, 500.0)))
-	t.eq(fs.cam_px, corner_b, "손을 뗀 뒤의 움직임은 카메라를 더 끌지 않는다")
-	t.ok(mid_cam == corner_b, "떼기 직전과 뗀 직후가 같다 (자가 점검 — 뗀 순간 자체가 끊는 게 아니라 그 다음 motion 이 끊긴다는 뜻)")
+	fs.cam_px = Vector2(300.0, 300.0)
+	game._unhandled_input(_motion(Vector2(680.0, 400.0), Vector2(40.0, 40.0)))
+	t.eq(fs.cam_px, Vector2(300.0, 300.0),
+		"손을 뗀 뒤의 움직임은 카메라를 안 끈다 — pan_by 가 불렸다면 클램프가 자리를 옮겼을 것이다")
 
 	# -- item 10 · item 4: the verdict hold ---------------------------------------------------------
 	# A synthetic kill, because reaching a real win here would take a whole island of stepping and the
@@ -1185,13 +944,17 @@ func run(t) -> void:
 	# below its `MAP` arm, and the cards are drawn and never shown while every count-only check stays
 	# green.
 	t.eq(game.run.state(), Run.State.PICK, "이긴 뒤 카드 고르기가 먼저 열린다")
-	t.eq(game.run.island_index, 0, "그리고 섬 번호는 혼자 안 움직였다 — 어느 칸으로 갈지는 손이 정한다")
+	t.eq(game.run.island_index, Rules.map_island_of(0),
+		"그리고 섬 번호는 혼자 안 움직였다 — 어느 칸으로 갈지는 손이 정한다")
 	t.eq(game.run.map.at(), 0, "서 있는 칸은 아직 0번이다")
 	t.eq(game.run.army.type_id.size(), 13, "0번 칸의 수 보상이 그 자리에서 붙었다 (10 + 3)")
 	t.ok(not game.panel_view.panel_active(), "카드 화면에서도 패널이 안 뜬다")
 	await t.pump_frames(2)
-	t.eq(fs.tiles.size(), 0, "카드 화면 밑에 지형이 한 칸도 안 그려진다 — 지난 섬이 안 남는다")
-	t.eq(hs.timers.size(), 0, "시계도 안 그려진다")
+	# `setup(null, ...)` rebuilds the terrain against an all-water fallback, so the committed mesh
+	# goes EMPTY — the 3D reading of "no terrain is drawn under the card screen".
+	t.eq(fs._terrain.mesh.get_surface_count(), 0, "카드 화면 밑에 지형 메시가 비어 있다 — 지난 섬이 안 남는다")
+	t.eq(fs._sprites_used, 0, "몸 스프라이트도 하나도 안 산다")
+	t.eq(hs.buttons.size() + hs.enemies.size(), 0, "HUD 글자도 안 그려진다")
 	t.eq(ps.panels.size(), 0, "패널도 없다")
 
 	_walk_pick_and_refit_to_map(t, game, fs, "0번")
@@ -1204,7 +967,7 @@ func run(t) -> void:
 	# entries. Without this the staleness row far below would be proving nothing — a check that never
 	# gets dirtied cannot tell "rebound" from "never bound at all".
 	await t.pump_frames(3)
-	t.ok(not rs._taken_age.is_empty(), "0번 칸에서 고른 두 카드가 화면에 실제로 자국을 남겼다 (자가 점검)")
+	t.ok(not rs._taken_age.is_empty(), "0번 칸에서 고른 카드가 화면에 실제로 자국을 남겼다 (자가 점검)")
 
 	# 「지도에서 칸을 누르면 섬이 열린다」, on the floor-2 node that pays the BEAK — which is what puts
 	# the reward panel on screen below. Its sibling pays cells; that fork is `net_map`'s.
@@ -1229,7 +992,8 @@ func run(t) -> void:
 	t.eq(game.run.map.at(), 2, "서 있는 칸이 2번이 됐다")
 	t.eq(game.run.island_index, Rules.map_island_of(2), "그 칸이 가리키는 섬이다")
 	t.ok(fs.battle == game.battle, "새 섬의 Battle 이 화면에 다시 물렸다")
-	t.eq(_shake_component(fs), Vector2.ZERO, "setup 이 흔들림까지 0으로 지웠다 (카메라 자체 위치는 별개)")
+	t.ok(fs._shake_amp == 0.0 and fs._shake_left == 0.0,
+		"setup 이 흔들림까지 0으로 지웠다 (카메라 자체 위치는 별개)")
 	b = game.battle
 
 	# -- the reward panel, reached through Run's own API --------------------------------------------
@@ -1357,13 +1121,14 @@ func run(t) -> void:
 		"그리고 화면이 실제로 다시 묶였다 — 나이가 0에 가깝다 (%.3f), 지난 카드 화면의 나이가 그대로 남지 않았다"
 			% rs._reveal_age)
 	t.ok(rs._taken_age.is_empty(),
-		"묶인 화면에 가져간 표 자국이 하나도 없다 — 0번 칸에서 골랐던 두 장의 흔적이 새 카드 위에 안 남는다")
-	t.eq(rs.cards.size(), Rules.CARDS_PER_WIN, "카드 여섯 장이 실제로 다시 그려졌다")
+		"묶인 화면에 가져간 표 자국이 하나도 없다 — 0번 칸에서 골랐던 장의 흔적이 새 카드 위에 안 남는다")
+	t.eq(rs.cards.size(), Rules.CARDS_PER_WIN, "카드 세 장이 실제로 다시 그려졌다")
 	t.eq(rs.marks.size(), 0, "그리고 어느 카드에도 가져간 표가 없다")
 
 	await t.pump_frames(1)
 	t.eq(ps.panels.size(), 0, "패널이 사라졌다")
-	t.eq(fs.tiles.size(), 0, "그리고 지형이 한 칸도 안 그려진다 — 카드 화면 밑에 지난 섬이 안 남는다")
+	t.eq(fs._terrain.mesh.get_surface_count(), 0,
+		"그리고 지형 메시가 비어 있다 — 카드 화면 밑에 지난 섬이 안 남는다")
 
 	_walk_pick_and_refit_to_map(t, game, fs, "부리 칸")
 	t.eq(game.run.state(), Run.State.MAP, "카드를 고르고 정비를 닫아야 비로소 지도다")
@@ -1390,7 +1155,7 @@ func run(t) -> void:
 	t.ok(game.battle == null, "그리고 섬이 닫혔다")
 	t.ok(game.run.army.living_count() > before_living, "COUNT 보상으로 병력이 늘었다")
 	await t.pump_frames(2)
-	t.eq(fs.tiles.size(), 0, "지도 화면으로 돌아오면 지형은 다시 안 그려진다")
+	t.eq(fs._terrain.mesh.get_surface_count(), 0, "지도 화면으로 돌아오면 지형 메시가 다시 비어 있다")
 
 	_press_node(t, game, 6, "보스")
 	t.ok(game.battle != null, "보스 칸이 섬을 열었다")
@@ -1433,8 +1198,9 @@ func run(t) -> void:
 	t.ok(not game.panel_view.panel_active(), "그리고 패널도 안 뜬다")
 	await t.pump_frames(2)
 	t.eq(ps.panels.size(), 0, "다시 하기 뒤에는 패널이 없다")
-	t.eq(fs.tiles.size(), 0, "지형도 한 칸도 안 그려진다 — 보스 섬이 타이틀 밑에 안 남는다")
-	t.eq(hs.timers.size(), 0, "시계도 안 그려진다")
+	t.eq(fs._terrain.mesh.get_surface_count(), 0,
+		"지형 메시도 비어 있다 — 보스 섬이 타이틀 밑에 안 남는다")
+	t.eq(hs.buttons.size() + hs.enemies.size(), 0, "HUD 글자도 하나도 안 그려진다")
 
 	# And the title works from there: a whole second run, from the same three slots.
 	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
@@ -1496,30 +1262,26 @@ func _win_the_open_island(t, game: Game, label: String) -> void:
 	game._process(Look.HOLD_OUTCOME_SEC)
 
 
-## Every win now stops for the card pick before the map — six cards drawn, two taken, then 완료 closes
-## the board. Walked through the real input door (`game._unhandled_input`), never by poking `Run`, for
-## the same reason `_win_the_open_island` above drives the hold through `_process` rather than calling
-## `finish_island` directly.
+## Every win now stops for the card pick before the map — **three cards drawn, ONE taken** (티켓 06)
+## — then 완료 closes the board. Walked through the real input door (`game._unhandled_input`), never
+## by poking `Run`, for the same reason `_win_the_open_island` above drives the hold through
+## `_process` rather than calling `finish_island` directly.
 ##
 ## ⚠⚠ **This is where §8.4's two new `net_shell` rows about the card screen actually get exercised**:
 ## a card screen draws no island underneath it (`battle == null` **and** `field_view.battle == null`,
 ## the same lever `_enter_map_screen` pulls) and a click on a card does not start a camera pan (the
 ## `PICK` branch has to sit ABOVE the `battle != null` fallback that ends in `_panning = true` —
 ## mutation: move it below).
-func _walk_pick_and_refit_to_map(t, game: Game, fs: FieldSpy, label: String) -> void:
+func _walk_pick_and_refit_to_map(t, game: Game, fs: FieldView, label: String) -> void:
 	t.eq(game.run.state(), Run.State.PICK, "%s — 이긴 뒤 카드 고르기가 열렸다" % label)
 	t.ok(game.battle == null, "%s — 카드 화면 밑에는 섬이 없다" % label)
 	t.ok(fs.battle == null, "%s — field_view 도 섬을 안 물었다 — 카드 화면에서는 섬이 안 그려진다" % label)
 	t.ok(not game._panning, "%s — 카드를 고르기 전엔 드래그가 없다 (자가 점검)" % label)
 
 	game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
-	t.ok(int(game.run.cards_taken[0]) != 0, "%s — 첫 카드를 골랐다" % label)
+	t.ok(int(game.run.cards_taken[0]) != 0, "%s — 카드를 골랐다" % label)
 	t.ok(not game._panning, "%s — 카드 화면의 클릭이 카메라를 안 움직인다" % label)
-	t.eq(game.run.state(), Run.State.PICK, "%s — 한 장으로는 아직 정비로 안 넘어간다" % label)
-
-	game._unhandled_input(_click(Look.card_rect_px(1).get_center()))
-	t.ok(int(game.run.cards_taken[1]) != 0, "%s — 둘째 카드도 골랐다" % label)
-	t.eq(game.run.state(), Run.State.REFIT, "%s — 둘을 고르면 정비로 넘어간다" % label)
+	t.eq(game.run.state(), Run.State.REFIT, "%s — 세 장에 한 장: 고르면 곧장 정비다" % label)
 
 	game._unhandled_input(_click(Look.refit_done_rect_px(false).get_center()))
 	t.eq(game.run.state(), Run.State.MAP, "%s — 완료를 누르면 정비에서 지도로 돌아온다" % label)
@@ -1528,11 +1290,10 @@ func _walk_pick_and_refit_to_map(t, game: Game, fs: FieldSpy, label: String) -> 
 ## The sim-only twin of the walk above, for fixtures that drive `Run` directly rather than through the
 ## shell. A no-op on any state that is not `PICK` — the boss pays no cards, and a `REWARD` win has not
 ## reached `PICK` yet — so a caller may call this after every `finish_island(true)` unconditionally.
-func _take_two_and_close_refit(r: Run) -> void:
+func _take_one_and_close_refit(r: Run) -> void:
 	if r.state() != Run.State.PICK:
 		return
 	r.take_card(0)
-	r.take_card(1)
 	r.close_refit()
 
 
@@ -1560,17 +1321,17 @@ func _panel_active_answers_all_five_screens(t) -> void:
 	t.ok(not pv.panel_active(), "섬 위에서도 패널이 안 뜬다")
 
 	# ⚠ **The other direction, and it is what stops "always false" from passing.**
-	# 0번 칸의 승리도 여섯 장을 내므로, 2번 칸을 밟기 전에 카드를 고르고 정비를 닫아 지도로 돌아가야
+	# 0번 칸의 승리도 카드를 내므로, 2번 칸을 밟기 전에 한 장을 고르고 정비를 닫아 지도로 돌아가야
 	# `enter_node` 가 다시 먹는다 — `enter_node` 는 `MAP` 이 아니면 조용히 거절한다.
 	r.finish_island(true)
-	_take_two_and_close_refit(r)
+	_take_one_and_close_refit(r)
 	r.enter_node(2)
 	r.finish_island(true)
 	t.eq(r.state(), Run.State.REWARD, "부리 칸을 이기면 REWARD 다 (자가 점검)")
 	t.ok(pv.panel_active(), "부리 고르기에서는 패널이 뜬다")
 
 	r.apply_beak(0)
-	_take_two_and_close_refit(r)
+	_take_one_and_close_refit(r)
 	r.enter_node(3)
 	r.finish_island(false)
 	t.eq(r.state(), Run.State.LOST, "지면 LOST 다 (자가 점검)")
@@ -1581,7 +1342,7 @@ func _panel_active_answers_all_five_screens(t) -> void:
 		won.enter_node(int(n))
 		if won.state() == Run.State.BATTLE:
 			won.finish_island(true)
-			_take_two_and_close_refit(won)
+			_take_one_and_close_refit(won)
 	t.eq(won.state(), Run.State.WON, "보스를 이기면 WON 이다 (자가 점검)")
 	pv.bind(won, null)
 	t.ok(pv.panel_active(), "이긴 화면에서도 패널이 뜬다")
@@ -1626,9 +1387,9 @@ func _two_presses_reach_the_first_island(t) -> void:
 ##
 ## ⚠ These are the ROW's bounds, not a restatement of the value. A row asserting `== 0.55` would be
 ## one fact written twice and would redden on every honest re-tune; a row asserting only the floor
-## passes an amplitude that runs away. `ZOOM_MIN`, `WATER_MARGIN_TILES` and `CLIFF_FACE_WIDTH_PX` are
-## `net_camera`'s, and `net_camera` already bounds the first two at both ends — the cliff line is
-## bounded here because no file bounded it at all.
+## passes an amplitude that runs away. `ZOOM_MIN` and `WATER_MARGIN_TILES` are `net_camera`'s, which
+## bounds both at both ends. (`CLIFF_FACE_WIDTH_PX`'s two rows lived here until the cliff became mesh
+## geometry and the constant was deleted with the line it measured.)
 func _the_plan_constants_have_both_ends(t) -> void:
 	t.ok(Look.HUD_START_ORIGIN_PX.y >= 560.0,
 		"시작 버튼이 화면 아래쪽에 있다 (바닥 y>=560 — 위로 오면 섬 한가운데에 뜬다)")
@@ -1683,15 +1444,59 @@ func _the_plan_constants_have_both_ends(t) -> void:
 	t.ok(Look.CHIP_FX_SEC <= 0.4, "그리고 0.4s 를 안 넘는다 (천장 — 넘으면 다음 누름까지 남는다)")
 	t.ok(Look.REFUSE_SHAKE_PX >= 2.0, "거절 흔들림이 한 픽셀보다 크다 (바닥 2px)")
 	t.ok(Look.REFUSE_SHAKE_PX <= 12.0, "그리고 12px 를 안 넘는다 (천장 — 넘으면 단추가 자리를 뜬다)")
-	t.ok(Look.CLIFF_FACE_WIDTH_PX >= 5.0,
-		"절벽 선이 ZOOM_MIN 에서 2.25px 로 남는다 (바닥 5 — 못 미치면 2px 스냅 바닥 밑으로 준다)")
-	t.ok(Look.CLIFF_FACE_WIDTH_PX <= 8.0, "그리고 8 을 안 넘는다 (천장)")
+	# ⚠ The two `CLIFF_FACE_WIDTH_PX` rows are DELETED with the constant (verify-read B): nothing has
+	# drawn a cliff line since the wall became mesh geometry, and a label bounding the legibility of a
+	# line that does not exist is a guarantee about nothing.
 
 
-## `position` composes `-cam_px * zoom + shake_offset()` now (`boat-and-landing`'s camera), so
-## isolating the shake means subtracting the camera's own (non-shake) contribution back out.
-func _shake_component(fv: FieldView) -> Vector2:
-	return fv.position + fv.cam_px * fv.zoom
+## -- surface-2 readers: the pooled nodes the engine draws --------------------------------------------
+
+## The first `_sprites_used` pooled sprites — exactly what this frame put on screen. Reading past
+## that index would count hidden leftovers from a busier frame as live bodies.
+func _used_sprites(fv: FieldView) -> Array:
+	var out := []
+	for k in fv._sprites_used:
+		out.append(fv._sprites[k])
+	return out
+
+
+## The BODY sprites: everything that is not wearing the one-texel bar texture.
+func _body_sprites(fv: FieldView) -> Array:
+	var out := []
+	for s: Sprite3D in _used_sprites(fv):
+		if s.texture != fv._tex_flat:
+			out.append(s)
+	return out
+
+
+## The HP-bar sprites — the flat one-texel texture, scaled into rails and fills.
+func _flat_sprites(fv: FieldView) -> Array:
+	var out := []
+	for s: Sprite3D in _used_sprites(fv):
+		if s.texture == fv._tex_flat:
+			out.append(s)
+	return out
+
+
+## The sprite standing at a world-px point, matched on the ground plane (x, z) — a body's height is
+## its own business (it depends on the picture's aspect), the tile it stands on is the sim's.
+func _sprite_at_xz(list: Array, world_px: Vector2) -> Sprite3D:
+	for s: Sprite3D in list:
+		if absf(s.position.x - world_px.x / Look.TILE_PX) < 0.001 \
+				and absf(s.position.z - world_px.y / Look.TILE_PX) < 0.001:
+			return s
+	return null
+
+
+## The inverse of `screen_to_world_px`, for aiming a press at a world point — the flat board's "park
+## at zoom 1 and screen == world" died with the pitch. Written once here; `net_camera` is what pins
+## the forward conversion this inverts, so the pair cannot both be wrong the same way.
+func _screen_of(fv: FieldView, world: Vector2) -> Vector2:
+	var span: Vector2 = fv._visible_ground_px()
+	var rel := world - fv._ground_centre_px()
+	var u := rel.dot(fv._ground_right()) / span.x
+	var v := rel.dot(fv._ground_down()) / span.y
+	return Vector2((u + 0.5) * Look.VIEWPORT_W_PX, (v + 0.5) * Look.VIEWPORT_H_PX)
 
 
 ## The lowest and highest `seq` in a capture array. -1 for an empty one, which never compares as a
@@ -1736,26 +1541,6 @@ func _rects_land_on_screen(t, label: String, rects: Array[Rect2]) -> void:
 	t.eq(outside, 0, "%s — 전부 1280x720 안에 든다" % label)
 
 
-## The field-space counterpart: every rectangle has area AND lands inside the map plus its water
-## margin (canvas px, `WATER_MARGIN_TILES` wide on every side) — the world the camera is allowed to
-## show, not the viewport a screen-space check would wrongly hold it to.
-func _rects_land_in_world(t, label: String, rects: Array[Rect2]) -> void:
-	var margin_px := Look.WATER_MARGIN_TILES * Look.TILE_PX
-	var world := Rect2(Vector2(-margin_px, -margin_px),
-		Vector2(Look.GRID_W, Look.GRID_H) * Look.TILE_PX + Vector2(margin_px, margin_px) * 2.0)
-	var no_area := 0
-	var outside := 0
-	for r: Rect2 in rects:
-		if r.size.x <= 0.0 or r.size.y <= 0.0:
-			no_area += 1
-		if r.position.x < world.position.x or r.position.y < world.position.y \
-				or r.end.x > world.end.x or r.end.y > world.end.y:
-			outside += 1
-	t.ok(rects.size() > 0, "%s — 잴 사각형이 있다 (%d개)" % [label, rects.size()])
-	t.eq(no_area, 0, "%s — 넓이 0인 사각형이 하나도 없다" % label)
-	t.eq(outside, 0, "%s — 전부 지도 + 물 여백 안에 든다" % label)
-
-
 ## Built by hand and handed straight to `_unhandled_input`. **Not `push_input`**: `Viewport.push_input`
 ## divides the position by the stretch transform first, and headless the window is 64x64 — a click
 ## pushed at the dock's own pixel arrives thousands of pixels away and hits nothing, with no error
@@ -1795,40 +1580,6 @@ func _motion(at: Vector2, relative: Vector2) -> InputEventMouseMotion:
 	ev.position = at
 	ev.relative = relative
 	return ev
-
-
-## The hull dict from `fs.hulls` whose width matches `want_w`, or `{}` on a miss — `.is_empty()` still
-## reads correctly as "not found". Reached through `_hull_rect_of` / `_hull_colour_of` below rather
-## than indexed directly: a miss indexed directly crashes the whole net on a missing key instead of
-## reddening the one check that wanted it, which is exactly what happened here once (measured: a
-## `BOAT_SLOT_PX`/`BOAT_HULL_PAD_PX` mutation that moved every hull's width off 124.0 crashed this
-## file with "Invalid access to property or key 'rect'" instead of failing cleanly).
-func _find_hull(fs: FieldSpy, want_w: float) -> Dictionary:
-	for hraw: Dictionary in fs.hulls:
-		if absf((hraw["rect"] as Rect2).size.x - want_w) < 0.01:
-			return hraw
-	return {}
-
-
-## A sentinel far off-screen — no real hull could ever equal it — so a miss reddens the comparison
-## that wanted the rect instead of crashing on the missing key.
-func _hull_rect_of(h: Dictionary) -> Rect2:
-	return h["rect"] if h.has("rect") else Rect2(Vector2(-99999.0, -99999.0), Vector2.ZERO)
-
-
-func _hull_colour_of(h: Dictionary) -> Color:
-	return h["colour"] if h.has("colour") else Look.COL_HOLE
-
-
-## The rect list `_paint_overlay` should have been handed for harbour `reach`'s sendable tiles — the
-## SAME construction `field_view._draw()` runs, so a captured `fs.overlays[...]["rects"]` can be
-## compared against it directly rather than only against a count.
-func _rects_of(w: int, reach: PackedByteArray) -> Array:
-	var out: Array = []
-	for t2 in reach.size():
-		if reach[t2] != 0:
-			out.append(Look.tile_rect_px(t2 % w, t2 / w))
-	return out
 
 
 func _wheel(at: Vector2, up: bool) -> InputEventMouseButton:
@@ -1986,7 +1737,6 @@ func _the_panel_holds_every_soldier_a_run_can_field(t) -> void:
 	# step onto a second node at all.
 	t.eq(run.state(), Run.State.PICK, "이긴 뒤 카드 고르기가 먼저 열린다 (자가 점검)")
 	run.take_card(0)
-	run.take_card(1)
 	t.ok(run.close_refit(), "정비를 닫고 지도로 돌아온다 (자가 점검)")
 	while run.army.living_count() < 22:
 		run.army.recruit(0)
@@ -2009,16 +1759,18 @@ func _the_panel_holds_every_soldier_a_run_can_field(t) -> void:
 ## exact mutation `panel_view.gd`'s own comment above `_entry_text` promises it does not make.
 ## MUTATION CONFIRMED GREEN by the plan's own audit before this row existed: `a.max_hp_of(i)` ->
 ## `Rules.hp_of(t)` left the whole suite green, because nothing anywhere compared the TEXT a roster
-## line actually drew against the function combat itself reads. A 가슴 part fitted into slot 0 raises
-## `max_hp_of` for every body that slot fields without moving the type's own base number — the one
-## state where the two reads print different digits — so this drives the panel through exactly that.
+## line actually drew against the function combat itself reads. An HP item fitted into slot 0's board
+## raises `max_hp_of` for every body that slot fields without moving the type's own base number — the
+## one state where the two reads print different digits — so this drives the panel through exactly
+## that. (⚠ The fixture used `Rules.Part.CHEST` until the parts table was replaced by the item list;
+## item 0, 가죽끈 hp +3, is the same lever in the current table.)
 func _the_roster_line_reads_max_hp_of(t) -> void:
 	var r := Run.new()
-	r.army.loadout.take_card(Rules.Part.CHEST, Rules.Species.MAMMAL)
+	r.army.loadout.take_card(0)
 	r.army.loadout.fit(0, 0)
 	t.ok(r.enter_node(0), "0번 칸을 밟는다 (자가 점검)")
 	r.finish_island(true)
-	_take_two_and_close_refit(r)
+	_take_one_and_close_refit(r)
 	t.ok(r.enter_node(2), "부리 칸을 밟는다 (자가 점검)")
 	r.finish_island(true)
 	t.eq(r.state(), Run.State.REWARD, "보상 화면이 열렸다 (자가 점검)")
@@ -2156,16 +1908,5 @@ func _gd_files_under(dir: String) -> Array:
 	return out
 
 
-## The refusal marks in one captured frame: rings at `REFUSE_MARK_R_PX`, which is deliberately larger
-## than `TARGET_RING_R_PX` so a drag candidate ring can never be mistaken for one.
-##
-## ⚠ **Matched on RADIUS and not on colour.** The drag candidate ring is `COL_LOSE` too whenever the
-## tile under the cursor is refused, so a colour match would count it and this row would go green on a
-## frame where no mark was ever pushed. The radii differ by 8 px and that gap is what the constant's
-## own floor (`>= TARGET_RING_R_PX`) exists to keep.
-static func _refusal_marks(fs: FieldSpy) -> Array:
-	var out := []
-	for raw: Dictionary in fs.rings:
-		if absf(float(raw["radius"]) - Look.REFUSE_MARK_R_PX) <= 0.01:
-			out.append(raw)
-	return out
+## ⚠ `_refusal_marks` is deleted with the ring capture it filtered — `net_slots` counts refusals off
+## `field_view._fx` directly, which never depended on a hook.

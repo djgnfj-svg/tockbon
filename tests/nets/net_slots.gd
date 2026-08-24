@@ -13,37 +13,18 @@ extends RefCounted
 ## ~6.9 ms and `pump_frames` cannot pin a 0.20 s cadence; and because no frame turns while they run,
 ## `field_view._fx` never ages under them, which is what makes "one refusal PER BEAT" countable.
 ##
-## ⚠ The camera is parked per row: `zoom = 1.0` and `cam_px` set so the tile under test sits at a known
-## screen point, so world px and screen px differ by exactly one translation. `_park_on` is the one
-## place that conversion is written.
-
-
-## Captures the three hooks this round reads. The rest are left as the REAL leaves on purpose — they
-## draw for real headless, so the frame under test is the frame the game draws.
+## ⚠ The camera is parked per row: `_park_on` puts the tile under test at the CENTRE of the screen
+## (the one screen point whose ground point is exact at every zoom, yaw and pitch) and returns that
+## screen point. It is the one place the conversion is touched in this file.
 ##
-## ⚠ Each array is cleared at the top of `_draw` and then `super()` runs, so what is read back is
-## exactly ONE frame's worth of calls rather than however many frames were pumped.
-class FieldSpy extends FieldView:
-	var draws := 0
-	var tiles := []
-	var rings := []
-	var routes := []
-
-	func _draw() -> void:
-		tiles.clear()
-		rings.clear()
-		routes.clear()
-		super()
-		draws += 1
-
-	func _paint_tile(rect: Rect2, fill: Color, line_colour: Color, line_width: float) -> void:
-		tiles.append({"rect": rect, "fill": fill, "line": line_colour, "width": line_width})
-
-	func _paint_ring(centre: Vector2, radius: float, colour: Color, width: float) -> void:
-		rings.append({"centre": centre, "radius": radius, "colour": colour, "width": width})
-
-	func _paint_route(points: PackedVector2Array, colour: Color, width: float) -> void:
-		routes.append({"points": points, "colour": colour, "width": width})
+## ⚠⚠ **`FieldSpy` IS DELETED — the field has no `_paint_*` hooks left to override**, and the old
+## spy's `super()` into a parent without `_draw` was the parse failure that made this whole net
+## vanish (151 checks reported as nothing). What replaces the captures is the REAL `FieldView`, read
+## on ticket 09's surfaces: the summon RING is its own pooled node (`_ring` — visible, position,
+## mesh AABB, material), the aim marks are vertices in the ground fx buffer (`_g_v`/`_g_c`) with
+## `_decal.mesh.get_surface_count()` beside them (buffers say "built", the surface says
+## "committed" — deleting `_fx_flush` stays green on the buffers alone), and the refusal marks were
+## always entries in `_fx`, which never depended on a hook.
 
 
 class HudSpy extends HudView:
@@ -86,7 +67,7 @@ func run(t) -> void:
 	for v: Node2D in [game.field_view, game.hud_view]:
 		game.remove_child(v)
 		v.queue_free()
-	var fs := FieldSpy.new()
+	var fs := FieldView.new()
 	var hs := HudSpy.new()
 	game.field_view = fs
 	game.hud_view = hs
@@ -100,7 +81,7 @@ func run(t) -> void:
 	# same instant. Every beat below is `game._process(dt)` called by hand.
 	game.set_process(false)
 
-	await _the_band_is_on_screen_from_frame_one(t, game, fs)
+	await _the_ring_is_on_screen_from_frame_one(t, game, fs)
 	_the_number_keys(t, game, hs)
 	_the_press_and_the_beat(t, game, fs)
 	_the_sweep(t, game, fs)
@@ -125,65 +106,40 @@ func run(t) -> void:
 
 
 # -- V1 / V2 ---------------------------------------------------------------------------------------
-## ⚠⚠ Mutation: delete the blend in `field_view`'s terrain pass ⇒ the two fills become **EQUAL**. That
-## is the strongest shape a check can have: the behaviour VANISHES rather than diverging, so there is
-## no value left that could accidentally still pass.
-## ⚠ Mutation: gate the blend on `_summon_aim >= 0` ⇒ the second half of this row goes red, because the
-## band has to be on screen the moment the island opens. **The region at frame one is what says a press
-## belongs there** — the last round failed on 「뭐 어떻게 동작시키는지 전혀모르겠는데?」 with everything
-## green.
-func _the_band_is_on_screen_from_frame_one(t, game: Game, fs: FieldSpy) -> void:
+## ⚠⚠ **The green band became a RING** (the user: 「초록색이 있을 필요는 없다? 내가 놓을 수 있는
+## 위치는 그냥 원 기준에 눈에 보이면 될 거 같고」), and the rule itself became a circle
+## (`Rules.SUMMON_RADIUS_TILES`) — so the row's subject moved from tile fills to the ring node.
+## **The centre and the radius are read off the SIM** (`Grid.summon_centre` / `summon_radius`), the
+## same two numbers `can_summon_at` tests, so the drawn circle cannot promise water the sim refuses.
+## ⚠ Mutation: gate the ring on `_summon_aim >= 0` ⇒ the frame-one half goes red — the region has to
+## be on screen the moment the island opens. 「뭐 어떻게 동작시키는지 전혀모르겠는데?」 was measured
+## with everything green once already.
+## ⚠ Mutation: `_rebuild_ring` with radius * 0.0 ⇒ the AABB extent row bites — a bounding box of
+## zero extent still returns the right centre (`how-nets-lie`'s zero-extent entry).
+func _the_ring_is_on_screen_from_frame_one(t, game: Game, fs: FieldView) -> void:
 	var pumped := 0
-	while fs.draws < 1 and pumped < 20:
+	while fs._sprites_used < 1 and pumped < 20:
 		await t.pump_frames(1)
 		pumped += 1
-	t.ok(fs.draws >= 1, "%d 프레임 만에 field_view 의 _draw 가 트리 위에서 진짜 돌았다 (자가 점검)" % pumped)
+	t.ok(fs._sprites_used >= 1,
+		"%d 프레임 만에 field_view 의 _process 가 트리 위에서 진짜 돌았다 (자가 점검 — 몸이 그려졌다)" % pumped)
 	t.eq(game._armed_slot, -1, "아직 아무 슬롯도 안 켰다 (자가 점검)")
 
-	# The island opens at ZOOM_MIN with the whole map on screen, which is the frame this row is about.
 	var g: Grid = game.battle.grid
-	var wet := []
-	var dry := []
-	for raw: Dictionary in fs.tiles:
-		var rect: Rect2 = raw["rect"]
-		var tx := int(round(rect.position.x / Look.TILE_PX))
-		# ⚠ `TILE_H_PX` and not `TILE_PX`: the board is laid back, so a row is 30.64 px tall and
-		# dividing by 40 puts every tile in the wrong row — silently, and every band tile then reads
-		# as plain sea.
-		var ty := int(round(rect.position.y / Look.TILE_H_PX))
-		if tx < 0 or ty < 0 or tx >= g.w or ty >= g.h:
-			continue
-		var tile := g.tile_index(tx, ty)
-		if g.water[tile] == 0:
-			continue
-		if g.can_summon_at(tile):
-			wet.append(raw)
-		else:
-			dry.append(raw)
-	# ⚠ The self-check FIRST: a frame holding only one kind would pass the comparison below vacuously.
-	t.ok(wet.size() > 0, "이 프레임에 소환 가능한 물칸이 실제로 있다 (%d칸 — 자가 점검)" % wet.size())
-	t.ok(dry.size() > 0, "그리고 소환 못 하는 물칸도 있다 (%d칸 — 자가 점검)" % dry.size())
-
-	var wet_fill: Color = wet[0]["fill"]
-	var dry_fill: Color = dry[0]["fill"]
-	t.ok(wet_fill != dry_fill,
-		"소환할 수 있는 물칸에 넘어간 색이 그렇지 않은 물칸과 다르다 (%s vs %s)"
-			% [str(wet_fill), str(dry_fill)])
-	t.eq(dry_fill, Look.COL_WATER, "그리고 띠 밖의 물은 그냥 바다색 그대로다")
-	t.ok(wet_fill.g > Look.COL_WATER.g,
-		"띠의 초록이 실제로 초록 쪽으로 갔다 (g %.3f > %.3f)" % [wet_fill.g, Look.COL_WATER.g])
-	# The alpha the design bet on, pinned once and separately — the bound must not come from the thing
-	# it measures.
-	# ⚠ Compared with a tolerance and not with `eq`: a `Color` channel is a 32-bit float, so 0.35 comes
-	# back as 0.34999999403954 and an exact compare would redden on the storage rather than on the value.
-	t.ok(absf(Look.COL_SUMMON_BAND.a - 0.35) < 0.001,
-		"띠의 알파는 0.35 다 — look.gd 가 재어 둔 실패값 0.18 의 두 배다 (자가 점검)")
-	# Every band tile in the frame carries it, not just the one that was sampled.
-	var missed := 0
-	for raw: Dictionary in wet:
-		if Color(raw["fill"]) == Look.COL_WATER:
-			missed += 1
-	t.eq(missed, 0, "띠 안의 모든 물칸이 넘어간 색을 받았다 — 한 칸만 칠해진 게 아니다")
+	t.ok(fs._ring != null, "소환 링 노드가 있다 (자가 점검)")
+	t.ok(fs._ring.visible, "섬이 열린 프레임부터, 키를 누르기 전에도, 링이 보인다 — 손이 갈 자리가 화면에 있다")
+	t.eq(fs._ring.position, Vector3(g.summon_centre().x, 0.0, g.summon_centre().y),
+		"링의 중심이 sim 의 summon_centre 그대로다")
+	t.eq((fs._ring.material_override as StandardMaterial3D).albedo_color, Look.COL_SUMMON_RING,
+		"링 색이 look.gd 값이다")
+	var r := g.summon_radius()
+	t.ok(r > 2.0, "이 섬의 소환 반지름이 실제로 몇 타일은 된다 (자가 점검, %.2f)" % r)
+	var aabb: AABB = fs._ring.mesh.get_aabb()
+	var half := Look.SUMMON_RING_W_TILES * 0.5
+	t.ok(absf(aabb.size.x * 0.5 - (r + half)) < 0.05 and absf(aabb.size.z * 0.5 - (r + half)) < 0.05,
+		"링의 바깥 반지름이 sim 의 summon_radius 다 (%.2f 타일) — 그린 원과 거절하는 규칙이 한 원이다" % r)
+	t.ok(aabb.size.x > 1.0 and aabb.size.z > 1.0,
+		"그리고 extent 가 0 이 아니다 — 반지름 0 으로 접힌 링은 중심만 맞고 여기서 문다")
 
 
 # -- L1 / L2 / L3 ----------------------------------------------------------------------------------
@@ -224,7 +180,7 @@ func _the_number_keys(t, game: Game, hs: HudSpy) -> void:
 ## ⚠ Mutation L4: move the first summon into `_process` ⇒ the press does nothing until a frame turns,
 ## which is a 200 ms hole in a budget Swink puts at 100.
 ## ⚠ Mutation L5: fire one per frame (drop the accumulator), or read the cadence as 0.0.
-func _the_press_and_the_beat(t, game: Game, fs: FieldSpy) -> void:
+func _the_press_and_the_beat(t, game: Game, fs: FieldView) -> void:
 	var g: Grid = game.battle.grid
 	var tile := _a_band_tile(g, 0)
 	var at := _park_on(fs, g, tile)
@@ -254,7 +210,7 @@ func _the_press_and_the_beat(t, game: Game, fs: FieldSpy) -> void:
 # -- L6 --------------------------------------------------------------------------------------------
 ## ⚠ Mutation: use the press tile for every beat instead of the tile under the cursor ⇒ a swept hold
 ## stacks every body on one beach, which is exactly the picture the sweep exists to spread.
-func _the_sweep(t, game: Game, fs: FieldSpy) -> void:
+func _the_sweep(t, game: Game, fs: FieldView) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
 	var a_tile := _a_band_tile(g, 0)
@@ -279,7 +235,7 @@ func _the_sweep(t, game: Game, fs: FieldSpy) -> void:
 
 # -- L7 --------------------------------------------------------------------------------------------
 ## ⚠ Mutation: never clear `_summon_down` on release, or disarm on release.
-func _the_release(t, game: Game, fs: FieldSpy) -> void:
+func _the_release(t, game: Game, fs: FieldView) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
 	var tile := _a_band_tile(g, 0)
@@ -301,7 +257,7 @@ func _the_release(t, game: Game, fs: FieldSpy) -> void:
 ## ⚠ Mutation: fire the refusal every frame instead of every beat ⇒ a solid red disc at the cursor,
 ## which reads as an error rather than as 「더 없다」. ⚠ **Only `game._process` is pumped here, so no
 ## frame turns and `field_view._fx` never ages** — that is what makes the count exact.
-func _a_dry_slot(t, game: Game, fs: FieldSpy) -> void:
+func _a_dry_slot(t, game: Game, fs: FieldView) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
 	var tile := _a_band_tile(g, 0)
@@ -329,7 +285,7 @@ func _a_dry_slot(t, game: Game, fs: FieldSpy) -> void:
 # -- L9 --------------------------------------------------------------------------------------------
 ## ⚠ Mutation: drop the `can_summon_at` test in `Battle.summon` ⇒ a press in open ocean places a boat
 ## the route cannot reach.
-func _outside_the_band(t, game: Game, fs: FieldSpy) -> void:
+func _outside_the_band(t, game: Game, fs: FieldView) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
 	var far := -1
@@ -351,7 +307,7 @@ func _outside_the_band(t, game: Game, fs: FieldSpy) -> void:
 ## branch's, the beat's) or `hud_view._draw`'s. **These are seams 1–4 of `sea-summon`'s OPEN question
 ## 1** — a live-fire version deletes them deliberately, and this row is what says they are all still
 ## here today.
-func _after_the_commit(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
+func _after_the_commit(t, game: Game, fs: FieldView, hs: HudSpy) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
 	var tile := _a_band_tile(g, 0)
@@ -393,7 +349,7 @@ func _after_the_commit(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
 ## ⚠ Mutation: gate `_on_wheel` on `_armed_slot < 0`. **This is the row that stops every "after the
 ## commit nothing answers" and "armed slots consume the press" row above from being satisfied by a
 ## screen that does nothing at all.**
-func _the_camera_still_answers(t, game: Game, fs: FieldSpy) -> void:
+func _the_camera_still_answers(t, game: Game, fs: FieldView) -> void:
 	game._open_island()
 	fs.zoom = Look.ZOOM_MIN
 	fs.cam_px = Vector2.ZERO
@@ -407,7 +363,6 @@ func _the_camera_still_answers(t, game: Game, fs: FieldSpy) -> void:
 	# rather than promised.
 	fs.zoom = 1.0
 	fs.cam_px = Vector2(300.0, 300.0)
-	fs.position = -fs.cam_px
 	game._unhandled_input(_key(KEY_1))
 	t.eq(game._armed_slot, -1, "같은 키로 껐다 (자가 점검)")
 	var cam_before: Vector2 = fs.cam_px
@@ -418,52 +373,99 @@ func _the_camera_still_answers(t, game: Game, fs: FieldSpy) -> void:
 
 
 # -- V3 / V4 / V5 ----------------------------------------------------------------------------------
-## ⚠ Mutation V3: draw the ring at the pressed tile instead of at the derived landing.
-## ⚠ Mutation V4: draw a two-point straight line. **`net_draw_leaf`'s whole-array shape check cannot
-## see a straightened polyline** — that is measured, and it is why this is a runtime row.
-## ⚠ Mutation V5: drop the dry test ⇒ a ring and a route appear for a slot that can place nothing.
-func _the_aim_marks(t, game: Game, fs: FieldSpy) -> void:
+## The aim's picture, read off SURFACE 3 (the ground fx buffer) and SURFACE 2 (the ghost sprites).
+## ⚠ Mutation V4: straighten the route into one chord. **`net_draw_leaf` lost its whole-array shape
+## check with the leaf itself**, so this runtime row is now the ONLY thing that catches it: a bent
+## route's interior waypoint sits well off the chord, and the waypoint-has-a-vertex row cannot be
+## satisfied by a straight line.
+## ⚠ Mutation V3 (the landing half): drop `_paint_ghosts`' landing derivation ⇒ the ghost fan stops
+## standing on `summon_landing_of`. ⚠⚠ **The RING sits on the AIMED tile in the current code** — the
+## old net had it on the derived landing, and the revival moved the landing's picture into the ghost
+## fan instead. Both facts are measured as they ARE; whether the ring should move back to the
+## landing is 티켓 09's fx round's question, written there rather than smuggled in here as a red.
+## ⚠ Mutation V5, WHOLE again (the user closed the fork: 「추천대로」, 2026-08-24): a dry slot draws
+## NOTHING — `_paint_plan`'s reserve gate kills the ring and the route, `_paint_ghosts`' kills the
+## fan. Drop either gate and its half of the tail rows bites.
+func _the_aim_marks(t, game: Game, fs: FieldView) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
-	# A BENT route: two hops out, so the polyline is the pressed tile, the beaching tile and the
-	# landing — three points. A straight-line mutation collapses it to two.
+	# A BENT route, and the bend must be big enough to measure: an interior waypoint at least 16 px
+	# off the endpoints' chord, so a straightened polyline leaves no vertex within 12 px of it.
 	var bent := -1
+	var bend_px := 0.0
 	for tile in g.w * g.h:
-		if g.can_summon_at(tile) and g.summon_route(tile).size() > 2:
+		if not g.can_summon_at(tile):
+			continue
+		var route := g.summon_route(tile)
+		if route.size() <= 2:
+			continue
+		var a := Look.tile_point_px(route[0])
+		var c := Look.tile_point_px(route[route.size() - 1])
+		var off := 0.0
+		for k in range(1, route.size() - 1):
+			off = maxf(off, _dist_to_segment(Look.tile_point_px(route[k]), a, c))
+		if off > bend_px:
 			bent = tile
-			break
-	t.ok(bent >= 0, "두 점보다 긴 항로를 내는 바다 칸을 찾았다 (자가 점검)")
+			bend_px = off
+	t.ok(bent >= 0 and bend_px > 16.0,
+		"직선에서 16px 넘게 굽은 항로를 내는 바다 칸을 찾았다 (자가 점검, %.1fpx)" % bend_px)
 
 	var at := _park_on(fs, g, bent)
 	game._unhandled_input(_key(KEY_1))
 	game._unhandled_input(_motion(at, Vector2(2.0, 2.0)))
 	t.eq(game.field_view._summon_aim, bent, "누르기 전에 이미 조준이 잡혔다 (자가 점검)")
 	await t.pump_frames(2)
-	t.eq(game.battle.boats.size(), 0, "계획이 비어 있다 — 이 프레임의 링과 항로는 조준의 것뿐이다 (자가 점검)")
+	t.eq(game.battle.boats.size(), 0, "계획이 비어 있다 — 이 프레임의 표시는 조준의 것뿐이다 (자가 점검)")
 
-	var marks := _aim_rings(fs)
-	t.eq(marks.size(), 1, "조준 링이 정확히 하나 그려진다")
-	var landing := g.summon_landing_of(bent)
-	t.eq(Vector2(marks[0]["centre"]), Look.tile_point_px(g.tile_point(landing)),
-		"조준 링은 누른 칸이 아니라 도출된 상륙지 위에 있다")
-	t.ok(Vector2(marks[0]["centre"]) != Look.tile_point_px(g.tile_point(bent)),
-		"그리고 그 둘은 실제로 다른 자리다 (자가 점검)")
-	t.eq(Color(marks[0]["colour"]), Look.COL_WIN, "띠 안이므로 수락 색이다")
+	# The ground buffer holds geometry AND it was committed — the pair `how-nets-lie` demands.
+	t.ok(fs._g_v.size() > 0, "조준 프레임의 바닥 버퍼에 기하가 있다 (%d 정점)" % fs._g_v.size())
+	t.eq(fs._decal.mesh.get_surface_count(), 1,
+		"그리고 바닥 메시로 커밋됐다 — _fx_flush 를 지우면 버퍼는 남고 여기가 문다")
+	t.eq(fs._a_v.size(), 0, "공중 버퍼는 조용하다 — 조준은 바닥의 것이다")
 
-	var want := PackedVector2Array()
-	for wp in g.summon_route(bent):
-		want.append(Look.tile_point_px(wp))
-	var drawn := _routes_from(fs, Look.tile_point_px(g.tile_point(bent)))
-	t.eq(drawn.size(), 1, "그 칸에서 출발하는 항로가 하나 그려진다")
-	t.eq(PackedVector2Array(drawn[0]["points"]), want,
-		"그려지는 항로가 배가 실제로 갈 항로와 점 하나까지 같다")
+	# The ring: every COL_WIN vertex, centred on the aimed tile at the aim ring's own radius.
+	var ring_pts := _ground_verts_of(fs, Look.COL_WIN)
+	t.ok(ring_pts.size() >= 24, "수락색(COL_WIN) 링 정점이 있다 (%d개)" % ring_pts.size())
+	var ring_centre := _xz_centre(ring_pts)
+	var aim_c := Look.tile_point_px(g.tile_point(bent)) / Look.TILE_PX
+	t.ok(ring_centre.distance_to(aim_c) < 0.05,
+		"링의 중심이 조준한 칸이다 (%.3f 타일 차)" % ring_centre.distance_to(aim_c))
+	# Both ends of the extent: the zero-extent trap on the floor, the radius itself on the ceiling.
+	var ring_max := _max_dist_xz(ring_pts, ring_centre)
+	var want_r := (Look.TARGET_RING_R_PX + Look.ROUTE_WIDTH_PX * 0.5) / Look.TILE_PX
+	t.ok(absf(ring_max - want_r) < 0.05,
+		"링의 extent 가 조준 링 반지름 그대로다 (%.3f 타일, 기대 %.3f) — 접힌 링은 여기서 문다"
+			% [ring_max, want_r])
+
+	# The route: a vertex beside EVERY waypoint of the sim's own `summon_route`, bend included.
+	var route_pts := _ground_verts_of(fs, Look.COL_ROUTE)
+	t.ok(route_pts.size() >= 6, "항로 정점이 있다 (%d개)" % route_pts.size())
+	var want := g.summon_route(bent)
 	t.ok(want.size() > 2, "그 항로는 두 점보다 길다 (%d점 — 자가 점검)" % want.size())
+	var missing := 0
+	for wp in want:
+		if _min_dist_xz(route_pts, Look.tile_point_px(wp) / Look.TILE_PX) > 0.3:
+			missing += 1
+	t.eq(missing, 0, "항로의 모든 경유점 곁에 정점이 있다 — 두 끝점을 직선으로 이으면 굽이 경유점이 빈다")
 
-	# ⚠ V5 — the same aim on a DRY slot draws neither. The absence is the answer, and it arrives
-	# before the press instead of after it.
-	# ⚠ **Drained at a DIFFERENT tile than the one being aimed at**, and that is not tidiness: an
-	# uncommitted boat sits at its own summon tile, so six boats born at `bent` would each draw a
-	# remaining route starting exactly where the aim's route starts — and the row would count six.
+	# The landing's picture is the GHOST FAN — real pooled sprites wearing the ghost tint, standing
+	# on the DERIVED landing rather than on the pressed water.
+	var landing := g.summon_landing_of(bent)
+	var land_c := Look.tile_point_px(g.tile_point(landing)) / Look.TILE_PX
+	t.ok(land_c.distance_to(aim_c) > 0.5, "상륙지와 누른 칸은 실제로 다른 자리다 (자가 점검)")
+	var ghosts := _ghost_sprites(fs)
+	t.ok(ghosts.size() > 0, "유령 몸이 실제로 그려진다 (%d장)" % ghosts.size())
+	var gc := Vector2.ZERO
+	for gs: Sprite3D in ghosts:
+		gc += Vector2(gs.position.x, gs.position.z)
+	gc /= float(ghosts.size())
+	t.ok(gc.distance_to(land_c) < 0.5,
+		"유령 부채의 한가운데가 도출된 상륙지다 (%.2f 타일 차) — 내릴 자리가 누른 자리가 아니라 설 자리에 보인다"
+			% gc.distance_to(land_c))
+	t.ok(gc.distance_to(aim_c) > 0.5, "그리고 누른 칸이 아니다 — V3 의 절반이 유령 쪽에서 산다")
+
+	# ⚠ V5's surviving half — the same aim on a DRY slot draws NO ghosts. Drained at a DIFFERENT
+	# tile so the six uncommitted boats' own positions cannot stand where the fan stood.
 	var drain := -1
 	for tile in g.w * g.h:
 		if g.can_summon_at(tile) and tile != bent:
@@ -474,9 +476,10 @@ func _the_aim_marks(t, game: Game, fs: FieldSpy) -> void:
 		game.battle.summon(0, drain)
 	t.eq(game.battle.slot_reserve_ids(0).size(), 0, "슬롯을 비웠다 (자가 점검)")
 	await t.pump_frames(2)
-	t.eq(_aim_rings(fs).size(), 0, "마른 슬롯은 조준 링을 안 그린다")
-	t.eq(_routes_from(fs, Look.tile_point_px(g.tile_point(bent))).size(), 0,
-		"항로도 안 그린다 — 없다는 게 대답이다")
+	t.eq(_ghost_sprites(fs).size(), 0, "마른 슬롯은 유령을 안 그린다 — 보낼 몸이 없으면 설 자리 그림도 없다")
+	t.eq(_ground_verts_of(fs, Look.COL_WIN).size() + _ground_verts_of(fs, Look.COL_LOSE).size(), 0,
+		"링도 안 그린다 — sim 이 거절할 약속을 화면이 하지 않는다 (복원된 옛 규칙)")
+	t.eq(_ground_verts_of(fs, Look.COL_ROUTE).size(), 0, "항로도 안 그린다 — 없다는 게 대답이다")
 
 
 # -- V6 / V7 / V8 ----------------------------------------------------------------------------------
@@ -486,7 +489,7 @@ func _the_aim_marks(t, game: Game, fs: FieldSpy) -> void:
 ## one picture.
 ## ⚠ Mutation V8: pass the resting width in both branches ⇒ the armed box loses one of its two
 ## channels and the fill has to carry the read alone.
-func _the_slot_row(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
+func _the_slot_row(t, game: Game, fs: FieldView, hs: HudSpy) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
 	var tile := _a_band_tile(g, 0)
@@ -545,14 +548,12 @@ func _the_slot_row(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
 # -- L12 -------------------------------------------------------------------------------------------
 ## ⚠ Mutation: make `slot_row_origin_x_px` a constant again ⇒ the row stops touching the margin the
 ## moment the slot table changes length, which is the half of 「확장가능」 the layout owns.
-func _the_boxes_clear_the_army(t, game: Game, fs: FieldSpy) -> void:
+func _the_boxes_clear_the_army(t, game: Game, fs: FieldView) -> void:
 	game._open_island()
-	fs.zoom = Look.ZOOM_MIN
-	fs.cam_px = Vector2.ZERO
-	# `_clamp_cam` centres both axes at ZOOM_MIN — the state `setup()` actually produces, which is the
-	# framing the stack's screen position has to be measured in.
-	fs._clamp_cam()
-	fs.position = Vector2(-fs.cam_px.x * fs.zoom, -fs.cam_px.y * fs.zoom)
+	# The camera state is irrelevant here on purpose: the slot boxes are HUD geometry read straight
+	# off `look.gd`, and nothing on the field is compared against them any more (the harbour stack
+	# they used to clear is deleted).
+	t.ok(fs.battle == game.battle, "필드가 물려 있다 (자가 점검)")
 
 	var boxes: Array[Rect2] = []
 	for i in Rules.summon_slot_count():
@@ -618,18 +619,12 @@ func _the_boxes_clear_the_army(t, game: Game, fs: FieldSpy) -> void:
 ## check could tell the two behaviours apart. **The band goes with the boxes** — the same rule the
 ## deleted coast wash was trusted for, applied on the other side of the commit — and this is the row
 ## that makes the choice a fact instead of a preference.
-func _the_band_goes_with_the_boxes(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
+func _the_band_goes_with_the_boxes(t, game: Game, fs: FieldView, hs: HudSpy) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
-	fs.zoom = Look.ZOOM_MIN
-	fs.cam_px = Vector2.ZERO
-	fs._clamp_cam()
-	fs.position = fs._compose_position()
-	fs.scale = Vector2(fs.zoom, fs.zoom)
 
 	await t.pump_frames(2)
-	var before := _band_fills(fs, g)
-	t.ok(before > 0, "확정 전에는 띠가 실제로 칠해져 있다 (%d칸 — 자가 점검)" % before)
+	t.ok(fs._ring.visible, "확정 전에는 링이 실제로 보인다 (자가 점검)")
 	t.eq(hs.boxes.size() > 0, true, "그리고 슬롯 상자도 그려진다 (자가 점검)")
 
 	t.ok(game.battle.send(0, int(_sendable_tile(g))) >= 0, "확정할 배를 하나 놓았다 (자가 점검)")
@@ -637,22 +632,19 @@ func _the_band_goes_with_the_boxes(t, game: Game, fs: FieldSpy, hs: HudSpy) -> v
 	hs.boxes.clear()
 	await t.pump_frames(2)
 	t.eq(hs.boxes.size(), 0, "확정 뒤 슬롯 상자가 사라진다 (자가 점검 — 비교 상대다)")
-	t.eq(_band_fills(fs, g), 0,
-		"그리고 띠도 같이 사라진다 — 손이 갈 데가 없어진 뒤에도 바다에 표시가 남으면 그게 거짓말이다")
-	# The floor: the water is still being drawn, so the zero above is "the blend went" and not "the
-	# terrain pass stopped".
-	var water := 0
-	for raw: Dictionary in fs.tiles:
-		if Color(raw["fill"]) == Look.COL_WATER:
-			water += 1
-	t.ok(water > 0, "물칸 자체는 여전히 그려진다 (%d칸) — 사라진 것은 덧칠뿐이다" % water)
+	t.ok(not fs._ring.visible,
+		"그리고 링도 같이 사라진다 — 손이 갈 데가 없어진 뒤에도 바다에 표시가 남으면 그게 거짓말이다")
+	# The floor: the sea and the island are still on screen, so the zero above is "the ring's own
+	# flip" and not "the world went dark".
+	t.ok(fs._sea.visible and fs._terrain.mesh.get_surface_count() > 0,
+		"바다와 지형은 그대로다 — 꺼진 것은 링뿐이다")
 
 
 ## ⚠⚠ **THREE LINES CLAIMED TO BE LOAD-BEARING AND WERE GREEN WHEN DELETED.** A comment asserting a
 ## line matters when nothing measures it is the same class of lie as a fake net — and the control says
 ## this is not blanket blindness: deleting `_disarm()` from `_open_island` reddens 23 checks. So each
 ## of the three is driven here rather than argued about.
-func _the_three_lines_that_claimed_to_be_load_bearing(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
+func _the_three_lines_that_claimed_to_be_load_bearing(t, game: Game, fs: FieldView, hs: HudSpy) -> void:
 	# (1) `_summon_down = false` inside the `_hold_sec` gate in `game.gd::_unhandled_input`. Its own
 	# comment says suppressing only the MOTION events leaves the flag alive, so the very next motion
 	# after the hold ends resumes a gesture the plan says was cancelled. Driven: hold, deliver an
@@ -763,7 +755,7 @@ func _a_refused_key_flashes_as_well_as_shakes(t, game: Game, hs: HudSpy) -> void
 ## ⚠ **The BORDER still says armed, and that is the point of the reorder rather than a consolation.**
 ## `hud_view`'s own paragraph says neither channel carries the read alone: the fill says what will come
 ## out, the border says which slot the key is on. Both are asserted here.
-func _an_armed_slot_that_has_run_dry_is_not_green(t, game: Game, fs: FieldSpy, hs: HudSpy) -> void:
+func _an_armed_slot_that_has_run_dry_is_not_green(t, game: Game, fs: FieldView, hs: HudSpy) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
 	var tile := _a_band_tile(g, 0)
@@ -793,23 +785,6 @@ func _an_armed_slot_that_has_run_dry_is_not_green(t, game: Game, fs: FieldSpy, h
 	game._unhandled_input(_key(KEY_1))
 
 
-## How many tiles in the last captured frame wear the band's blend. Read off the FILL rather than off
-## `can_summon_at`, because what is under test is whether the blend reached the leaf at all.
-func _band_fills(fs: FieldSpy, g: Grid) -> int:
-	var n := 0
-	for raw: Dictionary in fs.tiles:
-		var rect: Rect2 = raw["rect"]
-		var tx := int(round(rect.position.x / Look.TILE_PX))
-		var ty := int(round(rect.position.y / Look.TILE_PX))
-		if tx < 0 or ty < 0 or tx >= g.w or ty >= g.h:
-			continue
-		if g.water[g.tile_index(tx, ty)] == 0:
-			continue
-		if Color(raw["fill"]) != Look.COL_WATER:
-			n += 1
-	return n
-
-
 ## Any tile a boat may be sent to, so a plan can be committed. The band rows need a committed fight
 ## and `commit()` refuses an empty plan.
 func _sendable_tile(g: Grid) -> int:
@@ -830,27 +805,25 @@ func _a_band_tile(g: Grid, n: int) -> int:
 	return -1
 
 
-## Parks the camera at `zoom = 1.0` with `tile` as near the middle of the screen as the map allows,
-## and returns the SCREEN point that tile now sits at. **The one place screen<->world is written in
-## this file** — a second conversion would be the same arithmetic free to drift.
+## Parks the camera so `tile` sits at the CENTRE of the screen, and returns that screen point. The
+## centre is the one screen point whose ground point is exact at every zoom, yaw and pitch —
+## `screen_to_world_px(640, 360)` IS `_ground_centre_px()` — so this file never re-derives the
+## pitched, turnable conversion (`net_camera` owns it; a second copy here would be free to drift).
 ##
-## ⚠ `position` is composed in `field_view._process`, so it is written here directly rather than waited
-## for: these rows call `game._process(dt)` by hand and turn no frames at all.
-func _park_on(fs: FieldSpy, g: Grid, tile: int) -> Vector2:
+## ⚠ No `_clamp_cam` and none needed: nothing on these rows pans or zooms afterwards, and the
+## conversion the shell's `_tile_at` runs does not clamp either.
+func _park_on(fs: FieldView, g: Grid, tile: int) -> Vector2:
 	var world := Look.tile_point_px(g.tile_point(tile))
-	var cam := world - Look.viewport_size_px() * 0.5
-	cam.x = clampf(cam.x, 0.0, maxf(0.0, float(g.w) * Look.TILE_PX - Look.VIEWPORT_W_PX))
-	cam.y = clampf(cam.y, 0.0, maxf(0.0, float(g.h) * Look.TILE_PX - Look.VIEWPORT_H_PX))
 	fs.zoom = 1.0
-	fs.cam_px = cam
-	fs.position = -cam
-	fs.scale = Vector2.ONE
-	return world - cam
+	fs.cam_yaw_deg = Look.CAM_YAW_DEG
+	fs.cam_pitch_deg = Look.CAM_PITCH_DEG
+	fs.cam_px = world - fs._visible_ground_px() * 0.5
+	return Look.viewport_size_px() * 0.5
 
 
 ## How many refusal marks are sitting in the field's transient drawer. Read off `_fx` rather than off
 ## the drawn rings, because these rows turn no frames.
-func _refusals(fs: FieldSpy) -> int:
+func _refusals(fs: FieldView) -> int:
 	var n := 0
 	for raw: Dictionary in fs._fx:
 		if int(raw["kind"]) == FieldView.FxKind.REFUSE:
@@ -858,28 +831,56 @@ func _refusals(fs: FieldSpy) -> int:
 	return n
 
 
-## The AIM's rings in one captured frame, told apart from every boat's landing ring by COLOUR: a boat's
-## ring is `COL_ROUTE` and the aim's is the accept/refuse pair. ⚠ The radius is checked too, so a
-## refusal mark (a `COL_LOSE` ring at `REFUSE_MARK_R_PX`) can never be counted as one.
-func _aim_rings(fs: FieldSpy) -> Array:
+## The ground-buffer vertices wearing exactly `col`, on the ground plane (x, z), in TILE units.
+## Colour is what tells the aim ring (`COL_WIN`/`COL_LOSE`) from the route (`COL_ROUTE`) from the
+## intent lines — the buffers hold one frame's whole floor and the colour is each mark's name tag.
+func _ground_verts_of(fs: FieldView, col: Color) -> Array:
 	var out := []
-	for raw: Dictionary in fs.rings:
-		if absf(float(raw["radius"]) - Look.TARGET_RING_R_PX) > 0.01:
-			continue
-		var col := Color(raw["colour"])
-		if col == Look.COL_WIN or col == Look.COL_LOSE:
-			out.append(raw)
+	for k in fs._g_v.size():
+		if fs._g_c[k] == col:
+			out.append(Vector2(fs._g_v[k].x, fs._g_v[k].z))
 	return out
 
 
-## The drawn routes that START at `from_px`. A boat's own remaining route starts at that boat's `pos`,
-## so this names the aim's route without needing a second colour.
-func _routes_from(fs: FieldSpy, from_px: Vector2) -> Array:
+func _xz_centre(pts: Array) -> Vector2:
+	var sum := Vector2.ZERO
+	for p: Vector2 in pts:
+		sum += p
+	return sum / float(maxi(1, pts.size()))
+
+
+func _max_dist_xz(pts: Array, from: Vector2) -> float:
+	var out := 0.0
+	for p: Vector2 in pts:
+		out = maxf(out, p.distance_to(from))
+	return out
+
+
+func _min_dist_xz(pts: Array, from: Vector2) -> float:
+	var out := 1e9
+	for p: Vector2 in pts:
+		out = minf(out, p.distance_to(from))
+	return out
+
+
+## Distance from `p` to the segment `a`..`b`, for measuring how far a route's interior waypoint sits
+## off its endpoints' chord — which is exactly what a straightened polyline erases.
+func _dist_to_segment(p: Vector2, a: Vector2, b: Vector2) -> float:
+	var ab := b - a
+	if ab.length_squared() <= 0.000001:
+		return p.distance_to(a)
+	var k := clampf((p - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+	return p.distance_to(a + ab * k)
+
+
+## The pooled sprites wearing the ghost tint — the aim's landing fan, and nothing else wears it.
+func _ghost_sprites(fs: FieldView) -> Array:
+	var want := Look.beast_tint(Look.ghost_tint())
 	var out := []
-	for raw: Dictionary in fs.routes:
-		var pts := PackedVector2Array(raw["points"])
-		if pts.size() > 0 and pts[0] == from_px:
-			out.append(raw)
+	for k in fs._sprites_used:
+		var s: Sprite3D = fs._sprites[k]
+		if s.modulate == want:
+			out.append(s)
 	return out
 
 

@@ -136,6 +136,14 @@ var _enemy_cd := PackedFloat32Array()
 var _enemy_goal: Array = []               # Vector2, the tile centre this enemy is walking into
 var _enemy_stale := PackedByteArray()     # 1 = may still hold the tile behind it
 
+## Per-enemy status clocks, flat over the STATUS TABLE: index `s * enemy_alive.size() + e` (see
+## `_status_at`) holds the seconds left of status `s` on enemy `e`, and the magnitude its lit tier
+## wrote. ⚠ **Generic across `Rules.Status`, never bleed-shaped** — a new status must not open this
+## file for its storage. Public like `enemy_windup` and for the same reason: a status is a state the
+## view may draw for its whole length, and a view-side copy of a countdown drifts.
+var status_time := PackedFloat32Array()
+var status_mag := PackedFloat32Array()
+
 # --- soldiers. Indexed by ARMY id, so index i is the same soldier here and in `army` --------------
 var soldier_state := PackedInt32Array()
 var soldier_pos: Array = []               # Vector2, tile units
@@ -259,6 +267,11 @@ func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
 	_enemy_cd.resize(enemy_count)
 	_enemy_stale = PackedByteArray()
 	_enemy_stale.resize(enemy_count)
+	# resize on a fresh array zero-fills, so every status starts expired.
+	status_time = PackedFloat32Array()
+	status_time.resize(Rules.status_count() * enemy_count)
+	status_mag = PackedFloat32Array()
+	status_mag.resize(Rules.status_count() * enemy_count)
 	enemy_pos = []
 	_enemy_goal = []
 	var claimed := grid.reserved
@@ -588,6 +601,9 @@ func step(dt: float) -> void:
 		_phase_targeting()
 		_phase_movement(Rules.SIM_SUBSTEP_SEC)
 		_phase_attacks(Rules.SIM_SUBSTEP_SEC)
+		# After attacks, before deaths: an enemy bled to 0 this sub-step passes the SAME sub-step's
+		# death latch instead of standing a frame at no HP.
+		_phase_status(Rules.SIM_SUBSTEP_SEC)
 		_phase_deaths()
 		_phase_clock(Rules.SIM_SUBSTEP_SEC)
 
@@ -836,7 +852,9 @@ func _phase_movement(dt: float) -> void:
 			continue
 		var uid := ENEMY_UID_BASE + e
 		var goal: Vector2 = _enemy_goal[e]
-		var speed := Rules.speed_of(int(enemy_type[e]))
+		# The ONE read site a live SLOW-kind status has: the enemy's speed, glide and walk alike.
+		# The soldier branch above deliberately has no twin — allied bodies never carry a status.
+		var speed := Rules.speed_of(int(enemy_type[e])) * _slow_mul_of(e)
 		var atk := int(enemy_target[e])
 		var seek_id := -1
 		if atk < 0 or not _within(enemy_pos[e], soldier_pos[atk], _enemy_reach(e)):
@@ -957,6 +975,9 @@ func _hit_enemies(from_id: int, primary: int, damage: float, area: float) -> voi
 			if _within(enemy_pos[e], centre, area):
 				enemy_hp[e] -= damage
 				splash.append(e)
+	# Every lit status tier rides every allied blow, onto everyone the blow actually hit. Only HERE —
+	# `_hit_soldiers` has no twin, so an enemy blow can never leave a status on a soldier.
+	_apply_statuses(primary, splash)
 	events.append({
 		"kind": Event.ATTACK,
 		"from": from_id,
@@ -990,6 +1011,62 @@ func _hit_soldiers(from_id: int, primary: int, damage: float, area: float) -> vo
 		"area": area,
 		"splash": splash,
 	})
+
+
+func _status_at(s: int, e: int) -> int:
+	return s * enemy_alive.size() + e
+
+
+## Walks the status-tag table and writes every lit tier onto `primary` and the splash victims.
+## ⚠⚠ **An overwrite, never an accumulate**: re-hitting resets the clock to the lit tier's own values —
+## the magnitude must not add or fold onto itself, or six fast blows rebuild the -0.5 s mine here.
+func _apply_statuses(primary: int, splash: PackedInt32Array) -> void:
+	for r in Rules.tag_status_row_count():
+		var tier := Rules.tag_status_tier_at(r, army.loadout.tag_count(Rules.tag_status_tag_of(r)))
+		if tier.is_empty():
+			continue
+		var s := Rules.tag_status_status_of(r)
+		_put_status(s, primary, tier)
+		for v in splash:
+			_put_status(s, int(v), tier)
+
+
+func _put_status(s: int, e: int, tier: Dictionary) -> void:
+	var at := _status_at(s, e)
+	status_time[at] = float(tier["sec"])
+	status_mag[at] = float(tier["mag"])
+
+
+## Ages every status and lets the damage-over-time kind bite. It walks the KIND table and never knows
+## a status by name — that is what keeps the next damage-over-time status (poison is the named one) a
+## table row in `rules.gd` with this file shut.
+func _phase_status(dt: float) -> void:
+	for s in Rules.status_count():
+		var dot := Rules.status_kind_of(s) == Rules.StatusKind.DOT
+		for e in enemy_alive.size():
+			if enemy_alive[e] == 0:
+				continue
+			var at := _status_at(s, e)
+			var left := status_time[at]
+			if left <= 0.0:
+				continue
+			if dot:
+				# `minf` so the last partial sub-step bites only what is left — the total a tier deals
+				# is exactly magnitude x duration, not a sub-step more.
+				enemy_hp[e] -= status_mag[at] * minf(left, dt)
+			status_time[at] = maxf(0.0, left - dt)
+
+
+## The product of every live SLOW-kind status on this enemy — 1.0 with none. The product is across
+## DIFFERENT status rows only: one status re-applied was overwritten, never folded onto itself.
+func _slow_mul_of(e: int) -> float:
+	var mul := 1.0
+	for s in Rules.status_count():
+		if Rules.status_kind_of(s) != Rules.StatusKind.SLOW:
+			continue
+		if status_time[_status_at(s, e)] > 0.0:
+			mul *= status_mag[_status_at(s, e)]
+	return mul
 
 
 ## Everything at or below 0 HP dies, and the row stays. `army.kill` keeps the roster's history so a
