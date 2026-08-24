@@ -50,6 +50,21 @@ files drifts.
 - **Never two.** Whatever is second waits for the next reply. ⚠ **This replaces 「Don't ask」**, which
   produced replies with nothing to answer
 
+⚠⚠ **The closing block has a fixed shape, given by the user 2026-08-24** (*"질문 추천 왜 / 질문 : /
+추천 : / 왜: / 이렇게가 맞는데.."*). **A horizontal rule, then three labelled lines and nothing else:**
+
+```
+---
+**질문** : <one line>
+**추천** : <one line>
+**왜** : <one line>
+```
+
+- **One line each.** The reasoning that does not fit belongs in the body above, not in these three lines
+- ⚠ **Do not bury the recommendation in prose above and leave a bare question at the bottom** — that is
+  what this replaces. The user: *"질문이 너무 길어서 그래서 정확하게 뭘 말하는 건지 잘 모르겠네"*
+- ⚠ **Only ask what has a recommendation and a reason.** A confirmation check is not a question
+
 # Nothing pretends to work
 
 **Code that pretends to work is worse than code that doesn't, and a green that measures less than its
