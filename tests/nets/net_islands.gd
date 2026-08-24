@@ -151,7 +151,9 @@ const HAND_WRITTEN := 3
 
 func run(t) -> void:
 	t.eq(Islands.ISLAND_ROWS.size(), HAND_WRITTEN, "손으로 쓴 섬은 셋이다")
-	t.eq(Islands.count(), 4, "그리고 긴 지도까지 넷이다 — 격자 크기가 더 이상 상수에 박혀 있지 않다")
+	# ⚠ 4 -> 8: the four compact islands (2026-08-24). **They are outside this suite on purpose** — see
+	# `Islands.SMALL_ISLANDS`. Nothing here measures them, and that is written down there too.
+	t.eq(Islands.count(), 8, "긴 지도와 작은 섬 넷까지 여덟이다 — 격자 크기가 상수에 박혀 있지 않다")
 	t.eq(Islands.TIME_LIMITS.size(), HAND_WRITTEN, "제한 시간도 손으로 쓴 섬마다 하나씩 있다")
 	for i in EXPECT_LIMITS.size():
 		t.eq(Islands.time_limit_of(i), float(EXPECT_LIMITS[i]),

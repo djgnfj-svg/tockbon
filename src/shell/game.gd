@@ -526,11 +526,12 @@ func _refit_input(event: InputEvent) -> void:
 	var row := refit_view.held_at(at)
 	if row >= 0:
 		refit_view.note_held_press(row)
-		# The part is read BEFORE `fit` runs — `Loadout.fit` removes the pressed card first and the
-		# pile compacts under it, so `held_part[row]` names nothing once the call returns.
-		var landing_part := int(run.army.loadout.held_part[row])
+		# ⚠ **The CELL is read before `fit` runs**, not after: `first_empty` is where the card is about
+		# to land, and once `fit` returns that cell is full and the answer has changed. (It used to
+		# read the card's own part, which named its target back when cells had names.)
+		var landing_cell := run.army.loadout.first_empty(open_slot)
 		if run.army.loadout.fit(open_slot, row):
-			refit_view.note_fitted(landing_part)
+			refit_view.note_fitted(landing_cell)
 		return
 	var part := refit_view.cell_at(at)
 	if part >= 0:
@@ -732,6 +733,15 @@ func _on_turn_key(key: InputEventKey) -> bool:
 		return true
 	if key.keycode == KEY_E:
 		field_view.turn_by(Look.CAM_YAW_STEP_DEG)
+		return true
+	# ⚠ **R and F tilt, and they are ungated exactly as Q and E are** (2026-08-24, the user: 「기울기도
+	# 조절 되었으면 좋겠네」). R stands the camera up toward looking straight down; F lays it over toward
+	# the horizon. Same argument as the turn: it changes what is visible and nothing that happens.
+	if key.keycode == KEY_R:
+		field_view.tilt_by(Look.CAM_PITCH_STEP_DEG)
+		return true
+	if key.keycode == KEY_F:
+		field_view.tilt_by(-Look.CAM_PITCH_STEP_DEG)
 		return true
 	return false
 

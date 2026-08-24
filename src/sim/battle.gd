@@ -1034,9 +1034,15 @@ func _phase_clock(dt: float) -> void:
 		# precedence written on the `Lose` enum.
 		_lose = Lose.WIPED if army.living_count() == 0 else Lose.LANDING_LOST
 		return
-	if elapsed + Rules.EPS >= time_limit:
-		_outcome = Outcome.LOST
-		_lose = Lose.TIMEOUT
+	# ⚠⚠ **THE TIME LIMIT NO LONGER DECIDES ANYTHING** (2026-08-24, the user: 「제한 시간 안에 클리어
+	# 조건은 일단 지워」). An island now ends when the enemies are gone or the landing force is, and it
+	# can run as long as it takes.
+	#
+	# ⚠ **`time_limit` and `time_left()` are kept and `Lose.TIMEOUT` is kept**, unproducible, because
+	# 「일단」 is in the sentence: the number still comes out of `islands.gd`, the loss screen still has its
+	# wording, and putting the rule back is this branch and nothing else. **Nothing judges by the clock
+	# any more** — the HUD countdown went with it, because a clock counting down to nothing is the exact
+	# shape of code that pretends to work.
 
 
 ## ⚠⚠ **THE FIGHT IS OVER WHEN NOBODY IS STILL IN IT, AND A SOLDIER AT THE HARBOUR IS NOT IN IT.**

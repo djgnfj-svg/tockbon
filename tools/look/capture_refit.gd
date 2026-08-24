@@ -82,12 +82,9 @@ func _run() -> void:
 	# A fuller pile than two cards, so a board can actually be filled. Four more cards straight into
 	# the pile — the same thing four more wins would have paid.
 	var loadout := _game.run.army.loadout
-	loadout.take_card(Rules.Part.CHEST, Rules.Species.BIRD)
-	loadout.take_card(Rules.Part.ARM, Rules.Species.FISH)
-	loadout.take_card(Rules.Part.LEG, Rules.Species.MAMMAL)
-	loadout.take_card(Rules.Part.HAND, Rules.Species.BIRD)
-	loadout.take_card(Rules.Part.HEAD, Rules.Species.FISH)
-	loadout.take_card(Rules.Part.BELLY, Rules.Species.MAMMAL)
+	# Six items across the rarities, so the board and the pile both show what a spread looks like.
+	for item in [0, 6, 12, 16, 3, 9]:
+		loadout.take_card(item)
 
 	# --- step two: slot 0's board -----------------------------------------------------------------
 	_click(Look.refit_slot_rect_px(0).get_center())
@@ -112,10 +109,10 @@ func _run() -> void:
 	_print_board(0)
 
 	# hover a cell, then unfit it
-	_motion(Look.refit_cell_rect_px(Rules.Part.ARM).get_center())
+	_motion(Look.refit_cell_rect_px(0).get_center())
 	await _settle(18)
 	await _shot("34_refit_hover_cell")
-	_click(Look.refit_cell_rect_px(Rules.Part.ARM).get_center())
+	_click(Look.refit_cell_rect_px(0).get_center())
 	await _settle(48)
 	await _shot("35_refit_after_unfit")
 
@@ -131,13 +128,13 @@ func _run() -> void:
 func _print_board(slot: int) -> void:
 	var loadout := _game.run.army.loadout
 	var cells := []
-	for p in Rules.part_count():
-		cells.append(loadout.fitted_species(slot, p))
+	for p in Rules.ITEM_CELLS:
+		cells.append(loadout.fitted_item(slot, p))
 	var stats := []
-	for col in Rules.PART_COL_TOTAL:
+	for col in Rules.ITEM_COL_TOTAL:
 		stats.append("%.2f" % loadout.stat_of(slot, col))
 	print("capture_refit: slot %d cells = %s, stats = %s, pile = %d" % [
-		slot, str(cells), str(stats), loadout.held_part.size()])
+		slot, str(cells), str(stats), loadout.held.size()])
 
 
 func _settle(n: int) -> void:

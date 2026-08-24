@@ -72,11 +72,25 @@ var zoom := 1.0
 ## fight, is 티켓 07, which is open precisely because turning IS the hand moving.
 var cam_yaw_deg := Look.CAM_YAW_DEG
 
+## How far the camera is tilted, in degrees off the horizon. **A runtime float like `cam_yaw_deg` and
+## like `zoom`** — `Look.CAM_PITCH_DEG` is only where it starts. ⚠ Every conversion between the screen
+## and the ground reads THIS and not the constant, or a tilted view answers a press with the tile the
+## opening tilt would have had.
+var cam_pitch_deg := Look.CAM_PITCH_DEG
+
 
 # --- pictures ---------------------------------------------------------------------------------------
 
 var _tex_wolf_r: Texture2D = load(Look.BEAST_WOLF_R)
 var _tex_wolf_l: Texture2D = load(Look.BEAST_WOLF_L)
+var _tex_crow_r: Texture2D = load(Look.BEAST_CROW_R)
+var _tex_crow_l: Texture2D = load(Look.BEAST_CROW_L)
+var _tex_spear_r: Texture2D = load(Look.HUMAN_SPEAR_R)
+var _tex_spear_l: Texture2D = load(Look.HUMAN_SPEAR_L)
+var _tex_bow_r: Texture2D = load(Look.HUMAN_BOW_R)
+var _tex_bow_l: Texture2D = load(Look.HUMAN_BOW_L)
+var _tex_shield_r: Texture2D = load(Look.HUMAN_SHIELD_R)
+var _tex_shield_l: Texture2D = load(Look.HUMAN_SHIELD_L)
 ## The rounded square, baked once. Every enemy wears it, tinted — the same two marks `_paint_body`
 ## drew by hand (the outline and the centre dot) with nothing filled between them.
 var _tex_body: Texture2D = null
@@ -162,6 +176,11 @@ func _build_world() -> void:
 	_ring.material_override = ring_mat
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_world.add_child(_ring)
+
+	# The two effect layers. Built here and never rebuilt, because what changes every frame is the
+	# geometry inside them and not the nodes.
+	_decal = _fx_layer()
+	_air = _fx_layer()
 
 	_sun = DirectionalLight3D.new()
 	_sun.rotation_degrees = Vector3(Look.SUN_PITCH_DEG, Look.SUN_YAW_DEG, 0.0)
@@ -258,9 +277,12 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	_wait_clock = 0.0
 	# The survey: an island opens zoomed all the way out, so the WHOLE island is on screen before
 	# anything is planned — `plan-then-watch` 6.3, on the user's 「조금 더 카메라를 뒤로 빼야 될」.
-	zoom = Look.ZOOM_MIN
+	# ⚠ **Not `ZOOM_MIN` any more.** See `Look.survey_zoom_of`: the opening view is a question about the
+	# grid that just loaded, and a constant could only ever answer it for one map size.
+	zoom = Look.survey_zoom_of(_map_tiles().x, _map_tiles().y)
 	cam_px = Vector2.ZERO
 	cam_yaw_deg = Look.CAM_YAW_DEG
+	cam_pitch_deg = Look.CAM_PITCH_DEG
 	_clamp_cam()
 	# ⚠ **Forces a terrain rebuild even when the same island re-opens.** `_built_for` is a fingerprint
 	# of the rows, and re-entering island 0 from the map would otherwise keep the mesh from the last
@@ -288,7 +310,13 @@ func _process(delta: float) -> void:
 	if _ring != null:
 		_ring.visible = _band_on()
 	_place_camera()
+	# ⚠ **The buffers are opened BEFORE the bodies and flushed after everything.** The hit halo and the
+	# ghosts are painted from inside `_paint_bodies` — they are per-body facts and that is the one loop
+	# that has a body's centre, radius and clock in hand at the same time.
+	_fx_begin()
 	_paint_bodies()
+	_paint_fx()
+	_fx_flush()
 
 
 # --- the camera: still one transform, still in one place -------------------------------------------
@@ -301,7 +329,7 @@ func _process(delta: float) -> void:
 ## site instead, the two would drift and the drift would look like a mis-aimed click.
 func _visible_ground_px() -> Vector2:
 	var v := Look.viewport_size_px() / zoom
-	return Vector2(v.x, v.y / cos(deg_to_rad(Look.CAM_PITCH_DEG)))
+	return Vector2(v.x, v.y / cos(deg_to_rad(cam_pitch_deg)))
 
 
 ## The two ground axes the screen's own axes lie along, at this yaw. `_right` is screen-right,
@@ -405,12 +433,22 @@ func turn_by(deg: float) -> void:
 	_clamp_cam()
 
 
+## Tilts the camera and keeps the ground point at the MIDDLE of the screen where it was — the same
+## promise `turn_by` makes, and for the same reason: the vertical span changes with the pitch, so a
+## tilt that only wrote the angle would slide the island under the cursor.
+func tilt_by(deg: float) -> void:
+	var held := _ground_centre_px()
+	cam_pitch_deg = clampf(cam_pitch_deg + deg, Look.CAM_PITCH_MIN_DEG, Look.CAM_PITCH_MAX_DEG)
+	cam_px = held - _visible_ground_px() * 0.5
+	_clamp_cam()
+
+
 ## Points the real camera at what `cam_px` / `zoom` / `cam_yaw_deg` describe. **The one place any of
 ## those three reach the engine**, the same rule `_compose_position` used to keep for `position`.
 func _place_camera() -> void:
 	if _cam == null:
 		return
-	var pitch := deg_to_rad(Look.CAM_PITCH_DEG)
+	var pitch := deg_to_rad(cam_pitch_deg)
 	var yaw := deg_to_rad(cam_yaw_deg)
 	# The shake was an offset on a canvas; it is an offset on the ground now, in the screen's own two
 	# axes so a shake still reads as the screen jerking rather than as the island sliding.
@@ -539,7 +577,34 @@ func _hash_at(x: int, y: int) -> float:
 
 ## How high a tile stands: its legend height, plus the swell if it is land. **Two octaves**, the second
 ## finer and smaller, so a hillside has a shoulder instead of being one clean dome.
+## ⚠⚠ **MEMOISED, AND IT IS NOT AN OPTIMISATION — IT IS THE FIX FOR A GAME THAT LAGGED.**
+## `_ground_h` is four `_corner_h`, each up to four `_tile_h`, each a `_swell_at` over several octaves
+## of noise with four hash lookups apiece — **about sixty hash calls for one tile's height.** That was
+## fine while only the terrain build called it, once per island. The 3D effect layer calls it **per
+## vertex, every frame**: fourteen intent lines cut into 20 px pieces is a few thousand vertices, so a
+## quiet frame was doing on the order of a hundred thousand hash calls in GDScript. The user found it
+## the first time they played it (2026-08-24: 「이게 왜 렉이 걸리지? 이딴게임하는데?」).
+## ⚠ Both caches are cleared by `_rebuild_terrain`, which is the one place the letters can change.
+var _tile_h_cache: Dictionary = {}
+var _ground_h_cache: Dictionary = {}
+
+
+## A single int key for a tile, negative coordinates included — the water margin walks off the grid on
+## every side, so a plain `y * w + x` would collide there.
+static func _tile_key(tx: int, ty: int) -> int:
+	return (ty + 4096) * 65536 + (tx + 4096)
+
+
 func _tile_h(tx: int, ty: int) -> float:
+	var key := _tile_key(tx, ty)
+	if _tile_h_cache.has(key):
+		return float(_tile_h_cache[key])
+	var value := _tile_h_uncached(tx, ty)
+	_tile_h_cache[key] = value
+	return value
+
+
+func _tile_h_uncached(tx: int, ty: int) -> float:
 	var ch := _char_at(tx, ty)
 	var base := Look.terrain_height_of_char(ch)
 	var kind := _kind_of(ch)
@@ -586,8 +651,13 @@ func _corner_h(tx: int, ty: int, dx: int, dy: int) -> float:
 ## What a body standing on this tile stands ON: the middle of its four corners, so a wolf on a hillside
 ## is at the height of the ground under it rather than at the height the legend would give a box.
 func _ground_h(tx: int, ty: int) -> float:
-	return (_corner_h(tx, ty, 0, 0) + _corner_h(tx, ty, 1, 0)
+	var key := _tile_key(tx, ty)
+	if _ground_h_cache.has(key):
+		return float(_ground_h_cache[key])
+	var value := (_corner_h(tx, ty, 0, 0) + _corner_h(tx, ty, 1, 0)
 		+ _corner_h(tx, ty, 0, 1) + _corner_h(tx, ty, 1, 1)) * 0.25
+	_ground_h_cache[key] = value
+	return value
 
 
 ## Whether any of the four tiles orthogonally next to this one is open water. **Four and not eight**:
@@ -638,6 +708,10 @@ func _tile_colour(tx: int, ty: int) -> Color:
 ## ⚠ **Built once per island and once more at the commit**, never per frame — it is tens of thousands
 ## of triangles, and the only thing about it that changes mid-island is the band.
 func _rebuild_terrain() -> void:
+	# The letters are about to be read again, so every cached height is about to be about a different
+	# island. **Cleared here and nowhere else** — this is the only function the grid can change under.
+	_tile_h_cache.clear()
+	_ground_h_cache.clear()
 	if _terrain == null:
 		return
 	var tiles := _map_tiles()
@@ -809,6 +883,12 @@ func _hull_box() -> MeshInstance3D:
 	var m := MeshInstance3D.new()
 	m.mesh = BoxMesh.new()
 	var mat := StandardMaterial3D.new()
+	# ⚠⚠ **Unshaded, like the summon ring and like the bodies standing on it.** `COL_BOAT` is a light
+	# tan measured on a FLAT BOARD, and under this world's sun plus fill plus ambient a 0.85 albedo
+	# lands well past 1.0 — every hull rendered as **a solid white rectangle**, which is what the first
+	# capture with big bodies made impossible to miss. A boat is the plan's own mark on the water and
+	# has to read the same at every sun angle, which is the ring's argument one object over.
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.material_override = mat
 	_world.add_child(m)
 	_hulls.append(m)
@@ -818,7 +898,7 @@ func _hull_box() -> MeshInstance3D:
 
 ## Puts one billboard at a body's feet. `centre_px` is the same world px the flat board drew at, so
 ## every offset that already went through `_body_offset_of` follows across for free.
-func _put_body(centre_px: Vector2, radius: float, colour: Color, squash: Vector2, tex: Texture2D) -> void:
+func _put_body(centre_px: Vector2, radius: float, colour: Color, squash: Vector2, tex: Texture2D) -> float:
 	var s := _sprite()
 	var pic: Texture2D = tex if tex != null else _tex_body
 	s.texture = pic
@@ -831,16 +911,20 @@ func _put_body(centre_px: Vector2, radius: float, colour: Color, squash: Vector2
 	var tile := Vector2i(int(floor(centre_px.x / Look.TILE_PX)), int(floor(centre_px.y / Look.TILE_PX)))
 	var foot := _ground_h(tile.x, tile.y) + Look.BODY_LIFT_PX / Look.TILE_PX
 	s.position = Vector3(centre_px.x / Look.TILE_PX, foot + tall * 0.5, centre_px.y / Look.TILE_PX)
+	# ⚠⚠ **The TOP is returned and it is not `radius * 2`.** A wolf is 55 x 40 and a caveman 36 x 40:
+	# sized by WIDTH off the same radius, the man stands half again as tall as the animal, which is
+	# right and is exactly why nothing that hangs above a body may compute its own height from the
+	# radius. The bar did, and it landed across the caveman's face the first time he was on screen.
+	return foot + tall
 
 
 ## The two halves of an HP bar, standing above the body rather than below it — a bar UNDER a
 ## billboard is inside the ground the billboard is standing on.
-func _put_hp(centre_px: Vector2, radius: float, type_id: int, frac: float) -> void:
+func _put_hp(centre_px: Vector2, top_y: float, type_id: int, frac: float) -> void:
 	var rects := _hp_rects(centre_px, type_id, frac)
 	var back: Rect2 = rects[0]
 	var fill: Rect2 = rects[1]
-	var tile := Vector2i(int(floor(centre_px.x / Look.TILE_PX)), int(floor(centre_px.y / Look.TILE_PX)))
-	var y := _ground_h(tile.x, tile.y) + (radius * 2.0 + Look.HP_BAR_GAP_PX * 2.0) / Look.TILE_PX
+	var y := top_y + Look.HP_BAR_GAP_PX * 2.0 / Look.TILE_PX
 	for k in 2:
 		var r: Rect2 = back if k == 0 else fill
 		if r.size.x <= 0.0:
@@ -874,10 +958,11 @@ func _paint_bodies() -> void:
 		var ekey := "e%d" % e
 		var ecentre := Look.tile_point_px(battle.enemy_pos[e]) + _body_offset_of(ekey)
 		var eradius := Look.body_radius_of(et)
-		_put_body(ecentre, eradius,
+		var etop := _put_body(ecentre, eradius,
 			Look.body_colour_of(true).lerp(Look.COL_FLASH, _flash_of(ekey)),
-			_gait_squash(ekey), null)
-		_put_hp(ecentre, eradius, et, battle.enemy_hp[e] / Rules.hp_of(et))
+			_gait_squash(ekey), _beast_tex(et, true, _facing_of(e, true).x >= 0.0))
+		_put_hp(ecentre, etop, et, battle.enemy_hp[e] / Rules.hp_of(et))
+		_put_halo(ekey, ecentre, eradius, etop)
 
 	for raw_id in battle.ashore_ids():
 		var i := int(raw_id)
@@ -902,7 +987,51 @@ func _paint_bodies() -> void:
 		for k in soldiers.size():
 			_put_soldier(int(soldiers[k]), Vector2(boat["pos"]))
 
+	_paint_ghosts()
 	_hide_unused()
+
+
+## Item 3 of the twelve, and WITHOUT IT THAT ITEM DOES NOT EXIST — `COL_HIT_HALO`'s own comment says
+## so: a body here is a 2 px outline and a 3 px dot, so tinting it repaints two pixels of border and
+## nothing else. The halo is the area the hit is actually seen on.
+func _put_halo(key: String, centre_px: Vector2, radius: float, top_y: float) -> void:
+	var h := _halo_of(key)
+	if h <= 0.0:
+		return
+	var col := Look.COL_HIT_HALO
+	col.a *= h
+	# Hung at the body's MIDDLE, which is half its own height and not one radius: see `_put_body`.
+	var mid := Vector3(centre_px.x / Look.TILE_PX,
+		(_ground_y_px(centre_px) + top_y) * 0.5, centre_px.y / Look.TILE_PX)
+	_a_disc(mid, radius * Look.HIT_HALO_MUL, col)
+
+
+## The picture a body wears. **One place**, so the ghost, the soldier on a deck and the body ashore
+## cannot end up wearing three different things.
+##
+## ⚠⚠ **The lion keeps the drawn square on purpose.** The enemy became human and the two mobs became
+## cavemen, but the last boss is still a beast and **where it goes is an OPEN question** — handing it
+## the caveman's picture here would answer that by accident, in a place nobody would look for it.
+func _beast_tex(type_id: int, is_enemy: bool, facing_right: bool) -> Texture2D:
+	if is_enemy:
+		# ⚠⚠ **The weapon is read off what the unit DOES, not off a name.** `CROW` reaches 3 tiles and
+		# `BISON` does not, so the one that shoots carries the bow and the one that walks in carries
+		# the shield — a picture that disagreed with the reach would be the loudest lie on the island.
+		if type_id == Rules.CROW:
+			return _tex_bow_r if facing_right else _tex_bow_l
+		if type_id == Rules.BISON:
+			return _tex_shield_r if facing_right else _tex_shield_l
+		# ⚠ **The lion keeps the drawn square on purpose.** The last boss is still a beast in a game
+		# whose enemies became human, and where it goes is an OPEN question — handing it a picture
+		# here would answer that by accident, in a place nobody would look for it.
+		if type_id == Rules.LION:
+			return null
+		return _tex_spear_r if facing_right else _tex_spear_l
+	# The player's own two slots: one walks in and one shoots. **The crow is the ranged one because it
+	# is the ranged one** — same rule as the enemy's bow, one table over.
+	if type_id == Rules.CELL_RANGED:
+		return _tex_crow_r if facing_right else _tex_crow_l
+	return _tex_wolf_r if facing_right else _tex_wolf_l
 
 
 ## One soldier at a tile position, ashore or on a deck. Both call sites want the same body, the same
@@ -914,11 +1043,12 @@ func _put_soldier(i: int, at: Vector2) -> void:
 	var scentre := Look.tile_point_px(at) + _body_offset_of(skey)
 	# The wolf faces what it is walking at. `_facing_of` returns RIGHT when there is no target, so an
 	# idle body faces right rather than flipping on a zero vector.
-	var stex: Texture2D = _tex_wolf_r if _facing_of(i, false).x >= 0.0 else _tex_wolf_l
-	_put_body(scentre, sradius,
+	var stex := _beast_tex(st, false, _facing_of(i, false).x >= 0.0)
+	var stop := _put_body(scentre, sradius,
 		Look.body_colour_of(false).lerp(Look.COL_FLASH, _flash_of(skey)),
 		_gait_squash(skey), stex)
-	_put_hp(scentre, sradius, st, army.hp[i] / army.max_hp_of(i))
+	_put_hp(scentre, stop, st, army.hp[i] / army.max_hp_of(i))
+	_put_halo(skey, scentre, sradius, stop)
 
 
 func _put_hull(anchor: Vector2, colour: Color) -> void:
@@ -1405,3 +1535,390 @@ func _spark_points(centre: Vector2, facing: Vector2, progress: float) -> PackedV
 		out.append(centre + dir * inner)
 		out.append(centre + dir * outer)
 	return out
+
+
+# --- the effects, as geometry ------------------------------------------------------------------------
+## ⚠⚠ **This section is what the 3D move deleted, put back.** `_fx_step` and `_drain_events` above never
+## stopped running — effects were born, aged and died every frame with nothing painting them, and the
+## field went quiet without one check going red. **That is the exact shape "Nothing pretends to work"
+## names**, and it stood for a day.
+##
+## **Two buffers and two draw calls, not a node per effect.** Everything here is rebuilt every frame
+## into one `ImmediateMesh` per layer, because an effect that lives 0.12 s cannot afford a node.
+##
+## **The two layers exist because the board became a landscape, and the split IS the answer to
+## ticket 09's second open question** (bottom marks on ground that is no longer flat):
+##
+##   `_decal`  — marks that BELONG TO THE GROUND: the aim ring, the route, the landing ring, the area
+##               ring, the refusal mark, the intent lines. Cut into `FX_GROUND_STEP_PX` pieces and each
+##               piece laid at the height of the ground under it, so a ring across a ramp climbs it.
+##   `_air`    — marks that belong to a BODY: the tracer, the shards, the death burst, the hit halo.
+##               Built in the CAMERA'S OWN PLANE, so they read exactly as they did on the flat board
+##               and turning the island does not shear them.
+##
+## ⚠ **Neither layer writes depth** (`DEPTH_DRAW_DISABLED`) but both are TESTED against it: a cliff in
+## front still hides what is behind it, and two overlapping effects do not punch holes in each other.
+
+var _decal: MeshInstance3D = null
+var _air: MeshInstance3D = null
+var _g_v := PackedVector3Array()
+var _g_c := PackedColorArray()
+var _a_v := PackedVector3Array()
+var _a_c := PackedColorArray()
+
+
+## One unshaded, vertex-coloured, alpha-blended surface. Both layers are the same material; what
+## differs is only which buffer the geometry lands in and how it is built.
+func _fx_layer() -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	m.mesh = ImmediateMesh.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	m.material_override = mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_world.add_child(m)
+	return m
+
+
+func _fx_begin() -> void:
+	_g_v.clear()
+	_g_c.clear()
+	_a_v.clear()
+	_a_c.clear()
+
+
+## ⚠ **An `ImmediateMesh` surface with zero vertices is an ERROR, not an empty picture.** A quiet frame
+## — no plan, no fighting — is the common case at the start of an island, so both layers are guarded.
+func _fx_flush() -> void:
+	_fx_commit(_decal, _g_v, _g_c)
+	_fx_commit(_air, _a_v, _a_c)
+
+
+func _fx_commit(node: MeshInstance3D, verts: PackedVector3Array, cols: PackedColorArray) -> void:
+	if node == null:
+		return
+	var im: ImmediateMesh = node.mesh
+	im.clear_surfaces()
+	if verts.is_empty():
+		return
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for k in verts.size():
+		im.surface_set_color(cols[k])
+		im.surface_add_vertex(verts[k])
+	im.surface_end()
+
+
+# --- the ground layer ---------------------------------------------------------------------------------
+
+## The height of the ground under a point given in world px. **The one place a ground mark asks where
+## the ground is**, so a ring and a route cannot disagree about the hill they are both crossing.
+func _ground_y_px(p: Vector2) -> float:
+	var tx := int(floor(p.x / Look.TILE_PX))
+	var ty := int(floor(p.y / Look.TILE_PX))
+	return _ground_h(tx, ty) + Look.FX_GROUND_LIFT_TILES
+
+
+func _g_tri(a: Vector2, b: Vector2, c: Vector2, col: Color) -> void:
+	for p in [a, b, c]:
+		_g_v.append(Vector3(p.x / Look.TILE_PX, _ground_y_px(p), p.y / Look.TILE_PX))
+		_g_c.append(col)
+
+
+func _g_quad(a: Vector2, b: Vector2, c: Vector2, d: Vector2, col: Color) -> void:
+	_g_tri(a, b, c, col)
+	_g_tri(a, c, d, col)
+
+
+## One straight mark on the ground, cut into pieces small enough to follow it. **The cutting is the
+## whole of why this is not a single quad**: a 6-tile route drawn as one quad crosses a ramp as a
+## chord and half of it is underground.
+func _g_seg(a: Vector2, b: Vector2, width: float, col: Color, step: float = 0.0) -> void:
+	var span := b - a
+	var len_px := span.length()
+	if len_px <= Rules.EPS:
+		return
+	var n := Vector2(-span.y, span.x) / len_px * (width * 0.5)
+	var cut := step if step > 0.0 else Look.FX_GROUND_STEP_PX
+	var steps := maxi(1, int(ceil(len_px / cut)))
+	for k in steps:
+		var p0 := a.lerp(b, float(k) / float(steps))
+		var p1 := a.lerp(b, float(k + 1) / float(steps))
+		_g_quad(p0 + n, p1 + n, p1 - n, p0 - n, col)
+
+
+func _g_line(points: PackedVector2Array, width: float, col: Color) -> void:
+	for k in range(1, points.size()):
+		_g_seg(points[k - 1], points[k], width, col)
+
+
+## A ring lying on the ground. Every segment is its own quad and every corner samples its own height,
+## so the ring climbs whatever it is drawn across.
+func _g_ring(centre: Vector2, radius: float, width: float, col: Color) -> void:
+	if radius <= Rules.EPS:
+		return
+	var half := width * 0.5
+	var segs := maxi(8, int(ceil(TAU * radius / Look.FX_GROUND_STEP_PX)))
+	for k in segs:
+		var a0 := TAU * float(k) / float(segs)
+		var a1 := TAU * float(k + 1) / float(segs)
+		var d0 := Vector2(cos(a0), sin(a0))
+		var d1 := Vector2(cos(a1), sin(a1))
+		_g_quad(centre + d0 * (radius - half), centre + d1 * (radius - half),
+			centre + d1 * (radius + half), centre + d0 * (radius + half), col)
+
+
+func _g_disc(centre: Vector2, radius: float, col: Color) -> void:
+	if radius <= Rules.EPS:
+		return
+	var segs := maxi(8, int(ceil(TAU * radius / Look.FX_GROUND_STEP_PX)))
+	for k in segs:
+		var a0 := TAU * float(k) / float(segs)
+		var a1 := TAU * float(k + 1) / float(segs)
+		_g_tri(centre, centre + Vector2(cos(a0), sin(a0)) * radius,
+			centre + Vector2(cos(a1), sin(a1)) * radius, col)
+
+
+# --- the air layer ------------------------------------------------------------------------------------
+
+## A world point given as an offset in SCREEN px from an anchor. `-off.y` because the flat board's y
+## ran down the screen and every constant in `look.gd` was measured in that frame.
+func _air_at(anchor: Vector3, off: Vector2) -> Vector3:
+	var b := _cam.transform.basis
+	return anchor + b.x * (off.x / Look.TILE_PX) + b.y * (-off.y / Look.TILE_PX)
+
+
+func _a_quad(anchor: Vector3, a: Vector2, b: Vector2, c: Vector2, d: Vector2, col: Color) -> void:
+	for p in [a, b, c, a, c, d]:
+		_a_v.append(_air_at(anchor, p))
+		_a_c.append(col)
+
+
+func _a_seg(anchor: Vector3, a: Vector2, b: Vector2, width: float, col: Color) -> void:
+	var span := b - a
+	var len_px := span.length()
+	if len_px <= Rules.EPS:
+		return
+	var n := Vector2(-span.y, span.x) / len_px * (width * 0.5)
+	_a_quad(anchor, a + n, b + n, b - n, a - n, col)
+
+
+func _a_ring(anchor: Vector3, radius: float, width: float, col: Color) -> void:
+	if radius <= Rules.EPS:
+		return
+	var half := width * 0.5
+	var segs := Look.FX_RING_SEGMENTS
+	for k in segs:
+		var a0 := TAU * float(k) / float(segs)
+		var a1 := TAU * float(k + 1) / float(segs)
+		var d0 := Vector2(cos(a0), sin(a0))
+		var d1 := Vector2(cos(a1), sin(a1))
+		_a_quad(anchor, d0 * (radius - half), d1 * (radius - half),
+			d1 * (radius + half), d0 * (radius + half), col)
+
+
+func _a_disc(anchor: Vector3, radius: float, col: Color) -> void:
+	if radius <= Rules.EPS:
+		return
+	var segs := Look.FX_RING_SEGMENTS
+	for k in segs:
+		var a0 := TAU * float(k) / float(segs)
+		var a1 := TAU * float(k + 1) / float(segs)
+		_a_quad(anchor, Vector2.ZERO, Vector2(cos(a0), sin(a0)) * radius,
+			Vector2(cos(a1), sin(a1)) * radius, Vector2.ZERO, col)
+
+
+## Where a body's own effects hang: over the tile it stands on, a body-radius up. **Not the sprite's
+## centre** — the sprite is 2.4 radii wide and its middle drifts with the picture's aspect, and an
+## effect that moved when the artwork changed would be an effect measured against the wrong thing.
+func _body_anchor(centre_px: Vector2, radius: float) -> Vector3:
+	return Vector3(centre_px.x / Look.TILE_PX,
+		_ground_y_px(centre_px) + (Look.BODY_LIFT_PX + radius) / Look.TILE_PX,
+		centre_px.y / Look.TILE_PX)
+
+
+## How much of a body's hit flash is left, 0..1. `_flash_of` deliberately returns a CONSTANT strength
+## while the flash is live — it is a tint, and a tint that ramps reads as a fade rather than a hit —
+## but the halo is an area and has to go out, so it reads the clock itself.
+func _halo_of(key: String) -> float:
+	if not _body.has(key):
+		return 0.0
+	var b: Dictionary = _body[key]
+	var left := float(b["flash"])
+	if left <= 0.0 or left > Look.HIT_FLASH_SEC:
+		return 0.0
+	return left / Look.HIT_FLASH_SEC
+
+
+## A straight mark between two points that are BOTH in the world, thickened in the camera's plane.
+## The tracer needs this and the camera-plane `_a_seg` cannot serve it: a shooter on a cliff and a
+## target on the beach are 2.4 tiles apart in height, and a line built from screen offsets alone would
+## leave the muzzle it was fired from.
+func _a_seg3(a: Vector3, b: Vector3, width: float, col: Color) -> void:
+	var basis := _cam.transform.basis
+	var d := b - a
+	var du := d.dot(basis.x)
+	var dv := d.dot(basis.y)
+	var l := sqrt(du * du + dv * dv)
+	if l <= Rules.EPS:
+		return
+	var n := (basis.x * (-dv / l) + basis.y * (du / l)) * (width * 0.5 / Look.TILE_PX)
+	for v in [a + n, b + n, b - n, a + n, b - n, a - n]:
+		_a_v.append(v)
+		_a_c.append(col)
+
+
+## A world px point lifted to the height an effect with no body of its own hangs at. See
+## `FX_AIR_LIFT_PX`.
+func _fx_point3(p: Vector2) -> Vector3:
+	return Vector3(p.x / Look.TILE_PX,
+		_ground_y_px(p) + Look.FX_AIR_LIFT_PX / Look.TILE_PX,
+		p.y / Look.TILE_PX)
+
+
+# --- what actually gets painted -------------------------------------------------------------------
+
+## Everything that is not bolted to a body, in the order it has to stack: the plan under the fight,
+## the intent lines under the transients. **One entry point** so a caller cannot paint half of it.
+func _paint_fx() -> void:
+	if battle == null or army == null or battle.grid == null:
+		return
+	_paint_plan()
+	_paint_intent()
+	_paint_transients()
+
+
+## **The plan's own picture** — item 1 of the twelve and the one the ticket called the most painful to
+## have lost: without it a press puts a boat on the water with nothing having said where it would go.
+##
+## ⚠ **The ring's colour is the SIM'S answer and never the view's guess.** `can_summon_at` is the same
+## predicate `Battle.summon` refuses on, so a green ring cannot promise a drop the sim will reject —
+## the failure the deleted green wash was trusted not to have.
+func _paint_plan() -> void:
+	if battle.committed() or _summon_slot < 0 or _summon_aim < 0:
+		return
+	var grid := battle.grid
+	var ok := grid.can_summon_at(_summon_aim)
+	var at := Look.tile_point_px(grid.tile_point(_summon_aim))
+	if ok:
+		var route := grid.summon_route(_summon_aim)
+		var pts := PackedVector2Array()
+		for k in route.size():
+			pts.append(Look.tile_point_px(route[k]))
+		_g_line(pts, Look.ROUTE_WIDTH_PX, Look.COL_ROUTE)
+	_g_ring(at, Look.TARGET_RING_R_PX, Look.ROUTE_WIDTH_PX,
+		Look.COL_WIN if ok else Look.COL_LOSE)
+
+
+## The ghosts: **where the bodies this press would send are going to stand.** Painted as real bodies at
+## the LANDING and not at the press, because the press is water and the landing is where they end up.
+##
+## ⚠ These go through `_put_body` and therefore through the same sprite pool as everything alive, so
+## `_hide_unused` covers them and a ghost cannot outlive the aim that made it.
+func _paint_ghosts() -> void:
+	if battle.committed() or _summon_slot < 0 or _summon_aim < 0:
+		return
+	var grid := battle.grid
+	if not grid.can_summon_at(_summon_aim):
+		return
+	var landing := grid.summon_landing_of(_summon_aim)
+	if landing < 0:
+		return
+	var at := Look.tile_point_px(grid.tile_point(landing))
+	var ids: Array = battle.slot_reserve_ids(_summon_slot)
+	var n := ids.size()
+	if n <= 0:
+		return
+	# A fan and not a stack: `GHOST_FAN_PX` is the spacing that keeps two ghosts from reading as one
+	# blob, and the row is centred on the landing so the middle of the fan is the tile itself.
+	var span := float(n - 1) * Look.GHOST_FAN_PX.x
+	for k in n:
+		var i := int(ids[k])
+		var st := int(army.type_id[i])
+		var off := Vector2(float(k) * Look.GHOST_FAN_PX.x - span * 0.5,
+			float(k % 2) * Look.GHOST_FAN_PX.y)
+		var tex: Texture2D = _tex_wolf_r
+		_put_body(at + off, Look.body_radius_of(st), Look.ghost_tint(), Vector2.ONE, tex)
+
+
+## **Who is going for whom**, one thin line per pair. The alpha is 0.12 and up to
+## `TARGET_LINE_MAX_COUNT` of them cross the island at once: this effect is a TEXTURE over the fight,
+## not a set of readable lines, and raising either number turns it into a cage.
+func _paint_intent() -> void:
+	var left := Look.TARGET_LINE_MAX_COUNT
+	for i in battle.soldier_target.size():
+		if left <= 0:
+			break
+		var e := int(battle.soldier_target[i])
+		if e < 0 or not battle.is_hittable(i):
+			continue
+		if e >= battle.enemy_alive.size() or battle.enemy_alive[e] == 0:
+			continue
+		_g_seg(Look.tile_point_px(battle.soldier_pos[i]), Look.tile_point_px(battle.enemy_pos[e]),
+			Look.TARGET_LINE_WIDTH_PX, Look.COL_TARGET_LINE, Look.FX_INTENT_STEP_PX)
+		left -= 1
+	for e in battle.enemy_target.size():
+		if left <= 0:
+			break
+		if battle.enemy_alive[e] == 0:
+			continue
+		var i := int(battle.enemy_target[e])
+		if i < 0 or not battle.is_hittable(i):
+			continue
+		_g_seg(Look.tile_point_px(battle.enemy_pos[e]), Look.tile_point_px(battle.soldier_pos[i]),
+			Look.TARGET_LINE_WIDTH_PX, Look.COL_TARGET_LINE, Look.FX_INTENT_STEP_PX)
+		left -= 1
+
+
+## The six transient kinds `_drain_events` makes. **Nothing here decides WHEN anything happens** — the
+## sim froze the geometry on the frame the fact happened and this reads it back at whatever age it has
+## reached, which is why an island re-opening cannot show a stale explosion.
+func _paint_transients() -> void:
+	for raw_fx in _fx:
+		var fx: Dictionary = raw_fx
+		var age := float(fx["age"]) - float(fx["delay"])
+		if age < 0.0:
+			continue
+		var p := clampf(age / maxf(float(fx["life"]), Rules.EPS), 0.0, 1.0)
+		var fade := 1.0 - p
+		match int(fx["kind"]):
+			FxKind.SHOT:
+				# A STUB, not the whole line: drawing muzzle-to-target every frame is a laser, and a
+				# laser says "a beam is standing there" rather than "something crossed".
+				var p0 := _fx_point3(fx["from"])
+				var p1 := _fx_point3(fx["to"])
+				var full := p0.distance_to(p1)
+				var dir := (p1 - p0).normalized() if full > Rules.EPS else Vector3.RIGHT
+				var head := full * p
+				var tail := maxf(0.0, head - Look.SHOT_LEN_PX / Look.TILE_PX)
+				_a_seg3(p0 + dir * tail, p0 + dir * head, Look.SHOT_WIDTH_PX, Look.COL_SHOT)
+			FxKind.SPARK:
+				var anchor := _fx_point3(fx["at"])
+				var pts := _spark_points(Vector2.ZERO, fx["facing"], p)
+				var col := Look.COL_SPARK
+				col.a = fade
+				for k in range(0, pts.size() - 1, 2):
+					_a_seg(anchor, pts[k], pts[k + 1], Look.SPARK_WIDTH_PX, col)
+			FxKind.BURST:
+				var r := float(fx["radius"]) * lerpf(1.0, Look.BURST_GROWTH, p)
+				var col: Color = fx["colour"]
+				col.a = fade
+				_a_ring(_body_anchor(fx["at"], float(fx["radius"])), r, Look.BURST_WIDTH_PX, col)
+			FxKind.AREA:
+				var r := float(fx["radius"]) * lerpf(Look.AREA_RING_START_RATIO, 1.0, p)
+				var col := Look.COL_AREA_RING
+				col.a *= fade
+				_g_ring(fx["at"], r, Look.AREA_RING_WIDTH_PX, col)
+			FxKind.LAND:
+				# ⚠ **Fixed radius, unlike the two above.** `LAND_RING_R_PX` has no growth constant
+				# beside it, and inventing one would be a number nobody measured.
+				var col := Look.COL_LAND_RING
+				col.a *= fade
+				_g_ring(fx["at"], Look.LAND_RING_R_PX, Look.LAND_RING_WIDTH_PX, col)
+			FxKind.REFUSE:
+				var col := Look.COL_LOSE
+				col.a = fade
+				_g_ring(fx["at"], Look.REFUSE_MARK_R_PX, Look.REFUSE_MARK_WIDTH_PX, col)

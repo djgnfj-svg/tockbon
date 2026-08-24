@@ -14,7 +14,7 @@ extends Node2D
 ##
 ## ⚠ **The pile COMPACTS.** `Loadout.fit`/`unfit` may renumber every row after the one that changed, so
 ## this file never caches a held row's index across a frame boundary — it re-reads
-## `run.army.loadout.held_part` / `held_species` fresh every time it needs them.
+## `run.army.loadout.held` fresh every time it needs them.
 ##
 ## The press vocabulary is REUSED from `look.gd`'s "Pressable things" block — no new press constant is
 ## declared here, matching `title_view` and `map_view` and `reward_view` before it.
@@ -23,14 +23,16 @@ extends Node2D
 ## and reddens any function here it does not name.
 
 
-## Labels, indexed by `Rules.Part` / `Rules.Species`. `reward_view` carries the same two tables; a
-## third copy here would be the same fact written three times, so this file reads THOSE rather than
-## declaring its own.
-const PART_LABELS := RewardView.PART_LABELS
-const SPECIES_LABELS := RewardView.SPECIES_LABELS
+## Rarity words, read off `reward_view` rather than declared again — a table written twice diverges,
+## which is the same reason the part labels used to be read from there.
+## ⚠⚠ **The part and species labels are gone with the body diagram** (2026-08-24). A cell holds an ITEM
+## and cells have no names, so there is nothing left here to label but the item itself.
+const RARITY_LABELS := RewardView.RARITY_LABELS
 
-## The five dashboard rows, top to bottom, indexed by `Rules.PART_COL_*`.
-const STAT_LABELS := ["체력", "공격력", "공격주기", "사거리", "이동속도"]
+## The five dashboard rows, top to bottom, indexed by `Rules.ITEM_COL_*`.
+## ⚠ Read off `rules.gd` rather than typed: the card's own effect line spells the same five words, and
+## two copies of 「공격주기」 is two places to rename it.
+const STAT_LABELS := Rules.ITEM_COL_LABELS
 
 var run: Run = null
 
@@ -60,7 +62,7 @@ var _hover_done_age := 0.0
 var _press_done := false
 var _press_done_age := 0.0
 
-## The dashboard's own chase, one triple per `Rules.PART_COL_*` — `map_view`'s `_force_from` /
+## The dashboard's own chase, one triple per `Rules.ITEM_COL_*` — `map_view`'s `_force_from` /
 ## `_force_to` / `_force_age` shape, reused per column instead of once for the pool. ⚠⚠ **Without
 ## this, fitting a part and not fitting it look identical on screen** — the number would simply BE the
 ## new value, one frame apart from the old one, and nothing on the picture would say a change had just
@@ -140,7 +142,7 @@ func open_slot(s: int) -> void:
 	if _open_slot >= 0 and _open_slot != _stat_tracked_slot and run != null:
 		_stat_tracked_slot = _open_slot
 		var loadout := run.army.loadout
-		for col in Rules.PART_COL_TOTAL:
+		for col in Rules.ITEM_COL_TOTAL:
 			var v := loadout.stat_of(_open_slot, col)
 			_stat_from[col] = v
 			_stat_to[col] = v
@@ -179,13 +181,13 @@ func slot_at(point: Vector2) -> int:
 
 
 func cell_rect_of(part: int) -> Rect2:
-	if part < 0 or part >= Rules.part_count():
+	if part < 0 or part >= Rules.ITEM_CELLS:
 		return Rect2()
 	return Look.refit_cell_rect_px(part)
 
 
 func cell_hit_rect_of(part: int) -> Rect2:
-	if part < 0 or part >= Rules.part_count():
+	if part < 0 or part >= Rules.ITEM_CELLS:
 		return Rect2()
 	return Look.refit_cell_hit_rect_px(part)
 
@@ -193,7 +195,7 @@ func cell_hit_rect_of(part: int) -> Rect2:
 func cell_at(point: Vector2) -> int:
 	if not is_board_open():
 		return -1
-	for p in Rules.part_count():
+	for p in Rules.ITEM_CELLS:
 		if cell_hit_rect_of(p).has_point(point):
 			return p
 	return -1
@@ -212,11 +214,11 @@ func held_hit_rect_of(row_index: int) -> Rect2:
 
 
 ## The held row under `point`, or -1. Only among rows the pile actually holds right now — a stray hit
-## past the end of `held_part` cannot match, because that index names no card.
+## past the end of `held` cannot match, because that index names no card.
 func held_at(point: Vector2) -> int:
 	if not is_board_open() or run == null:
 		return -1
-	var n := run.army.loadout.held_part.size()
+	var n := run.army.loadout.held.size()
 	for row in mini(n, Look.refit_held_capacity()):
 		if held_hit_rect_of(row).has_point(point):
 			return row
@@ -333,7 +335,7 @@ func _fx_step(delta: float) -> void:
 	# own start).
 	if _open_slot >= 0 and run != null:
 		var loadout := run.army.loadout
-		for col in Rules.PART_COL_TOTAL:
+		for col in Rules.ITEM_COL_TOTAL:
 			_stat_age[col] = minf(_stat_age[col] + delta, Look.MAP_HEAL_SEC)
 			var live := loadout.stat_of(_open_slot, col)
 			if not is_equal_approx(live, _stat_to[col]):
@@ -429,9 +431,9 @@ func _cell_fill(p: int, filled: bool) -> Color:
 
 func _draw_board(face: Font) -> void:
 	var loadout := run.army.loadout
-	for p in Rules.part_count():
-		var species := loadout.fitted_species(_open_slot, p)
-		var filled := species >= 0
+	for p in Rules.ITEM_CELLS:
+		var item := loadout.fitted_item(_open_slot, p)
+		var filled := item >= 0
 		var hover_k := _hover_of(_hover_cell_age, _hover_cell, p)
 		var fill := Look.hover_lit(_cell_fill(p, filled), hover_k)
 		var edge_w := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX, hover_k)
@@ -439,32 +441,35 @@ func _draw_board(face: Font) -> void:
 		var scale := lerpf(1.0, Look.PRESS_DOWN_SCALE, _press_of(_press_cell_age) if _press_cell == p else 0.0)
 		var inner := Rect2(box.position + box.size * (1.0 - scale) * 0.5, box.size * scale)
 		_paint_cell_box(inner, fill, Look.COL_HUD_TEXT, edge_w)
-		_paint_cell_part(face, box.position + Look.CARD_PART_OFFSET_PX * 0.7,
-			str(PART_LABELS[p]), Look.REFIT_CELL_PART_FONT_SIZE_PX, Look.COL_HUD_TEXT)
-		var species_text := str(SPECIES_LABELS[species]) if filled else "-"
-		var species_col: Color = Look.COL_SPECIES[species] if filled else Look.dimmed(Look.COL_HUD_TEXT)
-		_paint_cell_species(face, box.position + Look.CARD_SPECIES_OFFSET_PX * 0.7,
-			species_text, Look.REFIT_CELL_SPECIES_FONT_SIZE_PX, species_col)
+		# ⚠ **The cell has no name of its own to draw any more.** It draws what is IN it — the item's
+		# name on the first line, what that item does on the second — and an empty cell draws a dash.
+		_paint_cell_name(face, box.position + Look.CARD_PART_OFFSET_PX * 0.7,
+			Rules.item_name_of(item) if filled else "-",
+			Look.REFIT_CELL_PART_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+		var effect_text := Rules.item_effect_text(item) if filled else ""
+		var effect_col: Color = Look.COL_RARITY[Rules.item_rarity_of(item)] if filled 			else Look.dimmed(Look.COL_HUD_TEXT)
+		_paint_cell_effect(face, box.position + Look.CARD_SPECIES_OFFSET_PX * 0.7,
+			effect_text, Look.REFIT_CELL_SPECIES_FONT_SIZE_PX, effect_col)
 
-	var held_n := mini(loadout.held_part.size(), Look.refit_held_capacity())
+	var held_n := mini(loadout.held.size(), Look.refit_held_capacity())
 	for row in held_n:
-		var part := int(loadout.held_part[row])
-		var species := int(loadout.held_species[row])
+		var held_item := int(loadout.held[row])
 		var rect := held_rect_of(row)
 		var hover_k := _hover_of(_hover_held_age, _hover_held, row)
 		var edge_w := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX, hover_k)
 		_paint_held_row(rect, Look.hover_lit(Look.COL_BUTTON, hover_k), Look.COL_HUD_TEXT, edge_w)
-		_paint_held_part(face, rect.position + Vector2(8.0, 22.0), str(PART_LABELS[part]),
+		_paint_held_name(face, rect.position + Vector2(8.0, 22.0), Rules.item_name_of(held_item),
 			Look.REFIT_CELL_SPECIES_FONT_SIZE_PX, Look.COL_HUD_TEXT)
-		_paint_held_species(face, rect.position + Vector2(8.0, 42.0), str(SPECIES_LABELS[species]),
-			Look.REFIT_CELL_SPECIES_FONT_SIZE_PX, Look.COL_SPECIES[species])
+		_paint_held_effect(face, rect.position + Vector2(8.0, 42.0),
+			Rules.item_effect_text(held_item), Look.REFIT_CELL_SPECIES_FONT_SIZE_PX,
+			Look.COL_RARITY[Rules.item_rarity_of(held_item)])
 
 	# ⚠⚠ The dashboard's TARGET is `loadout.stat_of` and nothing else — the same call `Army`'s five
 	# lookups make — but the drawn NUMBER is `_stat_shown(col)`, the chase toward that target. The two
 	# agree the instant a slot opens and the instant a climb finishes; between those two moments the
 	# picture is honestly mid-flight, and that gap is item 6's whole point — without it a fitted part
 	# and an unfitted one look identical on screen for exactly one frame less than forever.
-	for col in Rules.PART_COL_TOTAL:
+	for col in Rules.ITEM_COL_TOTAL:
 		var value := _stat_shown(col)
 		_paint_stat_label(face, Look.refit_stat_origin_px(col), str(STAT_LABELS[col]),
 			Look.REFIT_STAT_LABEL_FONT_SIZE_PX, Look.COL_HUD_TEXT)
@@ -496,11 +501,11 @@ func _paint_cell_box(rect: Rect2, bg: Color, edge: Color, edge_width: float) -> 
 	draw_rect(rect, edge, false, edge_width)
 
 
-func _paint_cell_part(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+func _paint_cell_name(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
 
 
-func _paint_cell_species(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+func _paint_cell_effect(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
 
 
@@ -509,11 +514,11 @@ func _paint_held_row(rect: Rect2, bg: Color, edge: Color, edge_width: float) -> 
 	draw_rect(rect, edge, false, edge_width)
 
 
-func _paint_held_part(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+func _paint_held_name(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
 
 
-func _paint_held_species(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+func _paint_held_effect(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
 
 

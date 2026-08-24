@@ -31,11 +31,11 @@ func run(t) -> void:
 func _the_board_survives_the_body(t) -> void:
 	var a := Army.new()
 	var id := a.recruit(0)
-	a.loadout.take_card(Rules.Part.CHEST, Rules.Species.MAMMAL)
+	a.loadout.take_card(1)
 	a.loadout.fit(0, 0)
-	var fitted_hp := a.loadout.stat_of(0, Rules.PART_COL_HP)
+	var fitted_hp := a.loadout.stat_of(0, Rules.ITEM_COL_HP)
 	a.kill(id)
-	t.eq(a.loadout.stat_of(0, Rules.PART_COL_HP), fitted_hp,
+	t.eq(a.loadout.stat_of(0, Rules.ITEM_COL_HP), fitted_hp,
 		"슬롯 0의 병사가 죽어도 판의 숫자는 그대로다")
 	var next_id := a.recruit(0)
 	t.eq(a.max_hp_of(next_id), fitted_hp,
@@ -71,17 +71,28 @@ func _the_roster_table(t) -> void:
 
 ## ⚠⚠ 「같은 종류 병사 둘이 서로 다를 수 있다」 — THE row of the round. Mutation:
 ## `damage_of` -> `Rules.damage_of(int(type_id[i]))`.
+## ⚠⚠ **Fixture item ids, named once.** They used to be `Rules.Part.ARM` and friends, which said what
+## they did in their own name. An item id says nothing, so the three the fight-side rows lean on are
+## pinned here with what each is for — and each is ASSERTED to move its column below, so a table edit
+## that moves an item elsewhere reddens rather than quietly measuring nothing.
+const ITEM_DAMAGE := 1     # 돌 목걸이 — 공격력 +1
+const ITEM_PERIOD := 2     # 나무 발톱 — 공격주기 -0.10
+const ITEM_SPEED := 3      # 마른 가죽 — 이동속도 +0.6
+const ITEM_HP := 0         # 가죽끈 — 체력 +3
+const ITEM_RANGE := 10     # 뺏은 창끝 — 사거리 +1
+
+
 func _two_soldiers_of_one_type_can_differ(t) -> void:
 	var plain := Army.new()
 	var plain_id := plain.recruit(0)
 	var armed := Army.new()
 	var armed_id := armed.recruit(0)
-	armed.loadout.take_card(Rules.Part.ARM, Rules.Species.MAMMAL)
+	armed.loadout.take_card(ITEM_DAMAGE)
 	armed.loadout.fit(0, 0)
 	t.eq(int(plain.type_id[plain_id]), int(armed.type_id[armed_id]),
 		"두 병사는 같은 종류(근접)다 (자가 점검)")
 	t.ok(armed.damage_of(armed_id) > plain.damage_of(plain_id),
-		"팔을 낀 쪽의 공격력이 더 높다 — 같은 종류 병사 둘이 서로 달라졌다 (%.1f > %.1f)"
+		"장비를 낀 쪽의 공격력이 더 높다 — 같은 종류 병사 둘이 서로 달라졌다 (%.1f > %.1f)"
 			% [armed.damage_of(armed_id), plain.damage_of(plain_id)])
 
 
@@ -90,11 +101,11 @@ func _the_beak_still_adds_to_range(t) -> void:
 	var a := Army.new()
 	var id := a.recruit(0)
 	var base := a.range_of(id)
-	a.loadout.take_card(Rules.Part.HEAD, Rules.Species.BIRD)
+	a.loadout.take_card(ITEM_RANGE)
 	a.loadout.fit(0, 0)
 	var with_head := a.range_of(id)
-	t.eq(with_head, base + Rules.part_bonus(Rules.Part.HEAD, Rules.PART_COL_RANGE),
-		"머리 부위가 사거리에 얹혔다")
+	t.eq(with_head, base + Rules.item_bonus(ITEM_RANGE, Rules.ITEM_COL_RANGE),
+		"사거리 장비가 사거리에 얹혔다")
 	a.has_beak[id] = 1
 	t.eq(a.range_of(id), with_head + Rules.BEAK_RANGE, "부리도 그 위에 그대로 얹힌다")
 
@@ -110,31 +121,31 @@ func _the_beak_still_adds_to_range(t) -> void:
 func _battle_reads_the_army(t) -> void:
 	# -- army.damage_of(i): a fitted 팔 moves the FIRST blow the sub-step actually threw ------------
 	var plain := _adjacent_bison_battle(-1)
-	var armed := _adjacent_bison_battle(Rules.Part.ARM)
+	var armed := _adjacent_bison_battle(ITEM_DAMAGE)
 	var plain_hit := Rules.hp_of(Rules.BISON) - plain.enemy_hp[0]
 	var armed_hit := Rules.hp_of(Rules.BISON) - armed.enemy_hp[0]
 	t.eq(plain_hit, Rules.damage_of(Rules.CELL_MELEE), "빈 판 병사는 종류값 그대로 때린다 (자가 점검)")
 	t.ok(armed_hit > plain_hit,
-		"팔을 낀 병사가 첫 타격에서 더 큰 피해를 준다 (%.1f > %.1f) — battle.step 이 army.damage_of 를 읽는다"
+		"장비를 낀 병사가 첫 타격에서 더 큰 피해를 준다 (%.1f > %.1f) — battle.step 이 army.damage_of 를 읽는다"
 			% [armed_hit, plain_hit])
-	t.eq(armed_hit, plain_hit + Rules.part_bonus(Rules.Part.ARM, Rules.PART_COL_DAMAGE),
-		"차이가 정확히 팔 부위의 공격력 보너스다")
+	t.eq(armed_hit, plain_hit + Rules.item_bonus(ITEM_DAMAGE, Rules.ITEM_COL_DAMAGE),
+		"차이가 정확히 그 장비의 공격력 보너스다")
 	# The enemy's own hp/type never moved — a fitted board must not leak onto the other side.
 	t.eq(plain.enemy_type[0], armed.enemy_type[0], "적 종류는 양쪽 다 같다 (자가 점검)")
 
 	# -- army.period_of(i): a fitted 손 moves the cooldown `step` actually WROTE after that blow ----
-	var handed := _adjacent_bison_battle(Rules.Part.HAND)
+	var handed := _adjacent_bison_battle(ITEM_PERIOD)
 	t.ok(is_equal_approx(plain._soldier_cd[0], Rules.period_of(Rules.CELL_MELEE)),
 		"빈 판 병사의 쿨타임은 종류값 그대로 다시 찬다 (자가 점검)")
 	t.ok(handed._soldier_cd[0] < plain._soldier_cd[0],
-		"손을 낀 병사는 더 짧은 쿨타임으로 다시 찬다 (%.3f < %.3f) — battle.step 이 army.period_of 를 읽는다"
+		"주기 장비를 낀 병사는 더 짧은 쿨타임으로 다시 찬다 (%.3f < %.3f) — battle.step 이 army.period_of 를 읽는다"
 			% [handed._soldier_cd[0], plain._soldier_cd[0]])
 	t.ok(is_equal_approx(handed._soldier_cd[0], handed.army.period_of(0)),
 		"그 쿨타임이 정확히 army.period_of(0) 이다")
 
 	# -- army.speed_of(i): a fitted 다리 moves how far a soldier OUT of reach walks in one sub-step --
 	var plain_walk := _walk_probe(-1)
-	var leg_walk := _walk_probe(Rules.Part.LEG)
+	var leg_walk := _walk_probe(5)
 	var plain_moved := _WALK_START.distance_to(plain_walk.soldier_pos[0])
 	var leg_moved := _WALK_START.distance_to(leg_walk.soldier_pos[0])
 	t.ok(plain_moved <= Rules.speed_of(Rules.CELL_MELEE) * Rules.SIM_SUBSTEP_SEC + Rules.EPS,
@@ -156,14 +167,14 @@ func _battle_reads_the_army(t) -> void:
 ## (driven here with the lion, the only type that carries one).
 func _enemies_stay_type_keyed(t) -> void:
 	var plain := _adjacent_bison_battle(-1)
-	var armed := _adjacent_bison_battle(Rules.Part.ARM)
+	var armed := _adjacent_bison_battle(3)
 	t.eq(plain.army.hp[0], Rules.hp_of(Rules.CELL_MELEE) - Rules.damage_of(Rules.BISON),
 		"안 낀 병사는 들소의 종류값 그대로 맞는다 (자가 점검 — 즉시 타격 갈래)")
 	t.eq(armed.army.hp[0], plain.army.hp[0],
 		"팔을 낀 판이어도 들소가 주는 피해는 그대로다 — 적은 플레이어 판을 안 읽는다 (즉시 타격 갈래)")
 
 	var plain_lion := _adjacent_lion_battle(-1)
-	var armed_lion := _adjacent_lion_battle(Rules.Part.ARM)
+	var armed_lion := _adjacent_lion_battle(3)
 	t.ok(plain_lion.army.hp[0] < Rules.hp_of(Rules.CELL_MELEE), "예고가 끝나자 사자가 실제로 때렸다 (자가 점검)")
 	t.eq(plain_lion.army.hp[0], Rules.hp_of(Rules.CELL_MELEE) - Rules.damage_of(Rules.LION),
 		"안 낀 병사는 사자의 종류값 그대로 맞는다 (자가 점검 — 예고 갈래)")
@@ -248,7 +259,7 @@ func _adjacent_battle(part: int, enemy_type: int) -> Battle:
 	var a := Army.new()
 	a.recruit(0)
 	if part >= 0:
-		a.loadout.take_card(part, Rules.Species.MAMMAL)
+		a.loadout.take_card(part)
 		a.loadout.fit(0, 0)
 	var grid := Grid.new()
 	grid.load_rows(_open_arena())
@@ -267,7 +278,7 @@ func _walk_probe(part: int) -> Battle:
 	var a := Army.new()
 	a.recruit(0)
 	if part >= 0:
-		a.loadout.take_card(part, Rules.Species.MAMMAL)
+		a.loadout.take_card(part)
 		a.loadout.fit(0, 0)
 	var grid := Grid.new()
 	grid.load_rows(_open_arena())
@@ -283,37 +294,65 @@ func _walk_probe(part: int) -> Battle:
 # -- the table --------------------------------------------------------------------------------------
 
 func _the_table(t) -> void:
-	# 「부위는 여섯이고 종은 셋이다」 — both halves. Mutation: delete the LEG row.
-	t.eq(Rules.part_count(), 6, "부위는 여섯이다")
-	t.eq(Rules.species_count(), 3, "종은 셋이다")
+	# 「칸은 여섯이고 장비는 그보다 많다」 — both halves. **The second half is the point of the rewrite**:
+	# with named cells the table could only ever be as long as the body had parts.
+	t.eq(Rules.ITEM_CELLS, 6, "한 판의 칸은 여섯이다")
+	t.ok(Rules.item_count() > Rules.ITEM_CELLS,
+		"장비 종류가 칸 수보다 많다 (%d > %d) — 판을 채우는 방법이 하나가 아니다" %
+			[Rules.item_count(), Rules.ITEM_CELLS])
 
-	# 「부위 표의 모든 줄이 다섯 칸이다」. Mutation: drop the last column of the ARM row.
+	# 「장비 표의 모든 줄이 이름 + 다섯 숫자 + 등급이다」. Mutation: drop the last column of a row.
 	var short_rows := 0
-	for p in Rules.part_count():
-		if Rules.PART_STATS[p].size() != Rules.PART_COL_TOTAL:
+	for p in Rules.item_count():
+		if Rules.ITEMS[p].size() != Rules.ITEM_COL_TOTAL + 2:
 			short_rows += 1
-	t.eq(short_rows, 0, "부위 표의 모든 줄이 다섯 칸이다")
+	t.eq(short_rows, 0, "장비 표의 모든 줄이 이름 하나 · 숫자 다섯 · 등급 하나다")
+
+	# 「이름 없는 장비가 없고, 이름이 겹치는 장비도 없다」 — the card says the name and nothing else
+	# identifies it on screen.
+	var names := {}
+	var nameless := 0
+	for p in Rules.item_count():
+		var nm := Rules.item_name_of(p)
+		if nm == "":
+			nameless += 1
+		names[nm] = true
+	t.eq(nameless, 0, "이름 없는 장비가 없다")
+	t.eq(names.size(), Rules.item_count(), "이름이 겹치는 장비도 없다")
+
+	# 「등급 넷이 전부 실제로 쓰인다」 — a rarity with no items is a draw that can never land.
+	var empty_rarity := 0
+	for r in Rules.RARITY_WEIGHT.size():
+		if Rules.items_of_rarity(r).size() == 0:
+			empty_rarity += 1
+	t.eq(empty_rarity, 0, "등급 넷 전부에 장비가 하나 이상 있다")
 
 	# ⚠ 「어떤 부위도 아무 숫자도 안 움직이지 않는다」 — a part that exists and does nothing would still
 	# pass every other row here, which is why this one measures every row independently rather than the
 	# table as a whole. Mutation: zero out the ARM row.
 	var dead_parts := 0
-	for p in Rules.part_count():
+	for p in Rules.item_count():
 		var moves_something := false
-		for c in Rules.PART_COL_TOTAL:
-			if not is_equal_approx(Rules.part_bonus(p, c), 0.0):
+		for c in Rules.ITEM_COL_TOTAL:
+			if not is_equal_approx(Rules.item_bonus(p, c), 0.0):
 				moves_something = true
 		if not moves_something:
 			dead_parts += 1
-	t.eq(dead_parts, 0, "여섯 부위 전부 적어도 하나의 숫자를 움직인다 — 있으나 마나 한 부위가 없다")
+	t.eq(dead_parts, 0, "장비 전부가 적어도 하나의 숫자를 움직인다 — 있으나 마나 한 장비가 없다")
 
 	# ⚠ 「여섯을 다 끼워도 공격주기가 0.2초 밑으로 안 간다」 — the bound is a LITERAL, not the table's own
 	# sum, because a bound read out of the table it checks would move with the mutation it exists to
 	# catch. Mutation: HAND's period bonus -0.15 -> -1.50.
+	# ⚠ **The WORST board, not an arbitrary one**: six copies of the biggest period drop in the table.
+	# A board of one mild item would clear 0.2 s while the mutation this row exists for was live.
+	var worst := 0
+	for p in Rules.item_count():
+		if Rules.item_bonus(p, Rules.ITEM_COL_PERIOD) < Rules.item_bonus(worst, Rules.ITEM_COL_PERIOD):
+			worst = p
 	var full := Loadout.new()
-	for p in Rules.part_count():
-		full.board[0 * Rules.part_count() + p] = Rules.Species.MAMMAL
-	var full_period := full.stat_of(0, Rules.PART_COL_PERIOD)
+	for p in Rules.ITEM_CELLS:
+		full.board[0 * Rules.ITEM_CELLS + p] = worst
+	var full_period := full.stat_of(0, Rules.ITEM_COL_PERIOD)
 	t.ok(full_period >= 0.2,
 		"여섯을 다 끼운 판의 공격주기가 0.2초 밑으로 안 간다 (%.2f)" % full_period)
 
@@ -324,61 +363,69 @@ func _the_empty_board(t) -> void:
 	# 「빈 판의 숫자는 UNITS 그대로다」 — slot 0 is CELL_MELEE: 14 · 2 · 1.0 · 0 · 4, as literals.
 	# Mutation: make `stat_of` return `bonus(...)` alone (drops the base entirely).
 	var lo := Loadout.new()
-	t.eq(lo.stat_of(0, Rules.PART_COL_HP), 14.0, "빈 판의 체력이 UNITS 그대로 14다")
-	t.eq(lo.stat_of(0, Rules.PART_COL_DAMAGE), 2.0, "빈 판의 공격력이 2다")
-	t.eq(lo.stat_of(0, Rules.PART_COL_PERIOD), 1.0, "빈 판의 공격주기가 1.0이다")
-	t.eq(lo.stat_of(0, Rules.PART_COL_RANGE), 0.0, "빈 판의 사거리가 0이다")
-	t.eq(lo.stat_of(0, Rules.PART_COL_SPEED), 4.0, "빈 판의 이동속도가 4다")
-	t.eq(lo.fitted_species(0, Rules.Part.HEAD), -1, "빈 칸은 -1로 읽힌다")
-	t.eq(lo.fitted_species(-1, 0), -1, "슬롯 범위 밖도 -1이다")
-	t.eq(lo.fitted_species(0, 999), -1, "부위 범위 밖도 -1이다")
+	t.eq(lo.stat_of(0, Rules.ITEM_COL_HP), 14.0, "빈 판의 체력이 UNITS 그대로 14다")
+	t.eq(lo.stat_of(0, Rules.ITEM_COL_DAMAGE), 2.0, "빈 판의 공격력이 2다")
+	t.eq(lo.stat_of(0, Rules.ITEM_COL_PERIOD), 1.0, "빈 판의 공격주기가 1.0이다")
+	t.eq(lo.stat_of(0, Rules.ITEM_COL_RANGE), 0.0, "빈 판의 사거리가 0이다")
+	t.eq(lo.stat_of(0, Rules.ITEM_COL_SPEED), 4.0, "빈 판의 이동속도가 4다")
+	t.eq(lo.fitted_item(0, 0), -1, "빈 칸은 -1로 읽힌다")
+	t.eq(lo.fitted_item(-1, 0), -1, "슬롯 범위 밖도 -1이다")
+	t.eq(lo.fitted_item(0, 999), -1, "부위 범위 밖도 -1이다")
 
 
 # -- fit / unfit ---------------------------------------------------------------------------------------
 
 func _fitting_and_unfitting(t) -> void:
-	# 「가슴을 끼우면 체력이 4 오르고 나머지 넷은 안 움직인다」. Mutation: make `bonus` return 0.0.
+	# 「장비를 끼우면 그 장비가 적힌 칸만 움직이고 나머지는 그대로다」. Mutation: make `bonus` return 0.0.
+	# ⚠ **Every column is compared against the TABLE's own number for that item**, not against a literal.
+	# The literal version said 「체력이 정확히 4 올랐다」 about a chest, and it could only ever be true of
+	# one row of one table.
 	var lo := Loadout.new()
-	lo.take_card(Rules.Part.CHEST, Rules.Species.BIRD)
-	var before_hp := lo.stat_of(0, Rules.PART_COL_HP)
-	t.ok(lo.fit(0, 0), "가슴 카드를 0번 슬롯에 끼운다")
-	t.eq(lo.stat_of(0, Rules.PART_COL_HP), before_hp + 4.0, "체력이 정확히 4 올랐다")
-	t.eq(lo.stat_of(0, Rules.PART_COL_DAMAGE), 2.0, "공격력은 안 움직였다")
-	t.eq(lo.stat_of(0, Rules.PART_COL_PERIOD), 1.0, "공격주기는 안 움직였다")
-	t.eq(lo.stat_of(0, Rules.PART_COL_RANGE), 0.0, "사거리는 안 움직였다")
-	t.eq(lo.stat_of(0, Rules.PART_COL_SPEED), 4.0, "이동속도는 안 움직였다")
-	t.eq(lo.fitted_species(0, Rules.Part.CHEST), Rules.Species.BIRD, "가슴 칸에 종이 적혔다")
+	var before: Array[float] = []
+	for col in Rules.ITEM_COL_TOTAL:
+		before.append(lo.stat_of(0, col))
+	lo.take_card(ITEM_HP)
+	t.ok(lo.fit(0, 0), "장비 카드를 0번 슬롯에 끼운다")
+	var moved_bad := 0
+	for col in Rules.ITEM_COL_TOTAL:
+		if not is_equal_approx(lo.stat_of(0, col), before[col] + Rules.item_bonus(ITEM_HP, col)):
+			moved_bad += 1
+	t.eq(moved_bad, 0, "다섯 칸이 전부 표가 말한 만큼만 움직였다")
+	t.ok(not is_equal_approx(Rules.item_bonus(ITEM_HP, Rules.ITEM_COL_HP), 0.0),
+		"그 장비가 실제로 체력을 움직인다 (자가 점검 — 0이면 위 줄은 아무것도 안 재고 있다)")
+	# ⚠ **Cell 0, not cell 1.** Cells have no names, so a fit lands in the first EMPTY one and nothing
+	# about the card decides where.
+	t.eq(lo.fitted_item(0, 0), ITEM_HP, "첫 빈 칸에 그 장비가 들어갔다")
 
 	# ⚠ 「부위를 빼면 숫자가 정확히 원래대로 돌아온다」. Mutation: make `unfit` clear the cell without
 	# appending to the pile (the number would still return, so the check is written against the PILE).
-	var empty_val := Loadout.new().stat_of(0, Rules.PART_COL_HP)
-	var pile_before := lo.held_part.size()
-	t.ok(lo.unfit(0, Rules.Part.CHEST), "가슴을 뺀다")
-	t.eq(lo.stat_of(0, Rules.PART_COL_HP), empty_val, "체력이 정확히 빈 판 값으로 돌아왔다")
-	t.eq(lo.held_part.size(), pile_before + 1, "그리고 더미가 하나 늘었다 — 뺀 부위가 사라지지 않았다")
-	t.eq(int(lo.held_species[lo.held_species.size() - 1]), Rules.Species.BIRD,
-		"더미에 돌아온 카드의 종이 그대로다")
+	var empty_val := Loadout.new().stat_of(0, Rules.ITEM_COL_HP)
+	var pile_before := lo.held.size()
+	t.ok(lo.unfit(0, 0), "장비를 뺀다")
+	t.eq(lo.stat_of(0, Rules.ITEM_COL_HP), empty_val, "체력이 정확히 빈 판 값으로 돌아왔다")
+	t.eq(lo.held.size(), pile_before + 1, "그리고 더미가 하나 늘었다 — 뺀 장비가 사라지지 않았다")
+	t.eq(int(lo.held[lo.held.size() - 1]), ITEM_HP, "더미에 돌아온 카드가 그 장비 그대로다")
 
 	# 빈 칸을 빼려 하면 false다.
-	t.ok(not lo.unfit(0, Rules.Part.LEG), "빈 다리 칸을 빼려 하면 거절한다")
+	t.ok(not lo.unfit(0, 5), "빈 칸을 빼려 하면 거절한다")
 
 
 func _one_cell_one_part(t) -> void:
-	# 「한 칸에는 한 부위뿐 — 가슴을 두 번 끼우면 앞엣것이 더미로 돌아온다」. Mutation: push the occupant
-	# AFTER removing the new card (renumbers the pile under the index being removed).
+	# ⚠⚠ **INVERTED BY THE REWRITE.** This used to be 「a second chest pushes the first one back to the
+	# pile」 — with named cells a fit always had a target and a swap was the only sensible answer. With
+	# unnamed cells **a full board REFUSES**: a swap would have to pick a victim, and a victim picked
+	# inside a fit is a choice the player never made. Mutation: make `fit` overwrite cell 0 when full.
 	var lo := Loadout.new()
-	lo.take_card(Rules.Part.CHEST, Rules.Species.MAMMAL)
-	lo.take_card(Rules.Part.CHEST, Rules.Species.FISH)
-	t.ok(lo.fit(0, 0), "첫 가슴 카드를 끼운다")
-	var pile_before := lo.held_part.size()
-	t.ok(lo.fit(0, 0), "같은 칸에 두 번째 가슴 카드를 끼운다")
-	t.eq(lo.held_part.size(), pile_before, "더미 크기는 그대로다 — 하나 빠지고 하나 돌아왔다")
-	var found_old := false
-	for i in lo.held_species.size():
-		if int(lo.held_part[i]) == Rules.Part.CHEST and int(lo.held_species[i]) == Rules.Species.MAMMAL:
-			found_old = true
-	t.ok(found_old, "앞에 끼웠던 종이 더미에 돌아와 있다")
-	t.eq(lo.fitted_species(0, Rules.Part.CHEST), Rules.Species.FISH, "칸에는 나중 것만 남는다")
+	for _i in Rules.ITEM_CELLS + 1:
+		lo.take_card(ITEM_HP)
+	for cell in Rules.ITEM_CELLS:
+		t.ok(lo.fit(0, 0), "%d번 칸까지 채운다" % cell)
+	t.eq(lo.first_empty(0), -1, "판이 꽉 찼다 (자가 점검)")
+	var pile_full := lo.held.size()
+	var board_full := lo.board.duplicate()
+	t.ok(not lo.fit(0, 0), "꽉 찬 판에는 더 못 끼운다")
+	t.eq(lo.held.size(), pile_full, "거절당한 카드는 더미에 그대로 남는다")
+	t.eq(lo.board, board_full, "그리고 어느 칸도 안 바뀌었다 — 아무도 안 밀려났다")
 
 
 func _no_cell_argument_on_fit(t) -> void:

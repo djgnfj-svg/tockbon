@@ -154,14 +154,17 @@ func finish_island(won: bool) -> void:
 	_queue_reward(map.at())
 
 
-## `Rules.CARDS_PER_WIN` independent draws of `(part, species)`, flat. `cards_taken` is cleared with it,
+## `Rules.CARDS_PER_WIN` independent item draws, one int each. `cards_taken` is cleared with it,
 ## so a stale mark from a previous win can never survive into the next one.
 func _draw_cards() -> void:
 	cards = PackedInt32Array()
-	cards.resize(Rules.CARDS_PER_WIN * 2)
+	cards.resize(Rules.CARDS_PER_WIN)
 	for k in Rules.CARDS_PER_WIN:
-		cards[2 * k] = _rng.randi_range(0, Rules.part_count() - 1)
-		cards[2 * k + 1] = _rng.randi_range(0, Rules.species_count() - 1)
+		# **Rarity first, item second.** Rolling straight over the item list would make legendaries
+		# rarer every time a common one was added — the drop table would move when the CONTENT moved.
+		var rarity := Rules.rarity_at_roll(_rng.randi_range(0, Rules.rarity_weight_total() - 1))
+		var pool := Rules.items_of_rarity(rarity)
+		cards[k] = int(pool[_rng.randi_range(0, pool.size() - 1)]) if pool.size() > 0 else 0
 	cards_taken = PackedByteArray()
 	cards_taken.resize(Rules.CARDS_PER_WIN)
 
@@ -237,7 +240,7 @@ func take_card(k: int) -> bool:
 	if taken >= Rules.CARD_PICKS:
 		return false
 	cards_taken[k] = 1
-	army.loadout.take_card(int(cards[2 * k]), int(cards[2 * k + 1]))
+	army.loadout.take_card(int(cards[k]))
 	if taken + 1 >= Rules.CARD_PICKS:
 		_state = State.REFIT
 	return true

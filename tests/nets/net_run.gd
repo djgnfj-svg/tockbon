@@ -116,10 +116,16 @@ func _starting_state(t) -> void:
 	# Identity, not equality of contents. A `begin_island` that handed the fight a fresh roster of the
 	# same size would satisfy every count above and this is the only line that sees it.
 	t.ok(b.army == r.army, "전투는 런의 로스터 객체 그 자체를 쓴다 — 복사본이 아니다")
-	t.eq(b.grid.w, 48, "격자 폭은 48")
-	t.eq(b.grid.h, 32, "격자 높이는 32")
-	t.eq(b.enemies_left(), Islands.spawns_of(0).size(), "첫 섬의 적 수는 스폰 표와 같다")
-	t.eq(b.time_limit, Islands.time_limit_of(0), "제한 시간은 islands.gd 가 준 값이다")
+	# ⚠ **Read off the node, not off island 0.** `MAP_NODES` gave every node its own grid on
+	# 2026-08-24; asserting 48 x 32 here was asserting which map node 0 happens to open, which is a
+	# different claim from the one this block is making (that `begin_island` opens the node's island).
+	var isle := r.island_index
+	t.eq(isle, Rules.map_island_of(0), "첫 노드가 여는 섬은 노드 표가 정한 섬이다")
+	var isle_rows: Array = Islands.rows_of(isle)
+	t.eq(b.grid.w, str(isle_rows[0]).length(), "격자 폭은 그 섬의 폭이다")
+	t.eq(b.grid.h, isle_rows.size(), "격자 높이는 그 섬의 높이다")
+	t.eq(b.enemies_left(), Islands.spawns_of(isle).size(), "첫 섬의 적 수는 스폰 표와 같다")
+	t.eq(b.time_limit, Islands.time_limit_of(isle), "제한 시간은 islands.gd 가 준 값이다")
 	t.eq(b.harbour_count(), 3, "첫 섬의 항구는 셋이다")
 
 
@@ -405,7 +411,7 @@ func _wipe_loses(t) -> void:
 	t.eq(b.outcome(), Battle.Outcome.RUNNING, "전투는 굴러가는 상태로 시작한다")
 	# The smallest plan there is, then the start button: without a commit `step` returns before
 	# `_phase_clock` and the wipe would never be latched at all.
-	t.ok(b.send(0, _isle1_landing()) >= 0 and b.commit(), "한 명을 보내고 시작을 눌렀다 (자가 점검)")
+	t.ok(b.send(0, _summonable_on(b)) >= 0 and b.commit(), "한 명을 보내고 시작을 눌렀다 (자가 점검)")
 	for i in range(r.army.type_id.size()):
 		r.army.kill(i)
 	t.eq(r.army.living_count(), 0, "병사가 하나도 안 남았다")
@@ -444,8 +450,8 @@ func _timeout_loses(t) -> void:
 	var r := Run.new()
 	r.enter_node(0)
 	var b := r.begin_island()
-	t.ok(b.send(0, _isle1_landing()) >= 0 and b.commit(), "한 명만 보내고 시작을 눌렀다 (자가 점검)")
-	t.eq(b.time_limit, Islands.time_limit_of(0), "섬이 준 제한 시간은 60초다 (자가 점검 — 줄이기 전에 확인한다)")
+	t.ok(b.send(0, _summonable_on(b)) >= 0 and b.commit(), "한 명만 보내고 시작을 눌렀다 (자가 점검)")
+	t.eq(b.time_limit, Islands.time_limit_of(r.island_index), "섬이 준 제한 시간을 확인한다 (자가 점검 — 줄이기 전에)")
 	var limit := 5.0
 	b.time_limit = limit
 	# ⚠ **One sub-step per call, never `step(1.0)`.** `step` consumes whole `Rules.SIM_SUBSTEP_SEC`
@@ -457,19 +463,17 @@ func _timeout_loses(t) -> void:
 		b.step(Rules.SIM_SUBSTEP_SEC)
 		steps += 1
 
-	t.eq(b.outcome(), Battle.Outcome.LOST, "한 명으로는 시간이 다 되어 진다")
-	t.eq(b.lose_reason(), Battle.Lose.TIMEOUT, "패인은 시간 초과다")
-	t.eq(steps, 300, "제한 시간 %.0f초 = 300 서브스텝을 다 쓰고 나서야 졌다" % limit)
-	# Not `== 0.0`: repeated additions of `1/60` land a hair short of the limit, and `_phase_clock`
-	# latches on `elapsed + EPS >= limit` for exactly that reason. Both ends, so a clock that never ran
-	# is caught by the first line and a clock that overran is caught by the second.
-	t.ok(b.elapsed >= limit - Rules.EPS, "시계는 제한 시간까지 갔다 (%.6f초)" % b.elapsed)
-	t.ok(b.time_left() <= Rules.EPS, "남은 시간은 0에 붙는다 (%.12f초)" % b.time_left())
-	t.eq(b.enemies_left(), Islands.spawns_of(0).size(), "적은 하나도 안 죽었다 — 한 명으로는 못 죽인다")
-	t.ok(r.army.living_count() >= 9, "항구에 남은 아홉은 한 명도 안 죽었다 — 안 내린 병사는 못 맞는다")
-
-	r.finish_island(false)
-	t.eq(r.state(), Run.State.LOST, "시간 초과도 런을 끝낸다")
+	# ⚠⚠ **INVERTED, 2026-08-24** (the user: 「제한 시간 안에 클리어 조건은 일단 지워」). This block used
+	# to prove the clock could end an island. It is kept, pointing the other way, because 「the clock
+	# does not decide」 is a RULE — and a rule nothing measures is a rule that grows back by accident.
+	# The one soldier either dies to the eight defenders (which is the WIPE arm, not the clock) or the
+	# island is still running long past its own limit; both are read below, and neither is a timeout.
+	t.ok(b.outcome() != Battle.Outcome.LOST or b.lose_reason() != Battle.Lose.TIMEOUT,
+		"시간으로 지는 일은 없다")
+	t.ok(b.elapsed >= limit - Rules.EPS, "그런데 시계는 제한 시간을 넘겨 갔다 (%.6f초) — 안 돈 게 아니다" % b.elapsed)
+	t.ok(b.time_left() <= Rules.EPS, "남은 시간은 0에 붙어 있다 (%.12f초)" % b.time_left())
+	t.eq(b.enemies_left(), Islands.spawns_of(r.island_index).size(),
+		"적은 하나도 안 죽었다 — 한 명으로는 못 죽인다")
 
 
 # -- restart -------------------------------------------------------------------------------------------
@@ -524,8 +528,20 @@ func _restart_resets(t) -> void:
 	var b := r.begin_island()
 	t.ok(b != null, "재시작 뒤 첫 섬의 전투가 다시 열린다")
 	t.ok(b.army == r.army, "새 전투는 새 로스터를 쓴다")
-	t.eq(b.enemies_left(), Islands.spawns_of(0).size(), "적도 처음 수로 되살아나 있다")
+	t.eq(b.enemies_left(), Islands.spawns_of(r.island_index).size(), "적도 처음 수로 되살아나 있다")
 
 
-func _isle1_landing() -> int:
-	return ISLE1_LANDING_Y * ISLE1_W + ISLE1_LANDING_X
+## ⚠⚠ **Found on the grid in front of it, not typed.** It used to be island 1's own literal tile, and
+## the day the first node stopped opening island 1 (2026-08-24 — every node has its own grid now) that
+## literal named water on a map 24 wide. **A landing this suite hard-codes is a landing that describes
+## one map**, and the thing being checked here has never been about which map.
+## ⚠ **`send` takes a LANDING, which is LAND, and `summon` takes a water tile — two different verbs
+## and it cost a red round to notice.** So this asks the grid's own question: is there a harbour whose
+## boat can reach this beach?
+func _summonable_on(b: Battle) -> int:
+	var g := b.grid
+	for tile in g.w * g.h:
+		var home := g.home_harbour_for(tile)
+		if home >= 0 and g.can_land_at(home, tile):
+			return tile
+	return -1

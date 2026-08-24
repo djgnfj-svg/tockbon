@@ -19,11 +19,11 @@ extends Node2D
 ## and reddens any function here it does not name.
 
 
-## Labels, not sentences — same exception `title_view.SLOT_LABELS` carries. Indexed by `Rules.Part`.
-const PART_LABELS := ["머리", "가슴", "배", "팔", "손", "다리"]
-
-## Indexed by `Rules.Species`.
-const SPECIES_LABELS := ["포유류", "조류", "어류"]
+## Labels, not sentences — same exception `title_view.SLOT_LABELS` carries. Indexed by `Rules.Rarity`.
+## ⚠⚠ **`PART_LABELS` and `SPECIES_LABELS` are DELETED** (2026-08-24). They said 「머리 · 가슴 · 배 ·
+## 팔 · 손 · 다리」 and 「포유류 · 조류 · 어류」 — the cell game's body diagram, still on the card two
+## games later. A card carries an ITEM now: its name, what it does, and how rare it is.
+const RARITY_LABELS := ["일반", "희귀", "영웅", "전설"]
 
 var run: Run = null
 
@@ -209,16 +209,20 @@ func _draw() -> void:
 		var fill := _card_fill(k)
 		fill.a *= reveal
 		_paint_card(box, fill, edge_width)
-		var part := int(run.cards[2 * k])
-		var species := int(run.cards[2 * k + 1])
-		var part_col := Look.COL_HUD_TEXT
-		part_col.a *= reveal
-		_paint_card_part(face, box.position + Look.CARD_PART_OFFSET_PX,
-			str(PART_LABELS[part]), Look.CARD_PART_FONT_SIZE_PX, part_col)
-		var species_col: Color = Look.COL_SPECIES[species]
-		species_col.a *= reveal
-		_paint_card_species(face, box.position + Look.CARD_SPECIES_OFFSET_PX,
-			str(SPECIES_LABELS[species]), Look.CARD_SPECIES_FONT_SIZE_PX, species_col)
+		var item := int(run.cards[k])
+		var name_col := Look.COL_HUD_TEXT
+		name_col.a *= reveal
+		_paint_card_name(face, box.position + Look.CARD_PART_OFFSET_PX,
+			Rules.item_name_of(item), Look.CARD_PART_FONT_SIZE_PX, name_col)
+		# The rarity is carried by the COLOUR of the effect line and by one word in front of it — a
+		# tone alone cannot be told apart by a player who has seen two cards, and a word alone does not
+		# catch the eye across a spread.
+		var rarity := Rules.item_rarity_of(item)
+		var effect_col: Color = Look.COL_RARITY[rarity]
+		effect_col.a *= reveal
+		_paint_card_effect(face, box.position + Look.CARD_SPECIES_OFFSET_PX,
+			"%s  %s" % [str(RARITY_LABELS[rarity]), Rules.item_effect_text(item)],
+			Look.CARD_SPECIES_FONT_SIZE_PX, effect_col)
 		if int(run.cards_taken[k]) != 0:
 			var mark := Look.COL_HUD_TEXT
 			mark.a = Look.PRESS_ALPHA_ON * _taken_of(k)
@@ -244,11 +248,11 @@ func _paint_card(rect: Rect2, bg: Color, edge_width: float) -> void:
 	draw_rect(rect, Look.COL_HUD_TEXT, false, edge_width)
 
 
-func _paint_card_part(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+func _paint_card_name(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
 
 
-func _paint_card_species(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+func _paint_card_effect(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
 
 

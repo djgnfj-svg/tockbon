@@ -426,8 +426,12 @@ func _phase_order(t) -> void:
 	_ashore(late, 0, Vector2(12, 2))
 	late.begin_frame()
 	late.step(0.5)
-	t.eq(late.outcome(), Battle.Outcome.LOST, "적이 남은 채 시간이 끝나면 패배다")
-	t.eq(late.lose_reason(), Battle.Lose.TIMEOUT, "패배 사유는 시간 초과다")
+	# ⚠⚠ **INVERTED, 2026-08-24** (the user: 「제한 시간 안에 클리어 조건은 일단 지워」). This pair used
+	# to assert the timeout arm was live. It is gone, and the check is kept POINTING THE OTHER WAY
+	# rather than deleted: 「the clock does not decide」 is a rule, and a rule with nothing measuring it
+	# comes back by accident.
+	t.eq(late.outcome(), Battle.Outcome.RUNNING, "시간이 다 가도 지지 않는다 — 시계는 판정하지 않는다")
+	t.eq(late.lose_reason(), Battle.Lose.NONE, "그러므로 패배 사유도 없다")
 
 
 # -- the run ends when nobody is left in the fight -------------------------------------------------

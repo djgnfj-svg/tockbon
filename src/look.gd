@@ -91,6 +91,21 @@ const TERRAIN_H_CLIFF := 2.40
 ## afford to lose. `size` is the visible WIDTH in tiles (`keep_aspect` is set to KEEP_WIDTH), so the
 ## existing `zoom` ladder converts straight across — `VIEWPORT_W_PX / zoom / TILE_PX`.
 const CAM_PITCH_DEG := MAP_TILT_DEG
+
+## --- the tilt, as a HANDLE ---------------------------------------------------------------------
+## ⚠⚠ **`CAM_PITCH_DEG` is the value an island OPENS at, not the value it is stuck at** (2026-08-24,
+## the user: 「기울기도 조절 되었으면 좋겠네」). The yaw got its handle first — Q and E — and the same
+## argument carries: **the tilt does not change what happens, only what is visible**, so it is not the
+## hand moving during combat in the sense the base rule forbids (see 티켓 07's answer).
+##
+## Floor 20 — under it the ground is nearly edge-on, bodies stand in front of each other in a single
+## row and the island stops being a map. Ceiling 80 — past it the terrain's own height stops reading
+## at all, which is the flat board the 3D move was for.
+const CAM_PITCH_MIN_DEG := 20.0
+const CAM_PITCH_MAX_DEG := 80.0
+## Per key press. 5 is one twelfth of the usable range, so the whole span is twelve presses — the same
+## order as the yaw's 15-degree step over a half turn.
+const CAM_PITCH_STEP_DEG := 5.0
 const CAM_YAW_DEG := 0.0
 ## Far enough back that the tallest cliff never crosses the near plane at any yaw, and the ortho
 ## projection makes the distance itself cost nothing in size.
@@ -229,9 +244,39 @@ const GRID_H := 32
 ##     notches cross the whole range. ⚠ It is also the mitigation for an 18 px tile being a small drop
 ##     target: the camera is unrestricted before the commit, so one notch puts a tile at 20.7 px and
 ##     four at 31.5 px.
-const ZOOM_MIN := 0.45
+const ZOOM_MIN := 0.50
+## ⚠ **RAISED 0.45 -> 0.50, which is that paragraph's OWN measured ceiling and not past it** — above
+## 0.50 the vertical margin disappears and `_clamp_cam` has nothing to centre into. It buys 11%, and
+## 11% is all this lever has: **the survey has to show the whole island, so the island's size is what
+## bounds it.** The rest came out of the sprite ratio above.
 const ZOOM_MAX := 1.0
 const ZOOM_STEP := 1.15
+
+## --- the survey ---------------------------------------------------------------------------------
+## ⚠⚠ **An island no longer opens at `ZOOM_MIN`; it opens at whatever zoom SHOWS IT.** `ZOOM_MIN` was
+## measured against one map size — 48 x 32 — and it was therefore a promise about that map and nothing
+## else. The long map is 144 wide and has never fitted on screen at 0.50; a small map would open with
+## the island as a stamp in the middle of an ocean, which is the exact opposite of what shrinking it
+## was for. **The survey is a QUESTION about the grid in front of it**, so it is computed from that
+## grid, and `ZOOM_MIN` / `ZOOM_MAX` go back to being only what the wheel may reach.
+##
+## `SURVEY_MARGIN` is how much wider than the island the opening view is. Below 1.0 the island is cut
+## off; at exactly 1.0 it touches all four edges and `_clamp_cam` has a zero-length range to centre
+## into, which is the failure `ZOOM_MIN`'s own paragraph records at 0.5625. 1.15 leaves a shore.
+const SURVEY_MARGIN := 1.15
+
+
+## The zoom an island of this many tiles opens at. Both axes, because a wide map binds on width and a
+## tall one on height, and the vertical is divided by `cos(pitch)` for the same reason
+## `_visible_ground_px` divides it — the ground is leaning away.
+static func survey_zoom_of(w_tiles: int, h_tiles: int) -> float:
+	if w_tiles <= 0 or h_tiles <= 0:
+		return ZOOM_MIN
+	var wide := float(w_tiles) * TILE_PX * SURVEY_MARGIN
+	var tall := float(h_tiles) * TILE_PX * SURVEY_MARGIN
+	var by_w := VIEWPORT_W_PX / wide
+	var by_h := VIEWPORT_H_PX / (tall * cos(deg_to_rad(CAM_PITCH_DEG)))
+	return clampf(minf(by_w, by_h), ZOOM_MIN, ZOOM_MAX)
 
 ## ⚠⚠ **THE WORLD-WIDTH TABLE. Every stroke `field_view` draws is multiplied by `zoom` before it
 ## reaches the canvas, and an island OPENS at `ZOOM_MIN`** — `field_view.setup` sets it and the whole
@@ -493,6 +538,40 @@ const BODY_DOT_RADIUS_PX := 3.0
 ## none of them has art; the ghost is a PLAN and reads better as the abstract shape.
 const BEAST_WOLF_R := "res://assets/beast/wolf_r.png"
 const BEAST_WOLF_L := "res://assets/beast/wolf_l.png"
+## ⚠⚠ **All five species, drawn in the SOLDIERS' style** (2026-08-24). The wolf that stood here before
+## was a realistic pixel animal and the enemy became a faceless low-poly toy, so the two sides read as
+## two games; this replaces the wolf rather than adding beside it. **Two of the five are wired** — see
+## `field_view._beast_tex` — and the other three are here because the pictures are the cheap half and
+## the rules table is the expensive one.
+const BEAST_SQUIRREL_R := "res://assets/beast/squirrel_r.png"
+const BEAST_SQUIRREL_L := "res://assets/beast/squirrel_l.png"
+const BEAST_BULL_R := "res://assets/beast/bull_r.png"
+const BEAST_BULL_L := "res://assets/beast/bull_l.png"
+const BEAST_BEAR_R := "res://assets/beast/bear_r.png"
+const BEAST_BEAR_L := "res://assets/beast/bear_l.png"
+const BEAST_CROW_R := "res://assets/beast/crow_r.png"
+const BEAST_CROW_L := "res://assets/beast/crow_l.png"
+
+## The enemy. **Two pictures, the same shape as the wolf's two** — no walk, no throw, no death frame.
+##
+## ⚠⚠ **ONE BODY, REUSED** (2026-08-24, the user: 「병사 하나를 만들어서 걔네들이 창을 던지는 걸로 …
+## 창 던지기 뭐 활쏘기, 뭐 방패병 이런 애들인데, 그 캐릭터 하나를 일단 돌려 쓰는 걸로」). The spear is
+## the first weapon; the bow and the shield are the same body with the hands changed, which is what
+## makes a human enemy cheap where five beasts would be five drawings.
+##
+## ⚠ **It is a big head on a stubby body and NOT a realistic man** (the user: 「좀 너무 리얼해 몬스터
+## 들이 … 게임처럼 보여야 되지 않을까 대가리가 큰 형태」). The realistic caveman that stood here first
+## could not be read at all on the island — at the size a body is drawn, proportion is the only thing
+## that survives, and a big head is the cheapest proportion that survives it.
+const HUMAN_SPEAR_R := "res://assets/human/spear_r.png"
+const HUMAN_SPEAR_L := "res://assets/human/spear_l.png"
+## ⚠⚠ **The same body with the hands changed, and that is the whole argument for a human enemy.**
+## Bow and shield were generated from the spearman's OWN seed with one clause of the prompt swapped,
+## so the three stand together as one army rather than as three drawings that happen to be red.
+const HUMAN_BOW_R := "res://assets/human/bow_r.png"
+const HUMAN_BOW_L := "res://assets/human/bow_l.png"
+const HUMAN_SHIELD_R := "res://assets/human/shield_r.png"
+const HUMAN_SHIELD_L := "res://assets/human/shield_l.png"
 
 ## How far the body's own colour is mixed INTO the wolf. **0 is the raw grey animal and 1 is a solid
 ## cyan silhouette**; 0.45 keeps the fur readable while the side stays unmistakable at `ZOOM_MIN`.
@@ -508,7 +587,18 @@ const BEAST_TEAM_TINT := 0.45
 ## Sprite WIDTH as a multiple of the body radius. `0.35 * 40 = 14 px` radius at TILE_PX, so 2.4 puts
 ## the wolf at **34 px across** — just under one tile, which is what a body that walks a tile grid can
 ## be without the horde reading as a solid mat. The height follows the texture's own aspect.
-const BEAST_SPRITE_W_RATIO := 2.4
+const BEAST_SPRITE_W_RATIO := 6.0
+## ⚠⚠ **RAISED AGAIN, 4.0 -> 6.0** (2026-08-24, the user: 「멀리서 봤을때 너무작네」 — 4.0 was already
+## the answer to 「너무 작긴 하거든」 and it was still too small). 6.0 puts a body at **84 px, 2.1 tiles**,
+## which is 38 screen px at `ZOOM_MIN`. **Bodies now overlap whenever two stand side by side, and that
+## is accepted** — see the note under `ZOOM_MIN`. ⚠ **The real cause is not this number**: island 0 is
+## 48 x 32 = 1536 tiles carrying eighteen bodies, and no sprite size fixes a field that empty.
+## ⚠⚠ **RAISED 2.4 -> 4.0** (2026-08-24, the user: 「맵에 비해 캐릭터가 너무 작긴 하거든. 뭐하는
+## 건지 잘 안 보여」). 2.4 put the wolf at 34 px — under one tile, chosen so a horde would not read
+## as a solid mat. **The horde was never the problem the eye had**: at the survey zoom a 34 px body is
+## 15 px on screen, and at 15 px nothing is doing anything. 4.0 puts it at **56 px, 1.4 tiles**, which
+## does overlap when bodies stand shoulder to shoulder — and overlapping bodies that can be told apart
+## beat separate bodies that cannot be seen.
 
 ## The beak is a triangle poking OUT past the outline, so it reads at a glance which soldier is
 ## carrying it. Length is measured from the body edge outward, not from the centre.
@@ -803,7 +893,15 @@ const CARD_TAKEN_GROW_SEC := 0.20
 ## rule; a card is a new verb and gets one tone.
 const COL_CARD := Color(0.596, 0.549, 0.827)
 
-## Indexed by `Rules.Species`. Pairwise luminance ratio ≥ 1.4, so no two species read as one tone —
+## ⚠⚠ **WAS `COL_SPECIES`, indexed by `Rules.Species` — a cell-game enum that nothing read.** It is
+## indexed by `Rules.Rarity` now (2026-08-24), and there are four rather than three. **Every constraint
+## the old table was measured against is kept and re-measured**: pairwise luminance ratio ≥ 1.4 so no
+## two rarities read as one tone, and every one WCAG-contrasts ≥ 3:1 against `COL_CARD`, the one surface
+## this table is ever drawn on. ⚠ **LEGENDARY is the only one allowed to be warm** — it is the tone the
+## eye is meant to catch across a three-card spread, and warmth is what does that here.
+## The original paragraph is kept below because its reasoning is what these numbers still obey:
+##
+## Pairwise luminance ratio ≥ 1.4, so no two species read as one tone —
 ## and, ⚠⚠ **every one WCAG-contrasts ≥ 3:1 against `COL_CARD`, the ONE surface this table is ever
 ## drawn on** (`reward_view._paint_card_species`, `refit_view._paint_cell_species`). The three used to
 ## be picked for pairwise separation alone and land at 1.03:1 / 1.16:1 / 1.56:1 against the card — a
@@ -811,10 +909,18 @@ const COL_CARD := Color(0.596, 0.549, 0.827)
 ## clear 3:1 against a card this light without turning white and erasing hue), which is what pushed
 ## the pairwise floor down near the card-contrast one: the two constraints share the same three
 ## numbers and both are checked, not just the one this comment used to name.
-const COL_SPECIES := [
-	Color(0.370, 0.239, 0.087),   # MAMMAL
-	Color(0.040, 0.199, 0.212),   # BIRD
-	Color(0.025, 0.050, 0.158),   # FISH
+## ⚠⚠ **THE FOUR LUMINANCES ARE GEOMETRIC AND THEY ARE AT THE ARITHMETIC LIMIT.** `COL_CARD` has
+## luminance 0.3013, so the 3:1 floor caps a rarity tone at **0.0671** — and four values spread evenly
+## between 0 and that cap can be at most **(0.1171 / 0.05)^(1/3) = 1.328** apart in pairs. **The old
+## three-species table's 1.4 pairwise floor is therefore unreachable with four**, and the floor moved
+## rather than the constraint being quietly dropped: `net_cards` carries 1.30 and this paragraph.
+## ⇒ **The colour is not what tells the rarities apart; the WORD in front of the effect line is.**
+## The tone is there to catch the eye across a spread, which is why LEGENDARY is the only warm one.
+const COL_RARITY := [
+	Color(0.000, 0.000, 0.000),   # COMMON    — black,       luminance 0.0000, 7.03:1 on the card
+	Color(0.084, 0.133, 0.241),   # RARE      — deep blue,             0.0165, 5.29:1
+	Color(0.060, 0.242, 0.230),   # EPIC      — deep teal,             0.0383, 3.98:1
+	Color(0.408, 0.253, 0.061),   # LEGENDARY — burnt amber,           0.0671, 3.00:1
 ]
 
 
@@ -1563,6 +1669,52 @@ const GAIT_SQUASH := 0.20             # max displacement crow 2.0 · ranged 2.2 
 ## this number. A guard that can never bite must not be described as the guard, or the next person
 ## believes it.
 const FX_MAX_COUNT := 256
+
+## --- what it costs to lay a flat mark on ground that is no longer flat -------------------------------
+## ⚠⚠ **These two are NEW with the 3D field and they exist because the board stopped being a board.**
+## On the flat board a ring was a ring: one `draw_arc` on the same plane as everything else. On a
+## landscape a ring drawn at one height either **buries itself in a hill or floats over a valley**, so
+## every ground mark here is cut into pieces and each piece is put down at the height of the ground
+## under IT.
+##
+## `FX_GROUND_LIFT_TILES` is how far above that ground it sits. It has to clear z-fighting with the
+## terrain and it must not read as hovering: 0.02 tiles is **0.8 px**, under the 0.90 px world-width
+## floor on purpose — this is not a mark to be seen edge-on, it is a mark to be seen from above, and
+## anything thicker starts casting its own visible gap on a slope.
+const FX_GROUND_LIFT_TILES := 0.02
+
+## How finely a ground mark is cut. **20 px is half a tile**, so no piece can span a whole tile's worth
+## of height change; the terrain's own steps are one tile wide, which makes half a tile the largest
+## piece that cannot straddle two of them.
+## ⚠ Lowering this multiplies triangles on every ring and every route. Raising it makes a route lay a
+## chord across a ramp instead of following it.
+const FX_GROUND_STEP_PX := 20.0
+
+## ⚠⚠ **The intent lines get a COARSER cut, and it is a budget decision written down.** There can be
+## fourteen of them, each crossing most of an island, and at 20 px a single line is forty quads — the
+## fourteen together were the largest thing the effect layer built every frame. **They are 1 px wide at
+## alpha 0.12 by design** (see `TARGET_LINE_WIDTH_PX`): a hairline that sinks half a tile into a hill
+## is invisible, where a ring that does the same is broken. 120 px is three tiles.
+const FX_INTENT_STEP_PX := 120.0
+
+## How many segments a ring built in the CAMERA'S plane gets. Ground rings size their own segment
+## count off `FX_GROUND_STEP_PX` because they have to follow the ground; an air ring does not, so it
+## takes a flat count. **24 keeps the biggest ring here — the lion's death burst at 48 px — under
+## 13 px of chord**, which is the point where a circle starts reading as a polygon.
+const FX_RING_SEGMENTS := 24
+
+## How high above the ground an effect that has NO body of its own hangs: the tracer's two ends and
+## the shard fan. **14 px is about one body radius**, so a tracer leaves and arrives at the height the
+## bodies actually stand at rather than skimming their feet.
+## ⚠ Effects that DO belong to a body (the halo, the death burst) ignore this and use that body's own
+## radius through `_body_anchor` — a crow and a lion do not hang their marks at the same height.
+const FX_AIR_LIFT_PX := 14.0
+
+## How many frames a screen is given to settle before an instrument photographs it. **20 frames is a
+## third of a second**, past every intro this project has — the card screen's fade is the longest.
+## ⚠ It is a capture number and nothing in `src/` reads it; it lives here because `look.gd` is where a
+## presentation number lives, and a capture that disagrees with the screen is worse than no capture.
+const FX_SETTLE_FRAMES := 20
 
 ## Per-effect strength, indexed by the item numbers 1..12 — read it through `fx_gain_of`, never
 ## directly. Every effect multiplies its own amplitude by its own slot, and 0.0 turns that effect off

@@ -104,7 +104,7 @@ func _hp_desc(a: int, b: int) -> bool:
 ## soldier is wearing one. The beak is added HERE and never inside `loadout.stat_of`, which knows
 ## nothing about a per-soldier reward.
 func range_of(i: int) -> float:
-	var base := loadout.stat_of(int(slot_id[i]), Rules.PART_COL_RANGE)
+	var base := loadout.stat_of(int(slot_id[i]), Rules.ITEM_COL_RANGE)
 	var bonus: float = Rules.BEAK_RANGE if has_beak[i] != 0 else 0.0
 	return base + bonus
 
@@ -114,19 +114,19 @@ func range_of(i: int) -> float:
 ## worth. ⚠⚠ **This is what makes two soldiers of one type able to differ**: before this round every
 ## stat downstream read `Rules.*_of(type_id)`, keyed on the TYPE and identical for every body of it.
 func max_hp_of(i: int) -> float:
-	return loadout.stat_of(int(slot_id[i]), Rules.PART_COL_HP)
+	return loadout.stat_of(int(slot_id[i]), Rules.ITEM_COL_HP)
 
 
 func damage_of(i: int) -> float:
-	return loadout.stat_of(int(slot_id[i]), Rules.PART_COL_DAMAGE)
+	return loadout.stat_of(int(slot_id[i]), Rules.ITEM_COL_DAMAGE)
 
 
 func period_of(i: int) -> float:
-	return loadout.stat_of(int(slot_id[i]), Rules.PART_COL_PERIOD)
+	return loadout.stat_of(int(slot_id[i]), Rules.ITEM_COL_PERIOD)
 
 
 func speed_of(i: int) -> float:
-	return loadout.stat_of(int(slot_id[i]), Rules.PART_COL_SPEED)
+	return loadout.stat_of(int(slot_id[i]), Rules.ITEM_COL_SPEED)
 
 
 ## Living soldiers of one SLOT, **highest HP first**. Mirrors `living_ids_of_type`'s shape and its

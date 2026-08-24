@@ -28,22 +28,22 @@ func _run() -> void:
 	_click(game, Look.card_rect_px(0).get_center())
 	_click(game, Look.card_rect_px(4).get_center())
 	var loadout := game.run.army.loadout
-	for p in Rules.part_count():
-		loadout.take_card(p, p % Rules.species_count())
+	for p in Rules.ITEM_CELLS:
+		loadout.take_card(p % Rules.item_count())
 	_click(game, Look.refit_slot_rect_px(0).get_center())
-	for _n in Rules.part_count():
+	for _n in Rules.ITEM_CELLS:
 		_click(game, Look.refit_held_rect_px(0).get_center())
 	print("slot 0 board full? open=%d cells=%s" % [
 		game.refit_view.open_slot_index(), str(_cells(loadout, 0))])
 
 	# Every cell, pressed at its own centre. A press that unfits leaves the cell empty; a press the
 	# strip stole leaves the board on the OTHER slot with the cell untouched.
-	for p in Rules.part_count():
+	for p in Rules.ITEM_CELLS:
 		var before := game.refit_view.open_slot_index()
 		var at := Look.refit_cell_rect_px(p).get_center()
 		_click(game, at)
 		var after := game.refit_view.open_slot_index()
-		var still := loadout.fitted_species(0, p)
+		var still := loadout.fitted_item(0, p)
 		print("cell %d at %s: open %d -> %d, slot0 cell now %d, slot_at=%d, cell_at=%d" % [
 			p, str(at), before, after, still, game.refit_view.slot_at(at),
 			game.refit_view.cell_at(at)])
@@ -59,8 +59,8 @@ func _run() -> void:
 
 func _cells(loadout: Loadout, slot: int) -> Array:
 	var out := []
-	for p in Rules.part_count():
-		out.append(loadout.fitted_species(slot, p))
+	for p in Rules.ITEM_CELLS:
+		out.append(loadout.fitted_item(slot, p))
 	return out
 
 

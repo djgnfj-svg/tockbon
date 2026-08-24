@@ -37,10 +37,10 @@ class RewardSpy extends RewardView:
 	func _paint_card(rect: Rect2, bg: Color, edge_width: float) -> void:
 		cards.append({"rect": rect, "bg": bg, "width": edge_width})
 
-	func _paint_card_part(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+	func _paint_card_name(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 		parts.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
 
-	func _paint_card_species(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
+	func _paint_card_effect(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 		species.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
 
 	func _paint_taken_mark(centre: Vector2, radius: float, col: Color) -> void:
@@ -85,49 +85,45 @@ func _the_six_cards(t) -> void:
 	# 「이기면 카드가 여섯 장 나온다」 — floor: six pairs; ceiling: none taken yet.
 	var r := _won_run()
 	t.eq(r.state(), Run.State.PICK, "이기면 카드 고르기가 열린다 (자가 점검)")
-	t.eq(r.cards.size(), Rules.CARDS_PER_WIN * 2, "카드 배열이 여섯 장(칸 열둘)이다")
+	# ⚠ **One int per card, not two** (2026-08-24): a card was a (part, species) pair and is an item id.
+	t.eq(r.cards.size(), Rules.CARDS_PER_WIN, "카드 배열이 세 장이다")
 	var taken := 0
 	for b in r.cards_taken:
 		if b != 0:
 			taken += 1
 	t.eq(taken, 0, "아직 아무것도 안 골랐다")
 	for k in Rules.CARDS_PER_WIN:
-		var p := int(r.cards[2 * k])
-		var s := int(r.cards[2 * k + 1])
-		t.ok(p >= 0 and p < Rules.part_count(), "%d번 카드의 부위가 표 안이다 (%d)" % [k, p])
-		t.ok(s >= 0 and s < Rules.species_count(), "%d번 카드의 종이 표 안이다 (%d)" % [k, s])
+		var item := int(r.cards[k])
+		t.ok(item >= 0 and item < Rules.item_count(), "%d번 카드가 장비 표 안이다 (%d)" % [k, item])
+		t.ok(Rules.item_name_of(item) != "", "%d번 카드에 이름이 있다" % k)
 
 
 ## 「둘을 고르면 정비로 넘어간다」 · 「같은 카드를 두 번 못 고른다」 · 「고른 카드가 더미에 그대로
 ## 들어간다」, in one walk — each reads the state right after the call it claims about.
 func _taking_two(t) -> void:
 	var r := _won_run()
-	var want_part := int(r.cards[0])
-	var want_species := int(r.cards[1])
-	var pile_before := r.army.loadout.held_part.size()
+	var want_item := int(r.cards[0])
+	var pile_before := r.army.loadout.held.size()
 
 	t.ok(r.take_card(0), "0번 카드를 고른다")
-	t.eq(r.state(), Run.State.PICK, "한 장으로는 아직 정비로 안 넘어간다")
-	t.eq(r.army.loadout.held_part.size(), pile_before + 1, "더미가 하나 늘었다")
-	t.eq(int(r.army.loadout.held_part[pile_before]), want_part,
-		"고른 카드의 부위가 더미에 그대로 들어갔다")
-	t.eq(int(r.army.loadout.held_species[pile_before]), want_species,
-		"고른 카드의 종도 더미에 그대로 들어갔다")
+	# ⚠⚠ **ONE PICK NOW, NOT TWO** (2026-08-24, 티켓 06). The block below used to walk 「한 장으로는
+	# 아직 정비로 안 넘어간다」 and then take a second; with `CARD_PICKS` at 1 the first pick IS the
+	# transition, and asserting the old sentence would be asserting the old rule.
+	t.eq(r.state(), Run.State.REFIT, "한 장을 고르면 바로 정비로 넘어간다")
+	t.eq(r.army.loadout.held.size(), pile_before + 1, "더미가 하나 늘었다")
+	t.eq(int(r.army.loadout.held[pile_before]), want_item,
+		"고른 카드의 장비가 더미에 그대로 들어갔다")
 
 	t.ok(not r.take_card(0), "같은 카드를 두 번 못 고른다")
-	t.eq(r.army.loadout.held_part.size(), pile_before + 1, "그래서 더미 크기가 그대로다")
-
-	t.ok(r.take_card(1), "1번 카드도 고른다")
-	t.eq(r.state(), Run.State.REFIT, "둘을 고르면 정비로 넘어간다")
-	t.eq(r.army.loadout.held_part.size(), pile_before + 2, "더미가 둘로 늘었다")
-
+	t.eq(r.army.loadout.held.size(), pile_before + 1, "그래서 더미 크기가 그대로다")
+	t.ok(not r.take_card(1), "고르기가 끝났으니 다른 카드도 못 고른다")
 	t.ok(not r.take_card(2), "정비로 넘어간 뒤에는 세 번째 카드도 안 먹는다")
 	t.ok(not r.take_card(-1), "음수 인덱스는 애초에 거절한다")
 	t.ok(not r.take_card(99), "범위 밖 인덱스도 거절한다")
 
 
 ## ⚠⚠ 「같은 씨앗이면 여섯 장이 똑같고, 씨앗이 다르면 어딘가 다르다」. Mutation:
-## `_rng.randi_range(0, Rules.part_count() - 1)` -> `0`.
+## `_rng.randi_range(0, Rules.ITEM_CELLS - 1)` -> `0`.
 ##
 ## ⚠ 「씨앗을 여럿 돌리면 부위 여섯과 종 셋이 전부 나온다」 is the row that structurally catches that
 ## exact mutation — a same/different-seed comparison of the WHOLE array can still see two seeds differ
@@ -146,16 +142,19 @@ func _the_seed(t) -> void:
 	t.ok(any_diff, "씨앗 여덟 개 중 적어도 한 번은 카드 배열이 달라진다")
 
 	var seen_parts := {}
-	var seen_species := {}
-	for s in range(100, 140):
+	var seen_rarity := {}
+	# ⚠ **Widened from forty seeds to four hundred, because the draw got a shape.** A legendary is 3 in
+	# 100, so forty runs of three cards is 120 draws and would miss one about 3% of the time — a net
+	# that is red one round in thirty is a net nobody believes.
+	for s in range(100, 500):
 		var r := _won_run(s)
 		for k in Rules.CARDS_PER_WIN:
-			seen_parts[int(r.cards[2 * k])] = true
-			seen_species[int(r.cards[2 * k + 1])] = true
-	t.eq(seen_parts.size(), Rules.part_count(),
-		"씨앗 마흔 개에 걸쳐 부위 %d개가 전부 한 번은 나왔다" % Rules.part_count())
-	t.eq(seen_species.size(), Rules.species_count(),
-		"그리고 종 %d개도 전부 나왔다" % Rules.species_count())
+			seen_parts[int(r.cards[k])] = true
+			seen_rarity[Rules.item_rarity_of(int(r.cards[k]))] = true
+	t.eq(seen_parts.size(), Rules.item_count(),
+		"씨앗 사백 개에 걸쳐 장비 %d개가 전부 한 번은 나왔다" % Rules.item_count())
+	t.eq(seen_rarity.size(), Rules.RARITY_WEIGHT.size(),
+		"그리고 등급 %d개도 전부 나왔다" % Rules.RARITY_WEIGHT.size())
 
 
 # -- the geometry: can it be aimed at ------------------------------------------------------------------
@@ -243,19 +242,31 @@ func _the_alpha_channel(t) -> void:
 ## — every one of those fails the card-contrast row below and none fail the pairwise row, which is
 ## exactly why a check that only ever compared species to species could not see this.
 func _the_species_colours_read(t) -> void:
+	# ⚠⚠ **The table this measures is `COL_RARITY` now and it has four rows, not three** (2026-08-24).
+	# **Both constraints are carried across unchanged** — pairwise separation AND contrast against the
+	# one surface it is drawn on — because the failure the paragraph above records is a property of
+	# "coloured text on a light card", not of what the colours happened to mean.
 	var low := 0
-	for a in Rules.species_count():
-		for b in range(a + 1, Rules.species_count()):
-			if _contrast(Look.COL_SPECIES[a], Look.COL_SPECIES[b]) < 1.4:
+	for a in Look.COL_RARITY.size():
+		for b in range(a + 1, Look.COL_RARITY.size()):
+			if _contrast(Look.COL_RARITY[a], Look.COL_RARITY[b]) < 1.30:
 				low += 1
-	t.eq(low, 0, "종 색 세 개가 서로 대비 1.4:1 이상이다 (자가 점검 — 카드 위 대비와는 다른 값이다)")
+	# ⚠⚠ **1.4 -> 1.30, and the number moved because it became UNREACHABLE, not because it was
+	# inconvenient.** `COL_CARD`'s luminance caps a readable tone at 0.0671; four tones spread between
+	# 0 and that cap sit at most (0.1171/0.05)^(1/3) = 1.328 apart. The old floor was measured for
+	# THREE species and three fit under it with room. **The rarity word on the card is what actually
+	# separates them** — see `look.gd`'s own paragraph beside the table.
+	t.eq(low, 0, "등급 색 넷이 서로 대비 1.30:1 이상이다 (자가 점검 — 카드 위 대비와는 다른 값이다)")
 
 	var unreadable := 0
-	for s in Rules.species_count():
-		if _contrast(Look.COL_SPECIES[s], Look.COL_CARD) < 3.0:
+	for s in Look.COL_RARITY.size():
+		if _contrast(Look.COL_RARITY[s], Look.COL_CARD) < 3.0:
 			unreadable += 1
 	t.eq(unreadable, 0,
-		"종 색 세 개 전부 카드 배경(COL_CARD)과 WCAG 대비 3:1 이상이다 — 이름은 안 읽히면 아무 값도 아니다")
+		"등급 색 넷 전부 카드 배경(COL_CARD)과 WCAG 대비 3:1 이상이다 — 이름은 안 읽히면 아무 값도 아니다")
+
+	t.eq(Look.COL_RARITY.size(), Rules.RARITY_WEIGHT.size(),
+		"색 수와 등급 수가 같다 — 한쪽만 늘면 색 없는 등급이 생긴다")
 
 
 ## WCAG 2.x relative-luminance contrast ratio, `(L_light + 0.05) / (L_dark + 0.05)`.
@@ -314,42 +325,43 @@ func _the_leaves_draw_what_they_were_handed(t) -> void:
 	await t.pump_frames(2)
 	t.ok(spy.draws >= 1, "카드 화면의 _draw 가 트리 위에서 진짜 돌았다 (%d프레임)" % spy.draws)
 
-	t.eq(spy.cards.size(), Rules.CARDS_PER_WIN, "카드 상자를 여섯 그렸다")
-	# 「카드에 부위와 종이 둘 다 찍힌다」
-	t.eq(spy.parts.size(), Rules.CARDS_PER_WIN, "부위 글자도 여섯 그렸다")
-	t.eq(spy.species.size(), Rules.CARDS_PER_WIN, "종 글자도 여섯 그렸다")
+	t.eq(spy.cards.size(), Rules.CARDS_PER_WIN, "카드 상자를 세 개 그렸다")
+	# 「카드에 이름과 하는 일이 둘 다 찍힌다」
+	t.eq(spy.parts.size(), Rules.CARDS_PER_WIN, "이름도 세 개 그렸다")
+	t.eq(spy.species.size(), Rules.CARDS_PER_WIN, "효과 줄도 세 개 그렸다")
 	var text_bad := 0
 	for k in Rules.CARDS_PER_WIN:
-		var want_part := str(RewardView.PART_LABELS[int(r.cards[2 * k])])
-		var want_species := str(RewardView.SPECIES_LABELS[int(r.cards[2 * k + 1])])
-		if str(spy.parts[k]["text"]) != want_part:
+		var item := int(r.cards[k])
+		if str(spy.parts[k]["text"]) != Rules.item_name_of(item):
 			text_bad += 1
-		if str(spy.species[k]["text"]) != want_species:
+		# ⚠ The effect line carries the rarity word in front of what the item does, so it is checked by
+		# CONTAINMENT rather than by equality — the row is about the numbers coming off the table.
+		if not str(spy.species[k]["text"]).ends_with(Rules.item_effect_text(item)):
 			text_bad += 1
-	t.eq(text_bad, 0, "카드마다 부위 글자와 종 글자가 그 카드의 실제 카드와 맞는다")
+	t.eq(text_bad, 0, "카드마다 장비 이름과 효과가 그 카드의 실제 장비와 맞는다")
 	t.eq(spy.marks.size(), 0, "고르기 전에는 표가 하나도 없다 (자가 점검)")
 
 	# ⚠ **The hover and press rows have to run BEFORE any card is taken** — the run reaches `REFIT`
 	# the moment the second pick lands, and `is_card_pressable` (which `set_hover`/`note_press` both
-	# gate on) answers false for every card once it does. Card 3 is left untouched for exactly this.
+	# gate on) answers false for every card once it does. Card 2 is left untouched for exactly this.
 
 	# 「호버하면 테두리가 3에서 6으로 간다」
-	var rest_width := float(spy.cards[3]["width"])
+	var rest_width := float(spy.cards[2]["width"])
 	t.eq(rest_width, Look.PRESS_BORDER_WIDTH_PX, "쉬는 카드의 테두리가 기본 굵기다 (자가 점검)")
-	spy.set_hover(spy.card_rect_of(3).get_center())
+	spy.set_hover(spy.card_rect_of(2).get_center())
 	spy._fx_step(Look.PRESS_HOVER_SEC)
 	spy.queue_redraw()
 	await t.pump_frames(1)
-	t.eq(float(spy.cards[3]["width"]), Look.PRESS_HOVER_BORDER_WIDTH_PX,
+	t.eq(float(spy.cards[2]["width"]), Look.PRESS_HOVER_BORDER_WIDTH_PX,
 		"호버한 카드의 테두리가 %.0fpx 로 굵어져서 화면까지 갔다" % Look.PRESS_HOVER_BORDER_WIDTH_PX)
 
 	# 「누르면 0.96배로 눌렸다가 0.10초 뒤 돌아온다」
-	var rest_rect: Rect2 = spy.cards[3]["rect"]
-	spy.note_press(3)
+	var rest_rect: Rect2 = spy.cards[2]["rect"]
+	spy.note_press(2)
 	spy._fx_step(Look.PRESS_DOWN_SEC * 0.5)
 	spy.queue_redraw()
 	await t.pump_frames(1)
-	var down_rect: Rect2 = spy.cards[3]["rect"]
+	var down_rect: Rect2 = spy.cards[2]["rect"]
 	t.ok(down_rect.size.x < rest_rect.size.x - 3.0,
 		"누른 카드가 화면에서 실제로 줄었다 (%.1f -> %.1f)" % [rest_rect.size.x, down_rect.size.x])
 	t.ok(down_rect.size.x >= rest_rect.size.x * Look.PRESS_DOWN_SCALE,
@@ -357,7 +369,7 @@ func _the_leaves_draw_what_they_were_handed(t) -> void:
 	spy._fx_step(Look.PRESS_DOWN_SEC * 0.6)
 	spy.queue_redraw()
 	await t.pump_frames(1)
-	t.eq((spy.cards[3]["rect"] as Rect2).size, rest_rect.size,
+	t.eq((spy.cards[2]["rect"] as Rect2).size, rest_rect.size,
 		"%.2f초가 지나면 카드가 정확히 쉬는 크기로 돌아온다" % Look.PRESS_DOWN_SEC)
 
 	# 「가져간 카드에 표가 그려진다」 — ⚠ **`run.cards_taken[1]` is written directly, not through
@@ -366,8 +378,12 @@ func _the_leaves_draw_what_they_were_handed(t) -> void:
 	# to read them back. Poking the byte in is the same fixture shape `net_parts`'s
 	# `_slot_reserves_are_filtered_by_slot` already uses: it isolates what THIS leaf does with two taken
 	# cards from the sim's own screen-switching side effect, which is a separate claim `net_run` owns.
-	r.take_card(0)
+	# ⚠⚠ **Both marks are set by HAND and `take_card` is not called.** With `CARD_PICKS` at 1 the first
+	# real pick leaves `PICK`, and this screen stops drawing the moment it does — so driving it through
+	# the sim would test the transition instead of the leaf. What this row is about is the LEAF: two
+	# taken flags, two marks.
 	var taken := r.cards_taken
+	taken[0] = 1
 	taken[1] = 1
 	r.cards_taken = taken
 	# The mark's own growth beat ages off `_taken_age`, populated by `_fx_step` reading
@@ -434,10 +450,10 @@ func _the_cards_fade_in_staggered(t) -> void:
 	spy.queue_redraw()
 	await t.pump_frames(1)
 	var a0 := (spy.cards[0]["bg"] as Color).a
-	var a5 := (spy.cards[5]["bg"] as Color).a
+	var a5 := (spy.cards[Rules.CARDS_PER_WIN - 1]["bg"] as Color).a
 	t.ok(a0 > a5,
-		"0번 카드가 5번 카드보다 먼저, 더 진하게 나타났다 (%.2f > %.2f) — 한꺼번에 안 뜬다" % [a0, a5])
-	t.ok(a5 <= 0.05, "5번 카드는 이 시점에 아직 시작도 안 했다 (%.2f)" % a5)
+		"0번 카드가 마지막 카드보다 먼저, 더 진하게 나타났다 (%.2f > %.2f) — 한꺼번에 안 뜬다" % [a0, a5])
+	t.ok(a5 <= 0.05, "마지막 카드는 이 시점에 아직 시작도 안 했다 (%.2f)" % a5)
 
 	# The ceiling: age past the LAST card's own fade window entirely.
 	var full := float(Rules.CARDS_PER_WIN - 1) * Look.MAP_REVEAL_STEP_SEC + Look.MAP_NODE_FADE_SEC

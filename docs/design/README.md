@@ -23,7 +23,7 @@
 
 | 문서 | 무엇을 접었나 |
 |---|---|
-| [몸은 코드가 그리는 선이다](the-body-is-a-line-drawn-by-code.md) | 스프라이트로 몸을 그리는 것. ⚠⚠ **절반 뒤집힘** — 늑대 그림이 온다. **속을 비운 이유는 그대로 산다** |
+| [몸은 코드가 그리는 선이다](the-body-is-a-line-drawn-by-code.md) | 스프라이트로 몸을 그리는 것. ⚠⚠ **2026-08-24 에 전부 뒤집혔다** — 판 위의 몸이 전부 그림이고 선으로 남은 건 보스 사자뿐이다. **「나중에 갈아 끼울 수 있게 열어 둔다」는 이유가 실제로 값을 했다** |
 | [해안선을 열고 고정 선착장을 버린다](open-coastline-over-fixed-docks.md) | 정해진 상륙 지점 |
 | [배 수를 안 막는다](unlimited-boats-not-a-five-boat-cap.md) | 배 다섯 척 상한 |
 | [하늘에서 떨어뜨린다, 배로 대지 않는다](dropped-from-the-sky-not-landed-by-boat.md) | 배로 상륙시키는 것 |

@@ -469,7 +469,7 @@ func _the_fourth_floor_opens_an_island_too(t) -> void:
 
 	# ⚠ 「이기면 카드가 여섯 장 나온다」 — the win drew the six cards even though the COUNT reward itself
 	# had nothing to choose. Mutation: skip `_draw_cards()` inside `finish_island`.
-	t.eq(r.cards.size(), Rules.CARDS_PER_WIN * 2, "이긴 뒤 카드 배열이 여섯 장(칸 열둘)이다")
+	t.eq(r.cards.size(), Rules.CARDS_PER_WIN, "이긴 뒤 카드 배열이 세 장이다 — 카드 하나가 정수 하나다")
 
 	_take_two_and_close_refit(r)
 	t.eq(r.state(), Run.State.MAP, "카드를 고르고 정비를 닫으면 지도로 돌아온다")

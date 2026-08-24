@@ -217,8 +217,9 @@ func _draw() -> void:
 	# 「시간 %.1f」 and not 「남은 시간 %.1f」 — one word instead of two. The user's own instruction was
 	# 「글자가 너무 많고 조금 더 단순하게 해줄래? 아니면 좀 UI를 크게 해서」, and this file answers both
 	# halves: three text items during a fight instead of six, each of them drawn bigger.
-	_paint_timer(face, Look.HUD_TIMER_POS_PX, "시간 %.1f" % battle.time_left(),
-		Look.HUD_TIMER_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+	# ⚠⚠ **The countdown is gone with the rule it counted to** (2026-08-24). `battle.time_left()` still
+	# answers and `Lose.TIMEOUT` still has its wording, but nothing loses by the clock any more, so a
+	# number ticking down in the middle of the screen would be the loudest lie on it.
 
 	# The start button, and ONLY while the plan can still be started. A button that cannot be pressed
 	# and is still drawn is the "well, while we're stopped…" door `plan-then-watch` closes on purpose.
@@ -275,10 +276,6 @@ func _draw() -> void:
 # --- hooks. Each one's draw_* count is pinned by net_draw_leaf; the table is that file's `_table()`.
 # Every parameter must be used in the body: a leaf handed a value it drops turned forty rocks
 # invisible with the round green.
-
-func _paint_timer(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
-	draw_string(face, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize, col)
-
 
 ## 2 calls: the filled rectangle, then its label. Renamed from `_paint_key` rather than deleted —
 ## the 1/2 key boxes are gone but the SHAPE they drew (a pressable box with one word in it) is what

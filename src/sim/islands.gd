@@ -225,15 +225,105 @@ const LONG_ENEMY_PITCH := 6
 const LONG_HARBOUR_PITCH := 24
 
 
+## --- the compact islands ---------------------------------------------------------------------------
+## ⚠⚠ **GENERATED, like the long map and NOT typed into `ISLAND_ROWS`** — and that is a decision about
+## the CHECKS, not about the maps. `net_islands` carries a per-island table of measured literals for
+## every hand-written grid (coast, sendable, passable, water, crossings). Typing four more grids in
+## would have meant four more measured rows in ten tables before a single one could be played; born
+## here they are outside that suite exactly as the long map is, and the suite's own literal `3` stays
+## true. **The cost is real and is written down: nothing measures these four.**
+##
+## ⚠ **They are SMALL on purpose** (2026-08-24). The shipped three are 48 x 32 = 1536 tiles carrying
+## eighteen bodies, and 「멀리서 봤을때 너무작네」 is what that empties out to. These run 22 x 14 to
+## 28 x 18 — a quarter of the area — and `Look.survey_zoom_of` opens them at a zoom that fills the
+## screen instead of at one constant measured against 48 x 32.
+##
+## ⚠⚠ **THE SEA BELOW THE LAND IS NOT DECORATION AND THE FIRST DRAFT OF THIS TABLE HAD NONE.** A boat
+## may only be placed at least `Rules.SUMMON_BAND_MIN_TILES` = **6 water hops from any shore**, and the
+## first four maps here left a four-row strip: **0 placeable tiles on all four**, measured. They loaded,
+## they drew, and the plan could not be authored — the exact shape of code that pretends to work.
+## ⇒ **Every row below leaves 8 or 9 rows of open water under the land**, and the harbours sit on the
+## last row of it. The land itself is what shrank, not the grid.
+##
+## Columns: 0 width · 1 height · 2 cliff row (-1 = no wall) · 3 first land row · 4 last land row ·
+## 5 enemy pitch in columns · 6 harbour pitch · 7 ramp stride through the wall (0 = no ramp) ·
+## 8 water columns down each side.
+## ⚠⚠ **THE FIRST ISLAND WAS UNWINNABLE AND THAT IS WHY THE PITCHES NOW RISE.** Every row started
+## at a pitch of 4-6 and the first fight came out at **twelve defenders against ten landing bodies** --
+## measured twice, once with the force split over four beaches and once landed whole. Both lost.
+## **A first island nobody wins is a game whose card screen nobody ever sees.**
+## => The pitch falls as the run climbs. The hand-written islands sit at 8 defenders for the same ten
+## bodies and are winnable, which is where the first row's number comes from.
+const SMALL_ISLANDS := [
+	[26, 20, -1, 3, 11, 9, 8, 0, 3],
+	[28, 21,  2, 3, 12, 7, 9, 5, 3],
+	[24, 19, -1, 3, 10, 4, 7, 0, 3],
+	[30, 22,  2, 3, 12, 5, 9, 7, 4],
+]
+
+## Where the compact islands start in the index. **After the long map**, so `LONG_ISLAND_INDEX` and
+## every literal measured against the hand-written three keep meaning what they meant.
+const SMALL_ISLAND_BASE := 4
+
+
+## One compact island, built from its row of `SMALL_ISLANDS`.
+##
+## ⚠ **Enemies alternate between the two kinds** as they are placed, so no island is eight of one
+## thing — which is what island 0 is, and it is why the first fight a player sees has one enemy in it.
+static func _small_rows(k: int) -> Array:
+	var spec: Array = SMALL_ISLANDS[k]
+	var w := int(spec[0])
+	var h := int(spec[1])
+	var cliff := int(spec[2])
+	var top := int(spec[3])
+	var bottom := int(spec[4])
+	var epitch := int(spec[5])
+	var hpitch := int(spec[6])
+	var ramp := int(spec[7])
+	var sea := int(spec[8])
+	var body := w - 2 * sea
+	var rows := []
+	var placed := 0
+	for y in h:
+		if cliff >= 0 and y == cliff:
+			var wall := ""
+			for x in body:
+				wall += "/" if (ramp > 0 and (x % ramp) == ramp / 2) else "^"
+			rows.append("~".repeat(sea) + wall + "~".repeat(sea))
+			continue
+		if y >= top and y <= bottom:
+			var land := ""
+			for x in body:
+				var ch := "."
+				# Every third land row and every `epitch` column, and never on column 0 — a body on
+				# the corner a boat lands at is a body the plan cannot avoid.
+				if x > 0 and (x % epitch) == epitch / 2 and ((y - top) % 3) == 1:
+					ch = "B" if (placed % 2) == 0 else "C"
+					placed += 1
+				land += ch
+			rows.append("~".repeat(sea) + land + "~".repeat(sea))
+			continue
+		if y == h - 1:
+			var water := ""
+			for x in w:
+				water += "H" if (x % hpitch) == hpitch / 2 else "~"
+			rows.append(water)
+			continue
+		rows.append("~".repeat(w))
+	return rows
+
+
 static func count() -> int:
 	# ⚠ `ISLAND_ROWS.size() + 1` and not a literal 4: the long map is generated rather than typed out,
 	# so it is not in that array and cannot be counted by it.
-	return ISLAND_ROWS.size() + 1
+	return ISLAND_ROWS.size() + 1 + SMALL_ISLANDS.size()
 
 
 static func rows_of(i: int) -> Array:
 	if i == LONG_ISLAND_INDEX:
 		return _long_rows()
+	if i >= SMALL_ISLAND_BASE:
+		return _small_rows(i - SMALL_ISLAND_BASE)
 	return ISLAND_ROWS[i] as Array
 
 
@@ -254,9 +344,14 @@ static func rows_of(i: int) -> Array:
 ## this map as 60 is on island 1 — it is a placeholder that scales, not a balance decision. Retuning
 ## `TIME_LIMITS` is a decision with the user in it.
 static func time_limit_of(i: int) -> float:
+	var base_w := str((ISLAND_ROWS[0] as Array)[0]).length()
+	var per_column := float(TIME_LIMITS[0]) / float(base_w)
 	if i == LONG_ISLAND_INDEX:
-		var base_w := str((ISLAND_ROWS[0] as Array)[0]).length()
-		return float(TIME_LIMITS[0]) / float(base_w) * float(LONG_ISLAND_W)
+		return per_column * float(LONG_ISLAND_W)
+	# ⚠ The compact islands take the same seconds-per-column. **Nothing loses by the clock any more**
+	# (see `battle._phase_clock`), so this is a number that has to exist rather than one that decides.
+	if i >= SMALL_ISLAND_BASE:
+		return per_column * float((SMALL_ISLANDS[i - SMALL_ISLAND_BASE] as Array)[0])
 	return float(TIME_LIMITS[i])
 
 

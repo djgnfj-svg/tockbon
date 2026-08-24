@@ -301,71 +301,196 @@ static func roster_reward_count() -> int:
 	return sum
 
 
-## --- Parts (parts-on-a-board-not-on-the-body) -------------------------------------------------------
-## The six parts a board has a cell for. ⚠ A cell is bound to one part — head goes in the head cell and
-## nowhere else — so this enum IS the cell index and there is no second numbering to keep in step.
-enum Part { HEAD, CHEST, BELLY, ARM, HAND, LEG }
+## --- Equipment: an ITEM LIST, not a body ------------------------------------------------------------
+## ⚠⚠ **THE BODY PARTS ARE GONE** (2026-08-24, the user: 「이게 세포 게임에 남아있던 것들이네. 갈아엎어」).
+## What stood here was `Part { HEAD, CHEST, BELLY, ARM, HAND, LEG }`, one cell bound to each, plus a
+## `Species { MAMMAL, BIRD, FISH }` that nothing read. **It was the cell game's own idea and it survived
+## two changes of game** — the wolf roguelike never had a body diagram to hang it on, and the cards still
+## said 「다리」 「손」 on screen the day this was written.
+##
+## What replaces it is what tickets 01 and 02 already decided and nothing had built: **an item goes into
+## an UNNAMED cell**, and a summon slot has a row of them. There is no head cell, and therefore no rule
+## anywhere forbidding a leg in it — the arrangement that needed forbidding does not exist.
+##
+## ⚠ **The board still belongs to the SLOT and not to the body.** That half was already right: a soldier
+## dying does not touch the slot's equipment, which is 「늑대에게 투구를 끼우면 모든 늑대가 낀다」 said in
+## the code that exists rather than in the code that is planned.
 
-## What a part belongs to. ⚠ It does NOTHING this round and that is decided, not forgotten: the user
-## took set effects out and left the species in as the place they will attach. Nothing below reads it.
-enum Species { MAMMAL, BIRD, FISH }
+## The five columns an item may move — declared in UNITS' own order so the two tables read alike.
+const ITEM_COL_HP := 0
+const ITEM_COL_DAMAGE := 1
+const ITEM_COL_PERIOD := 2
+const ITEM_COL_RANGE := 3
+const ITEM_COL_SPEED := 4
+const ITEM_COL_TOTAL := 5
 
-## The five columns a part may move — declared in UNITS' own order so the two tables read alike.
-const PART_COL_HP := 0
-const PART_COL_DAMAGE := 1
-const PART_COL_PERIOD := 2
-const PART_COL_RANGE := 3
-const PART_COL_SPEED := 4
-const PART_COL_TOTAL := 5
+## How rare a card is. ⚠ **It is a draw weight and nothing else this round** — no set bonus, no visual
+## change. 티켓 01 says only LEGENDARY ever changes what a beast looks like, and no beast has a second
+## picture yet, so writing that in now would be a rule with no picture behind it.
+enum Rarity { COMMON, RARE, EPIC, LEGENDARY }
 
-## One row per part, five columns, ADDED to the type's own number. Nothing multiplies: two rules for one
-## column is the second copy that diverges.
-## ⚠ These are first values, not measured ones. `parts-on-a-board-not-on-the-body` records that what a
-## part moves and by how much is balance work that needs the screen to exist first.
-## ⚠ There is deliberately NO clamp on the result anywhere in the code. One part per cell means a period
-## can fall by at most one row's worth, so a floor would be a branch no input can reach — dead code
-## wearing a safety belt. The bound lives in `net_parts` as a literal instead, so a table edit that
-## drove a period to zero reddens where a dead clamp would have hidden it.
-const PART_STATS := [
-	[0.0, 0.0,  0.00, 1.0, 0.0],   # HEAD  머리 — 사거리
-	[4.0, 0.0,  0.00, 0.0, 0.0],   # CHEST 가슴 — 체력
-	[3.0, 0.0,  0.00, 0.0, 0.0],   # BELLY 배   — 체력
-	[0.0, 1.0,  0.00, 0.0, 0.0],   # ARM   팔   — 공격력
-	[0.0, 0.0, -0.15, 0.0, 0.0],   # HAND  손   — 공격주기 (내려간다)
-	[0.0, 0.0,  0.00, 0.0, 0.8],   # LEG   다리 — 이동속도
+## How many of each rarity a hundred draws should hold. ⚠ **First values, not measured ones** — nothing
+## in this game has been balanced yet and pretending otherwise is worse than saying so.
+const RARITY_WEIGHT := [60, 26, 11, 3]
+
+## One row per item: **name · hp · damage · period · range · speed · rarity**, ADDED to the type's own
+## number. Nothing multiplies: two rules for one column is the second copy that diverges.
+##
+## ⚠ **The names are Korean because the user reads them off the card**, and this is the same exception
+## `hud_view.TYPE_LABELS` already carries. Everything else in `src/` stays English.
+##
+## ⚠ **The fiction is that these come off the humans whose island was just taken.** That is why a bronze
+## plate and a flint tooth sit in one list: the beasts do not forge, they strip.
+##
+## ⚠ **A negative column is allowed and one row uses it.** 「질주의 발」 trades health for speed, and a
+## table where every row is an upgrade is a table where picking is not a decision.
+const ITEMS := [
+	# name              hp    dmg   period  range  speed  rarity
+	["가죽끈",          3.0,  0.0,   0.00,   0.0,   0.0,  Rarity.COMMON],
+	["돌 목걸이",       0.0,  1.0,   0.00,   0.0,   0.0,  Rarity.COMMON],
+	["나무 발톱",       0.0,  0.0,  -0.10,   0.0,   0.0,  Rarity.COMMON],
+	["마른 가죽",       0.0,  0.0,   0.00,   0.0,   0.6,  Rarity.COMMON],
+	["뼛조각",          2.0,  0.5,   0.00,   0.0,   0.0,  Rarity.COMMON],
+	["말린 힘줄",       0.0,  0.0,  -0.05,   0.0,   0.3,  Rarity.COMMON],
+	["무두질 가죽",     6.0,  0.0,   0.00,   0.0,   0.0,  Rarity.RARE],
+	["부싯돌 이빨",     0.0,  2.0,   0.00,   0.0,   0.0,  Rarity.RARE],
+	["사슴 힘줄",       0.0,  0.0,  -0.20,   0.0,   0.0,  Rarity.RARE],
+	["바람 갈기",       0.0,  0.0,   0.00,   0.0,   1.2,  Rarity.RARE],
+	["뺏은 창끝",       0.0,  1.0,   0.00,   1.0,   0.0,  Rarity.RARE],
+	["방패 조각",       4.0,  0.0,   0.00,   0.0,  -0.3,  Rarity.RARE],
+	["청동 판",        10.0,  0.0,   0.00,   0.0,   0.0,  Rarity.EPIC],
+	["늑대 송곳니",     0.0,  3.0,  -0.10,   0.0,   0.0,  Rarity.EPIC],
+	["사냥꾼의 눈",     0.0,  0.0,   0.00,   2.0,   0.0,  Rarity.EPIC],
+	["질주의 발",      -2.0,  0.0,   0.00,   0.0,   2.0,  Rarity.EPIC],
+	["우두머리의 뿔",  12.0,  3.0,   0.00,   0.0,   0.0,  Rarity.LEGENDARY],
+	["폭풍의 가죽",     0.0,  0.0,  -0.25,   0.0,   2.5,  Rarity.LEGENDARY],
 ]
 
-const CARDS_PER_WIN := 6
-const CARD_PICKS := 2
+const _ITEM_COL_NAME := 0
+const _ITEM_COL_STATS := 1
+const _ITEM_COL_RARITY := 6
+
+## How many unnamed cells one summon slot's board has.
+## ⚠ **Six, which is what the board already drew** — the cells stopped being body parts, not stopped
+## existing, and `look.gd`'s refit layout is measured against six boxes. Changing this number is a
+## screen job as much as a rules one.
+const ITEM_CELLS := 6
+
+## ⚠⚠ **A REAL FLOOR, AND IT IS NOT A SAFETY BELT.** The old parts table wrote down that there was
+## deliberately NO clamp anywhere, because one part per cell meant the period could fall by at most one
+## row's worth and a floor would have been a branch no input could reach. **Unnamed cells deleted that
+## argument**: any item may be fitted six times, and six copies of the biggest period drop in the table
+## takes a 1.0 s attack to **-0.5 s**. `net_parts` measured exactly that the day the cells were unnamed.
+## ⇒ The clamp lives in `Loadout.stat_of`, and 0.20 s is the bound that net already carried as a literal.
+const PERIOD_FLOOR_SEC := 0.20
+
+## ⚠⚠ **THREE CARDS, ONE PICK** (2026-08-24, 티켓 06). It was six and two. **Two of three are left on
+## the table**, so the pick is a loss as well as a gain — which is the whole of what makes it a decision.
+const CARDS_PER_WIN := 3
+const CARD_PICKS := 1
 
 
-static func part_count() -> int:
-	return PART_STATS.size()
+## The five column names, in `ITEM_COL_*` order, and the one place they are spelled.
+## ⚠ **Korean, and that is the same exception the item names carry**: this string goes on a card the
+## user reads. `refit_view.STAT_LABELS` is the same five words for the dashboard and reads THIS.
+const ITEM_COL_LABELS = ["체력", "공격력", "공격주기", "사거리", "이동속도"]
 
 
-static func species_count() -> int:
-	return Species.size()
+## What an item does, as one line — 「체력 +6」, 「공격력 +3 · 공격주기 -0.10」.
+##
+## ⚠⚠ **Built from the table, never typed beside it.** A description written by hand is a second copy
+## of the numbers, and the day one moves the card lies about it — which is exactly the failure this
+## whole rewrite was for: the cards said 「다리」 for a round after legs stopped existing.
+static func item_effect_text(item: int) -> String:
+	var parts := []
+	for col in ITEM_COL_TOTAL:
+		var v := item_bonus(item, col)
+		if absf(v) <= EPS:
+			continue
+		# The period is the one column measured in seconds and the one that is better when it falls,
+		# so it is the one printed to two decimals. ⚠ **`%g` does not exist in GDScript's `%`** — it is
+		# a silent 「unsupported format character」 at runtime, printed once per card per frame.
+		var shown := ""
+		if col == ITEM_COL_PERIOD:
+			shown = "%+.2f" % v
+		elif is_equal_approx(v, roundf(v)):
+			shown = "%+d" % int(roundf(v))
+		else:
+			shown = "%+.1f" % v
+		parts.append("%s %s" % [str(ITEM_COL_LABELS[col]), shown])
+	return " · ".join(parts)
 
 
-static func part_bonus(part: int, col: int) -> float:
-	return float(PART_STATS[part][col])
+static func item_count() -> int:
+	return ITEMS.size()
 
 
-## Maps a `PART_COL_*` onto the matching base-stat column, so the five columns are not named twice.
+static func item_name_of(item: int) -> String:
+	if item < 0 or item >= ITEMS.size():
+		return ""
+	return str((ITEMS[item] as Array)[_ITEM_COL_NAME])
+
+
+static func item_rarity_of(item: int) -> int:
+	if item < 0 or item >= ITEMS.size():
+		return Rarity.COMMON
+	return int((ITEMS[item] as Array)[_ITEM_COL_RARITY])
+
+
+## What item `item` adds to column `col`. **The one reader of `ITEMS`' number columns**, so the offset
+## between "column 0 is hp" and "cell 1 of the row is hp" is written once.
+static func item_bonus(item: int, col: int) -> float:
+	if item < 0 or item >= ITEMS.size():
+		return 0.0
+	if col < 0 or col >= ITEM_COL_TOTAL:
+		return 0.0
+	return float((ITEMS[item] as Array)[_ITEM_COL_STATS + col])
+
+
+## Every item of one rarity, in table order. Used by the draw, which picks a rarity first and an item
+## inside it second — so adding a common item cannot quietly make legendaries rarer.
+static func items_of_rarity(rarity: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for i in ITEMS.size():
+		if int((ITEMS[i] as Array)[_ITEM_COL_RARITY]) == rarity:
+			out.append(i)
+	return out
+
+
+## The rarity a roll of `0 .. RARITY_WEIGHT sum - 1` lands on.
+## ⚠ **The caller owns the RNG.** `rules.gd` holds no state and never will — a table that could roll
+## its own number is a table two runs cannot be compared across.
+static func rarity_at_roll(roll: int) -> int:
+	var acc := 0
+	for r in RARITY_WEIGHT.size():
+		acc += int(RARITY_WEIGHT[r])
+		if roll < acc:
+			return r
+	return Rarity.COMMON
+
+
+static func rarity_weight_total() -> int:
+	var sum := 0
+	for w in RARITY_WEIGHT:
+		sum += int(w)
+	return sum
+
+
+## Maps an `ITEM_COL_*` onto the matching base-stat column, so the five columns are not named twice.
 ## ⚠ This is what stops the five columns being named twice — every base number in the game is still
 ## read through the existing `hp_of` · `damage_of` · `period_of` · `range_of` · `speed_of`, and this is
 ## a `match` over those five and nothing else.
 static func unit_stat(type_id: int, col: int) -> float:
 	match col:
-		PART_COL_HP:
+		ITEM_COL_HP:
 			return hp_of(type_id)
-		PART_COL_DAMAGE:
+		ITEM_COL_DAMAGE:
 			return damage_of(type_id)
-		PART_COL_PERIOD:
+		ITEM_COL_PERIOD:
 			return period_of(type_id)
-		PART_COL_RANGE:
+		ITEM_COL_RANGE:
 			return range_of(type_id)
-		PART_COL_SPEED:
+		ITEM_COL_SPEED:
 			return speed_of(type_id)
 	return 0.0
 
@@ -503,17 +628,18 @@ enum Reward { NONE, COUNT, BEAK }
 ## ⚠ `const X := PackedInt32Array([...])` is a parse error on 4.7.1, so this is a plain const Array and
 ## every read below casts.
 ##
-## ⚠ The island column is still the declared temporary from `title-and-map`: three grids serving SEVEN
-## island-opening nodes now, one more than before the chest's floor joined them. The check that forbids
-## two nodes sharing a grid lands WITH the three new grids, so no round is red for the gap.
+## ⚠⚠ **EVERY NODE NOW HAS ITS OWN GRID** (2026-08-24). The column used to be three grids serving seven
+## nodes, declared temporary; the four compact islands in `islands.gd` are the three-new-grids this
+## table was waiting for, and one more. **The run walks four small islands, then the two big ones, then
+## the boss** — smallest first, so the map grows under the player instead of opening at full size.
+## ⚠ The boss stays on grid 2 because grid 2 is the only one with a lion in its rows.
 const MAP_NODES := [
-	[0, NodeKind.FIGHT, Reward.COUNT, 0],   # 0 — floor 1, fixed, where every run lands
-	[1, NodeKind.FIGHT, Reward.COUNT, 1],   # 1 — floor 2 left
-	[1, NodeKind.FIGHT, Reward.BEAK,  2],   # 2 — floor 2 right
-	[2, NodeKind.FIGHT, Reward.BEAK,  1],   # 3 — floor 3 left
-	[2, NodeKind.FIGHT, Reward.COUNT, 2],   # 4 — floor 3 right
-	[3, NodeKind.FIGHT, Reward.COUNT, 0],   # 5 — floor 4, WAS THE CHEST, now a fight on grid 0 (closed
-	                                         # open question B: `Reward.COUNT`, on a grid already in use)
+	[0, NodeKind.FIGHT, Reward.COUNT, 4],   # 0 — floor 1, fixed, where every run lands
+	[1, NodeKind.FIGHT, Reward.COUNT, 5],   # 1 — floor 2 left
+	[1, NodeKind.FIGHT, Reward.BEAK,  6],   # 2 — floor 2 right
+	[2, NodeKind.FIGHT, Reward.BEAK,  7],   # 3 — floor 3 left
+	[2, NodeKind.FIGHT, Reward.COUNT, 0],   # 4 — floor 3 right
+	[3, NodeKind.FIGHT, Reward.COUNT, 1],   # 5 — floor 4
 	[4, NodeKind.BOSS,  Reward.NONE,  2],   # 6 — floor 5, the lion, the run ends here
 ]
 

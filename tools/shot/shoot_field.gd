@@ -65,7 +65,7 @@ func _summonable_screen_px() -> Vector2:
 func _world_to_screen_px(world: Vector2) -> Vector2:
 	var fv := _game.field_view
 	var span := Look.viewport_size_px() / fv.zoom
-	span.y /= cos(deg_to_rad(Look.CAM_PITCH_DEG))
+	span.y /= cos(deg_to_rad(fv.cam_pitch_deg))
 	var centre := fv.cam_px + span * 0.5
 	var off := world - centre
 	return Vector2(

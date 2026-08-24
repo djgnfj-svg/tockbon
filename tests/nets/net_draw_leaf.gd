@@ -329,8 +329,8 @@ func _table() -> Dictionary:
 			"_draw": 0,
 			# fill + border, the same shape every other pressable box in this repo draws.
 			"_paint_card": 2,
-			"_paint_card_part": 1,
-			"_paint_card_species": 1,
+			"_paint_card_name": 1,
+			"_paint_card_effect": 1,
 			"_paint_taken_mark": 1,
 			"_paint_hint": 1,
 			# The scene wash, `map_view`'s own shape reused rather than a second fade invented for
