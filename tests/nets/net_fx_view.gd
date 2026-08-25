@@ -305,7 +305,11 @@ func _the_hills_never_swallow_the_tier(t) -> void:
 				var drop := here - fv._ground_h(nx, ny)
 				wall_min = minf(wall_min, drop)
 				wall_max = maxf(wall_max, drop)
-	t.eq(walls, 31, "첫 섬의 층 경계 모서리는 31개다 (자가 점검, 이 수가 0이면 아래가 전부 공허하다)")
+	# ⚠ **15 and not 31 since the island was drawn by hand** (2026-08-25): the plateau is 4 x 4 with one
+	# corner spent on the stair, so its 4-way boundary is 15 edges — counted off the letters, and it is
+	# the perimeter shrinking with the slab, not the wall getting shallower. The claim below is what
+	# carries the meaning; this row only refuses to let that claim be vacuous.
+	t.eq(walls, 15, "첫 섬의 층 경계 모서리는 15개다 (자가 점검, 이 수가 0이면 아래가 전부 공허하다)")
 
 	# ⚠⚠ **THE ONE THAT CARRIES THE CLAIM, AND IT HAS NO MAGIC NUMBER IN IT.** A tier boundary reads as
 	# a boundary only if it is unmistakably steeper than the ground's own roll — so the two populations

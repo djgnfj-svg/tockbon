@@ -112,11 +112,24 @@ const SEALED_LANDINGS := 26
 ## tier board today.
 const FIRST_ISLAND := 4
 
-## Island 4, derived outside Godot: 62 tiles of plateau, one stair, 3 harbours, 54 landing tiles,
-## 6 defenders, 3 of them standing on the plateau.
-const ISLAND_HIGH := 62
+## Island 4, **re-derived by hand when the island stopped being generated** (2026-08-25). The rows used
+## to come out of `_small_rows` — a rectangle of land — and they are typed out in `ISLAND_4_ROWS` now,
+## with a bay cutting the south shore. **Every figure below is a fact about that drawing**, and each was
+## worked out from the letters before the nets were run, not read back off a red row:
+##
+##  · **15 plateau tiles.** The plateau is 4 x 4 at x 18-21, y 3-6, and one of its sixteen tiles is the
+##    stair. It is smaller than the 62 it replaces because a slab that size cannot sit on this coast
+##    without touching water, and `_the_first_island_carries_a_real_plateau` refuses that.
+##  · **68 landing tiles**, up from 54. Land went 180 tiles to 165, but a bay is nearly all shore: of
+##    the 165, only 97 have land on all eight sides. **A rectangle has the least coast a given area
+##    can have** — that is the same fact as 「휑하다」, counted.
+##    ⚠ It was 72 for one draft, and **that draft's coast was thrown away for looking like a comb**
+##    (see `ISLAND_4_ROWS`): stepping the shore back a column per row buys coast tiles by hanging a
+##    separate wall off every one of them.
+##  · **6 defenders, 3 up top** — unchanged, and the letters were placed to keep it so.
+const ISLAND_HIGH := 15
 const ISLAND_STAIR := 1
-const ISLAND_LANDINGS := 54
+const ISLAND_LANDINGS := 68
 const ISLAND_ENEMIES := 6
 const ISLAND_ENEMIES_HIGH := 3
 
@@ -822,8 +835,13 @@ func _a_landing_never_puts_a_body_on_the_plateau(t) -> void:
 	Islands.load_into(g, FIRST_ISLAND)
 	var b := Battle.new()
 	b.setup(g, Army.new(), Islands.spawns_of(FIRST_ISLAND), 999.0)
-	var landing := g.tile_index(16, 3)
-	t.ok(_is_landing(g, landing), "(16,3) 은 실제로 승인된 상륙지다 (자가 점검)")
+	# ⚠⚠ **The tile moved with the island and the choice is not arbitrary.** (16,3) was a shore on the
+	# rectangle and is inland on the drawn coast. (22,2) is picked because it is **the approved landing
+	# nearest the plateau** — it touches the plateau's own corner diagonally, so the ten-tile search
+	# starting there has the strongest pull up the wall of any beach on this island. A landing far from
+	# the plateau would pass this row without ever testing it.
+	var landing := g.tile_index(22, 2)
+	t.ok(_is_landing(g, landing), "(22,2) 는 실제로 승인된 상륙지다 (자가 점검)")
 	t.eq(g.level_of(landing), 0, "그리고 낮은 층이다 (자가 점검)")
 	var want := 10
 	var tiles := b._free_tiles_from(landing, want)

@@ -810,11 +810,20 @@ func run(t) -> void:
 		Vector2(ghost_row.position.x + 2.0, ghost_row.end.y - 2.0),
 		ghost_row.end - Vector2(2.0, 2.0),
 	]
+	# ⚠⚠ **THE WINDOW IS 30 FRAMES AND IT WAS 6** (2026-08-25). The first island stopped being a
+	# rectangle and grew a plateau reached through **one stair tile**, so fourteen bodies queue at that
+	# door — measured at up to 9.35 s motionless for a single body. 6 frames is 0.096 s, and a queue
+	# that is inching forward moves less than `Rules.EPS` in that time: **the floor row below went red
+	# on a sim that was working exactly as designed.** 0.48 s is still far under any queue and still
+	# reddens on a genuinely frozen screen.
+	# ⚠ **The queue itself is a real complaint and is not fixed here** — 티켓 26 carries it (「줄서기」),
+	# and widening this window does not make it smaller. This row was never the one measuring it.
+	const MOTION_FRAMES := 30
 	# The control arm: the same number of `_process` calls with NO presses at all. Run first, off a
 	# snapshot, so the comparison is against a number rather than against a hope.
 	var control_elapsed := b.elapsed
 	var control_substeps := b.substeps
-	for _cn in 6:
+	for _cn in MOTION_FRAMES:
 		game._process(0.016)
 	var control_after_elapsed := b.elapsed - control_elapsed
 	var control_after_substeps := b.substeps - control_substeps
@@ -827,7 +836,7 @@ func run(t) -> void:
 	for c5: Vector2 in corners:
 		game._unhandled_input(_press(c5))
 		game._unhandled_input(_release(c5))
-	for _pn in 6:
+	for _pn in MOTION_FRAMES:
 		game._process(0.016)
 	t.ok(absf((b.elapsed - pressed_elapsed) - control_after_elapsed) <= 1e-5,
 		"옛 배속 줄 네 귀퉁이를 눌러도 시계가 아무것도 안 누른 판과 똑같이 간다")

@@ -110,6 +110,7 @@ var _tex_flat: Texture2D = null
 var _world: Node3D = null
 var _cam: Camera3D = null
 var _terrain: MeshInstance3D = null
+
 var _sea: MeshInstance3D = null
 var _ring: MeshInstance3D = null
 var _sun: DirectionalLight3D = null
@@ -733,12 +734,58 @@ func _tile_h_uncached(tx: int, ty: int) -> float:
 	var base := Look.terrain_height_of_char(ch) + float(_tier_level(tx, ty)) * Rules.TIER_STEP_TILES
 	var kind := _kind_of(ch)
 	if kind == Kind.LAND or kind == Kind.RAMP:
-		return base + _swell_at(tx, ty) * Look.HILL_AMP_TILES
+		return base + _stepped(_swell_at(tx, ty) * Look.HILL_AMP_TILES * _shore_fade(tx, ty))
 	# A cliff takes a fraction of the same swell, so a ridge is a ridge and not a row of identical
 	# blocks. It reads the SAME noise as the land under it, so the ridge follows the ground it stands on.
 	if kind == Kind.CLIFF:
-		return base + _swell_at(tx, ty) * Look.HILL_AMP_TILES * Look.HILL_CLIFF_RATIO
+		return base + _stepped(_swell_at(tx, ty) * Look.HILL_AMP_TILES * Look.HILL_CLIFF_RATIO)
 	return base
+
+
+## The swell, **snapped to a ladder of `Look.HILL_STEP_TILES`**. ⚠⚠ **This is what keeps a flat-topped
+## tile from being a staircase.** Unsnapped, 520 tiles take 520 heights and every single tile edge is a
+## step — which is exactly the board the user threw out on 2026-08-24 (「너무 딱딱해서 재미가 없을까?」).
+## Snapped, whole runs of tiles land on the same rung: the island reads as broad flats with an
+## occasional one-step rise, and the rise is a real edge the eye can count.
+func _stepped(h: float) -> float:
+	return roundf(h / Look.HILL_STEP_TILES) * Look.HILL_STEP_TILES
+
+
+## How much of the swell a tile is allowed, by how far it is from the sea. **0 on the shore itself.**
+##
+## ⚠⚠ **A BEACH IS WHERE A BOAT UNLOADS AND IT WAS GROWING TERRACES** (2026-08-25, the user:
+## ***"갑자기 배가 도착해야 될 곳에 층이 생겼는데, 이러면 안 되고"***). Once tile tops went flat and
+## the swell went onto a ladder, a coast tile could land a full rung above its neighbour — so the
+## island's edge, the one place the whole game arrives through, grew steps out of noise. **The tiers
+## are authored in `islands.gd` and are the only height that is supposed to mean something**; this is
+## what keeps the hills from inventing more of them where they do the most damage.
+##
+## ⚠ Three bands rather than a smooth falloff, because the ladder quantises anyway: shore flat, the
+## ring behind it part-way up, everything further inland at full swell.
+func _shore_fade(tx: int, ty: int) -> float:
+	if _touches_water(tx, ty):
+		return 0.0
+	for k in Grid.NEIGHBOURS.size():
+		var nx := tx + int(Grid.NEIGHBOURS[k][0])
+		var ny := ty + int(Grid.NEIGHBOURS[k][1])
+		if _touches_water(nx, ny):
+			return Look.HILL_SHORE_FADE_MID
+	return 1.0
+
+
+## How wet one CORNER of a tile is, in `[0, 1]` — the share of the four tiles meeting there that are
+## sea. ⚠⚠ **This is 「한 칸 자체가 다채로워야 한다」** (2026-08-25, the user: ***"해안에서 잔디로
+## 이어지는 형태가 돼야 되는데, 지금은 그냥 잔디 덩어리"***). One flat colour per tile makes an island
+## of identical stamps; colouring the four corners separately puts the sand→grass run **inside** the
+## tile, where the shore actually is. ⚠ The tile boundary does not dissolve with it — the boundary is
+## carried by the HEIGHT step now, not by the colour.
+func _corner_wet(tx: int, ty: int, dx: int, dy: int) -> float:
+	var wet := 0
+	for oy in [dy - 1, dy]:
+		for ox in [dx - 1, dx]:
+			if _kind_of(_char_at(tx + ox, ty + oy)) == Kind.WATER:
+				wet += 1
+	return float(wet) / 4.0
 
 
 ## How far up the swell this tile sits, in `[0, 1]`. **Two octaves**, the second finer and smaller, so
@@ -754,21 +801,22 @@ func _swell_at(tx: int, ty: int) -> float:
 
 ## The height of one corner of one tile. `dx`/`dy` are 0 or 1 and name which corner.
 ##
-## ⚠⚠ **The join happens here and nowhere else.** The four tiles touching this corner are averaged, but
-## only the ones of the SAME kind — so two land tiles meet smoothly while land meeting water does not
-## drag the coast down into the sea. A tile always counts itself, so the average is never empty.
-func _corner_h(tx: int, ty: int, dx: int, dy: int) -> float:
-	var sum := 0.0
-	var n := 0
-	for oy in [dy - 1, dy]:
-		for ox in [dx - 1, dx]:
-			if not _tiles_join(tx, ty, tx + ox, ty + oy):
-				continue
-			sum += _tile_h(tx + ox, ty + oy)
-			n += 1
-	if n == 0:
-		return _tile_h(tx, ty)
-	return sum / float(n)
+## ⚠⚠ **A TILE IS FLAT AND IT USED TO BE AVERAGED WITH ITS NEIGHBOURS** (2026-08-25, the user:
+## ***"한 칸을 직관적으로 안 보이니까"***). Averaging the four tiles at each corner is what makes a
+## hillside smooth — and it is also what **dissolves the grid**: with every corner shared, no edge on
+## the island is a tile edge, and the eye has nothing to count. A flat top per tile puts a real corner
+## at every tile boundary, which is the whole of 「한 칸이 보인다」.
+##
+## ⚠ **This is NOT the 「칸마다 상자」 that was rejected on 2026-08-24.** What died that day was every
+## tile standing at its own *unquantised* height, so the ground was a staircase with a step on every
+## single tile. `Look.HILL_STEP_TILES` is the difference: the swell is snapped to a ladder, so
+## neighbours land on the SAME rung most of the time and the island comes out as **broad flats with an
+## occasional one-step rise** rather than as 520 different heights.
+##
+## The signature is kept — `dx`/`dy` still name a corner — because `_skirt` asks a NEIGHBOUR for the
+## two corners along a shared edge, and that has to keep meaning what it meant.
+func _corner_h(tx: int, ty: int, _dx: int, _dy: int) -> float:
+	return _tile_h(tx, ty)
 
 
 ## What a body standing on this tile stands ON: the middle of its four corners, so a wolf on a hillside
@@ -825,10 +873,10 @@ func _tile_colour(tx: int, ty: int) -> Color:
 	# a hill a hill, and the geometry alone is not.
 	if _kind_of(ch) == Kind.LAND:
 		col = col.lerp(Look.COL_LAND_HIGH, _swell_at(tx, ty))
-		# ...and land that touches the sea takes the shore's tone on top of that. Applied AFTER the
-		# height tint so a high headland still reads as a coast rather than as a bright inland field.
-		if _touches_water(tx, ty):
-			col = col.lerp(Look.COL_SHORE, Look.SHORE_BLEND)
+	# ⚠⚠ **The shore tone is NOT applied here any more** (2026-08-25). It used to be a whole-tile
+	# lerp gated on `_touches_water`, which paints a coast tile one flat sand colour right up to its
+	# inland edge — an island of identical stamps with a hard line where the stamps stop. It is a
+	# per-CORNER blend now (`_corner_wet`), so the sand runs out inside the tile that touches the sea.
 	return col
 
 
@@ -873,7 +921,7 @@ func _rebuild_terrain() -> void:
 			var b := Vector3(x0 + 1.0, h10, z0)
 			var c := Vector3(x0 + 1.0, h11, z0 + 1.0)
 			var d := Vector3(x0, h01, z0 + 1.0)
-			_quad(st, col, a, b, c, d)
+			_tile_top(st, col, tx, ty, a, b, c, d)
 
 			# The four skirts. **A skirt is what a box's side used to be**, and it is emitted only
 			# where the neighbour is genuinely lower — a slope that already meets its neighbour needs
@@ -932,11 +980,72 @@ func _rebuild_ring() -> void:
 	_ring.visible = _band_on()
 
 
+## A tile's top face: **an inner panel with a darker border around it.** See `Look.TILE_RIM_TILES` —
+## this border is the tile boundary made visible, and it is the answer to 「한 칸이 안 보인다」.
+##
+## The corners carry their own colours (`_corner_wet`), so a shore runs out INSIDE the tile that
+## touches the sea instead of stopping dead at that tile's inland edge, and the border inherits those
+## same four colours one shade down rather than being a colour of its own.
+func _tile_top(st: SurfaceTool, col: Color, tx: int, ty: int,
+		a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
+	var land := _kind_of(_char_at(tx, ty)) == Kind.LAND
+	var ca := _shored(col, tx, ty, 0, 0) if land else col
+	var cb := _shored(col, tx, ty, 1, 0) if land else col
+	var cc := _shored(col, tx, ty, 1, 1) if land else col
+	var cd := _shored(col, tx, ty, 0, 1) if land else col
+	# ⚠ The inset moves x and z only. A flat top means all four corners share a height, so pulling the
+	# panel in cannot tilt it — and on the one kind of tile that is NOT flat (a ramp) the panel follows
+	# the same plane its corners already describe.
+	var t := Look.TILE_RIM_TILES
+	var ai := Vector3(a.x + t, a.y, a.z + t)
+	var bi := Vector3(b.x - t, b.y, b.z + t)
+	var ci := Vector3(c.x - t, c.y, c.z - t)
+	var di := Vector3(d.x + t, d.y, d.z - t)
+	_quad4(st, ca, cb, cc, cd, ai, bi, ci, di)
+	# ⚠ **One darkening per SIDE, not one for the tile.** See `Look.TILE_RIM_DARKEN_FLAT` — a border
+	# that is the same on all four sides of every tile is a chessboard, and a chessboard says the same
+	# thing everywhere. The sides that differ are the ones worth a line.
+	var kn := _rim_darken(tx, ty, 0, -1)
+	var ke := _rim_darken(tx, ty, 1, 0)
+	var ks := _rim_darken(tx, ty, 0, 1)
+	var kw := _rim_darken(tx, ty, -1, 0)
+	_quad4(st, ca.darkened(kn), cb.darkened(kn), cb.darkened(kn), ca.darkened(kn), a, b, bi, ai)
+	_quad4(st, cb.darkened(ke), cc.darkened(ke), cc.darkened(ke), cb.darkened(ke), b, c, ci, bi)
+	_quad4(st, cc.darkened(ks), cd.darkened(ks), cd.darkened(ks), cc.darkened(ks), c, d, di, ci)
+	_quad4(st, cd.darkened(kw), ca.darkened(kw), ca.darkened(kw), cd.darkened(kw), d, a, ai, di)
+
+
+## How dark this tile's border is along one side, by what is on the other side of it.
+func _rim_darken(tx: int, ty: int, dx: int, dy: int) -> float:
+	var nx := tx + dx
+	var ny := ty + dy
+	if _kind_of(_char_at(nx, ny)) == Kind.WATER:
+		return Look.TILE_RIM_DARKEN_EDGE
+	if absf(_tile_h(nx, ny) - _tile_h(tx, ty)) > 0.01:
+		return Look.TILE_RIM_DARKEN_STEP
+	return Look.TILE_RIM_DARKEN_FLAT
+
+
 ## Two triangles, wound so the face points up, with one colour on all four corners.
 func _quad(st: SurfaceTool, col: Color, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
 	for v in [a, c, b, a, d, c]:
 		st.set_color(col)
 		st.add_vertex(v)
+
+
+## The same quad with **a colour per corner**, `ca`..`cd` matching `a`..`d`.
+func _quad4(st: SurfaceTool, ca: Color, cb: Color, cc: Color, cd: Color,
+		a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
+	var verts := [a, c, b, a, d, c]
+	var cols := [ca, cc, cb, ca, cd, cc]
+	for i in verts.size():
+		st.set_color(cols[i])
+		st.add_vertex(verts[i])
+
+
+## `col` with the shore tone mixed in by how wet that corner is.
+func _shored(col: Color, tx: int, ty: int, dx: int, dy: int) -> Color:
+	return col.lerp(Look.COL_SHORE, Look.SHORE_BLEND * _corner_wet(tx, ty, dx, dy))
 
 
 ## Drops a wall from this tile's edge to whatever the neighbour's edge sits at, when the neighbour is
@@ -965,8 +1074,38 @@ func _skirt(st: SurfaceTool, col: Color, tx: int, ty: int, dx: int, dy: int, a: 
 	var pad := Look.TERRAIN_SKIRT_PAD
 	# Darkened so a wall is told from the top face it hangs off even when the sun is straight on it —
 	# the cliff-face line the flat board drew did the same job with a leaf and a width constant.
-	_quad(st, col.darkened(0.15),
-		a, b, Vector3(b.x, nb - pad, b.z), Vector3(a.x, na - pad, a.z))
+	#
+	# ⚠⚠ **WOUND BOTTOM-EDGE FIRST, AND IT USED TO BE TOP-EDGE FIRST** (2026-08-25). The old order
+	# gave every one of the four skirts a normal pointing back INTO the tile it hangs off, so a wall
+	# was lit by whatever happened to be behind it. On the plateau's south face that is neither light:
+	# **it drew as a black rectangle under the plateau, and the first read of it was 「그림자가 너무
+	# 진하다」.** It is not a shadow — turning `shadow_enabled` off left the rectangle exactly as it
+	# was, which is what named the cause. ⚠ `generate_normals` derives the normal from the winding, so
+	# this reversal IS the fix; the material stays two-sided for the yaws that see a wall from behind.
+	#
+	# ⚠⚠ **A WALL THAT LANDS IN THE SEA IS ROCK, AND IT USED TO BE GRASS ONE SHADE DOWN.** That is
+	# right for a one-tile step between two fields; the coast is now three tiles (`TERRAIN_H_WATER`),
+	# and three tiles of the tile's own green is what made the island read as a slab of paper with a
+	# green edge rather than as a block of land. Rock, and darker at its foot than at its top.
+	var foot_a := Vector3(a.x, na - pad, a.z)
+	var foot_b := Vector3(b.x, nb - pad, b.z)
+	if _kind_of(_char_at(tx + dx, ty + dy)) == Kind.WATER:
+		_wall_quad(st, Look.COL_SEA_WALL.darkened(Look.SEA_WALL_FOOT_DARKEN), Look.COL_SEA_WALL,
+			foot_a, foot_b, b, a)
+		return
+	_quad(st, col.darkened(0.15), foot_a, foot_b, b, a)
+
+
+## A skirt with **two colours: one along its foot and one along its top.** Same winding as `_quad` —
+## `a`/`b` are the foot edge and `c`/`d` the top — so the two functions cannot disagree about which
+## way a wall faces.
+func _wall_quad(st: SurfaceTool, foot: Color, top: Color,
+		a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
+	var verts := [a, c, b, a, d, c]
+	var cols := [foot, top, foot, foot, top, top]
+	for i in verts.size():
+		st.set_color(cols[i])
+		st.add_vertex(verts[i])
 
 
 func _terrain_material() -> StandardMaterial3D:

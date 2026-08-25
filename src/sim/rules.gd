@@ -405,7 +405,7 @@ static func roster_reward_count() -> int:
 ##
 ## Floor 3 — under it the minimum crossing drops below 0.85 s and the band starts touching the shore
 ## again, which is what the user asked to end. **Ceiling 10, from the cliff above** — not from taste.
-const SUMMON_BAND_MIN_TILES := 6
+const SUMMON_BAND_MIN_TILES := 3
 
 ## ⚠⚠ **The OUTER edge of the band, and it is new** (2026-08-24, the user: 「내가 바다면 그 일정
 ## 동그랗게 섬 기준으로 동그랗게 해서」). Until now the band had a floor and no ceiling: every reachable

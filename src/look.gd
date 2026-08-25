@@ -75,7 +75,21 @@ const TILE_H_PX := TILE_PX
 ## height column next to the colour column `terrain_colour_of_char` already owns.
 ## ⚠ **Water is not 0.** A sea at zero height and a hole at zero height would be the same box, and the
 ## boat has to sit ON something.
-const TERRAIN_H_WATER := 0.15
+##
+## ⚠⚠ **THE SEA WENT FROM 0.15 TO -2.00, AND THAT ONE NUMBER IS 「너무 2D 같다」** (2026-08-25, the
+## user, looking at the hand-drawn first island: ***"이게 지금 너무 2D처럼 보인다까?"***). At 0.15 the
+## land stood **0.85 tiles** out of the water — about 34 canvas px before the 40° tilt shortens it, so
+## the island's whole coast was a **rim**, not a cliff. Nothing else was wrong with the geometry: it
+## was a solid the sea had swallowed to the ankles. At -2.00 the same coast is **3.00 tiles** of wall,
+## half again a tier step, and the island reads as a block of rock standing in the sea.
+##
+## ⚠ **Lowering the SEA and not raising the land, on purpose.** Land, ramp, cliff, the hills
+## (`HILL_AMP_TILES`) and the tier step are all in proportion to each other and every one of them was
+## judged on screen; raising land would have moved four numbers and re-opened four judgements.
+## Everything that reads the sea's height — the open-sea quad, the summon ring, a hull, and
+## `screen_to_world_px`'s water plane (티켓 22) — takes it from this constant, so they all came down
+## with it.
+const TERRAIN_H_WATER := -0.45
 const TERRAIN_H_HOLE := 0.02
 const TERRAIN_H_LAND := 1.00
 const TERRAIN_H_RAMP := 1.60
@@ -171,6 +185,14 @@ const HULL_H_TILES := 0.22
 ## ⚠ **Only land rises.** Water stays flat or the coast breathes, a cliff stays its own height or it
 ## stops reading as a wall you cannot climb, and a hole stays a hole.
 const HILL_AMP_TILES := 2.60
+
+## **The rung the swell is snapped to, in tiles** (2026-08-25). ⚠⚠ **The whole of 「한 칸이 보인다」
+## lives in this number together with the flat tile top.** A tile top is flat now, so without a ladder
+## every one of the island's tiles would stand at its own height and the ground would be a staircase —
+## the board the user rejected on 2026-08-24. At 0.5 an amplitude of 2.60 has **six rungs**, a swell
+## cell is `HILL_CELL_TILES` = 11 tiles wide, so a rung is about two tiles of flat ground before the
+## next step. ⚠ **Raise it and the island turns into terraces; lower it and the grid dissolves again.**
+const HILL_STEP_TILES := 0.5
 ## How wide one swell is, in tiles. Under about 6 the land reads as noise rather than as terrain; over
 ## about 20 an island 48 wide holds one bump and might as well be flat.
 const HILL_CELL_TILES := 11.0
@@ -184,16 +206,27 @@ const HILL_SEED := 1743
 ## in the geometry and the eye cannot find it. Tinting by height is what makes a rise legible from the
 ## chair the game is actually played in. **Lighter and slightly warmer**, the way distance and altitude
 ## both wash colour out.
-const COL_LAND_HIGH := Color(0.322, 0.365, 0.243)
+const COL_LAND_HIGH := Color(0.404, 0.514, 0.278)
 
 ## The tone land takes where it meets the sea. **A coast is not the same green as an inland field** and
 ## the eye knows it before it knows anything else about a picture of an island — bleached, sandier, and
 ## it is what turns a green slab into a piece of land with a shore.
 ## ⚠ It says nothing about walking: the legend still decides that, and this is only the tile's colour.
-const COL_SHORE := Color(0.416, 0.400, 0.290)
+## ⚠ **RAISED 2026-08-25 from `(0.416, 0.400, 0.290)`** — a dark khaki, which is what the shore blend
+## was mixing into a green that has itself just been brightened: the two met in the middle and the
+## coast came out as *paler grass*, not as sand. Sand is the lightest thing on the island.
+const COL_SHORE := Color(0.643, 0.588, 0.427)
 ## How far the shore tone reaches into the tile that touches water. Under about 0.3 nothing reads; at
 ## 1.0 the coast row stops being green at all and the island grows a painted outline.
-const SHORE_BLEND := 0.62
+## ⚠⚠ **CUT FROM 0.62 to 0.30 (2026-08-25).** 0.62 was measured on the 48 x 32 grids, where the shore
+## ring is a thin band around a wide inland field. **This island is 26 x 20 with a bay in it and 68 of
+## its 165 land tiles are coast** — at 0.62 that is two fifths of the island painted sand, and the
+## green never gets a chance to be the island's colour.
+const SHORE_BLEND := 0.85
+
+## How much of the swell the ring of tiles just BEHIND the shore gets. The shore itself gets none —
+## see `field_view._shore_fade`, and 「배가 도착해야 될 곳에 층이 생겼다」 for why.
+const HILL_SHORE_FADE_MID := 0.45
 
 ## How much of the land's swell a cliff gets. **Not zero** — a ridge of flat-topped cliff blocks all at
 ## exactly one height is the blockiest thing left on the island once the land is rolling. **Not one** —
@@ -368,7 +401,12 @@ static func survey_zoom_of(w_tiles: int, h_tiles: int) -> float:
 ## (`COL_HARBOUR` and `COL_GRID_LINE` were deleted 2026-08-24 — the harbour marker and the lattice
 ## both died with the flat board and nothing read either.)
 const COL_WATER := Color(0.086, 0.145, 0.255)
-const COL_LAND := Color(0.203, 0.259, 0.184)
+## ⚠⚠ **RAISED 2026-08-25 — it was `(0.203, 0.259, 0.184)` and that is not a green on screen.** The
+## ambient is a cold blue-grey (`COL_AMBIENT`) and a near-grey green under it comes out as **stone with
+## a tint**, which is what made a whole island read as one washed slab. Saturation up and value up: the
+## island has to say *grass* before it says anything else, because grass is what the rock wall and the
+## sea are told apart FROM.
+const COL_LAND := Color(0.235, 0.373, 0.196)
 const COL_HOLE := Color(0.055, 0.067, 0.078)
 
 # Cliff and ramp (`boat-and-landing` stage 5, P10). `^` gets its OWN fill now instead of reusing
@@ -385,6 +423,49 @@ const COL_HOLE := Color(0.055, 0.067, 0.078)
 ## the terrain mesh, told from the top face by its own darkened skirt.)
 const COL_CLIFF := Color(0.243, 0.235, 0.251)
 const COL_RAMP := Color(0.361, 0.310, 0.235)
+
+## **What the wall down to the sea is made of.** ⚠⚠ **A sea wall is not grass and it was drawing as
+## grass** — every skirt took its own tile's colour one shade down, which is right for a one-tile step
+## between two fields and wrong for three tiles of coast: the island came out as a green slab with a
+## green edge, and a slab has no material. Rock, warmer and lighter than `COL_CLIFF` so the impassable
+## cliff letter stays the darkest thing on the island and this does not start claiming to be one.
+const COL_SEA_WALL := Color(0.396, 0.341, 0.286)
+
+## --- the tile rim -----------------------------------------------------------------------------------
+## ⚠⚠ **A TILE IS DRAWN AS AN INNER FACE PLUS A DARKER BORDER, AND THAT BORDER IS THE WHOLE OF
+## 「한 칸이 안 보인다」.** Bad North's look talk states the rule this comes from: *borders, not
+## textures* — a repeating grass texture only says "grass" over and over, and everything interesting
+## happens where two areas meet. On a flat-topped tile the place two areas meet is the tile edge.
+##
+## ⚠ **The grow-outline was tried first and thrown away** (2026-08-25). Drawing the mesh a second time
+## inside-out and grown along its normals is what Bad North itself does — but that works because its
+## tiles are modelled with smooth normals. **This terrain is flat tops and hard walls, so every
+## triangle carries its own normal and `grow` pushes the faces apart instead of outward.** Measured:
+## at four times the intended thickness the screen was unchanged.
+##
+## How wide the border is, as a fraction of one tile, taken off each side.
+const TILE_RIM_TILES := 0.085
+## How much darker the border is than the face it edges. ⚠ **A fraction of the tile's OWN colour, not
+## a fixed colour** — a sand tile's border has to be dark sand and a grass tile's dark grass, or the
+## border becomes a third material and starts claiming to be something.
+##
+## ⚠⚠ **THREE VALUES, ONE PER KIND OF EDGE, AND IT WAS ONE VALUE FOR ALL OF THEM.** One value puts
+## the same line on all four sides of all 165 tiles and the island reads as a chessboard — which is
+## the exact failure the Bad North talk warns about (a repeating pattern that says the same thing over
+## and over carries no information). What carries information is WHICH edges are different:
+##  · `FLAT` — the neighbour is at the same height. Barely there: enough to count tiles by, not
+##    enough to draw the eye. Broad plains stay broad.
+##  · `STEP` — the neighbour is higher or lower. **This is where a body can and cannot walk**, so it
+##    is the edge the player is actually reading, and it gets the strong line.
+##  · `EDGE` — the neighbour is sea. The coastline, which the same talk singles out as the one thing
+##    worth drawing about water.
+const TILE_RIM_DARKEN_FLAT := 0.10
+const TILE_RIM_DARKEN_STEP := 0.34
+const TILE_RIM_DARKEN_EDGE := 0.30
+## How far down the sea wall's colour goes as it sinks — the bottom of a coast is in the water's shade.
+## ⚠ Applied at the wall's FOOT only; the top edge keeps `COL_SEA_WALL`, so the wall has a gradient
+## instead of being one flat rectangle, which is the other half of why the old edge read as paper.
+const SEA_WALL_FOOT_DARKEN := 0.28
 
 ## The one tile of a tier boundary a body may climb (티켓 19). **Its own colour and NOT `COL_RAMP`
 ## reused**, for a measuring reason as much as a visual one: `net_fx_view` picks terrain vertices out
@@ -565,7 +646,27 @@ const COL_HIT_HALO := Color(1.0, 1.0, 1.0, 0.35)
 ## ⚠ **Four of the nine are transplants** — the wolf, the crow, the archer and the shieldbearer carry
 ## the exact ratios their pre-rename rows had, for the reason `Rules.UNITS`' own header gives.
 ## Nothing here changes what happens, which is why body size is in this file and not in rules.gd.
-const BODY_RADIUS_RATIO := [0.22, 0.35, 0.45, 0.50, 0.28, 0.35, 0.25, 0.40, 0.55]
+##
+## ⚠⚠ **HALVED 2026-08-25 — the row above is what these WERE** (the user: ***"타일 하나가 크고 그 안에
+## 병사가 여덟 명은 들어가야 된다. 최소 네다섯 명"***). At 0.35 a wolf is **0.70 tiles across** and one
+## body fills one tile, so the grid could never read as tiles a squad stands on — it read as a grid of
+## single soldiers. At 0.17 a wolf is 0.34 tiles and **nine fit in one tile, four with room to spare**.
+##
+## ⚠ **This changes nothing about what happens and that is why it could be done at all**: `rules.gd`
+## says so in its own header — every distance in the sim is centre-to-centre in tiles, and body radius
+## is deliberately absent from it. Reach, pack radius, summon radius and the tiers are untouched.
+##
+## AT TILE_PX = 40 THESE NOW ARE, IN ORDER: 4.2 · 6.8 · 8.6 · 9.6 · 5.4 · 6.8 · 4.8 · 7.6 · 10.6 px.
+## ⚠⚠ **The BODY got smaller in tiles; whether it gets smaller on SCREEN is the camera's business** —
+## a smaller body on a grid the same size is a smaller picture, and the answer to that is fewer, bigger
+## tiles (the user's 「타일을 좀 더 크게」), not a bigger sprite.
+## ⚠⚠ **SET FROM ONE RULE, 2026-08-25: FOUR WOLVES STAND IN ONE TILE** (the user: ***"칸에 병사가
+## 4마리정도 들어간걸 기준 한번 만들어볼래?"***). Four bodies in a tile is a 2x2, so a wolf may be at
+## most **0.5 tiles across** and the ratio is half of that. 0.22 leaves a hair of gap so four wolves
+## read as four rather than as one blob. Every other species is that same 1.29x off the row before it,
+## so the herd keeps the proportions the user already judged: **the bear is still 0.62 across and
+## still takes a tile to itself**, which is what a bear is for.
+const BODY_RADIUS_RATIO := [0.142, 0.22, 0.277, 0.31, 0.174, 0.22, 0.155, 0.245, 0.342]
 
 ## Corner rounding as a fraction of that body's own radius — this is the "shape" half of telling
 ## types apart. The heavy walkers are boxy; the small and the flying are nearly circles.

@@ -256,16 +256,72 @@ const LONG_HARBOUR_PITCH := 24
 ## **A first island nobody wins is a game whose card screen nobody ever sees.**
 ## => The pitch falls as the run climbs. The hand-written islands sit at 8 defenders for the same ten
 ## bodies and are winnable, which is where the first row's number comes from.
+## ⚠⚠ **THE FIRST ISLAND'S GENERATOR ROW IS GONE — it is typed out by hand below.** The row that used
+## to sit here was `[26, 20, -1, 3, 11, 9, 8, 0, 3]`, and what it produced was **a rectangle**: nine
+## full-width rows of land with a straight coast on all four sides. 「그냥 땅땅한 판에 아무것도 없는
+## 너무 휑해」 is a description of that shape and not of what is drawn on it. **A generator that takes
+## a width and a height cannot make a bay**, and a bay is what splits one landing choice from another.
 const SMALL_ISLANDS := [
-	[26, 20, -1, 3, 11, 9, 8, 0, 3],
 	[28, 21,  2, 3, 12, 7, 9, 5, 3],
 	[24, 19, -1, 3, 10, 4, 7, 0, 3],
 	[30, 22,  2, 3, 12, 5, 9, 7, 4],
 ]
 
-## Where the compact islands start in the index. **After the long map**, so `LONG_ISLAND_INDEX` and
-## every literal measured against the hand-written three keep meaning what they meant.
-const SMALL_ISLAND_BASE := 4
+## The island the first map node opens, **typed out rather than generated** (2026-08-25, the user:
+## ***「저 맵부터 가다구를 잡자」*** and ***「손으로 그리는게 맞지 않을까?」***).
+##
+## ⚠⚠ **THE TERRAIN AND THE HEIGHT ARE ONE DRAWING AND THEY WERE TWO.** The rows came out of a
+## generator and `ISLAND_4_TIERS` was typed by hand against a shape nobody had drawn — the two were
+## held in step by nothing but being the same size. **A plateau can only be placed where the land
+## actually is**, so the moment height became real the terrain had to be authorable too.
+##
+## Same **26 x 20** as the generated row it replaces: `Look.survey_zoom_of` opens an island against its
+## own size, `net_shell` names 26 x 20, and the crossing figures every timing literal in this repo is
+## measured against are that grid's. **The shape changed; the frame did not.**
+##
+## What is drawn, and why each piece is there:
+##  · **A bay splitting the south shore.** The land is one body — you can walk from the west spur to
+##    the east one across the north — but a fleet landing west and a fleet landing east arrive at
+##    opposite ends of a walk. **That is the landing choice the rectangle did not have.**
+##  · **A plateau at x 18-21, y 3-6, with its one stair at (18, 4).** Set inland on purpose: `net_tiers`
+##    asserts no plateau tile touches water on any of eight sides (so nothing can land on it while
+##    「상륙은 낮은 층에만」 is still unbuilt) and that no landing tile sits beside the stair (so a boat
+##    cannot be parked at the door).
+##  · **Six defenders, three of them up top** — an empty plateau teaches nothing, and the first island
+##    is where a player learns that high ground has to be climbed.
+##  · **Eight rows of open sea below the land, harbours on the last one.** A boat may only be placed
+##    `Rules.SUMMON_BAND_MIN_TILES` = 6 water hops from any shore; the first draft of the generated
+##    table left four rows and measured **0 placeable tiles**. That failure is not repeatable here.
+## ⚠⚠ **THE COAST IS DRAWN IN STRAIGHT RUNS AND THE FIRST DRAFT WAS NOT.** That draft stepped the
+## south shore back one column per row — a smooth diagonal on paper. On screen every tile hangs a
+## `_skirt` down to the sea, so a staircase coast shows **every one of those skirts edge-on at once**
+## and the island reads as a torn sheet of paper. Photographed and thrown away. **A shore that changes
+## in runs of three or more columns hangs one wall, not a comb.**
+const ISLAND_4_ROWS := [
+	"~~~~~~~~~~~~~~~~",
+	"~~~..........~~~",
+	"~~..S......A..~~",
+	"~~.........A..~~",
+	"~~........A...~~",
+	"~~....~~......~~",
+	"~~~.S.~~...S.~~~",
+	"~~~~~~~~~~~~~~~~",
+	"~~~~~~~~~~~~~~~~",
+	"~~~~~~~~~~~~~~~~",
+	"~~~~~~~~~~~~~~~~",
+	"~~~H~~~~H~~~~H~~",
+]
+
+
+## **The island index the hand-drawn map holds.** `Rules.MAP_NODES[0]` opens it, and `net_tiers`
+## asserts that — the island a player sees first and the island carrying the plateau are the same
+## island by check, not by coincidence.
+const HAND_ISLAND_INDEX := 4
+
+## Where the compact islands start in the index. **After the long map and after the hand-drawn one**,
+## so `LONG_ISLAND_INDEX` and every literal measured against the hand-written three keep meaning what
+## they meant.
+const SMALL_ISLAND_BASE := 5
 
 
 ## --- the tier boards --------------------------------------------------------------------------------
@@ -278,33 +334,33 @@ const SMALL_ISLAND_BASE := 4
 ## plateau before seven more are authored against a shape nobody has judged yet. **The other seven are
 ## not "done" — they are not started**, and `tiers_of` returning `[]` for them means flat.
 ##
-## ⚠ **`Rules.MAP_NODES[0]` opens island 4**, which is `SMALL_ISLANDS[0]` — a GENERATED map. So its
-## rows come out of `_small_rows` and its tiers are typed here by hand, and the two are held in step by
-## nothing but their shape. **`net_tiers` asserts that shape**, and asserts that no stair or high tile
-## lands on a character a body cannot stand on — a stair drawn over water is a door that silently is
-## not there.
+## ✅ **`Rules.MAP_NODES[0]` opens island 4, and island 4 is now TYPED OUT** (`ISLAND_4_ROWS`). The two
+## boards are one drawing by one hand, which is what they were not: the rows used to come out of a
+## generator and this board was written against a rectangle nobody had chosen. **`net_tiers` still
+## asserts the shape**, and asserts that no stair or high tile lands on a character a body cannot stand
+## on — a stair drawn over water is a door that silently is not there.
+##
+## ⚠⚠ **THE PLATEAU MOVED AND SHRANK, and both are consequences of the coast being drawn.** The old
+## board put a 9 x 7 slab across the middle of a full-width rectangle; on a coast with a bay in it that
+## slab **touches water**, and `net_tiers` refuses that — nothing may land on a plateau while
+## 「상륙은 낮은 층에만」 is unbuilt. What fits inland is **4 wide by 4 deep at x 18-21, y 3-6**, one
+## corner of it traded for the stair.
 const ISLAND_4_TIERS := [
-	"..........................",
-	"..........................",
-	"..........................",
-	"..........................",
-	".............111111111....",
-	".............111111111....",
-	".............111111111....",
-	"............./11111111....",
-	".............111111111....",
-	".............111111111....",
-	".............111111111....",
-	"..........................",
-	"..........................",
-	"..........................",
-	"..........................",
-	"..........................",
-	"..........................",
-	"..........................",
-	"..........................",
-	"..........................",
+	"................",
+	"................",
+	"..........11....",
+	"........../1....",
+	"..........11....",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
+	"................",
 ]
+
+
 
 
 ## The tier board for island `i`, or **`[]` for an island with no height in it** — which `Grid.load_rows`
@@ -314,7 +370,7 @@ const ISLAND_4_TIERS := [
 ## "these seven were considered and are flat", and what is true is that they have not been authored.
 ## The day the second one is written this becomes the table; today it is one island and a default.
 static func tiers_of(i: int) -> Array:
-	if i == SMALL_ISLAND_BASE:
+	if i == HAND_ISLAND_INDEX:
 		return ISLAND_4_TIERS
 	return []
 
@@ -381,14 +437,19 @@ static func _small_rows(k: int) -> Array:
 
 
 static func count() -> int:
-	# ⚠ `ISLAND_ROWS.size() + 1` and not a literal 4: the long map is generated rather than typed out,
-	# so it is not in that array and cannot be counted by it.
-	return ISLAND_ROWS.size() + 1 + SMALL_ISLANDS.size()
+	# ⚠ Not a literal 8: **two of the eight are not in `ISLAND_ROWS`** — the long map is generated, and
+	# the first island is typed out in its own constant because it is the one a player sees first.
+	# ⚠⚠ **The total did not move when the first island stopped being generated.** One row left
+	# `SMALL_ISLANDS` and `ISLAND_4_ROWS` took its place in the index, so the map's seven nodes still
+	# open the islands they opened.
+	return ISLAND_ROWS.size() + 1 + 1 + SMALL_ISLANDS.size()
 
 
 static func rows_of(i: int) -> Array:
 	if i == LONG_ISLAND_INDEX:
 		return _long_rows()
+	if i == HAND_ISLAND_INDEX:
+		return ISLAND_4_ROWS
 	if i >= SMALL_ISLAND_BASE:
 		return _small_rows(i - SMALL_ISLAND_BASE)
 	return ISLAND_ROWS[i] as Array
@@ -417,6 +478,11 @@ static func time_limit_of(i: int) -> float:
 		return per_column * float(LONG_ISLAND_W)
 	# ⚠ The compact islands take the same seconds-per-column. **Nothing loses by the clock any more**
 	# (see `battle._phase_clock`), so this is a number that has to exist rather than one that decides.
+	# ⚠⚠ **The hand-drawn island needs its own branch and would otherwise index `TIME_LIMITS`**, which
+	# has one entry per island in `ISLAND_ROWS` and would be read out of range. Its width is read off
+	# its own first row for the same reason `base_w` is: a number typed twice rots on the day one moves.
+	if i == HAND_ISLAND_INDEX:
+		return per_column * float(str(ISLAND_4_ROWS[0]).length())
 	if i >= SMALL_ISLAND_BASE:
 		return per_column * float((SMALL_ISLANDS[i - SMALL_ISLAND_BASE] as Array)[0])
 	return float(TIME_LIMITS[i])
