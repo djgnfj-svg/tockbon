@@ -10,13 +10,37 @@ class_name Rules
 
 # --- Unit type ids -------------------------------------------------------------------------------
 # These are indices into UNITS. Reordering the table renumbers every spawn character and every
-# hotkey binding at once, with nothing to bark about it.
-const CELL_MELEE := 0
-const CELL_RANGED := 1
-const BISON := 2
-const CROW := 3
-const LION := 4
-const TYPE_COUNT := 5
+# hotkey binding at once — **and `net_summon._the_unit_table` is now the bark that was missing**:
+# every constant here is asserted to name its own row, and the pair list's LENGTH is pinned against
+# the table so a row added without a constant reddens too.
+#
+# ⚠⚠ **`CELL_MELEE` and `CELL_RANGED` are GONE, renamed to `WOLF` and `CROW`.** `CONTEXT.md` marked
+# them as the last place the dead cell game was still spelled out and said they change 「고도가 도는
+# 데서」; the five-beast roster is that place. **The numbers moved unchanged** — the wolf is the one
+# row a whole run has been played on, and re-tuning it while renaming it would make a later
+# difference unattributable.
+const SQUIRREL := 0
+const WOLF := 1
+const COW := 2
+const BEAR := 3
+const CROW := 4
+const SPEARMAN := 5
+const ARCHER := 6
+const SHIELDBEARER := 7
+const LION := 8
+
+## ⚠ **`TYPE_COUNT` is DELETED, not renamed.** It meant two different things at once — the table's
+## height and the number of equipment boards — and those stopped being the same number the day the
+## enemy rows joined the table. What used to read it now reads `player_type_count()` (the boards) or
+## `UNITS.size()` (the table).
+
+## Which army a row belongs to.
+##
+## ⚠⚠ **EVERY PLAYER ROW COMES BEFORE EVERY ENEMY ROW, and that is a contract rather than tidiness.**
+## `Loadout`'s board is indexed `0 .. player_type_count() - 1` and the refit strip draws that same
+## range, so an enemy row sitting between two player rows would put a helmet on a human with every
+## count check downstream still green. `net_summon` pins the ordering, not just the count.
+enum Side { PLAYER, ENEMY }
 
 
 # --- Reach ---------------------------------------------------------------------------------------
@@ -26,7 +50,31 @@ const TYPE_COUNT := 5
 ## attack caught almost nothing (orthogonal neighbours are 1.414 apart from each other), and the
 ## orthogonal case landed exactly on the float boundary. See the first slice plan, "range + 1.0
 ## excluded diagonals".
-const REACH_BONUS := 1.5
+const REACH_BONUS := 1.75
+## ⚠⚠ **RAISED 1.5 -> 1.75** (2026-08-25, 티켓 19). **1.5 covered the flat 8-neighbourhood and nothing
+## else, and the neighbourhood stopped being flat.** A body on a stair (level 1) reaching an enemy on
+## the plateau beside it (level 2) is `sqrt(1 + 1)` = **1.414 orthogonally** — inside 1.5 — but
+## `sqrt(2 + 1)` = **1.732 diagonally**, outside it. Measured in play with the attacker pinned on the
+## stairs: **orthogonal, three hits and a kill; diagonal, ZERO hits and ZERO damage.** The stair is one
+## tile wide, so the horde behind the body that cannot hit is stuck in the doorway and the archers
+## above shoot the queue. **26 of 162 fights lost that way, and in 24 of them every surviving enemy was
+## clustered on exactly those diagonal tiles.**
+##
+## **The window is `(sqrt(3), 2.0)`** — above the tier diagonal, below the flat two-tile orthogonal.
+## 1.75 sits in it with **+0.018 above and -0.250 below**; the lower margin is thin and safe because
+## both bounds are exact (integers under a root, heights are exact multiples of `TIER_STEP_TILES`) and
+## `EPS` is 1e-4.
+##
+## ⚠⚠ **IT IS NOT A MELEE-ONLY CHANGE AND NO VALUE COULD MAKE IT ONE.** This bonus is added to EVERY
+## species' range, so raising it moves every species' reach. Swept over every tile-aligned pair at
+## every level difference: at 1.75 exactly **two** species gain a flat-ground distance —
+## **다람쥐 3.50 -> 3.75 gains 3.606** and **까마귀 5.50 -> 5.75 gains 5.657** — and nothing else moves.
+## **There is no way to avoid those two**: 다람쥐's next distance enters at a bonus of 1.606, which is
+## BELOW the 1.732 melee needs, so any value that fixes the stair also gives it that tile.
+## ⚠ **1.85 was the other candidate** — more comfortable margins, but it also hands 창병 the 2-tile
+## diagonal (2.828) and 까마귀 a second tile. **1.75 is the smallest drift that closes the defect**, and
+## the drift is written here rather than discovered later. **Nothing else moved**: 곰's sweep, 사자's
+## area, 다람쥐's pull and every detection radius are their own table columns and read no bonus.
 
 ## Compare reach with this epsilon. A diagonal is exactly sqrt(2); a bare `<=` on that boundary is
 ## a coin flip that changes which units can fight from frame to frame.
@@ -37,9 +85,36 @@ const EPS := 1e-4
 const NO_DETECT := -1.0
 
 
+# --- Height: tiers and the stairs between them ------------------------------------------------------
+## **A tile carries one integer, its LEVEL, and every height fact is derived from it.** 티켓 19's answer
+## table decided two tiers, one tier two tiles tall, a stair one tile wide, and the stair as the only
+## way up. The whole of "the stair is the only door" is `MAX_CLIMB_LEVELS` below: low ground is level 0,
+## a stair is level 1, high ground is level 2, so the boundary is a gap of two and the stair is two
+## gaps of one.
+##
+## ⚠⚠ **Integer levels, deliberately, and never a float height comparison.** `_within` was once caught
+## on the 1.41421 diagonal boundary (see `REACH_BONUS`), and a climb rule written against heights would
+## put a float boundary in the middle of every hillside — the hills are noise, and noise crosses any
+## threshold somewhere. **Nothing decides whether a body may walk by looking at a height.**
+##
+## How tall one tier stands, in tiles. Everything below is derived from it and the number is not
+## repeated anywhere else.
+const TIER_RISE_TILES := 2.0
+## How far ONE level rises — a stair tread. Half a tier, because a stair sits halfway up.
+const TIER_STEP_TILES := TIER_RISE_TILES * 0.5
+## The largest level difference a body may step across. **1**, so a stair is passable from both sides
+## and a tier boundary is not.
+const MAX_CLIMB_LEVELS := 1
+
+
 # --- The unit table ------------------------------------------------------------------------------
 ## Columns: name, max_hp, damage, attack_period(s), range(tiles), area(tiles), speed(tiles/s),
-## detect(tiles).
+## detect(tiles), side, 한국어 이름.
+##
+## ⚠⚠ **THE KOREAN NAME IS A COLUMN HERE AND NOT A SECOND TABLE IN `hud_view`.** `TYPE_LABELS` was
+## that second table, and the split showed: 까마귀 stood in it TWICE, because the player's ranged row
+## borrowed the crow's picture while the enemy crow was its own row. One column ends the duplicate at
+## its cause. The Korean is the same exception `ITEMS`' names carry — the user reads this word.
 ##
 ## `const X := PackedInt32Array([...])` is a PARSE ERROR in GDScript 4.7 — "Assigned value for
 ## constant isn't a constant expression" — so every table in this repo is a plain const Array.
@@ -53,12 +128,35 @@ const NO_DETECT := -1.0
 ## it to 5 is the one change that gives the boss a losable band, and that is an open design decision
 ## for the user, not a tuning knob. Until it is decided the probe's fourth policy fails on purpose
 ## rather than being quietly retired — see the first slice plan, "the boss still has no band".
+## ⚠⚠ **FOUR ROWS ARE TRANSPLANTS AND FOUR ARE FIRST DRAFTS, and which is which decides what a later
+## measurement means.** `WOLF` carries `CELL_MELEE`'s numbers and `CROW` carries `CELL_RANGED`'s,
+## unchanged, because the wolf is the only row a whole run has ever been played on. `SHIELDBEARER`
+## carries `BISON`'s and `ARCHER` carries the old enemy `CROW`'s, because the three soldiers on screen
+## had their weapons chosen from what those rows DO (reach 3 got the bow, slow and tough got the
+## shield — `field_view` says so), so moving the numbers keeps the picture and the number agreeing.
+## **`SQUIRREL` · `COW` · `BEAR` · `SPEARMAN` are first values and nothing has measured them**, the
+## same standing `RARITY_WEIGHT` carries — 티켓 05 결정 16 puts the tuning in the user's hands.
+##
+## ⚠ **`SPEARMAN` gets a row and stands on no island.** 티켓 16 is what gives it a spawn character.
+## ⚠⚠ **`SQUIRREL`'s `range` of 2.0 IS NOT A TASTE CALL — the pull needs somewhere to pull TO.** At
+## range 0 its reach is `REACH_BONUS` alone, so everything it bites already stands within 1.5 tiles
+## and a one-tile pull lands on the squirrel's own tile, where `_shove` correctly refuses to put a
+## body: the passive would have been in the table and inert on screen. Range 2 gives the pull room.
+## It is still a first value — how far, and whether a puller should out-range a wolf at all, is the
+## user's to set.
+## ⚠⚠ **`BEAR`'s `area` of 1.5 IS the bear's 휘두르기, and it is the whole of it.** `_phase_attacks`
+## already hands `area_of` to `_hit_enemies` and `_hit_enemies` already walks a radius, so the passive
+## cost zero lines in `battle.gd`. 1.5 is the lion's value — a first value, not a measured one.
 const UNITS := [
-	["CELL_MELEE", 14.0, 2.0, 1.0, 0.0, 0.0, 4.0, NO_DETECT],
-	["CELL_RANGED", 8.0, 1.5, 1.0, 4.0, 1.0, 4.0, NO_DETECT],
-	["BISON", 20.0, 3.0, 2.0, 0.0, 0.0, 2.5, 6.0],
-	["CROW", 6.0, 1.5, 1.0, 3.0, 0.0, 6.0, 12.0],
-	["LION", 140.0, 4.0, 1.5, 0.0, 1.5, 2.5, 2.0],
+	["SQUIRREL", 8.0, 1.5, 0.8, 2.0, 0.0, 5.5, NO_DETECT, Side.PLAYER, "다람쥐"],
+	["WOLF", 14.0, 2.0, 1.0, 0.0, 0.0, 4.0, NO_DETECT, Side.PLAYER, "늑대"],
+	["COW", 26.0, 3.0, 1.6, 0.0, 0.0, 3.0, NO_DETECT, Side.PLAYER, "소"],
+	["BEAR", 30.0, 3.5, 1.8, 0.0, 1.5, 2.8, NO_DETECT, Side.PLAYER, "곰"],
+	["CROW", 8.0, 1.5, 1.0, 4.0, 1.0, 4.0, NO_DETECT, Side.PLAYER, "까마귀"],
+	["SPEARMAN", 16.0, 2.5, 1.5, 1.0, 0.0, 3.0, 6.0, Side.ENEMY, "창병"],
+	["ARCHER", 6.0, 1.5, 1.0, 3.0, 0.0, 6.0, 12.0, Side.ENEMY, "궁수"],
+	["SHIELDBEARER", 20.0, 3.0, 2.0, 0.0, 0.0, 2.5, 6.0, Side.ENEMY, "방패병"],
+	["LION", 140.0, 4.0, 1.5, 0.0, 1.5, 2.5, 2.0, Side.ENEMY, "사자"],
 ]
 
 const _COL_NAME := 0
@@ -69,6 +167,8 @@ const _COL_RANGE := 4
 const _COL_AREA := 5
 const _COL_SPEED := 6
 const _COL_DETECT := 7
+const _COL_SIDE := 8
+const _COL_LABEL := 9
 
 
 static func name_of(type_id: int) -> String:
@@ -103,6 +203,32 @@ static func detect_of(type_id: int) -> float:
 	return float(UNITS[type_id][_COL_DETECT])
 
 
+static func side_of(type_id: int) -> int:
+	return int(UNITS[type_id][_COL_SIDE])
+
+
+## The word a player reads for this row. `name_of` returns the table's IDENTIFIER, which is English
+## and is not text anybody reads on screen.
+static func label_of(type_id: int) -> String:
+	if type_id < 0 or type_id >= UNITS.size():
+		return ""
+	return str((UNITS[type_id] as Array)[_COL_LABEL])
+
+
+## How many rows are the player's. **Counted over the table and never written as a literal** — the
+## boards, the refit strip and every range check on a beast type ride on this number, and a hand
+## written copy beside a table that grows is the second copy this repo has watched rot twice.
+##
+## ⚠ It leans on the ordering `Side`'s own header states: the player rows are `0 ..` this `- 1`, so a
+## caller may use it as a bound and not only as a count.
+static func player_type_count() -> int:
+	var n := 0
+	for i in UNITS.size():
+		if int((UNITS[i] as Array)[_COL_SIDE]) == Side.PLAYER:
+			n += 1
+	return n
+
+
 # --- The telegraph -------------------------------------------------------------------------------
 ## How long the lion holds a declared blow before it lands. The blow is announced first and lands
 ## when this runs out, so there is something to draw BEFORE the damage. A ring drawn on the frame the
@@ -124,14 +250,15 @@ const LION_WINDUP_SEC := 0.6
 
 
 # --- The run -------------------------------------------------------------------------------------
-## Starting force: 10 soldiers (`roster_start_count()`, below `SUMMON_SLOTS`). A run starts from this
+## Starting force: 10 soldiers (`roster_start_count()`, below `START_SLOTS`). A run starts from this
 ## identical state every time — no meta, no unlocks, no carry between runs.
 ##
 ## ⚠ **`START_MELEE` / `START_RANGED` / `REWARD_MELEE` / `REWARD_RANGED` are DELETED, not renamed.**
-## They were per-TYPE and the roster is per-SLOT — see `SUMMON_SLOTS`' own header below, which is where
-## the two counts moved. What a `Reward.COUNT` node pays is `roster_reward_count()`: more soldiers at
-## FULL HP, applied on the win with nothing to click, so the run goes straight back to the map; only the
-## beak opens a reward screen.
+## They were per-TYPE and the roster is per-SLOT — `START_SLOTS` and `SLOT_PAY` below are where the two
+## counts live. What a `Reward.COUNT` node pays is `slot_pay_of` per registered slot: more soldiers at
+## FULL HP, applied on the win with nothing to click, so the run goes straight to the card screen.
+## ⚠ **A second reward kind used to open a pick screen of its own** — the beak — and it is deleted
+## (2026-08-25). Every fight node pays this one thing now.
 ##
 ## ⚠ It is a NODE's reward and no longer an island's. A route may step on up to
 ## `map_max_count_nodes_on_a_route()` of them, which is why nothing downstream may assume one per run —
@@ -141,49 +268,101 @@ const LION_WINDUP_SEC := 0.6
 # --- The summon slots ------------------------------------------------------------------------------
 ## What the number keys hold, and how far out to sea a summon may be pressed. See `sea-summon`.
 ##
-## ⚠⚠ **THIS TABLE IS THE ROW.** It held five entries — two bound and three `SUMMON_UNBOUND` — and the
-## user cut it after playing: ***"슬럿 2개로 시작 확장가능"***. **The row is two boxes because the table
-## has two rows, not because anything counts to two.** `summon_slot_count()` is `SUMMON_SLOTS.size()`
-## and `hud_view` loops over it; **a third binding is one line here and no other edit anywhere.**
-## ⇒ **Nothing may write 2 as a literal.** A check that pins the count against a number is what turns
-## the next binding into a rewrite, and this repo has measured that shape — both sides of an assertion
-## moving together and passing at any value. Pin the count against the TABLE; pin the table's own size
-## as the literal.
+## ⚠⚠ **THE TABLE THAT STOOD HERE IS DELETED. THE SLOTS ARE RUN STATE NOW** (`Army.slots`, 티켓 15).
+## `SUMMON_SLOTS` said 「칸 s 는 영원히 종 t 에 묶여 있다」 and that sentence became false the day a
+## card could fill a slot: **a constant holding a fact that differs per run is a shape this repo has
+## already paid for.** `Army` is where it went and not `Run`, for the reason `army.gd` gives about the
+## equipment boards — **`Battle` is handed `army` and nothing else**, and the fight has to read the
+## slots.
 ##
-## ⚠ **`SUMMON_UNBOUND` survives with no entry using it**, and that is deliberate: `summon_type_of`
-## returns it for an out-of-range slot, which is the answer `slot_reserve_ids` and `Battle.summon` both
-## refuse on. Delete it and an out-of-range slot answers `CELL_MELEE` — 0 — with every bounds check
-## downstream still passing while the wrong body is summoned.
+## **Its three lessons did not die with it, and they are the three checks `net_summon._the_run_slots`
+## carries**:
+##  · **Nothing may write the slot count as a literal.** Count against `army.slot_count()`; the
+##    LITERAL belongs on `START_SLOTS.size()`, one side of the assertion only
+##  · **The answer for an empty slot is `SUMMON_UNBOUND` and the test is `< 0`, NEVER `<= 0`.**
+##    There is a row 0, so a `<= 0` refuses it forever and a slot that refuses looks exactly like an
+##    empty roster
+##  · **An enemy row must not reach a slot.** Binding one 「reads as done and ships enemy bodies as
+##    the player's army」 — `Army.register_species` is the one door and it refuses on `side_of`
 ##
-## ⚠⚠ **`CELL_MELEE` IS 0, so the "nothing is bound here" test is `< 0` and NEVER `<= 0`.** A `<= 0`
-## refuses slot 1 forever, and every count check downstream still passes — a slot that refuses looks
-## exactly like an empty roster.
-##
-## ⚠ **The unbound slots were deliberately NOT `BISON` / `CROW` / `LION`** and deleting them does not
-## change that: `TYPE_LABELS` has five entries and nothing range-checks it, so binding a slot to an
-## enemy type reads as done and ships enemy bodies as the player's army. **Re-binding a slot at runtime
-## IS the 짐승 economy**, blocked twice in `session-loop`, and it is not this table's business.
-##
-## ⚠⚠ **AND WHAT THE USER DECIDED THAT ECONOMY WILL BE IS RECORDED HERE, because it lands on this
-## table**: ***"슬롯에 세포를 넣음 대신 슬롯자체를 강화하는거임"*** — a cell goes into a slot and **what
-## you upgrade is the SLOT, not the cell.** Deferred to a refit screen that does not exist, so
-## **nothing in code changes**: slots stay bound to types. `sea-summon`'s design doc records why
-## `session-loop`'s object-cost arithmetic cannot be reused for it.
+## ⚠⚠ **AND WHAT THE USER DECIDED THE 짐승 ECONOMY WILL BE IS STILL RECORDED, because it lands on the
+## slots**: ***"슬롯에 세포를 넣음 대신 슬롯자체를 강화하는거임"*** — a beast goes into a slot and
+## **what you upgrade is the SLOT, not the beast.** Nothing in code does that yet.
 const SUMMON_UNBOUND := -1
 
-## Columns: unit type, how many bodies a run STARTS with in this slot, how many a COUNT node adds to it.
-## ⚠⚠ **The starting counts moved here from `START_MELEE` / `START_RANGED` because they were per-TYPE
-## and the roster is per-SLOT.** A third row used to arrive with no bodies at all and every count check
-## downstream stayed green; the header above already claimed a third binding costs one line, and for the
-## roster it did not until this moved.
-const SUMMON_SLOTS := [
-	[CELL_MELEE, 6, 2],
-	[CELL_RANGED, 4, 1],
+## How many slots a run may ever hold. **Five, because there are five beasts** — 티켓 05 decided the
+## row of buttons is five and that they are all open from the start rather than unlocked by floor.
+## ⚠ **A registration past this is REFUSED and changes nothing**, the same contract `Loadout.fit`
+## carries for a full board. The screen that asks 「하나 버릴래?」 is 티켓 05 결정 10 and is not built.
+const SUMMON_SLOT_MAX := 5
+
+## What a run OPENS with: one row per slot, as `[unit row, how many bodies]`.
+##
+## ⚠⚠ **This is the OPENING and not the shape of a slot.** A slot's species is `Army.slots` and moves
+## during the run; this table is only what `add_starting_force` registers and recruits before anything
+## has been played. **The ten cannot move**: `islands.gd` sized the four compact islands' enemy pitch
+## against a landing force of ten, and a first island nobody wins is a game whose card screen nobody
+## ever sees.
+##
+## ⚠⚠ **ONE ROW, TEN WOLVES** (2026-08-25, the user: 「시작할 때 뭐 늑대만 있지 않아?」). It was two
+## rows — six wolves and four crows — and the crow row moved to a CARD: a run opens holding one
+## species and the second arrives on the opening card screen. **The ten did not move**, only how it is
+## split.
+const START_SLOTS := [
+	[WOLF, 10],
 ]
 
-const _SLOT_COL_TYPE := 0
-const _SLOT_COL_START := 1
-const _SLOT_COL_REWARD := 2
+const _START_COL_TYPE := 0
+const _START_COL_BODIES := 1
+
+## What a `Reward.COUNT` node adds, **indexed by SLOT NUMBER**. ⚠⚠ **That is a leftover and it is
+## written down as one** (티켓 15): the amounts are exactly what `SUMMON_SLOTS` paid, but which
+## SPECIES they reach now depends on what is registered in that slot, which is a per-run fact. The
+## user pinned the amounts for this ticket (***"이번 티켓에선 손대지 말고"***), so they moved
+## unchanged; a slot past the end of this table pays nothing.
+const SLOT_PAY := [2, 1]
+
+
+## The unit row slot `slot` OPENS bound to, or `SUMMON_UNBOUND` past the opening table. **Only
+## `add_starting_force` reads this** — a live slot is `Army.slot_type_of`.
+static func start_type_of(slot: int) -> int:
+	if slot < 0 or slot >= START_SLOTS.size():
+		return SUMMON_UNBOUND
+	return int((START_SLOTS[slot] as Array)[_START_COL_TYPE])
+
+
+## How many bodies a run starts with in slot `slot`. 0 past the opening table.
+static func start_bodies_of(slot: int) -> int:
+	if slot < 0 or slot >= START_SLOTS.size():
+		return 0
+	return int((START_SLOTS[slot] as Array)[_START_COL_BODIES])
+
+
+## How many bodies a `Reward.COUNT` node adds to slot `slot`. 0 for a slot this table does not reach.
+static func slot_pay_of(slot: int) -> int:
+	if slot < 0 or slot >= SLOT_PAY.size():
+		return 0
+	return int(SLOT_PAY[slot])
+
+
+## The force a run opens with, summed over the opening table rather than written beside it.
+static func roster_start_count() -> int:
+	var sum := 0
+	for s in START_SLOTS.size():
+		sum += start_bodies_of(s)
+	return sum
+
+
+## The MOST a `Reward.COUNT` node can pay — the whole pay table, whatever a given run has registered.
+## ⚠ **It is a capacity bound and not what any one run receives**: a run with one slot collects only
+## `slot_pay_of(0)`. `net_islands`' landing-region floor wants the bound, which is why this sums the
+## table instead of asking a run.
+static func roster_reward_count() -> int:
+	var sum := 0
+	for s in SLOT_PAY.size():
+		sum += slot_pay_of(s)
+	return sum
+
 
 ## ⚠⚠ **THE BAND IS A MINIMUM DISTANCE FROM LAND, AND IT USED TO BE A MAXIMUM.** It was
 ## `SUMMON_BAND_TILES := 2` — *within 2 hops of the coast* — and the user inverted it after playing:
@@ -258,49 +437,6 @@ static func summon_radius_of(w: int, h: int) -> float:
 	return float(maxi(w, h)) * SUMMON_RADIUS_RATIO
 
 
-static func summon_slot_count() -> int:
-	return SUMMON_SLOTS.size()
-
-
-## The unit type in slot `slot`, or `SUMMON_UNBOUND` for an empty or out-of-range slot. The cast is
-## the same one every read of a `const` Array in this file makes.
-static func summon_type_of(slot: int) -> int:
-	if slot < 0 or slot >= SUMMON_SLOTS.size():
-		return SUMMON_UNBOUND
-	return int(SUMMON_SLOTS[slot][_SLOT_COL_TYPE])
-
-
-## How many bodies a run STARTS with in this slot. 0 for an out-of-range slot.
-static func slot_start_count(slot: int) -> int:
-	if slot < 0 or slot >= SUMMON_SLOTS.size():
-		return 0
-	return int(SUMMON_SLOTS[slot][_SLOT_COL_START])
-
-
-## How many bodies a `Reward.COUNT` node adds to this slot. 0 for an out-of-range slot.
-static func slot_reward_count(slot: int) -> int:
-	if slot < 0 or slot >= SUMMON_SLOTS.size():
-		return 0
-	return int(SUMMON_SLOTS[slot][_SLOT_COL_REWARD])
-
-
-## The sum of every slot's starting count. Replaces `START_MELEE + START_RANGED` at every reader —
-## walked over the table, never written as a literal, so a third slot moves this for free.
-static func roster_start_count() -> int:
-	var sum := 0
-	for s in summon_slot_count():
-		sum += slot_start_count(s)
-	return sum
-
-
-## The sum of every slot's `Reward.COUNT` payout. Replaces `REWARD_MELEE + REWARD_RANGED`.
-static func roster_reward_count() -> int:
-	var sum := 0
-	for s in summon_slot_count():
-		sum += slot_reward_count(s)
-	return sum
-
-
 ## --- Equipment: an ITEM LIST, not a body ------------------------------------------------------------
 ## ⚠⚠ **THE BODY PARTS ARE GONE** (2026-08-24, the user: 「이게 세포 게임에 남아있던 것들이네. 갈아엎어」).
 ## What stood here was `Part { HEAD, CHEST, BELLY, ARM, HAND, LEG }`, one cell bound to each, plus a
@@ -359,7 +495,7 @@ const TAG_LABELS = ["출혈", "공속", "범위", "디버프"]
 ## numeric tag line later is a tier-table row plus this column — one file.
 ##
 ## ⚠ **The names are Korean because the user reads them off the card**, and this is the same exception
-## `hud_view.TYPE_LABELS` already carries. Everything else in `src/` stays English.
+## the unit table's own 한국어 column already carries. Everything else in `src/` stays English.
 ##
 ## ⚠ **The fiction is that these come off the humans whose island was just taken.** That is why a bronze
 ## plate and a flint tooth sit in one list: the beasts do not forge, they strip.
@@ -453,6 +589,111 @@ static func tag_stat_bonus_at(r: int, count: int) -> float:
 	return add
 
 
+## --- The species that MOVE what they hit -------------------------------------------------------
+## One row per species whose blow shoves its target: the `UNITS` row, **how many tiles, signed
+## POSITIVE TOWARD the attacker**, and whether it happens only once per body per island.
+##
+## ⚠⚠ **Two species, one mechanism, and the only difference is a sign.** 다람쥐 pulls what it bites
+## in; 소 drives it away. Written as one signed column rather than as two rules, because two rules
+## for one motion is the second copy that diverges.
+##
+## ⚠ **The 「once」 column belongs to 소 and is what makes it a CHARGE rather than a shove.** `Battle`
+## is new every island, so 「per island」 costs no reset code — it comes free with the object.
+##
+## ⚠ **First values, not measured ones.**
+const SPECIES_SHOVE := [
+	[SQUIRREL, 1.0, false],
+	[COW, -2.0, true],
+]
+
+const _SHOVE_COL_TYPE := 0
+const _SHOVE_COL_TILES := 1
+const _SHOVE_COL_ONCE := 2
+
+
+## Tiles species `type_id` shoves what it hits, positive toward itself. **0.0 for a species with no
+## row**, which is what makes the whole feature a table lookup with no branch behind it.
+static func shove_tiles_of(type_id: int) -> float:
+	for r in SPECIES_SHOVE.size():
+		if int((SPECIES_SHOVE[r] as Array)[_SHOVE_COL_TYPE]) == type_id:
+			return float((SPECIES_SHOVE[r] as Array)[_SHOVE_COL_TILES])
+	return 0.0
+
+
+## Whether species `type_id` shoves only on its FIRST blow of an island.
+static func shove_once_of(type_id: int) -> bool:
+	for r in SPECIES_SHOVE.size():
+		if int((SPECIES_SHOVE[r] as Array)[_SHOVE_COL_TYPE]) == type_id:
+			return bool((SPECIES_SHOVE[r] as Array)[_SHOVE_COL_ONCE])
+	return false
+
+
+## --- The species that hunt as one -------------------------------------------------------------
+## One row per species that picks its target from the centre of mass of its own kind nearby, itself
+## included: the `UNITS` row and how far 「nearby」 reaches, in tiles.
+##
+## ⚠⚠ **ONE NUMBER BUYS BOTH HALVES OF 무리사냥.** Picking from a shared point makes a pack bite the
+## same enemy (티켓 06's own sentence), and the movement phase then walks each of them at THAT enemy —
+## so they arrive as one body. **There is no formation code**, and a second rule for the shape would
+## be a second thing to keep in step with the first.
+##
+## ⚠⚠ **NEARBY AND NEVER GLOBAL.** A global centre of mass drags a wolf that landed on the far beach
+## toward one point — and where you land is the decision this whole game is about.
+##
+## ⚠ **First value, not a measured one.**
+const SPECIES_PACK := [
+	[WOLF, 6.0],
+]
+
+## ⚠⚠ **THE PACK TABLE ABOVE IS A TARGETING RULE AND IT DOES NOTHING TO FORMATION — measured, not
+## suspected** (2026-08-25, `tools/probe/pack_spread.gd`). `_seek_point_of` only changes WHERE a body
+## LOOKS FROM when it picks a target; every body then walks its own flow field alone. Ten wolves
+## crossing the first island, pack radius 6.0 against the same run with it forced to 0.0:
+##
+##   씨앗 7 — spread 1.60 / widest 4.93 / touching 85%  BOTH WAYS, identical to two decimals
+##   씨앗 1 — 1.79 vs 1.90    씨앗 99 — 1.85 vs 1.84
+##
+## ⚠ `how-nets-lie` already records the check labelled 「무리가 한 덩어리로 움직인다」 passing
+## with this radius at zero. **It passes because the radius changes nothing**, and that is now measured
+## rather than inferred. The table stays what it is — a rule about who gets bitten.
+##
+## --- ⚠⚠ A COHESION THROTTLE WAS BUILT HERE AND TAKEN BACK OUT, because it was measured ------------
+## 2026-08-25, the user, watching a fight: ***"좀더 배드노스 같이 합쳐져야할듯"***. So a rule was added
+## that slowed any body further along toward its target than the group's centre of mass was. Measured
+## with `pack_spread` on the first island, ten wolves and four others:
+##
+##   gentle (3.0 tiles of lead, floor 0.35) — spread 1.79/1.60/1.85 -> **1.81/1.59/1.75**, and fights
+##       15% longer
+##   hard   (1.0 tile,          floor 0.10) — spread -> **1.64/1.63/1.64**, still nothing, and fights
+##       **19.0s -> 34.3s**
+##
+## ⇒ **The lever has no authority over the spread and a large cost in time.** Keeping it would have
+## been a mechanism whose measured effect is noise, which is the shape this file's own header calls
+## code that pretends to work.
+##
+## ⚠⚠ **AND THE SAME PROBE SAYS THE GROUP IS ALREADY TOGETHER**, which is the finding that matters more
+## than the reverted rule: **89% of bodies have another within one tile**, fourteen of them average
+## **1.7–1.9 distinct targets** between them, and **78% of samples have the whole group facing one
+## way.** Whatever reads as scattered on screen, the formation is not it — so the next place to look is
+## the PICTURE, and the number pointing there is that a body's sprite is **1.23 tiles wide standing on
+## 1-tile centres**, so a dense group necessarily overlaps into one mass.
+##
+const _PACK_COL_TYPE := 0
+## ⚠ Named `_TILES` and not `_RADIUS`: `net_draw_leaf`'s pixel sweep reads every file under `src/`
+## outside `look.gd` and `radius` is one of the size-ish suffixes it bites, so a column constant
+## wearing that word reads as a presentation literal in a rules file. The distance IS in tiles.
+const _PACK_COL_TILES := 1
+
+
+## How far species `type_id` looks for its own kind when picking a target. **0.0 for a species with
+## no row**, which is what makes a lone hunter a table lookup rather than a branch.
+static func pack_radius_of(type_id: int) -> float:
+	for r in SPECIES_PACK.size():
+		if int((SPECIES_PACK[r] as Array)[_PACK_COL_TYPE]) == type_id:
+			return float((SPECIES_PACK[r] as Array)[_PACK_COL_TILES])
+	return 0.0
+
+
 ## --- The status table ------------------------------------------------------------------------------
 ## ⚠⚠ **Not one-off bleed code** (2026-08-24, the user: 「독부터 해서 정말 많이 있을듯」). A status is a
 ## row here plus a generic walk in `battle.gd`; the day poison arrives it is one `Status` entry and one
@@ -504,6 +745,31 @@ static func tag_status_status_of(r: int) -> int:
 	return int((TAG_STATUS_TIERS[r] as Array)[_TSTATUS_COL_STATUS])
 
 
+## The stronger of two tiers of the SAME status, either of which may be empty.
+##
+## ⚠⚠ **WHICH WAY 「강하다」 POINTS DEPENDS ON THE KIND, and reading it one way is a real defect.** A
+## DOT's magnitude is damage a second and BIGGER is stronger; a SLOW's is a speed multiplier and
+## SMALLER is stronger. One comparison for both hands a slowed enemy the weakest slow on the field.
+##
+## ⚠ **Ties on magnitude break on the LONGER duration**, so a source that is equally strong and lasts
+## longer is not silently discarded.
+##
+## ⚠ **This resolves the sources of ONE BLOW and is not a stacking rule.** What lands on a body is a
+## single tier, exactly as before; what changed is that a blow with two sources no longer lets
+## whichever was written last stand.
+static func stronger_status_tier(status: int, a: Dictionary, b: Dictionary) -> Dictionary:
+	if a.is_empty():
+		return b
+	if b.is_empty():
+		return a
+	var am := float(a["mag"])
+	var bm := float(b["mag"])
+	if not is_equal_approx(am, bm):
+		var a_wins := am > bm if status_kind_of(status) == StatusKind.DOT else am < bm
+		return a if a_wins else b
+	return a if float(a["sec"]) >= float(b["sec"]) else b
+
+
 ## The lit tier of row `r` at `count` copies of its tag, as {"mag": .., "sec": ..} — empty below the
 ## first threshold. The highest reached tier replaces the lower ones, same rule as the numeric table.
 static func tag_status_tier_at(r: int, count: int) -> Dictionary:
@@ -513,6 +779,46 @@ static func tag_status_tier_at(r: int, count: int) -> Dictionary:
 		if count >= int(tier[0]):
 			lit = {"mag": float(tier[1]), "sec": float(tier[2])}
 	return lit
+
+
+## --- The species that leave a status behind ---------------------------------------------------
+## One row per species whose blow leaves a status on what it hits: the `UNITS` row, the `Status`, its
+## magnitude and its duration in seconds.
+##
+## ⚠⚠ **THIS IS A SECOND SOURCE AND NOT A SECOND MECHANISM.** It writes through the same
+## `_put_status` the equipment tags write through, and `_phase_status` walks `STATUS_KIND` without
+## ever knowing a status by name — so 까마귀's 출혈 costs one row here and nothing at all in
+## `battle.gd`'s ageing or damage-over-time code.
+##
+## ⚠ **First values, and deliberately the SAME numbers the 출혈 tag's first tier carries** (0.5 a
+## second for 2 seconds). ⚠⚠ **A crow wearing bleed equipment gets the HIGHER of the two and not the
+## last one written** — `Battle._apply_statuses` resolves both sources of a blow through
+## `stronger_status_tier` before anything reaches the body. Written the naive way the crow's own
+## passive OVERWROTE its equipment and cut a full bleed set to 22% of what the same set gives a wolf.
+const SPECIES_STATUS := [
+	[CROW, Status.BLEED, 0.5, 2.0],
+]
+
+const _SPECIES_STATUS_COL_TYPE := 0
+const _SPECIES_STATUS_COL_STATUS := 1
+const _SPECIES_STATUS_COL_MAG := 2
+const _SPECIES_STATUS_COL_SEC := 3
+
+
+## What species `type_id` leaves on what it hits, as `{"status": .., "mag": .., "sec": ..}` — **empty
+## for a species with no row**, which is what makes this a table lookup with no branch behind it.
+## ⚠ The `mag`/`sec` keys match `tag_status_tier_at`'s, so `_put_status` takes either without asking
+## which table it came from.
+static func species_status_of(type_id: int) -> Dictionary:
+	for r in SPECIES_STATUS.size():
+		var row: Array = SPECIES_STATUS[r]
+		if int(row[_SPECIES_STATUS_COL_TYPE]) == type_id:
+			return {
+				"status": int(row[_SPECIES_STATUS_COL_STATUS]),
+				"mag": float(row[_SPECIES_STATUS_COL_MAG]),
+				"sec": float(row[_SPECIES_STATUS_COL_SEC]),
+			}
+	return {}
 
 
 ## Every threshold `tag` can light, ascending, walked over BOTH tier tables — the refit aggregate
@@ -535,6 +841,98 @@ static func tag_thresholds_of(tag: int) -> PackedInt32Array:
 ## the table**, so the pick is a loss as well as a gain — which is the whole of what makes it a decision.
 const CARDS_PER_WIN := 3
 const CARD_PICKS := 1
+
+
+## --- What a card can BE ---------------------------------------------------------------------------
+## ⚠⚠ **A card is one of two things now** (티켓 15): a piece of equipment, or a BEAST — a summon slot
+## filled with a species, plus bodies of it. `Run.cards[k]` holds an item id under `ITEM` and a
+## `UNITS` row under `SPECIES`, and `Run.card_kind[k]` is which.
+enum CardKind { ITEM, SPECIES }
+
+## One row per beast card: the `UNITS` row it registers, and how rare the card is.
+##
+## ⚠ **The rarities are first values**, the standing `RARITY_WEIGHT` carries — nothing has measured
+## whether a bear should be rarer than a squirrel. ⚠ **The wolf keeps a row although a run opens
+## already holding it**: the table is per species, and the draw refuses a species already registered
+## rather than this table having a hole in it.
+const SPECIES_CARDS := [
+	[SQUIRREL, Rarity.RARE],
+	[WOLF, Rarity.COMMON],
+	[COW, Rarity.RARE],
+	[BEAR, Rarity.EPIC],
+	[CROW, Rarity.RARE],
+]
+
+const _SPECIES_CARD_COL_TYPE := 0
+const _SPECIES_CARD_COL_RARITY := 1
+
+## How many bodies of that species arrive with the card. **2026-08-25, the user, with 「일단」 on it**
+## — so it is ONE constant and 4 is written nowhere else: changing what a beast card is worth has to
+## be one line.
+##
+## ⚠⚠ **IT MUST NOT BE 0.** A card that only registers a slot adds **a button that refuses when you
+## press it** — the same failure the user hit from the other side with `Reward.COUNT` (a thing that is
+## there and is not on screen), built backwards.
+##
+## **Why four**: the old second slot opened with four bodies, so 「둘째 종이 도착한다」 is the size this
+## game has already been played at.
+const SPECIES_CARD_BODIES := 4
+
+## The chance ONE card is a beast rather than an item. ⚠⚠ **The kind is rolled BEFORE what is inside
+## it, for the reason `_draw_cards` already gives about rarity**: roll straight over one pooled list
+## and adding an item makes beasts quietly rarer, so the drop table moves whenever the CONTENT moves.
+##
+## ⚠ **It is a weight and NOT a reservation.** 2026-08-25 the user cut the earlier plan's 「세 장 중 한
+## 장은 늘 짐승」: every card rolls its own kind, so some rounds hold no beast at all and some hold
+## three. `1/3` keeps the frequency that plan argued for — one beast per round in expectation — and
+## drops only the guarantee.
+##
+## ⚠ **This is a FLAT weight and it is not the last word.** 티켓 18 tilts the pool toward the species a
+## run is already using; nothing here may be written down as 「영원히 균등」, or that ticket starts by
+## deleting a sentence.
+const SPECIES_CARD_WEIGHT := 1.0 / 3.0
+
+
+static func species_card_count() -> int:
+	return SPECIES_CARDS.size()
+
+
+static func species_card_type_of(r: int) -> int:
+	return int((SPECIES_CARDS[r] as Array)[_SPECIES_CARD_COL_TYPE])
+
+
+## The card rarity of beast row `type_id`, or `Rarity.COMMON` for a row with no card.
+static func species_card_rarity_of(type_id: int) -> int:
+	for r in SPECIES_CARDS.size():
+		if int((SPECIES_CARDS[r] as Array)[_SPECIES_CARD_COL_TYPE]) == type_id:
+			return int((SPECIES_CARDS[r] as Array)[_SPECIES_CARD_COL_RARITY])
+	return Rarity.COMMON
+
+
+## --- One card's face, whatever kind it is ---------------------------------------------------------
+## ⚠⚠ **These three exist so `reward_view` never asks what kind a card is.** A screen that branched on
+## the kind would be a second place that knows there are two of them, and the day a third arrives one
+## of the two gets missed.
+
+static func card_name_of(kind: int, value: int) -> String:
+	if kind == CardKind.SPECIES:
+		return label_of(value)
+	return item_name_of(value)
+
+
+static func card_rarity_of(kind: int, value: int) -> int:
+	if kind == CardKind.SPECIES:
+		return species_card_rarity_of(value)
+	return item_rarity_of(value)
+
+
+## What the card does, as one line. ⚠ **Built from the constants, never typed beside them** — the same
+## rule `item_effect_text` carries, and the reason the cards said 「다리」 for a round after legs
+## stopped existing.
+static func card_effect_text_of(kind: int, value: int) -> String:
+	if kind == CardKind.SPECIES:
+		return "소환 칸 +1 · %d마리" % SPECIES_CARD_BODIES
+	return item_effect_text(value)
 
 
 ## The five column names, in `ITEM_COL_*` order, and the one place they are spelled.
@@ -665,11 +1063,6 @@ static func unit_stat(type_id: int, col: int) -> float:
 	return 0.0
 
 
-## The beak (a `Reward.BEAK` node's pay): range += 1.0 on one surviving soldier. Deliberately NOT +1 HP —
-## that candidate is unadopted, and the slice exists to learn whether "who do I bolt it onto" is a
-## real decision. Range 1 means a second rank can attack, so it doubles the effective contact width
-## at a doorway: it is the boss's answer and the terrain's undoing in the same line.
-const BEAK_RANGE := 1.0
 
 
 # --- The boat ------------------------------------------------------------------------------------
@@ -784,16 +1177,24 @@ enum NodeKind { FIGHT, BOSS }
 
 ## What a node pays on the way out. Moved here from `Run` so the table below can name it.
 ##
-## ⚠ `HEAL` is GONE with the chest that was its only payer — see `NodeKind`'s own header. `COUNT` is
-## applied on the win with nothing to choose; only `BEAK` opens a `REWARD` state (the beak pick, which
-## predates the card pick and still routes through it — see `run.gd`).
-enum Reward { NONE, COUNT, BEAK }
+## ⚠ `HEAL` is GONE with the chest that was its only payer — see `NodeKind`'s own header.
+## ⚠⚠ **`BEAK` IS GONE TOO** (2026-08-25, the user: 「부리 보상 없지 끝나면 카드보상으로 통일했잖아」).
+## It was the dead cell game's reward — +1 range bolted onto ONE surviving body, dying with that body —
+## still paying out on two of seven nodes. 티켓 06 closed the growth loop as **win -> one card of
+## three** and 티켓 05 fixed it at three cards all the way through; the beak node was a leftover nobody
+## removed. **The +1-range mechanic went with it**: it hung on nothing else.
+## ⚠⚠ **AND SO EVERY NODE NOW PAYS THE SAME THING.** Seven nodes, six `COUNT` and one boss `NONE` —
+## the reward column no longer forks anything. **This is what 「통일」 costs and it is written here
+## rather than left to be noticed**: the table keeps its column so a second reward kind is one row.
+enum Reward { NONE, COUNT }
 
 ## One row is ONE NODE: floor, kind, reward, island index.
 ##
 ## ⚠ The reward is the NODE's and not the KIND's. Keyed by kind, every fight node would pay the
-## identical thing and a fork could never put "cells or beak" side by side — see `title-and-map`, the
+## identical thing and a fork could never put two payouts side by side — see `title-and-map`, the
 ## reward-belongs-to-the-node refutation box. That is why this table has a reward column at all.
+## ⚠⚠ **Today every fight node DOES pay the identical thing** — the beak was the only other kind and
+## the user removed it. The column is kept for the reason above, not because it currently forks.
 ##
 ## ⚠ `const X := PackedInt32Array([...])` is a parse error on 4.7.1, so this is a plain const Array and
 ## every read below casts.
@@ -806,8 +1207,8 @@ enum Reward { NONE, COUNT, BEAK }
 const MAP_NODES := [
 	[0, NodeKind.FIGHT, Reward.COUNT, 4],   # 0 — floor 1, fixed, where every run lands
 	[1, NodeKind.FIGHT, Reward.COUNT, 5],   # 1 — floor 2 left
-	[1, NodeKind.FIGHT, Reward.BEAK,  6],   # 2 — floor 2 right
-	[2, NodeKind.FIGHT, Reward.BEAK,  7],   # 3 — floor 3 left
+	[1, NodeKind.FIGHT, Reward.COUNT, 6],   # 2 — floor 2 right  (was BEAK until 2026-08-25)
+	[2, NodeKind.FIGHT, Reward.COUNT, 7],   # 3 — floor 3 left   (was BEAK until 2026-08-25)
 	[2, NodeKind.FIGHT, Reward.COUNT, 0],   # 4 — floor 3 right
 	[3, NodeKind.FIGHT, Reward.COUNT, 1],   # 5 — floor 4
 	[4, NodeKind.BOSS,  Reward.NONE,  2],   # 6 — floor 5, the lion, the run ends here

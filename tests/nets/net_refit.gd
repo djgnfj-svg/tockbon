@@ -90,8 +90,8 @@ class RefitSpy extends RefitView:
 	func _paint_stat_value(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
 		stat_values.append({"at": at, "text": text, "fsize": fsize, "col": col})
 
-	func _paint_body(centre: Vector2, radius: float, corner: float, colour: Color) -> void:
-		bodies.append({"centre": centre, "radius": radius, "corner": corner, "col": colour})
+	func _paint_beast(rect: Rect2, tex: Texture2D, colour: Color) -> void:
+		bodies.append({"rect": rect, "tex": tex, "col": colour})
 
 	func _paint_button(face: Font, rect: Rect2, bg: Color, text: String, at: Vector2, fsize: int,
 			col: Color) -> void:
@@ -160,7 +160,7 @@ func _the_geometry(t) -> void:
 	var cross := 0
 	for p in Rules.ITEM_CELLS:
 		var hit := view.cell_hit_rect_of(p).grow(1.0)
-		for s in Rules.TYPE_COUNT:
+		for s in Rules.player_type_count():
 			if hit.intersects(view.slot_hit_rect_of(s).grow(1.0)):
 				cross += 1
 		if hit.intersects(done_open_hit.grow(1.0)):
@@ -181,12 +181,12 @@ func _the_geometry(t) -> void:
 		"슬롯 띠 상자도 220x64 보다 크다")
 
 	# The strip — five beast boxes now — and the two buttons, inside the screen and clear of each other.
-	for s in Rules.TYPE_COUNT:
+	for s in Rules.player_type_count():
 		t.ok(SCREEN.encloses(view.slot_hit_rect_of(s)), "짐승 %d번 상자가 화면 안이다" % s)
 	# The strip boxes themselves never touch each other — the same 1px demand the cells carry.
 	var strip_overlap := 0
-	for s in Rules.TYPE_COUNT:
-		for q in range(s + 1, Rules.TYPE_COUNT):
+	for s in Rules.player_type_count():
+		for q in range(s + 1, Rules.player_type_count()):
 			if view.slot_hit_rect_of(s).grow(1.0).intersects(view.slot_hit_rect_of(q).grow(1.0)):
 				strip_overlap += 1
 	t.eq(strip_overlap, 0, "다섯 상자의 판정 사각형이 1px 안으로도 안 붙는다")
@@ -238,7 +238,7 @@ func _the_capacity(t) -> void:
 ## 띠에서 밝고 나머지는 어둡다」 — driven on a bare view (no `Run` needed for the strip alone; a fresh
 ## `Loadout` reads its own zero values).
 func _the_strip_and_the_board(t) -> void:
-	var r := Run.new()
+	var r := _opened(Run.new())
 	var spy := RefitSpy.new()
 	t.root.add_child(spy)
 	spy.process_mode = Node.PROCESS_MODE_DISABLED
@@ -251,20 +251,25 @@ func _the_strip_and_the_board(t) -> void:
 	# self-check that the spy is actually wired before trusting the zero below.
 	t.eq(spy.slot_boxes.size(), 0, "REFIT 상태가 아니면 슬롯 띠조차 안 그려진다 (자가 점검)")
 
-	# Force the run into REFIT the short way — one win, two cards — so the screen actually draws.
+	# Force the run into REFIT the short way — one win, one ITEM card — so the screen actually draws.
+	r.seed_cards(1)
 	r.enter_node(0)
 	r.finish_island(true)
-	r.take_card(0)
-	r.take_card(1)
-	t.eq(r.state(), Run.State.REFIT, "카드 둘을 고르면 정비다 (자가 점검)")
+	_take_an_item_card(r)
+	t.eq(r.state(), Run.State.REFIT, "장비 카드를 고르면 정비다 (자가 점검)")
 	spy.queue_redraw()
 	await t.pump_frames(1)
 
-	t.eq(spy.slot_boxes.size(), Rules.TYPE_COUNT, "짐승 상자를 다섯 종 전부만큼 그렸다 — 소환 칸 수가 아니다")
-	t.eq(spy.slot_labels.size(), Rules.TYPE_COUNT, "짐승 이름표도 그만큼 그렸다")
+	# ⚠⚠ **THE COUNT IS PINNED AGAINST THE TABLE AND THE TABLE'S OWN ANSWER IS PINNED AS A LITERAL.**
+	# Both sides reading `player_type_count()` would move together and pass at any value — the shape
+	# this repo has already measured. ⚠ **The strip draws SPECIES, never summon slots** (티켓 11's
+	# 「소환 칸 없는 짐승도 장비를 받는다」), so a run with one registered slot still draws all five.
+	t.eq(Rules.player_type_count(), 5, "아군 종은 다섯이다 (리터럴)")
+	t.eq(spy.slot_boxes.size(), Rules.player_type_count(), "짐승 상자를 다섯 종 전부만큼 그렸다 — 소환 칸 수가 아니다")
+	t.eq(spy.slot_labels.size(), Rules.player_type_count(), "짐승 이름표도 그만큼 그렸다")
 	# 「라벨이 짐승 이름이다」 — mutation: the label text back to "슬롯 %d".
 	var label_bad := 0
-	for s in Rules.TYPE_COUNT:
+	for s in Rules.player_type_count():
 		if str(spy.slot_labels[s]["text"]) != HudView.type_label(s):
 			label_bad += 1
 	t.eq(label_bad, 0, "상자마다 그 짐승의 이름이 적힌다 — 슬롯 번호가 아니다")
@@ -316,7 +321,7 @@ func _the_strip_and_the_board(t) -> void:
 		"연 슬롯이 나머지보다 알파가 3배 넘게 밝다 (%.2f / %.2f = %.1f배)" % [lit.a, dark.a, lit.a / dark.a])
 
 	# The strip stays drawn on step two, and the boxes do not move.
-	t.eq(spy.slot_boxes.size(), Rules.TYPE_COUNT, "판이 열려도 짐승 띠는 다섯 전부 그대로 그려진다")
+	t.eq(spy.slot_boxes.size(), Rules.player_type_count(), "판이 열려도 짐승 띠는 다섯 전부 그대로 그려진다")
 
 	# ⚠ 「호버가 테두리만이 아니라 채움도 밝힌다」 — the card screen and the map both carry hover on
 	# TWO channels (border width AND fill brightness); this screen's own slot/cell/held boxes used to
@@ -348,6 +353,16 @@ func _the_strip_and_the_board(t) -> void:
 ## `_the_dashboard_reads_the_same_function_the_fight_does` watched climb, were a different experiment
 ## every round — the BELLY-cell workaround below existed only because of this, and the dashboard row
 ## bound only whichever one column the draw happened to move.
+## Takes the first ITEM card of the draw. ⚠ **A card can be a BEAST since 티켓 15**, and a beast pick
+## pays a slot and bodies instead of the held pile — so it walks back to the map and this screen never
+## opens. Every fixture below wants the refit screen, so every one of them takes an item.
+func _take_an_item_card(r: Run) -> void:
+	for k in Rules.CARDS_PER_WIN:
+		if int(r.card_kind[k]) == Rules.CardKind.ITEM:
+			r.take_card(k)
+			return
+
+
 func _reach_refit(t, seed: int) -> Game:
 	var game := Game.new()
 	t.root.add_child(game)
@@ -356,6 +371,7 @@ func _reach_refit(t, seed: int) -> Game:
 	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
 	t.ok(game.run != null, "런이 시작됐다 (자가 점검)")
 	game.run.seed_cards(seed)
+	_take_opening_card(game)
 	game._unhandled_input(_press(Look.map_node_pos_px(0)))
 	game._process(Look.MAP_TRAVEL_SEC)
 	t.ok(game.battle != null, "섬이 열렸다 (자가 점검)")
@@ -382,9 +398,17 @@ func _reach_refit(t, seed: int) -> Game:
 	game.refit_view = spy
 	game.add_child(spy)
 
-	game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
-	game._unhandled_input(_click(Look.card_rect_px(1).get_center()))
-	t.eq(game.run.state(), Run.State.REFIT, "카드 둘을 고르자 정비 화면이 열렸다 (자가 점검)")
+	# ⚠⚠ **AN ITEM CARD, CHOSEN OFF `card_kind`.** A card can be a BEAST since 티켓 15, and a beast
+	# pick leaves the held pile empty — so it walks back to the map and the screen this helper exists
+	# to reach never opens. The index is derived rather than fixed at 0.
+	var pick := -1
+	for k in Rules.CARDS_PER_WIN:
+		if int(game.run.card_kind[k]) == Rules.CardKind.ITEM:
+			pick = k
+			break
+	t.ok(pick >= 0, "이 씨앗의 세 장에 장비가 하나는 있다 (자가 점검)")
+	game._unhandled_input(_click(Look.card_rect_px(pick).get_center()))
+	t.eq(game.run.state(), Run.State.REFIT, "장비 카드를 고르자 정비 화면이 열렸다 (자가 점검)")
 	return game
 
 
@@ -468,15 +492,20 @@ func _fitting_through_the_shell(t) -> void:
 ## every DRAWN value is compared against `loadout.stat_of(slot, col)` directly, so a view that computed
 ## its own (correct, by accident) number would still be caught the day it drifts.
 func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
+	# ⚠ **The strip is indexed by SPECIES and this row's last check recruits from summon slot 0**, so
+	# the box it opens has to be that slot's own species. It was a literal 0, which was the same thing
+	# only while the wolf happened to be row 0 — the roster grew and box 0 became the squirrel, a
+	# species the fixture never puts a body of on the roster.
+	var beast := Rules.start_type_of(0)
 	var game := await _reach_refit(t, 1)
 	var spy := game.refit_view as RefitSpy
 
-	game._unhandled_input(_click(Look.refit_slot_hit_rect_px(0).get_center()))
+	game._unhandled_input(_click(Look.refit_slot_hit_rect_px(beast).get_center()))
 	spy.queue_redraw()
 	await t.pump_frames(1)
 	t.eq(spy.stat_values.size(), Rules.ITEM_COL_TOTAL, "슬롯을 열자 대시보드 숫자 다섯이 그려졌다")
 
-	# The literal floor: an untouched slot 0 (CELL_MELEE) reads 14 / 2 / 1.0 / 0 / 4, exactly the
+	# The literal floor: an untouched wolf board reads 14 / 2 / 1.0 / 0 / 4, exactly the
 	# values `net_parts`'s 「빈 판의 숫자는 UNITS 그대로다」 pins for `Loadout.stat_of` itself.
 	# ⚠ Compared as TEXT against `"%.1f" % literal`, never as a re-parsed float against the raw one —
 	# see the ceiling row below for the rounding-boundary reason a raw/re-parsed pair is the wrong
@@ -491,7 +520,7 @@ func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
 	var loadout := game.run.army.loadout
 	var same_bad := 0
 	for col in Rules.ITEM_COL_TOTAL:
-		if str(spy.stat_values[col]["text"]) != "%.1f" % loadout.stat_of(0, col):
+		if str(spy.stat_values[col]["text"]) != "%.1f" % loadout.stat_of(beast, col):
 			same_bad += 1
 	t.eq(same_bad, 0, "다섯 숫자 모두 loadout.stat_of 가 내놓는 값과 화면에 찍힌 값이 같다")
 
@@ -505,9 +534,9 @@ func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
 	# ⚠ **The CELL is asked before the click, the ITEM after** — the pile compacts under a fit, so the
 	# card's own id has to be taken first and the cell it lands in is the board's first empty one.
 	var fitting := int(loadout.held[0])
-	var landing := loadout.first_empty(0)
+	var landing := loadout.first_empty(beast)
 	game._unhandled_input(_click(Look.refit_held_rect_px(0).get_center()))
-	t.eq(loadout.fitted_item(0, landing), fitting, "카드를 끼웠다 (자가 점검)")
+	t.eq(loadout.fitted_item(beast, landing), fitting, "카드를 끼웠다 (자가 점검)")
 
 	var moved_col := -1
 	for col in Rules.ITEM_COL_TOTAL:
@@ -515,7 +544,7 @@ func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
 			moved_col = col
 			break
 	t.ok(moved_col >= 0, "끼운 부위가 적어도 한 칸을 움직인다 (자가 점검)")
-	var target := loadout.stat_of(0, moved_col)
+	var target := loadout.stat_of(beast, moved_col)
 
 	spy.queue_redraw()
 	await t.pump_frames(1)
@@ -535,8 +564,8 @@ func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
 
 	# ⚠⚠ The ceiling: without it, deleting the whole climb (multiplying `_stat_age`'s delta by 0.0)
 	# would still pass the floor above forever, because a number frozen at its OLD value also never
-	# equals the target. Aged past `MAP_HEAL_SEC`, the shown number has to land EXACTLY on it.
-	spy._fx_step(Look.MAP_HEAL_SEC)
+	# equals the target. Aged past `NUMBER_CLIMB_SEC`, the shown number has to land EXACTLY on it.
+	spy._fx_step(Look.NUMBER_CLIMB_SEC)
 	spy.queue_redraw()
 	await t.pump_frames(1)
 	# ⚠ **Compared as TEXT, not as a re-parsed float.** `target` is the raw 64-bit value and a value
@@ -549,9 +578,9 @@ func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
 	var want_text := "%.1f" % target
 	t.eq(landed_text, want_text,
 		"%.2f초가 지나면 대시보드 숫자가 정확히 도착값(%s)에 닿는다 (%s) — 흐린 채로 안 남는다"
-			% [Look.MAP_HEAL_SEC, want_text, landed_text])
-	t.ok(Look.MAP_HEAL_SEC >= 0.30 and Look.MAP_HEAL_SEC <= 1.00,
-		"숫자가 오르는 시간이 0.30~1.00초다 (%.2f)" % Look.MAP_HEAL_SEC)
+			% [Look.NUMBER_CLIMB_SEC, want_text, landed_text])
+	t.ok(Look.NUMBER_CLIMB_SEC >= 0.30 and Look.NUMBER_CLIMB_SEC <= 1.00,
+		"숫자가 오르는 시간이 0.30~1.00초다 (%.2f)" % Look.NUMBER_CLIMB_SEC)
 
 	# ⚠⚠ **All FIVE columns, not only `moved_col`.** The row above already proved the MOVED column is
 	# `stat_of`'s own value; the seed fixes which held part gets fitted, so which single column moves
@@ -562,7 +591,7 @@ func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
 	var post_fit_bad := 0
 	for col in Rules.ITEM_COL_TOTAL:
 		var shown := str(spy.stat_values[col]["text"])
-		var want_col_text := "%.1f" % loadout.stat_of(0, col)
+		var want_col_text := "%.1f" % loadout.stat_of(beast, col)
 		if shown != want_col_text:
 			post_fit_bad += 1
 	t.eq(post_fit_bad, 0,
@@ -572,7 +601,7 @@ func _the_dashboard_reads_the_same_function_the_fight_does(t) -> void:
 	game.run.army.recruit(0)
 	var new_id := game.run.army.type_id.size() - 1
 	t.eq(game.run.army.slot_id[new_id], 0, "0번 슬롯에서 병사를 하나 더 뽑았다 (자가 점검)")
-	t.ok(is_equal_approx(game.run.army.max_hp_of(new_id), loadout.stat_of(0, Rules.ITEM_COL_HP)),
+	t.ok(is_equal_approx(game.run.army.max_hp_of(new_id), loadout.stat_of(beast, Rules.ITEM_COL_HP)),
 		"그 병사의 만피가 대시보드가 보여주는 그 체력 숫자와 정확히 같다")
 
 	t.root.remove_child(game)
@@ -599,12 +628,16 @@ func _the_body_differs_per_slot(t) -> void:
 	t.eq(spy.bodies.size(), 1, "1번 슬롯의 몸도 하나 그렸다 (자가 점검)")
 	var body1: Dictionary = spy.bodies[0]
 
-	t.ok(float(body0["radius"]) > 0.0 and float(body1["radius"]) > 0.0,
-		"두 몸 다 반지름이 0보다 크다 (자가 점검 — 하나가 0이면 아래 비교가 공짜다)")
-	t.ok(not is_equal_approx(float(body0["radius"]), float(body1["radius"])),
-		"두 슬롯의 몸이 반지름부터 다르다 (%.1f vs %.1f)" % [body0["radius"], body1["radius"]])
-	t.ok(not is_equal_approx(float(body0["corner"]), float(body1["corner"])),
-		"그리고 모서리 둥글기도 다르다 (%.2f vs %.2f)" % [body0["corner"], body1["corner"]])
+	# ⚠⚠ **THIS ROW USED TO SAY THE TWO PREVIEWS DIFFER BY RADIUS AND CORNER ROUNDING, AND THAT WAS
+	# THE DEFECT** (2026-08-25). The preview drew a rounded square with a dot while the island next
+	# door drew a beast, so five species were told apart by two numbers on a box. **They are different
+	# PICTURES now**, which is what a preview whose job is 「which beast is open」 has to be.
+	t.ok(body0["tex"] != null and body1["tex"] != null,
+		"두 미리보기 다 그림이 실려 있다 (자가 점검 — 하나가 null 이면 아래 비교가 공짜다)")
+	t.ok(body0["tex"] != body1["tex"],
+		"두 슬롯이 서로 다른 짐승 그림을 보여준다 — 반지름 두 개가 아니라 다른 동물이다")
+	t.ok((body0["rect"] as Rect2).size.x > 0.0 and (body0["rect"] as Rect2).size.y > 0.0,
+		"그리고 그림이 실제 넓이를 갖는다 (%s) — 0 크기 사각형은 안 보이는 그림이다" % str((body0["rect"] as Rect2).size))
 
 	t.root.remove_child(game)
 	game.queue_free()
@@ -677,11 +710,13 @@ func _the_cell_flashes_when_a_part_lands(t) -> void:
 ## the leaf is not even CALLED (the `if wash > 0.0` guard `map_view`'s own site shares) — bounded only
 ## above, a deleted wash would also pass.
 func _the_screen_itself_fades_in(t) -> void:
+	# ⚠ Seed FIRST, then walk past the opening round — see `_opened`.
 	var r := Run.new()
+	r.seed_cards(1)
+	_opened(r)
 	t.ok(r.enter_node(0), "0번 칸을 밟는다 (자가 점검)")
 	r.finish_island(true)
-	r.take_card(0)
-	r.take_card(1)
+	_take_an_item_card(r)
 	t.eq(r.state(), Run.State.REFIT, "정비 화면이 열렸다 (자가 점검)")
 
 	var spy := RefitSpy.new()
@@ -831,11 +866,13 @@ func _pressing_past_the_pile_end_does_nothing(t) -> void:
 ## Mutations: the count pinned to 0 (a line that never moves) · the lit colour painted on every row ·
 ## the rows fed `tag_count` of one board instead of the horde.
 func _the_tag_rows(t) -> void:
+	# ⚠ Seed FIRST, then walk past the opening round — see `_opened`.
 	var r := Run.new()
+	r.seed_cards(1)
+	_opened(r)
 	t.ok(r.enter_node(0), "0번 칸을 밟는다 (자가 점검)")
 	r.finish_island(true)
-	r.take_card(0)
-	r.take_card(1)
+	_take_an_item_card(r)
 	t.eq(r.state(), Run.State.REFIT, "정비 화면이 열렸다 (자가 점검)")
 	var spy := RefitSpy.new()
 	t.root.add_child(spy)
@@ -859,13 +896,14 @@ func _the_tag_rows(t) -> void:
 	t.eq(rest_bad, 0, "빈 무리의 네 줄이 전부 「이름 0/첫 문턱」이다 — 문턱 리터럴은 3·3·2·2")
 	t.eq(rest_lit, 0, "그리고 켜짐 색인 줄이 하나도 없다 — 머리말 포함")
 
-	# Two range items onto the LION board — a board with no summon slot, so this row doubles as "the
-	# aggregate counts the whole horde".
+	# Two range items onto the COW board — a board with no summon slot, so this row doubles as "the
+	# aggregate counts the whole horde". ⚠ **소 판이다** — 사자가 이 자리를 맡던 시절 사자에게도 판이
+	# 있었고, 적 편 종은 이제 판이 아예 없다.
 	var lo := r.army.loadout
 	for _i in 2:
 		lo.take_card(10)   # 뺏은 창끝 — 범위 딱지
-		lo.fit(Rules.LION, lo.held.size() - 1)
-	t.eq(lo.tag_count(Rules.Tag.RANGE), 2, "범위 딱지 둘을 사자 판에 꼈다 (자가 점검)")
+		lo.fit(Rules.COW, lo.held.size() - 1)
+	t.eq(lo.tag_count(Rules.Tag.RANGE), 2, "범위 딱지 둘을 소 판에 꼈다 (자가 점검)")
 	spy.queue_redraw()
 	await t.pump_frames(1)
 	var range_row: Dictionary = spy.tag_rows[Rules.Tag.RANGE + 1]
@@ -881,7 +919,7 @@ func _the_tag_rows(t) -> void:
 	# Two more — the top tier: the count stands alone, no next threshold to name.
 	for _i in 2:
 		lo.take_card(10)
-		lo.fit(Rules.LION, lo.held.size() - 1)
+		lo.fit(Rules.COW, lo.held.size() - 1)
 	spy.queue_redraw()
 	await t.pump_frames(1)
 	t.eq(str(spy.tag_rows[Rules.Tag.RANGE + 1]["text"]), "%s 4" % Rules.tag_label_of(Rules.Tag.RANGE),
@@ -893,32 +931,37 @@ func _the_tag_rows(t) -> void:
 
 
 ## 「소환 칸에 없는 짐승도 정비에서 장비를 받는다」 — 사용자의 「버리는 것도 주워서 안쓰는 자기
-## 몬스터에게도 넣을 수 있게」가 화면까지 닿았다는 검사. 진짜 셸을 지나 들소 상자를 열고, 카드를
+## 몬스터에게도 넣을 수 있게」가 화면까지 닿았다는 검사. 진짜 셸을 지나 곰 상자를 열고, 카드를
 ## 끼우고, 도로 뺀다. Mutation: `game.gd`'s `_refit_input` keying the fit back onto a summon slot.
+##
+## ⚠ **곰이다** — 들소가 이 자리를 맡던 시절 들소에게도 판이 있었고, 적 편 종은 이제 판이 없다.
 func _a_boxless_species_takes_a_card_through_the_shell(t) -> void:
+	var boxless := Rules.BEAR
 	var game := await _reach_refit(t, 1)
 	var spy := game.refit_view as RefitSpy
-	game._unhandled_input(_click(Look.refit_slot_hit_rect_px(Rules.BISON).get_center()))
-	t.eq(game.refit_view.open_slot_index(), Rules.BISON, "소환 칸 없는 들소 상자가 눌려 열린다")
+	game._unhandled_input(_click(Look.refit_slot_hit_rect_px(boxless).get_center()))
+	t.eq(game.refit_view.open_slot_index(), boxless, "소환 칸 없는 곰 상자가 눌려 열린다")
 	spy.queue_redraw()
 	await t.pump_frames(1)
-	t.eq(spy.bodies.size(), 1, "들소 판에도 몸 미리보기가 하나 그려진다 (자가 점검)")
+	t.eq(spy.bodies.size(), 1, "곰 판에도 몸 미리보기가 하나 그려진다 (자가 점검)")
 	# ⚠ The preview is keyed on the OPEN TYPE itself — keyed back through `summon_type_of` a slotless
 	# species answers -1 and the preview draws the wrong body.
-	t.ok(is_equal_approx(float((spy.bodies[0] as Dictionary)["radius"]),
-			Look.body_radius_of(Rules.BISON) * Look.REFIT_BODY_SCALE),
-		"그 몸의 반지름이 들소 자신의 것이다 — 소환 칸을 거꾸로 물어본 몸이 아니다")
+	# ⚠ **Re-derived 2026-08-25 (티켓 23)**: the preview is a PICTURE now, so the claim is that it is
+	# the bear's own picture rather than that a radius matches. That is the stronger form of the same
+	# thing — a wrong key would show a different animal, not a box of the wrong size.
+	t.ok((spy.bodies[0] as Dictionary)["tex"] == load(Look.beast_tex_path(boxless, true)),
+		"그 그림이 곰 자신의 것이다 — 소환 칸을 거꾸로 물어본 몸이 아니다")
 
 	var loadout := game.run.army.loadout
 	t.ok(loadout.held.size() > 0, "더미에 카드가 있다 (자가 점검)")
 	var want_item := int(loadout.held[0])
-	var want_cell := loadout.first_empty(Rules.BISON)
+	var want_cell := loadout.first_empty(boxless)
 	game._unhandled_input(_click(Look.refit_held_rect_px(0).get_center()))
-	t.eq(loadout.fitted_item(Rules.BISON, want_cell), want_item,
-		"들소 판에 그 장비가 들어갔다 — 버리는 카드가 없다")
+	t.eq(loadout.fitted_item(boxless, want_cell), want_item,
+		"곰 판에 그 장비가 들어갔다 — 버리는 카드가 없다")
 
 	game._unhandled_input(_click(Look.refit_cell_rect_px(want_cell).get_center()))
-	t.eq(loadout.fitted_item(Rules.BISON, want_cell), -1, "그 칸을 누르면 도로 나온다")
+	t.eq(loadout.fitted_item(boxless, want_cell), -1, "그 칸을 누르면 도로 나온다")
 	t.eq(int(loadout.held[loadout.held.size() - 1]), want_item, "그리고 더미로 돌아왔다")
 
 	t.root.remove_child(game)
@@ -944,7 +987,7 @@ func _every_effect_line_fits_its_box(t) -> void:
 	for i in Rules.item_count():
 		var text := Rules.item_effect_text(i)
 		for probe in [
-			[Look.REFIT_CELL_EFFECT_WRAP_W_PX, Look.REFIT_CELL_SPECIES_FONT_SIZE_PX,
+			[Look.REFIT_CELL_EFFECT_WRAP_W_PX, Look.REFIT_CELL_EFFECT_FONT_SIZE_PX,
 				Look.REFIT_CELL_EFFECT_OFFSET_PX.y, Look.REFIT_CELL_SIZE_PX.y, true],
 			[Look.REFIT_HELD_EFFECT_WRAP_W_PX, Look.REFIT_HELD_EFFECT_FONT_SIZE_PX,
 				Look.REFIT_HELD_EFFECT_OFFSET_PX.y, Look.REFIT_HELD_SIZE_PX.y, false],
@@ -991,3 +1034,21 @@ func _press(at: Vector2) -> InputEventMouseButton:
 	ev.pressed = true
 	ev.position = at
 	return ev
+
+
+## Walks past the OPENING BEAST ROUND. ⚠⚠ **A run opens on a card screen since 티켓 15** (「시작하자
+## 마자 세 개 중에 하나 고르는 거」), so `enter_node` refuses until one of its three beasts has been
+## taken — every fixture below that steps onto the map has to pass through it first. Card 0, always,
+## so the fixture is the same run every time.
+func _opened(r: Run) -> Run:
+	if r.state() == Run.State.PICK:
+		r.take_card(0)
+	return r
+
+
+## Takes the OPENING BEAST CARD through the real input door. ⚠⚠ **A run opens on a card screen since
+## 티켓 15** (「시작하자마자 세 개 중에 하나 고르는 거」), so the map sits one press further from the
+## title than it used to. Card 0, always, so the fixture is the same run every time.
+func _take_opening_card(game: Game) -> void:
+	if game.run != null and game.run.state() == Run.State.PICK:
+		game._unhandled_input(_click(Look.card_rect_px(0).get_center()))

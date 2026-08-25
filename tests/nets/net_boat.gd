@@ -97,10 +97,10 @@ func _the_one_surviving_number(t) -> void:
 ## lerp rate in `_phase_boats` are all invisible to them.** This is the one check whose numbers are
 ## bare literals, verified by hand against `_bay()`'s geometry.
 func _crossing_arithmetic_is_literal(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 1)
+	var army := _army_of(Rules.WOLF, 1)
 	# A live enemy far from the crossing, or `enemies_left() == 0` latches WON on the first sub-step
 	# and every step after it returns before the boat has moved.
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
 	var landing := _tile_of(6, 5)
 	t.ok(b.send(0, landing) >= 0 and b.commit(), "한 척을 보내고 확정했다 (자가 점검)")
 	t.ok(absf(float(b.boats[0]["dist"]) - BAY_DIST) <= 1e-5,
@@ -136,15 +136,15 @@ func _crossing_arithmetic_is_literal(t) -> void:
 ## Two landable targets at different distances from one harbour: the ratio of the arrival TIMES equals
 ## the ratio of the distances, because `t = distance / speed` and there is only one speed now.
 func _crossing_scales_with_distance(t) -> void:
-	var near_army := _army_of(Rules.CELL_MELEE, 1)
-	var nb := _battle_of(_bay(), near_army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], 999.0)
+	var near_army := _army_of(Rules.WOLF, 1)
+	var nb := _battle_of(_bay(), near_army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
 	t.ok(nb.send(0, _tile_of(6, 5)) >= 0 and nb.commit(), "가까운 해안으로 보냈다 (자가 점검)")
 	var near_steps := _drive_until_ashore(t, nb, 0, "가까운 해안")
 
 	# A separate, deeper bay — `_bay()`'s own coast is a single column, so its harbour-to-coast
 	# distance never varies enough to test a ratio against.
-	var far_army := _army_of(Rules.CELL_MELEE, 1)
-	var fb := _battle_of(_far_bay(), far_army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], 999.0)
+	var far_army := _army_of(Rules.WOLF, 1)
+	var fb := _battle_of(_far_bay(), far_army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
 	t.ok(fb.send(0, _tile_of(16, 5)) >= 0 and fb.commit(), "먼 해안으로 보냈다 (자가 점검)")
 	var far_steps := _drive_until_ashore(t, fb, 0, "먼 해안")
 
@@ -165,8 +165,8 @@ func _crossing_scales_with_distance(t) -> void:
 # -- thirteen boats, one soldier each ------------------------------------------------------------
 
 func _boats_do_not_share(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, FULL_ROSTER)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], 999.0)
+	var army := _army_of(Rules.WOLF, FULL_ROSTER)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
 	var landing := _tile_of(6, 5)
 	var made := 0
 	for i in FULL_ROSTER:
@@ -197,8 +197,8 @@ func _boats_do_not_share(t) -> void:
 ## `(2,4) (5,4) (8,3) (9,2)`, `3 + sqrt(10) + sqrt(2) = 7.576491` tiles. The bend at (5,4) is still
 ## the boat going around the `#` at (5,3); what went is the row of collinear waypoints after it.
 func _the_boat_really_sails_on_water(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 1)
-	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.BISON, 2, 1)], 999.0)
+	var army := _army_of(Rules.WOLF, 1)
+	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.SHIELDBEARER, 2, 1)], 999.0)
 	var beach := 2 * 12 + 9
 	t.eq(b.grid.home_harbour_for(beach), 0, "그 해안의 집 항구는 하나뿐인 0번이다 (자가 점검)")
 	# ⚠ **The label says only what this line asserts.** It used to read 「예전 규칙이 거절하던 해안으로
@@ -245,8 +245,8 @@ func _the_boat_really_sails_on_water(t) -> void:
 ## be monotone: a `leg` that never advances leaves the hull on segment 0 while `t` runs out, and a
 ## `leg` that jumps backwards redraws water the boat has already crossed.
 func _leg_only_goes_forward(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 1)
-	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.BISON, 2, 1)], 999.0)
+	var army := _army_of(Rules.WOLF, 1)
+	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.SHIELDBEARER, 2, 1)], 999.0)
 	var beach := 2 * 12 + 9
 	t.ok(b.send(0, beach) >= 0 and b.commit(), "보내고 확정했다 (자가 점검)")
 	var path: PackedVector2Array = b.boats[0]["path"]
@@ -283,8 +283,8 @@ func _leg_only_goes_forward(t) -> void:
 ## the day the route's tie-break moves. `dist` is not recomputed either: a reversed polyline is exactly
 ## as long as the polyline.
 func _return_leg_is_the_outbound_path_reversed(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 1)
-	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.BISON, 2, 1)], 999.0)
+	var army := _army_of(Rules.WOLF, 1)
+	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.SHIELDBEARER, 2, 1)], 999.0)
 	var beach := 2 * 12 + 9
 	t.ok(b.send(0, beach) >= 0 and b.commit(), "보내고 확정했다 (자가 점검)")
 	var out_path := PackedVector2Array(b.boats[0]["path"])
@@ -318,8 +318,8 @@ func _return_leg_is_the_outbound_path_reversed(t) -> void:
 # -- the return leg -----------------------------------------------------------------------------
 
 func _return_leg_is_simulated(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 1)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], 999.0)
+	var army := _army_of(Rules.WOLF, 1)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
 	var landing := _tile_of(6, 5)
 	var uid := b.send(0, landing)
 	t.ok(uid >= 0 and b.commit(), "한 척을 보내고 확정했다 (자가 점검)")
@@ -368,8 +368,8 @@ func _relocation_sends_the_boat_to_the_right_harbour(t) -> void:
 		"~~~~~~~~~~~~~~~~",
 		"~~H~~~~~~~~~~~~~",
 	]
-	var army := _army_of(Rules.CELL_MELEE, 1)
-	var b := _battle_of(rows, army, [_spawn(16, Rules.BISON, 10, 4)], 999.0)
+	var army := _army_of(Rules.WOLF, 1)
+	var b := _battle_of(rows, army, [_spawn(16, Rules.SHIELDBEARER, 10, 4)], 999.0)
 	var landing := 3 * 16 + 2   # (2,3), on the bar's seaward edge
 	var home := b.grid.home_harbour_for(landing)
 	t.eq(home, 0, "이 상륙지의 집 항구는 물길이 짧은 0번이다 (자가 점검)")
@@ -401,8 +401,8 @@ func _relocation_sends_the_boat_to_the_right_harbour(t) -> void:
 ## plan's side (the soldier stays in RESERVE); this file measures that `boats` never grew, which is the
 ## half that would stay green if `send` refused *after* appending.
 func _send_refusals(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 4)
-	var b := _battle_of(_two_harbours(), army, [_spawn(12, Rules.BISON, 8, 1)], 999.0)
+	var army := _army_of(Rules.WOLF, 4)
+	var b := _battle_of(_two_harbours(), army, [_spawn(12, Rules.SHIELDBEARER, 8, 1)], 999.0)
 	var west := _th_tile(2, 2)
 
 	t.eq(b.send(-1, west), -1, "없는 병사 번호로는 배가 안 생긴다")
@@ -415,7 +415,7 @@ func _send_refusals(t) -> void:
 	t.eq(b.send(0, west), -1, "이미 배에 탄 병사로는 두 번째 배가 안 생긴다")
 	t.eq(b.boats.size(), 1, "그 거절도 배를 안 늘렸다")
 
-	var dead := _army_of(Rules.CELL_MELEE, 2)
+	var dead := _army_of(Rules.WOLF, 2)
 	dead.kill(0)
 	var db := _battle_of(_two_harbours(), dead, [], 999.0)
 	t.eq(db.send(0, west), -1, "죽은 병사로는 배가 안 생긴다")
@@ -430,8 +430,8 @@ func _send_refusals(t) -> void:
 ## refusal mark: the mark is drawn off THIS `-1`, so if `send` ever refused *after* touching state the
 ## screen would say no about a drop that half happened.
 func _a_refused_drop_makes_no_boat(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 2)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], 999.0)
+	var army := _army_of(Rules.WOLF, 2)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
 	# An inland tile with no water 8-neighbour at all — the denylist's own refusal case, not a tile
 	# that happens to be off the grid.
 	var inland := _tile_of(12, 5)
@@ -462,7 +462,7 @@ func _a_refused_drop_makes_no_boat(t) -> void:
 ## `home_harbour_for`, which picks the harbour with the SHORTEST water route — so a west landing still
 ## leaves from the west harbour and an east landing from the east one.
 func _reach_is_per_harbour(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 4)
+	var army := _army_of(Rules.WOLF, 4)
 	var b := _battle_of(_two_harbours(), army, [], 999.0)
 	var west := _th_tile(2, 2)
 	var east := _th_tile(9, 2)
@@ -489,8 +489,8 @@ func _reach_is_per_harbour(t) -> void:
 ## Four boats aimed at one tile from one harbour arrive on the same sub-step, and every one of them
 ## asks `_free_tiles_from` for one tile after the one before it has already reserved its own.
 func _unload_placement(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 4)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], 999.0)
+	var army := _army_of(Rules.WOLF, 4)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
 	var landing := _tile_of(6, 5)
 	for i in 4:
 		t.ok(b.send(i, landing) >= 0, "%d번을 같은 칸으로 보냈다 (자가 점검)" % i)
@@ -535,8 +535,8 @@ const _PORT_LANDING_Y := 5.0
 ## on somebody. **The floor is the three that DID land** — a boat that never arrives at all satisfies
 ## "the fourth is still aboard" for the wrong reason.
 func _boat_waits_for_shore(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 4)
-	var b := _battle_of(_cove(), army, [_spawn(COVE_W, Rules.BISON, 3, 2)], 999.0)
+	var army := _army_of(Rules.WOLF, 4)
+	var b := _battle_of(_cove(), army, [_spawn(COVE_W, Rules.SHIELDBEARER, 3, 2)], 999.0)
 	var landing := 3 * COVE_W + 3
 	for i in 4:
 		t.ok(b.send(i, landing) >= 0, "%d번을 좁은 해안으로 보냈다 (자가 점검)" % i)
@@ -556,16 +556,16 @@ func _boat_waits_for_shore(t) -> void:
 # -- cargo aboard --------------------------------------------------------------------------------
 
 func _cargo_rides_the_boat(t) -> void:
-	var army := _army_of(Rules.CELL_RANGED, 1)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.CROW, 3, 2)], 999.0)
+	var army := _army_of(Rules.CROW, 1)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.ARCHER, 3, 2)], 999.0)
 	t.ok(b.send(0, _tile_of(6, 5)) >= 0 and b.commit(), "보내고 확정했다 (자가 점검)")
 	_drive(b, 6)
 	t.eq(b.soldier_pos[0], Vector2(b.boats[0]["pos"]), "화물은 배 위치를 그대로 탄다")
 	t.ok(b.soldier_pos[0].distance_to(b.enemy_pos[0]) < army.range_of(0) + Rules.REACH_BONUS,
 			"까마귀는 그 병사의 사거리 안에 있다")
 	_drive(b, 18)
-	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.CROW), "그래도 배 위에서는 못 쏜다")
-	t.ok(army.hp[0] < Rules.hp_of(Rules.CELL_RANGED), "맞기는 맞는다")
+	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.ARCHER), "그래도 배 위에서는 못 쏜다")
+	t.ok(army.hp[0] < Rules.hp_of(Rules.CROW), "맞기는 맞는다")
 
 
 # -- driving ---------------------------------------------------------------------------------------
@@ -682,14 +682,13 @@ func _th_tile(x: int, y: int) -> int:
 	return y * 12 + x
 
 
-## `Army.add(type_id)` is gone — a body is `recruit`ed from a SLOT now. `type_id` here is always one
-## `SUMMON_SLOTS` binds, so it is resolved back to its slot here rather than at every call site.
+## `Army.add(type_id)` is gone — a body is `recruit`ed from a SLOT now, and the slots are the ARMY's
+## own since 티켓 15, so the species is REGISTERED here and the slot it lands in is what recruits.
 func _army_of(type_id: int, n: int) -> Army:
 	var a := Army.new()
-	var slot := 0
-	for s in Rules.summon_slot_count():
-		if Rules.summon_type_of(s) == type_id:
-			slot = s
+	var slot := a.slot_of_type(type_id)
+	if slot < 0:
+		slot = a.register_species(type_id)
 	for _i in n:
 		a.recruit(slot)
 	return a

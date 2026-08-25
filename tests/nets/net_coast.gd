@@ -243,7 +243,7 @@ func _cliff_and_ramp(t) -> void:
 	t.eq(cg.harbour_tiles.size(), 1, "절벽 픽스처에 항구가 있다 (자가 점검 — 없으면 전부 거절이라 아무것도 증명 못 한다)")
 	t.eq(int(cg.passable[1 * 8 + 3]), 0, "절벽 칸은 지나갈 수 없다")
 	t.ok(not cg.can_land_at(0, 1 * 8 + 3),
-		"절벽 칸에는 배를 못 댄다 — grid.gd 의 LAND_CHARS 에 '^' 를 넣으면 문다")
+		"절벽 칸에는 배를 못 댄다 — grid.gd 의 land_chars() 에 '^' 를 넣으면 문다")
 	t.ok(not cg.can_land_at(0, 2 * 8 + 3),
 		"절벽 뒤 땅에도 못 댄다 — 물에 닿은 이웃이 하나도 없다 (구조로 막힌다, 별도 규칙이 없다)")
 
@@ -256,7 +256,7 @@ func _cliff_and_ramp(t) -> void:
 	rg.load_rows(ramp_rows)
 	t.eq(int(rg.passable[1 * 8 + 3]), 1, "램프는 걸을 수 있다")
 	t.ok(rg.can_land_at(0, 1 * 8 + 3),
-		"물에 닿은 램프에는 배를 댈 수 있다 — grid.gd 의 LAND_CHARS 에서 '/' 를 빼면 문다")
+		"물에 닿은 램프에는 배를 댈 수 있다 — grid.gd 의 BARE_LAND_CHARS 에서 '/' 를 빼면 문다")
 	t.ok(not rg.can_land_at(0, 2 * 8 + 3),
 		"램프 뒤 땅에는 여전히 못 댄다 — 문은 해안이 아니다 (천장)")
 

@@ -36,7 +36,10 @@ extends RefCounted
 ## whether the real game's units can cross this ground.
 
 
-const LEGEND := "~H.#^/BCL"
+## ⚠ **`B` and `C` became `S` (방패병) and `A` (궁수)** when 소 and 까마귀 moved to the player's side.
+## The letters changed WITH the meaning rather than being re-pointed under the same name: this repo
+## has paid twice for a name that outlived its sense (「부위」 and 「다리」).
+const LEGEND := "~H.#^/SAL"
 
 const EXPECT_ROWS := 32
 const EXPECT_COLS := 48
@@ -160,15 +163,13 @@ func run(t) -> void:
 			"섬 %d 의 제한 시간은 %.0f초다" % [i + 1, float(EXPECT_LIMITS[i])])
 
 	var min_region_floor := _min_region_floor()
-	# ⚠ The 23 is a LITERAL on purpose. Writing the formula on both sides would let the roster grow and
+	# ⚠ The 39 is a LITERAL on purpose. Writing the formula on both sides would let the roster grow and
 	# the expectation grow with it, which is the shape that proves nothing.
-	# ⚠⚠ **20 -> 23**: node 5 (floor 4, the ex-chest) now pays `Reward.COUNT`, so
-	# `map_max_count_nodes_on_a_route()` moved 3 -> 4 with it — a route can now step on FOUR count
-	# nodes, not three. The floor moves with the roster it exists to clear.
-	t.eq(min_region_floor, 23, "가장 좁아도 되는 상륙지 바닥은 23칸이다 (최대 병력 22 + 여유 1) — 자가 점검")
-	t.eq(Rules.roster_start_count()
-		+ Rules.map_max_count_nodes_on_a_route() * (Rules.roster_reward_count()), 22,
-		"그 최대 병력 22가 10 + 짐승 칸 넷 x 3 이다 — 4층 칸도 짐승을 내면서 최대가 하나 늘었다 (자가 점검)")
+	# ⚠⚠ **23 -> 39** (티켓 15): a run opens with ten in one slot, and up to four more species arrive
+	# on cards with `SPECIES_CARD_BODIES` bodies each — 10 + 4x3 + 4x4 = 38, plus a tile of margin.
+	t.eq(min_region_floor, 39, "가장 좁아도 되는 상륙지 바닥은 39칸이다 (최대 병력 38 + 여유 1) — 자가 점검")
+	t.eq(_max_roster(), 38,
+		"그 최대 병력 38이 10 + 보상 칸 넷 x 3 + 짐승 카드 넷 x 4 다 (자가 점검)")
 	_the_floor_actually_rejects_something(t, min_region_floor)
 
 	var walker_pairs := 0
@@ -510,7 +511,7 @@ func run(t) -> void:
 		# ⚠ **Only the enemy being walked to is reserved for that pair — never the whole spawn list at
 		# once.** This is `net_islands`' own prior version (the plan's dock-to-enemy version) and it
 		# measures whether the ISLAND can be crossed — pure terrain, not a transient occupancy claim.
-		var reach := Rules.range_of(Rules.CELL_MELEE) + Rules.REACH_BONUS
+		var reach := Rules.range_of(Rules.WOLF) + Rules.REACH_BONUS
 		var unreached: Array = []
 		var fields: Array = []
 		for e in spawns.size():
@@ -567,6 +568,7 @@ func run(t) -> void:
 	t.ok(walker_steps > 0, "그 걷기들은 실제로 칸을 넘었다 (총 %d칸)" % walker_steps)
 
 	_the_long_map(t)
+	_every_spawn_is_an_enemy(t)
 	_self_check(t)
 
 
@@ -592,7 +594,7 @@ func _the_long_map(t) -> void:
 		% str(_shape_errors(rows, 32, 144)))
 	t.eq(_illegal_chars(rows).size(), 0, "범례 밖 글자가 없다 %s" % str(_illegal_chars(rows)))
 	t.eq(_count_char(rows, "H"), 6, "항구가 여섯이다 (24칸마다 하나)")
-	t.eq(_count_char(rows, "B"), 23, "바이슨이 스물셋이다 (6칸마다 하나)")
+	t.eq(_count_char(rows, "S"), 23, "방패병이 스물셋이다 (6칸마다 하나)")
 	t.eq(_count_char(rows, "^"), 140, "북쪽 절벽이 140칸이다")
 	t.eq(Islands.spawns_of(i).size(), 23, "그리고 spawns_of 도 스물셋을 뽑는다")
 
@@ -656,6 +658,39 @@ func _the_long_map(t) -> void:
 	t.eq(route[route.size() - 1], Vector2(140.0, 20.0), "항로의 마지막 점이 그 상륙 칸이다")
 
 
+# -- nobody friendly stands on the far side ---------------------------------------------------------
+## **The net that says the move actually happened.** 소 and 까마귀 were the enemy's rows and are the
+## player's now, so a leftover spawn character would put a beast back on the island fighting for the
+## humans — and it would look completely ordinary on screen.
+##
+## ⚠ **Derived from the SIDE COLUMN, never from a list of names.** A roll call would have to be edited
+## the day a row is added, and the row nobody edited is the one that gets through.
+##
+## ⚠ Mutation: put `Rules.WOLF` in `Islands.SPAWN_ROWS`; leave one `B` in a hand-written row (that one
+## reddens the legend check above instead, which is the point of having both).
+func _every_spawn_is_an_enemy(t) -> void:
+	var seen := 0
+	for i in Islands.count():
+		var rows := Islands.rows_of(i)
+		var grid := Grid.new()
+		grid.load_rows(rows)
+		var allied := 0
+		var off_land := 0
+		for raw in Islands.spawns_of(i):
+			var s: Dictionary = raw
+			seen += 1
+			if Rules.side_of(int(s["type_id"])) != Rules.Side.ENEMY:
+				allied += 1
+			var p := grid.tile_point(int(s["tile"]))
+			if not grid.is_passable(int(p.x), int(p.y)):
+				off_land += 1
+		t.eq(allied, 0, "섬 %d 에서 아군 편 종이 하나도 안 나온다" % i)
+		# ⚠ **모르는 글자는 조용히 구멍이 된다** (`grid.gd`) — 적이 못 걷는 벽 위에 서고 아무도 안 짖는다.
+		# 이 줄이 새 글자가 `LAND_CHARS` 에 도착했는지를 정면으로 잰다.
+		t.eq(off_land, 0, "섬 %d 의 적은 전부 걸을 수 있는 땅에 서 있다 — 새 글자가 구멍이 아니다" % i)
+	t.ok(seen > 0, "섬들이 적을 실제로 내놓았다 — 0마리면 위 두 줄이 공허하다 (자가 점검)")
+
+
 # -- the instrument's own failing cases -------------------------------------------------------------
 
 func _self_check(t) -> void:
@@ -665,8 +700,9 @@ func _self_check(t) -> void:
 	t.eq(_shape_errors(["....", "...."], 2, 4).size(), 0,
 			"모양 검사기는 멀쩡한 격자를 잡지 않는다 — 전부 빨개지는 검사기가 아니다 (자가 점검)")
 
-	t.ok(_illegal_chars(["~H.#^/,BCL"]).size() == 1, "범례 검사기는 쉼표를 잡는다 (자가 점검)")
-	t.eq(_illegal_chars(["~H.#^/BCL"]).size(), 0, "범례 안의 글자는 안 잡는다 (자가 점검)")
+	t.ok(_illegal_chars(["~H.#^/,SAL"]).size() == 1, "범례 검사기는 쉼표를 잡는다 (자가 점검)")
+	t.eq(_illegal_chars(["~H.#^/SAL"]).size(), 0, "범례 안의 글자는 안 잡는다 (자가 점검)")
+	t.ok(_illegal_chars(["~H.#^/BCL"]).size() == 2, "그리고 옛 짐승 글자 B·C 는 이제 범례 밖이다 — 하나라도 남으면 여기가 문다 (자가 점검)")
 
 	# Column 0 is all water. Counting it would make every island's cut 0 and the number above would be
 	# unfalsifiable.
@@ -686,10 +722,10 @@ func _self_check(t) -> void:
 		"~~~~~~~~~~~~",
 	])
 	var fx_spawns := [
-		{"type_id": Rules.BISON, "tile": 3 * 12 + 3},
-		{"type_id": Rules.CROW, "tile": 3 * 12 + 9},
+		{"type_id": Rules.SHIELDBEARER, "tile": 3 * 12 + 3},
+		{"type_id": Rules.ARCHER, "tile": 3 * 12 + 9},
 	]
-	var reach := Rules.range_of(Rules.CELL_MELEE) + Rules.REACH_BONUS
+	var reach := Rules.range_of(Rules.WOLF) + Rules.REACH_BONUS
 	var f0 := fx.flow_field(int(fx_spawns[0]["tile"]))
 	var f1 := fx.flow_field(int(fx_spawns[1]["tile"]))
 	var near := _reaches(fx, 1 * 12 + 1, int(fx_spawns[0]["tile"]), reach, f0)
@@ -760,9 +796,21 @@ func _cut_of(grid: Grid) -> int:
 ## to one value and not to its siblings": it does not bite on the three shipped grids (smallest region
 ## is in the hundreds) and a new grid with a 15-tile landing region would pass green and stall a boat
 ## forever.
+## ⚠⚠ **AND THE BEAST CARDS ARE IN IT NOW** (티켓 15). A run registers up to `SUMMON_SLOT_MAX`
+## species and every one after the opening table arrives with `SPECIES_CARD_BODIES` bodies, so the
+## largest roster grew by four times four. Leaving them out would have left this floor's own label —
+## 「최대 병력 + 여유 1」 — claiming more than the number measures, which is this repo's false green.
 func _min_region_floor() -> int:
+	return _max_roster() + 1
+
+
+## The largest roster a run can ever field: the opening table, plus every `Reward.COUNT` node a single
+## route can step on, plus a body count for every species a card can still register.
+func _max_roster() -> int:
+	var from_cards := (Rules.SUMMON_SLOT_MAX - Rules.START_SLOTS.size()) * Rules.SPECIES_CARD_BODIES
 	return Rules.roster_start_count() \
-		+ Rules.map_max_count_nodes_on_a_route() * (Rules.roster_reward_count()) + 1
+		+ Rules.map_max_count_nodes_on_a_route() * Rules.roster_reward_count() \
+		+ from_cards
 
 
 ## The length of the water route from harbour `hb` to `landing`, in tiles — what a crossing actually

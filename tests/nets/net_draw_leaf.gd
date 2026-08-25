@@ -32,7 +32,7 @@ extends RefCounted
 ##    number is presentation wherever it is written.
 ##  - `_literal_hits` — that list plus the TIME-ish and shape-ish ones, swept over `src/view/` and
 ##    `src/shell/` only. Measured, and this is why it is narrowed: run the wide list over all of
-##    `src/` and it bites `rules.gd`'s `TYPE_COUNT`, `_COL_SPEED` and `LION_WINDUP_SEC` — a table
+##    `src/` and it bites `rules.gd`'s `SUMMON_BAND_MIN_TILES`, `_COL_SPEED` and `LION_WINDUP_SEC` — a table
 ##    column count, a table column index and a SIM rule. `src/shell/` is not optional in that pair:
 ##    `HOLD_OUTCOME_SEC`, `HOLD_BEAK_SEC` and `PANEL_FADE_SEC` are read by `game.gd`, so a scope of
 ##    `src/view/` alone leaves `var _hold_sec := 0.8` hardcoded in the shell and green.
@@ -106,6 +106,12 @@ func _table() -> Dictionary:
 			"_ground_down": 0,
 			"_ground_centre_px": 0,
 			"screen_to_world_px": 0,
+			# The three that came with 2026-08-25's press fix. `screen_to_terrain_px` is what a press
+			# actually goes through; the other two are its forward, written here so the six copies
+			# under `tools/` could stop each carrying a private one.
+			"screen_to_terrain_px": 0,
+			"world_to_screen_px": 0,
+			"tile_to_screen_px": 0,
 			"world_to_tile": 0,
 			"pan_by": 0,
 			"zoom_at": 0,
@@ -116,6 +122,9 @@ func _table() -> Dictionary:
 			# The landscape: one mesh, built by SurfaceTool — no canvas stroke anywhere in it.
 			"_kind_of": 0,
 			"_joins": 0,
+			"_tier_level": 0,
+			"_idle_offset": 0,
+			"_tiles_join": 0,
 			"_char_at": 0,
 			"_noise_at": 0,
 			"_hash_at": 0,
@@ -142,6 +151,13 @@ func _table() -> Dictionary:
 			"_paint_bodies": 0,
 			"_put_halo": 0,
 			"_beast_tex": 0,
+			"_load_beast_tex": 0,
+			# The wolf's frame strips. `_body_tex` picks the picture and the other three feed it; not
+			# one of them strokes a canvas, same as the standing lookup they sit beside.
+			"_load_beast_anim": 0,
+			"_anim_strip": 0,
+			"_anim_sec": 0,
+			"_body_tex": 0,
 			"_put_soldier": 0,
 			"_put_hull": 0,
 			"_hide_unused": 0,
@@ -159,7 +175,6 @@ func _table() -> Dictionary:
 			"_facing_of": 0,
 			"_fx_step": 0,
 			"_drain_events": 0,
-			"_shake_offset": 0,
 			"_wait_blend": 0,
 			"_body_offset_of": 0,
 			"_lunge_offset": 0,
@@ -194,6 +209,8 @@ func _table() -> Dictionary:
 			"_paint_plan": 0,
 			# Step 4's revival: the caller `_route_ahead` had lost. 0 draws — it feeds the fx buffer.
 			"_paint_boat_routes": 0,
+			# The landing ring of every boat ALREADY placed, so the undo has a picture (2026-08-25).
+			"_paint_placed_boats": 0,
 			"_paint_ghosts": 0,
 			"_paint_intent": 0,
 			"_paint_transients": 0,
@@ -243,23 +260,15 @@ func _table() -> Dictionary:
 		"panel_view.gd": {
 			"bind": 0,
 			"panel_active": 0,
-			"is_reward": 0,
 			"is_finished": 0,
-			"roster_ids": 0,
-			"roster_rect_of": 0,
-			"soldier_id_at": 0,
 			"button_rect": 0,
 			"button_hit": 0,
-			"note_beak": 0,
 			"_fx_step": 0,
-			"_entry_bg": 0,
 			"_process": 0,
 			"_draw": 0,
 			"_paint_panel": 1,
 			"_paint_message": 2,
-			"_paint_roster_entry": 2,
 			"_paint_button": 2,
-			"_entry_text": 0,
 			"_message_text": 0,
 			"_message_colour": 0,
 		},
@@ -276,11 +285,11 @@ func _table() -> Dictionary:
 			"_press_of": 0,
 			"_slot_fill": 0,
 			"_slot_box": 0,
-			"_cell_centre": 0,
+			"_tile_centre": 0,
 			"_fx_step": 0,
 			"_process": 0,
 			"_draw": 0,
-			"_paint_cell": 1,
+			"_paint_tile": 1,
 			"_paint_title": 1,
 			# 2 calls: the fill, then the border that says it presses. One hook and not two — a box
 			# without its border is the same box saying something else, not a second thing to draw.
@@ -359,7 +368,7 @@ func _table() -> Dictionary:
 			# `_reveal_alpha_of`, applied to the drawn box only), the rarity pulse (a sine on
 			# `_reveal_age` — no second clock), the art square, and the burst geometry handed WHOLE
 			# to its leaf (`_spark_points`'s split; see `_whole_array_leaves` below, which pins it).
-			"_load_item_art": 0,
+			"_load_card_art": 0,
 			"_deal_offset_of": 0,
 			"_pulse_of": 0,
 			"_art_rect": 0,
@@ -438,9 +447,11 @@ func _table() -> Dictionary:
 			"_tag_state_of": 0,
 			# `draw_polyline` + `draw_circle`, the outline-and-dot shape `field_view._paint_body`
 			# already draws -- this screen's own scale, no part drawn on it.
-			"_paint_body": 2,
+			"_paint_beast": 1,
+			"_load_beast_tex": 0,
+			"_beast_tex": 0,
+			"_beast_rect": 0,
 			"_paint_button": 2,
-			"_rounded_square": 0,
 			# The scene wash — this screen had no reveal of its own to piggyback on until now, so
 			# `_reveal_age` was added purely to drive this one call.
 			"_paint_fade": 1,
@@ -547,8 +558,34 @@ func run(t) -> void:
 	# summed by hand.
 	# ⚠ 91 -> 92 in `field_view` (step 4): `_paint_boat_routes`, the caller `_route_ahead` lost in the
 	# 3D move. 0 draws — the route is fx-buffer geometry — so the leaf total does not move.
-	t.eq(total_funcs, 258, "일곱 파일의 함수는 모두 258개다 (92 + 17 + 21 + 18 + 29 + 31 + 50)")
-	t.eq(total_leaves, 44, "그중 draw 를 실제로 부르는 잎은 44개다 (0 + 5 + 4 + 4 + 7 + 9 + 15) — 필드는 0이고, 0이 주장이다")
+	# ⚠ 93 -> 97 in `field_view` (2026-08-25, the press fix and the placed boat's picture):
+	# `screen_to_terrain_px` and the two forwards `world_to_screen_px` / `tile_to_screen_px`, plus
+	# `_paint_placed_boats`. All four are pure arithmetic or fx-buffer geometry and draw nothing, so
+	# the leaf total does not move. Both totals re-derived from the seven per-file tables —
+	# 97 + 17 + 21 + 18 + 29 + 31 + 50 — and not nudged by four.
+	# ⚠ 97 -> 99 in `field_view` (2026-08-25, 티켓 19's tiers): `_tier_level`, which asks the SIM for a
+	# tile's level rather than parsing the tier board a second time, and `_tiles_join`, which ANDs the
+	# level gap onto the kind rule `_joins` already answered. Both are pure arithmetic over the mesh
+	# build and draw nothing, so the leaf total does not move. Re-derived from the seven per-file
+	# tables — 99 + 17 + 21 + 18 + 29 + 31 + 50 — and not nudged by two.
+	# ⚠ 99 -> 100 in `field_view` (2026-08-25): `_idle_offset`, what a body does when it CANNOT
+	# move. 0 draws — it is a position offset like the lunge and the knock beside it.
+	# ⚠ 100 -> 99 in `field_view` (2026-08-25): `_shake_offset` went with the screen shake, which the
+	# user turned down. `net_camera` holds the check that it and its constants are gone.
+	# ⚠ 50 -> 52 in `refit_view` (2026-08-25, 티켓 23): the body preview stopped drawing a rounded
+	# square and started drawing the island's own picture. `_paint_body` and `_rounded_square` went,
+	# `_paint_beast` (1 draw) and three readers came.
+	# ⚠ 21 -> 13 in `panel_view` (2026-08-25): the beak reward is deleted, and the roster it asked the
+	# player to click went with it — `is_reward` · `roster_ids` · `roster_rect_of` · `soldier_id_at` ·
+	# `note_beak` · `_entry_bg` · `_paint_roster_entry` · `_entry_text`. The band and the button stay.
+	# ⚠ 99 -> 103 in `field_view` (2026-08-25, 티켓 26): the wolf's frame strips — `_load_beast_anim`
+	# loads them, `_anim_strip` and `_anim_sec` read the table, `_body_tex` picks the frame. All four
+	# are lookups feeding `_put_body`'s existing texture argument, so no new leaf and the leaf total
+	# does not move. Re-derived from the seven per-file tables — 103 + 17 + 13 + 18 + 29 + 31 + 52 —
+	# and not nudged by four.
+	t.eq(total_funcs, 263, "일곱 파일의 함수는 모두 263개다 (103 + 17 + 13 + 18 + 29 + 31 + 52)")
+	# ⚠ 4 -> 3 in `panel_view` (2026-08-25): `_paint_roster_entry` went with the beak reward.
+	t.eq(total_leaves, 43, "그중 draw 를 실제로 부르는 잎은 43개다 (0 + 5 + 3 + 4 + 7 + 9 + 15) — 필드는 0이고, 0이 주장이다")
 
 	# -- 3b. the array leaves hand their array WHOLE to one native call -----------------------------
 	# ⚠⚠ **THIS SECTION EXISTS BECAUSE THE COUNT ABOVE CANNOT SEE THE DIFFERENCE, AND THAT WAS
@@ -836,8 +873,12 @@ func _invert_the_scanner(t) -> void:
 	# it bites rule constants, which are not presentation and must not be dragged into `look.gd`.
 	t.ok(_literal_hits("const LION_WINDUP_SEC := 0.6\n").size() > 0,
 		"넓힌 목록은 sim 의 룰 상수까지 문다 — 그래서 범위가 뷰와 셸뿐이다 (스캐너 자가 점검)")
-	t.ok(_literal_hits("const TYPE_COUNT := 5\n").size() > 0,
-		"표 컬럼 수도 문다 — 같은 이유다 (스캐너 자가 점검)")
+	# ⚠ **This line used to quote `const TYPE_COUNT := 5`, and that constant is DELETED** (티켓 15).
+	# The scanner was NOT loosened to make the row pass — the row was pointed at another sim constant
+	# that still exists, because a self-check quoting a line no file holds is green for a reason that
+	# has nothing to do with what it claims.
+	t.ok(_literal_hits("const SUMMON_BAND_MIN_TILES := 6\n").size() > 0,
+		"칸 거리 상수도 문다 — 같은 이유다 (스캐너 자가 점검)")
 
 	# (f2) the world-width extractor. It is what CLOSES the width table, so it has to bite a name the
 	# table does not hold and it has to ignore the prose that names those same constants everywhere.

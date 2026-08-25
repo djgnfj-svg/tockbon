@@ -23,14 +23,14 @@ extends Node2D
 ## is, is its SHAPE, its COLOUR and its SIZE — all three, because Slay the Spire's map is criticised
 ## for symbols that differ in neither of the last two. What it PAYS is a glyph drawn inside it. Where
 ## the run has been is the thickness of the lines and the fill of the nodes it has walked. The only
-## text is 「병사 %d · 힘 %.0f」, and that exists because `hud_view._draw` returns on `battle == null`
+## text is 「짐승 %d · 힘 %.0f」, and that exists because `hud_view._draw` returns on `battle == null`
 ## and would otherwise leave the screen with no data at all to answer "what am I short of".
 ##
 ## Its clock is its own (`_fx_step`), like `panel_view`'s and `title_view`'s: `game.gd::_process`
 ## reaches nothing here, and a view aged by the shell would be one clock living in two places.
 ##
 ## ⚠ **The 힘 number CHASES the army's pool rather than printing it.** Nothing tells this file that a
-## `Reward.COUNT` node was won — it notices the pool moved and climbs to it over `MAP_HEAL_SEC`. That is
+## `Reward.COUNT` node was won — it notices the pool moved and climbs to it over `NUMBER_CLIMB_SEC`. That is
 ## what makes a win visibly pay rather than merely returning to the same-looking map. A shell that had
 ## to remember to announce the change would eventually forget on one of the paths that can raise it.
 ##
@@ -39,7 +39,13 @@ extends Node2D
 
 
 ## The two numbers, and they are the only glyphs on this screen.
-const ARMY_FORMAT := "병사 %d · 힘 %.0f"
+##
+## ⚠⚠ **「병사」-> 「짐승」** (2026-08-25, the user, playing: 「이거 아직 부리를 달 병사를 고르세요 이게
+## 남아있네? 이게 뭐지?」). **In this game 병사 are the ENEMY** — 창병 · 궁수 · 방패병 — so a map that
+## counted the player's own force in 병사 was naming their horde after the people it is invading.
+## ⚠ **The Korean string only.** `soldier` · `army` · `unit` are ruled species-neutral by the glossary
+## and are deliberately NOT renamed; this is a word on a screen, not a symbol.
+const ARMY_FORMAT := "짐승 %d · 힘 %.0f"
 
 ## **The four sentences a circle on this map can say**, and the whole reason this enum exists rather
 ## than three `if`s scattered through `_draw`: SIZE and BRIGHTNESS are decided from the same answer,
@@ -321,8 +327,12 @@ func _edge_style(e: int) -> Vector2:
 
 
 ## The glyph inside node `n`, as **point PAIRS** for one `draw_multiline` — three little squares for a
-## node that pays cells, one triangle for a node that pays the beak (the same shape the beak on a body
-## is). Empty for the boss, which is told apart by size and by its nested rings.
+## node that pays bodies. Empty for the boss, which is told apart by size and by its nested rings.
+##
+## ⚠⚠ **A SECOND GLYPH — a triangle for the beak node — was deleted with the reward** (2026-08-25,
+## the user: 「부리 보상 없지 끝나면 카드보상으로 통일했잖아」). **So every fight node now draws the
+## same glyph**, and the `match` below has one arm. That is the honest picture of a map whose seven
+## nodes pay one thing; it is written down rather than hidden behind a `match` that looks like a fork.
 ##
 ## ⚠ **Built here and handed to the leaf as an argument**, the `_spark_points` precedent: geometry
 ## built INSIDE a leaf never leaves it, and `net_draw_leaf` skips the unused-argument check on any
@@ -347,12 +357,6 @@ func _glyph_points(n: int) -> PackedVector2Array:
 				for i in 4:
 					out.append(corner[i])
 					out.append(corner[(i + 1) % 4])
-		Rules.Reward.BEAK:
-			var tri: Array[Vector2] = [c + Vector2(0.0, -r), c + Vector2(r * 0.87, r * 0.5),
-				c + Vector2(-r * 0.87, r * 0.5)]
-			for i in 3:
-				out.append(tri[i])
-				out.append(tri[(i + 1) % 3])
 	return out
 
 
@@ -389,7 +393,7 @@ func _fx_step(delta: float) -> void:
 		_travel_age += delta
 	if _cleared_node >= 0:
 		_cleared_age += delta
-	if _force_age < Look.MAP_HEAL_SEC:
+	if _force_age < Look.NUMBER_CLIMB_SEC:
 		_force_age += delta
 	if run == null or run.army == null:
 		return
@@ -498,7 +502,7 @@ func _draw() -> void:
 	# The only two numbers on this screen. 힘 is the CHASED value, so a chest visibly pays.
 	var shown := _force_to
 	if _force_to >= 0.0:
-		shown = lerpf(_force_from, _force_to, clampf(_force_age / Look.MAP_HEAL_SEC, 0.0, 1.0))
+		shown = lerpf(_force_from, _force_to, clampf(_force_age / Look.NUMBER_CLIMB_SEC, 0.0, 1.0))
 	var text := ARMY_FORMAT % [run.army.living_count(), maxf(shown, 0.0)]
 	var ink_army := Look.COL_HUD_TEXT
 	ink_army.a = clampf(_reveal_age / Look.MAP_NODE_FADE_SEC, 0.0, 1.0)

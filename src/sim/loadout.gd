@@ -35,7 +35,7 @@ func _init() -> void:
 ## `Run._reset` is shared.
 func reset() -> void:
 	board = PackedInt32Array()
-	board.resize(Rules.TYPE_COUNT * Rules.ITEM_CELLS)
+	board.resize(Rules.player_type_count() * Rules.ITEM_CELLS)
 	for i in board.size():
 		board[i] = -1
 	held = PackedInt32Array()
@@ -44,7 +44,7 @@ func reset() -> void:
 ## The item in that cell, or -1 for an empty cell or an out-of-range type/cell. Out of range is a
 ## refusal, not a fault.
 func fitted_item(beast_type: int, cell: int) -> int:
-	if beast_type < 0 or beast_type >= Rules.TYPE_COUNT:
+	if beast_type < 0 or beast_type >= Rules.player_type_count():
 		return -1
 	if cell < 0 or cell >= Rules.ITEM_CELLS:
 		return -1
@@ -76,7 +76,7 @@ func tag_count(tag: int) -> int:
 ## term for `col`. ⚠⚠ This one function is the whole of the room set effects need — the tag term was
 ## added here and no consumer moved, exactly as this header once promised.
 func bonus(beast_type: int, col: int) -> float:
-	if beast_type < 0 or beast_type >= Rules.TYPE_COUNT:
+	if beast_type < 0 or beast_type >= Rules.player_type_count():
 		return 0.0
 	var sum := 0.0
 	for cell in Rules.ITEM_CELLS:
@@ -95,7 +95,7 @@ func bonus(beast_type: int, col: int) -> float:
 ## piece of equipment or a lit tag can move comes out of THIS call — the fight's and the dashboard's
 ## alike.
 func stat_of(beast_type: int, col: int) -> float:
-	if beast_type < 0 or beast_type >= Rules.TYPE_COUNT:
+	if beast_type < 0 or beast_type >= Rules.player_type_count():
 		return 0.0
 	var value := Rules.unit_stat(beast_type, col) + bonus(beast_type, col)
 	# ⚠⚠ **The ONE clamped column, and it became reachable the day cells lost their names.** See
@@ -118,7 +118,7 @@ func stat_of(beast_type: int, col: int) -> float:
 ## swap was the only sensible answer; with unnamed cells a swap would have to choose a victim, and a
 ## choice made silently inside a fit is a choice the player never made. Unfit first, then fit.
 func fit(beast_type: int, held_index: int) -> bool:
-	if beast_type < 0 or beast_type >= Rules.TYPE_COUNT:
+	if beast_type < 0 or beast_type >= Rules.player_type_count():
 		return false
 	if held_index < 0 or held_index >= held.size():
 		return false
@@ -134,7 +134,7 @@ func fit(beast_type: int, held_index: int) -> bool:
 ## Clears one cell and returns its item to the pile. False on an empty cell — and changes nothing when
 ## it is.
 func unfit(beast_type: int, cell: int) -> bool:
-	if beast_type < 0 or beast_type >= Rules.TYPE_COUNT:
+	if beast_type < 0 or beast_type >= Rules.player_type_count():
 		return false
 	if cell < 0 or cell >= Rules.ITEM_CELLS:
 		return false

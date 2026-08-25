@@ -27,7 +27,9 @@ class_name Islands
 ##       `speed-off-open-landing` the cliff face is also the ONLY standing 「여긴 못 내린다」 mark on
 ##       screen: the green coast wash that used to say the same thing from the other side is deleted.
 ##   `/` ramp — passable land, the only doorway through a cliff wall. A doorway, not a climb.
-##   `B` `C` `L` land, with a bison / crow / lion starting there
+##   `S` `A` `L` land, with a shieldbearer / archer / lion starting there. ⚠ **The letters are NOT
+##       listed here twice** — `SPAWN_ROWS` at the bottom of this file is what binds each one to a
+##       unit row, and `grid.land_chars()` reads that same table for walkability
 ##
 ## **`D` (dock) is gone.** The old fixed-dock legend is deleted along with `Grid.DOCK_CHAR` and
 ## `grid.dock_tiles` — an open coastline replaces it, and `grid.gd`'s `water_fields` / `sendable` /
@@ -48,7 +50,7 @@ class_name Islands
 ## `const X := PackedInt32Array([...])` is a parse error in GDScript 4.7, so this is a plain const
 ## Array of const Arrays and every read casts.
 const ISLAND_ROWS := [
-	# Island 1 -- open, one bay, 4 bison. Narrowest cut 15. Deliberately no headland: a draft put two
+	# Island 1 -- open, one bay, 4 shieldbearers. Narrowest cut 15. Deliberately no headland: a draft put two
 	# cliff promontories on it and they shadowed 50 of its 74 coast tiles, which is not a baseline.
 	[
 		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
@@ -59,19 +61,19 @@ const ISLAND_ROWS := [
 		"~~............................................~~",
 		"~~............................................~~",
 		"~~............................................~~",
-		"~~..B........####..............####...........~~",
+		"~~..S........####..............####...........~~",
 		"~~...........####..............####...........~~",
 		"~~...........####..............####...........~~",
 		"~~............................................~~",
 		"~~............................................~~",
-		"~~................B...........B...............~~",
-		"~~.....B.................................B....~~",
+		"~~................S...........S...............~~",
+		"~~.....S.................................S....~~",
 		"~~............................................~~",
 		"~~............................................~~",
-		"~~.................B..........................~~",
+		"~~.................S..........................~~",
 		"~~..................~~~~~~~~..................~~",
 		"~~..................~~~~~~~~..................~~",
-		"~~.....B............~~~~~~~~.....B............~~",
+		"~~.....S............~~~~~~~~.....S............~~",
 		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
 		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
 		"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
@@ -95,20 +97,20 @@ const ISLAND_ROWS := [
 		"~~....................^^......................~~",
 		"~~....................^^......................~~",
 		"~~....................^^......................~~",
-		"~~........C...........^^......................~~",
+		"~~........A...........^^......................~~",
 		"~~....................^^......................~~",
-		"~~....B...............^^..........B...........~~",
+		"~~....S...............^^..........S...........~~",
 		"~~....................^^......................~~",
-		"~~....................^^..B...................~~",
-		"~~....................^^.....B................~~",
-		"~~............B.......//......................~~",
+		"~~....................^^..S...................~~",
+		"~~....................^^.....S................~~",
+		"~~............S.......//......................~~",
 		"~~....................//......................~~",
-		"~~....................^^..B.............B.....~~",
-		"~~....................^^......B...............~~",
+		"~~....................^^..S.............S.....~~",
+		"~~....................^^......S...............~~",
 		"~~....................^^......................~~",
 		"~~....................^^......................~~",
-		"~~......C.......C.....^^......................~~",
-		"~~....................^^......C...............~~",
+		"~~......A.......A.....^^......................~~",
+		"~~....................^^......A...............~~",
 		"~~....................^^......................~~",
 		"~~~~~~~~~~~~~~~~~~~~~~^^~~~~~~~~~~~~~~~~~~~~~~~~",
 		"~~~~~~~~~~~~~~~~~~~~~~^^~~~~~~~~~~~~~~~~~~~~~~~~",
@@ -123,7 +125,7 @@ const ISLAND_ROWS := [
 		"~~~~~~~~~~~~~~~~~~~~~~~~~~H~~~~~~~~~~~~~~~~~~~~~",
 	],
 	# Island 3 -- a cliff ring with two ramp doors, behind a bay. Narrowest cut 10. Lion at the centre,
-	# a crow and a bison inside, a bison and a crow outside. Under "nearest harbour, full stop"
+	# an archer and a shieldbearer inside, a shieldbearer and an archer outside. Under "nearest harbour, full stop"
 	# landing at (18,18) or (17,19) would strand the beachhead -- Grid.home_harbour_for visibility
 	# filter is what fixes it.
 	[
@@ -132,19 +134,19 @@ const ISLAND_ROWS := [
 		"~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^~~",
 		"~~............................................~~",
 		"~~............................................~~",
-		"~~........B...........................B.......~~",
+		"~~........S...........................S.......~~",
 		"~~.............^^^^^^^^^^^^^^^^^^^............~~",
 		"~~.............^.................^............~~",
-		"~~.............^...BC........C...^............~~",
+		"~~.............^...SA........A...^............~~",
 		"~~.............^.................^............~~",
 		"~~............./........L......../............~~",
 		"~~............./................./............~~",
-		"~~....C........^.................^..B.........~~",
-		"~~.............^............BB...^............~~",
+		"~~....A........^.................^..S.........~~",
+		"~~.............^............SS...^............~~",
 		"~~.............^.................^............~~",
 		"~~.............^^^^^^^^^^^^^^^^^^^............~~",
 		"~~............................................~~",
-		"~~......B...B.......C...................C.....~~",
+		"~~......S...S.......A...................A.....~~",
 		"~~............................................~~",
 		"~~................~~~~~~~~~~~~~...............~~",
 		"~~................~~~~~~~~~~~~~...............~~",
@@ -218,9 +220,9 @@ const LONG_LAND_TOP := 3
 const LONG_LAND_BOTTOM := 20      # inclusive. 21..31 is open water, as on all three shipped islands
 const LONG_SEA_EDGE := 2        # columns of water down each side, the same as the shipped rows
 
-## One bison every this many columns of land, and one harbour every this many columns of sea. Both are
+## One defender every this many columns of land, and one harbour every this many columns of sea. Both are
 ## SPACINGS rather than counts, so widening the map adds enemies and harbours instead of stretching
-## the same few further apart — a 144-column map with island 1's eight bison is an empty walk.
+## the same few further apart — a 144-column map with island 1's eight defenders is an empty walk.
 const LONG_ENEMY_PITCH := 6
 const LONG_HARBOUR_PITCH := 24
 
@@ -266,6 +268,70 @@ const SMALL_ISLANDS := [
 const SMALL_ISLAND_BASE := 4
 
 
+## --- the tier boards --------------------------------------------------------------------------------
+## **A second board per island, the same shape as its rows, holding height and nothing else.**
+## `.` low · `/` stair · `1` high — `Grid.TIER_CHARS` is where those letters are bound to levels, and
+## this file only holds the characters, exactly as it does for the terrain legend.
+##
+## ⚠⚠ **ONE ISLAND HAS ONE, AND THE OTHER SEVEN ARE FLAT.** 티켓 19's answer says all eight get tiers;
+## the user cut this slice down to the island the first map node opens, so they can look at a real
+## plateau before seven more are authored against a shape nobody has judged yet. **The other seven are
+## not "done" — they are not started**, and `tiers_of` returning `[]` for them means flat.
+##
+## ⚠ **`Rules.MAP_NODES[0]` opens island 4**, which is `SMALL_ISLANDS[0]` — a GENERATED map. So its
+## rows come out of `_small_rows` and its tiers are typed here by hand, and the two are held in step by
+## nothing but their shape. **`net_tiers` asserts that shape**, and asserts that no stair or high tile
+## lands on a character a body cannot stand on — a stair drawn over water is a door that silently is
+## not there.
+const ISLAND_4_TIERS := [
+	"..........................",
+	"..........................",
+	"..........................",
+	"..........................",
+	".............111111111....",
+	".............111111111....",
+	".............111111111....",
+	"............./11111111....",
+	".............111111111....",
+	".............111111111....",
+	".............111111111....",
+	"..........................",
+	"..........................",
+	"..........................",
+	"..........................",
+	"..........................",
+	"..........................",
+	"..........................",
+	"..........................",
+	"..........................",
+]
+
+
+## The tier board for island `i`, or **`[]` for an island with no height in it** — which `Grid.load_rows`
+## reads as flat.
+##
+## ⚠ **Deliberately not a table indexed by island.** A seven-entry table of empty arrays would say
+## "these seven were considered and are flat", and what is true is that they have not been authored.
+## The day the second one is written this becomes the table; today it is one island and a default.
+static func tiers_of(i: int) -> Array:
+	if i == SMALL_ISLAND_BASE:
+		return ISLAND_4_TIERS
+	return []
+
+
+## **Loads island `i` into `grid` — terrain and height together.** ⚠⚠ **This exists because loading an
+## island became TWO calls and five callers were still making one**, which is not a bug anyone would
+## have found by reading: a grid loaded without its tier board comes up flat, draws, plays, and says
+## nothing. The probe reported a flat island and the screenshot tool photographed one.
+##
+## ⇒ **Nobody outside a hand-written fixture should call `grid.load_rows` directly.** `load_rows` keeps
+## taking rows and an optional board because every net builds its own board by hand; **an island NUMBER
+## is loaded through here**, so the day a third table joins the two there is one line to change instead
+## of a sweep that has already been missed once.
+static func load_into(grid: Grid, i: int) -> void:
+	grid.load_rows(rows_of(i), tiers_of(i))
+
+
 ## One compact island, built from its row of `SMALL_ISLANDS`.
 ##
 ## ⚠ **Enemies alternate between the two kinds** as they are placed, so no island is eight of one
@@ -298,7 +364,8 @@ static func _small_rows(k: int) -> Array:
 				# Every third land row and every `epitch` column, and never on column 0 — a body on
 				# the corner a boat lands at is a body the plan cannot avoid.
 				if x > 0 and (x % epitch) == epitch / 2 and ((y - top) % 3) == 1:
-					ch = "B" if (placed % 2) == 0 else "C"
+					ch = spawn_char_of(Rules.SHIELDBEARER) if (placed % 2) == 0 \
+						else spawn_char_of(Rules.ARCHER)
 					placed += 1
 				land += ch
 			rows.append("~".repeat(sea) + land + "~".repeat(sea))
@@ -373,10 +440,11 @@ static func _long_rows() -> Array:
 		if y >= LONG_LAND_TOP and y <= LONG_LAND_BOTTOM:
 			var land := ""
 			for x in body:
-				# The bison sit on the LAND, spaced by column, and the first one is a full pitch in
-				# from the west edge so nothing spawns on the corner a boat lands at.
+				# The defenders sit on the LAND, spaced by column, and the first one is a full pitch
+				# in from the west edge so nothing spawns on the corner a boat lands at.
 				var on_pitch := (x % LONG_ENEMY_PITCH) == 0 and x > 0
-				land += "B" if (on_pitch and y == _enemy_row(x)) else "."
+				land += spawn_char_of(Rules.SHIELDBEARER) \
+					if (on_pitch and y == _enemy_row(x)) else "."
 			rows.append("~".repeat(sea) + land + "~".repeat(sea))
 			continue
 		# Open sea. The harbours go on the bottom row, spread the width of the map, so a plan can be
@@ -391,7 +459,7 @@ static func _long_rows() -> Array:
 	return rows
 
 
-## Which land row column `x`'s bison stands on. A single `sin`-free stagger — three rows walked in
+## Which land row column `x`'s defender stands on. A single `sin`-free stagger — three rows walked in
 ## turn — so the enemies are not one straight line across the map and the pattern is still
 ## reproducible by hand. **No RNG**: a random layout cannot be measured, and this repo has paid for
 ## that once already.
@@ -411,20 +479,57 @@ static func spawns_of(i: int) -> Array:
 	for y in rows.size():
 		var row := str(rows[y])
 		for x in row.length():
-			var type_id := _spawn_type_at(row[x])
+			var type_id := spawn_type_of_char(row[x])
 			if type_id >= 0:
 				out.append({"type_id": type_id, "tile": y * w + x})
 	return out
 
 
-## -1 means "this character spawns nothing". Terrain is grid.gd's business, not this file's.
-static func _spawn_type_at(ch: String) -> int:
-	match ch:
-		"B":
-			return Rules.BISON
-		"C":
-			return Rules.CROW
-		"L":
-			return Rules.LION
-		_:
-			return -1
+## --- the spawn characters ---------------------------------------------------------------------
+## **One row per letter that puts a body on the ground: the character, and the `Rules.UNITS` row it
+## is.** ⚠⚠ **THIS IS THE ONE PLACE A SPAWN LETTER IS BOUND TO ANYTHING**, and it is new: the letters
+## used to live here as a `match` AND in `grid.LAND_CHARS` as a string, two lists nobody kept in step.
+## `grid.land_chars()` reads this table, so **a letter that spawns a body is walkable ground by
+## construction** — which closes 「모르는 글자는 조용히 구멍이 된다」 at its cause rather than by
+## remembering to edit twice.
+##
+## ⚠⚠ **`B` AND `C` ARE GONE — the letters changed WITH their meaning.** They were 들소 and 까마귀,
+## and both species crossed to the player's side, so the rows they named are `SHIELDBEARER` and
+## `ARCHER` now. Re-pointing `B` at the shieldbearer would have left this file's legend and
+## `grid.gd`'s both lying, and this repo has paid twice for a name that outlived its sense (「부위」
+## and 「다리」).
+const SPAWN_ROWS := [
+	["S", Rules.SHIELDBEARER],
+	["A", Rules.ARCHER],
+	["L", Rules.LION],
+]
+
+const _SPAWN_COL_CHAR := 0
+const _SPAWN_COL_TYPE := 1
+
+
+## The `Rules.UNITS` row `ch` spawns, or **-1 for "this character spawns nothing"**. Terrain is
+## `grid.gd`'s business, not this file's.
+static func spawn_type_of_char(ch: String) -> int:
+	for r in SPAWN_ROWS.size():
+		if str((SPAWN_ROWS[r] as Array)[_SPAWN_COL_CHAR]) == ch:
+			return int((SPAWN_ROWS[r] as Array)[_SPAWN_COL_TYPE])
+	return -1
+
+
+## Every spawn letter, as one string. `grid.land_chars()` appends it to the bare ground characters.
+static func spawn_chars() -> String:
+	var out := ""
+	for r in SPAWN_ROWS.size():
+		out += str((SPAWN_ROWS[r] as Array)[_SPAWN_COL_CHAR])
+	return out
+
+
+## The letter row `type_id` is written with, or `"."` — plain ground — for a row that spawns nowhere.
+## **The generators below call THIS and never type a letter**, so the generated maps and the
+## hand-written ones cannot drift apart.
+static func spawn_char_of(type_id: int) -> String:
+	for r in SPAWN_ROWS.size():
+		if int((SPAWN_ROWS[r] as Array)[_SPAWN_COL_TYPE]) == type_id:
+			return str((SPAWN_ROWS[r] as Array)[_SPAWN_COL_CHAR])
+	return "."

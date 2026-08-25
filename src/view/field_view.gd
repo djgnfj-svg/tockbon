@@ -34,15 +34,23 @@ extends Node2D
 ## ⚠ **Orthogonal, not perspective.** This game is read off a grid; a perspective camera draws two
 ## tiles of one size at two sizes, and that reading is the thing it cannot lose.
 ##
-## **What is not here yet** (they were 210 of the checks that died, and they are the next step):
-## the summon aim ring and its route, target lines, area and landing rings, hit halos, tracers,
-## sparks, death bursts, the beak, and the refusal mark. `_fx_step` and `_drain_events` below still
-## run and still fill `_fx` every frame — **the effects are being simulated, nobody is drawing them.**
-## That is stated here rather than left to be discovered from a quiet screen.
+## ⚠ **This paragraph used to say the effects were not drawn, and that stopped being true on
+## 2026-08-24** — 티켓 09's step 4 brought all twelve back on two immediate-mesh layers (the ground
+## one follows the terrain, the air one stands on the camera plane). It is corrected rather than
+## deleted because a header claiming a quiet screen is how a real absence gets read as expected.
+##
+## **What is not here**, as of 2026-08-25: nothing on that list. The beak was never this layer's —
+## it belongs to the roster screen and the twelve were wrong to count it.
 
 
 ## Kept because `_rounded_square` is gone but the baked picture wants the same corner it drew.
 const CORNER_SEGMENTS := 6
+
+## How many rungs `screen_to_terrain_px` walks down the view ray. **The height step is this divided
+## into `Look.terrain_height_ceiling()`**, so at pitch 40 one rung slides the ground point about 3.6
+## world px — under a tenth of a tile, which is the resolution a press is answered to. Raising it buys
+## precision nobody can press to; lowering it lets a thin ridge fall between two rungs.
+const TERRAIN_PICK_STEPS := 48
 
 const WATER_SHADER := "res://src/view/water.gdshader"
 
@@ -58,8 +66,7 @@ var rows: Array = []
 
 var _fx: Array = []
 var _body: Dictionary = {}
-var _shake_amp := 0.0
-var _shake_left := 0.0
+
 
 
 # --- the camera ------------------------------------------------------------------------------------
@@ -81,16 +88,16 @@ var cam_pitch_deg := Look.CAM_PITCH_DEG
 
 # --- pictures ---------------------------------------------------------------------------------------
 
-var _tex_wolf_r: Texture2D = load(Look.BEAST_WOLF_R)
-var _tex_wolf_l: Texture2D = load(Look.BEAST_WOLF_L)
-var _tex_crow_r: Texture2D = load(Look.BEAST_CROW_R)
-var _tex_crow_l: Texture2D = load(Look.BEAST_CROW_L)
-var _tex_spear_r: Texture2D = load(Look.HUMAN_SPEAR_R)
-var _tex_spear_l: Texture2D = load(Look.HUMAN_SPEAR_L)
-var _tex_bow_r: Texture2D = load(Look.HUMAN_BOW_R)
-var _tex_bow_l: Texture2D = load(Look.HUMAN_BOW_L)
-var _tex_shield_r: Texture2D = load(Look.HUMAN_SHIELD_R)
-var _tex_shield_l: Texture2D = load(Look.HUMAN_SHIELD_L)
+## One texture per row of `Look.BEAST_TEX`, both facings, loaded once. **`null` where that row's path
+## is empty**, which `_put_body` already draws the plain rounded shape for.
+var _tex_facing_r: Array[Texture2D] = _load_beast_tex(true)
+var _tex_facing_l: Array[Texture2D] = _load_beast_tex(false)
+## The frame strips, `[type][anim][frame]`, loaded once beside the standing pictures. **Empty wherever
+## `Look.BEAST_TEX` declares no strip** — which is eight of the nine rows today, and is exactly why
+## nothing below names a species: an empty strip falls back on the standing picture at the one place a
+## body's picture is chosen, so the ninth species animates by editing its own row and nothing else.
+var _tex_anim_r: Array = _load_beast_anim(true)
+var _tex_anim_l: Array = _load_beast_anim(false)
 ## The rounded square, baked once. Every enemy wears it, tinted — the same two marks `_paint_body`
 ## drew by hand (the outline and the centre dot) with nothing filled between them.
 var _tex_body: Texture2D = null
@@ -268,8 +275,6 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	# flight over bodies that no longer exist, and every id in them means a different unit now.
 	_fx = []
 	_body = {}
-	_shake_amp = 0.0
-	_shake_left = 0.0
 	# A slot armed on island 1 must not survive onto island 2, and the tile index it was aiming at
 	# would name a different piece of water there.
 	_summon_slot = -1
@@ -297,7 +302,7 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 ##
 ## **The order is load-bearing and it is the order it always was.** Ageing first and draining second
 ## means an effect born this frame is at full amplitude on the frame it was born, so the flinch really
-## does reach `HIT_KNOCK_PX` once and the shake really does reach its peak once.
+## does reach its full flinch once and the idle sway really does start from rest.
 ##
 ## ⚠ **Every clock here is aged by the BARE frame delta**, `_wait_clock` included — there is no speed
 ## multiplier to fold in, and a leaf handed a constant 1.0 is the shape "No fake code" names.
@@ -324,12 +329,20 @@ func _process(delta: float) -> void:
 ## How much GROUND, in world px, the viewport covers at this zoom.
 ##
 ## ⚠⚠ **The two axes no longer share a divisor and that is the whole of what tilting cost.** A screen
-## px across is a ground px across; a screen px DOWN is `1 / cos(pitch)` ground px, because the ground
+## px across is a ground px across; a screen px DOWN is `1 / sin(pitch)` ground px, because the ground
 ## is leaning away. Written once, here, and both conversions below read it — computed at each call
 ## site instead, the two would drift and the drift would look like a mis-aimed click.
+##
+## ⚠⚠ **IT WAS `cos` AND THAT WAS A MEASURED DEFECT** (2026-08-25, the user: 「놓는 위치랑 배의 위치가
+## 다른데?」). `cam_pitch_deg` is measured OFF THE HORIZON — 0 is a camera lying flat, 90 is a camera
+## straight overhead — so the ground's foreshortening is its SINE: at 90 a tile of ground is unsquashed
+## (`sin 90 == 1`) and at 0 it is edge on (`sin 0 == 0`). `cos` gets both ends backwards. Measured
+## against `Camera3D.unproject_position` at pitch 40: one tile of ground along +z covers **0.6428** of
+## a tile on screen, which is `sin 40` and not `cos 40`. The 19% error it cost put a press up to **two
+## tiles above the tile under the cursor** at the bottom of the screen.
 func _visible_ground_px() -> Vector2:
 	var v := Look.viewport_size_px() / zoom
-	return Vector2(v.x, v.y / cos(deg_to_rad(cam_pitch_deg)))
+	return Vector2(v.x, v.y / sin(deg_to_rad(cam_pitch_deg)))
 
 
 ## The two ground axes the screen's own axes lie along, at this yaw. `_right` is screen-right,
@@ -350,20 +363,84 @@ func _ground_centre_px() -> Vector2:
 	return cam_px + _visible_ground_px() * 0.5
 
 
-## A screen (viewport) px back to a ground point in world px. **The one conversion every click goes
-## through**, the same promise the flat board's `(at - position) / zoom` made.
+## A screen (viewport) px back to a point on the horizontal plane `ground_h` TILES up, in world px.
+## **The one conversion every click goes through**, the same promise the flat board's
+## `(at - position) / zoom` made.
 ##
-## ⚠ At yaw 0 and pitch 0 this IS that expression. The pitch divides the vertical, the yaw turns the
-## two axes, and nothing else about it moved.
-func screen_to_world_px(at: Vector2) -> Vector2:
+## ⚠ At yaw 0, pitch 90 and `ground_h` 0 this IS that expression. The pitch squashes the vertical, the
+## yaw turns the two axes, and nothing else about it moved.
+##
+## ⚠⚠ **`ground_h` is why a press on a hill used to land in the sea behind it.** The island has real
+## height and this mapping had no argument for it, so it answered every press with the point the plane
+## at height 0 would have — and a thing standing `h` tiles up draws `h / tan(pitch)` world px UP the
+## screen from where that plane says it is. Measured on island 0 at the opening survey: **every one of
+## its 180 walkable tiles** answered with a tile a mean of **2.8** and up to **4** rows away.
+## **Nothing calls this with a height it invented**: `screen_to_terrain_px` reads the landscape's own
+## `_ground_h`, and the camera gestures below pass nothing because they are about the plane.
+func screen_to_world_px(at: Vector2, ground_h: float = 0.0) -> Vector2:
 	var span := _visible_ground_px()
 	var u := at.x / Look.VIEWPORT_W_PX - 0.5
 	var v := at.y / Look.VIEWPORT_H_PX - 0.5
-	return _ground_centre_px() + _ground_right() * (u * span.x) + _ground_down() * (v * span.y)
+	var flat := _ground_centre_px() + _ground_right() * (u * span.x) + _ground_down() * (v * span.y)
+	return flat + _ground_down() * (ground_h * Look.TILE_PX / tan(deg_to_rad(cam_pitch_deg)))
+
+
+## A screen px back to the point on the LANDSCAPE under it, in world px. **This is what a press means**
+## — `screen_to_world_px` answers about a plane, and the player is pointing at a hill.
+##
+## ⚠⚠ **It walks the view ray from the EYE OUTWARD and stops at the first ground it meets, and that
+## near-to-far order is the whole of why it is a walk and not a fixed point.** The obvious version —
+## take the sea-level answer, look up that tile's height, ask again, repeat — settles, and **it settles
+## on the wrong surface**: at a screen point where a hilltop stands in front of open water, both the
+## hilltop and the water behind it are answers that reproduce themselves, and the loop lands on
+## whichever it started nearest. Measured on island 0: it left **60 of the 180 walkable tiles** still
+## answering with a tile up to 3 rows away, every one of them behind something tall. The player can
+## only press what they can SEE, so the nearest surface is the only right answer.
+##
+## **Near to far is DOWNWARD in height**: this camera stands on the `_ground_down` side of what it
+## looks at, so along one view ray a higher point is a nearer point. The walk starts one step above
+## `Look.terrain_height_ceiling()` — above every hill the legend can build — and drops until the ray is
+## no longer above the ground under it.
+##
+## `TERRAIN_PICK_STEPS` is a COUNT and the height step is derived from it, so a shallow pitch (where
+## one step of height slides the ground point a long way) costs the same work as a steep one instead of
+## costing an unbounded amount.
+func screen_to_terrain_px(at: Vector2) -> Vector2:
+	var ceiling := Look.terrain_height_ceiling()
+	var step := ceiling / float(TERRAIN_PICK_STEPS)
+	var h := ceiling
+	for _i in TERRAIN_PICK_STEPS:
+		var world := screen_to_world_px(at, h)
+		var tile := world_to_tile(world)
+		if _ground_h(tile.x, tile.y) >= h:
+			return world
+		h -= step
+	# Under every hill on the board: the ray reached sea level without meeting anything, so the sea is
+	# what it hit. **Not `0.0`** — the water is a surface at `TERRAIN_H_WATER` like any other, and
+	# answering on the plane below it would put a press on open sea a fifth of a tile off.
+	return screen_to_world_px(at, Look.TERRAIN_H_WATER)
 
 
 func world_to_tile(world: Vector2) -> Vector2i:
 	return Vector2i(int(floor(world.x / Look.TILE_PX)), int(floor(world.y / Look.TILE_PX)))
+
+
+## The forward of `screen_to_world_px`, for a world point standing `ground_h` tiles up. **Written here
+## beside its own inverse and nowhere else**: six instruments under `tools/` each carried a private
+## copy, every one of them still on the flat board's formula and none of them turning with the yaw, so
+## every one of them aimed its clicks at a tile next to the one it meant.
+func world_to_screen_px(world: Vector2, ground_h: float = 0.0) -> Vector2:
+	var span := _visible_ground_px()
+	var off := world - _ground_centre_px()
+	off -= _ground_down() * (ground_h * Look.TILE_PX / tan(deg_to_rad(cam_pitch_deg)))
+	return Vector2(
+		(off.dot(_ground_right()) / span.x + 0.5) * Look.VIEWPORT_W_PX,
+		(off.dot(_ground_down()) / span.y + 0.5) * Look.VIEWPORT_H_PX)
+
+
+## The forward of `screen_to_terrain_px`: where a tile's own surface lands on the glass.
+func tile_to_screen_px(tx: int, ty: int) -> Vector2:
+	return world_to_screen_px(Look.tile_point_px(Vector2(tx, ty)), _ground_h(tx, ty))
 
 
 ## Moves the camera by a SCREEN-space delta (mouse motion) and re-clamps. The ground under the cursor
@@ -445,17 +522,27 @@ func tilt_by(deg: float) -> void:
 
 ## Points the real camera at what `cam_px` / `zoom` / `cam_yaw_deg` describe. **The one place any of
 ## those three reach the engine**, the same rule `_compose_position` used to keep for `position`.
+##
+## ⚠⚠ **`back.z` WAS NEGATIVE AND THE WHOLE PICTURE WAS TURNED HALF A TURN** (2026-08-25, the user:
+## 「놓는 위치랑 배의 위치가 다른데?」). Standing the camera on the -z side of its target makes it look
+## along **+z**, and a Godot camera looking along +z has its own +x pointing at **world -x** — so world
+## +x drew toward the LEFT of the screen and world +z drew UP it, while `_ground_right` / `_ground_down`
+## and every press that goes through them said the opposite. **The island was drawn 180 degrees around
+## from the board the shell was reading.** Measured against `Camera3D.unproject_position` on island 0:
+## a press aimed at the tile actually under the cursor landed a **mean of 18.6 tiles** away.
+## ⚠ **It is not symmetric and cannot be absorbed into the yaw**: `cam_yaw_deg` is the player's, Q and E
+## write it, and 0 has to be the view the flat board had.
 func _place_camera() -> void:
 	if _cam == null:
 		return
 	var pitch := deg_to_rad(cam_pitch_deg)
 	var yaw := deg_to_rad(cam_yaw_deg)
-	# The shake was an offset on a canvas; it is an offset on the ground now, in the screen's own two
-	# axes so a shake still reads as the screen jerking rather than as the island sliding.
-	var shake := _shake_offset()
-	var centre := _ground_centre_px() + _ground_right() * shake.x + _ground_down() * shake.y
+	# ⚠ The screen shake was added here as a ground offset in the screen's own two axes and it is
+	# DELETED (2026-08-25, the user: 「이게 화면이 흔들릴 필요는 없을듯?」). The camera's resting
+	# place is now the only thing this composes, which is why it cannot be corrupted by one.
+	var centre := _ground_centre_px()
 	var target := Vector3(centre.x / Look.TILE_PX, 0.0, centre.y / Look.TILE_PX)
-	var back := Vector3(-sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch))
+	var back := Vector3(-sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch))
 	_cam.size = _visible_ground_px().x / Look.TILE_PX
 	_cam.look_at_from_position(target + back * Look.CAM_DIST_TILES, target, Vector3.UP)
 
@@ -536,6 +623,39 @@ func _joins(a: int, b: int) -> bool:
 	return true
 
 
+## The tier level of a tile, **read off the SIM and never re-derived here** (티켓 19, decision 4). The
+## grid already parsed the tier board; a second parse in this file would be the same fact computed in
+## two places, and the two would part company the day either legend moved. Off the island — the water
+## margin the terrain loop walks — answers 0, the same silence `_char_at` keeps with `~`.
+func _tier_level(tx: int, ty: int) -> int:
+	if battle == null or battle.grid == null:
+		return 0
+	return battle.grid.level_at(tx, ty)
+
+
+## **Whether two tiles' corners are welded — the KIND rule and the TIER rule, in that order.** This is
+## what makes a tier a cube: two tiles a body cannot step between do not share a corner, so
+## `_corner_h` keeps them at their own heights and `_skirt` drops a wall down the gap. **The cliff and
+## the ramp have been in exactly that relationship since 2026-08-24** — this adds a second reason for
+## two tiles to refuse each other, not a second mechanism.
+##
+##   · high / high (level gap 0) — welded, so **the plateau's top keeps rolling with the hills**
+##   · low / high (gap 2) — refused, so a wall one tier tall drops between them. That is the cube
+##   · stair / either (gap 1) — welded, so a stair is a genuine diagonal, the way a ramp is
+##
+## ⚠⚠ **It reads the LEVEL and never `_tile_h`.** The heights carry the hill noise, so a threshold on
+## them would tear the ground open wherever the noise happened to open a gap. The noise is smaller
+## than a tier today, which makes that an accident rather than a rule — and an accident that holds is
+## the shape this repo files under greens that guarantee nothing.
+##
+## ⚠ **`Rules.MAX_CLIMB_LEVELS` and not a 1 typed here**, so the wall the eye sees and the wall the
+## walker refuses cannot be two different walls.
+func _tiles_join(tx: int, ty: int, nx: int, ny: int) -> bool:
+	if not _joins(_kind_of(_char_at(tx, ty)), _kind_of(_char_at(nx, ny))):
+		return false
+	return absi(_tier_level(tx, ty) - _tier_level(nx, ny)) <= Rules.MAX_CLIMB_LEVELS
+
+
 ## The legend character at a tile, with everything off the island reading as open water — the same
 ## fallback the colour lookup makes, made in one place so the two cannot disagree about where the
 ## island ends.
@@ -606,7 +726,11 @@ func _tile_h(tx: int, ty: int) -> float:
 
 func _tile_h_uncached(tx: int, ty: int) -> float:
 	var ch := _char_at(tx, ty)
-	var base := Look.terrain_height_of_char(ch)
+	# The tier lifts the whole tile, legend height and hill alike, so a plateau is the low ground
+	# raised bodily rather than a second kind of terrain with its own profile. `_ground_h` reads
+	# `_corner_h` reads this, so a body standing up there comes up with it for free — that is the one
+	# consumer this ticket did not have to wire.
+	var base := Look.terrain_height_of_char(ch) + float(_tier_level(tx, ty)) * Rules.TIER_STEP_TILES
 	var kind := _kind_of(ch)
 	if kind == Kind.LAND or kind == Kind.RAMP:
 		return base + _swell_at(tx, ty) * Look.HILL_AMP_TILES
@@ -634,12 +758,11 @@ func _swell_at(tx: int, ty: int) -> float:
 ## only the ones of the SAME kind — so two land tiles meet smoothly while land meeting water does not
 ## drag the coast down into the sea. A tile always counts itself, so the average is never empty.
 func _corner_h(tx: int, ty: int, dx: int, dy: int) -> float:
-	var kind := _kind_of(_char_at(tx, ty))
 	var sum := 0.0
 	var n := 0
 	for oy in [dy - 1, dy]:
 		for ox in [dx - 1, dx]:
-			if not _joins(kind, _kind_of(_char_at(tx + ox, ty + oy))):
+			if not _tiles_join(tx, ty, tx + ox, ty + oy):
 				continue
 			sum += _tile_h(tx + ox, ty + oy)
 			n += 1
@@ -690,6 +813,13 @@ func _band_on() -> bool:
 ## no longer has to be rebuilt at the commit.
 func _tile_colour(tx: int, ty: int) -> Color:
 	var ch := _char_at(tx, ty)
+	# A stair is the one tile of a tier boundary a body may climb, and geometry alone does not say so:
+	# a one-tile diagonal in a long wall is small, and from 40 degrees at `ZOOM_MIN` it is what the eye
+	# has to find. **Before the land tint below**, and returned outright, so nothing washes it back
+	# toward the field it sits in — a colour mixed in the wrong order was measured drifting the wrong
+	# way on this repo's bleed tint (티켓 15).
+	if Grid.is_stair_level(_tier_level(tx, ty)):
+		return Look.COL_STAIR
 	var col := Look.terrain_colour_of_char(ch)
 	# High ground drifts lighter. See `COL_LAND_HIGH`: from 40 degrees at `ZOOM_MIN` this is what makes
 	# a hill a hill, and the geometry alone is not.
@@ -898,11 +1028,18 @@ func _hull_box() -> MeshInstance3D:
 
 ## Puts one billboard at a body's feet. `centre_px` is the same world px the flat board drew at, so
 ## every offset that already went through `_body_offset_of` follows across for free.
-func _put_body(centre_px: Vector2, radius: float, colour: Color, squash: Vector2, tex: Texture2D) -> float:
+##
+## ⚠⚠ **`bleed_sec` IS MIXED IN AFTER THE FACTION TINT AND THAT ORDER IS THE WHOLE OF WHETHER IT CAN
+## BE SEEN.** Tinting a bled colour pulls it 45% back toward white and throws most of the pull away:
+## measured, the body's HUE did not move at all and only its brightness fell 27%, which reads as
+## shade rather than as blood. The side's colour is resolved first and the blood goes on top of it.
+func _put_body(centre_px: Vector2, radius: float, colour: Color, squash: Vector2, tex: Texture2D,
+		bleed_sec: float) -> float:
 	var s := _sprite()
 	var pic: Texture2D = tex if tex != null else _tex_body
 	s.texture = pic
-	s.modulate = Look.beast_tint(colour) if tex != null else colour
+	var team := Look.beast_tint(colour) if tex != null else colour
+	s.modulate = Look.bleeding(team, bleed_sec)
 	var wide := radius * Look.BEAST_SPRITE_W_RATIO if tex != null else radius * 2.0
 	var sx := wide * squash.x / float(pic.get_width())
 	var sy := sx * squash.y / maxf(squash.x, 0.001)
@@ -958,24 +1095,35 @@ func _paint_bodies() -> void:
 		var ekey := "e%d" % e
 		var ecentre := Look.tile_point_px(battle.enemy_pos[e]) + _body_offset_of(ekey)
 		var eradius := Look.body_radius_of(et)
+		# ⚠ **The bleed is handed DOWN rather than mixed in here**, so `_put_body` can put it on after
+		# the faction tint — see that function's own header for why the other order is invisible.
 		var etop := _put_body(ecentre, eradius,
 			Look.body_colour_of(true).lerp(Look.COL_FLASH, _flash_of(ekey)),
-			_gait_squash(ekey), _beast_tex(et, true, _facing_of(e, true).x >= 0.0))
+			_gait_squash(ekey), _body_tex(ekey, et, _facing_of(e, true).x >= 0.0),
+			battle.status_left(Rules.Status.BLEED, e))
 		_put_hp(ecentre, etop, et, battle.enemy_hp[e] / Rules.hp_of(et))
-		_put_halo(ekey, ecentre, eradius, etop)
+		_put_halo(ekey, ecentre, Look.sprite_half_px(et), etop)
 
 	for raw_id in battle.ashore_ids():
 		var i := int(raw_id)
 		_put_soldier(i, battle.soldier_pos[i])
 
-	# The boats: a hull on the water and its passengers standing on it. Before the commit there is no
-	# hull — a boat that has not left is its PLAN, and thirteen hulls stacked on one harbour is a blob
-	# that says nothing. ⚠ **The plan's own picture (the route, the ring, the ghost fan) is NOT ported
-	# yet**, so before the commit the field shows the band and nothing else.
+	# The boats: a hull on the water and its passengers standing on it.
+	#
+	# ⚠⚠ **THIS USED TO SKIP EVERY BOAT BEFORE THE COMMIT AND THE USER CAUGHT IT** (2026-08-25:
+	# 「배를 놨으면 그게 바다에 보여야할듯」). The reason written here was *"a boat that has not left is
+	# its PLAN, and thirteen hulls stacked on one harbour is a blob that says nothing"* — and that was
+	# TRUE OF A GESTURE THAT NO LONGER EXISTS. It was the harbour drag: `Battle.send` starts every boat
+	# at `path[0]`, the harbour, so thirteen sends really did pile thirteen hulls on one tile. The drag
+	# is deleted and the shell has no caller for `send` at all; the sea summon starts a boat at
+	# `path[0]` too, and for a summon **that is the water tile the player pressed**. Thirteen summons
+	# are thirteen hulls in thirteen places.
+	# ⇒ **A placed boat is drawn from the moment it is placed.** What is drawn before the commit and
+	# after it is now the same picture, which is also the honest one: the boat EXISTS in `battle.boats`
+	# the instant the press lands, and a plan that shows nothing for a body it has already spent is the
+	# screen disagreeing with the sim.
 	for bk in battle.boats.size():
 		var boat: Dictionary = battle.boats[bk]
-		if not battle.committed():
-			continue
 		var anchor := Look.tile_point_px(Vector2(boat["pos"]))
 		var arrived := float(boat["t"]) * float(boat["speed"]) + Rules.EPS >= float(boat["dist"])
 		var waiting := int(boat["phase"]) == Battle.Phase.OUTBOUND and arrived
@@ -1000,6 +1148,10 @@ func _put_halo(key: String, centre_px: Vector2, radius: float, top_y: float) -> 
 		return
 	var col := Look.COL_HIT_HALO
 	col.a *= h
+	# ⚠⚠ **`radius` IS THE DRAWN HALF-WIDTH, not the sim radius, and it was the sim radius until
+	# 2026-08-25.** 1.35 x a wolf's 14 px put the halo 18.9 px out — INSIDE a 49 px picture, so the
+	# thing that says 「this one was just hit」 was drawn underneath the body. It is 33.1 px now and
+	# clears the picture on every side. **This is the death burst's own lesson, one effect over.**
 	# Hung at the body's MIDDLE, which is half its own height and not one radius: see `_put_body`.
 	var mid := Vector3(centre_px.x / Look.TILE_PX,
 		(_ground_y_px(centre_px) + top_y) * 0.5, centre_px.y / Look.TILE_PX)
@@ -1009,29 +1161,93 @@ func _put_halo(key: String, centre_px: Vector2, radius: float, top_y: float) -> 
 ## The picture a body wears. **One place**, so the ghost, the soldier on a deck and the body ashore
 ## cannot end up wearing three different things.
 ##
-## ⚠⚠ **The lion keeps the drawn square on purpose.** The enemy became human and the two mobs became
-## cavemen, but the last boss is still a beast and **where it goes is an OPEN question** — handing it
-## the caveman's picture here would answer that by accident, in a place nobody would look for it.
-func _beast_tex(type_id: int, is_enemy: bool, facing_right: bool) -> Texture2D:
-	if is_enemy:
-		# ⚠⚠ **The weapon is read off what the unit DOES, not off a name.** `CROW` reaches 3 tiles and
-		# `BISON` does not, so the one that shoots carries the bow and the one that walks in carries
-		# the shield — a picture that disagreed with the reach would be the loudest lie on the island.
-		if type_id == Rules.CROW:
-			return _tex_bow_r if facing_right else _tex_bow_l
-		if type_id == Rules.BISON:
-			return _tex_shield_r if facing_right else _tex_shield_l
-		# ⚠ **The lion keeps the drawn square on purpose.** The last boss is still a beast in a game
-		# whose enemies became human, and where it goes is an OPEN question — handing it a picture
-		# here would answer that by accident, in a place nobody would look for it.
-		if type_id == Rules.LION:
-			return null
-		return _tex_spear_r if facing_right else _tex_spear_l
-	# The player's own two slots: one walks in and one shoots. **The crow is the ranged one because it
-	# is the ranged one** — same rule as the enemy's bow, one table over.
-	if type_id == Rules.CELL_RANGED:
-		return _tex_crow_r if facing_right else _tex_crow_l
-	return _tex_wolf_r if facing_right else _tex_wolf_l
+## ⚠⚠ **`is_enemy` IS GONE, and its absence is the point.** The argument existed because one table row
+## served two species — the player's ranged slot borrowed the enemy crow's row — so a row had to
+## answer with two pictures depending on who asked. `Rules.UNITS` has a row per species now, so there
+## is nothing left for it to select between. Which side a body is on still reaches the screen, through
+## `Look.body_colour_of`; it is a TINT and not a different animal.
+func _beast_tex(type_id: int, facing_right: bool) -> Texture2D:
+	var pool: Array[Texture2D] = _tex_facing_r if facing_right else _tex_facing_l
+	if type_id < 0 or type_id >= pool.size():
+		return null
+	return pool[type_id]
+
+
+## ⚠ **Static so it can run in a member initialiser**, which is where the ten hand-named `load()`
+## calls it replaces used to run. `null` for an empty path rather than a missing entry: the array is
+## indexed by unit row and a short one would fault on the last species instead of drawing a square.
+static func _load_beast_tex(facing_right: bool) -> Array[Texture2D]:
+	var out: Array[Texture2D] = []
+	for ty in Look.BEAST_TEX.size():
+		var path := Look.beast_tex_path(ty, facing_right)
+		out.append(null if path.is_empty() else load(path) as Texture2D)
+	return out
+
+
+## Every strip every row declares, loaded once. **Static for the same reason `_load_beast_tex` is** —
+## it runs in a member initialiser. The loop walks `Anim` rather than a list of animated species, so a
+## row that declares nothing contributes an empty strip and costs no branch anywhere downstream.
+static func _load_beast_anim(facing_right: bool) -> Array:
+	var out := []
+	for ty in Look.BEAST_TEX.size():
+		var per_anim := []
+		for anim in Look.ANIM_NAME.size():
+			var strip: Array[Texture2D] = []
+			for f in Look.beast_anim_frames(ty, anim):
+				strip.append(load(Look.beast_frame_path(ty, anim, f, facing_right)) as Texture2D)
+			per_anim.append(strip)
+		out.append(per_anim)
+	return out
+
+
+## Row `type_id`'s `anim` strip facing `facing_right`, empty where there is none.
+func _anim_strip(type_id: int, anim: int, facing_right: bool) -> Array:
+	var pool: Array = _tex_anim_r if facing_right else _tex_anim_l
+	if type_id < 0 or type_id >= pool.size():
+		return []
+	var per_anim: Array = pool[type_id]
+	if anim < 0 or anim >= per_anim.size():
+		return []
+	return per_anim[anim]
+
+
+## How long row `type_id`'s `anim` strip runs end to end, **0 s for a row that has none.** The bite
+## clock is started from this and read back against it, so the strip's length lives in one place — a
+## literal at the start and a divisor at the read is the pair that drifts and leaves the last frame
+## either unreachable or held forever.
+func _anim_sec(type_id: int, anim: int) -> float:
+	return float(Look.beast_anim_frames(type_id, anim)) * Look.BEAST_FRAME_SEC
+
+
+## The picture a body wears THIS frame: its bite strip while a bite is running, its walk strip the
+## rest of the time, and **its standing picture whenever the strip it asked for is empty** — which is
+## the whole of how eight species keep working with no frames of their own.
+##
+## ⚠⚠ **The walk phase is TIME, not distance, and that is the opposite of `_gait_squash` one clock
+## over.** The squash is a stride and is right to stop dead with the body. The legs are not: phased on
+## distance they made a body in contact the only completely motionless thing on the island, which is
+## what the user was looking at when he said 「그냥 붙어서 그냥 벌렁벌렁하는 거밖에 없어」. A standing
+## body keeps cycling its legs and `_idle_offset` is what says it is standing.
+func _body_tex(key: String, type_id: int, facing_right: bool) -> Texture2D:
+	var idle := _beast_tex(type_id, facing_right)
+	if not _body.has(key):
+		return idle
+	var b: Dictionary = _body[key]
+	var bite := float(b["bite"])
+	var anim := Look.Anim.BITE if bite > 0.0 else Look.Anim.WALK
+	var strip := _anim_strip(type_id, anim, facing_right)
+	if strip.is_empty():
+		return idle
+	var at := 0
+	if anim == Look.Anim.BITE:
+		# The clock runs DOWN, so `1 - left/whole` is how far in the strip is. Clamped at both ends:
+		# `int()` of exactly 1.0 lands one past the last frame, and the last frame is the one the
+		# mouth is widest in — a bite that never reaches it is a bite nobody sees.
+		at = clampi(int((1.0 - bite / _anim_sec(type_id, anim)) * float(strip.size())),
+			0, strip.size() - 1)
+	else:
+		at = int(float(b["walk"]) / Look.BEAST_FRAME_SEC) % strip.size()
+	return strip[at] as Texture2D
 
 
 ## One soldier at a tile position, ashore or on a deck. Both call sites want the same body, the same
@@ -1043,12 +1259,14 @@ func _put_soldier(i: int, at: Vector2) -> void:
 	var scentre := Look.tile_point_px(at) + _body_offset_of(skey)
 	# The wolf faces what it is walking at. `_facing_of` returns RIGHT when there is no target, so an
 	# idle body faces right rather than flipping on a zero vector.
-	var stex := _beast_tex(st, false, _facing_of(i, false).x >= 0.0)
+	var stex := _body_tex(skey, st, _facing_of(i, false).x >= 0.0)
+	# ⚠ **0.0, and not a lookup**: `battle`'s status arrays are per ENEMY. An allied body never carries
+	# one, and `_hit_soldiers` has no `_apply_statuses` twin — see `battle.gd`.
 	var stop := _put_body(scentre, sradius,
 		Look.body_colour_of(false).lerp(Look.COL_FLASH, _flash_of(skey)),
-		_gait_squash(skey), stex)
+		_gait_squash(skey), stex, 0.0)
 	_put_hp(scentre, stop, st, army.hp[i] / army.max_hp_of(i))
-	_put_halo(skey, scentre, sradius, stop)
+	_put_halo(skey, scentre, Look.sprite_half_px(st), stop)
 
 
 func _put_hull(anchor: Vector2, colour: Color) -> void:
@@ -1177,7 +1395,7 @@ func _hp_rects(centre: Vector2, type_id: int, frac: float) -> Array:
 	return [Rect2(origin, span), Rect2(origin, Vector2(span.x * f, span.y))]
 
 ## Which way a body is pointing: toward its current target, and to the right when it has none — a
-## zero vector normalised is zero, which would collapse the beak triangle to a point and aim a lunge
+## zero vector normalised is zero, which would collapse a facing mark to a point and aim a lunge
 ## nowhere while every check about them still passed.
 ##
 ## **`is_enemy` is not decoration.** Two of the three types whose range is 0 — the bison and the lion
@@ -1218,15 +1436,17 @@ func _fx_step(delta: float) -> void:
 			live.append(fx)
 	_fx = live
 
-	_shake_left = maxf(0.0, _shake_left - delta)
-	if _shake_left <= 0.0:
-		_shake_amp = 0.0
 
 	for key: String in _body:
 		var b: Dictionary = _body[key]
 		b["flash"] = maxf(0.0, float(b["flash"]) - delta)
 		b["knock"] = maxf(0.0, float(b["knock"]) - delta)
 		b["lunge"] = maxf(0.0, float(b["lunge"]) - delta)
+		b["bite"] = maxf(0.0, float(b["bite"]) - delta)
+		# ⚠ **Advanced unconditionally, and NOT inside the `moved` test below.** That test is the gait's
+		# and it is right there; putting the legs under it is the rule 「움직이지 않는 몸은 애니메이션
+		# 하지 않는다」, which is what left a body in melee frozen. This clock never stops.
+		b["walk"] = float(b["walk"]) + delta
 
 	if battle == null or army == null:
 		return
@@ -1236,10 +1456,12 @@ func _fx_step(delta: float) -> void:
 	var walkers := []
 	for e in battle.enemy_alive.size():
 		if battle.enemy_alive[e] != 0:
-			walkers.append(["e%d" % e, battle.enemy_pos[e]])
+			walkers.append(["e%d" % e, battle.enemy_pos[e],
+				Look.sprite_half_px(int(battle.enemy_type[e]))])
 	for i in battle.soldier_state.size():
 		if battle.is_hittable(i):
-			walkers.append(["s%d" % i, battle.soldier_pos[i]])
+			walkers.append(["s%d" % i, battle.soldier_pos[i],
+				Look.sprite_half_px(int(army.type_id[i]))])
 
 	for raw_walker in walkers:
 		var walker: Array = raw_walker
@@ -1253,13 +1475,28 @@ func _fx_step(delta: float) -> void:
 				"lunge": 0.0,
 				"lunge_dir": Vector2.RIGHT,
 				"push": 0.0,
+				# Seconds left of a bite, and the strip is read off how far in that is. 0 is "not
+				# biting" and is also what a species with no bite strip is pinned at forever.
+				"bite": 0.0,
+				# Seconds this body has existed, which is what the walk strip is phased on. ⚠ **The
+				# start is scattered by the key's hash**, the same trick `_idle_offset` uses: a pack
+				# that steps in lockstep reads as one animal rather than as five. One second covers
+				# more than any strip, so every phase is reachable.
+				"walk": float(absi(key.hash()) % 1000) / 1000.0,
 				"gait": 0.0,
 				"head": Vector2.RIGHT,
 				"last": here,
+				# How wide this body is DRAWN, so the knock and the sway are sized off the picture and
+				# not off the sim radius. Looked up once — a body's species never changes.
+				"half": float(walker[2]),
+				# Seconds since it last moved. **The gait phases on DISTANCE and so stops dead when a
+				# body stops; this is what carries the other half.**
+				"still": 0.0,
 			}
 		var b: Dictionary = _body[key]
 		var last: Vector2 = b["last"]
 		var moved := here.distance_to(last)
+		b["still"] = 0.0 if moved > Rules.EPS else float(b["still"]) + delta
 		if moved > Rules.EPS:
 			# Positions are in TILES and so is the period, so the two divide directly. Phase on
 			# distance is the whole of "it must not slide": a body that does not move does not
@@ -1355,13 +1592,22 @@ func _drain_events() -> void:
 			# overlap in any pairing is exactly LUNGE_BITE_PX, by construction.
 			var gap := maxf(0.0,
 				atk_px.distance_to(tgt_px) - r_self - Look.body_radius_of(tgt_type))
-			var push := minf(Look.LUNGE_PUSH_RATIO * r_self, gap + Look.LUNGE_BITE_PX) \
-				* Look.fx_gain_of(2)
+			# ⚠⚠ **`sprite_half_px` and not `r_self`.** The ratio is unchanged; what it multiplies is.
+			# 0.55 of a wolf's SIM radius is 7.7 px of lunge on a 49 px picture — the fraction of the
+			# body it was worth on the flat board, where a body WAS its radius, has more than halved.
+			var push := minf(Look.LUNGE_PUSH_RATIO * Look.sprite_half_px(atk_type),
+				gap + Look.LUNGE_BITE_PX) * Look.fx_gain_of(2)
 			if _body.has(atk_key):
 				var ab: Dictionary = _body[atk_key]
 				ab["lunge"] = Look.LUNGE_SEC
 				ab["lunge_dir"] = facing
 				ab["push"] = push
+				# ⚠⚠ **The mouth and the body start on ONE event and on one line of it.** Started
+				# anywhere else — off a cooldown, off the target's flash — the two would be two
+				# clocks measuring the same blow, and the pair that drifts is the pair that reads
+				# as a wolf snapping at nothing. **0 s for a species with no bite strip**, so this
+				# costs nothing and says nothing for the other eight.
+				ab["bite"] = _anim_sec(atk_type, Look.Anim.BITE)
 			if Look.fx_gain_of(2) > 0.0:
 				# The contact point is frozen at the body edge AS IT WILL BE at the peak of the
 				# lunge, `r_self + push` out — not at `r_self`. The shards are seen half a lunge
@@ -1400,17 +1646,11 @@ func _drain_events() -> void:
 			# body was simply white, and the Dictionary key makes stacking structurally impossible.
 			vb["flash"] = Look.HIT_FLASH_SEC + reaction
 			vb["knock"] = Look.HIT_KNOCK_SEC + reaction
+			vb["knock_px"] = Look.HIT_KNOCK_RATIO * float(vb["half"])
 			var vtile: Vector2 = battle.soldier_pos[v] if from_enemy else battle.enemy_pos[v]
 			var away := Look.tile_point_px(vtile) - atk_px
 			vb["knock_dir"] = Vector2.RIGHT if away.length() <= Rules.EPS else away.normalized()
 
-		# Amplitude tracks damage, or half of this effect is dead: a 2-damage cell and the lion's 4
-		# have to feel different. A hit landing during an older shake only restarts it when it is at
-		# least as strong as what is left, so a crow cannot cut a lion's blow short.
-		var amp := minf(Look.SHAKE_MAX_PX, float(ev["dmg"]) * Look.SHAKE_PER_DAMAGE_PX)
-		if amp >= _shake_amp * (_shake_left / Look.SHAKE_SEC):
-			_shake_amp = amp
-			_shake_left = Look.SHAKE_SEC
 
 	for raw_new in born:
 		_fx.append(raw_new)
@@ -1419,34 +1659,43 @@ func _drain_events() -> void:
 	while _fx.size() > Look.FX_MAX_COUNT:
 		_fx.remove_at(0)
 
-## The shake, as an ABSOLUTE offset to assign to `position`.
-##
-## The phase runs off the shake's OWN age rather than a wall clock, which makes it deterministic —
-## a random shake cannot be measured by any net — and starts it from rest so there is no pop. The
-## magnitude is limited rather than left as two independent sines, because two sines at ±1 would put
-## the corner at 1.41 x the cap and the cap would stop being a cap.
-func _shake_offset() -> Vector2:
-	if _shake_left <= 0.0:
-		return Vector2.ZERO
-	var decay := _shake_left / Look.SHAKE_SEC
-	var age := Look.SHAKE_SEC - _shake_left
-	var mag := _shake_amp * decay * Look.fx_gain_of(11)
-	if mag <= 0.0:
-		return Vector2.ZERO
-	var raw := Vector2(sin(age * Look.SHAKE_A_FREQ), sin(age * Look.SHAKE_B_FREQ))
-	return (raw * mag).limit_length(mag)
-
 ## P7. 0..1, one full on/off cycle every `HULL_WAIT_BLINK_SEC` — a raised cosine rather than a raw
 ## sine, so it sits at exactly 0 and 1 at the ends of each half-cycle instead of sweeping through
 ## every value with no rest, which reads as a pulse rather than a smear.
 func _wait_blend() -> float:
 	return 0.5 - 0.5 * cos(TAU * _wait_clock / Look.HULL_WAIT_BLINK_SEC)
 
-## The one place a body's drawing offset is computed, so the body, the halo, the beak and the HP bar
+## The one place a body's drawing offset is computed, so the body, the halo and the HP bar
 ## are all handed the same number. Split across call sites, one of them is eventually forgotten and
 ## the body walks out from under its own health bar with the whole round green.
 func _body_offset_of(key: String) -> Vector2:
-	return _lunge_offset(key) + _knock_offset(key)
+	return _lunge_offset(key) + _knock_offset(key) + _idle_offset(key)
+
+
+## What a body does when it CANNOT move. See `Look.IDLE_AFTER_SEC` for why it exists at all.
+##
+## ⚠ **Phased off the key, so a queue does not sway in unison** — twelve bodies breathing on one
+## beat read as a single object, which is worse than stillness. Deterministic, because a random
+## wobble cannot be measured.
+## ⚠ **Zero until `IDLE_AFTER_SEC` and it starts FROM zero**: the sway is a `sin` of elapsed
+## stillness, so a body that has just stopped eases in rather than snapping sideways.
+func _idle_offset(key: String) -> Vector2:
+	if not _body.has(key):
+		return Vector2.ZERO
+	var b: Dictionary = _body[key]
+	# `.get`, because a net may hand-build a body entry that has no history yet — and "no history"
+	# is exactly "not standing still", which is the right answer for a body nobody has stepped.
+	var still := float(b.get("still", 0.0))
+	if still <= Look.IDLE_AFTER_SEC:
+		return Vector2.ZERO
+	var phase := TAU * float(absi(key.hash()) % 100) / 100.0
+	# ⚠ **No `fx_gain_of` here, deliberately.** The twelve slots are numbered for the twelve
+	# combat-juice effects and the sway is not one of them; borrowing slot 12 would tie it to the
+	# GAIT, so switching the walk cycle off would silently switch this off too — which is the exact
+	# failure `fx_gain_of`'s own comment names.
+	var amp := Look.IDLE_SWAY_RATIO * float(b.get("half", 0.0))
+	var t := still - Look.IDLE_AFTER_SEC
+	return Vector2(sin(TAU * t / Look.IDLE_PERIOD_SEC + phase), 0.0) * amp
 
 ## Item 2①. A triangle: exactly 0 at both ends and full push at the halfway point, so no body is ever
 ## left sitting displaced when it finishes.
@@ -1474,7 +1723,8 @@ func _knock_offset(key: String) -> Vector2:
 	if left <= 0.0 or left > Look.HIT_KNOCK_SEC:
 		return Vector2.ZERO
 	var dir: Vector2 = b["knock_dir"]
-	return dir * (Look.HIT_KNOCK_PX * Look.fx_gain_of(3) * (left / Look.HIT_KNOCK_SEC))
+	return dir * (float(b.get("knock_px", 0.0)) * Look.fx_gain_of(3)
+		* (left / Look.HIT_KNOCK_SEC))
 
 ## Item 3①. How much white is mixed into this body's colour, 0.0 when it is not being hit.
 ##
@@ -1787,6 +2037,7 @@ func _paint_fx() -> void:
 	if battle == null or army == null or battle.grid == null:
 		return
 	_paint_plan()
+	_paint_placed_boats()
 	_paint_boat_routes()
 	_paint_intent()
 	_paint_transients()
@@ -1818,6 +2069,35 @@ func _paint_plan() -> void:
 		_g_line(pts, Look.ROUTE_WIDTH_PX, Look.COL_ROUTE)
 	_g_ring(at, Look.TARGET_RING_R_PX, Look.ROUTE_WIDTH_PX,
 		Look.COL_WIN if ok else Look.COL_LOSE)
+
+
+## **Where each boat ALREADY PLACED is going to land**, one ring per boat, while the plan is still
+## open. `_paint_plan` above draws the AIM — the one tile the cursor is over — and it has never drawn
+## the drops already made.
+##
+## ⚠⚠ **The ring is not decoration: it is the UNDO, and it had no picture at all.**
+## `game._ring_hit_at` takes a drop back when a press lands inside `TARGET_RING_R_PX` of that boat's
+## landing tile, and its own header says the radius is *"read the same way `field_view` draws them"* —
+## which was false, because nothing drew them. A control the player cannot see is a control they do
+## not have (2026-08-25, found while answering 「배를 놨으면 그게 바다에 보여야할듯」).
+##
+## ⚠ **`COL_BOAT` and not `COL_WIN`.** The valid-aim ring is `COL_WIN` and it means *"a press here
+## would work"*; this one means *"a boat is already going here"*. Two different sentences may not wear
+## one colour, and the hull's own tan is what ties the ring to the boat it belongs to.
+##
+## ⚠⚠ **The ring and NOT the route, and that is a decision.** A placed boat's whole water route in
+## `COL_ROUTE` would be the aim's own mark worn by something else — `net_slots` reads the aim's route
+## by that colour to prove a dry slot promises nothing — and thirteen placed boats would lay thirteen
+## lines over the sea the plan is authored on. **What a placed boat owes the player is where it IS and
+## where it ENDS**; the hull says the first and this ring says the second. The route comes back the
+## moment it starts sailing, in `_paint_boat_routes`.
+func _paint_placed_boats() -> void:
+	if battle.committed():
+		return
+	for raw_boat in battle.boats:
+		var boat: Dictionary = raw_boat
+		_g_ring(Look.tile_point_px(battle.grid.tile_point(int(boat["target"]))),
+			Look.TARGET_RING_R_PX, Look.ROUTE_WIDTH_PX, Look.COL_BOAT)
 
 
 ## **The remaining water route under every boat still crossing** — the part it has NOT sailed, read
@@ -1865,8 +2145,11 @@ func _paint_ghosts() -> void:
 		var st := int(army.type_id[i])
 		var off := Vector2(float(k) * Look.GHOST_FAN_PX.x - span * 0.5,
 			float(k % 2) * Look.GHOST_FAN_PX.y)
-		var tex: Texture2D = _tex_wolf_r
-		_put_body(at + off, Look.body_radius_of(st), Look.ghost_tint(), Vector2.ONE, tex)
+		# ⚠ **The ghost wears the SPECIES it is a ghost of**, and it used to wear the wolf whatever was
+		# in the slot. With one slot bound to one species the two agreed by accident; with five they do
+		# not, and a plan that draws the wrong animal is the plan lying about what it will land.
+		_put_body(at + off, Look.body_radius_of(st), Look.ghost_tint(), Vector2.ONE,
+			_beast_tex(st, true), 0.0)
 
 
 ## **Who is going for whom**, one thin line per pair. The alpha is 0.12 and up to

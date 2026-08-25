@@ -63,8 +63,8 @@ func run(t) -> void:
 ## assertion below would pass on it. So the same fixture, driven by the same loop, is committed at the
 ## end and has to move.
 func _uncommitted_step_touches_nothing(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 2)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.BISON, 7, 5)], 999.0)
+	var army := _army_of(Rules.WOLF, 2)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 7, 5)], 999.0)
 	t.ok(b.send(0, _tile_of(6, 4)) >= 0 and b.send(1, _tile_of(6, 6)) >= 0,
 			"두 척을 계획해 뒀다 (자가 점검)")
 
@@ -94,8 +94,8 @@ func _uncommitted_step_touches_nothing(t) -> void:
 
 
 func _commit_refuses_an_empty_plan(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 2)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.BISON, 7, 5)], 999.0)
+	var army := _army_of(Rules.WOLF, 2)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 7, 5)], 999.0)
 	t.ok(not b.commit(), "빈 계획으로는 시작이 안 된다")
 	t.ok(not b.committed(), "거절당한 시작은 상태도 안 건드린다")
 	t.ok(b.send(0, _tile_of(6, 4)) >= 0, "한 척을 계획했다 (자가 점검)")
@@ -105,8 +105,8 @@ func _commit_refuses_an_empty_plan(t) -> void:
 
 
 func _the_plan_is_sealed_by_the_commit(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 3)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.BISON, 7, 5)], 999.0)
+	var army := _army_of(Rules.WOLF, 3)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 7, 5)], 999.0)
 	var uid := b.send(0, _tile_of(6, 4))
 	t.ok(uid >= 0 and b.send(1, _tile_of(6, 6)) >= 0, "두 척을 계획해 뒀다 (자가 점검)")
 	t.ok(b.commit(), "확정했다 (자가 점검)")
@@ -122,7 +122,7 @@ func _the_plan_is_sealed_by_the_commit(t) -> void:
 # -- one drop, one boat, no ceiling -----------------------------------------------------------------
 
 func _one_drop_is_one_boat(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 3)
+	var army := _army_of(Rules.WOLF, 3)
 	var b := _battle_of(_bay(), army, [], 999.0)
 	t.eq(b.boats.size(), 0, "아직 아무것도 안 놓았다 (자가 점검)")
 	var a := b.send(0, _tile_of(6, 4))
@@ -141,7 +141,7 @@ func _one_drop_is_one_boat(t) -> void:
 ## not a fix, it is a decision nobody made. **13 succeeded, not "more than five".**
 func _there_is_no_cap(t) -> void:
 	var g := _island_grid(0)
-	var army := _army_of(Rules.CELL_MELEE, FULL_ROSTER)
+	var army := _army_of(Rules.WOLF, FULL_ROSTER)
 	var b := Battle.new()
 	b.setup(g, army, Islands.spawns_of(0), Islands.time_limit_of(0))
 	var landing := _isle1_landing()
@@ -167,8 +167,8 @@ func _there_is_no_cap(t) -> void:
 
 
 func _send_refusals(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 3)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.BISON, 7, 5)], 999.0)
+	var army := _army_of(Rules.WOLF, 3)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 7, 5)], 999.0)
 	var good := _tile_of(6, 4)
 
 	t.eq(b.send(-1, good), -1, "없는 병사 번호(-1)는 거절된다")
@@ -180,7 +180,7 @@ func _send_refusals(t) -> void:
 	t.eq(b.boats.size(), 1, "그리고 그 거절도 배를 안 늘렸다")
 
 	# A dead soldier: `setup` puts anyone `army.alive` says is gone straight into DEAD.
-	var dead_army := _army_of(Rules.CELL_MELEE, 2)
+	var dead_army := _army_of(Rules.WOLF, 2)
 	dead_army.kill(0)
 	var db := _battle_of(_bay(), dead_army, [], 999.0)
 	t.eq(db.soldier_state[0], Battle.SoldierState.DEAD, "죽은 병사는 DEAD 로 들어온다 (자가 점검)")
@@ -206,8 +206,8 @@ func _a_boat_leaves_from_its_own_harbour(t) -> void:
 		"~~~H~~~~~~H~~~~~",
 		"H~~~~~~~~~~~~~~~",
 	]
-	var army := _army_of(Rules.CELL_MELEE, 2)
-	var b := _battle_of(rows, army, [_spawn(16, Rules.BISON, 14, 1)], 999.0)
+	var army := _army_of(Rules.WOLF, 2)
+	var b := _battle_of(rows, army, [_spawn(16, Rules.SHIELDBEARER, 14, 1)], 999.0)
 	var landing := 2 * 16 + 12          # (12,2): the east harbour is the nearest that can see it
 	var hb := b.grid.home_harbour_for(landing)
 	t.ok(hb >= 0, "그 칸을 볼 수 있는 항구가 있다 (자가 점검)")
@@ -228,7 +228,7 @@ func _a_boat_leaves_from_its_own_harbour(t) -> void:
 
 
 func _recall_puts_the_soldier_back(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 2)
+	var army := _army_of(Rules.WOLF, 2)
 	var b := _battle_of(_bay(), army, [], 999.0)
 	var uid := b.send(0, _tile_of(6, 4))
 	t.ok(uid >= 0 and b.send(1, _tile_of(6, 6)) >= 0, "두 척을 놓았다 (자가 점검)")
@@ -289,7 +289,7 @@ func _drop_order_takes_the_front(t) -> void:
 ## reading as a pass.
 func _formation_of(t, order: Array, landing: int) -> Dictionary:
 	var g := _island_grid(0)
-	var army := _army_of(Rules.CELL_MELEE, 2)
+	var army := _army_of(Rules.WOLF, 2)
 	var b := Battle.new()
 	b.setup(g, army, Islands.spawns_of(0), Islands.time_limit_of(0))
 	for raw in order:
@@ -342,7 +342,7 @@ func _formation_of(t, order: Array, landing: int) -> Dictionary:
 ## the row that reddens if that write is skipped.
 func _thirteen_aimed_at_one_tile_stand_on_thirteen(t) -> void:
 	var g := _island_grid(0)
-	var army := _army_of(Rules.CELL_MELEE, FULL_ROSTER)
+	var army := _army_of(Rules.WOLF, FULL_ROSTER)
 	var b := Battle.new()
 	b.setup(g, army, Islands.spawns_of(0), Islands.time_limit_of(0))
 	var landing := _isle1_landing()
@@ -366,10 +366,10 @@ func _thirteen_aimed_at_one_tile_stand_on_thirteen(t) -> void:
 
 
 func _the_empty_boat_goes_home_and_vanishes(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 1)
+	var army := _army_of(Rules.WOLF, 1)
 	# A live enemy far from the crossing, or `enemies_left() == 0` latches WON on the first sub-step
 	# and every step after it returns before the boat has moved an inch.
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
 	var landing := _tile_of(6, 5)
 	var uid := b.send(0, landing)
 	t.ok(uid >= 0 and b.commit(), "한 척을 보내고 확정했다 (자가 점검)")
@@ -440,7 +440,7 @@ func _one_slice_and_six_are_the_same_fight(t) -> void:
 	var a: Battle = slow["battle"]
 	var c: Battle = fast["battle"]
 	t.ok(a.elapsed > 0.0 and c.elapsed > 0.0, "두 판 다 실제로 흘렀다 (자가 점검)")
-	t.ok(a.enemy_hp[0] < Rules.hp_of(Rules.BISON), "잘게 쪼갠 쪽에서 적이 실제로 맞았다 (자가 점검)")
+	t.ok(a.enemy_hp[0] < Rules.hp_of(Rules.SHIELDBEARER), "잘게 쪼갠 쪽에서 적이 실제로 맞았다 (자가 점검)")
 	_compare_arms(t, a, c, "같은 시간을 120조각으로 나눠도 20조각으로 나눠도 같은 싸움이다")
 
 
@@ -557,14 +557,14 @@ func _the_substep_itself_is_pinned(t) -> void:
 	# Ceiling: the fastest unit (the crow, 6 tiles/s) must not cross a quarter of a tile in one
 	# sub-step, or reservation contention — which 「the order you drop is the order」 now rides on —
 	# resolves by iteration order instead of by geometry.
-	t.ok(Rules.speed_of(Rules.CROW) * Rules.SIM_SUBSTEP_SEC <= 0.25,
+	t.ok(Rules.speed_of(Rules.ARCHER) * Rules.SIM_SUBSTEP_SEC <= 0.25,
 			"가장 빠른 놈도 한 서브스텝에 0.25칸을 못 넘는다 (%.3f칸)"
-			% (Rules.speed_of(Rules.CROW) * Rules.SIM_SUBSTEP_SEC))
+			% (Rules.speed_of(Rules.ARCHER) * Rules.SIM_SUBSTEP_SEC))
 
 
 func _zero_stops_the_clock(t) -> void:
-	var army := _army_of(Rules.CELL_MELEE, 1)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.BISON, 20, 1)], 999.0)
+	var army := _army_of(Rules.WOLF, 1)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
 	t.ok(b.send(0, _tile_of(6, 5)) >= 0 and b.commit(), "보내고 확정했다 (자가 점검)")
 	b.begin_frame()
 	b.step(Rules.SIM_SUBSTEP_SEC)
@@ -692,9 +692,9 @@ func _the_comparison_itself(t) -> void:
 ## verdict in a handful of seconds, which is what keeps the equivalence rows well inside the runner's
 ## 120 s kill.
 func _skirmish() -> Dictionary:
-	var army := _army_of(Rules.CELL_MELEE, 4)
+	var army := _army_of(Rules.WOLF, 4)
 	var b := _battle_of(_bay(), army,
-			[_spawn(ARENA_W, Rules.BISON, 8, 5), _spawn(ARENA_W, Rules.BISON, 9, 4)], 999.0)
+			[_spawn(ARENA_W, Rules.SHIELDBEARER, 8, 5), _spawn(ARENA_W, Rules.SHIELDBEARER, 9, 4)], 999.0)
 	return {"battle": b, "army": army}
 
 
@@ -745,15 +745,13 @@ func _tile_of(x: int, y: int) -> int:
 	return y * ARENA_W + x
 
 
-## `Army.add(type_id)` is gone — a body is `recruit`ed from a SLOT now. Every caller here passes
-## `Rules.CELL_MELEE`, which is `SUMMON_SLOTS`' own slot 0, so the type is resolved back to its slot
-## once here rather than at every one of this file's fourteen call sites.
+## `Army.add(type_id)` is gone — a body is `recruit`ed from a SLOT now, and the slots are the ARMY's
+## own since 티켓 15, so the species is REGISTERED here and the slot it lands in is what recruits.
 func _army_of(type_id: int, n: int) -> Army:
 	var a := Army.new()
-	var slot := 0
-	for s in Rules.summon_slot_count():
-		if Rules.summon_type_of(s) == type_id:
-			slot = s
+	var slot := a.slot_of_type(type_id)
+	if slot < 0:
+		slot = a.register_species(type_id)
 	for _i in n:
 		a.recruit(slot)
 	return a

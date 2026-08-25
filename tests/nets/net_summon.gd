@@ -77,7 +77,9 @@ func run(t) -> void:
 	_seven_refusals(t)
 	_a_summoned_boat_goes_home_to_the_sea(t)
 	_a_mixed_plan_unloads_on_two_tiles(t)
-	_the_slot_table(t)
+	_the_run_slots(t)
+	_an_unregistered_slot_sends_nobody(t)
+	_the_unit_table(t)
 
 
 # -- G1 --------------------------------------------------------------------------------------------
@@ -593,10 +595,11 @@ func _most_hurt_first(t) -> void:
 	# on this fixture is `[2,3,4,5,0,1]`; the two share no first element, which is what makes the
 	# assertion above a measurement rather than a restatement.
 	t.ok(order[0] != 2, "그리고 옛 규칙(멀쩡한 몸부터)의 첫 답 2번이 아니다 (자가 점검)")
-	# `army.living_ids_of_type` keeps its documented healthiest-first order, because the probe reads
-	# `ids[0]` from it to put the beak on the healthiest body. Asserted here so the split is visible.
-	t.eq(int(army.living_ids_of_type(Rules.CELL_MELEE)[0]), 2,
-		"army.living_ids_of_type 는 여전히 멀쩡한 몸부터다 — 프로브가 부리를 그 순서로 단다")
+	# `army.living_ids_of_type` keeps its documented healthiest-first order. ⚠ Its one caller used to
+	# be the probe putting the beak on the healthiest body; **the beak reward is deleted** (2026-08-25)
+	# and the ORDER is still the documented contract, so the split stays asserted here.
+	t.eq(int(army.living_ids_of_type(Rules.WOLF)[0]), 2,
+		"army.living_ids_of_type 는 여전히 멀쩡한 몸부터다 — 문서가 그렇게 적어 뒀다")
 
 
 # -- B4 --------------------------------------------------------------------------------------------
@@ -617,15 +620,18 @@ func _a_pinned_hold_does_not_grow_the_army(t) -> void:
 			placed += 1
 		else:
 			refused += 1
-	t.eq(placed, 6, "슬롯 1 을 스무 번 눌러도 여섯 척뿐이다 (START_MELEE)")
-	t.eq(refused, 14, "나머지 열넷은 거절이다 — 꾹 눌러도 군대가 늘지 않는다")
-	t.eq(b.boats.size(), 6, "배도 여섯 척이다")
-	t.eq(Rules.slot_start_count(0), 6, "시작 근접 병력이 여섯이다 (이 줄의 리터럴이 재는 값 — 자가 점검)")
+	# ⚠ **The counts are DERIVED from the opening table and only its own value is a literal.** Slot 0
+	# opened with six while the run started on two species; it opens with ten since the second one
+	# moved to a card (티켓 15).
+	t.eq(Rules.start_bodies_of(0), 10, "개막 첫 칸의 병력이 열이다 (이 줄의 리터럴이 재는 값 — 자가 점검)")
+	t.eq(placed, Rules.start_bodies_of(0), "슬롯 1 을 스무 번 눌러도 그 칸이 가진 만큼만 나간다")
+	t.eq(refused, 20 - Rules.start_bodies_of(0), "나머지는 거절이다 — 꾹 눌러도 군대가 늘지 않는다")
+	t.eq(b.boats.size(), Rules.start_bodies_of(0), "배도 그만큼이다")
 
 
 # -- B2 --------------------------------------------------------------------------------------------
-## ⚠ Mutation: drop any one guard. ⚠ For the unbound arm specifically: `summon_type_of(slot) < 0` ->
-## `<= 0`, which refuses slot 0 forever because `Rules.CELL_MELEE` is 0 — and every count row above
+## ⚠ Mutation: drop any one guard. ⚠ For the unbound arm specifically: `army.slot_type_of(slot) < 0`
+## -> `<= 0`, which refuses slot 0 forever because there IS a unit row 0 — and every count row above
 ## still passes, because a slot that refuses looks exactly like an empty roster.
 ## ⚠⚠ **MEASURED: the land arm and the far-water arm are NOT carried by `summon`'s own
 ## `can_summon_at` line** — deleting it reddens nothing, because `grid.summon_route` refuses on the
@@ -647,17 +653,20 @@ func _seven_refusals(t) -> void:
 	# 2 — slot below range.
 	_refuses(t, _fresh(0), -1, good, "슬롯 -1 은 거절한다")
 	# 3 — slot above range.
-	# ⚠ Off the END of the table, whatever the table's length is — the index is derived so a third
-	# binding does not turn this row into a rewrite.
-	_refuses(t, _fresh(0), Rules.SUMMON_SLOTS.size(), good, "표 끝을 넘는 슬롯은 거절한다")
-	# 4 — ⚠⚠ **THE UNBOUND ARM NO LONGER HAS A SLOT TO STAND ON.** Slots 3–5 were `SUMMON_UNBOUND` and
-	# the user cut them (*"슬럿 2개로 시작 확장가능"*), so every slot in the table is bound. The `< 0`
-	# vs `<= 0` rule it guarded is unchanged and still reachable — `summon_type_of` answers
-	# `SUMMON_UNBOUND` for any out-of-range slot — so the arm is driven through THAT door instead.
-	t.eq(Rules.summon_type_of(Rules.SUMMON_SLOTS.size()), Rules.SUMMON_UNBOUND,
-		"표 끝 너머는 비어 있다고 답한다 (자가 점검 — 위 줄이 거절하는 이유가 이것이다)")
-	t.eq(Rules.CELL_MELEE, 0,
-		"그리고 근접 짐승의 번호는 0 이다 — 이 줄이 `<= 0` 이 왜 슬롯 1을 죽이는지의 전부다 (자가 점검)")
+	# ⚠ Off the END of the RUN's own slots, whatever the run has registered — derived so a fourth
+	# registration does not turn this row into a rewrite.
+	var fresh := _fresh(0)
+	_refuses(t, fresh, fresh.army.slot_count(), good, "회차의 칸 수를 넘는 슬롯은 거절한다")
+	# 4 — ⚠⚠ **THE UNBOUND ARM.** Every slot the run HAS registered is bound, so the `< 0` vs `<= 0`
+	# rule is driven through the out-of-range door: `army.slot_type_of` answers `SUMMON_UNBOUND` there.
+	t.eq(fresh.army.slot_type_of(fresh.army.slot_count()), Rules.SUMMON_UNBOUND,
+		"칸 끝 너머는 비어 있다고 답한다 (자가 점검 — 위 줄이 거절하는 이유가 이것이다)")
+	# ⚠ **어떤 종이 0번인지는 표 순서에 달렸고, 함정은 「0번 종이 존재한다」는 것 하나다.** 늑대가 0번이던
+	# 시절 이 줄은 `Rules.CELL_MELEE == 0` 이었는데, 그것은 함정이 아니라 그날의 표 순서였다.
+	t.ok(Rules.player_type_count() > 0 and Rules.side_of(0) == Rules.Side.PLAYER,
+		"0번 줄이 아군 종으로 실재한다 (자가 점검 — 없으면 아래 줄이 공허하다)")
+	t.ok(Rules.SUMMON_UNBOUND < 0,
+		"그리고 빈 칸의 답은 음수다 — 이 둘이 `<= 0` 이 왜 0번 종을 영원히 거절하는지의 전부다")
 
 	# 5 — a land tile.
 	var land := -1
@@ -684,7 +693,8 @@ func _seven_refusals(t) -> void:
 
 	# 7 — the slot is dry.
 	var dry := _fresh(0)
-	for k in 6:
+	# ⚠ Derived from the opening table, not a literal 6 — slot 0's body count moved to ten (티켓 15).
+	for k in Rules.start_bodies_of(0):
 		t.ok(dry.summon(0, int(band[k])) >= 0, "마르기 전에는 %d번째도 나간다 (자가 점검)" % k)
 	t.eq(dry.slot_reserve_ids(0).size(), 0, "슬롯 1 이 실제로 말랐다 (자가 점검)")
 	var before := dry.boats.size()
@@ -768,30 +778,152 @@ func _a_mixed_plan_unloads_on_two_tiles(t) -> void:
 
 
 # -- R1 --------------------------------------------------------------------------------------------
-## ⚠ Mutation: put `BISON` in slot 2. `session-loop`'s buildability review measured a previous attempt
-## shipping *"bison, crow and lion with correct names and correct bodies"* as the player's army.
-func _the_slot_table(t) -> void:
-	# ⚠⚠ **THE TABLE'S SIZE IS THE LITERAL AND THE COUNT IS PINNED AGAINST THE TABLE**, never the other
-	# way round. `summon_slot_count()` is `SUMMON_SLOTS.size()`, so pinning both to the same number
-	# would move together and pass at any value — the shape this repo has already measured. A third
-	# binding must be ONE line in `rules.gd`, and only the literal below may have to move with it.
-	t.eq(Rules.SUMMON_SLOTS.size(), 2, "표에 두 줄이 있다 (리터럴)")
-	t.eq(Rules.summon_slot_count(), Rules.SUMMON_SLOTS.size(),
-		"그리고 슬롯 수는 표에서 나온다 — 세는 게 아니라 표가 정한다")
-	var bound := 0
-	var enemy_typed := 0
-	for i in Rules.summon_slot_count():
-		var want := Rules.summon_type_of(i)
-		if want >= 0:
-			bound += 1
-		if want >= 2:
-			enemy_typed += 1
-	t.eq(bound, Rules.SUMMON_SLOTS.size(), "그리고 그 두 줄이 전부 채워져 있다 — 빈 슬롯이 없다")
-	t.eq(enemy_typed, 0, "들소·까마귀·사자가 들어간 슬롯은 하나도 없다 — 짐승 경제는 아직 안 열렸다")
-	t.eq(Rules.summon_type_of(0), Rules.CELL_MELEE, "1번은 근접 짐승다")
-	t.eq(Rules.summon_type_of(1), Rules.CELL_RANGED, "2번은 원거리 짐승다")
-	t.eq(Rules.summon_type_of(-1), Rules.SUMMON_UNBOUND, "범위 밖은 비어 있다고 답한다")
-	t.eq(Rules.summon_type_of(9), Rules.SUMMON_UNBOUND, "위쪽 범위 밖도 마찬가지다")
+## ⚠⚠ **THE SLOTS ARE RUN STATE NOW AND THIS ROW MOVED WITH THEM.** `Rules.SUMMON_SLOTS` was a
+## CONSTANT table saying 「칸 s 는 영원히 종 t 에 묶여 있다」, and that sentence stopped being true the
+## day a card could fill a slot — a constant holding a per-run fact is a shape this repo has paid for.
+## What survives is the three lessons its header carried, and they are all below.
+##
+## ⚠ Mutation: put an enemy row in a slot; count slots with a literal; answer `0` for an empty slot.
+func _the_run_slots(t) -> void:
+	# ⚠⚠ **THE COUNT IS PINNED AGAINST THE ARMY AND THE OPENING TABLE'S SIZE IS THE LITERAL**, never
+	# the other way round — pinning both to one number moves them together and passes at any value.
+	var a := Army.new()
+	a.add_starting_force()
+	t.eq(Rules.START_SLOTS.size(), 1, "회차는 표의 한 줄로 연다 (리터럴)")
+	t.eq(a.slot_count(), Rules.START_SLOTS.size(), "그리고 새 군대의 칸 수는 그 표가 정한다")
+	t.eq(Rules.roster_start_count(), 10,
+		"시작 병력은 열이다 (리터럴) — 작은 섬 넷의 밀도가 전부 이 열에 맞춰져 있다")
+	t.eq(a.slot_type_of(0), Rules.WOLF, "1번 칸은 늑대다")
+
+	# Lesson 1: **the answer for an empty slot is `SUMMON_UNBOUND` and never 0.** There IS a row 0,
+	# so a `0` here summons the squirrel with every bounds check downstream still passing.
+	t.eq(a.slot_type_of(a.slot_count()), Rules.SUMMON_UNBOUND, "칸 끝 너머는 비어 있다고 답한다")
+	t.eq(a.slot_type_of(-1), Rules.SUMMON_UNBOUND, "아래쪽 범위 밖도 마찬가지다")
+	t.ok(a.slot_type_of(a.slot_count()) < 0, "그 답은 음수다 — `< 0` 로 검사해야 하는 이유가 이것이다")
+
+	# Lesson 2: **an enemy row cannot be registered.** The old header said binding one 「reads as done
+	# and ships enemy bodies as the player's army」; there is a door to try it through now.
+	var enemy := Rules.player_type_count()
+	t.eq(Rules.side_of(enemy), Rules.Side.ENEMY, "%d 번이 적 줄이다 (자가 점검)" % enemy)
+	var before := a.slot_count()
+	t.eq(a.register_species(enemy), -1, "적 편 종은 칸에 못 들어간다")
+	t.eq(a.slot_count(), before, "그리고 거절이라 칸 수도 그대로다 — 아무것도 안 변했다")
+
+	# Lesson 3: **one species, at most one slot.**
+	t.eq(a.register_species(Rules.WOLF), -1, "이미 등록된 종은 두 번째 칸에 못 들어간다")
+	t.eq(a.slot_count(), before, "그것도 아무것도 안 바꿨다")
+
+	# The floor under those three ceilings: a legal registration DOES land.
+	var got := a.register_species(Rules.BEAR)
+	t.eq(got, before, "안 등록된 아군 종은 다음 빈 칸으로 들어간다 (자가 점검)")
+	t.eq(a.slot_count(), before + 1, "그리고 칸이 하나 늘었다")
+	t.eq(a.slot_type_of(got), Rules.BEAR, "그 칸이 그 종이다")
+
+	# The ceiling on the ceiling: `SUMMON_SLOT_MAX` refuses, and nothing changes when it does.
+	var full := Army.new()
+	full.add_starting_force()
+	for ty in Rules.player_type_count():
+		full.register_species(ty)
+	t.eq(full.slot_count(), Rules.SUMMON_SLOT_MAX, "다섯 종을 다 넣으면 칸이 상한만큼 찬다 (자가 점검)")
+	t.eq(Rules.SUMMON_SLOT_MAX, 5, "그 상한은 다섯이다 (리터럴)")
+
+
+## The summon and its reserve list both refuse a slot the run never registered — and they refuse it
+## **without putting a body anywhere**, which a count-only check cannot see.
+##
+## ⚠ Mutation: `slot >= army.slot_count()` -> `slot >= Rules.SUMMON_SLOT_MAX`.
+func _an_unregistered_slot_sends_nobody(t) -> void:
+	var b := _fresh(0)
+	var unbound := b.army.slot_count()
+	t.ok(unbound < Rules.SUMMON_SLOT_MAX, "등록 안 된 칸이 상한 안쪽에 있다 (자가 점검)")
+	t.eq(b.slot_reserve_ids(unbound).size(), 0, "등록 안 된 칸의 예비 병력은 비어 있다")
+	var tile := int(_band_tiles(b.grid)[0])
+	t.ok(tile >= 0, "띠 안의 칸을 하나 찾았다 (자가 점검)")
+	t.eq(b.summon(unbound, tile), -1, "그 칸으로는 소환이 거절된다")
+	t.eq(b.boats.size(), 0, "그리고 배가 한 척도 안 생겼다 — 거절은 아무것도 안 만든다")
+	var transit := 0
+	for i in b.soldier_state.size():
+		if b.soldier_state[i] != Battle.SoldierState.RESERVE:
+			transit += 1
+	t.eq(transit, 0, "몸도 하나도 안 나갔다")
+	# The floor: a REGISTERED slot on the same grid does send one.
+	t.ok(b.summon(0, tile) >= 0, "등록된 칸으로는 나간다 (자가 점검)")
+
+
+# -- U1 --------------------------------------------------------------------------------------------
+## **The barking device the unit table has never had.** `rules.gd`'s own header says renumbering
+## `UNITS` renumbers every spawn character and every hotkey binding at once **with nothing to bark
+## about it** — these rows are that bark.
+##
+## ⚠ Mutation: swap two rows of `UNITS`; move an enemy row above a player row.
+func _the_unit_table(t) -> void:
+	# Every id constant, paired with the identifier its own row carries. The pair list is a second
+	# copy of nothing — the NAMES are what the table stores — but its LENGTH is, so the length is
+	# pinned against the table: a row added without a pair here reddens this line before anything else.
+	var named := [
+		[Rules.SQUIRREL, "SQUIRREL"],
+		[Rules.WOLF, "WOLF"],
+		[Rules.COW, "COW"],
+		[Rules.BEAR, "BEAR"],
+		[Rules.CROW, "CROW"],
+		[Rules.SPEARMAN, "SPEARMAN"],
+		[Rules.ARCHER, "ARCHER"],
+		[Rules.SHIELDBEARER, "SHIELDBEARER"],
+		[Rules.LION, "LION"],
+	]
+	t.eq(named.size(), Rules.UNITS.size(),
+		"이 검사가 표의 모든 줄을 든다 — 줄이 늘면 여기가 먼저 문다 (자가 점검)")
+	for raw in named:
+		var pair: Array = raw
+		t.eq(Rules.name_of(int(pair[0])), str(pair[1]),
+			"%s 상수가 제 줄을 가리킨다" % str(pair[1]))
+
+	# The side column, and the ordering contract that `Loadout`'s board index stands on.
+	var players := 0
+	var first_enemy := -1
+	for i in Rules.UNITS.size():
+		if Rules.side_of(i) == Rules.Side.PLAYER:
+			players += 1
+			t.ok(first_enemy < 0, "%d 번 아군 줄이 어떤 적 줄보다도 앞에 있다" % i)
+		elif first_enemy < 0:
+			first_enemy = i
+	t.ok(players > 0 and players < Rules.UNITS.size(),
+		"표에 아군 줄도 적 줄도 있다 — 한쪽만이면 아래 줄들이 공허하다 (자가 점검)")
+	# ⚠ **어디에도 숫자로 안 박는다.** 아군 수는 표를 걸어서 나오고, 이 검사도 표를 걸어서 센다.
+	t.eq(Rules.player_type_count(), players, "아군 종 수는 표를 세어서 나온다")
+	for i in Rules.player_type_count():
+		t.eq(Rules.side_of(i), Rules.Side.PLAYER,
+			"아군 줄 번호가 0 부터 연속이다 — %d 번" % i)
+	t.eq(Rules.side_of(Rules.player_type_count()), Rules.Side.ENEMY,
+		"그리고 바로 다음 줄이 적이다 — 연속의 끝을 못 박는다")
+
+	# ⚠⚠ **THE FOUR TRANSPLANTED ROWS, PINNED AS LITERALS.** `rules.gd` claims 늑대 · 까마귀 · 궁수 ·
+	# 방패병 carry the numbers their pre-rename rows carried, and **nothing measured that claim** —
+	# 까마귀's damage in particular was pinned in no file at all, so changing it 1.5 -> 2.5 reddened
+	# one HP-total line in `net_run` and nothing else. The literals below are the OLD table's own
+	# values, typed in rather than read back: a check that asks the subject for its expectation is
+	# this repo's named false green.
+	#
+	# ⚠ **The two that are NOT transplants are deliberately absent** — 다람쥐 · 소 · 곰 · 창병 are first
+	# drafts the user is expected to move, and pinning them would turn a tuning pass into a rewrite.
+	var moved := [
+		# row                   hp    dmg  period range  area  speed  detect
+		[Rules.WOLF,           14.0,  2.0,  1.0,   0.0,  0.0,  4.0,  Rules.NO_DETECT],
+		[Rules.CROW,            8.0,  1.5,  1.0,   4.0,  1.0,  4.0,  Rules.NO_DETECT],
+		[Rules.ARCHER,          6.0,  1.5,  1.0,   3.0,  0.0,  6.0,  12.0],
+		[Rules.SHIELDBEARER,   20.0,  3.0,  2.0,   0.0,  0.0,  2.5,  6.0],
+	]
+	for raw2 in moved:
+		var row: Array = raw2
+		var ty := int(row[0])
+		var who := Rules.label_of(ty)
+		t.eq(Rules.hp_of(ty), float(row[1]), "%s 의 체력이 옮겨온 값 그대로다" % who)
+		t.eq(Rules.damage_of(ty), float(row[2]), "%s 의 공격력이 옮겨온 값 그대로다" % who)
+		t.eq(Rules.period_of(ty), float(row[3]), "%s 의 공격주기가 옮겨온 값 그대로다" % who)
+		t.eq(Rules.range_of(ty), float(row[4]), "%s 의 사거리가 옮겨온 값 그대로다" % who)
+		t.eq(Rules.area_of(ty), float(row[5]), "%s 의 범위가 옮겨온 값 그대로다" % who)
+		t.eq(Rules.speed_of(ty), float(row[6]), "%s 의 이동속도가 옮겨온 값 그대로다" % who)
+		t.eq(Rules.detect_of(ty), float(row[7]), "%s 의 시야가 옮겨온 값 그대로다" % who)
 
 
 # -- helpers ---------------------------------------------------------------------------------------

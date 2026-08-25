@@ -270,19 +270,59 @@ const ZOOM_STEP := 1.15
 ## `SURVEY_MARGIN` is how much wider than the island the opening view is. Below 1.0 the island is cut
 ## off; at exactly 1.0 it touches all four edges and `_clamp_cam` has a zero-length range to centre
 ## into, which is the failure `ZOOM_MIN`'s own paragraph records at 0.5625. 1.15 leaves a shore.
-const SURVEY_MARGIN := 1.15
+const SURVEY_MARGIN := 1.40
+## ⚠⚠ **RAISED 1.15 -> 1.40** (2026-08-25, the user: 「처음 시작할떄 가메라 좀더 뒤에서 시작할 수
+## 있게해줘」). **This is the margin term and nothing else moved** — `ZOOM_MIN`, `ZOOM_MAX` and the
+## pitch's sine are all untouched.
+##
+## ⚠⚠ **AND IT HAD TO PASS 1.231 BEFORE THE FIRST ISLAND MOVED AT ALL.** Island 4 is 26 x 20, so at
+## 1.15 the formula wants 1.07 and is **capped by `ZOOM_MAX`** — the opening view was not the survey's
+## answer, it was the ceiling. Nothing under `1280 / (26 x 40) = 1.231` changes that island by one
+## pixel, which is why a small nudge was not an option.
+##
+## ⚠ **The boat fix is NOT what the user is reacting to, and this does not undo it.** That fix replaced
+## a cosine with the pitch's sine in this same derivation. Re-measured across all six grid sizes: it
+## moved **exactly one island** — island 5, 0.9730 -> 0.9938, 2% tighter — and **island 4 not at all**,
+## because both formulas clamp it at `ZOOM_MAX`.
+##
+## **What 1.40 does**, and the body size is quoted with it because the two are read in one glance:
+##
+## | island | zoom | wolf on screen | one tile |
+## |---|---|---|---|
+## | **4, the first node** | 1.000 -> **0.879** | 49.0 -> **43.1 px** | 40.0 -> 35.2 px |
+## | the hand-written 48 x 32 | 0.580 -> **0.500** | 28.4 -> 24.5 px | 20.0 px |
+## | the long map | 0.500, unchanged | — | already on the floor |
+##
+## The first island goes from filling **81% of the width and 71% of the height** to **71% and 63%**.
+##
+## ⚠ **The 48 x 32 islands land exactly ON `ZOOM_MIN`, and that is that constant's own framing** — its
+## paragraph calls 0.50 the ceiling at which a 48 x 32 island still keeps a vertical margin for
+## `_clamp_cam` to centre into. **Nothing derived from `ZOOM_MIN` moved** (`WATER_MARGIN_TILES`,
+## `CLIFF_FACE_WIDTH_PX`), because `ZOOM_MIN` itself did not.
+##
+## ⚠⚠ **It cost `net_camera` a guard and the guard was re-anchored rather than deleted.** That file
+## asserted the opening zoom is *not* the `ZOOM_MIN` constant by checking it sat 0.05 above the floor —
+## true at 0.580 and false at 0.500. **Any margin past ~1.21 breaks it**, so the claim moved to a grid
+## that does not clamp. A survey that is only ever the floor cannot be told from a constant, and that
+## distinction is the whole reason this function exists.
 
 
 ## The zoom an island of this many tiles opens at. Both axes, because a wide map binds on width and a
-## tall one on height, and the vertical is divided by `cos(pitch)` for the same reason
-## `_visible_ground_px` divides it — the ground is leaning away.
+## tall one on height, and the vertical is multiplied by `sin(pitch)` for the same reason
+## `_visible_ground_px` divides by it — the ground is leaning away, so a tile of ground reaches the
+## glass `sin(pitch)` of a tile tall.
+##
+## ⚠ **It was `cos(pitch)` and that was the same defect `_visible_ground_px` carried** (2026-08-25).
+## Here it only ever framed an island wider than it had to; there it aimed every press. **Both are the
+## one formula and they are corrected together** — leaving this one would be the same number written
+## two ways again.
 static func survey_zoom_of(w_tiles: int, h_tiles: int) -> float:
 	if w_tiles <= 0 or h_tiles <= 0:
 		return ZOOM_MIN
 	var wide := float(w_tiles) * TILE_PX * SURVEY_MARGIN
 	var tall := float(h_tiles) * TILE_PX * SURVEY_MARGIN
 	var by_w := VIEWPORT_W_PX / wide
-	var by_h := VIEWPORT_H_PX / (tall * cos(deg_to_rad(CAM_PITCH_DEG)))
+	var by_h := VIEWPORT_H_PX / (tall * sin(deg_to_rad(CAM_PITCH_DEG)))
 	return clampf(minf(by_w, by_h), ZOOM_MIN, ZOOM_MAX)
 
 ## ⚠⚠ **THE WORLD-WIDTH TABLE. Every stroke `field_view` draws is multiplied by `zoom` before it
@@ -296,7 +336,7 @@ static func survey_zoom_of(w_tiles: int, h_tiles: int) -> float:
 ##   ABOVE THE FLOOR (5.0 or more)   SHOT · BURST · AREA_RING · LAND_RING · ROUTE · REFUSE_MARK
 ##   DELIBERATELY BELOW              TARGET_LINE · SPARK — each carries its own reason on its own
 ##                                   line, and the reason is the whole licence
-##   (BODY_OUTLINE · CLIFF_FACE · GRID_LINE · BEAK left this table with the 3D move: the field's
+##   (BODY_OUTLINE · CLIFF_FACE · GRID_LINE · the beak mark left this table with the 3D move: the field's
 ##   body became a baked texture — BODY_OUTLINE_WIDTH_PX lives on for the refit screen's drawn body,
 ##   in HUD space where the snap floor bites raw — the cliff line became mesh, and the other two
 ##   were deleted with zero readers.)
@@ -346,11 +386,21 @@ const COL_HOLE := Color(0.055, 0.067, 0.078)
 const COL_CLIFF := Color(0.243, 0.235, 0.251)
 const COL_RAMP := Color(0.361, 0.310, 0.235)
 
+## The one tile of a tier boundary a body may climb (티켓 19). **Its own colour and NOT `COL_RAMP`
+## reused**, for a measuring reason as much as a visual one: `net_fx_view` picks terrain vertices out
+## of the mesh BY COLOUR, so two things sharing a tone are two things no check can tell apart. A ramp
+## is a doorway through a cliff wall and a stair is the way up a tier; they are different rules and
+## they get different tones.
+##
+## ⚠ **Lighter than the ramp and warmer than the land.** It has to be findable at `ZOOM_MIN` from 40
+## degrees — 「계단이 어디인지 찾을 수 있다」 is one of the things the eye is asked for on this ticket,
+## and a stair is one tile on a board of hundreds.
+const COL_STAIR := Color(0.588, 0.502, 0.318)
+
 # Bodies. Friend and foe are told apart by COLOUR; the unit type is told apart by SIZE and by how
 # round its corners are — see BODY_RADIUS_RATIO and BODY_CORNER_RATIO.
 const COL_ALLY := Color(0.451, 0.847, 1.0)
 const COL_ENEMY := Color(1.0, 0.420, 0.361)
-const COL_BEAK := Color(1.0, 0.863, 0.451)
 
 # HP. The old game died partly because nothing on screen ever went down; the empty half is drawn
 # so the bar has a length before it is hurt.
@@ -461,9 +511,19 @@ const COL_NODE_BOSS := Color(0.933, 0.322, 0.290)
 
 # Combat juice. Seven, and every one of them is a colour no existing name can stand in for.
 # Items 8, 9, 4 and the shake margin deliberately REUSE what is already above — COL_WIN / COL_LOSE,
-# COL_BEAK / COL_BUTTON, COL_ALLY / COL_ENEMY, COL_WATER — because the same value under two names
+# COL_BUTTON, COL_ALLY / COL_ENEMY, COL_WATER — because the same value under two names
 # diverges the first time one of them is tuned.
 const COL_FLASH := Color(1.0, 1.0, 1.0)
+
+## What a bleeding body's colour is dragged toward. ⚠ **The VALUES here are eye values and this
+## ticket does not judge them** — how red, and how dark, is `verify-look`'s to say.
+const COL_BLEED := Color(0.42, 0.03, 0.06)
+## Seconds of REMAINING bleed at which the pull reaches its full strength. The crow's own row lasts
+## exactly this long, so a fresh bite reads at full and fades as the clock runs out.
+const BLEED_TINT_SEC := 2.0
+## How far the pull may go at full strength. **Not 1.0**: a body dragged the whole way to `COL_BLEED`
+## stops being its own side's colour, and friend-and-foe-by-colour is the older rule.
+const BLEED_TINT_MAX := 0.7
 const COL_SHOT := Color(1.0, 0.925, 0.667)
 const COL_AREA_RING := Color(1.0, 0.600, 0.350, 0.55)
 const COL_LAND_RING := Color(0.451, 0.847, 1.0, 0.60)
@@ -490,24 +550,37 @@ const COL_HIT_HALO := Color(1.0, 1.0, 1.0, 0.35)
 # Bodies — an outline, a centre dot, nothing between
 # ---------------------------------------------------------------------------------------------
 
-## Indexed by the unit type id in rules.gd: 0 CELL_MELEE, 1 CELL_RANGED, 2 BISON, 3 CROW, 4 LION.
-## Radius as a fraction of one tile. AT TILE_PX = 40 THESE ARE, IN ORDER:
-##   0 CELL_MELEE  0.35 -> 14.0 px
-##   1 CELL_RANGED 0.28 -> 11.2 px
-##   2 BISON       0.40 -> 16.0 px
-##   3 CROW        0.25 -> 10.0 px
-##   4 LION        0.55 -> 22.0 px
+## Indexed by the unit type id in rules.gd, and **one entry per row of `UNITS`** — nine now, and a
+## sixth body standing on a five-entry array is an index off the end that stops the island drawing at
+## all. Radius as a fraction of one tile. AT TILE_PX = 40 THESE ARE, IN ORDER:
+##   0 SQUIRREL     0.22 ->  8.8 px
+##   1 WOLF         0.35 -> 14.0 px
+##   2 COW          0.45 -> 18.0 px
+##   3 BEAR         0.50 -> 20.0 px
+##   4 CROW         0.28 -> 11.2 px
+##   5 SPEARMAN     0.35 -> 14.0 px
+##   6 ARCHER       0.25 -> 10.0 px
+##   7 SHIELDBEARER 0.40 -> 16.0 px
+##   8 LION         0.55 -> 22.0 px
+## ⚠ **Four of the nine are transplants** — the wolf, the crow, the archer and the shieldbearer carry
+## the exact ratios their pre-rename rows had, for the reason `Rules.UNITS`' own header gives.
 ## Nothing here changes what happens, which is why body size is in this file and not in rules.gd.
-const BODY_RADIUS_RATIO := [0.35, 0.28, 0.40, 0.25, 0.55]
+const BODY_RADIUS_RATIO := [0.22, 0.35, 0.45, 0.50, 0.28, 0.35, 0.25, 0.40, 0.55]
 
 ## Corner rounding as a fraction of that body's own radius — this is the "shape" half of telling
-## types apart. Melee and the lion are boxy, ranged and the crow are nearly circles.
-## AT THE RADII ABOVE: 3.50 px, 9.52 px, 4.80 px, 9.00 px, 4.40 px.
-const BODY_CORNER_RATIO := [0.25, 0.85, 0.30, 0.90, 0.20]
+## types apart. The heavy walkers are boxy; the small and the flying are nearly circles.
+## AT THE RADII ABOVE: 7.48, 3.50, 5.40, 5.00, 9.52, 4.20, 9.00, 4.80, 4.40 px.
+const BODY_CORNER_RATIO := [0.85, 0.25, 0.30, 0.25, 0.85, 0.30, 0.90, 0.30, 0.20]
 
-## ⚠ **RAISED 2.0 -> 5.0 by the world-width table above, and this is the row that moves the most
-## picture.** A body IS its outline here — `_paint_body` draws a rounded-square polyline plus a 3 px
-## dot and nothing else — and the whole fight is WATCHED at `ZOOM_MIN`, where 2.0 reached the glass at
+## ⚠⚠ **THESE TWO NOW HAVE NO READER AT ALL** (2026-08-25, 티켓 23). They sized a body drawn as a
+## rounded-square outline plus a centre dot. The island stopped drawing that on 2026-08-24 and the
+## refit screen's preview — the last one — stopped today, so **nothing in `src/` reads either.**
+## ⚠ **Kept rather than deleted**, because `net_draw_leaf`'s pixel sweep is what would catch a new
+## width literal appearing somewhere, and these two are the measured answer it would be compared
+## against. **If they still have no reader when a later ticket sweeps orphans, they should go.**
+## The measurement, kept as the reason for the number:
+## RAISED 2.0 -> 5.0 by the world-width table above. A body WAS its outline — a rounded-square
+## polyline plus a 3 px dot — and the whole fight is WATCHED at `ZOOM_MIN`, where 2.0 reached the glass at
 ## **0.90 px**. That is the same finding `COL_HIT_HALO`'s comment already carries one step short of
 ## the conclusion ("a body here is a 2 px outline plus a 3 px dot, so a tint has no AREA to paint").
 ## Ceiling 5.0, and it is arithmetic rather than taste: the smallest body is the crow at
@@ -523,15 +596,14 @@ const BODY_DOT_RADIUS_PX := 3.0
 ## `_draw` costs a `draw_set_transform` and `net_draw_leaf` counts every `draw_*` call site — a
 ## mirrored copy on disk keeps the leaf at exactly one call.
 ##
-## ⚠ **The enemy is still a square, and so is the landing ghost.** The enemies are 들소·까마귀·사자 and
-## none of them has art; the ghost is a PLAN and reads better as the abstract shape.
+## ⚠ **The ghost wears its own species' picture too** (티켓 15) — it used to be the wolf whatever was
+## in the slot, which agreed with the plan only while one slot existed.
 const BEAST_WOLF_R := "res://assets/beast/wolf_r.png"
 const BEAST_WOLF_L := "res://assets/beast/wolf_l.png"
 ## ⚠⚠ **All five species, drawn in the SOLDIERS' style** (2026-08-24). The wolf that stood here before
 ## was a realistic pixel animal and the enemy became a faceless low-poly toy, so the two sides read as
-## two games; this replaces the wolf rather than adding beside it. **Two of the five are wired** — see
-## `field_view._beast_tex` — and the other three are here because the pictures are the cheap half and
-## the rules table is the expensive one.
+## two games; this replaces the wolf rather than adding beside it. **All five are wired now** — see
+## `BEAST_TEX` below, which is what 티켓 15 gave the other three rows to stand on.
 const BEAST_SQUIRREL_R := "res://assets/beast/squirrel_r.png"
 const BEAST_SQUIRREL_L := "res://assets/beast/squirrel_l.png"
 const BEAST_BULL_R := "res://assets/beast/bull_r.png"
@@ -562,6 +634,105 @@ const HUMAN_BOW_L := "res://assets/human/bow_l.png"
 const HUMAN_SHIELD_R := "res://assets/human/shield_r.png"
 const HUMAN_SHIELD_L := "res://assets/human/shield_l.png"
 
+## ⚠⚠ **`IDLE` IS NOT A STRIP.** It is the standing picture every row already has and every row
+## without a strip falls back to, which is why it carries no frame count and why the frame table below
+## starts at `WALK`. Making it a one-frame strip would give eight species an animation made of the
+## picture they already wear, and the fallback — the thing that keeps a species with no art working —
+## would stop being visible in the code at all.
+enum Anim { IDLE, WALK, BITE }
+
+## The `<anim>` piece of `<beast>_<anim>_<frame>_<facing>.png`, indexed by `Anim`. `IDLE`'s is empty
+## because an idle picture has no `<anim>` piece — it is `<beast>_<facing>.png` and nothing more.
+const ANIM_NAME := ["", "walk", "bite"]
+
+## Frames per strip, in `Anim` order starting at `WALK`. **A 0 is a row with no strip of that kind.**
+const NO_ANIM_FRAMES := [0, 0]
+## ⚠ **WALK loops 0-1-2-3; BITE plays 0-1-2-3 once and hands the body back to WALK.** Frame 0 of the
+## bite is the only closed mouth in the strip, so a bite that looped would leave the jaw hanging open
+## for the whole fight.
+const WOLF_ANIM_FRAMES := [4, 4]
+
+## How long one frame of any strip is held. **One rate for the whole animal**: 0.12 s puts the walk
+## cycle at 0.48 s (8 fps, four frames), which at a 49 px body is a stride you can count — the same
+## strip at 60 fps reads as a twitch, and 「연출은 과할 정도로」 cuts that way too. The bite is the same
+## four frames, so it also runs 0.48 s against a ~1.0 s attack period: the jaw is moving for about
+## half the time a body spends in contact, which is the half 「붙어서 가만히 있으면 재미가 죽는다」 is
+## about. **The lunge (`LUNGE_SEC`) is deliberately shorter** — the body snaps out and back inside the
+## first frames while the mouth carries the rest.
+const BEAST_FRAME_SEC := 0.12
+
+## ⚠⚠ **ONE ROW PER `Rules.UNITS` ROW: the picture that row wears facing right, and facing left.**
+## This replaces `field_view._beast_tex`'s `if` chain, and with it the `is_enemy` argument that chain
+## needed. **That argument existed only because two species shared one row** — 소 and 까마귀 were the
+## enemy's rows while the player's two slots borrowed their bodies, so one row had to answer with two
+## different pictures depending on who was asking. Split the rows and there is nothing for it to point
+## at: **one row, one picture**, and the argument going away is the structural proof the move landed.
+##
+## ⚠ **An empty string is a row with NO picture**, and `field_view` draws the plain rounded shape for
+## it. The lion is the only one: the last boss is still a beast in a game whose enemies became human,
+## and **where it goes is an open question** (티켓 17) — handing it the caveman's picture here would
+## answer that by accident, in a place nobody would look for it.
+##
+## ⚠⚠ **The third column is the row's OWN animation, and it is the only place one is declared.** A
+## species animates by editing its own row; every consumer asks the row and falls back on the standing
+## picture when the row says nothing, so **there is no species named anywhere in `field_view`**. A
+## second list — "these ones have frames" — is the shape that has to be hand-synced with this one, and
+## the day they disagree the wrong animal walks.
+const BEAST_TEX := [
+	[BEAST_SQUIRREL_R, BEAST_SQUIRREL_L, NO_ANIM_FRAMES],
+	[BEAST_WOLF_R, BEAST_WOLF_L, WOLF_ANIM_FRAMES],
+	[BEAST_BULL_R, BEAST_BULL_L, NO_ANIM_FRAMES],
+	[BEAST_BEAR_R, BEAST_BEAR_L, NO_ANIM_FRAMES],
+	[BEAST_CROW_R, BEAST_CROW_L, NO_ANIM_FRAMES],
+	[HUMAN_SPEAR_R, HUMAN_SPEAR_L, NO_ANIM_FRAMES],
+	# ⚠ **The weapon is read off what the row DOES, not off its name.** The archer reaches 3 tiles and
+	# the shieldbearer walks in, so the one that shoots carries the bow — a picture that disagreed with
+	# the reach would be the loudest lie on the island.
+	[HUMAN_BOW_R, HUMAN_BOW_L, NO_ANIM_FRAMES],
+	[HUMAN_SHIELD_R, HUMAN_SHIELD_L, NO_ANIM_FRAMES],
+	["", "", NO_ANIM_FRAMES],
+]
+
+const _TEX_COL_RIGHT := 0
+const _TEX_COL_LEFT := 1
+const _TEX_COL_FRAMES := 2
+
+
+## The picture path row `type_id` wears facing `facing_right`, or `""` for a row with none.
+static func beast_tex_path(type_id: int, facing_right: bool) -> String:
+	if type_id < 0 or type_id >= BEAST_TEX.size():
+		return ""
+	var row: Array = BEAST_TEX[type_id]
+	return str(row[_TEX_COL_RIGHT if facing_right else _TEX_COL_LEFT])
+
+
+## How many frames row `type_id`'s `anim` strip holds. **0 for `IDLE`, for an unknown row and for any
+## row that declares no strip** — one answer, so no caller has to know which of the three it hit.
+static func beast_anim_frames(type_id: int, anim: int) -> int:
+	if type_id < 0 or type_id >= BEAST_TEX.size():
+		return 0
+	if anim <= Anim.IDLE or anim >= ANIM_NAME.size():
+		return 0
+	var row: Array = BEAST_TEX[type_id]
+	var strips: Array = row[_TEX_COL_FRAMES]
+	return int(strips[anim - 1])
+
+
+## One frame's path, **derived from the standing picture rather than named a second time.** The
+## convention is `<beast>_<anim>_<frame>_<facing>.png` and the standing picture is `<beast>_<facing>`,
+## so the stem is already on the row; writing the strip out as sixteen more constants would put the
+## word `wolf` in seventeen places and rot in sixteen of them the day a species is renamed.
+##
+## Falls back on the standing picture for `IDLE`, for a row with no strip and for a row with no
+## picture at all, so **a caller never has to ask whether this species is animated.**
+static func beast_frame_path(type_id: int, anim: int, frame: int, facing_right: bool) -> String:
+	var idle := beast_tex_path(type_id, facing_right)
+	var count := beast_anim_frames(type_id, anim)
+	if idle.is_empty() or count <= 0 or frame < 0 or frame >= count:
+		return idle
+	var tail := "_r.png" if facing_right else "_l.png"
+	return "%s_%s_%d%s" % [idle.trim_suffix(tail), str(ANIM_NAME[anim]), frame, tail]
+
 ## How far the body's own colour is mixed INTO the wolf. **0 is the raw grey animal and 1 is a solid
 ## cyan silhouette**; 0.45 keeps the fur readable while the side stays unmistakable at `ZOOM_MIN`.
 ##
@@ -576,7 +747,32 @@ const BEAST_TEAM_TINT := 0.45
 ## Sprite WIDTH as a multiple of the body radius. `0.35 * 40 = 14 px` radius at TILE_PX, so 2.4 puts
 ## the wolf at **34 px across** — just under one tile, which is what a body that walks a tile grid can
 ## be without the horde reading as a solid mat. The height follows the texture's own aspect.
-const BEAST_SPRITE_W_RATIO := 6.0
+const BEAST_SPRITE_W_RATIO := 3.5
+## ⚠⚠ **CUT 6.0 -> 3.5** (2026-08-25, the user: 「캐릭터 크기 좀 줄이고」, and on the why: 「지금
+## 캐릭터가 너무 커. 계속 플래시게임 같은 문제가 있거든」). **6.0 is kept in this comment because the
+## user judges this by eye and has moved it in both directions before.**
+##
+## **The wolf goes 84 px -> 49 px, 2.1 tiles -> 1.23.** Measured across all nine rows at 3.5: squirrel
+## 31x25, wolf 49x34, cow 63x44, bear 70x60, crow 39x26, spearman 49x52, archer 35x42, shieldbearer
+## 56x64, lion 44x44.
+##
+## ⚠⚠ **A TIER IS THE NEW CEILING AND IT IS WHAT CHOSE THE VALUE'S UPPER HALF.** Bodies are
+## camera-facing panels; a panel standing taller than the wall behind it hides the wall, and 티켓 19's
+## whole point is that the wall is readable. One tier is 2 tiles = 80 px. **At 6.0 the tallest drawn
+## body was the shieldbearer at 110 px — 1.37 tiers, taller than the thing it stands in front of. At
+## 3.5 he is 64 px, 0.80 of a tier**, so a body never covers a boundary it is standing at.
+##
+## ⚠ **Chosen at the TOP of the 40-50 px band, deliberately.** The user's history on this axis is two
+## complaints of *too small* (34 px, then 56) against one of *too big*, and this repo has written down
+## that undershooting a presentation value costs a whole extra round (연출은 과할 정도로). **3.0 (42 px
+## wolf) is the low-end alternative if 3.5 still reads big** — it costs one line and moves nothing else.
+##
+## ⚠ **What moved with it**: `BURST_START_MUL` is derived from this and halves with it (that derivation
+## is 2026-08-24's fix for a death burst nobody could see, and `net_fx_view` pins it); the HP bar hangs
+## off the sprite's own returned TOP rather than off a radius, so it follows by construction; the sim
+## body radius, the halo and `hp_bar_origin_px` read `BODY_RADIUS_RATIO` and do not move at all.
+## ⚠ **`BURST_WIDTH_PX` did NOT move and it is the one that got tight** — see its own note.
+##
 ## ⚠⚠ **RAISED AGAIN, 4.0 -> 6.0** (2026-08-24, the user: 「멀리서 봤을때 너무작네」 — 4.0 was already
 ## the answer to 「너무 작긴 하거든」 and it was still too small). 6.0 puts a body at **84 px, 2.1 tiles**,
 ## which is 38 screen px at `ZOOM_MIN`. **Bodies now overlap whenever two stand side by side, and that
@@ -591,9 +787,9 @@ const BEAST_SPRITE_W_RATIO := 6.0
 
 ## ⚠ (`BEAK_LENGTH_PX` / `BEAK_WIDTH_PX` were deleted 2026-08-24 with zero readers: the triangle
 ## they shaped was the flat board's on-body beak marker and nothing draws one in 3D. **The beak
-## itself is alive** — `Rules.BEAK_RANGE`, `Army.has_beak`, the panel's pick — only its FIELD mark is
-## an unported picture, and that gap is written on ticket 09 rather than hidden by two live-looking
-## constants.)
+## itself was alive at the time. ⚠⚠ **The WHOLE reward is deleted now** (2026-08-25, the user: 「부리
+## 보상 없지 끝나면 카드보상으로 통일했잖아」) — the range bonus, the per-body flag and the panel's
+## pick all went with it, so there is nothing left for a field mark to mark.)
 
 ## A thin bar under the body. GAP is from the bottom of the body to the top of the bar.
 const HP_BAR_W_PX := 24.0
@@ -684,7 +880,7 @@ const HUD_START_FONT_SIZE_PX := 28    # > HUD_FONT_SIZE_PX; <= HUD_TIMER_FONT_SI
 ## (*"슬럿 2개로 시작 확장가능"*) and that arithmetic put the last box at 1076, leaving a 192 px hole
 ## between the row and the corner.
 ## ⇒ **The row is RIGHT-ANCHORED**: `slot_rect_px` computes the origin backwards from the margin using
-## `Rules.summon_slot_count()`, so the last box touches 1268 at two slots, at five, and at whatever the
+## the count it is HANDED, so the last box touches 1268 at one slot, at five, and at whatever the
 ## table says next. **"확장가능" has to be true of the layout and not only of the table** — otherwise a
 ## third binding is a `look.gd` edit, which is exactly what the user asked not to happen.
 ## Only the Y survives as a constant: it shares `HUD_START_ORIGIN_PX`'s own 632 so the two bottom
@@ -762,16 +958,11 @@ const GHOST_ALPHA := 0.55             # >= 0.35 — dimmer than that and the pla
 
 ## Centred: (1280 - 560) / 2 = 360, (720 - 520) / 2 = 100.
 ##
-## ⚠ **The panel grew again with `refit-board`'s node table.** Node 5 (floor 4, the ex-chest) now pays
-## `Reward.COUNT`, which moves `map_max_count_nodes_on_a_route()` 3 -> 4: a route can step on FOUR count
-## nodes, so the roster reaches `10 + 4 * 3 = 22` against a capacity that was sized for 19.
-## `panel_view.roster_ids` caps at `roster_capacity()` and drops the rest **silently** — its own comment
-## already said the cap "never actually bites" once, and it bit. ⇒ **The bound is pinned CONSERVATIVE**:
-## the panel holds every soldier a run can field, with no clause about where the beak nodes happen to
-## sit on the route that reaches one — see `net_shell`'s 22-body fixture, built by driving `run`
-## directly rather than by walking a route, because no route today actually reaches a `REWARD` screen
-## with 22 bodies aboard.
-## Height check: `72 + 11 * (28 + 6) = 446 <= 520` and `456 + 48 = 504 <= 520`.
+## ⚠⚠ **THE PANEL NO LONGER HOLDS A ROSTER** (2026-08-25). It was sized to list every body a run can
+## field, because the beak reward asked the player to click one of them; the user deleted that reward
+## — 「부리 보상 없지 끝나면 카드보상으로 통일했잖아」 — so the panel is a band and a button.
+## **The size is deliberately NOT shrunk to fit**: it is the win/lose screen's frame, and re-laying it
+## is a look decision nobody has made. Height check: `456 + 48 = 504 <= 520`.
 const PANEL_ORIGIN_PX := Vector2(360.0, 100.0)
 const PANEL_SIZE_PX := Vector2(560.0, 520.0)
 
@@ -779,18 +970,8 @@ const PANEL_TITLE_OFFSET_PX := Vector2(40.0, 44.0)
 const PANEL_TITLE_FONT_SIZE_PX := 28
 const PANEL_BODY_FONT_SIZE_PX := 18
 
-## The roster the player clicks to bolt the beak on. Two columns of **eleven** = 22 slots, against a run
-## that can now field 22 soldiers (see PANEL_SIZE_PX above), so no entry is ever off the panel.
-## Width check: 40 + 240 + 24 + 240 = 544 <= 560. Height check: 72 + 11 * (28 + 6) = 446 <= 520.
-const ROSTER_ORIGIN_OFFSET_PX := Vector2(40.0, 72.0)
-const ROSTER_ENTRY_SIZE_PX := Vector2(240.0, 28.0)
-const ROSTER_ENTRY_GAP_PX := 6.0
-const ROSTER_COLUMN_GAP_PX := 24.0
-const ROSTER_COLUMNS := 2
-const ROSTER_ROWS := 11
-const ROSTER_TEXT_OFFSET_PX := Vector2(8.0, 20.0)
-
-## The restart / continue button. 456 + 48 = 504 <= 520, so it clears the roster block above it.
+## The restart / continue button. **The seven roster constants above it are deleted** with the beak
+## reward they laid out (2026-08-25). 456 + 48 = 504 <= 520.
 const BUTTON_OFFSET_PX := Vector2(180.0, 456.0)
 const BUTTON_SIZE_PX := Vector2(200.0, 48.0)
 const BUTTON_TEXT_OFFSET_PX := Vector2(24.0, 32.0)
@@ -860,21 +1041,26 @@ const CARD_GAP_PX := 32.0             # ≥ 12 or two cards read as one bar; ≤
 ## x = `(1280 − 904) / 2` exactly; y ≥ 120 (clear of the hint line); `180 + 2×200 + 32 = 612 ≤ 720`.
 const CARD_GRID_ORIGIN_PX := Vector2(188.0, 180.0)
 
-const CARD_PART_FONT_SIZE_PX := 34    # > HUD_TIMER_FONT_SIZE_PX 30 — the part name is the loudest
+## ⚠⚠ **RENAMED, NOT RESIZED** (2026-08-25, 티켓 23). These two were `CARD_PART_*` and
+## `CARD_SPECIES_*`, and they sized neither: 부위 and 종 were the DEAD cell game's two card lines,
+## and since 2026-08-24 a card carries an item NAME and an EFFECT. **A constant whose name says a
+## thing it does not size is the quietest kind of wrong** — nothing reddens, and the next reader
+## looks for a species line that is not there. Every number is unchanged.
+const CARD_NAME_FONT_SIZE_PX := 34    # > HUD_TIMER_FONT_SIZE_PX 30 — the item name is the loudest
                                       # thing on its own card; ≤ 44, from 4 glyphs at ~0.6em inside
                                       # 280 − 2×24
-const CARD_SPECIES_FONT_SIZE_PX := 20 # ≥ 16 (unreadable below); ≤ CARD_PART_FONT_SIZE_PX − 12, or
-                                      # 부위 and 종 read as one line
+const CARD_EFFECT_FONT_SIZE_PX := 20  # ≥ 16 (unreadable below); ≤ CARD_NAME_FONT_SIZE_PX − 12, or
+                                      # the name and the effect read as one line
 ## ⚠ **The card was relaid for the art** (티켓 12 fix round): name on top, art in the middle, effect
 ## at the bottom. The name's descenders end near `44 + 5 = 49`, above the art band at 52.
-const CARD_PART_OFFSET_PX := Vector2(24.0, 44.0)        # x > 0 and y ≥ the part font size; inside
+const CARD_NAME_OFFSET_PX := Vector2(24.0, 44.0)        # x > 0 and y ≥ the name font size; inside
                                       # the card
 ## The effect line WRAPS now (`_paint_card_effect` is a `draw_multiline_string`), because the longest
 ## item line — 폭풍의 가죽's 「전설  공격주기 -0.25 · 이동속도 +2.5」 — was measured clipping at the
 ## card's right border as a single line. Wrapped at `CARD_EFFECT_WRAP_W_PX` it is two lines: first
 ## baseline 160, second ≈ 188, descenders ≈ 194 ≤ 200 — inside the card for the LONGEST string, not
 ## an average one. y ≥ art bottom (136) + the font size, or the line overlaps the picture.
-const CARD_SPECIES_OFFSET_PX := Vector2(24.0, 160.0)
+const CARD_EFFECT_OFFSET_PX := Vector2(24.0, 160.0)
 ## The wrap width: `280 − 2 × 24` — the same 24 px inset on both sides. A single token never exceeds
 ## it (the widest, 공격주기, is 4 glyphs ≈ 80 px), so word-wrap alone guarantees no horizontal clip.
 const CARD_EFFECT_WRAP_W_PX := 232.0
@@ -971,6 +1157,32 @@ const ITEM_ART := [
 	BEAST_BULL_R,    # 16 우두머리의 뿔 — the bull the horn came off
 	"res://assets/item/storm_hide.png",      # 17 폭풍의 가죽 — pick 17-2
 ]
+
+
+## The picture on a card of either kind. ⚠ **A beast card wears the beast's own field picture** — the
+## one the body will actually be, so the card and the island cannot show two different animals.
+## `""` for a card with no picture, which the art leaf is simply not called for.
+static func card_art_path(kind: int, value: int) -> String:
+	if kind == Rules.CardKind.SPECIES:
+		return beast_tex_path(value, true)
+	if value < 0 or value >= ITEM_ART.size():
+		return ""
+	return str(ITEM_ART[value])
+
+
+## Every distinct path a card could ever wear, so a screen can load them once instead of per frame.
+## ⚠ **Walked over both tables rather than listed**, or a new card face is a picture nobody loads.
+static func card_art_paths() -> PackedStringArray:
+	var out := PackedStringArray()
+	for i in ITEM_ART.size():
+		var p := card_art_path(Rules.CardKind.ITEM, i)
+		if p != "" and not out.has(p):
+			out.append(p)
+	for r in Rules.species_card_count():
+		var p := card_art_path(Rules.CardKind.SPECIES, Rules.species_card_type_of(r))
+		if p != "" and not out.has(p):
+			out.append(p)
+	return out
 
 ## The art rectangle inside a card, offset from the card's own origin — the middle band of the
 ## relaid card, between the name (descenders end ≈ 49) and the effect block (glyph tops at
@@ -1091,8 +1303,10 @@ const REFIT_BOARD_ORIGIN_PX := Vector2(80.0, 320.0)
 ## frame less than forever. Its own constant, not a re-read of the map's, because the two screens'
 ## clocks are never compared against each other and a shared name would suggest they could be.
 const REFIT_CELL_FILL_SEC := 0.25         # >= 0.084 (five frames); <= 0.50
-const REFIT_CELL_PART_FONT_SIZE_PX := 26      # > HUD_FONT_SIZE_PX 22; ≤ 34
-const REFIT_CELL_SPECIES_FONT_SIZE_PX := 18   # ≥ 16; ≤ the part font − 6
+## ⚠ **Renamed for the same reason as `CARD_NAME_*` above** (티켓 23): these sized a cell's item name
+## and its effect line, not a 부위 and a 종. Numbers unchanged.
+const REFIT_CELL_NAME_FONT_SIZE_PX := 26     # > HUD_FONT_SIZE_PX 22; ≤ 34
+const REFIT_CELL_EFFECT_FONT_SIZE_PX := 18   # ≥ 16; ≤ the name font − 6
 
 ## Where a cell's two lines sit, and the wrap that keeps the effect inside a 220-wide cell — the
 ## same structure `CARD_EFFECT_WRAP_W_PX` carries, arrived at for the same reason: 뺏은 창끝's line
@@ -1121,7 +1335,7 @@ const REFIT_HELD_COL_PITCH_PX := 240.0
 ## exactly why the net measures metrics instead of this comment doing arithmetic with the number 16.
 const REFIT_HELD_NAME_OFFSET_PX := Vector2(8.0, 18.0)
 const REFIT_HELD_EFFECT_OFFSET_PX := Vector2(8.0, 34.0)
-const REFIT_HELD_EFFECT_FONT_SIZE_PX := 14    # ≥ 12; ≤ REFIT_CELL_SPECIES_FONT_SIZE_PX — two
+const REFIT_HELD_EFFECT_FONT_SIZE_PX := 14    # ≥ 12; ≤ REFIT_CELL_EFFECT_FONT_SIZE_PX — two
                                               # wrapped lines have to fit the 64-tall row, and the
                                               # fit is MEASURED by net_refit, not asserted here
 const REFIT_HELD_EFFECT_WRAP_W_PX := 204.0
@@ -1169,7 +1383,7 @@ const REFIT_TAG_ORIGIN_PX := Vector2(810.0, 196.0)
 const REFIT_TAG_ROW_PITCH_PX := 24.0          # ≥ the font size + 4; ≤ 25 (`196 + 4×25 + 4 ≤ 300`)
 const REFIT_TAG_FONT_SIZE_PX := 20            # ≥ 16; ≤ REFIT_STAT_LABEL_FONT_SIZE_PX + 4
 
-## A lit combo line. Gold — the beak's own family — against `dimmed(COL_HUD_TEXT)` for the unlit
+## A lit combo line. Gold against `dimmed(COL_HUD_TEXT)` for the unlit
 ## lines, so "this one is on" reads as colour and not as a symbol nobody explained.
 const COL_TAG_LIT := Color(1.0, 0.843, 0.400)
 
@@ -1285,21 +1499,25 @@ const TITLE_SLOT_FONT_SIZE_PX := 40
 ## `96 + ~200 = 296 <= 360` across, `58 <= 88` down.
 const TITLE_SLOT_TEXT_OFFSET_PX := Vector2(96.0, 58.0)
 
-## The background: cells drifting behind the menu, drawn by code. **No image file** — see the decision
-## "the body is a line drawn by code", which forbids a sprite here as much as in the fight.
-## ⚠ **The drift is `sin`/`cos` of the index and the age, with NO RNG**, the same reason `SHAKE_A_FREQ`
-## is a constant: a random drift cannot be measured, and this repo has already paid for that once.
-## The two frequencies are coprime-ish so nine cells do not march in step.
-const TITLE_CELL_COUNT := 9               # >= 5, under which the background is three dots rather than
+## The background: **TILES** drifting behind the menu, drawn by code. **No image file** — see the
+## decision "the body is a line drawn by code", which forbids a sprite here as much as in the fight.
+## ⚠⚠ **THEY WERE CELLS UNTIL 2026-08-25** (티켓 23) — nine translucent CIRCLES, the deleted cell
+## game's own picture, on the first screen of a beast roguelike. **A placeholder chosen by the
+## builder** on the user's 「이미지나 이런건 니가 임시로 다 넣으면 됨」; only the shape and the names
+## moved, so every measured bound below still describes the drift it was measured on.
+## ⚠ **The drift is `sin`/`cos` of the index and the age, with NO RNG**: a random drift cannot be
+## measured, and this repo has already paid for that once.
+## The two frequencies are coprime-ish so nine tiles do not march in step.
+const TITLE_TILE_COUNT := 9               # >= 5, under which the background is three dots rather than
                                           # a drift; <= 16 or it competes with the slots
-const TITLE_CELL_RADIUS_PX := 14.0        # >= 8; <= 24
-const TITLE_CELL_SPEED_PX := 8.0          # px/s. >= 3 — under it nothing visibly moves over a title's
+const TITLE_TILE_HALF_PX := 14.0          # half a tile's edge. >= 8; <= 24
+const TITLE_TILE_SPEED_PX := 8.0          # px/s. >= 3 — under it nothing visibly moves over a title's
                                           # dwell; <= 20 or it reads as gameplay
-const TITLE_CELL_ALPHA := 0.14            # >= 0.06 or there is no background at all; <= 0.30 or it
+const TITLE_TILE_ALPHA := 0.14            # >= 0.06 or there is no background at all; <= 0.30 or it
                                           # ties `PRESS_ALPHA_OFF` and a drifting cell reads as a
                                           # disabled button
-const TITLE_CELL_A_FREQ := 0.13
-const TITLE_CELL_B_FREQ := 0.19
+const TITLE_TILE_A_FREQ := 0.13
+const TITLE_TILE_B_FREQ := 0.19
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1317,11 +1535,14 @@ const TITLE_CELL_B_FREQ := 0.19
 #   4. THE LINES BETWEEN THEM        MAP_LINE_*
 #   5. THE MARKS ON TOP              MAP_HERE_RING_* · MAP_BOSS_RING_* · MAP_GLYPH_* · MAP_PULSE_*
 #   6. THE BEATS (how long each      MAP_NODE_FADE_SEC · MAP_REVEAL_STEP_SEC · MAP_TRAVEL_SEC ·
-#      little animation takes)       MAP_CLEAR_FILL_SEC · MAP_HEAL_SEC
+#      little animation takes)       MAP_CLEAR_FILL_SEC · NUMBER_CLIMB_SEC
 #
-# ⚠ **The three node COLOURS are not here** — `COL_NODE_FIGHT` / `COL_NODE_CHEST` / `COL_NODE_BOSS`
-# live in the colours block near the top of this file, with every other colour in the game. One
-# concept, one place: a colour written in two blocks is a colour that diverges.
+# ⚠ **The node COLOURS are not here** — `COL_NODE_FIGHT` / `COL_NODE_BOSS` live in the colours block
+# near the top of this file, with every other colour in the game. One concept, one place: a colour
+# written in two blocks is a colour that diverges.
+# ⚠ **This said THREE and named `COL_NODE_CHEST` as one of them** (corrected 2026-08-25, 티켓 23). The
+# chest node was deleted and so was its colour; the block up top says so on its own line, so this one
+# was pointing a reader at a constant that has not existed for a while.
 #
 # ⚠ **A node is drawn in one of FOUR states, and every number in group 3 belongs to exactly one of
 # them.** The state machine itself is `map_view._look_of` and there is no second copy of it:
@@ -1451,10 +1672,14 @@ const MAP_REVEAL_STEP_SEC := 0.06         # >= 0.03, under which seven nodes app
 const MAP_TRAVEL_SEC := 0.45              # >= 0.25 or the ring teleports; <= 0.70 or it is a wait
 
 ## The node just won filling in, and the army's 「힘」 number climbing after a `Reward.COUNT` win.
-## ⚠ `MAP_HEAL_SEC`'s floor is 0.30 because the number has to be WATCHED climbing — without it a win
+## ⚠⚠ **RENAMED FROM `MAP_HEAL_SEC`** (2026-08-25, 티켓 23). 「회복」 was the reward of a CHEST node
+## that was deleted; nothing heals anything any more. What this times is a NUMBER climbing to a new
+## value — the map's 힘 readout and the refit dashboard's five columns, which is also why a name
+## mentioning the map was wrong twice over.
+## ⚠ Its floor is 0.30 because the number has to be WATCHED climbing — without it a win
 ## that raised the pool and a win that did not look identical on screen.
 const MAP_CLEAR_FILL_SEC := 0.25          # >= 0.084; <= 0.50
-const MAP_HEAL_SEC := 0.60                # >= 0.30; <= 1.00
+const NUMBER_CLIMB_SEC := 0.60                # >= 0.30; <= 1.00
 
 ## The glyph inside a node — what that node PAYS. Without it the two nodes on a floor are identical
 ## to the pixel, and the fork has nothing to choose between.
@@ -1463,7 +1688,7 @@ const MAP_HEAL_SEC := 0.60                # >= 0.30; <= 1.00
 ##「a few pixels of line art inside a 40 px circle」 and could not be told apart at all. The three
 ## shapes at 21 px, measured rather than estimated (`map_view._glyph_points` builds them):
 ##   COUNT (cells)  three squares 11.8 px on a side, 16.8 px apart, spanning 22.7 px out
-##   BEAK           a triangle 36.5 px across the base and 31.5 px tall
+##   (BEAK          a triangle — deleted 2026-08-25 with the reward it marked)
 ##   HEAL (chest)   a cross 42 px across both ways
 ## At 13 those were a 7.3 px square, a 22.6 px triangle and a 26 px cross.
 ##
@@ -1618,7 +1843,12 @@ const SPARK_SPREAD_DEG := 12.0        # HALF-angle off the tangent, so one fan s
 const HIT_FLASH_SEC := 0.14           # 14% duty against the 1.0 s attack period
 const HIT_FLASH_STRENGTH := 0.70      # 1.0 is not "mix" but "cover", and then who was hit is lost
 const HIT_HALO_MUL := 1.35            # of body radius: 18.9 · 15.1 · 21.6 · 13.5 · 29.7 px
-const HIT_KNOCK_PX := 3.0             # above the 2.0 px snap floor
+## ⚠⚠ **A RATIO OF THE DRAWN HALF-WIDTH, and it was a raw 3.0 px until 2026-08-25.** See
+## `Look.sprite_half_px`: 3.0 px was chosen on the flat board where a body WAS its sim radius, and it
+## survived the move to billboards unchanged — 3 px of flinch on a 49 px animal. **0.22 puts a wolf's
+## flinch at 5.4 px**, the same fraction of the picture 3.0 was of the old one, and still above the
+## 2.0 px snap floor at every zoom this game opens at.
+const HIT_KNOCK_RATIO := 0.22
 const HIT_KNOCK_SEC := 0.10
 
 ## 4 — the death burst, in that body's own side colour. It is drawn ABOVE everything: on the floor a
@@ -1635,8 +1865,16 @@ const BURST_START_MUL := BEAST_SPRITE_W_RATIO * 0.5   # crow starts at 30 px, li
 const BURST_GROWTH := 2.2             # lion 66 -> 145.2 px, crow 30 -> 66.0 px — past the pile
 const BURST_WIDTH_PX := 9.0           # ⚠ RAISED 5.0 -> 9.0 with the sprite scaling: a 5 px stroke on
                                       # a 105 px ring over an 84 px sprite pile was a hairline. Snap
-                                      # floor at ZOOM_MIN is 4.5 px; ceiling 15, half the crow's own
-                                      # 30 px start radius, past which the ring closes into a disc
+                                      # floor at ZOOM_MIN is 4.5 px; ceiling is half the crow's own
+                                      # start radius, past which the ring closes into a disc.
+                                      # ⚠⚠ **THE CEILING MOVED WHEN THE BODIES SHRANK AND THIS NUMBER
+                                      # DID NOT.** The crow's start radius was 33.6 px at ratio 6.0 and
+                                      # is 19.6 at 3.5, so the ceiling went 16.8 -> 9.8 and 9.0 now
+                                      # sits at 46% of the radius instead of 27%. **Still legal, with
+                                      # 0.8 px of room.** It is left at 9.0 rather than re-derived
+                                      # because deriving it would change today's picture as well, and
+                                      # `net_fx_view` now holds the ceiling so the next cut reddens
+                                      # here instead of quietly drawing a disc.
 
 ## 5 — the area ring, grown to the REAL area radius so the screen finally says which attacks splash:
 ## the lion's `area` 1.5 tiles = 60 px, and CELL_RANGED's `area` 1.0 = 40 px, which nothing on screen
@@ -1753,12 +1991,10 @@ const REFUSE_SHAKE_PX := 4.0
 ## 9 and 10 — the holds, and the panel rising out of nothing rather than snapping to full alpha.
 ## ⚠ HOLD_OUTCOME_SEC IS A PRECONDITION FOR ITEM 4, not a flourish. Today the shell opens the next
 ## island on the frame victory is decided, so the last enemy's burst never plays on island 1 at all.
-## HOLD_BEAK_SEC is ALSO how long the picked roster row stays stained: there is deliberately no
-## separate flash constant, because the moment the two diverge the panel either vanishes mid-stain or
-## holds an empty screen after the stain has finished. One concept, one constant.
+## ⚠ **`HOLD_BEAK_SEC` is deleted** (2026-08-25): it timed the picked roster row's stain, and both the
+## row and the reward it served are gone.
 const PANEL_FADE_SEC := 0.25
 const HOLD_OUTCOME_SEC := 0.80
-const HOLD_BEAK_SEC := 0.50
 
 ## 11 — screen shake, amplitude proportional to damage.
 ## ⚠ THERE IS STILL NO `Camera2D` IN THE TREE. `boat-and-landing` added a real pan and zoom, but
@@ -1771,13 +2007,18 @@ const HOLD_BEAK_SEC := 0.50
 ## ⚠ THE OFFSET IS ASSIGNED TO `position`, NEVER `+=`. In the last game `+=` became the basis of the
 ## next frame's lerp and compounded roughly 9x, so a 28 px cap stopped nothing: 67.9 px at 60fps and
 ## 160.4 px at 144. Keep the unshaken position separately and assign.
-const SHAKE_SEC := 0.30
-const SHAKE_PER_DAMAGE_PX := 1.2      # damage 2 -> 2.4 px, the lion's 4 -> 4.8 px
-const SHAKE_MAX_PX := 6.0             # also the width of the bare band a shake exposes, and the
-                                      # size of the click error if the shell fails to subtract the
-                                      # offset — 6 px on a 40 px tile is 15% of its edge
-const SHAKE_A_FREQ := 61.0            # deterministic `sin`: a random shake cannot be measured
-const SHAKE_B_FREQ := 47.0
+## ⚠⚠ **THE SCREEN SHAKE IS DELETED** (2026-08-25, the user: 「이게 화면이 흔들릴 필요는 없을듯?」).
+## `SHAKE_SEC` · `SHAKE_PER_DAMAGE_PX` · `SHAKE_MAX_PX` · `SHAKE_A_FREQ` · `SHAKE_B_FREQ` are gone,
+## and so are `field_view`'s `_shake_amp`, `_shake_left` and `_shake_offset`. **`net_camera` carries
+## the check that they are gone** — a deletion nobody measures comes back as a half-alive constant.
+##
+## ⚠ **It was briefly switched off at the gain instead, and that was not enough**: leaving a dead
+## effect wired keeps every check about it green while it describes something the game no longer does.
+## ⚠ **`FX_GAIN` slot 11 is now unused and stays 1.0.** The table is numbered 1..12 for the twelve
+## combat-juice effects, and renumbering it would shift every other effect onto its neighbour's gain —
+## which is the exact failure `fx_gain_of`'s own comment names.
+## ⚠ **`REFUSE_SHAKE_PX` is a DIFFERENT thing and is untouched** — the HUD chip's refusal wobble, whose
+## one reader is `hud_view._chip_offset`. It is not the camera.
 
 ## ⚠ **RE-MEASURED with `ZOOM_MIN`, and the old value was a real defect at the new one.** At
 ## `ZOOM_MIN` 0.45 the visible world is 2844.4 px wide against a 1920 px map, so it starts at
@@ -1810,6 +2051,26 @@ const WATER_MARGIN_TILES := 16
 ## slide": a body that does not move does not animate. Squash is a Vector2 and not a scalar —
 ## `1 - s*sin(phase)` along the heading, `1 + s*sin(phase)` across it. A scalar radius can only
 ## pulse uniformly, which is not "squashed along the direction of travel" at all.
+## ⚠⚠ **THE IDLE SWAY — what a body does when it CANNOT move.** 2026-08-25, the user:
+## 「지금 너무 재미없어 그냥 붙어서 그냥 벌렁벌렁하는 거밖에 없어가지고」, against this repo's own
+## standing rule 「붙어서 가만히 있으면 재미가 죽는다」(*"존나 중요해"*).
+##
+## The gait below phases on DISTANCE, on purpose — 「a body that does not move does not animate」 — and
+## that is exactly right for a walk cycle and exactly wrong for everything else, because **a body in
+## contact does not move.** So the two bodies the player is watching most closely were the only
+## perfectly still things on the island. Measured in the sweep: on 31 of 54 landing tiles a body
+## stands over 5 seconds with its target out of reach, worst **22.4 seconds** — every better tile
+## reserved, queued behind a one-tile stair.
+##
+## ⚠ **This does NOT shorten that queue and must not be read as fixing it.** It gives a body that
+## cannot advance something to be doing. The queue is a sim question and it is still open.
+## ⚠ **A ratio of the drawn half-width** (`Look.sprite_half_px`), so it survives the art changing —
+## 0.25 puts a wolf's sway at 6.1 px against a 49 px picture. The period is deliberately far from
+## `LUNGE_SEC` (0.18 s) so a sway never reads as a blow.
+const IDLE_AFTER_SEC := 0.5           # long enough that a pause between tiles does not wobble
+const IDLE_SWAY_RATIO := 0.25         # of the drawn half-width: wolf 6.1 px, bear 8.8, squirrel 3.9
+const IDLE_PERIOD_SEC := 1.1
+
 const GAIT_PERIOD_TILES := 0.7        # one cycle every 28 px
 const GAIT_SQUASH := 0.20             # max displacement crow 2.0 · ranged 2.2 · melee 2.8 ·
                                       # bison 3.2 · lion 4.4 px. The crow sits exactly on the 2.0 px
@@ -1885,6 +2146,9 @@ const FX_SETTLE_FRAMES := 20
 ## 0.078% of the screen). Explaining both the same way makes neither checkable.
 ## ⚠ `const X := PackedFloat32Array([...])` is a parse error on 4.7.1, so this is a plain `const`
 ## Array — read-only, but with no element typing, which is why the accessor casts.
+## ⚠ **SLOT 11 IS UNUSED**: it was the screen shake and the shake is deleted (the user, 2026-08-25).
+## It stays 1.0 and the table stays twelve long — renumbering would move every effect after it onto
+## its neighbour's gain, which is the failure `fx_gain_of` is written to prevent.
 const FX_GAIN := [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
 
 
@@ -1895,6 +2159,21 @@ const FX_GAIN := [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
 ## A `const` Array is read-only but its elements are untyped, so every read casts.
 static func body_radius_of(type_id: int) -> float:
 	return float(BODY_RADIUS_RATIO[type_id]) * TILE_PX
+
+
+## ⚠⚠ **HOW WIDE THE BODY IS ACTUALLY DRAWN, half of it — and it is NOT `body_radius_of`.**
+## The sim radius is the collision-ish size (a wolf is 14 px); the PICTURE is a billboard
+## `BEAST_SPRITE_W_RATIO` radii wide (a wolf is 49 px, so its half is 24.5). **Anything the eye is
+## meant to see next to a body must be sized off THIS**, and this repo has already paid for the
+## difference once: the death burst started at the sim radius, both its buffer rows were green, the
+## effect log showed it alive for its whole life, and **no death ever read on screen** because the ring
+## was swallowed by the sprite pile.
+## ⚠ **The lunge, the knockback and the hit halo carried the same defect until 2026-08-25** and were
+## never caught, because unlike the burst they are not *invisible* — they are merely half the size
+## they read as, which is what 「그냥 붙어서 벌렁벌렁하는 거밖에 없어」 sounds like from the chair.
+## `BURST_START_MUL` is this same quantity expressed as a multiplier and the two must not disagree.
+static func sprite_half_px(type_id: int) -> float:
+	return body_radius_of(type_id) * BEAST_SPRITE_W_RATIO * 0.5
 
 
 static func body_corner_radius_of(type_id: int) -> float:
@@ -1919,6 +2198,27 @@ static func beast_tint(colour: Color) -> Color:
 
 static func body_colour_of(is_enemy: bool) -> Color:
 	return COL_ENEMY if is_enemy else COL_ALLY
+
+
+## `col` pulled toward `COL_BLEED` in proportion to the seconds of bleed still on that body.
+##
+## ⚠⚠ **THIS IS THE ONLY STATUS THAT REACHES THE SCREEN AT ALL, and that is why it was built.** Four
+## of the five beast passives are free to draw — they come out as a body's POSITION or its target, and
+## the field already draws those. 출혈 is the fifth and `field_view` had **zero** lines reading
+## `status_time`: without this, one of the five ways a run can go would be invisible while the other
+## four are obvious, and 「어느 짐승을 데려갈까」 would be a four-way decision on screen.
+##
+## ⚠ **0 seconds returns `col` untouched**, so a body that is not bleeding is byte-identical to one
+## that never was — which is what lets a net read the two side by side.
+##
+## ⚠⚠ **IT IS APPLIED AFTER `beast_tint` AND NOT BEFORE.** Bleeding first and tinting afterwards pulls
+## the result 45% back toward white and throws most of the mix away — measured, the body's HUE did not
+## move at all and only its brightness fell 27%, which reads as shade rather than as blood.
+## `field_view._put_body` is the one place that composes the two, in that order.
+static func bleeding(col: Color, left: float) -> Color:
+	if left <= 0.0:
+		return col
+	return col.lerp(COL_BLEED, clampf(left / BLEED_TINT_SEC, 0.0, 1.0) * BLEED_TINT_MAX)
 
 
 ## ⚠ **`sendable_tint()` is deleted with the two constants it combined.** It washed every sendable
@@ -1974,6 +2274,19 @@ static func terrain_height_of_char(c: String) -> float:
 			return TERRAIN_H_LAND
 
 
+## The highest the landscape can ever stand, in tiles: the tallest character in the table above plus
+## the whole swell that character may carry.
+##
+## ⚠ **Derived from the same five constants rather than written down as a number.** It is the ceiling
+## `field_view.screen_to_terrain_px` starts its search at, and a search that starts BELOW the ground
+## walks straight past a hilltop and answers with the sea behind it — which is the defect that function
+## exists to close. A hand-written 4.2 would be right until somebody raised one row of the table.
+static func terrain_height_ceiling() -> float:
+	var tallest := maxf(maxf(TERRAIN_H_WATER, TERRAIN_H_HOLE),
+		maxf(TERRAIN_H_LAND, maxf(TERRAIN_H_RAMP, TERRAIN_H_CLIFF)))
+	return tallest + HILL_AMP_TILES + FX_GROUND_LIFT_TILES
+
+
 static func viewport_size_px() -> Vector2:
 	return Vector2(VIEWPORT_W_PX, VIEWPORT_H_PX)
 
@@ -2022,16 +2335,20 @@ static func start_rect_px() -> Rect2:
 ## keyboard arms them — so a hit rect would be geometry nothing tests against, and the next reader
 ## would wire a press to it.
 ## ⚠ **The row's left edge is derived, never stored.** `right - n*w - (n-1)*gap` where `right` is the
-## HUD's own margin — so the LAST box always ends at 1268 whatever `Rules.SUMMON_SLOTS` holds. Stored
-## as a constant it was correct at five and wrong at two, and it would be wrong again at three.
-static func slot_row_origin_x_px() -> float:
-	var n := Rules.summon_slot_count()
+## HUD's own margin — so the LAST box always ends at 1268 at one slot, at five, and at anything
+## between. Stored as a constant it was correct at five and wrong at two.
+##
+## ⚠⚠ **`n` IS AN ARGUMENT NOW and no longer asked of `Rules`** (티켓 15). The slot count is a per-RUN
+## fact since the slots became `Army.slots`, and a layout function that fetched it from a constant
+## would draw a row of a different length from the one the run actually has — while the boxes still
+## touched the margin, so the geometry check would stay green.
+static func slot_row_origin_x_px(n: int) -> float:
 	var span := n * HUD_SLOT_SIZE_PX.x + maxf(0.0, float(n - 1)) * HUD_SLOT_GAP_PX
 	return VIEWPORT_W_PX - HUD_MARGIN_PX - span
 
 
-static func slot_rect_px(i: int) -> Rect2:
-	var x := slot_row_origin_x_px() + i * (HUD_SLOT_SIZE_PX.x + HUD_SLOT_GAP_PX)
+static func slot_rect_px(i: int, n: int) -> Rect2:
+	var x := slot_row_origin_x_px(n) + i * (HUD_SLOT_SIZE_PX.x + HUD_SLOT_GAP_PX)
 	return Rect2(Vector2(x, HUD_SLOT_ROW_Y_PX), HUD_SLOT_SIZE_PX)
 
 
@@ -2039,8 +2356,8 @@ static func slot_rect_px(i: int) -> Rect2:
 ##
 ## ⚠ **Derived from `slot_rect_px` here and NOWHERE else.** `hud_view` draws it and `net_slots`
 ## measures it; geometry written twice is exactly what this second accessor exists to prevent.
-static func slot_bar_rect_px(i: int) -> Rect2:
-	var box := slot_rect_px(i)
+static func slot_bar_rect_px(i: int, n: int) -> Rect2:
+	var box := slot_rect_px(i, n)
 	return Rect2(
 		Vector2(box.position.x + HUD_SLOT_BAR_INSET_PX,
 			box.position.y + box.size.y - HUD_SLOT_BAR_BOTTOM_PX - HUD_SLOT_BAR_H_PX),
@@ -2065,18 +2382,6 @@ static func panel_rect_px() -> Rect2:
 ## Absolute viewport rectangles, not panel-relative ones: the shell hit-tests a mouse position
 ## against these, and a relative rect would have to be offset by whoever asked — which is the
 ## same value living in two places.
-static func roster_entry_rect_px(entry_index: int) -> Rect2:
-	var col := entry_index % ROSTER_COLUMNS
-	var row := entry_index / ROSTER_COLUMNS
-	var x := PANEL_ORIGIN_PX.x + ROSTER_ORIGIN_OFFSET_PX.x \
-		+ col * (ROSTER_ENTRY_SIZE_PX.x + ROSTER_COLUMN_GAP_PX)
-	var y := PANEL_ORIGIN_PX.y + ROSTER_ORIGIN_OFFSET_PX.y \
-		+ row * (ROSTER_ENTRY_SIZE_PX.y + ROSTER_ENTRY_GAP_PX)
-	return Rect2(Vector2(x, y), ROSTER_ENTRY_SIZE_PX)
-
-
-static func roster_capacity() -> int:
-	return ROSTER_COLUMNS * ROSTER_ROWS
 
 
 static func button_rect_px() -> Rect2:

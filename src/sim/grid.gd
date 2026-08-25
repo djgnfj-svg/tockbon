@@ -40,11 +40,40 @@ const UNREACHABLE := 1 << 30
 ## `net_islands`' job, and a `push_error` here would have to be forgiven by every net that hands this
 ## function a hand-written fixture.
 ##
-## `.` land, `/` ramp (a doorway through a cliff wall — both walkable), `B`/`C`/`L` land with a spawn.
-const LAND_CHARS := "./BCL"
+## `.` land, `/` ramp (a doorway through a cliff wall — both walkable).
+##
+## ⚠⚠ **THE SPAWN LETTERS ARE NOT LISTED HERE ANY MORE, and that was two lists nobody kept in step.**
+## This constant used to spell them out (`"./BCL"`) while `islands.gd` bound them to unit rows in a
+## `match`, so a letter added to one and missed in the other was a body standing on an impassable
+## hole with nothing barking. `land_chars()` appends `Islands.spawn_chars()` instead, which makes
+## walkability a CONSEQUENCE of being a spawn letter rather than a second fact about it.
+const BARE_LAND_CHARS := "./"
 ## `~` water, `H` harbour — a water tile a boat may sail from and return to.
 const WATER_CHARS := "~H"
 const HARBOUR_CHAR := "H"
+
+## **The TIER legend — a second board of the same size as the terrain one, and not new terrain
+## letters.** 티켓 19, decision 2: a "high ground" letter would need a high twin of every letter that
+## can stand on it (`S` · `A` · `L` and every warrior still to come), so the table would square. A
+## second board indexes the same tiles and leaves `BARE_LAND_CHARS` untouched — which is why every
+## fixture in every net still measures exactly what it measured before.
+##
+## `.` low ground (level 0) · `/` stair (level 1) · `1` high ground (level 2).
+##
+## ⚠ **A third tier is levels 3 and 4 and needs no rule change** — only a row here and a colour. That
+## is the whole of what decision 2 bought.
+## ⚠ **An unlisted character loads as level 0**, matching what the terrain legend does with an unknown
+## letter: barking here would have to be forgiven by every net handing this function a fixture, and
+## validating the legend is `net_tiers`' job.
+const TIER_CHARS := "./1"
+## `TIER_CHARS[k]` is level `TIER_LEVELS[k]`. Two arrays and not a dictionary, for the reason every
+## flat table in this file is an Array: `const X := PackedInt32Array([...])` is a parse error on 4.7.
+const TIER_LEVELS := [0, 1, 2]
+
+
+## Every character a soldier may stand on: bare ground plus every letter that spawns a body.
+static func land_chars() -> String:
+	return BARE_LAND_CHARS + Islands.spawn_chars()
 
 ## 8-way, listed in a fixed order so an equal-cost tie always resolves the same way. Plain `const`
 ## Arrays: `const X := PackedInt32Array([...])` is a parse error on 4.7, so every read casts.
@@ -68,6 +97,15 @@ var w: int = 0
 var h: int = 0
 var passable := PackedByteArray()      # w*h, 1 = walkable (includes a ramp)
 var water := PackedByteArray()         # w*h, 1 = water (includes a harbour)
+## w*h, the tier level of each tile. **Every height in this game is derived from this one integer** —
+## see `Rules.TIER_STEP_TILES` and `TIER_CHARS` above.
+##
+## ⚠⚠ **`passable` is NOT folded into this and the two mean different things.** `passable` is still
+## "may a body stand here"; whether a body may *cross between* two tiles it could both stand on is
+## `can_step`. Folding the height into `passable` would make one byte answer two questions, and this
+## repo has already paid for a name whose sense changed under it (티켓 15: four checks became shells
+## when 소 and 까마귀 moved sides).
+var level := PackedByteArray()
 var harbour_tiles := PackedInt32Array()   # row-major order — this defines harbour index
 ## One BFS field per harbour over WATER tiles, hop count from that harbour, `UNREACHABLE` where a
 ## boat cannot get. Indexed the same way `sendable` is. **This is the whole of the landing rule** —
@@ -126,7 +164,18 @@ var _held := {}
 
 ## Loads one island's rows. Safe to call twice: every array is rebuilt, so a `Grid` reused across
 ## islands cannot inherit the previous island's reservations.
-func load_rows(rows: Array) -> void:
+##
+## ⚠⚠ **`tiers` DEFAULTS TO EMPTY AND EMPTY MEANS FLAT**, and that default is the whole reason this
+## change did not move a single existing fixture. Every net that hands this function rows and nothing
+## else gets an island at level 0 everywhere, where `can_step` is `passable` and nothing more — so the
+## checks written before height existed keep measuring their own subject rather than quietly measuring
+## a climb rule as well.
+##
+## A short `tiers` board, or a short row inside it, reads as level 0 there — the same silence the
+## terrain loop keeps for a short row. **`net_tiers` is what asserts the two boards are the same
+## shape**, per island, because two boards that disagree about their size is the one way a stair can
+## end up somewhere nobody authored it.
+func load_rows(rows: Array, tiers: Array = []) -> void:
 	h = rows.size()
 	w = 0
 	if h > 0:
@@ -136,6 +185,8 @@ func load_rows(rows: Array) -> void:
 	passable.resize(n)
 	water = PackedByteArray()
 	water.resize(n)
+	level = PackedByteArray()
+	level.resize(n)
 	reserved = PackedInt32Array()
 	reserved.resize(n)
 	reserved.fill(-1)
@@ -144,16 +195,21 @@ func load_rows(rows: Array) -> void:
 	water_field_builds = 0
 	summon_field_builds = 0
 
+	# Built once per load rather than per tile: the string is assembled from a table, and 1536 tiles
+	# rebuilding it would be a walk of `SPAWN_ROWS` per tile for an answer that cannot change.
+	var land := land_chars()
 	for y in h:
 		var row := String(rows[y])
+		var tier_row := String(tiers[y]) if y < tiers.size() else ""
 		for x in w:
 			var t := y * w + x
+			level[t] = _level_of_char(tier_row[x]) if x < tier_row.length() else 0
 			if x >= row.length():
 				passable[t] = 0
 				water[t] = 0
 				continue
 			var c := row[x]
-			passable[t] = 1 if LAND_CHARS.find(c) != -1 else 0
+			passable[t] = 1 if land.find(c) != -1 else 0
 			water[t] = 1 if WATER_CHARS.find(c) != -1 else 0
 			# Append order IS harbour index, row-major — the same convention the deleted `dock_tiles`
 			# used, so an index is stable and reproducible.
@@ -188,6 +244,82 @@ func load_rows(rows: Array) -> void:
 		sendable.append(arr)
 
 	start_harbour = _derive_start_harbour()
+
+
+## The level a tier character stands for, or 0 for a character the legend does not list.
+static func _level_of_char(c: String) -> int:
+	var k := TIER_CHARS.find(c)
+	if k < 0:
+		return 0
+	return int(TIER_LEVELS[k])
+
+
+## **Whether a level is a stair tread rather than a tier's own floor.** A stair is not a kind of tile —
+## it is an ODD level, which is what makes a third tier cost nothing but two more rows in `TIER_CHARS`:
+## level 3 would be the stair up to level 4 and this function would already know it.
+## ⚠ Its one reader is the picture, which paints a stair its own colour. **Nothing about walking asks
+## this** — `can_step` compares levels and never asks what a level means.
+static func is_stair_level(lv: int) -> bool:
+	return (lv % 2) == 1
+
+
+## The tier level of a tile. **Off the grid answers 0** — the terrain mesh runs `WATER_MARGIN_TILES`
+## wider than the island on every side, and the margin is the sea, which is the bottom of everything.
+func level_at(tx: int, ty: int) -> int:
+	if tx < 0 or ty < 0 or tx >= w or ty >= h:
+		return 0
+	return int(level[ty * w + tx])
+
+
+func level_of(t: int) -> int:
+	if t < 0 or t >= level.size():
+		return 0
+	return int(level[t])
+
+
+## **How high the ground is under a point, in TILES** — the one place a level becomes a height, so the
+## walking rule and the reach rule cannot end up with two ideas of how tall a tier is.
+##
+## `p` is in tile units with tile centres on integers, the same units `soldier_pos` and `step_toward`
+## speak. ⚠ **It ROUNDS to the tile and does not interpolate**, and that is a decision rather than an
+## omission: pathfinding is per tile, so a height that slid smoothly between tiles would have the two
+## halves of the sim looking at different ground. **A body's height changes in one step as it crosses
+## a tile line** — the reach test flips once at a stair mouth, which is intended, and whether that
+## reads as a stutter is something only an eye can answer.
+func height_at(p: Vector2) -> float:
+	return float(level_at(int(round(p.x)), int(round(p.y)))) * Rules.TIER_STEP_TILES
+
+
+## **Whether a body standing on `from_tile` may walk into `to_tile` — the stair rule, and the only
+## place it is written.** The destination must be walkable, and the two levels must be within
+## `Rules.MAX_CLIMB_LEVELS` of each other.
+##
+## ⚠⚠ **This is a NEW name and `passable` is untouched, deliberately.** `passable` used to answer "may
+## a body go here" on its own, and the day height arrives that question splits in two. Widening
+## `passable`'s meaning in place is exactly the shape that left four checks in 티켓 15 measuring
+## nothing while still reading correctly, so the question that changed gets the new word.
+##
+## ⚠ **The ORIGIN's passability is deliberately not asked**, which is what both existing callers
+## already did — they test `passable[nt]` and never `passable[t]`. It is load-bearing rather than lax:
+## `flow_field` plants its seed on the target's tile *whatever its passability*, because a target
+## still aboard a boat would otherwise give an all-unreachable field and freeze every unit chasing it
+## for the rest of the island with nothing logged. Asking the origin here would put that freeze back.
+##
+## ⚠ **Symmetric in the levels.** `absi` and not a signed test: a wall a body may drop off but not
+## climb is a one-way door, and 티켓 19's answer says bodies do not fall.
+##
+## ⚠ **It binds on DIAGONALS too**, which is what keeps a tier boundary from being cut at a corner —
+## `flow_field` and `step_toward` walk all eight neighbours through here. That is a stronger guard
+## than `_water_step_open` gives a boat, and it is stated rather than assumed: the note on
+## `_water_step_open` says the LAND half still does not refuse a squeeze between two impassable
+## corners, and that is unchanged. What this refuses is a HEIGHT gap, not a squeeze.
+func can_step(from_tile: int, to_tile: int) -> bool:
+	var n := w * h
+	if from_tile < 0 or to_tile < 0 or from_tile >= n or to_tile >= n:
+		return false
+	if passable[to_tile] == 0:
+		return false
+	return absi(level_of(from_tile) - level_of(to_tile)) <= Rules.MAX_CLIMB_LEVELS
 
 
 func is_passable(tx: int, ty: int) -> bool:
@@ -805,7 +937,11 @@ func flow_field(target_tile: int) -> PackedInt32Array:
 			if nx < 0 or ny < 0 or nx >= w or ny >= h:
 				continue
 			var nt := ny * w + nx
-			if passable[nt] == 0:
+			# ⚠ **`can_step` and not `passable[nt]`.** The height gap is refused HERE, in the field
+			# itself, and not by the walker afterwards: a field that reached a plateau over its own
+			# wall would send every unit to stand under it, which is what "walk to the stair" has to
+			# come out of. The plateau is `UNREACHABLE` until a stair is authored.
+			if not can_step(t, nt):
 				continue
 			if field[nt] <= next_cost:
 				continue
@@ -820,7 +956,13 @@ func flow_field(target_tile: int) -> PackedInt32Array:
 ## Picks the neighbour with the lowest field value that is passable and either unreserved or already
 ## this unit's, reserves it, releases the tile behind, and returns the point to walk toward. **If every
 ## candidate is taken the unit's own position comes back and it stands** — that is the queue at a neck.
-func step_toward(unit_id: int, from: Vector2, field: PackedInt32Array) -> Vector2:
+## ⚠ **`keep_level` is -1 for everybody except an enemy holding high ground.** At 0 or more the step
+## must also LAND on that level, which is what stops a defender posted on a plateau walking down its
+## own stair to meet the attackers — 티켓 19's positional advantage only exists if the side holding it
+## stays there. **An optional argument rather than a second walker**: the tie-breaks, the reservation
+## swap and the queue-at-a-neck behaviour are the same, and a second copy of them would drift.
+func step_toward(unit_id: int, from: Vector2, field: PackedInt32Array,
+		keep_level: int = -1) -> Vector2:
 	var n := w * h
 	if n == 0 or field.size() != n:
 		return from
@@ -836,7 +978,13 @@ func step_toward(unit_id: int, from: Vector2, field: PackedInt32Array) -> Vector
 		if nx < 0 or ny < 0 or nx >= w or ny >= h:
 			continue
 		var nt := ny * w + nx
-		if passable[nt] == 0:
+		# ⚠ **Asked here as well as in `flow_field`, and that is not a second copy of the rule** — it is
+		# the same one function, asked about the tile the unit is actually standing on. The field is
+		# built once per target; a unit shoved or landed onto a tier the field never expanded from
+		# would otherwise read a neighbour's cost and step over the wall to get at it.
+		if not can_step(cur, nt):
+			continue
+		if keep_level >= 0 and level_of(nt) != keep_level:
 			continue
 		if reserved[nt] != -1 and reserved[nt] != unit_id:
 			continue

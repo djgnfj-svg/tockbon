@@ -64,9 +64,10 @@ var panel_view: PanelView = null
 var _panning := false
 
 ## Seconds the shell is standing still, holding a moment on screen before it walks the run forward.
-## Two things ride it — the verdict pause and the beak stain — and they never overlap, because a hold
-## does not call `step` and so cannot see a second outcome, and `_release_hold` moves the state on the
-## frame it expires. `combat-juice`, items "승패 전환" and "부리 부착".
+## Two things ride it — the verdict pause and the map ring's walk — and they never overlap, because a
+## hold does not call `step` and so cannot see a second outcome, and `_release_hold` moves the state
+## on the frame it expires. `combat-juice`, item "승패 전환".
+## ⚠ **A third rode it until 2026-08-25** — the beak stain — and it went with the reward.
 ##
 ## **Declared with an explicit type and not `:= 0.0` on purpose.** `net_draw_leaf`'s literal scan
 ## reads `src/shell/` as well, and a bare `_hold_sec := <number>` is exactly the shape it is widened
@@ -75,19 +76,14 @@ var _panning := false
 ## biting the duration.
 var _hold_sec: float = 0.0
 
-## The soldier the beak is destined for while the panel is still showing him being picked, or -1.
-## **The sim does not know yet**: `run.apply_beak` is called by `_release_hold` and not by the click,
-## which is what buys item 9 a frame to play in. `combat-juice` explains in its "부리 부착" box why
-## delaying the CALL is the fix and editing `run.gd` is not.
-var _pending_beak := -1
-
 ## The map node a press has been accepted for, while the you-are-here ring is still walking the edge
 ## toward it, or -1. **The sim does not know yet**: `run.enter_node` is called by `_release_hold` and
 ## not by the click, which is what buys the travel its 0.45 s to play in.
 ##
 ## ⚠ Cutting straight to the island instead would make the map's work invisible — the walk IS the
-## progress readout. Same shape as `_pending_beak` above, and for the same reason: the beat needs a
-## frame, and delaying the CALL is the fix that does not edit the sim.
+## progress readout. **The beak pick had the same shape and it is deleted** (2026-08-25) — this is the
+## last deferred call in the shell, and the reason is the same: the beat needs a frame, and delaying
+## the CALL is the fix that does not edit the sim.
 var _pending_node := -1
 
 ## `sea-summon`'s four. `_armed_slot` is which slot a number key has armed, or -1; `_summon_down` is
@@ -153,7 +149,7 @@ func _open_island() -> void:
 	if opened != null:
 		battle = opened
 		# A fresh `Grid` and a fresh `Battle` per island, but the SAME `Army` — that is how HP and the
-		# beak carry across islands. The army handed to the field is `run.army`, the same object
+		# every fitted item carry across islands. The army handed to the field is `run.army`, the same object
 		# `begin_island` just gave the battle; rebuilding it anywhere would heal the run between
 		# islands while a check that only counted soldiers stayed green.
 		#
@@ -174,17 +170,19 @@ func _open_island() -> void:
 ## ⚠ **It no longer re-opens unconditionally, and the comment that said it should is gone with the
 ## behaviour it described.** A won island now lands the run back in `MAP` (`take_count_reward` and the
 ## chest both end there), so re-opening would ask `begin_island` for a fight the run is not in, get a
-## null, and leave the island just won drawing underneath the map. A `BEAK` node still stops in
-## `REWARD` and a boss still ends in `WON`/`LOST`, and `_open_island` handles all three exactly as it
-## did — by leaving the last island drawable behind the panel.
+## null, and leave the island just won drawing underneath the map. A boss still ends in `WON`/`LOST`,
+## and `_open_island` handles that exactly as it did — by leaving the last island drawable behind the
+## panel.
+## ⚠ **A `BEAK` node used to stop in `REWARD` here.** Both the node kind and the state are deleted
+## (2026-08-25) — every fight node now ends in `MAP`, `PICK` or `REFIT`.
 func _close_island() -> void:
 	run.finish_island(battle.outcome() == Battle.Outcome.WON)
 	_show_state()
 
 
 ## The one mapping from `run.state()` to a screen. Three copies of a state->screen dispatch is three
-## places to forget a new state — `_close_island`, `_release_hold`'s beak branch and `_enter_node`'s
-## else arm all call this instead of deciding for themselves.
+## places to forget a new state — `_close_island` and `_enter_node`'s else arm both call this instead
+## of deciding for themselves.
 func _show_state() -> void:
 	match run.state():
 		Run.State.MAP:
@@ -278,27 +276,17 @@ func _process(delta: float) -> void:
 		_hold_sec = Look.HOLD_OUTCOME_SEC
 
 
-## What the shell does when a hold runs out: step onto the map node the ring has just walked to, bolt
-## on the beak the panel has been showing, or close the island that was left standing on screen.
+## What the shell does when a hold runs out: step onto the map node the ring has just walked to, or
+## close the island that was left standing on screen.
 ##
-## The three are exclusive by construction and the order only decides which is read first. A map hold
-## runs with `battle == null`, so it can never reach `_close_island` below; a beak hold cannot start
-## while an outcome hold is running, because a hold does not step and only a step can latch an
-## outcome.
+## The two are exclusive by construction and the order only decides which is read first. A map hold
+## runs with `battle == null`, so it can never reach `_close_island` below.
+## ⚠ **A third branch — bolting on the beak — was deleted with the reward** (2026-08-25).
 func _release_hold() -> void:
 	if _pending_node >= 0:
 		var n := _pending_node
 		_pending_node = -1
 		_enter_node(n)
-		return
-	if _pending_beak >= 0:
-		run.apply_beak(_pending_beak)
-		_pending_beak = -1
-		# ⚠⚠ **Not `_enter_map_screen()` and not `_open_island()`.** `apply_beak` ends in `_advance`,
-		# which lands in `PICK` when the win that paid this beak still has cards undrawn from — a run
-		# may collect the beak before the cards, and both screens have to show. `_show_state()` is the
-		# one place that already knows which of `MAP` / `PICK` / `REFIT` that is.
-		_show_state()
 		return
 	_close_island()
 
@@ -464,7 +452,7 @@ func _map_input(event: InputEvent) -> void:
 	var n := map_view.node_at(click.position)
 	if n < 0 or not run.map.is_reachable(n):
 		return
-	# The view is told first and the sim is told last, exactly as the beak pick is: `enter_node` leaves
+	# The view is told first and the sim is told last: `enter_node` leaves
 	# `MAP` on the spot, and `map_view._draw` returns the instant it does — so the ring would have zero
 	# frames to walk in however long the shell then waited.
 	map_view.note_press(n)
@@ -491,8 +479,12 @@ func _pick_input(event: InputEvent) -> void:
 		return
 	reward_view.note_press(k)
 	run.take_card(k)
+	# ⚠⚠ **`_show_state()` and no longer a hard-wired `_enter_refit_screen()`** (티켓 15). A beast card
+	# pays a slot and bodies rather than the held pile, so the run walks straight back to the MAP —
+	# and the refit screen it used to open unconditionally would have been a board with nothing to lay
+	# on it, over a map nobody could see.
 	if run.state() != Run.State.PICK:
-		_enter_refit_screen()
+		_show_state()
 
 
 ## The refit screen's whole input table: one hover and, in order, four kinds of press — 완료, 뒤로 (only
@@ -546,7 +538,9 @@ func _refit_input(event: InputEvent) -> void:
 ## honest about fields added to one path and not the other.
 func _start_run() -> void:
 	run = Run.new()
-	_enter_map_screen()
+	# ⚠ **`_show_state()` and not `_enter_map_screen()`** — a run opens on its beast card round now, and
+	# a hard-wired map screen here would draw the map over a pick nobody could see.
+	_show_state()
 
 
 ## Steps onto a node once its ring has finished walking. A node that opens an island hands over to
@@ -594,6 +588,10 @@ func _enter_pick_screen() -> void:
 	hud_view.bind(null)
 	panel_view.bind(run, null)
 	reward_view.bind(run)
+	# ⚠⚠ **AND THE TITLE GOES DOWN HERE TOO** (티켓 15). It used to be enough for `_enter_map_screen`
+	# to do it, because the map was always the first screen a run opened on; a run opens on its beast
+	# card round now, and without this line the title sits ON TOP of the three cards.
+	title_view.visible = false
 
 
 ## The two taken cards are ready to be laid into a board.
@@ -607,8 +605,8 @@ func _enter_refit_screen() -> void:
 
 
 ## The panel is asked first, and it is asked through `panel_active()` rather than through a state
-## check written out again here. Its rectangles exist whether it is drawn or not, so routing a click
-## into the roster during a battle would bolt the beak on from an invisible list.
+## check written out again here. Its rectangle exists whether it is drawn or not, so routing a click
+## into the panel during a battle would press an invisible button.
 ##
 ## Then, in this order and the order is not arbitrary:
 ##
@@ -756,6 +754,12 @@ func _on_summon_key(key: InputEventKey) -> void:
 	var slot := _slot_of_keycode(key.keycode)
 	if slot < 0:
 		return
+	# ⚠⚠ **A KEY WITH NO BOX BEHIND IT DOES NOTHING AT ALL — not even a refusal mark.** This used to
+	# treat 「빈 칸」 and 「마른 칸」 as one case and stamp the refusal on both, which was correct while
+	# every slot in the constant table was drawn. The row is as long as the RUN now, so a mark on an
+	# unregistered slot lands where there is no box: something on screen shakes that is not there.
+	if battle.army == null or slot >= battle.army.slot_count():
+		return
 	if slot == _armed_slot:
 		_disarm()
 		return
@@ -831,7 +835,7 @@ func _begin_summon(at: Vector2) -> void:
 func _fire_one_summon() -> void:
 	if battle.summon(_armed_slot, _summon_at) >= 0:
 		return
-	field_view.note_refusal(field_view.screen_to_world_px(_summon_cursor))
+	field_view.note_refusal(field_view.screen_to_terrain_px(_summon_cursor))
 
 
 ## Which placed boat's landing ring a press at `at` is on, as that boat's **uid**, or -1.
@@ -845,7 +849,7 @@ func _fire_one_summon() -> void:
 func _ring_hit_at(at: Vector2) -> int:
 	if battle == null or battle.grid == null:
 		return -1
-	var world := field_view.screen_to_world_px(at)
+	var world := field_view.screen_to_terrain_px(at)
 	var i := battle.boats.size() - 1
 	while i >= 0:
 		var boat: Dictionary = battle.boats[i]
@@ -862,7 +866,7 @@ func _ring_hit_at(at: Vector2) -> int:
 func _tile_at(at: Vector2) -> int:
 	if battle == null or battle.grid == null:
 		return -1
-	var world := field_view.screen_to_world_px(at)
+	var world := field_view.screen_to_terrain_px(at)
 	var tv := field_view.world_to_tile(world)
 	if tv.x < 0 or tv.y < 0 or tv.x >= battle.grid.w or tv.y >= battle.grid.h:
 		return -1
@@ -893,28 +897,16 @@ func _on_wheel(at: Vector2, factor: float) -> void:
 	field_view.zoom_at(at, factor)
 
 
-## Reward pick and restart, both of which the panel resolves. `soldier_id_at` returns -1 outside the
-## REWARD state and `button_hit` is false outside WON/LOST, so the two cannot both fire and neither
-## needs a state test on this side — the mapping from a point to a soldier id lives in exactly one
-## place, next to the code that draws the entries.
+## Restart, which the panel resolves. `button_hit` is false outside WON/LOST, so this needs no state
+## test on this side.
+## ⚠⚠ **THE REWARD PICK USED TO BE THE OTHER HALF OF THIS FUNCTION** and is deleted (2026-08-25, the
+## user: 「부리 보상 없지 끝나면 카드보상으로 통일했잖아」). With it went the hold this handler took
+## before telling the sim — there is nothing left here that has to be shown before it is applied.
 func _click_panel(at: Vector2) -> void:
 	# `_unhandled_input` already refuses every real press during a hold. This second guard is for the
 	# callers that skip it — a net drives this handler directly, because headless the window is 64x64
-	# and a pushed click lands thousands of pixels off target. Without it a second pick would overwrite
-	# `_pending_beak` while the first is still being stained.
+	# and a pushed click lands thousands of pixels off target.
 	if _hold_sec > 0.0:
-		return
-	var picked := panel_view.soldier_id_at(at)
-	if picked >= 0:
-		# The view is told first and the sim is told last. `run.apply_beak` ends in `_advance()`, which
-		# puts the run back into BATTLE, and `panel_view.panel_active()` is false the instant it does —
-		# so calling it here would stop the panel drawing on this very frame however long the shell
-		# then waited to open the next island. Delaying the CALL is the only fix that does not edit the
-		# sim, and it pays for itself: `army.has_beak[picked]` stays 0 for the whole stain, so the only
-		# thing that can colour that row differently is `note_beak`.
-		panel_view.note_beak(picked)
-		_pending_beak = picked
-		_hold_sec = Look.HOLD_BEAK_SEC
 		return
 	if panel_view.button_hit(at):
 		# ⚠ **Back to the TITLE, not to a fresh island.** `run == null` IS the title screen, so this is

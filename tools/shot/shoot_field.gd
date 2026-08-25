@@ -2,6 +2,14 @@
 # how a human sees the field without playing to it. Nets live in `tests/nets/` and this is why they
 # stay there: nothing here can go red.
 #
+# ⚠⚠ **THIS SHOOTER IS STALE AND ITS PICTURES ARE NOT OF WHAT THEY SAY** (found 2026-08-25).
+# 티켓 15 put a BEAST CARD ROUND between the title and the map, and step 1 below still clicks a map
+# node straight after the title — so the click lands on the card screen, no island ever opens, and
+# `_summonable_screen_px` barks `grid on a base object of type 'Nil'` while every `_save` after it
+# writes a frame of the wrong screen. **Nothing here can go red, so it wrote eight wrong PNGs without
+# failing.** ⇒ Take a card (`Look.card_hit_rect_px(0)`) between steps 0 and 1, then re-shoot the set;
+# `tools/shot/shoot_loop.gd` and `shoot_species.gd` already do this and both still run.
+#
 # Run (a window has to open — a headless run has no renderer to read a frame back from):
 #   Godot_v4.7.1-stable_win64.exe --path . -s tools/shot/shoot_field.gd
 extends SceneTree
@@ -53,24 +61,11 @@ func _summonable_screen_px() -> Vector2:
 	var g := _game.battle.grid
 	for t in g.w * g.h:
 		if g.can_summon_at(t):
-			var tx := t % g.w
-			var ty := t / g.w
-			var world := Look.tile_point_px(Vector2(tx, ty))
-			return _world_to_screen_px(world)
+			# ⚠ **The VIEW's own forward** (`tile_to_screen_px`), and no longer a copy of it kept here.
+			# The copy was the flat board's, it ignored the yaw, and it aimed every click in this file
+			# at a tile next to the one it meant (2026-08-25).
+			return _game.field_view.tile_to_screen_px(t % g.w, t / g.w)
 	return Vector2.ZERO
-
-
-## The inverse of `field_view.screen_to_world_px`, written here because only this instrument needs it:
-## a net drives the shell in screen px it already knows, and the view itself never goes this way.
-func _world_to_screen_px(world: Vector2) -> Vector2:
-	var fv := _game.field_view
-	var span := Look.viewport_size_px() / fv.zoom
-	span.y /= cos(deg_to_rad(fv.cam_pitch_deg))
-	var centre := fv.cam_px + span * 0.5
-	var off := world - centre
-	return Vector2(
-		(off.x / span.x + 0.5) * Look.VIEWPORT_W_PX,
-		(off.y / span.y + 0.5) * Look.VIEWPORT_H_PX)
 
 
 func _process(_delta: float) -> bool:
@@ -129,7 +124,7 @@ func _process(_delta: float) -> bool:
 			# seen on the island the shell opens first. The field is pointed at island 2 directly here,
 			# through the same `setup` the shell uses, purely so a human can look at it.
 			var grid := Grid.new()
-			grid.load_rows(Islands.rows_of(2))
+			Islands.load_into(grid, 2)
 			var b := Battle.new()
 			b.setup(grid, _game.run.army, Islands.spawns_of(2), Islands.time_limit_of(2))
 			_game.field_view.setup(b, _game.run.army, Islands.rows_of(2))

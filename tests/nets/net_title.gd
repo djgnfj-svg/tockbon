@@ -49,7 +49,7 @@ class TitleSpy extends TitleView:
 		seq += 1
 		return seq - 1
 
-	func _paint_cell(centre: Vector2, radius: float, col: Color) -> void:
+	func _paint_tile(centre: Vector2, radius: float, col: Color) -> void:
 		cells.append({"seq": _bump(), "centre": centre, "radius": radius, "col": col})
 
 	func _paint_title(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
@@ -81,6 +81,7 @@ func run(t) -> void:
 	_hover_and_press_answer_the_hand(t)
 	_the_background_is_background(t)
 	await _the_leaves_draw_what_they_were_handed(t)
+	_the_drifting_shape_is_not_a_cell(t)
 
 
 # -- geometry: can it be aimed at ------------------------------------------------------------------
@@ -319,30 +320,30 @@ func _hover_and_press_answer_the_hand(t) -> void:
 func _the_background_is_background(t) -> void:
 	# 「배경 알파가 못 누르는 칸보다 어둡다」 — floor: it exists at all; ceiling: it is below the
 	# dimmest button, or a drifting cell reads as one more thing to press.
-	t.ok(Look.TITLE_CELL_ALPHA >= 0.06, "배경 세포 알파가 0.06 이상이다 (%.2f) — 밑은 배경이 아예 없는 것이다"
-		% Look.TITLE_CELL_ALPHA)
-	t.ok(Look.TITLE_CELL_ALPHA < Look.PRESS_ALPHA_OFF,
-		"그리고 못 누르는 칸(%.2f)보다 어둡다 — 안 그러면 떠다니는 세포가 단추로 읽힌다"
+	t.ok(Look.TITLE_TILE_ALPHA >= 0.06, "배경 타일 알파가 0.06 이상이다 (%.2f) — 밑은 배경이 아예 없는 것이다"
+		% Look.TITLE_TILE_ALPHA)
+	t.ok(Look.TITLE_TILE_ALPHA < Look.PRESS_ALPHA_OFF,
+		"그리고 못 누르는 칸(%.2f)보다 어둡다 — 안 그러면 떠다니는 타일가 단추로 읽힌다"
 			% Look.PRESS_ALPHA_OFF)
-	t.ok(Look.TITLE_CELL_COUNT >= 5 and Look.TITLE_CELL_COUNT <= 16,
-		"세포가 5~16개다 (%d) — 5 밑은 점 셋이고 16 위는 무늬다" % Look.TITLE_CELL_COUNT)
-	t.ok(Look.TITLE_CELL_RADIUS_PX >= 8.0 and Look.TITLE_CELL_RADIUS_PX <= 24.0,
-		"세포 반지름이 8~24px 다 (%.0f)" % Look.TITLE_CELL_RADIUS_PX)
+	t.ok(Look.TITLE_TILE_COUNT >= 5 and Look.TITLE_TILE_COUNT <= 16,
+		"타일이 5~16개다 (%d) — 5 밑은 점 셋이고 16 위는 무늬다" % Look.TITLE_TILE_COUNT)
+	t.ok(Look.TITLE_TILE_HALF_PX >= 8.0 and Look.TITLE_TILE_HALF_PX <= 24.0,
+		"타일 반폭이 8~24px 다 (%.0f)" % Look.TITLE_TILE_HALF_PX)
 
-	# 「배경 세포가 실제로 움직이고 화면을 안 벗어난다」 — ⚠ the FLOOR is the half that proves the
+	# 「배경 타일가 실제로 움직이고 화면을 안 벗어난다」 — ⚠ the FLOOR is the half that proves the
 	# drift exists. Measured as the TORUS distance, because `fposmod` wraps and a cell that crossed an
 	# edge would otherwise read as having jumped the width of the screen.
 	var view := TitleView.new()
 	var start := []
-	for i in Look.TITLE_CELL_COUNT:
-		start.append(view._cell_centre(i))
+	for i in Look.TITLE_TILE_COUNT:
+		start.append(view._tile_centre(i))
 	view._fx_step(2.0)
 	var still := 0
 	var runaway := 0
 	var off := 0
-	var reach := Look.TITLE_CELL_SPEED_PX * 2.0
-	for i in Look.TITLE_CELL_COUNT:
-		var now: Vector2 = view._cell_centre(i)
+	var reach := Look.TITLE_TILE_SPEED_PX * 2.0
+	for i in Look.TITLE_TILE_COUNT:
+		var now: Vector2 = view._tile_centre(i)
 		var was: Vector2 = start[i]
 		var dx: float = absf(now.x - was.x)
 		var dy: float = absf(now.y - was.y)
@@ -355,45 +356,45 @@ func _the_background_is_background(t) -> void:
 			runaway += 1
 		if not SCREEN.has_point(now) or not SCREEN.has_point(was):
 			off += 1
-	t.eq(still, 0, "2초 뒤 세포 %d개가 전부 2px 넘게 움직였다 — 속도가 0이면 여기가 문다"
-		% Look.TITLE_CELL_COUNT)
+	t.eq(still, 0, "2초 뒤 타일 %d개가 전부 2px 넘게 움직였다 — 속도가 0이면 여기가 문다"
+		% Look.TITLE_TILE_COUNT)
 	t.eq(runaway, 0, "그리고 어느 것도 %.0fpx(= 속도 x 2초)보다 멀리 가지 않았다" % reach)
-	t.eq(off, 0, "세포 중심이 전부 화면 안이다 — fposmod 가 감싸고 있다")
-	t.ok(Look.TITLE_CELL_SPEED_PX >= 3.0 and Look.TITLE_CELL_SPEED_PX <= 20.0,
-		"세포 속도가 3~20px/s 다 (%.0f) — 3 밑은 안 움직이는 것과 같고 20 위는 배경이 시끄럽다"
-			% Look.TITLE_CELL_SPEED_PX)
+	t.eq(off, 0, "타일 중심이 전부 화면 안이다 — fposmod 가 감싸고 있다")
+	t.ok(Look.TITLE_TILE_SPEED_PX >= 3.0 and Look.TITLE_TILE_SPEED_PX <= 20.0,
+		"타일 속도가 3~20px/s 다 (%.0f) — 3 밑은 안 움직이는 것과 같고 20 위는 배경이 시끄럽다"
+			% Look.TITLE_TILE_SPEED_PX)
 
 	# The long run, because `fposmod` is what keeps them in: a bounce rule would have to be measured
 	# too, and a drift that leaks off screen leaks slowly.
 	var far := TitleView.new()
 	far._fx_step(600.0)
 	var escaped := 0
-	for i in Look.TITLE_CELL_COUNT:
-		if not SCREEN.has_point(far._cell_centre(i)):
+	for i in Look.TITLE_TILE_COUNT:
+		if not SCREEN.has_point(far._tile_centre(i)):
 			escaped += 1
-	t.eq(escaped, 0, "10분을 흘려도 세포가 화면을 못 벗어난다")
+	t.eq(escaped, 0, "10분을 흘려도 타일이 화면을 못 벗어난다")
 	view.free()
 	far.free()
 
-	# 「배경 세포가 난수를 안 쓴다」 — two views at the same age agree EXACTLY. A random drift cannot
+	# 「배경 타일가 난수를 안 쓴다」 — two views at the same age agree EXACTLY. A random drift cannot
 	# be measured, which is the same reason the shake frequencies are constants.
 	var a := TitleView.new()
 	var b := TitleView.new()
 	a._fx_step(3.7)
 	b._fx_step(3.7)
 	var drifted := 0
-	for i in Look.TITLE_CELL_COUNT:
-		if a._cell_centre(i) != b._cell_centre(i):
+	for i in Look.TITLE_TILE_COUNT:
+		if a._tile_centre(i) != b._tile_centre(i):
 			drifted += 1
-	t.eq(drifted, 0, "같은 나이의 두 타이틀이 세포 %d개 자리가 전부 정확히 같다 — 난수가 없다"
-		% Look.TITLE_CELL_COUNT)
+	t.eq(drifted, 0, "같은 나이의 두 타이틀이 타일 %d개 자리가 전부 정확히 같다 — 난수가 없다"
+		% Look.TITLE_TILE_COUNT)
 	# And they are not all in one place, or "identical" would be trivially true.
 	var distinct := {}
-	for i in Look.TITLE_CELL_COUNT:
-		distinct[a._cell_centre(i).snapped(Vector2(1.0, 1.0))] = true
-	t.ok(distinct.size() >= Look.TITLE_CELL_COUNT - 1,
-		"그리고 세포 %d개가 서로 다른 자리에 있다 (%d군데) — 한 점에 겹쳐 있으면 위 비교가 공짜다"
-			% [Look.TITLE_CELL_COUNT, distinct.size()])
+	for i in Look.TITLE_TILE_COUNT:
+		distinct[a._tile_centre(i).snapped(Vector2(1.0, 1.0))] = true
+	t.ok(distinct.size() >= Look.TITLE_TILE_COUNT - 1,
+		"그리고 타일 %d개가 서로 다른 자리에 있다 (%d군데) — 한 점에 겹쳐 있으면 위 비교가 공짜다"
+			% [Look.TITLE_TILE_COUNT, distinct.size()])
 	a.free()
 	b.free()
 
@@ -420,16 +421,16 @@ func _the_leaves_draw_what_they_were_handed(t) -> void:
 	await t.pump_frames(2)
 	t.ok(spy.draws >= 1, "타이틀의 _draw 가 트리 위에서 진짜 돌았다 (%d프레임)" % spy.draws)
 
-	t.eq(spy.cells.size(), Look.TITLE_CELL_COUNT, "세포를 %d개 그렸다" % Look.TITLE_CELL_COUNT)
+	t.eq(spy.cells.size(), Look.TITLE_TILE_COUNT, "타일을 %d개 그렸다" % Look.TITLE_TILE_COUNT)
 	var cell_bad := 0
 	for c: Dictionary in spy.cells:
-		if not is_equal_approx(float(c["radius"]), Look.TITLE_CELL_RADIUS_PX):
+		if not is_equal_approx(float(c["radius"]), Look.TITLE_TILE_HALF_PX):
 			cell_bad += 1
-		if not is_equal_approx((c["col"] as Color).a, Look.TITLE_CELL_ALPHA):
+		if not is_equal_approx((c["col"] as Color).a, Look.TITLE_TILE_ALPHA):
 			cell_bad += 1
 		if not SCREEN.has_point(c["centre"]):
 			cell_bad += 1
-	t.eq(cell_bad, 0, "세포가 전부 look.gd 의 반지름과 알파로, 화면 안에 그려졌다")
+	t.eq(cell_bad, 0, "타일이 전부 look.gd 의 반지름과 알파로, 화면 안에 그려졌다")
 
 	t.eq(spy.titles.size(), 1, "제목을 한 번 그렸다")
 	t.eq(str(spy.titles[0]["text"]), TitleView.TITLE_TEXT, "제목 글자가 「%s」다" % TitleView.TITLE_TEXT)
@@ -459,7 +460,7 @@ func _the_leaves_draw_what_they_were_handed(t) -> void:
 	for c: Dictionary in spy.cells:
 		last_cell = maxi(last_cell, int(c["seq"]))
 	t.ok(last_cell < int(spy.titles[0]["seq"]),
-		"세포가 전부 제목보다 먼저다 — 배경이 뒤에 오면 글자를 덮는다")
+		"타일이 전부 제목보다 먼저다 — 배경이 뒤에 오면 글자를 덮는다")
 	t.ok(int(spy.titles[0]["seq"]) < int(spy.boxes[0]["seq"]), "제목이 첫 칸 상자보다 먼저다")
 
 	# The dead slot, as the picture actually receives it: alpha 0 on the border and a dimmed fill.
@@ -513,3 +514,56 @@ func _the_leaves_draw_what_they_were_handed(t) -> void:
 
 	t.root.remove_child(spy)
 	spy.queue_free()
+
+
+## ⚠⚠ **A TEXT SCAN, AND THE LABEL SAYS SO** — this repo has measured five scans being evaded inside
+## one feature. It is here because the SHAPE is the whole of what changed and nothing else can see it:
+## the spy captures a centre, a half-width and a colour, which a circle and a square hand over
+## identically, and `net_draw_leaf` counts `draw_*` calls without recording which one. **One call
+## either way, so the count row stayed green through the change.**
+##
+## Why it is worth a row at all: 2026-08-25, 티켓 23 — the first screen of a beast roguelike was nine
+## translucent CIRCLES drifting behind the menu, which is the deleted cell game's own picture. A
+## square is this game's ground unit. **If the shape goes back, everything else about this screen
+## still measures green.**
+func _the_drifting_shape_is_not_a_cell(t) -> void:
+	var src := FileAccess.get_file_as_string("res://src/view/title_view.gd")
+	t.ok(src.length() > 0, "타이틀 파일을 실제로 읽었다 (자가 점검)")
+	var body := _func_body(src, "_paint_tile")
+	t.ok(body.length() > 0, "_paint_tile 의 본문을 찾았다 (자가 점검 — 못 찾으면 아래가 공허하다)")
+	t.ok(body.contains("draw_rect"), "떠다니는 배경이 네모다 — draw_rect 로 그린다")
+	t.ok(not body.contains("draw_circle"), "그리고 원이 아니다 — 원은 죽은 세포 게임의 그림이다")
+
+	# ⚠ **Inverting the INSTRUMENT.** A body-finder that returned nothing would pass both rows above
+	# forever, so it is handed a body it must read and one it must not confuse with its neighbour.
+	var fake := "func _paint_tile(a, b, c) -> void:
+	draw_circle(a, b, c)
+
+
+func _other() -> void:
+	draw_rect(a)
+"
+	t.ok(_func_body(fake, "_paint_tile").contains("draw_circle"),
+		"훑개가 원으로 그린 본문을 실제로 잡는다 (계측기 자가 점검)")
+	t.ok(not _func_body(fake, "_paint_tile").contains("draw_rect"),
+		"그리고 다음 함수의 본문을 안 섞는다 (계측기 자가 점검)")
+
+
+## One function's body out of a source file: from its `func` line to the next line that starts a new
+## top-level `func`. Comments are not stripped — the two rows above ask about CALLS, and a `draw_rect`
+## written in a comment inside this one function would be a lie worth reddening on.
+func _func_body(src: String, name: String) -> String:
+	var lines := src.split("
+")
+	var out := ""
+	var inside := false
+	for raw: String in lines:
+		if raw.begins_with("func "):
+			if inside:
+				break
+			inside = raw.begins_with("func %s(" % name)
+			continue
+		if inside:
+			out += raw + "
+"
+	return out

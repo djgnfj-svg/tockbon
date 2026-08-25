@@ -6,6 +6,13 @@
 # and a shard fan 0.12 s; stepping a fixed number of frames and hoping catches nothing, and a shot
 # that catches nothing looks exactly like an effect that was never painted.
 #
+# ⚠⚠ **THIS SHOOTER IS STALE AND IT HANGS** (found 2026-08-25). 티켓 15 put a BEAST CARD ROUND between
+# the title and the map, and the step that clicks a map node still runs straight after the title — so
+# no island opens, and because the fight shots wait on the EFFECT LIST rather than on a frame count,
+# the wait never ends. **It has to be killed by hand.** ⇒ Take a card (`Look.card_hit_rect_px(0)`)
+# between the title click and the map click. `shoot_field.gd` carries the same staleness (it finishes,
+# and writes eight PNGs of the wrong screen).
+#
 # Run (a window has to open — a headless run has no renderer to read a frame back from):
 #   Godot_v4.7.1-stable_win64.exe --path . -s tools/shot/shoot_fx.gd
 extends SceneTree
@@ -132,21 +139,17 @@ func _measure() -> void:
 		_bad = _click_px_of(Look.tile_point_px(g.tile_point(_bad_t)))
 
 
-## ⚠⚠ **Where to CLICK, which is not where the thing IS on screen.** `field_view.screen_to_world_px`
-## is still the flat board's inverse — it puts the ground on one plane and ignores the height the
-## terrain actually has — and that mapping is what decides which tile a press lands on. So input has
-## to be aimed with the SHELL'S map of the screen and pictures cropped with the CAMERA'S, and the two
-## do not agree. **That disagreement is a real defect and it lives in `screen_to_world_px`, not here**:
-## a press on a hill lands on the tile the flat plane says, not the tile under the cursor.
+## ✅ **Where to CLICK — and it is the same place the thing IS on screen now** (2026-08-25). This
+## carried its own copy of the flat board's inverse and its header said, correctly, that the copy and
+## the camera disagreed and that the defect was in `screen_to_world_px` rather than here. **That
+## defect is fixed**: the shell resolves a press against the LANDSCAPE, and `world_to_screen_px` is
+## its forward, written once in the view. So there is one map of the screen again and this asks the
+## view for it.
 func _click_px_of(world: Vector2) -> Vector2:
 	var fv := _game.field_view
-	var span := Look.viewport_size_px() / fv.zoom
-	span.y /= cos(deg_to_rad(fv.cam_pitch_deg))
-	var centre := fv.cam_px + span * 0.5
-	var off := world - centre
-	return Vector2(
-		(off.x / span.x + 0.5) * Look.VIEWPORT_W_PX,
-		(off.y / span.y + 0.5) * Look.VIEWPORT_H_PX)
+	var tx := int(floor(world.x / Look.TILE_PX))
+	var ty := int(floor(world.y / Look.TILE_PX))
+	return fv.world_to_screen_px(world, fv._ground_h(tx, ty))
 
 
 ## ⚠⚠ **The camera does this, not a formula.** The first version of this instrument carried a copy of

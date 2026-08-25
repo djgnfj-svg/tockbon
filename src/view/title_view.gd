@@ -43,7 +43,7 @@ const SLOT_SETTINGS := 1
 const SLOT_QUIT := 2
 
 ## Seconds this screen has been alive. The cells' drift is a pure function of it and of the cell's
-## index — **no RNG anywhere**, the same reason `SHAKE_A_FREQ` is a constant: a random drift cannot be
+## index — **no RNG anywhere**, the same reason every drift in this game is a constant: a random one cannot be
 ## measured, and two `TitleView`s at the same age must agree exactly.
 var _age := 0.0
 
@@ -160,17 +160,17 @@ func _slot_box(slot_index: int) -> Rect2:
 	return Rect2(rect.position + (rect.size - inner) * 0.5, inner)
 
 
-## Where background cell `i` is right now. A unit direction from the index and a start point from the
-## index, both through the two frequencies, so **every cell moves at exactly `TITLE_CELL_SPEED_PX`**
+## Where background tile `i` is right now. A unit direction from the index and a start point from the
+## index, both through the two frequencies, so **every tile moves at exactly `TITLE_TILE_SPEED_PX`**
 ## and none of them can sit still. Wrapped with `fposmod`, which is what keeps every centre inside the
 ## viewport without a bounce rule that would have to be measured too.
-func _cell_centre(i: int) -> Vector2:
-	var th := float(i) * TAU * Look.TITLE_CELL_A_FREQ
-	var ph := float(i) * TAU * Look.TITLE_CELL_B_FREQ
+func _tile_centre(i: int) -> Vector2:
+	var th := float(i) * TAU * Look.TITLE_TILE_A_FREQ
+	var ph := float(i) * TAU * Look.TITLE_TILE_B_FREQ
 	var w := Look.VIEWPORT_W_PX
 	var h := Look.VIEWPORT_H_PX
-	var x := 0.5 * (1.0 + sin(ph)) * w + cos(th) * Look.TITLE_CELL_SPEED_PX * _age
-	var y := 0.5 * (1.0 + cos(ph)) * h + sin(th) * Look.TITLE_CELL_SPEED_PX * _age
+	var x := 0.5 * (1.0 + sin(ph)) * w + cos(th) * Look.TITLE_TILE_SPEED_PX * _age
+	var y := 0.5 * (1.0 + cos(ph)) * h + sin(th) * Look.TITLE_TILE_SPEED_PX * _age
 	return Vector2(fposmod(x, w), fposmod(y, h))
 
 
@@ -198,11 +198,14 @@ func _draw() -> void:
 		return
 
 	# The background first, and dimmer than a dead slot on purpose: at `PRESS_ALPHA_OFF` a drifting
-	# cell would read as one more button.
-	var cell := Look.COL_ALLY
-	cell.a = Look.TITLE_CELL_ALPHA
-	for i in Look.TITLE_CELL_COUNT:
-		_paint_cell(_cell_centre(i), Look.TITLE_CELL_RADIUS_PX, cell)
+	# tile would read as one more button.
+	# ⚠ **The COLOUR is unchanged and that is deliberate.** `TITLE_TILE_ALPHA` 0.14 was measured
+	# against this colour on this background; moving both the shape and the tone at once would leave
+	# the alpha's floor describing something nobody measured.
+	var tile := Look.COL_ALLY
+	tile.a = Look.TITLE_TILE_ALPHA
+	for i in Look.TITLE_TILE_COUNT:
+		_paint_tile(_tile_centre(i), Look.TITLE_TILE_HALF_PX, tile)
 
 	_paint_title(face, Look.TITLE_TEXT_POS_PX, TITLE_TEXT, Look.TITLE_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
@@ -230,8 +233,14 @@ func _draw() -> void:
 # used in the body: a leaf that quietly drops one of its arguments is invisible on screen and green in
 # the round.
 
-func _paint_cell(centre: Vector2, radius: float, col: Color) -> void:
-	draw_circle(centre, radius, col)
+## ⚠⚠ **A SQUARE, AND IT WAS A CIRCLE UNTIL 2026-08-25.** Nine translucent circles drifting behind the
+## menu are CELLS, and this is a beast roguelike — the first screen of it was a field of cells from a
+## game that was deleted. **A square is this game's ground unit**, so the drift now reads as tiles.
+## ⚠ **A placeholder I chose**, on the user's 「이미지나 이런건 니가 임시로 다 넣으면 됨 하나하나 아직
+## 안정할꺼야」. The motion, the count, the alpha and the two frequencies are all unchanged — only the
+## shape and the name — so whatever replaces it later inherits a drift that is already measured.
+func _paint_tile(centre: Vector2, half: float, col: Color) -> void:
+	draw_rect(Rect2(centre - Vector2(half, half), Vector2(half, half) * 2.0), col, true)
 
 
 func _paint_title(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:

@@ -58,6 +58,10 @@ func run(t) -> void:
 	# Title -> map -> island, through the door the OS uses. `net_shell` owns the assertions about that
 	# path; here it is only how the shell reaches a planning screen.
 	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
+	# ⚠ The run opens on its beast card round; **seeded first** so which species the second slot holds
+	# is the same every round — every box, digit and bar row below counts against that.
+	game.run.seed_cards(1)
+	_take_opening_card(game)
 	game._unhandled_input(_press(Look.map_node_pos_px(0)))
 	game._process(Look.MAP_TRAVEL_SEC)
 	t.ok(game.battle != null, "섬이 열렸다 (자가 점검)")
@@ -97,6 +101,7 @@ func run(t) -> void:
 	await _the_three_lines_that_claimed_to_be_load_bearing(t, game, fs, hs)
 	await _a_refused_key_flashes_as_well_as_shakes(t, game, hs)
 	await _an_armed_slot_that_has_run_dry_is_not_green(t, game, fs, hs)
+	await _a_press_away_from_the_centre(t, game, fs)
 
 	# ⚠ **The swapped-in spies are NOT removed here.** `queue_free` on the parent takes its children
 	# with it; pulling them out first leaves two orphaned `Node2D`s nothing owns, and the round reports
@@ -164,14 +169,21 @@ func _the_number_keys(t, game: Game, hs: HudSpy) -> void:
 	t.eq(game._armed_slot, -1, "같은 키를 다시 누르면 꺼진다")
 	t.eq(hs._armed, -1, "HUD 도 꺼졌다")
 
-	# ⚠ L3 — an unbound slot arms nothing AND says so. 「아무 일도 안 일어났다」 and 「게임이 안 듣는다」
-	# are two different sentences and the shake is the only thing separating them.
-	t.ok(not hs._chip_fx.has(HudView.CHIP_SLOT_BASE + 2), "3번 칸에 아직 표시가 없다 (자가 점검)")
+	# ⚠⚠ **L3 INVERTED BY 티켓 15, and the reason is a picture.** It used to read 「비어 있는 3번은 안
+	# 켜지지만 거절 표시는 들어간다」 — correct while the slot row came from a constant table and every
+	# slot in range HAD a box. The row is as long as the RUN now, so slot 2 has no box at all, and a
+	# refusal mark stamped there makes something shake that is not on screen. **「아무 일도 안
+	# 일어났다」 is the right answer when there is nothing there to answer.**
+	var slot_n := game.battle.army.slot_count()
+	t.ok(slot_n <= 2, "회차가 등록한 칸이 3번에 못 미친다 (자가 점검 — 이 줄의 전제)")
+	t.ok(not hs._chip_fx.has(HudView.CHIP_SLOT_BASE + 2), "3번 칸에 표시가 없다 (자가 점검)")
 	game._unhandled_input(_key(KEY_3))
-	t.eq(game._armed_slot, -1, "비어 있는 3번 슬롯은 안 켜진다")
-	t.ok(hs._chip_fx.has(HudView.CHIP_SLOT_BASE + 2), "그래도 그 칸에 거절 표시가 들어간다")
-	t.ok(not bool((hs._chip_fx[HudView.CHIP_SLOT_BASE + 2] as Dictionary)["ok"]),
-		"그 표시는 거절이다 — 수락이 아니다")
+	t.eq(game._armed_slot, -1, "등록 안 된 3번 슬롯은 안 켜진다")
+	t.ok(not hs._chip_fx.has(HudView.CHIP_SLOT_BASE + 2),
+		"그리고 거절 표시도 안 찍힌다 — 상자가 없는 자리에 찍으면 화면에 없는 것이 흔들린다")
+	# ⚠ The FLOOR under that ceiling — a slot that has a box and is dry still gets the mark — is
+	# `_a_refused_key_flashes_as_well_as_shakes`, further down this file. Without it the line above
+	# would be green with the refusal mark deleted outright.
 	t.eq(HudView.CHIP_START, 0, "시작 버튼은 0번 칸이다 (자가 점검)")
 	t.eq(HudView.CHIP_SLOT_BASE, 1, "그리고 소환 칸은 1번부터다 (자가 점검)")
 
@@ -264,12 +276,15 @@ func _a_dry_slot(t, game: Game, fs: FieldView) -> void:
 	var at := _park_on(fs, g, tile)
 	game._unhandled_input(_key(KEY_1))
 	game._unhandled_input(_press(at))
-	# Five more beats empties the six melee. The slot is armed and wet when the hold starts and runs
-	# dry under it — which is the only way a slot can be armed AND dry, because the key refuses to arm
-	# a dry one.
-	for _k in 5:
+	# Beat until the slot is dry. The slot is armed and wet when the hold starts and runs dry under it —
+	# which is the only way a slot can be armed AND dry, because the key refuses to arm a dry one.
+	# ⚠ **The beat count is DERIVED, not the literal 5 it used to be**: slot 0 opens with
+	# `Rules.start_bodies_of(0)` bodies and that number moved from six to ten (티켓 15).
+	var beats := 0
+	while not game.battle.slot_reserve_ids(0).is_empty() and beats < 40:
 		game._process(0.20)
-	t.eq(game.battle.boats.size(), 6, "여섯이 다 나갔다 (자가 점검)")
+		beats += 1
+	t.eq(game.battle.boats.size(), Rules.start_bodies_of(0), "1번 칸의 몸이 다 나갔다 (자가 점검)")
 	t.eq(game.battle.slot_reserve_ids(0).size(), 0, "슬롯이 말랐다 (자가 점검)")
 
 	var before := _refusals(fs)
@@ -278,7 +293,7 @@ func _a_dry_slot(t, game: Game, fs: FieldView) -> void:
 	game._process(0.20)
 	game._process(0.20)
 	t.eq(_refusals(fs) - before, 3, "세 박자면 셋이다 — 프레임마다가 아니다")
-	t.eq(game.battle.boats.size(), 6, "그리고 배는 안 늘었다")
+	t.eq(game.battle.boats.size(), Rules.start_bodies_of(0), "그리고 배는 안 늘었다")
 	t.ok(game._summon_down, "꾹 누른 것은 안 끝난다 — 마른 것이 손을 놓게 하지는 않는다")
 
 
@@ -317,9 +332,10 @@ func _after_the_commit(t, game: Game, fs: FieldView, hs: HudSpy) -> void:
 	t.eq(game.battle.boats.size(), 1, "확정할 배가 하나 있다 (자가 점검)")
 
 	await t.pump_frames(2)
-	# ⚠ Against the TABLE, never against a number. A third binding is one line in `rules.gd`.
-	t.eq(hs.boxes.size(), Rules.summon_slot_count(),
-		"슬롯 줄은 확정 전에 표가 정한 만큼 그려진다 (%d칸)" % Rules.summon_slot_count())
+	# ⚠ Against the RUN's own slots, never against a number. A registration is one card.
+	var slot_n := game.battle.army.slot_count()
+	t.eq(hs.boxes.size(), slot_n,
+		"슬롯 줄은 확정 전에 회차가 등록한 만큼 그려진다 (%d칸)" % slot_n)
 
 	# ⚠⚠ **The press is deliberately NOT released before the commit.** Released first, `_summon_down`
 	# is already false and the beat's own commit gate is never reached at all — measured: with the
@@ -472,7 +488,8 @@ func _the_aim_marks(t, game: Game, fs: FieldView) -> void:
 			drain = tile
 			break
 	t.ok(drain >= 0 and drain != bent, "배를 뺄 다른 바다 칸을 찾았다 (자가 점검)")
-	for _k in 6:
+	# ⚠ Derived, not a literal 6 — slot 0's opening body count moved to ten (티켓 15).
+	for _k in Rules.start_bodies_of(0):
 		game.battle.summon(0, drain)
 	t.eq(game.battle.slot_reserve_ids(0).size(), 0, "슬롯을 비웠다 (자가 점검)")
 	await t.pump_frames(2)
@@ -498,51 +515,55 @@ func _the_slot_row(t, game: Game, fs: FieldView, hs: HudSpy) -> void:
 	await t.pump_frames(2)
 
 	# V8 — two channels, and the border difference clears the snap floor.
-	t.eq(hs.boxes.size(), Rules.summon_slot_count(),
-		"슬롯 상자가 표가 정한 수만큼 그려진다 (%d개)" % Rules.summon_slot_count())
-	# The literal, once and on the TABLE itself, so the row above cannot move both sides together.
-	t.eq(Rules.SUMMON_SLOTS.size(), 2, "그리고 표에는 두 줄이 있다 (리터럴 — 사용자의 「슬럿 2개로 시작」)")
-	var armed := _box_at(hs, 0)
-	var resting := _box_at(hs, 1)
+	var slot_n := game.battle.army.slot_count()
+	t.eq(hs.boxes.size(), slot_n,
+		"슬롯 상자가 회차가 등록한 수만큼 그려진다 (%d개)" % slot_n)
+	# ⚠⚠ **The literal is on the OPENING TABLE, never on the count the row above reads.** Both sides
+	# reading the run would move together and pass at any value — the shape this repo has measured.
+	t.eq(Rules.START_SLOTS.size(), 1, "그리고 회차는 한 칸으로 연다 (리터럴) — 둘째는 개막 카드가 넣었다")
+	var armed := _box_at(hs, 0, slot_n)
+	var resting := _box_at(hs, 1, slot_n)
 	t.eq(float(armed["width"]), Look.PRESS_HOVER_BORDER_WIDTH_PX, "켜진 상자의 테두리가 두꺼운 쪽이다")
 	t.eq(float(resting["width"]), Look.PRESS_BORDER_WIDTH_PX, "안 켜진 상자는 쉬는 두께다")
 	t.ok(float(armed["width"]) - float(resting["width"]) > 2.0,
 		"둘의 차이가 스냅 바닥 2.0 보다 크다 — 안 그러면 켠 것이 화면에 안 닿는다")
 	t.eq(Color(armed["bg"]), Look.COL_START, "그리고 채움 색도 다르다 — 두 갈래로 말한다")
 	t.ok(Color(resting["bg"]) != Look.COL_START, "안 켜진 상자는 그 색이 아니다")
-	t.eq(hs.digits.size(), Rules.summon_slot_count(), "숫자도 상자마다 하나씩 그려진다")
+	t.eq(hs.digits.size(), slot_n, "숫자도 상자마다 하나씩 그려진다")
 	t.eq(str(hs.digits[0]["text"]), "1", "첫 상자에 1 이 적혀 있다")
-	t.eq(str(hs.digits[Rules.summon_slot_count() - 1]["text"]),
-		str(Rules.summon_slot_count()), "마지막 상자에 그 번호가 적혀 있다")
+	t.eq(str(hs.digits[slot_n - 1]["text"]), str(slot_n), "마지막 상자에 그 번호가 적혀 있다")
 	# The glyph rides the box: a rect origin plus a non-zero offset, never the rect's own corner.
-	t.eq(Vector2(hs.digits[0]["at"]), Look.slot_rect_px(0).position + Look.HUD_SLOT_TEXT_OFFSET_PX,
+	t.eq(Vector2(hs.digits[0]["at"]), Look.slot_rect_px(0, slot_n).position + Look.HUD_SLOT_TEXT_OFFSET_PX,
 		"숫자가 상자 안에 놓였다 — 상자의 원점에 그린 글자는 놓인 적이 없는 글자다")
 
-	# V7 — the bars. Two bound slots draw one each; three unbound slots draw none at all.
-	t.eq(hs.bars.size(), 2, "빈 슬롯 3·4·5 에는 막대가 아예 없다")
+	# V7 — the bars. Every REGISTERED slot draws one; the slots the run has not registered draw none
+	# at all, and there is no box for them either.
+	t.eq(hs.bars.size(), slot_n, "등록 안 된 칸에는 막대가 아예 없다")
 
-	# V6 — one body out, and the bar drops exactly one sixth.
-	var back: Rect2 = _bar_at(hs, 0)["back"]
-	var full: Rect2 = _bar_at(hs, 0)["fill"]
+	# V6 — one body out, and the bar drops by exactly one body's worth.
+	var back: Rect2 = _bar_at(hs, 0, slot_n)["back"]
+	var full: Rect2 = _bar_at(hs, 0, slot_n)["fill"]
 	t.eq(full.size.x, back.size.x, "내보내기 전에는 막대가 가득이다 (자가 점검)")
-	t.eq(Rules.slot_start_count(0), 6, "시작 근접 병력이 여섯이다 (아래 6분의 5 가 재는 값 — 자가 점검)")
+	var opens_with := Rules.start_bodies_of(0)
+	t.eq(opens_with, 10, "개막 첫 칸의 병력이 열이다 (아래 분수가 재는 값 — 자가 점검)")
 	game._unhandled_input(_press(at))
 	game._unhandled_input(_release(at))
 	t.eq(game.battle.boats.size(), 1, "한 척 내보냈다 (자가 점검)")
 	await t.pump_frames(2)
-	var after: Rect2 = _bar_at(hs, 0)["fill"]
-	t.ok(absf(after.size.x - back.size.x * 5.0 / 6.0) < 0.01,
-		"한 척 내보내면 막대가 정확히 6분의 5 로 줄어든다 (%.2f / %.2f)" % [after.size.x, back.size.x])
+	var after: Rect2 = _bar_at(hs, 0, slot_n)["fill"]
+	t.ok(absf(after.size.x - back.size.x * float(opens_with - 1) / float(opens_with)) < 0.01,
+		"한 척 내보내면 막대가 정확히 %d분의 %d 로 줄어든다 (%.2f / %.2f)"
+			% [opens_with, opens_with - 1, after.size.x, back.size.x])
 
 	# V7 again — an exhausted slot keeps an EMPTY RAIL, which is the only thing separating
 	# 「다 내보냈다」 from 「아직 아무것도 안 넣었다」.
-	for _k in 5:
+	for _k in opens_with - 1:
 		game.battle.summon(0, tile)
 	t.eq(game.battle.slot_reserve_ids(0).size(), 0, "슬롯을 다 비웠다 (자가 점검)")
 	await t.pump_frames(2)
-	t.eq(hs.bars.size(), 2, "다 내보낸 슬롯도 여전히 막대를 하나 그린다")
-	t.eq(Rect2(_bar_at(hs, 0)["fill"]).size.x, 0.0, "그 막대의 채움은 0 이다 — 빈 레일만 남는다")
-	t.eq(Rect2(_bar_at(hs, 0)["back"]), back, "레일 자체는 그대로 있다")
+	t.eq(hs.bars.size(), slot_n, "다 내보낸 슬롯도 여전히 막대를 하나 그린다")
+	t.eq(Rect2(_bar_at(hs, 0, slot_n)["fill"]).size.x, 0.0, "그 막대의 채움은 0 이다 — 빈 레일만 남는다")
+	t.eq(Rect2(_bar_at(hs, 0, slot_n)["back"]), back, "레일 자체는 그대로 있다")
 
 
 # -- L12 -------------------------------------------------------------------------------------------
@@ -556,8 +577,9 @@ func _the_boxes_clear_the_army(t, game: Game, fs: FieldView) -> void:
 	t.ok(fs.battle == game.battle, "필드가 물려 있다 (자가 점검)")
 
 	var boxes: Array[Rect2] = []
-	for i in Rules.summon_slot_count():
-		boxes.append(Look.slot_rect_px(i))
+	var slot_n := game.battle.army.slot_count()
+	for i in slot_n:
+		boxes.append(Look.slot_rect_px(i, slot_n))
 	var screen := Rect2(Vector2.ZERO, Look.viewport_size_px())
 	for i in boxes.size():
 		t.ok(boxes[i].size.x > 0.0 and boxes[i].size.y > 0.0, "%d번 상자에 넓이가 있다" % i)
@@ -714,16 +736,17 @@ func _a_refused_key_flashes_as_well_as_shakes(t, game: Game, hs: HudSpy) -> void
 		spent += 1
 	t.ok(game.battle.slot_reserve_ids(1).is_empty(), "2번 슬롯이 말랐다 (자가 점검)")
 	await t.pump_frames(2)
-	t.eq(hs.boxes.size(), Rules.summon_slot_count(), "상자가 표가 정한 수만큼 그려진다 (자가 점검)")
+	var slot_n := game.battle.army.slot_count()
+	t.eq(hs.boxes.size(), slot_n, "상자가 회차가 등록한 수만큼 그려진다 (자가 점검)")
 	var rest_bg := Color(hs.boxes[1]["bg"])
 	var rest_pos: Vector2 = (hs.boxes[1]["rect"] as Rect2).position
 	t.eq(rest_bg, Look.COL_SLOT_OFF, "쉴 때 그 상자는 안 눌리는 색이다 (자가 점검)")
-	t.eq(rest_pos, Look.slot_rect_px(1).position, "그리고 제자리에 있다 (자가 점검)")
+	t.eq(rest_pos, Look.slot_rect_px(1, slot_n).position, "그리고 제자리에 있다 (자가 점검)")
 
 	game._unhandled_input(_key(KEY_2))
 	t.eq(game._armed_slot, -1, "마른 슬롯은 안 켜진다 (자가 점검)")
 	await t.pump_frames(1)
-	t.eq(hs.boxes.size(), Rules.summon_slot_count(), "거절한 프레임에도 같은 수가 그려진다 (자가 점검)")
+	t.eq(hs.boxes.size(), slot_n, "거절한 프레임에도 같은 수가 그려진다 (자가 점검)")
 	var hit_bg := Color(hs.boxes[1]["bg"])
 	var hit_pos: Vector2 = (hs.boxes[1]["rect"] as Rect2).position
 
@@ -742,7 +765,7 @@ func _a_refused_key_flashes_as_well_as_shakes(t, game: Game, hs: HudSpy) -> void
 	game._unhandled_input(_key(KEY_1))
 	await t.pump_frames(1)
 	t.eq(game._armed_slot, 0, "1번은 받아들여졌다 (자가 점검)")
-	t.eq((hs.boxes[0]["rect"] as Rect2).position, Look.slot_rect_px(0).position,
+	t.eq((hs.boxes[0]["rect"] as Rect2).position, Look.slot_rect_px(0, slot_n).position,
 		"받아들여진 상자는 안 흔들린다 — 두 답이 같은 말을 하지 않는다")
 	game._unhandled_input(_key(KEY_1))
 
@@ -765,9 +788,12 @@ func _an_armed_slot_that_has_run_dry_is_not_green(t, game: Game, fs: FieldView, 
 	t.eq(Color(hs.boxes[0]["bg"]), Look.COL_START, "켜자마자 상자가 초록이다 (자가 점검)")
 
 	game._unhandled_input(_press(at))
-	for _k in 5:
+	# ⚠ Beat until dry rather than a literal count — see `_a_dry_slot`.
+	var beats := 0
+	while not game.battle.slot_reserve_ids(0).is_empty() and beats < 40:
 		game._process(0.20)
-	t.eq(game.battle.slot_reserve_ids(0).size(), 0, "여섯이 다 나가 슬롯이 말랐다 (자가 점검)")
+		beats += 1
+	t.eq(game.battle.slot_reserve_ids(0).size(), 0, "몸이 다 나가 슬롯이 말랐다 (자가 점검)")
 	t.eq(game._armed_slot, 0, "그런데 슬롯은 여전히 켜져 있다 — 마른 채 켜진 그 상태다 (자가 점검)")
 	game._unhandled_input(_release(at))
 	await t.pump_frames(2)
@@ -778,7 +804,7 @@ func _an_armed_slot_that_has_run_dry_is_not_green(t, game: Game, fs: FieldView, 
 		"그래도 테두리는 켜진 두께다 — 테두리는 「어느 키인가」를 말한다")
 	# The floor: a slot that is neither armed nor dry still reads as the third tone, so the grey above
 	# is not "every box is grey now".
-	t.ok(Rules.summon_type_of(1) >= 0 and not game.battle.slot_reserve_ids(1).is_empty(),
+	t.ok(game.battle.army.slot_type_of(1) >= 0 and not game.battle.slot_reserve_ids(1).is_empty(),
 		"2번 슬롯은 물려 있고 몸도 남아 있다 (자가 점검)")
 	t.eq(Color(hs.boxes[1]["bg"]), Look.COL_BUTTON, "그 상자는 세 번째 색 그대로다")
 	t.eq(float(hs.boxes[1]["width"]), Look.PRESS_BORDER_WIDTH_PX, "테두리도 쉬는 두께다")
@@ -787,6 +813,160 @@ func _an_armed_slot_that_has_run_dry_is_not_green(t, game: Game, fs: FieldView, 
 
 ## Any tile a boat may be sent to, so a plan can be committed. The band rows need a committed fight
 ## and `commit()` refuses an empty plan.
+## ⚠⚠⚠ **THE ROW THIS WHOLE FILE WAS MISSING, AND `_park_on` IS EXACTLY WHY** (2026-08-25).
+##
+## **Every other press in this file goes through `_park_on`, which puts its tile at the MIDDLE OF THE
+## SCREEN — and the middle is the one screen point that is right however broken the conversion is.**
+## `screen_to_world_px(640, 360)` IS `_ground_centre_px()` by construction, at every zoom, every yaw,
+## every pitch and every height. `_park_on`'s own header says so, and says it as a virtue. It is a
+## virtue for what those rows measure (which tile, which beat, which body) and it is a **blind spot**
+## for whether a press lands where the player is pointing.
+##
+## **Three separate faults in that conversion lived under this file's green at once**: a camera parked
+## on the wrong side of its target so the island drew half a turn around, a `cos(pitch)` where the
+## ground's foreshortening is its sine, and a flat plane standing in for a landscape with real hills.
+## The user found all three in one sentence, by pressing somewhere other than the middle:
+## 「놓는 위치랑 배의 위치가 다른데? 내가 놓는데에 배가 놔지지 않는데」.
+##
+## ⇒ **This row presses AWAY from the centre.** **The floor that keeps it honest is the distance from
+## the centre**: without it a sweep that happened to sample only the middle of the screen would read
+## exactly the same as this one, which is how the blind spot got here in the first place.
+##
+## ⚠⚠ **WHAT THIS ROW CANNOT CATCH, SAID OUT LOUD.** It aims with `field_view.tile_to_screen_px` and
+## reads back through the shell's `_tile_at`, and those two are the FORWARD and the INVERSE of one
+## expression — **a fault in both cancels inside the round trip**, which is `how-nets-lie`'s "A/B
+## comparison catches diverged, never vanished". Measured, not assumed: put the camera's 180° flip
+## back, or the cosine, and this file stays green at 174 while `net_camera` reddens by 6 and by 18.
+## ⇒ **The chain is two links and both are measured.** `net_camera` ties the forward to
+## `Camera3D.unproject_position` (the engine's own projection, in a 1280 x 720 `SubViewport`); this
+## row ties the press to that forward. What is pinned HERE, because it costs one line and cannot
+## cancel, is that the engine's camera and the pure axes still name the same screen-right.
+func _a_press_away_from_the_centre(t, game: Game, fs: FieldView) -> void:
+	game._open_island()
+	var g: Grid = game.battle.grid
+
+	# The survey framing, written out rather than inherited from whatever the last row left: zoom 1.0,
+	# the opening yaw and pitch, camera at the origin and then clamped, which is what the shell hands
+	# the player on an island this size.
+	fs.zoom = 1.0
+	fs.cam_yaw_deg = Look.CAM_YAW_DEG
+	fs.cam_pitch_deg = Look.CAM_PITCH_DEG
+	fs.cam_px = Vector2.ZERO
+	fs._clamp_cam()
+
+	fs._process(1.0 / 60.0)
+	# ⚠ **The one pin here that a round trip cannot cancel**: the engine's camera and the pure axes
+	# have to name the same screen-right. A camera parked on the wrong side of its target answers
+	# `(-1, 0, 0)` at yaw 0 — the island drawn half a turn from the board every press is read against.
+	var cam_right: Vector3 = fs._cam.transform.basis.x
+	t.ok(cam_right.distance_to(Vector3(fs._ground_right().x, 0.0, fs._ground_right().y)) < 0.001,
+		"엔진 카메라의 화면 오른쪽이 _ground_right 와 같은 방향이다 (%.3f, %.3f, %.3f)"
+			% [cam_right.x, cam_right.y, cam_right.z])
+	var cam_down: Vector3 = -fs._cam.transform.basis.y
+	t.ok(Vector2(cam_down.x, cam_down.z).normalized().distance_to(fs._ground_down()) < 0.001,
+		"화면 아래쪽도 _ground_down 과 같다 — 둘이 짝을 이뤄 180° 회전을 잡는다")
+
+	var centre := Look.viewport_size_px() * 0.5
+	var wrong := 0
+	var seen := 0
+	var far := 0
+	var furthest := -1
+	var furthest_px := Vector2.ZERO
+	var furthest_d := 0.0
+	for tile in g.w * g.h:
+		if not g.can_summon_at(tile):
+			continue
+		var tx := tile % g.w
+		var ty := tile / g.w
+		var px := fs.tile_to_screen_px(tx, ty)
+		if px.x < 0.0 or px.y < 0.0 or px.x > Look.VIEWPORT_W_PX or px.y > Look.VIEWPORT_H_PX:
+			continue
+		seen += 1
+		var d := px.distance_to(centre)
+		if d > 150.0:
+			far += 1
+		if d > furthest_d:
+			furthest_d = d
+			furthest = tile
+			furthest_px = px
+		if game._tile_at(px) != tile:
+			wrong += 1
+	t.ok(seen >= 20, "화면에 뜬 소환 가능 칸이 %d개다 (자가 점검 — 0개면 아무것도 안 쟀다)" % seen)
+	t.ok(far >= 10,
+		"그중 %d개는 화면 한가운데에서 150px 넘게 떨어져 있다 — 가운데만 찍는 검사가 아니다" % far)
+	t.eq(wrong, 0, "그 칸들이 그려진 화면점을 누르면 셸이 전부 그 칸으로 읽는다")
+
+	# ⚠⚠ **THE SAME QUESTION ON LAND, AND IT IS NOT THE SAME ANSWER.** The band is water and the sea
+	# stands a flat 0.15 tiles up, so its height is worth 0.18 of a tile and never crosses a boundary —
+	# **on the band alone, the flat plane and the landscape agree.** Land is 1 to 3 tiles up and a
+	# press there was off by up to 4 rows, which is the gesture on the other end of the same plan:
+	# `game._ring_hit_at` takes a drop BACK by a press on its landing ring, and a landing is land.
+	var land_wrong := 0
+	var land_seen := 0
+	var flat_wrong := 0
+	for tile in g.w * g.h:
+		var tx := tile % g.w
+		var ty := tile / g.w
+		if not g.is_passable(tx, ty):
+			continue
+		var px := fs.tile_to_screen_px(tx, ty)
+		if px.x < 0.0 or px.y < 0.0 or px.x > Look.VIEWPORT_W_PX or px.y > Look.VIEWPORT_H_PX:
+			continue
+		land_seen += 1
+		# The flat board's own answer, which is what the shell used until 2026-08-25.
+		if fs.world_to_tile(fs.screen_to_world_px(px)) != Vector2i(tx, ty):
+			flat_wrong += 1
+		# ⚠ Not `== 0`: a tile standing BEHIND a taller one is genuinely not on screen at its own
+		# centre, and the walk answering with the hill in front of it is the right answer. Measured on
+		# this island: 19 of its 180 walkable tiles are hidden that way, so the bound is the one that
+		# separates "occluded" from "the mapping is wrong" — 4 in 5 have to come back exactly.
+		if game._tile_at(px) != tile:
+			land_wrong += 1
+	t.ok(land_seen >= 100, "화면에 뜬 걸을 수 있는 칸이 %d개다 (자가 점검)" % land_seen)
+	t.ok(float(land_wrong) < float(land_seen) * 0.2,
+		"언덕 위를 눌러도 커서 밑 칸이 잡힌다 — %d/%d 만 어긋난다 (가려진 칸들이다)" % [land_wrong, land_seen])
+	t.ok(flat_wrong > land_seen / 2,
+		"자가 점검 — 높이를 무시한 옛 셈은 %d/%d 칸에서 틀린다 (그래서 위 행이 뭔가를 잰다)"
+			% [flat_wrong, land_seen])
+
+	# -- and the boat has to be ON THE WATER the moment it is placed --------------------------------
+	# ⚠⚠ **The second half of the same sentence**: 「그리고 배를 놨으면 그게 바다에 보여야할듯」.
+	# `_paint_bodies` skipped every boat while `battle.committed()` was false, so a placed boat was in
+	# the sim and nowhere on screen — no hull, no body on its deck, and no landing ring to take it
+	# back with. The reason written in the code was the harbour drag's (thirteen hulls on one tile) and
+	# the harbour drag is deleted.
+	t.ok(furthest >= 0 and furthest_d > 150.0,
+		"가장 먼 소환 칸이 화면 한가운데에서 %.0fpx 떨어져 있다 (자가 점검)" % furthest_d)
+	game._unhandled_input(_key(KEY_1))
+	game._unhandled_input(_press(furthest_px))
+	t.eq(game.battle.boats.size(), 1, "화면 구석을 눌러도 배가 한 척 뜬다")
+	var boat: Dictionary = game.battle.boats[0]
+	t.eq(Vector2(boat["pos"]), g.tile_point(furthest), "그 배가 앉은 칸이 누른 그 칸이다")
+	t.ok(not game.battle.committed(), "아직 확정 전이다 (자가 점검 — 이 아래가 재는 것이 계획 화면이다)")
+
+	fs._process(1.0 / 60.0)
+	t.eq(fs._hulls_used, 1, "확정 전에도 선체가 하나 그려진다 — 놓은 배는 바다에 보인다")
+	t.ok(fs._hulls[0].visible, "그 선체가 실제로 켜져 있다")
+	var hull_xz := Vector2(fs._hulls[0].position.x, fs._hulls[0].position.z) * Look.TILE_PX
+	t.ok(hull_xz.distance_to(Look.tile_point_px(g.tile_point(furthest))) < 0.01,
+		"그리고 선체가 누른 칸 위에 있다 — 다른 데 그려진 것이 아니다")
+	# The body it carries is on the deck too: a hull with nobody on it says the slot spent nothing.
+	# ⚠ In TILE units, and the deck's own point is `tile_point_px(pos) / TILE_PX` — half a tile past
+	# `tile_point`, which names a corner. Compared against the corner it is 0.71 out, which is the
+	# diagonal and not a body somewhere else.
+	var deck := Look.tile_point_px(g.tile_point(furthest)) / Look.TILE_PX
+	var on_deck := 0
+	for k in fs._sprites_used:
+		var s: Sprite3D = fs._sprites[k]
+		if Vector2(s.position.x, s.position.z).distance_to(deck) < 0.4:
+			on_deck += 1
+	t.ok(on_deck > 0, "탄 몸도 그 갑판 위에 그려진다 (%d개)" % on_deck)
+	# And the undo has a picture: `game._ring_hit_at` takes the drop back when a press lands inside
+	# `TARGET_RING_R_PX` of the landing, and nothing drew that ring until 2026-08-25.
+	t.ok(_ground_verts_of(fs, Look.COL_BOAT).size() > 0,
+		"그 배의 상륙 고리가 바닥 버퍼에 그려져 있다 — 무르는 조작에 그림이 생겼다")
+
+
 func _sendable_tile(g: Grid) -> int:
 	for tile in g.w * g.h:
 		if g.home_harbour_for(tile) >= 0:
@@ -886,8 +1066,8 @@ func _ghost_sprites(fs: FieldView) -> Array:
 
 ## The captured box whose resting rectangle is slot `i`'s. Matched by POSITION rather than by index in
 ## the capture array, so the row still names the right box if the draw order is ever changed.
-func _box_at(hs: HudSpy, i: int) -> Dictionary:
-	var want := Look.slot_rect_px(i)
+func _box_at(hs: HudSpy, i: int, n: int) -> Dictionary:
+	var want := Look.slot_rect_px(i, n)
 	for raw: Dictionary in hs.boxes:
 		if (raw["rect"] as Rect2).position.distance_to(want.position) < 0.01:
 			return raw
@@ -895,8 +1075,8 @@ func _box_at(hs: HudSpy, i: int) -> Dictionary:
 
 
 ## The captured BAR whose rail is slot `i`'s, matched by rectangle for the reason `_box_at` is.
-func _bar_at(hs: HudSpy, i: int) -> Dictionary:
-	var want := Look.slot_bar_rect_px(i)
+func _bar_at(hs: HudSpy, i: int, n: int) -> Dictionary:
+	var want := Look.slot_bar_rect_px(i, n)
 	for raw: Dictionary in hs.bars:
 		if (raw["back"] as Rect2).position.distance_to(want.position) < 0.01:
 			return raw
@@ -953,3 +1133,11 @@ func _wheel(at: Vector2, up: bool) -> InputEventMouseButton:
 	ev.pressed = true
 	ev.position = at
 	return ev
+
+
+## Takes the OPENING BEAST CARD through the real input door. ⚠⚠ **A run opens on a card screen since
+## 티켓 15** (「시작하자마자 세 개 중에 하나 고르는 거」), so the map sits one press further from the
+## title than it used to. Card 0, always, so the fixture is the same run every time.
+func _take_opening_card(game: Game) -> void:
+	if game.run != null and game.run.state() == Run.State.PICK:
+		game._unhandled_input(_click(Look.card_rect_px(0).get_center()))

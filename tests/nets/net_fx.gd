@@ -57,10 +57,10 @@ func run(t) -> void:
 ## and the attacker parameter dropped altogether are all indistinguishable from the truth. The idle
 ## pair are placed out of everyone's reach and detect, so they change nothing except the indices.
 func _attack_event_shape(t) -> void:
-	var army := _army_of([Rules.CELL_RANGED, Rules.CELL_MELEE])
+	var army := _army_of([Rules.CROW, Rules.WOLF])
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
-		_spawn(ARENA_W, Rules.BISON, 20, 9),   # idle: 8.9 tiles from the fight, outside detect 6
-		_spawn(ARENA_W, Rules.BISON, 13, 5),   # the one that swings
+		_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 9),   # idle: 8.9 tiles from the fight, outside detect 6
+		_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5),   # the one that swings
 	], 999.0)
 	_ashore(b, 0, Vector2(3, 9))               # idle: 10.8 tiles away, outside its own 5.5 reach
 	_ashore(b, 1, Vector2(12, 5))
@@ -76,29 +76,29 @@ func _attack_event_shape(t) -> void:
 	t.eq(bool(mine["from_enemy"]), false, "병사가 때린 것이다")
 	t.eq(int(mine["from"]), 1, "공격자 id 가 그 병사의 army id 다 (0번이 아니라 1번이 때렸다)")
 	t.eq(int(mine["to"]), 1, "표적이 1번 적이다")
-	t.eq(float(mine["dmg"]), Rules.damage_of(Rules.CELL_MELEE), "피해가 근접 셀의 값이다")
-	t.eq(float(mine["area"]), Rules.area_of(Rules.CELL_MELEE), "근접은 area 가 0.0 이다 — 뷰는 이걸로 찌르기를 고른다")
+	t.eq(float(mine["dmg"]), Rules.damage_of(Rules.WOLF), "피해가 근접 셀의 값이다")
+	t.eq(float(mine["area"]), Rules.area_of(Rules.WOLF), "근접은 area 가 0.0 이다 — 뷰는 이걸로 찌르기를 고른다")
 	t.eq(PackedInt32Array(mine["splash"]).size(), 0, "단일 표적이라 splash 가 비어 있다")
 
 	t.eq(bool(theirs["from_enemy"]), true, "둘째 사건은 적이 때린 것이다")
 	t.eq(int(theirs["from"]), 1, "공격자 id 가 그 적의 인덱스다 (1번 들소가 때렸다)")
 	t.eq(int(theirs["to"]), 1, "표적이 1번 병사다")
-	t.eq(float(theirs["dmg"]), Rules.damage_of(Rules.BISON), "피해가 들소의 값이다")
+	t.eq(float(theirs["dmg"]), Rules.damage_of(Rules.SHIELDBEARER), "피해가 들소의 값이다")
 
 	# The event is a fact ABOUT the damage, so the damage has to be in the columns too — an event
 	# appended by a function that no longer subtracts anything would pass every check above.
-	t.eq(b.enemy_hp[1], Rules.hp_of(Rules.BISON) - Rules.damage_of(Rules.CELL_MELEE),
+	t.eq(b.enemy_hp[1], Rules.hp_of(Rules.SHIELDBEARER) - Rules.damage_of(Rules.WOLF),
 			"사건만 나온 게 아니라 적 HP 가 실제로 줄었다")
-	t.eq(army.hp[1], Rules.hp_of(Rules.CELL_MELEE) - Rules.damage_of(Rules.BISON),
+	t.eq(army.hp[1], Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.SHIELDBEARER),
 			"병사 HP 도 실제로 줄었다")
-	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.BISON), "구경만 한 적은 안 맞았다")
-	t.eq(army.hp[0], Rules.hp_of(Rules.CELL_RANGED), "구경만 한 병사도 안 맞았다")
+	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.SHIELDBEARER), "구경만 한 적은 안 맞았다")
+	t.eq(army.hp[0], Rules.hp_of(Rules.CROW), "구경만 한 병사도 안 맞았다")
 
 	# A ranged blow is the same event with a non-zero range on the ATTACKER's type — that is the only
 	# thing telling item 1 (tracer) from item 2 (lunge), so the view has to be able to reach it.
-	var shooter := _army_of([Rules.CELL_RANGED])
+	var shooter := _army_of([Rules.CROW])
 	var r := _battle_of(_open(ARENA_W, ARENA_H), shooter,
-			[_spawn(ARENA_W, Rules.BISON, 12, 5)], 999.0)
+			[_spawn(ARENA_W, Rules.SHIELDBEARER, 12, 5)], 999.0)
 	_ashore(r, 0, Vector2(8, 5))
 	r.begin_frame()
 	r.step(TICK_ONE)
@@ -106,7 +106,7 @@ func _attack_event_shape(t) -> void:
 	var shot: Dictionary = r.events[0]
 	t.ok(Rules.range_of(int(shooter.type_id[int(shot["from"])])) > 0.0,
 			"공격자 타입의 사거리가 0보다 크다 — 뷰가 예광선을 고르는 기준")
-	t.eq(float(shot["area"]), Rules.area_of(Rules.CELL_RANGED), "원거리 셀은 area 가 1.0 이다")
+	t.eq(float(shot["area"]), Rules.area_of(Rules.CROW), "원거리 셀은 area 가 1.0 이다")
 
 
 # -- splash ----------------------------------------------------------------------------------------
@@ -115,11 +115,11 @@ func _attack_event_shape(t) -> void:
 ## corpse: an enemy already dead is skipped by the damage loop, and a view that flashed the radius
 ## instead would light it up.
 func _splash_carries_only_real_victims(t) -> void:
-	var army := _army_of([Rules.CELL_RANGED])
+	var army := _army_of([Rules.CROW])
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
-		_spawn(ARENA_W, Rules.BISON, 12, 5),   # primary, 4.0 from the soldier
-		_spawn(ARENA_W, Rules.BISON, 13, 5),   # 1.0 from the primary — inside area 1.0
-		_spawn(ARENA_W, Rules.BISON, 13, 6),   # 1.41421 from the primary — outside it
+		_spawn(ARENA_W, Rules.SHIELDBEARER, 12, 5),   # primary, 4.0 from the soldier
+		_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5),   # 1.0 from the primary — inside area 1.0
+		_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 6),   # 1.41421 from the primary — outside it
 	], 999.0)
 	_ashore(b, 0, Vector2(8, 5))
 	b.begin_frame()
@@ -131,16 +131,21 @@ func _splash_carries_only_real_victims(t) -> void:
 	# produces, and indexing it kills the rest of this net's checks instead of reddening one.
 	t.ok(splash.has(1), "실린 것은 직교 1.0 칸의 형제다 (대각 1.41421 은 반경 밖)")
 	t.ok(not splash.has(2), "대각 형제는 안 실렸다")
-	t.eq(b.enemy_hp[1], Rules.hp_of(Rules.BISON) - Rules.damage_of(Rules.CELL_RANGED),
+	# ⚠ **A `<=` and not an equality since 티켓 15**: the crow's own bleed lands on everyone the blow
+	# hit and `_phase_status` takes its first sip in the SAME sub-step, so the exact figure carries one
+	# tick of drip on top of the blow. What this row is about is that the splashed sibling took the
+	# blow at all, and the row below (an untouched sibling at FULL hp) is the ceiling that keeps the
+	# `<=` from being satisfied by anything.
+	t.ok(b.enemy_hp[1] <= Rules.hp_of(Rules.SHIELDBEARER) - Rules.damage_of(Rules.CROW) + Rules.EPS,
 			"splash 에 실린 그 적이 실제로 맞았다")
-	t.eq(b.enemy_hp[2], Rules.hp_of(Rules.BISON), "안 실린 형제는 안 맞았다")
+	t.eq(b.enemy_hp[2], Rules.hp_of(Rules.SHIELDBEARER), "안 실린 형제는 안 맞았다")
 
 	# The same fixture with the sibling already dead. It is still inside the radius and must not be
 	# in `splash` — the check that separates "who took it" from "who was standing there".
-	var again := _army_of([Rules.CELL_RANGED])
+	var again := _army_of([Rules.CROW])
 	var c := _battle_of(_open(ARENA_W, ARENA_H), again, [
-		_spawn(ARENA_W, Rules.BISON, 12, 5),
-		_spawn(ARENA_W, Rules.BISON, 13, 5),
+		_spawn(ARENA_W, Rules.SHIELDBEARER, 12, 5),
+		_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5),
 	], 999.0)
 	_ashore(c, 0, Vector2(8, 5))
 	c.enemy_alive[1] = 0
@@ -149,7 +154,9 @@ func _splash_carries_only_real_victims(t) -> void:
 	c.step(TICK_ONE)
 	var dead_ev: Dictionary = c.events[0]
 	t.eq(PackedInt32Array(dead_ev["splash"]).size(), 0, "반경 안이어도 이미 죽은 놈은 splash 에 안 실린다")
-	t.eq(c.enemy_hp[0], Rules.hp_of(Rules.BISON) - Rules.damage_of(Rules.CELL_RANGED),
+	# ⚠ `<=` for the reason the row above carries: the crow's own bleed takes its first sip in the
+	# same sub-step as the blow.
+	t.ok(c.enemy_hp[0] <= Rules.hp_of(Rules.SHIELDBEARER) - Rules.damage_of(Rules.CROW) + Rules.EPS,
 			"그래도 주 표적은 맞았다 — 빈 splash 가 '아무 일도 없었다'가 아니다")
 
 
@@ -159,13 +166,13 @@ func _splash_carries_only_real_victims(t) -> void:
 ## oldest-first and the phase order is a contract, so a view can rely on seeing the blow before the
 ## burst — reversed, the burst would play a frame before the hit that caused it.
 func _death_events_come_after_the_attacks_that_caused_them(t) -> void:
-	var army := _army_of([Rules.CELL_MELEE])
+	var army := _army_of([Rules.WOLF])
 	army.hp[0] = 1.0
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
-		_spawn(ARENA_W, Rules.BISON, 13, 5),
-		_spawn(ARENA_W, Rules.BISON, 20, 9),
+		_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5),
+		_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 9),
 	], 999.0)
-	b.enemy_hp[0] = Rules.damage_of(Rules.CELL_MELEE)
+	b.enemy_hp[0] = Rules.damage_of(Rules.WOLF)
 	_ashore(b, 0, Vector2(12, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -207,7 +214,7 @@ func _death_events_come_after_the_attacks_that_caused_them(t) -> void:
 ## one line earlier and is the answer, so the ambiguous "which tile" (the dock the boat aimed at, or
 ## the spot this soldier actually stands on) never enters the event at all.
 func _land_events(t) -> void:
-	var army := _army_of([Rules.CELL_MELEE, Rules.CELL_MELEE])
+	var army := _army_of([Rules.WOLF, Rules.WOLF])
 	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.LION, 20, 9)], 999.0)
 	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
 	t.ok(b.send(0, landing) >= 0, "병사 하나를 배에 실었다")
@@ -242,8 +249,8 @@ func _land_events(t) -> void:
 # -- begin_frame -----------------------------------------------------------------------------------
 
 func _begin_frame_clears(t) -> void:
-	var army := _army_of([Rules.CELL_MELEE])
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.BISON, 13, 5)], 999.0)
+	var army := _army_of([Rules.WOLF])
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5)], 999.0)
 	_ashore(b, 0, Vector2(12, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -289,7 +296,7 @@ func _frame_ceiling_and_the_pile_up_without_it(t) -> void:
 ## that is sometimes there is worse than none — combat-juice, item 5, and section 0 records the user
 ## choosing to build the real one knowing it costs the boss 29% of its damage.
 func _lion_declares_before_it_lands(t) -> void:
-	var army := _army_of([Rules.CELL_MELEE])
+	var army := _army_of([Rules.WOLF])
 	# **A water wall between them, not just distance.** Out of reach alone is not enough: the soldier
 	# would walk over and the fixture would measure a blow at whatever moment it arrived. With no path
 	# `step_toward` hands back the tile it is on and the soldier stands, so the frame it enters reach
@@ -311,7 +318,7 @@ func _lion_declares_before_it_lands(t) -> void:
 	_place(b, 0, Vector2(12, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
-	t.eq(army.hp[0], Rules.hp_of(Rules.CELL_MELEE),
+	t.eq(army.hp[0], Rules.hp_of(Rules.WOLF),
 			"사거리에 들어온 그 프레임에 피해가 0이다 — 첫 일격도 예고된다")
 	# `enemy_windup` is a PackedFloat32Array, so the 64-bit constant does not survive the store
 	# exactly — every comparison against it is a tolerance, never `eq`.
@@ -331,14 +338,14 @@ func _lion_declares_before_it_lands(t) -> void:
 		b.begin_frame()
 		b.step(0.05)
 		waited += 0.05
-		if army.hp[0] < Rules.hp_of(Rules.CELL_MELEE) and landed < 0.0:
+		if army.hp[0] < Rules.hp_of(Rules.WOLF) and landed < 0.0:
 			landed = waited
 			break
 	t.ok(landed > 0.0, "예고가 끝나자 일격이 실제로 떨어졌다")
 	t.ok(absf(landed - Rules.LION_WINDUP_SEC) <= 0.06,
 			"떨어진 시점이 LION_WINDUP_SEC 근처다 (%.2f초 / 선언 %.2f초)"
 			% [landed, Rules.LION_WINDUP_SEC])
-	t.eq(army.hp[0], Rules.hp_of(Rules.CELL_MELEE) - Rules.damage_of(Rules.LION),
+	t.eq(army.hp[0], Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.LION),
 			"떨어진 피해는 사자의 값이다")
 	t.eq(b.enemy_windup[0], 0.0, "터진 뒤 예고는 지워졌다")
 	t.eq(b.enemy_windup_at[0], -1, "잠근 표적도 풀렸다")
@@ -360,16 +367,16 @@ func _lion_declares_before_it_lands(t) -> void:
 
 	# The floor under all of it: a type with no wind-up hits on the very first frame. Without this the
 	# lion's silence above could just as well be "the enemy never attacked at all".
-	var bison_army := _army_of([Rules.CELL_MELEE])
+	var bison_army := _army_of([Rules.WOLF])
 	var bb := _battle_of(_open(ARENA_W, ARENA_H), bison_army,
-			[_spawn(ARENA_W, Rules.BISON, 13, 5)], 999.0)
+			[_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5)], 999.0)
 	_ashore(bb, 0, Vector2(12, 5))
 	bb.begin_frame()
 	bb.step(TICK_ONE)
-	t.eq(bison_army.hp[0], Rules.hp_of(Rules.CELL_MELEE) - Rules.damage_of(Rules.BISON),
+	t.eq(bison_army.hp[0], Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.SHIELDBEARER),
 			"예고가 없는 들소는 첫 프레임에 그냥 때린다")
 	t.eq(bb.enemy_windup[0], 0.0, "들소는 예고를 안 건다")
-	t.eq(bb._windup_of(Rules.BISON), 0.0, "_windup_of 는 사자 말고 전부 0.0 이다")
+	t.eq(bb._windup_of(Rules.SHIELDBEARER), 0.0, "_windup_of 는 사자 말고 전부 0.0 이다")
 	t.eq(bb._windup_of(Rules.LION), Rules.LION_WINDUP_SEC, "그리고 사자만 LION_WINDUP_SEC 이다")
 
 
@@ -424,9 +431,9 @@ func _windup_is_thrown_away_whole(t) -> void:
 ## written into `soldier_pos` would change who is inside whose reach, and then the effect has rewritten
 ## the rule it exists to decorate.
 func _events_do_not_move_the_sim(t) -> void:
-	var army := _army_of([Rules.CELL_MELEE, Rules.CELL_RANGED])
+	var army := _army_of([Rules.WOLF, Rules.CROW])
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
-		_spawn(ARENA_W, Rules.BISON, 13, 5),
+		_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5),
 		_spawn(ARENA_W, Rules.LION, 13, 7),
 	], 999.0)
 	_ashore(b, 0, Vector2(12, 5))
@@ -468,7 +475,7 @@ func _declared() -> Dictionary:
 	# its first line from then on and the wind-up is never touched again, so the stale value reads as
 	# "it was kept". The spare stands outside the lion's detect 2 and every step here is still, so it
 	# never joins the fight.
-	var army := _army_of([Rules.CELL_MELEE, Rules.CELL_MELEE])
+	var army := _army_of([Rules.WOLF, Rules.WOLF])
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.LION, 13, 5)], 999.0)
 	_ashore(b, 0, Vector2(12, 5))
 	_ashore(b, 1, Vector2(6, 8))
@@ -483,13 +490,13 @@ func _declared() -> Dictionary:
 func _melee(frames: int, clear_each_frame: bool) -> Dictionary:
 	var types := []
 	for _i in 8:
-		types.append(Rules.CELL_MELEE)
+		types.append(Rules.WOLF)
 	for _i in 5:
-		types.append(Rules.CELL_RANGED)
+		types.append(Rules.CROW)
 	var army := _army_of(types)
 	var spawns := []
 	for k in 6:
-		spawns.append(_spawn(ARENA_W, Rules.BISON, 15 + k % 3, 4 + k / 3))
+		spawns.append(_spawn(ARENA_W, Rules.SHIELDBEARER, 15 + k % 3, 4 + k / 3))
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, spawns, 9999.0)
 	for i in 13:
 		_ashore(b, i, Vector2(4 + i % 5, 3 + i / 5))
@@ -550,20 +557,19 @@ func _grid_of(rows: Array) -> Grid:
 
 
 ## `Army.add(type_id)` is gone — a body is `recruit`ed from a SLOT now. Every `type_id` this file passes
-## is one `SUMMON_SLOTS` already binds, so it is resolved back to its slot here rather than at every
+## is a PLAYER row, so it is registered into the army's own slots here rather than at every
 ## call site.
 func _army_of(types: Array) -> Army:
 	var a := Army.new()
+	# ⚠ **The slots are the ARMY's now, so the resolution asks the army rather than a constant table.**
+	# `register_species` is idempotent-by-refusal, so asking for the same species twice costs one slot.
 	for raw in types:
-		a.recruit(_slot_of_type(int(raw)))
+		var ty := int(raw)
+		var slot := a.slot_of_type(ty)
+		if slot < 0:
+			slot = a.register_species(ty)
+		a.recruit(slot)
 	return a
-
-
-func _slot_of_type(type_id: int) -> int:
-	for s in Rules.summon_slot_count():
-		if Rules.summon_type_of(s) == type_id:
-			return s
-	return 0
 
 
 func _spawn(w: int, type_id: int, x: int, y: int) -> Dictionary:

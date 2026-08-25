@@ -43,13 +43,12 @@ func _summon_px(n: int) -> Vector2:
 		if seen < n:
 			seen += 1
 			continue
-		var world := Look.tile_point_px(g.tile_point(t))
-		var span := Look.viewport_size_px() / fv.zoom
-		span.y /= cos(deg_to_rad(fv.cam_pitch_deg))
-		var centre := fv.cam_px + span * 0.5
-		var off := world - centre
-		return Vector2((off.x / span.x + 0.5) * Look.VIEWPORT_W_PX,
-			(off.y / span.y + 0.5) * Look.VIEWPORT_H_PX)
+		# The VIEW's own forward, and not a copy of it. Three probes and three shooters each carried a
+		# private one; all six were the flat board's, all six ignored the yaw, and every click they
+		# aimed landed on a tile next to the one it meant (2026-08-25).
+		var tx := t % g.w
+		var ty := t / g.w
+		return fv.tile_to_screen_px(tx, ty)
 	return Vector2.ZERO
 
 

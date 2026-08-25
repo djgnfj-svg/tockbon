@@ -78,8 +78,12 @@ func run(t) -> void:
 ## Wins island 0, at a fixed seed unless `seed` is < 0, and hands back the `Run` sitting in `PICK`.
 func _won_run(seed: int = 1) -> Run:
 	var r := Run.new()
+	# ⚠ **Seed FIRST, then walk past the opening round.** `seed_cards` re-deals an untouched round, so
+	# seeding after the opening pick would leave WHICH species the run registered random — and the
+	# post-win draw's beast pool, and therefore its cards, would move run to run.
 	if seed >= 0:
 		r.seed_cards(seed)
+	_opened(r)
 	r.enter_node(0)
 	r.finish_island(true)
 	return r
@@ -98,20 +102,33 @@ func _the_three_cards(t) -> void:
 		if b != 0:
 			taken += 1
 	t.eq(taken, 0, "아직 아무것도 안 골랐다")
+	# ⚠ **A card is one of two kinds since 티켓 15**, so the range a value has to be inside is the
+	# range of ITS OWN table — and the name is asked through `card_name_of`, which is the one place
+	# that knows there are two.
 	for k in Rules.CARDS_PER_WIN:
-		var item := int(r.cards[k])
-		t.ok(item >= 0 and item < Rules.item_count(), "%d번 카드가 장비 표 안이다 (%d)" % [k, item])
-		t.ok(Rules.item_name_of(item) != "", "%d번 카드에 이름이 있다" % k)
+		var kind := int(r.card_kind[k])
+		var value := int(r.cards[k])
+		var top := Rules.UNITS.size() if kind == Rules.CardKind.SPECIES else Rules.item_count()
+		t.ok(value >= 0 and value < top, "%d번 카드가 제 표 안이다 (%d)" % [k, value])
+		t.ok(Rules.card_name_of(kind, value) != "", "%d번 카드에 이름이 있다" % k)
 
 
 ## 「한 장을 고르면 정비로 넘어간다」 · 「같은 카드를 두 번 못 고른다」 · 「고른 카드가 더미에 그대로
 ## 들어간다」, in one walk — each reads the state right after the call it claims about.
 func _taking_one(t) -> void:
+	# ⚠ **An ITEM card** — a beast pick pays a slot and bodies instead of the pile, and this row is
+	# about the pile. The beast half is `net_run`'s, driven there on purpose.
 	var r := _won_run()
-	var want_item := int(r.cards[0])
+	var pick := -1
+	for k in Rules.CARDS_PER_WIN:
+		if int(r.card_kind[k]) == Rules.CardKind.ITEM:
+			pick = k
+			break
+	t.ok(pick >= 0, "이 씨앗의 세 장에 장비가 하나는 있다 (자가 점검)")
+	var want_item := int(r.cards[pick])
 	var pile_before := r.army.loadout.held.size()
 
-	t.ok(r.take_card(0), "0번 카드를 고른다")
+	t.ok(r.take_card(pick), "장비 카드를 고른다")
 	# ⚠⚠ **ONE PICK NOW, NOT TWO** (2026-08-24, 티켓 06). The block below used to walk 「한 장으로는
 	# 아직 정비로 안 넘어간다」 and then take a second; with `CARD_PICKS` at 1 the first pick IS the
 	# transition, and asserting the old sentence would be asserting the old rule.
@@ -120,10 +137,10 @@ func _taking_one(t) -> void:
 	t.eq(int(r.army.loadout.held[pile_before]), want_item,
 		"고른 카드의 장비가 더미에 그대로 들어갔다")
 
-	t.ok(not r.take_card(0), "같은 카드를 두 번 못 고른다")
+	t.ok(not r.take_card(pick), "같은 카드를 두 번 못 고른다")
 	t.eq(r.army.loadout.held.size(), pile_before + 1, "그래서 더미 크기가 그대로다")
-	t.ok(not r.take_card(1), "고르기가 끝났으니 다른 카드도 못 고른다")
-	t.ok(not r.take_card(2), "정비로 넘어간 뒤에는 세 번째 카드도 안 먹는다")
+	t.ok(not r.take_card((pick + 1) % Rules.CARDS_PER_WIN), "고르기가 끝났으니 다른 카드도 못 고른다")
+	t.ok(not r.take_card((pick + 2) % Rules.CARDS_PER_WIN), "정비로 넘어간 뒤에는 세 번째 카드도 안 먹는다")
 	t.ok(not r.take_card(-1), "음수 인덱스는 애초에 거절한다")
 	t.ok(not r.take_card(99), "범위 밖 인덱스도 거절한다")
 
@@ -155,6 +172,10 @@ func _the_seed(t) -> void:
 	for s in range(100, 500):
 		var r := _won_run(s)
 		for k in Rules.CARDS_PER_WIN:
+			# ⚠ **ITEM cards only.** A beast card's value is a `UNITS` row, and folding the two id
+			# spaces into one dictionary would let a species stand in for the item of the same number.
+			if int(r.card_kind[k]) != Rules.CardKind.ITEM:
+				continue
 			seen_parts[int(r.cards[k])] = true
 			seen_rarity[Rules.item_rarity_of(int(r.cards[k]))] = true
 	t.eq(seen_parts.size(), Rules.item_count(),
@@ -336,14 +357,15 @@ func _the_leaves_draw_what_they_were_handed(t) -> void:
 	t.eq(spy.species.size(), Rules.CARDS_PER_WIN, "효과 줄도 세 개 그렸다")
 	var text_bad := 0
 	for k in Rules.CARDS_PER_WIN:
-		var item := int(r.cards[k])
-		if str(spy.parts[k]["text"]) != Rules.item_name_of(item):
+		var kind := int(r.card_kind[k])
+		var value := int(r.cards[k])
+		if str(spy.parts[k]["text"]) != Rules.card_name_of(kind, value):
 			text_bad += 1
-		# ⚠ The effect line carries the rarity word in front of what the item does, so it is checked by
+		# ⚠ The effect line carries the rarity word in front of what the card does, so it is checked by
 		# CONTAINMENT rather than by equality — the row is about the numbers coming off the table.
-		if not str(spy.species[k]["text"]).ends_with(Rules.item_effect_text(item)):
+		if not str(spy.species[k]["text"]).ends_with(Rules.card_effect_text_of(kind, value)):
 			text_bad += 1
-	t.eq(text_bad, 0, "카드마다 장비 이름과 효과가 그 카드의 실제 장비와 맞는다")
+	t.eq(text_bad, 0, "카드마다 이름과 효과가 그 카드의 실제 내용과 맞는다")
 	t.eq(spy.marks.size(), 0, "고르기 전에는 표가 하나도 없다 (자가 점검)")
 
 	# ⚠ **The hover and press rows have to run BEFORE any card is taken** — the run reaches `REFIT`
@@ -482,3 +504,13 @@ func _the_cards_fade_in_staggered(t) -> void:
 
 	t.root.remove_child(spy)
 	spy.queue_free()
+
+
+## Walks past the OPENING BEAST ROUND. ⚠⚠ **A run opens on a card screen since 티켓 15** (「시작하자
+## 마자 세 개 중에 하나 고르는 거」), so `enter_node` refuses until one of its three beasts has been
+## taken — every fixture below that steps onto the map has to pass through it first. Card 0, always,
+## so the fixture is the same run every time.
+func _opened(r: Run) -> Run:
+	if r.state() == Run.State.PICK:
+		r.take_card(0)
+	return r

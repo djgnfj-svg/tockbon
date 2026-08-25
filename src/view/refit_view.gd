@@ -89,7 +89,7 @@ var _stat_tracked_slot := -1
 ## The cell a part just landed in, or -1 — the shell's own `note_press` shape, called from
 ## `game.gd`'s `_refit_input` on an ACCEPTED fit and nowhere else. Keyed by part, not by slot: the
 ## board showing is already the open slot's own, so one index is enough.
-var _filled_part := -1
+var _filled_cell := -1
 var _filled_age := 0.0
 
 ## The screen's own age, since `bind` — `map_view._reveal_age`'s and `reward_view._reveal_age`'s own
@@ -119,7 +119,7 @@ func bind(r: Run) -> void:
 	_press_done = false
 	_press_done_age = 0.0
 	_stat_tracked_slot = -1
-	_filled_part = -1
+	_filled_cell = -1
 	_filled_age = 0.0
 	queue_redraw()
 
@@ -127,13 +127,13 @@ func bind(r: Run) -> void:
 ## Called by `game.gd`'s `_refit_input`, and only on a fit that actually landed — a refused press
 ## (an empty held row, an out-of-range slot) must never start this beat, or a cell that did nothing
 ## would flash exactly like one that did.
-func note_fitted(part: int) -> void:
-	_filled_part = part
+func note_fitted(cell: int) -> void:
+	_filled_cell = cell
 	_filled_age = 0.0
 
 
 func open_slot(s: int) -> void:
-	if s < 0 or s >= Rules.TYPE_COUNT:
+	if s < 0 or s >= Rules.player_type_count():
 		_open_slot = -1
 	else:
 		_open_slot = s
@@ -141,10 +141,10 @@ func open_slot(s: int) -> void:
 	_hover_held = -1
 	# Switching slots (or closing the board) leaves any in-flight flash behind — it belongs to a cell
 	# on the board that just left the screen, not to whatever opens next.
-	_filled_part = -1
+	_filled_cell = -1
 	_filled_age = 0.0
 	# A newly opened slot's numbers arrive already settled — there is nothing to have climbed FROM.
-	# `_stat_shown` below reads `_stat_age >= MAP_HEAL_SEC` as "arrived", so this is the one place both
+	# `_stat_shown` below reads `_stat_age >= NUMBER_CLIMB_SEC` as "arrived", so this is the one place both
 	# ends of the triple are set equal and the age is pinned at the ceiling.
 	if _open_slot >= 0 and _open_slot != _stat_tracked_slot and run != null:
 		_stat_tracked_slot = _open_slot
@@ -153,7 +153,7 @@ func open_slot(s: int) -> void:
 			var v := loadout.stat_of(_open_slot, col)
 			_stat_from[col] = v
 			_stat_to[col] = v
-			_stat_age[col] = Look.MAP_HEAL_SEC
+			_stat_age[col] = Look.NUMBER_CLIMB_SEC
 
 
 func is_board_open() -> bool:
@@ -169,34 +169,34 @@ func open_slot_index() -> int:
 # --- geometry, read straight out of look.gd -----------------------------------------------------
 
 func slot_rect_of(slot: int) -> Rect2:
-	if slot < 0 or slot >= Rules.TYPE_COUNT:
+	if slot < 0 or slot >= Rules.player_type_count():
 		return Rect2()
 	return Look.refit_slot_rect_px(slot)
 
 
 func slot_hit_rect_of(slot: int) -> Rect2:
-	if slot < 0 or slot >= Rules.TYPE_COUNT:
+	if slot < 0 or slot >= Rules.player_type_count():
 		return Rect2()
 	return Look.refit_slot_hit_rect_px(slot)
 
 
 func slot_at(point: Vector2) -> int:
-	for s in Rules.TYPE_COUNT:
+	for s in Rules.player_type_count():
 		if slot_hit_rect_of(s).has_point(point):
 			return s
 	return -1
 
 
-func cell_rect_of(part: int) -> Rect2:
-	if part < 0 or part >= Rules.ITEM_CELLS:
+func cell_rect_of(cell: int) -> Rect2:
+	if cell < 0 or cell >= Rules.ITEM_CELLS:
 		return Rect2()
-	return Look.refit_cell_rect_px(part)
+	return Look.refit_cell_rect_px(cell)
 
 
-func cell_hit_rect_of(part: int) -> Rect2:
-	if part < 0 or part >= Rules.ITEM_CELLS:
+func cell_hit_rect_of(cell: int) -> Rect2:
+	if cell < 0 or cell >= Rules.ITEM_CELLS:
 		return Rect2()
-	return Look.refit_cell_hit_rect_px(part)
+	return Look.refit_cell_hit_rect_px(cell)
 
 
 func cell_at(point: Vector2) -> int:
@@ -282,8 +282,8 @@ func note_slot_press(s: int) -> void:
 	_press_age = 0.0
 
 
-func note_cell_press(part: int) -> void:
-	_press_cell = part
+func note_cell_press(cell: int) -> void:
+	_press_cell = cell
 	_press_cell_age = 0.0
 
 
@@ -333,7 +333,7 @@ func _fx_step(delta: float) -> void:
 		_press_done_age += delta
 		if _press_done_age >= Look.PRESS_DOWN_SEC:
 			_press_done = false
-	if _filled_part >= 0:
+	if _filled_cell >= 0:
 		_filled_age = minf(_filled_age + delta, Look.REFIT_CELL_FILL_SEC)
 	# The dashboard chase. Read at whatever point a fit or an unfit actually landed — never re-derived
 	# from `_open_slot` alone — so a column that did not move keeps its own `_stat_to` and reads back
@@ -343,7 +343,7 @@ func _fx_step(delta: float) -> void:
 	if _open_slot >= 0 and run != null:
 		var loadout := run.army.loadout
 		for col in Rules.ITEM_COL_TOTAL:
-			_stat_age[col] = minf(_stat_age[col] + delta, Look.MAP_HEAL_SEC)
+			_stat_age[col] = minf(_stat_age[col] + delta, Look.NUMBER_CLIMB_SEC)
 			var live := loadout.stat_of(_open_slot, col)
 			if not is_equal_approx(live, _stat_to[col]):
 				_stat_from[col] = _stat_shown(col)
@@ -352,12 +352,12 @@ func _fx_step(delta: float) -> void:
 
 
 ## 0..1 chase read back as the actual number, column by column -- `map_view`'s own `lerpf` line,
-## reused. `_stat_age >= MAP_HEAL_SEC` answers "arrived" so a column that never moved (age pinned at
+## reused. `_stat_age >= NUMBER_CLIMB_SEC` answers "arrived" so a column that never moved (age pinned at
 ## the ceiling by `open_slot`) returns `_stat_to` exactly rather than a lerp that happens to land there.
 func _stat_shown(col: int) -> float:
-	if _stat_age[col] >= Look.MAP_HEAL_SEC:
+	if _stat_age[col] >= Look.NUMBER_CLIMB_SEC:
 		return _stat_to[col]
-	return lerpf(_stat_from[col], _stat_to[col], clampf(_stat_age[col] / Look.MAP_HEAL_SEC, 0.0, 1.0))
+	return lerpf(_stat_from[col], _stat_to[col], clampf(_stat_age[col] / Look.NUMBER_CLIMB_SEC, 0.0, 1.0))
 
 
 func _process(delta: float) -> void:
@@ -382,7 +382,7 @@ func _draw() -> void:
 	# uses for a slot that CANNOT be pressed at all) painted on both would say the opposite of what
 	# is true. Once one is open, the OTHER dims to say "you are looking at slot N, not this one" —
 	# still pressable, just not the one on screen — never "locked".
-	for s in Rules.TYPE_COUNT:
+	for s in Rules.player_type_count():
 		var lit := s == _open_slot or _open_slot < 0
 		var fill := Look.COL_BUTTON if lit else Look.dimmed(Look.COL_BUTTON)
 		fill.a = Look.PRESS_ALPHA_ON if lit else Look.PRESS_ALPHA_OFF
@@ -392,8 +392,8 @@ func _draw() -> void:
 		_paint_slot_box(slot_rect_of(s), fill, Look.COL_HUD_TEXT, edge_w)
 		# The box is a beast, so it says the beast's name — the same words `panel_view` names
 		# soldiers with.
-		_paint_slot_label(face, slot_rect_of(s).position + Look.CARD_PART_OFFSET_PX,
-			HudView.type_label(s), Look.REFIT_CELL_PART_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+		_paint_slot_label(face, slot_rect_of(s).position + Look.CARD_NAME_OFFSET_PX,
+			HudView.type_label(s), Look.REFIT_CELL_NAME_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
 	# The tag aggregate, on BOTH steps — the count is army-wide, so it is just as true before any
 	# board is open. A 「무리」 header first (the column sits under one beast's strip box, and without
@@ -439,10 +439,10 @@ func _draw() -> void:
 ## The cell's own fill colour — item 5's flash, folded into the same channel the filled/empty story
 ## already uses. ⚠⚠ **Without this, fitting a part and not fitting it look identical on screen** —
 ## the cell would simply BE filled, one frame apart from empty. A cell that is NOT the one that just
-## landed reads exactly as before this beat existed; only `_filled_part`'s own cell climbs instead of
+## landed reads exactly as before this beat existed; only `_filled_cell`'s own cell climbs instead of
 ## snapping, over `REFIT_CELL_FILL_SEC`.
 func _cell_fill(p: int, filled: bool) -> Color:
-	if filled and p == _filled_part and _filled_age < Look.REFIT_CELL_FILL_SEC:
+	if filled and p == _filled_cell and _filled_age < Look.REFIT_CELL_FILL_SEC:
 		var t := clampf(_filled_age / Look.REFIT_CELL_FILL_SEC, 0.0, 1.0)
 		var fill := Look.dimmed(Look.COL_BUTTON).lerp(Look.COL_BUTTON, t)
 		fill.a = lerpf(Look.PRESS_ALPHA_OFF, Look.PRESS_ALPHA_ON, t)
@@ -468,13 +468,13 @@ func _draw_board(face: Font) -> void:
 		# name on the first line, what that item does on the second — and an empty cell draws a dash.
 		_paint_cell_name(face, box.position + Look.REFIT_CELL_NAME_OFFSET_PX,
 			Rules.item_name_of(item) if filled else "-",
-			Look.REFIT_CELL_PART_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+			Look.REFIT_CELL_NAME_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 		var effect_text := Rules.item_effect_text(item) if filled else ""
 		# ⚠ The DARK-panel rarity tones, never `COL_RARITY` — that table is dark text for the light
 		# card and it sank here twice (verify-look, and 티켓 12's own record before it).
 		var effect_col: Color = Look.COL_RARITY_TEXT_DARK[Rules.item_rarity_of(item)] if filled 			else Look.dimmed(Look.COL_HUD_TEXT)
 		_paint_cell_effect(face, box.position + Look.REFIT_CELL_EFFECT_OFFSET_PX,
-			effect_text, Look.REFIT_CELL_EFFECT_WRAP_W_PX, Look.REFIT_CELL_SPECIES_FONT_SIZE_PX,
+			effect_text, Look.REFIT_CELL_EFFECT_WRAP_W_PX, Look.REFIT_CELL_EFFECT_FONT_SIZE_PX,
 			effect_col)
 
 	var held_n := mini(loadout.held.size(), Look.refit_held_capacity())
@@ -485,7 +485,7 @@ func _draw_board(face: Font) -> void:
 		var edge_w := lerpf(Look.PRESS_BORDER_WIDTH_PX, Look.PRESS_HOVER_BORDER_WIDTH_PX, hover_k)
 		_paint_held_row(rect, Look.hover_lit(Look.COL_BUTTON, hover_k), Look.COL_HUD_TEXT, edge_w)
 		_paint_held_name(face, rect.position + Look.REFIT_HELD_NAME_OFFSET_PX,
-			Rules.item_name_of(held_item), Look.REFIT_CELL_SPECIES_FONT_SIZE_PX, Look.COL_HUD_TEXT)
+			Rules.item_name_of(held_item), Look.REFIT_CELL_EFFECT_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 		_paint_held_effect(face, rect.position + Look.REFIT_HELD_EFFECT_OFFSET_PX,
 			Rules.item_effect_text(held_item), Look.REFIT_HELD_EFFECT_WRAP_W_PX,
 			Look.REFIT_HELD_EFFECT_FONT_SIZE_PX,
@@ -503,13 +503,16 @@ func _draw_board(face: Font) -> void:
 		_paint_stat_value(face, Look.refit_stat_origin_px(col) + Vector2(0.0, 30.0),
 			"%.1f" % value, Look.REFIT_STAT_VALUE_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
-	# The body preview: which beast you are editing and nothing else — no item is drawn on it. The
-	# open index IS the type id (see the header), so both the radius and the corner rounding are that
-	# type's own at `REFIT_BODY_SCALE` and any two boxes read differently on both channels.
+	# The body preview: which beast you are editing and nothing else — no item is drawn on it.
+	# ⚠⚠ **IT DREW A ROUNDED SQUARE WITH A DOT UNTIL 2026-08-25, AND ITS COMMENT CLAIMED PARITY WITH
+	# A FUNCTION THAT NO LONGER EXISTS.** `field_view._paint_body` died with the 3D move; the island
+	# draws a beast PICTURE. So this preview — whose whole job is to say WHICH beast's board is open
+	# — showed five species that differed only by radius and corner rounding, while the island next
+	# door showed a wolf. **It shows the same picture the island does now.**
 	var type_id := _open_slot
-	var radius := Look.body_radius_of(type_id) * Look.REFIT_BODY_SCALE
-	var corner := Look.body_corner_radius_of(type_id) * Look.REFIT_BODY_SCALE
-	_paint_body(Look.REFIT_BODY_CENTRE_PX, radius, corner, Look.COL_ALLY)
+	var tex := _beast_tex(type_id)
+	if tex != null:
+		_paint_beast(_beast_rect(tex), tex, Look.beast_tint(Look.body_colour_of(false)))
 
 
 # --- hooks. Each one's draw_* count is pinned by net_draw_leaf; every parameter is used in the body.
@@ -581,11 +584,40 @@ func _tag_state_of(tag: int) -> Dictionary:
 	return {"count": count, "next": next, "lit": lit}
 
 
-## The body: an outline and a centre dot, the same shape `field_view._paint_body` draws, at this
-## screen's own scale. **No part is drawn on it** — the dashboard carries what a fitted part moved.
-func _paint_body(centre: Vector2, radius: float, corner: float, colour: Color) -> void:
-	draw_polyline(_rounded_square(centre, radius, corner), colour, Look.BODY_OUTLINE_WIDTH_PX)
-	draw_circle(centre, Look.BODY_DOT_RADIUS_PX, colour)
+## The beast's own picture, tinted the way the island tints it. **One draw call**, and the rect is
+## built outside so `net_draw_leaf` can pin the geometry rather than a rounded-square helper.
+## The five player species' pictures, loaded once. **The same table `field_view` reads**, so the
+## refit screen cannot end up showing a different animal than the island — which is exactly what it
+## did while it drew a rounded square.
+## ⚠ Right-facing only: this is a portrait, not a body walking somewhere.
+var _tex_beast: Array[Texture2D] = _load_beast_tex()
+
+
+static func _load_beast_tex() -> Array[Texture2D]:
+	var out: Array[Texture2D] = []
+	for ty in Look.BEAST_TEX.size():
+		var path := Look.beast_tex_path(ty, true)
+		out.append(null if path.is_empty() else load(path) as Texture2D)
+	return out
+
+
+func _beast_tex(type_id: int) -> Texture2D:
+	if type_id < 0 or type_id >= _tex_beast.size():
+		return null
+	return _tex_beast[type_id]
+
+
+## Where the portrait sits: centred on `REFIT_BODY_CENTRE_PX`, as wide as the island would draw it
+## at this screen's own scale, and the height follows the texture's own aspect — the same rule
+## `field_view._beast_rect` follows, so a tall caveman does not come out square.
+func _beast_rect(tex: Texture2D) -> Rect2:
+	var w := Look.sprite_half_px(_open_slot) * 2.0 * Look.REFIT_BODY_SCALE
+	var h := w * float(tex.get_height()) / float(tex.get_width())
+	return Rect2(Look.REFIT_BODY_CENTRE_PX - Vector2(w, h) * 0.5, Vector2(w, h))
+
+
+func _paint_beast(rect: Rect2, tex: Texture2D, colour: Color) -> void:
+	draw_texture_rect(tex, rect, false, colour)
 
 
 func _paint_button(face: Font, rect: Rect2, bg: Color, text: String, at: Vector2, fsize: int,
@@ -602,18 +634,3 @@ func _paint_fade(rect: Rect2, col: Color) -> void:
 	draw_rect(rect, col, true)
 
 
-## 0 draws — geometry built for `_paint_body`, the `_spark_points` precedent.
-func _rounded_square(centre: Vector2, radius: float, corner: float) -> PackedVector2Array:
-	var half := radius - corner
-	var pts: Array[Vector2] = []
-	var corners := [Vector2(1, 1), Vector2(-1, 1), Vector2(-1, -1), Vector2(1, -1)]
-	for ci in 4:
-		var base: Vector2 = corners[ci] * half
-		for a in 3:
-			var ang := (float(ci) + float(a) / 2.0) * PI * 0.5
-			pts.append(centre + base + Vector2(cos(ang), sin(ang)) * corner)
-	pts.append(pts[0])
-	var out := PackedVector2Array()
-	for p in pts:
-		out.append(p)
-	return out

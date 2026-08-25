@@ -1,0 +1,239 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "FLUX.2 klein base 4B (fp8)"
+    },
+    "inputs": {
+      "unet_name": "flux-2-klein-base-4b-fp8.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Qwen3-4B text encoder"
+    },
+    "inputs": {
+      "clip_name": "qwen_3_4b.safetensors",
+      "type": "flux2"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "FLUX.2 VAE"
+    },
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Pixel Art Spritesheet 4-Walk LoRA"
+    },
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "pixel_4walk_small.safetensors",
+      "strength_model": 1.0
+    }
+  },
+  "5": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive"
+    },
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "text": "a knight in silver armor with a red cape"
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative"
+    },
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "text": ""
+    }
+  },
+  "7": {
+    "class_type": "CFGGuider",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "22",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "cfg": 5.0
+    }
+  },
+  "8": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "9": {
+    "class_type": "Flux2Scheduler",
+    "inputs": {
+      "steps": 28,
+      "width": 512,
+      "height": 512
+    }
+  },
+  "10": {
+    "class_type": "EmptyFlux2LatentImage",
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1
+    }
+  },
+  "11": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 1
+    }
+  },
+  "12": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "11",
+        0
+      ],
+      "guider": [
+        "7",
+        0
+      ],
+      "sampler": [
+        "8",
+        0
+      ],
+      "sigmas": [
+        "9",
+        0
+      ],
+      "latent_image": [
+        "10",
+        0
+      ]
+    }
+  },
+  "13": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "12",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "14": {
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save 512 raw"
+    },
+    "inputs": {
+      "images": [
+        "13",
+        0
+      ],
+      "filename_prefix": "pixel/raw512"
+    }
+  },
+  "15": {
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Downscale x4 (nearest)"
+    },
+    "inputs": {
+      "image": [
+        "13",
+        0
+      ],
+      "upscale_method": "nearest-exact",
+      "width": 128,
+      "height": 128,
+      "crop": "disabled"
+    }
+  },
+  "16": {
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save 128 pixel-perfect"
+    },
+    "inputs": {
+      "images": [
+        "15",
+        0
+      ],
+      "filename_prefix": "pixel/px128"
+    }
+  },
+  "20": {
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Reference image"
+    },
+    "inputs": {
+      "image": "reference.png",
+      "upload": "image"
+    }
+  },
+  "21": {
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "Reference -> latent"
+    },
+    "inputs": {
+      "pixels": [
+        "20",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "22": {
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "Set Reference Latent"
+    },
+    "inputs": {
+      "conditioning": [
+        "5",
+        0
+      ],
+      "latent": [
+        "21",
+        0
+      ]
+    }
+  }
+}

@@ -7,26 +7,31 @@ extends RefCounted
 ## **`army` is built in exactly two places — `_init` and `restart` — and nowhere else.** HP carries
 ## across islands by identity: the same rows, the same ids, the same wounds. So `begin_island` hands
 ## `battle` the roster this object already holds instead of making one. Building a fresh `Army` there
-## instead would heal every soldier and drop every beak between islands **while a check that only counts
+## instead would heal every soldier between islands **while a check that only counts
 ## soldiers stayed green**, which is the mutation the first-slice plan names for `net_run` to bite on.
 ##
 ## Every value that changes what happens lives in `rules.gd`, and the islands' own facts — how many
 ## there are, their grids, their spawns, their time limits — live in `islands.gd`. Nothing here holds a
 ## second copy of either; a number counted in two places diverges.
 ##
-## See the cell army GDD for the session loop, and the first-slice plan's "The sim — shapes and entry
+## ⚠ **The 「cell army GDD」 this line used to cite does not exist** (2026-08-25, 티켓 23) — the deleted
+## cell game's design document. The session loop is read out of `.scratch/cell-hook/`'s map. See the
+## first-slice plan's "The sim — shapes and entry, and the first-slice plan's "The sim — shapes and entry
 ## points" for the signatures below.
 
 
 ## Where the run is. `MAP` means the node map is open and a node is waiting to be pressed; `BATTLE`
-## means an island is open and `begin_island` will build its fight; `REWARD` means a beak pick is
+## means an island is open and `begin_island` will build its fight; a card pick is
 ## waiting; `PICK` means the six cards are up and two are waiting to be taken; `REFIT` means the two
 ## taken cards are ready to be laid into a board; `WON` and `LOST` are both terminal until `restart`.
 ##
 ## ⚠ **`MAP` is FIRST so it is 0**, and a default-constructed int therefore lands on the map rather
 ## than in a battle against an island nobody entered. ⚠ **Nothing anywhere may compare a state against
 ## a literal int** — `net_run` pins `State.MAP == 0` and the rest by name.
-enum State { MAP, BATTLE, REWARD, PICK, REFIT, WON, LOST }
+## ⚠⚠ **`REWARD` IS GONE** (2026-08-25): its only producer was a `Reward.BEAK` node, and the user
+## deleted that reward — 「부리 보상 없지 끝나면 카드보상으로 통일했잖아」. A state nothing can enter
+## is a screen nobody can reach, and leaving it would keep every check about it green.
+enum State { MAP, BATTLE, PICK, REFIT, WON, LOST }
 
 
 ## The island the node the army is standing on opened. **It never leaves the range of real islands.**
@@ -48,15 +53,23 @@ var map: RunMap = null
 var _state := State.MAP
 var _pending := Rules.Reward.NONE
 
-## `Rules.CARDS_PER_WIN` pairs, flat: `cards[2*k]` is the part, `cards[2*k + 1]` the species.
+## `Rules.CARDS_PER_WIN` cards. **`cards[k]` means an ITEM id or a `UNITS` row depending on
+## `card_kind[k]`** — a card is one of two things since 티켓 15.
 ## ⚠ **Flat and parallel, not an Array of Arrays**, for the reason `army.gd`'s header gives.
 var cards := PackedInt32Array()
+## `Rules.CardKind` per card, index-aligned with `cards`. ⚠ **Never inferred from the value**: item 4
+## and unit row 4 are both 4, and a reader that guessed would be right most of the time.
+var card_kind := PackedInt32Array()
 var cards_taken := PackedByteArray()
 
 ## ⚠⚠ **The first RNG in `src/sim/`, and it is bounded on purpose**: one object, one reader
 ## (`_draw_cards`), one seed verb. **The map stays authored** — `title-and-map`'s reason for that (four
 ## routes a net can walk exhaustively) is untouched.
 var _rng := RandomNumberGenerator.new()
+
+## Whether the round currently on the table was dealt beasts-only. **Read by `seed_cards` alone**, so
+## a re-deal produces the same KIND of round the player is looking at rather than an ordinary one.
+var _round_is_beasts_only := false
 
 
 func _init() -> void:
@@ -78,13 +91,29 @@ func _reset() -> void:
 	_state = State.MAP
 	_pending = Rules.Reward.NONE
 	cards = PackedInt32Array()
+	card_kind = PackedInt32Array()
 	cards_taken = PackedByteArray()
 	_rng.randomize()
+	# ⚠⚠ **A RUN OPENS ON A CARD SCREEN, NOT ON THE MAP** (2026-08-25, the user: 「시작하자마자 세 개
+	# 중에 하나 고르는 거 그거 하고 가자」). Three cards, **beasts only** — equipment here would make
+	# the one species a run holds stronger instead of splitting the horde, which pushes the fork this
+	# game is about a whole island later.
+	_draw_cards(true)
+	_state = State.PICK
 
 
 ## For nets and the probe: makes `_draw_cards()` reproducible.
+##
+## ⚠⚠ **AND IT RE-DEALS AN UNTOUCHED ROUND.** The opening three are drawn inside `_reset`, which runs
+## before any caller can hand a seed in — so without this the first screen of the whole game is the
+## one screen nothing can ever pin, and 「무작위라 못 잰다」 would be true of it forever.
+##
+## ⚠ **Only while nothing has been taken from that round.** A seed handed in mid-pick must never
+## replace cards somebody is looking at.
 func seed_cards(s: int) -> void:
 	_rng.seed = s
+	if _state == State.PICK and _cards_taken_count() == 0:
+		_draw_cards(_round_is_beasts_only)
 
 
 ## The map screen's ONE verb: step onto a node. Returns false and changes nothing when the run is not
@@ -120,7 +149,7 @@ func begin_island() -> Battle:
 	if _state != State.BATTLE:
 		return null
 	var grid := Grid.new()
-	grid.load_rows(Islands.rows_of(island_index))
+	Islands.load_into(grid, island_index)
 	var battle := Battle.new()
 	battle.setup(grid, army, Islands.spawns_of(island_index), Islands.time_limit_of(island_index))
 	return battle
@@ -154,19 +183,59 @@ func finish_island(won: bool) -> void:
 	_queue_reward(map.at())
 
 
-## `Rules.CARDS_PER_WIN` independent item draws, one int each. `cards_taken` is cleared with it,
-## so a stale mark from a previous win can never survive into the next one.
-func _draw_cards() -> void:
+## `Rules.CARDS_PER_WIN` independent draws. `cards_taken` is cleared with them, so a stale mark from a
+## previous win can never survive into the next one.
+##
+## ⚠⚠ **THE KIND IS ROLLED FIRST, PER CARD, and both halves of that sentence are decisions.**
+##  · **Kind first**, for exactly the reason the rarity roll below already carries in its own comment:
+##    pooling beasts and items into one list makes a beast quietly rarer every time an item is added,
+##    so the drop table would move whenever the CONTENT moved
+##  · **Per card and never "exactly one of the three"** — a fixed share IS a reservation, and the user
+##    cut the reservation on 2026-08-25. Some rounds hold no beast; some hold three
+##
+## `beasts_only` is 시작 라운드's door: the opening round pays beasts and nothing else.
+func _draw_cards(beasts_only: bool = false) -> void:
+	_round_is_beasts_only = beasts_only
 	cards = PackedInt32Array()
 	cards.resize(Rules.CARDS_PER_WIN)
+	card_kind = PackedInt32Array()
+	card_kind.resize(Rules.CARDS_PER_WIN)
+	var pool := _species_pool()
 	for k in Rules.CARDS_PER_WIN:
+		# ⚠ **An empty pool falls back to an item, whatever was asked for.** A beast card naming a
+		# species the run already holds is a card that cannot be picked — a dead face on the screen.
+		if pool.size() > 0 and (beasts_only or _rng.randf() < Rules.SPECIES_CARD_WEIGHT):
+			card_kind[k] = Rules.CardKind.SPECIES
+			# ⚠⚠ **WITHOUT REPLACEMENT — no species may stand twice in one round.** Drawn with it,
+			# 64% of opening rounds held a duplicate and 6% were three of one animal, which is a
+			# three-card screen offering one choice. **There is exactly enough slack**: four
+			# candidates for three cards on the opening round. A pool that runs out mid-round falls
+			# through to equipment on the lines below, which is what it already did when empty.
+			var at := _rng.randi_range(0, pool.size() - 1)
+			cards[k] = int(pool[at])
+			pool.remove_at(at)
+			continue
+		card_kind[k] = Rules.CardKind.ITEM
 		# **Rarity first, item second.** Rolling straight over the item list would make legendaries
 		# rarer every time a common one was added — the drop table would move when the CONTENT moved.
 		var rarity := Rules.rarity_at_roll(_rng.randi_range(0, Rules.rarity_weight_total() - 1))
-		var pool := Rules.items_of_rarity(rarity)
-		cards[k] = int(pool[_rng.randi_range(0, pool.size() - 1)]) if pool.size() > 0 else 0
+		var items := Rules.items_of_rarity(rarity)
+		cards[k] = int(items[_rng.randi_range(0, items.size() - 1)]) if items.size() > 0 else 0
 	cards_taken = PackedByteArray()
 	cards_taken.resize(Rules.CARDS_PER_WIN)
+
+
+## The beast rows this run could still take: on the player's side, not already in a slot, and only
+## while there is a slot left to put one in. **Empty is the ceiling** — every card is then an item.
+func _species_pool() -> PackedInt32Array:
+	var out := PackedInt32Array()
+	if army == null or army.slot_count() >= Rules.SUMMON_SLOT_MAX:
+		return out
+	for r in Rules.species_card_count():
+		var ty := Rules.species_card_type_of(r)
+		if army.slot_of_type(ty) < 0:
+			out.append(ty)
+	return out
 
 
 ## Queues the node's reward and resolves it as far as it can go on its own. **One dispatch**, so a
@@ -176,13 +245,11 @@ func _queue_reward(n: int) -> void:
 	match _pending:
 		Rules.Reward.COUNT:
 			take_count_reward()
-		Rules.Reward.BEAK:
-			_state = State.REWARD
 		_:
 			_advance()
 
 
-## `Rules.Reward.NONE`, `COUNT` or `BEAK` — what is waiting to be taken right now.
+## `Rules.Reward.NONE` or `COUNT` — what is waiting to be taken right now.
 func pending_reward() -> int:
 	return _pending
 
@@ -195,31 +262,11 @@ func pending_reward() -> int:
 func take_count_reward() -> void:
 	if _pending != Rules.Reward.COUNT:
 		return
-	for s in Rules.summon_slot_count():
-		for _i in range(Rules.slot_reward_count(s)):
+	# ⚠ **Over the RUN's own slots** — the pay table is indexed by slot number and a run that has
+	# registered fewer slots than the table has rows collects only the rows it reaches.
+	for s in army.slot_count():
+		for _i in range(Rules.slot_pay_of(s)):
 			army.recruit(s)
-	_pending = Rules.Reward.NONE
-	_advance()
-
-
-## A `BEAK` node's reward: the beak onto one **surviving** soldier, then back to the map.
-##
-## A bad pick — an id off the end of the roster, or a soldier who died on the island that paid for it —
-## leaves everything where it was: the reward stays pending and `state()` stays `REWARD`, so the caller
-## can see that nothing happened and ask again. It does not bark, matching `grid.load_rows`: validating
-## a click is the caller's job, and a bark here would have to be forgiven by every net that pokes at the
-## roster. What it must never do is consume the reward without applying it.
-##
-## ⚠ **A run may collect more than one beak now** — a route can step on two beak nodes — so nothing
-## downstream may treat a beak already on the roster as proof this reward was spent. `_pending` is.
-func apply_beak(soldier_id: int) -> void:
-	if _pending != Rules.Reward.BEAK:
-		return
-	if soldier_id < 0 or soldier_id >= army.alive.size():
-		return
-	if army.alive[soldier_id] == 0:
-		return
-	army.has_beak[soldier_id] = 1
 	_pending = Rules.Reward.NONE
 	_advance()
 
@@ -240,10 +287,33 @@ func take_card(k: int) -> bool:
 	if taken >= Rules.CARD_PICKS:
 		return false
 	cards_taken[k] = 1
-	army.loadout.take_card(int(cards[k]))
+	if int(card_kind[k]) == Rules.CardKind.SPECIES:
+		_take_species_card(int(cards[k]))
+	else:
+		army.loadout.take_card(int(cards[k]))
 	if taken + 1 >= Rules.CARD_PICKS:
-		_state = State.REFIT
+		# ⚠⚠ **The fork is 「is there anything in the pile」 and NOT 「what kind was that card」.**
+		# Branching on the kind makes two paths out of this screen, and two paths diverge — a beast
+		# card taken while an earlier item is still unfitted would strand that item.
+		if army.loadout.held.is_empty():
+			_advance()
+		else:
+			_state = State.REFIT
 	return true
+
+
+## A beast card: the species takes the next free slot and **arrives with bodies**.
+##
+## ⚠⚠ **The bodies are not optional.** Registering alone adds a button that refuses when pressed —
+## the user's own `Reward.COUNT` failure (a thing that exists and is not on screen) built backwards.
+## ⚠ A refused registration (full, already held, enemy side) recruits nobody: `register_species` is
+## the one place that decides, and this reads its answer instead of re-deciding.
+func _take_species_card(type_id: int) -> void:
+	var slot := army.register_species(type_id)
+	if slot < 0:
+		return
+	for _i in Rules.SPECIES_CARD_BODIES:
+		army.recruit(slot)
 
 
 func _cards_taken_count() -> int:
@@ -264,7 +334,7 @@ func close_refit() -> bool:
 	return true
 
 
-## `State.MAP`, `State.BATTLE`, `State.REWARD`, `State.PICK`, `State.REFIT`, `State.WON` or
+## `State.MAP`, `State.BATTLE`, `State.PICK`, `State.REFIT`, `State.WON` or
 ## `State.LOST`.
 func state() -> int:
 	return _state
@@ -274,8 +344,8 @@ func state() -> int:
 ## from (`cards.size() > 0 and taken < CARD_PICKS`); else `MAP`.
 ##
 ## ⚠⚠ **The `PICK` arm is ABOVE the `MAP` arm.** Below it, the cards are drawn and never shown and the
-## round stays green — the roster grows (or the beak lands), the run walks back to the map, and every
-## check that only counts soldiers or beaks stays green.
+## round stays green — the roster grows, the run walks back to the map, and every
+## check that only counts soldiers stays green.
 ##
 ## ⚠ **It does not touch `island_index`.** Walking to the next island by itself is what the old
 ## `island_index + 1` did, and a map added on top of that just gets walked past — the map appears, the

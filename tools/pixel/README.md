@@ -49,20 +49,158 @@ k_centroid — the `sigil` preset carries `down: 0` because k_centroid's dominan
 Neither `cutbg.py` (chroma green, monsters) nor `cut_white_bg.py` (flood from the border, UI panels) fits:
 a ring's **inner hole** is cream too and is not reachable from the border, so a flood leaves it opaque.
 
-## Animation — **this is the one thing local cannot do**
+## Animation — ⚠ **this section said "local cannot do it" and that was measured false on 2026-08-25**
 
-The original pipeline's walk LoRA is **for human characters**, so an animal walk cycle has no local path.
-The bosses' walks were made with **pixellab `animate_image`** (1 generation each, ~2 minutes) from the
-standing frame, and the returned frames go through `anim_sheet.py` into one horizontal sheet plus a
-GIF to judge the motion by:
+**What was true**: the original pipeline's walk LoRA is for **human** characters, so there is no local
+path to an animal walk *through the LoRA*. The old game's boss walks were made with pixellab
+`animate_image`, one generation each.
+
+**What is true now**: the beasts of this game are **low-poly 3D renders**, not pixel art, and FLUX.2
+klein will draw a **whole four-frame row in one image**. Local does animation. Measured on the wolf.
 
 ```powershell
-& $py tools\pixel\anim_sheet.py tools\pixel\out\anim_bull assets\monster\bull_walk.png
+# 1. one wide image = four frames. **One image is one style applied once**, which is what keeps the
+#    body, the lighting and the polygon size identical across frames.
+& $py tools\pixel\gen.py "<the sheet prompt, below>" --name wolf_walk_sheet --preset raw `
+    --batch 8 --width 2048 --height 512 --negative "extra legs, six legs, duplicated limbs"
+
+# 2. cut the row into registered frames (chroma green removed, ground line pinned)
+& $py tools\pixel\split_row.py tools\pixel\out\wolf_walk_sheet\<pick>.png `
+    tools\pixel\out\anim_wolf_walk --frames 4 --height 40 --face right
+
+# 3. the horizontal sheet plus a GIF to judge the motion by
+& $py tools\pixel\anim_sheet.py tools\pixel\out\anim_wolf_walk tools\pixel\out\anim_wolf_walk\_row.png
+
+# 4. every candidate on one board, each row ending in its onion-skin registration check
+& $py tools\pixel\anim_board.py walk,walk2 --title "WOLF WALK" --out _BOARD_wolf_walk.png
 ```
 
-**The input must be quantized to 16-32 colors first.** Past roughly 3,000 base64 characters the MCP client
-**silently truncates the argument** and the call comes back "could not decode image" — a 88×54 RGBA png is
-already twice that. A palette png with a transparent index gets under it; RGBA never does.
+### What the sheet prompt has to say, and why
+
+**Say the row, the spacing and the sameness, then name each frame's pose one at a time.** The wording
+that worked: *"a sprite sheet of one low poly grey wolf walking, four separate frames in a single
+horizontal row, evenly spaced with a wide empty gap between frames, each frame shows the same wolf at
+the same size seen from the same camera on the same ground line, in the first frame ... in the second
+frame ..."* followed by the beast style phrasing.
+
+- ⚠ **Shape words, not action verbs.** *"lunging"* · *"biting"* · *"leaping"* were **ignored every time**
+  and came back as a wolf walking with its mouth open. *"its head pulled back and its neck arched"* ·
+  *"its front paws lifted high off the ground"* moved the body. **Describe the silhouette, not the verb.**
+- ⚠⚠ **`square` summons a front view.** *"stands square with its mouth shut"* produced a wolf **facing
+  the camera** in frame 1 of five sheets out of eight, and a front view cannot be registered against
+  side views at all — the whole candidate dies. Say **`stands in profile`** and put
+  `front view, facing the camera, head on view` in the negative.
+- ⚠ **`all four legs gathered close under the body` grows extra legs.** Four of six sheets came back with
+  a **six-legged** middle frame. `extra legs, six legs, duplicated limbs` in the negative fixed it
+  outright — eight of eight clean on the next batch.
+- ⚠ **A mouth opens pink.** The shipped beasts are one flat grey, and an open jaw arrives with a pink
+  tongue that is the brightest thing in the frame. `pink, red tongue, bright saturated colors` in the
+  negative.
+- **`--cfg 7.5` is worse, not better.** Tried to force the pose through guidance: the poses did not move
+  and the body picked up pink and purple blotches. **Stay at the preset's 5.0 and fix it in the prompt.**
+
+### ⚠⚠ What this route **cannot** do — measured, not guessed
+
+**A big pose change does not come out.** Across 22 bite candidates the model reliably gives
+**"the same wolf with its jaws open"** and reliably refuses **"the wolf leaves the ground and lunges"**.
+Exactly one candidate (`wolf_bite2_sheet_02_seed726115173`) produced a genuinely coiled lunge frame.
+⇒ **A bite that reads as a bite is available; a bite that reads as a leap is not.** If the leap is
+required, that is the thing to spend a paid generation on — and **only when the user asks.**
+
+### The reference route — **strong registration, almost no pose range**
+
+`genref.py` conditions on an actual image through FLUX.2's `ReferenceLatent`, so the wolf comes back
+**identical** — same camera, same scale, same ground line.
+
+```powershell
+& $py tools\pixel\genref.py --ref tools\pixel\out\beast_wolf\beast_wolf_03_seed675153149.png `
+    --name bite_ref --seed 675153149 --frames "<pose A>|<pose B>|<pose C>"
+```
+
+⚠ **The reference wins over the prompt.** Asked to gallop, to rear up and to leap, the wolf **stood
+still** in all three; only the jaws opened. ⇒ Use it for **small** changes (a mouth, a head turn, an
+ear) and use the one-image sheet for anything that moves a leg. **It is not the walk-cycle tool.**
+
+### The frames still need fixing after the split — that is what `split_row.py` is for
+
+Three defects show up in raw output and **all three are invisible until the frames are laid on top of
+one another**, which is why `split_row.py` writes `_onion.png` beside the frames. **Two heads in the
+onion means the candidate is dead however good each frame looks alone.**
+
+| Defect | Measured | What the script does |
+|---|---|---|
+| **The frames are not evenly spaced** | every batch | Splits at the **empty columns**, not at `width / 4` |
+| **Some frames come out mirrored** | 1 of 4 in a walk row, with `facing right` in the prompt | The **ears are the highest point**, so their x against the body centroid gives the facing; the minority is flipped |
+| **Each frame is a slightly different size** | up to 3% in a walk row | Rescales by **silhouette area** — a lifted paw moves the bounding box a lot and the opaque pixel count almost not at all |
+
+**The vertical anchor is the lowest paw, never the bounding box**, and the horizontal anchor is the
+centroid of the bottom quarter (`--align feet`). Centring the bounding box **slides the body backwards
+on the strike frame**, because a thrust head widens the box on one side only.
+
+### ⚠⚠ The fourth defect is a colour cast, and it is the one that breaks the style match
+
+**Every generation lights the wolf a different colour**, and the beast prompt cannot hold it — the phrase
+already says `plain light grey material`. Measured as mean saturation over the opaque pixels:
+
+| | meanSat |
+|---|---|
+| **shipped `assets/beast/wolf_r.png`** | **7.6** |
+| candidates, as generated | **5.1** (a match) · **9.8** pink · **14.9** teal · **16.0** teal · **21.0** blue |
+
+On the stage's `#0E0E13` a teal wolf does not read as the same animal as the one already in the game.
+`split_row.py --desat` pulls each pixel toward its own luminance, which **removes the cast without
+touching the shading** — a flat desaturate or a hue rotate wrecks the facets, which are the whole look.
+
+⚠ **There is no one right value; it is per candidate.** Saturation scales with `1 - desat`, so run at
+`--desat 0` first, read the `meanSat` the script prints, and use **`1 - 7.6 / that number`**. Measured:
+21.0 -> `--desat 0.64` -> **7.5**, and 9.8 -> `--desat 0.22` -> **7.6**.
+
+**What `--desat` does not fix**: the shipped wolf is **warmer, stockier and cut from bigger facets**;
+the new frames are cooler, slimmer and finer-faceted. That gap is in the geometry, not the colour, and
+**only the user can say whether it matters.**
+
+⚠⚠ **And matching saturation is not matching colour.** Both installed sets hit the shipped wolf's
+meanSat 7.6 and still measured **16 and 13 points heavier in blue** — the renders are lit cool, the
+shipped wolf is lit warm, and `--desat` fixes how strong a cast is, never which way it points.
+`install_anim.py --tint assets/beast/wolf_r.png` applies a **per-channel gain onto the reference's
+mean**, which brought every channel inside ±3.7. It is multiplicative on purpose: **an additive shift
+flattens the dark facets**, and the facets are the whole look.
+
+## Installing frames into `assets/` — `install_anim.py`
+
+```powershell
+& $py tools\pixel\install_anim.py --dst assets\beast --beast wolf `
+    --tint assets\beast\wolf_r.png `
+    --set walk=tools\pixel\out\full_walk --set bite=tools\pixel\out\full_bite
+```
+
+⚠⚠ **Every frame it writes shares ONE canvas, across every set named in one call.** That is the whole
+job, and the reason is `src/view/field_view.gd`'s `_beast_rect`: the sprite's **width is fixed by the
+body radius, never by the texture**, the height follows the texture's own aspect ratio, and the rect is
+**centred on the body, not stood on the ground.** So a texture 4 px wider does not draw wider — it draws
+the same width with **the wolf inside it shrunk** — and one 2 px taller **lifts the animal off the
+ground.** ⇒ Two frames of one animation on two canvas sizes is a wolf that pulses and floats.
+
+- **The canvas is the union of every frame's bounding box** — the smallest that clips nothing.
+- **The sets are scaled to each other by silhouette area first**, so the body in a bite frame is the
+  same body as in a walk frame. A raised head then honestly makes the canvas taller.
+- **The standing frame joins the set as one more `--set`, and it must.** Left out, `wolf_l/r.png` stayed
+  trimmed to its own pose (57x40) while the frames were 74x40, and since `_beast_rect` takes height from
+  the aspect ratio, **idle -> walk made the animal 40% taller.** Measured, in units of the constant rect
+  width: idle **0.702W** against walk frame 0's **0.500W**. Bringing it onto the shared canvas took that
+  to **0.541W vs 0.500W — 8%**, and the 8% that remains is the pose (a walking wolf carries its head
+  lower), not a defect.
+- ⚠ **No regeneration was needed.** The shipped wolf's 512px original is
+  `out/beast_wolf/beast_wolf_03_seed675153149.png`; running **that** through `split_row.py --frames 1`
+  registers it exactly, because working from the original beats padding the 57x40 downscale — padding
+  cannot change how much of the canvas the animal fills, and that fraction is what decides its rendered
+  size. **Regenerate only if the original is gone.**
+- ⚠ **`--no-tint <set>` on the standing frame.** It is the colour every other set was matched to; a gain
+  over the target moves the target and leaves nothing anchored.
+
+**Godot needs the `.import` sidecars.** `godot --headless --import` writes them without opening the
+editor; it also imports everything under `tools/pixel/out/`, which is noise but harmless since that
+folder is gitignored.
 
 ## Presets — the place that stops the style from splitting
 
@@ -75,6 +213,20 @@ One entry in `gen.py`'s `PRESETS` holds the style phrasing, the LoRA strength an
 | `rune` | the rune — **it does not need to be geometric** | 512 -> 96px |
 | `ui` | the assembly window (an open grimoire) | 512 -> unchanged |
 | `raw` | with no style phrasing | 512 -> unchanged |
+
+### ⚠⚠ The shipped game's art is **two styles**, and neither is a preset in this table
+
+Recovered 2026-08-25 by regenerating `beast_wolf_03_seed675153149` and matching it against the shipped
+`assets/beast/wolf_l.png`. **Both ride the `raw` preset**, so the style lives in the prompt and nothing
+in `gen.py` protects it — write the phrase, do not invent one.
+
+| What | Preset | The phrase that carries the style |
+|---|---|---|
+| **Beasts** | `raw` | `low poly 3d render, faceted flat shaded polygons, plain light grey material, on a plain solid bright chroma green background` — ⚠ **this is not pixel art** |
+| **Humans** | `monster` | `oversized round bald head, small stubby body, thick black outline` — chibi pixel art |
+
+**They do not match each other on purpose** (`.scratch/cell-hook/issues/15`, the user delegated the
+choice). One realistic-cartoon batch was thrown away whole before this split was found.
 
 **`--lora` is 0 everywhere.** Turn on the 4-walk LoRA and even a UI prompt yields **a human spritesheet**
 (measured in the original `PROMPTS.md`). It is 1.0 only when generating characters, and that is the original pipeline's job.

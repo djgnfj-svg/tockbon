@@ -8,14 +8,12 @@ extends RefCounted
 ## floor-0 node to a terminal one, and the claims about the fork are minima and maxima over all of
 ## them rather than over the two somebody happened to try.
 ##
-## ⚠⚠ **One row the plan asked for is NOT here, and its absence is a finding rather than an
-## omission.** `title-and-map` section 8.1 asks for 「어느 경로도 부리 칸을 하나 이상 지난다」 with a
-## floor of 1, **and it contradicts the row directly above it** (「한 경로가 지나는 짐승 칸은 최대
-## 셋이다」, floor 3). The proof is one line: every route steps on exactly three FIGHT nodes, so a
-## route with three `COUNT` nodes is a route with zero `BEAK` nodes, and the two rows cannot both
-## hold on any table with this shape. **The three rows that replace it are below** — the fight count
-## is pinned at 3 both ways, and the beak minimum and maximum are pinned at what they are, which is
-## the fork actually being a fork. See the report handed back with this net.
+## ⚠⚠ **THE REWARD FORK THIS FILE MEASURED NO LONGER EXISTS** (2026-08-25). `title-and-map` 8.1 asked
+## for 「어느 경로도 부리 칸을 하나 이상 지난다」, and the rows that replaced it pinned the beak count's
+## minimum and maximum — the fork actually being a fork. **The user then deleted the beak reward**
+## (「부리 보상 없지 끝나면 카드보상으로 통일했잖아」), so every fight node on every route pays bodies
+## and there is nothing left on that axis to differ. The rows below assert the SAMENESS instead, which
+## is the honest form and the one that reddens if a second reward kind ever returns.
 ##
 ## ⚠ **`net_islands`'s 「두 칸이 같은 격자를 안 쓴다」 is not here either**, and that is the plan's own
 ## instruction: the island column is still the stage-1 `[0, 1, 2, 1, 2, -1, 2]` and the check that
@@ -241,9 +239,8 @@ func _every_route_walked(t) -> void:
 		% Rules.map_floor_count())
 
 	# ⚠⚠ **The row that replaces the plan's self-contradicting pair.** Every route steps on exactly
-	# three FIGHT nodes, and that is what makes 「짐승 칸 최대 셋」 and 「부리 칸 최소 하나」 mutually
-	# exclusive: four fights all paying cells is a route with no beak on it at all. ⚠⚠ **The chest is
-	# gone and node 5 (floor 4) is a fight now, so every route steps on FOUR fight nodes, not three.**
+	# three FIGHT nodes. ⚠⚠ **The chest is gone and node 5 (floor 4) is a fight now, so every route
+	# steps on FOUR fight nodes, not three.**
 	var fights_min := 99
 	var fights_max := 0
 	for route: PackedInt32Array in routes:
@@ -272,40 +269,32 @@ func _every_route_walked(t) -> void:
 	t.eq(Rules.map_max_card_nodes_on_a_route(), cards_max,
 		"map_max_card_nodes_on_a_route() 가 걸어서 나온 최대(%d)와 같다" % cards_max)
 
-	var beaks_min := 99
-	var beaks_max := 0
+	# ⚠⚠ **THIS BLOCK MEASURED A FORK AND THERE IS NO FORK LEFT** (2026-08-25). Two of the seven nodes
+	# paid the beak; the user deleted that reward — 「부리 보상 없지 끝나면 카드보상으로 통일했잖아」 —
+	# so **every fight node on every route pays bodies.** The rows below are inverted rather than
+	# rewritten to still pass: 「경로에 따라 갈린다」 became 「어느 경로도 똑같다」, which is the true
+	# claim and the one that reddens the day a second reward kind returns.
 	var counts_min := 99
 	var counts_max := 0
 	for route: PackedInt32Array in routes:
-		var b := _count_reward(route, Rules.Reward.BEAK)
 		var c := _count_reward(route, Rules.Reward.COUNT)
-		beaks_min = mini(beaks_min, b)
-		beaks_max = maxi(beaks_max, b)
 		counts_min = mini(counts_min, c)
 		counts_max = maxi(counts_max, c)
-		# The two are complementary on every single route, which is the arithmetic above stated per
-		# row rather than as an aggregate.
-		t.eq(b + c, 4, "경로 %s 는 부리 %d + 짐승 %d = 싸우는 칸 넷이다" % [str(route), b, c])
+		t.eq(c, 4, "경로 %s 의 싸우는 칸 넷이 전부 짐승을 낸다" % str(route))
 
 	# ⚠⚠ 「한 경로가 지나는 짐승 칸은 최대 넷이다」 — node 5 (floor 4, the ex-chest) pays COUNT now, so
 	# the ceiling this repo watched rot once already moved from 3 to 4 with it. ⚠ **the FLOOR is the
 	# half that proves the fork exists**: a table where nobody can reach four count nodes has no
 	# cells-heavy branch at all.
-	t.ok(counts_max >= 4, "짐승 칸만 넷 지나는 경로가 실제로 있다 (최대 %d) — 갈림길의 짐승 쪽 답이다"
-		% counts_max)
-	t.ok(counts_max <= 4, "그리고 넷을 넘는 경로는 없다 (최대 %d) — 명부 상한이 이 수에 걸려 있다"
-		% counts_max)
-	# 「부리 칸을 지나는 경로가 있다」 — the other end of the same fork.
-	t.ok(beaks_max >= 2, "부리를 둘까지 모으는 경로가 있다 (최대 %d) — 갈림길의 부리 쪽 답이다" % beaks_max)
-	t.ok(beaks_max <= 2, "그리고 둘을 넘지 않는다 (최대 %d)" % beaks_max)
-	# ⚠ **And the two answers really are different answers.** If min and max agreed on either axis the
-	# fork would be a decoration: every route would pay the same thing and the map would be a corridor
-	# with pictures on it — this repo's second game died of exactly that shape.
-	t.ok(counts_max - counts_min >= 2,
-		"경로에 따라 짐승 칸 수가 %d~%d 로 갈린다 — 두 칸 이상 차이가 나야 고를 이유가 있다"
+	t.eq(counts_max, 4, "어느 경로든 짐승 칸을 넷 지난다 (최대 %d)" % counts_max)
+	# ⚠⚠ **THE ROW THAT SAYS THE MAP NO LONGER FORKS ON REWARD, AND IT IS DELIBERATELY THE OPPOSITE OF
+	# WHAT STOOD HERE.** This file's own sentence was 「min 과 max 가 같으면 갈림길은 장식이고, 모든
+	# 경로가 같은 것을 내는 지도는 그림 붙인 복도다 — 이 저장소의 둘째 게임이 정확히 그 모양으로
+	# 죽었다」. **That is now literally true of the reward axis**, and it is asserted rather than left
+	# for someone to notice: what a route pays is identical on every route.
+	t.eq(counts_min, counts_max,
+		"경로에 따라 짐승 칸 수가 안 갈린다 (%d~%d) — 보상 축의 갈림길은 없다"
 			% [counts_min, counts_max])
-	t.ok(beaks_max - beaks_min >= 2, "부리 칸 수도 %d~%d 로 갈린다" % [beaks_min, beaks_max])
-	t.eq(beaks_min, 0, "부리를 하나도 안 지나는 경로가 있다 — 짐승을 넷 다 먹는 길이 바로 그 길이다")
 
 	# 「`map_max_count_nodes_on_a_route()` 가 그 최대와 같다」 — the accessor is walked over the table
 	# and never written as a literal 4, because `net_islands`'s region floor and the roster capacity
@@ -422,7 +411,7 @@ func _the_walk_over_it(t) -> void:
 # -- the ex-chest floor --------------------------------------------------------------------------------
 
 ## ⚠⚠ 「4층 칸도 섬을 연다」 — node 5, floor 4, WAS the chest and had no island. Walked the way a run
-## does: node 0, win, node 1, win, node 3, win (a beak node, so a pick is taken), then node 5.
+## does: node 0, win, node 1, win, node 3, win, then node 5.
 ## Mutation: give node 5 back `island < 0`.
 ## Every win now stops for the card pick before the map (「6개중 2택」). ⚠ **`enter_node` refuses
 ## unless `_state == MAP`**, so a route walk that skips the pick between two nodes never reaches the
@@ -438,7 +427,7 @@ func _take_two_and_close_refit(r: Run) -> void:
 
 
 func _the_fourth_floor_opens_an_island_too(t) -> void:
-	var r := Run.new()
+	var r := _opened(Run.new())
 	t.ok(r.enter_node(0), "0번 칸을 밟는다")
 	r.finish_island(true)
 	t.eq(r.state(), Run.State.PICK, "0번은 짐승 칸이라 지도 전에 카드 고르기부터 연다 (자가 점검)")
@@ -451,11 +440,8 @@ func _the_fourth_floor_opens_an_island_too(t) -> void:
 
 	t.ok(r.enter_node(3), "3번 칸을 밟는다")
 	r.finish_island(true)
-	t.eq(r.state(), Run.State.REWARD, "3번은 부리 칸이라 고르기가 열렸다 (자가 점검)")
-	r.apply_beak(0)
-	# ⚠⚠ 「부리를 달고 나면 지도가 아니라 카드 화면이다」 — 3번의 승리도 여섯 장을 냈고 `apply_beak`
-	# 는 그 카드를 건드리지 않으므로, `_advance` 는 `MAP` 이 아니라 `PICK` 에 내려앉는다.
-	t.eq(r.state(), Run.State.PICK, "부리를 달고 나면 지도가 아니라 카드 고르기다")
+	# ⚠ **3번은 부리 칸이었고 이제 짐승 칸이다** (2026-08-25) — 고르는 화면 없이 바로 카드로 간다.
+	t.eq(r.state(), Run.State.PICK, "3번을 이기면 바로 카드 고르기다 — 고를 몸이 뜨지 않는다")
 	_take_two_and_close_refit(r)
 	t.eq(r.state(), Run.State.MAP, "카드를 고르고 정비를 닫아야 비로소 지도다")
 	t.eq(r.map.at(), 3, "서 있는 칸은 3번 그대로다")
@@ -702,7 +688,7 @@ func _the_picture(t) -> void:
 			% (Look.MAP_LINE_OPEN_ALPHA - Look.MAP_LINE_DIM_ALPHA))
 
 	# -- treed, with a real run behind it ----------------------------------------------------------
-	var run := Run.new()
+	var run := _opened(Run.new())
 	var spy := MapSpy.new()
 	t.root.add_child(spy)
 	# ⚠⚠ **`set_process(false)` DOES NOT HOLD, and this was measured on 4.7.1 rather than assumed.**
@@ -863,22 +849,24 @@ func _the_picture(t) -> void:
 	# The user has to be able to change that number without the round lying about it, so the
 	# comparison is `_shapes_match`, tolerant to a hundredth of a pixel — far under this file's own
 	# 2.0 px snap floor, so it cannot forgive a real difference.
-	t.ok(not _shapes_match(_glyph_shape(spy, 1), _glyph_shape(spy, 2)),
-		"2층 두 칸의 무늬가 서로 다르다 — 같으면 갈림길에 고를 것이 없다")
-	t.ok(not _shapes_match(_glyph_shape(spy, 3), _glyph_shape(spy, 4)),
-		"3층 두 칸의 무늬도 서로 다르다")
-	# ⚠ Two reward kinds now, not three: the chest (and its cross glyph) is gone, and node 5 (floor 4,
-	# the ex-chest) pays COUNT exactly like node 0 — so their glyphs MATCH now, which is the inverse of
-	# what this row used to assert.
-	t.ok(_shapes_match(_glyph_shape(spy, 0), _glyph_shape(spy, 5)),
-		"짐승을 내는 두 칸(0번과 5번)의 무늬가 같다 — 같은 보상은 같은 무늬다")
-	t.ok(not _shapes_match(_glyph_shape(spy, 2), _glyph_shape(spy, 5)),
-		"부리 칸과 짐승 칸의 무늬는 다르다")
-	# ⚠⚠ **The case that fails the CHECK rather than the tree.** Nodes 1 and 4 both pay cells and sit at
-	# different centres. If the four rows above were comparing POSITIONS again, this one would go red —
-	# it is the inversion of the instrument, not of the subject.
-	t.ok(_shapes_match(_glyph_shape(spy, 1), _glyph_shape(spy, 4)),
-		"같은 보상을 내는 두 칸은 자기 중심에 맞춰 놓으면 무늬가 완전히 같다 — 이 줄이 red 면 위 네 줄이 모양이 아니라 자리를 재고 있는 것이다")
+	# ⚠⚠ **THESE ROWS USED TO SAY 「2층 두 칸의 무늬가 서로 다르다 — 같으면 갈림길에 고를 것이 없다」
+	# AND THEY ARE INVERTED** (2026-08-25). Two fight nodes paid the beak and drew a triangle; the user
+	# deleted that reward, so **every fight node draws the same three squares.** The old rows would have
+	# to be deleted to pass, and deleting them would take the glyph vocabulary's only measurement with
+	# them — so they assert the sameness instead, and 「갈림길에 고를 것이 없다」 is now the true reading
+	# of the picture rather than a warning about it.
+	var fight_nodes := [0, 1, 2, 3, 4, 5]
+	var odd_one := []
+	for n in fight_nodes:
+		if not _shapes_match(_glyph_shape(spy, 0), _glyph_shape(spy, int(n))):
+			odd_one.append(n)
+	t.eq(odd_one, [], "싸우는 칸 여섯이 전부 같은 무늬다 %s — 보상이 하나라 무늬도 하나다" % str(odd_one))
+	# ⚠⚠ **The case that fails the CHECK rather than the tree**, and it had to move: with every fight
+	# node matching, 「두 칸이 같다」 can no longer tell a shape comparison from a position comparison.
+	# **The boss draws NO glyph at all**, so it is the one node that must not match — if this row ever
+	# goes green the comparator has stopped comparing anything.
+	t.ok(not _shapes_match(_glyph_shape(spy, 0), _glyph_shape(spy, 6)),
+		"보스 칸만 무늬가 다르다 — 이 줄이 green 이면 비교기가 아무것도 안 재고 있는 것이다")
 
 	t.eq(spy.armies.size(), 1, "병사·힘 숫자를 한 번 그렸다")
 	# ⚠⚠ **The expectation used to be read out of the very constant it was checking**, so
@@ -903,7 +891,11 @@ func _the_picture(t) -> void:
 	t.ok((spy.armies[0]["col"] as Color).a >= 0.8,
 		"그리고 그 글자가 알파 %.2f 로 화면까지 갔다 (>= 0.8) — 이 화면에서 숫자가 사라지면 아무 정보도 없다"
 			% (spy.armies[0]["col"] as Color).a)
-	t.ok(str(spy.armies[0]["text"]).contains("병사"), "「병사」가 쓰여 있다")
+	# ⚠ **「병사」-> 「짐승」** (2026-08-25, 티켓 23): in this game 병사 are the ENEMY, so the map was
+	# counting the player's own horde in the invaded side's word.
+	t.ok(str(spy.armies[0]["text"]).contains("짐승"), "「짐승」이 쓰여 있다")
+	t.ok(not str(spy.armies[0]["text"]).contains("병사"),
+		"그리고 「병사」는 안 쓰여 있다 — 이 게임에서 병사는 적이다")
 	t.ok(str(spy.armies[0]["text"]).contains("힘"), "「힘」도 쓰여 있다")
 	# ⚠ The glyph budget, as a COUNT and not a taste: this screen is allowed two numbers and no
 	# sentences. 「병사 16 · 힘 188」 is five space-separated tokens and a sixth would be a word nobody
@@ -1374,14 +1366,13 @@ func _the_picture(t) -> void:
 	# `_force_to` unconditionally, and the rise snaps.
 	t.ok(run.enter_node(3), "3번 부리 칸을 밟는다 (자가 점검)")
 	run.finish_island(true)
-	run.apply_beak(0)
 	_take_two_and_close_refit(run)
 	spy.bind(run)
 	# Two steps: the first notices the pool moved, the second runs the chase all the way out, so the
 	# number is SETTLED before node 5 is won. Without that the row below would be measuring a climb
 	# that was already in flight.
 	spy._fx_step(0.016)
-	spy._fx_step(Look.MAP_HEAL_SEC * 2.0)
+	spy._fx_step(Look.NUMBER_CLIMB_SEC * 2.0)
 	var low := await _force_shown(t, spy)
 	t.ok(is_equal_approx(low, _pool(run.army)),
 		"4층 칸을 밟기 전 힘 숫자가 실제 총합 %.0f 에 도착해 있다 (자가 점검)" % _pool(run.army))
@@ -1400,9 +1391,9 @@ func _the_picture(t) -> void:
 	t.eq(spy._age, frozen_at,
 		"지도 뷰의 자체 시계가 프레임을 돌려도 안 흐른다 (자가 점검) — 흐르면 아래 시간 검사가 전부 헐거워진다")
 	var climbing := await _force_shown(t, spy)
-	spy._fx_step(Look.MAP_HEAL_SEC * 0.5)
+	spy._fx_step(Look.NUMBER_CLIMB_SEC * 0.5)
 	var half := await _force_shown(t, spy)
-	spy._fx_step(Look.MAP_HEAL_SEC)
+	spy._fx_step(Look.NUMBER_CLIMB_SEC)
 	var landed := await _force_shown(t, spy)
 	t.ok(landed > low, "회복 뒤 힘 숫자가 %.0f 에서 %.0f 로 올랐다" % [low, landed])
 	t.ok(is_equal_approx(climbing, low),
@@ -1413,8 +1404,8 @@ func _the_picture(t) -> void:
 		"절반 시간에는 절반쯤 와 있다 (%.0f < %.0f < %.0f) — 지켜보는 동안 오른다" % [climbing, half, landed])
 	t.ok(is_equal_approx(landed, _pool(run.army)),
 		"다 오른 값이 실제 HP 총합(%.1f)과 같다 — 화면과 sim 이 같은 수를 말한다" % _pool(run.army))
-	t.ok(Look.MAP_HEAL_SEC >= 0.30 and Look.MAP_HEAL_SEC <= 1.00,
-		"힘 숫자 오르는 시간이 0.30~1.00초다 (%.2f) — 밑은 지켜볼 수가 없다" % Look.MAP_HEAL_SEC)
+	t.ok(Look.NUMBER_CLIMB_SEC >= 0.30 and Look.NUMBER_CLIMB_SEC <= 1.00,
+		"힘 숫자 오르는 시간이 0.30~1.00초다 (%.2f) — 밑은 지켜볼 수가 없다" % Look.NUMBER_CLIMB_SEC)
 
 	# `node_at`, the hit test the shell actually asks. Every centre finds its own node; the daylight
 	# between two hit circles finds nothing.
@@ -1584,3 +1575,13 @@ func _pool(army: Army) -> float:
 		if army.alive[i] != 0:
 			sum += army.hp[i]
 	return sum
+
+
+## Walks past the OPENING BEAST ROUND. ⚠⚠ **A run opens on a card screen since 티켓 15** (「시작하자
+## 마자 세 개 중에 하나 고르는 거」), so `enter_node` refuses until one of its three beasts has been
+## taken — every fixture below that steps onto the map has to pass through it first. Card 0, always,
+## so the fixture is the same run every time.
+func _opened(r: Run) -> Run:
+	if r.state() == Run.State.PICK:
+		r.take_card(0)
+	return r

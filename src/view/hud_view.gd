@@ -47,24 +47,15 @@ extends Node2D
 ## while a panel is up, so an effect hung off sim time freezes behind the win screen.
 
 
-## Display names, indexed by the type id in rules.gd. `Rules.name_of` returns the table's IDENTIFIER
-## ("CELL_MELEE"), which is not text a player reads, and the user cannot read English at all.
-## panel_view reads this through `HudView.type_label` rather than keeping a second copy — a table
-## written down twice diverges.
+## ⚠⚠ **`TYPE_LABELS` IS DELETED and the words are a COLUMN of `Rules.UNITS` now.** It was a second
+## table indexed by the same ids, and the split showed on screen: 까마귀 stood in it twice, because the
+## player's ranged row borrowed the enemy crow's body while the CROW row was the enemy species itself.
+## That duplicate was user-approved as an interim (2026-08-24: 「구지? 그냥 까마귀라고 하면 되는거
+## 아니야?」) and the five-species roster is what dissolves it — **at the cause, by there being one
+## table.**
 ##
-## ⚠ **Nothing on the HUD reads it any more** — the roster strip it was written for is deleted. It
-## survives because `panel_view` names soldiers in the reward list and `refit_view` labels the beast
-## strip with it (티켓 11).
-##
-## ⚠⚠ **The first two are the BEASTS THE ART DRAWS, no longer the cell-game roles** (2026-08-24,
-## verify-look: 「근접·원거리」 on the refit strip failed the beast-name acceptance). Type 0 draws the
-## wolf and type 1 draws the crow — `field_view._beast_tex`'s own player branch is the authority —
-## so the words follow the picture. ⚠ **That makes 까마귀 appear TWICE (types 1 and 3)**: the ranged
-## soldier borrows the crow's body while the CROW row is the enemy species itself. **The duplicate is
-## USER-APPROVED as the interim state** (2026-08-24: 「구지? 그냥 까마귀라고 하면 되는거 아니야?」 —
-## no suffix, plain 까마귀 on both); the five-species roster migration (다람쥐·늑대·소·곰·까마귀) is
-## another ticket's scope and is what actually dissolves it.
-const TYPE_LABELS := ["늑대", "까마귀", "들소", "까마귀", "사자"]
+## `type_label` stays as the one call site everything already reads (`panel_view` names soldiers in the
+## reward list, `refit_view` labels the beast strip), so nothing outside this line moved.
 
 ## `_chip_fx` slot ids. **The start button is 0 and the five summon boxes are 1..5**, so one drawer
 ## and one `_chip_offset` serve both — one concept, one value. Named rather than written as bare
@@ -112,8 +103,10 @@ static func default_font() -> Font:
 	return _face
 
 
+## The word a player reads for a beast row. **One line reading the unit table**, so the name on the
+## refit strip and the name in the reward list cannot say two different things.
 static func type_label(type_id: int) -> String:
-	return str(TYPE_LABELS[type_id])
+	return Rules.label_of(type_id)
 
 
 func bind(b: Battle) -> void:
@@ -245,16 +238,20 @@ func _draw() -> void:
 			srect.position + Look.HUD_START_TEXT_OFFSET_PX,
 			Look.HUD_START_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 
-		# --- the five summon slots (sea-summon) ---------------------------------------------------
+		# --- the summon slots, as many as the run has registered (sea-summon) ---------------------------------------------------
 		# ⚠ **Inside the SAME gate the start button is**, and that is seam #4 of OPEN question 1 — see
 		# this file's header. Nobody dies during planning, so the bar's denominator cannot move under
 		# its numerator; during a fight it could, and the bar would climb.
-		for i in Rules.summon_slot_count():
+		# ⚠ **The RUN's own slot count, asked of the army the fight is holding.** It was
+		# `Rules.summon_slot_count()`, a constant — and the row of boxes has to be as long as the run
+		# actually is or the screen promises a key that refuses.
+		var slot_n := 0 if battle.army == null else battle.army.slot_count()
+		for i in slot_n:
 			# ⚠ **The shake rides `rect.position` AND the glyph's `at` is derived from the SHIFTED
 			# rect.** Shake the box alone and the digit walks out of it; shake the digit alone and it
 			# reads as nothing having moved — combat-juice item 8, the same as the start button above.
 			var shake := _chip_offset(CHIP_SLOT_BASE + i)
-			var box := Look.slot_rect_px(i)
+			var box := Look.slot_rect_px(i, slot_n)
 			box.position += shake
 			# Two channels — fill AND border — so neither one carries the read of "this is the armed
 			# slot" alone. The pair's own inequality (`> PRESS_BORDER_WIDTH_PX + 2`, the snap floor) is
@@ -265,10 +262,10 @@ func _draw() -> void:
 				Look.HUD_SLOT_FONT_SIZE_PX, Look.COL_HUD_TEXT)
 			# **An unbound slot draws NO bar; a slot whose bodies are all out draws an empty rail.**
 			# That rail is the only thing separating 「다 내보냈다」 from 「아직 아무것도 안 넣었다」.
-			var want := Rules.summon_type_of(i)
+			var want := battle.army.slot_type_of(i)
 			if want < 0:
 				continue
-			var rail := Look.slot_bar_rect_px(i)
+			var rail := Look.slot_bar_rect_px(i, slot_n)
 			rail.position += shake
 			var pool := 0
 			if battle.army != null:

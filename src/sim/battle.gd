@@ -135,6 +135,17 @@ var enemy_windup_at := PackedInt32Array()
 var _enemy_cd := PackedFloat32Array()
 var _enemy_goal: Array = []               # Vector2, the tile centre this enemy is walking into
 var _enemy_stale := PackedByteArray()     # 1 = may still hold the tile behind it
+## The tier an enemy was posted on, or **-1 for one that is free to go anywhere** (티켓 19).
+##
+## ⚠⚠ **ONLY A DEFENDER THAT STARTED ON HIGH GROUND HOLDS, AND THAT NARROWNESS IS THE WHOLE RULE.**
+## Enemies move by "walk at the nearest soldier" and nothing else, so the ones posted on a plateau
+## walked DOWN their own stair and died on the flat — **measured in play: most WON fights never sent
+## anyone up the stairs at all, because the defenders came to them.** The ticket's answer is that the
+## advantage is positional and the ATTACKER does the walking; a defender that abandons the height
+## inverts it.
+## ⚠ **Giving every enemy a holding behaviour would stop the fight coming to the player at all**, so a
+## defender on the low ground is untouched and still advances.
+var _enemy_home_level := PackedInt32Array()
 
 ## Per-enemy status clocks, flat over the STATUS TABLE: index `s * enemy_alive.size() + e` (see
 ## `_status_at`) holds the seconds left of status `s` on enemy `e`, and the magnitude its lit tier
@@ -151,6 +162,9 @@ var soldier_target := PackedInt32Array()  # enemy index, or -1
 var _soldier_cd := PackedFloat32Array()
 var _soldier_goal: Array = []
 var _soldier_stale := PackedByteArray()
+## 1 once this body has spent its once-per-island shove (`Rules.shove_once_of`). **Per island**, which
+## is free: `setup` rebuilds it and a `Battle` is new every island.
+var _charged := PackedByteArray()
 
 # --- boats -----------------------------------------------------------------------------------------
 ## **The plan AND the fleet, in one array.** There is no second structure: `send` appends here with
@@ -267,6 +281,8 @@ func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
 	_enemy_cd.resize(enemy_count)
 	_enemy_stale = PackedByteArray()
 	_enemy_stale.resize(enemy_count)
+	_enemy_home_level = PackedInt32Array()
+	_enemy_home_level.resize(enemy_count)
 	# resize on a fresh array zero-fills, so every status starts expired.
 	status_time = PackedFloat32Array()
 	status_time.resize(Rules.status_count() * enemy_count)
@@ -287,6 +303,10 @@ func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
 		enemy_windup_at[e] = -1
 		_enemy_cd[e] = 0.0
 		_enemy_stale[e] = 0
+		# Posted high means posted; posted low means free. Read once, off the spawn tile, so a defender
+		# that is somehow moved later still holds the tier it was placed to hold.
+		var home := grid.level_of(tile)
+		_enemy_home_level[e] = home if home > 0 else -1
 		enemy_pos.append(here)
 		_enemy_goal.append(here)
 		if tile >= 0 and tile < claimed.size():
@@ -302,6 +322,10 @@ func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
 	_soldier_cd.resize(roster)
 	_soldier_stale = PackedByteArray()
 	_soldier_stale.resize(roster)
+	# resize on a fresh array zero-fills, so nobody has charged yet. **Per island for free**: a
+	# `Battle` is new every island, so 「몸당 섬당 한 번」 needs no reset anywhere else.
+	_charged = PackedByteArray()
+	_charged.resize(roster)
 	soldier_pos = []
 	_soldier_goal = []
 	for i in roster:
@@ -393,7 +417,8 @@ func send(soldier_id: int, tile: int) -> int:
 ##
 ## ⚠⚠ **`army.living_ids_of_type` IS NOT REORDERED, and that was checked rather than assumed.** It has
 ## three other readers: `hud_view` and `net_run` take only `.size()` (order-blind), but
-## **`tools/probe/run_run.gd` reads `ids[0]` to put the beak on the HEALTHIEST living body** — its own
+## **`tools/probe/run_run.gd` used to read `ids[0]` to put the beak on the HEALTHIEST living body** —
+## the beak reward is deleted (2026-08-25) but the ORDER is still this function's contract. Its own
 ## comment says so. Flipping that function would silently invert the probe's reward policy, which is a
 ## design instrument, not a caller. So the summon gets its own ordering here and `army` keeps its
 ## documented one.
@@ -410,13 +435,13 @@ func send(soldier_id: int, tile: int) -> int:
 ##
 ## ⚠⚠ **Filtered by `army.slot_id[i] == slot`, NOT by `army.type_id[i] == want`.** The two agree today
 ## (one slot per type), and they stop agreeing the day two slots bind to the same type — which is what
-## `SUMMON_SLOTS`' three-column table exists for. Filtering on type would draw two slots from one pool
+## `Army.slots` allows. Filtering on type would draw two slots from one pool
 ## with every count check downstream still green.
 func slot_reserve_ids(slot: int) -> Array:
 	var out: Array = []
 	if army == null:
 		return out
-	if Rules.summon_type_of(slot) < 0:
+	if army.slot_type_of(slot) < 0:
 		return out
 	for raw in army.living_ids_of_slot(slot):
 		var i := int(raw)
@@ -465,9 +490,9 @@ func summon(slot: int, tile: int) -> int:
 		return -1
 	if grid == null or army == null:
 		return -1
-	if slot < 0 or slot >= Rules.summon_slot_count():
+	if slot < 0 or slot >= army.slot_count():
 		return -1
-	if Rules.summon_type_of(slot) < 0:
+	if army.slot_type_of(slot) < 0:
 		return -1
 	# ⚠ **REDUNDANT TODAY AND MEASURED SO**: `grid.summon_route` refuses on this same predicate, so
 	# deleting this line reddens nothing — the route test below catches every case. It is kept for the
@@ -805,7 +830,9 @@ func _phase_targeting() -> void:
 		if held >= 0 and enemy_alive[held] != 0 \
 				and _within(soldier_pos[i], enemy_pos[held], _soldier_reach(i)):
 			continue
-		soldier_target[i] = _nearest_enemy(soldier_pos[i])
+		# ⚠ The pack decides WHERE it looks from; the body decides HOW HIGH it looks from. Reading the
+		# height off the seek point instead had wolves on the ground aiming from a plateau.
+		soldier_target[i] = _nearest_enemy(_seek_point_of(i), grid.height_at(soldier_pos[i]))
 
 	for e in enemy_alive.size():
 		if enemy_alive[e] == 0:
@@ -873,7 +900,7 @@ func _phase_movement(dt: float) -> void:
 			continue
 		var seek: Vector2 = soldier_pos[seek_id]
 		enemy_pos[e] = _walk(uid, enemy_pos[e], _enemy_goal, e, speed * dt,
-				_field_for(_tile_of(seek)), seek, _enemy_reach(e))
+				_field_for(_tile_of(seek)), seek, _enemy_reach(e), int(_enemy_home_level[e]))
 		_enemy_stale[e] = 1
 
 
@@ -977,7 +1004,11 @@ func _hit_enemies(from_id: int, primary: int, damage: float, area: float) -> voi
 				splash.append(e)
 	# Every lit status tier rides every allied blow, onto everyone the blow actually hit. Only HERE —
 	# `_hit_soldiers` has no twin, so an enemy blow can never leave a status on a soldier.
-	_apply_statuses(primary, splash)
+	_apply_statuses(from_id, primary, splash)
+	# 다람쥐 pulls what it bites in, 소 drives it away — one signed number in `Rules.SPECIES_SHOVE`.
+	# Same place and same victims as the statuses above, for the same reason: what a blow does to what
+	# it hit belongs on one line, not two.
+	_shove_victims(from_id, primary, splash)
 	events.append({
 		"kind": Event.ATTACK,
 		"from": from_id,
@@ -1013,22 +1044,149 @@ func _hit_soldiers(from_id: int, primary: int, damage: float, area: float) -> vo
 	})
 
 
+## Moves everyone this blow hit, if the attacker's species is in `Rules.SPECIES_SHOVE`. Nothing at
+## all for a species with no row — the table lookup answers 0.0 and this returns before touching
+## anything.
+func _shove_victims(from_id: int, primary: int, splash: PackedInt32Array) -> void:
+	if from_id < 0 or from_id >= army.type_id.size():
+		return
+	var st := int(army.type_id[from_id])
+	var tiles := Rules.shove_tiles_of(st)
+	if absf(tiles) <= Rules.EPS:
+		return
+	var once := Rules.shove_once_of(st)
+	if once and _charged[from_id] != 0:
+		return
+	# ⚠⚠ **THE FLAG IS SET BY THE MOVE AND NOT BY THE ATTEMPT.** Setting it first spent 소's whole
+	# island on a target with its back to a wall — `_shove` refuses to put a body on a blocked tile,
+	# so the charge was consumed by a blow that moved nobody and every later blow was refused for a
+	# charge that never happened. **A once-per-island rule has to be spent by the thing it names.**
+	var moved := _shove(from_id, primary, tiles)
+	for v in splash:
+		moved = _shove(from_id, int(v), tiles) or moved
+	if once and moved:
+		_charged[from_id] = 1
+
+
+## Moves enemy `e` up to `tiles` along the line to soldier `from_id` — **positive is TOWARD the
+## attacker** — and stops at the last tile on the way that a body may actually stand on.
+##
+## ⚠⚠ **FOUR THINGS HAVE TO MOVE TOGETHER AND THREE OF THEM ARE INVISIBLE.** Writing `enemy_pos`
+## alone reads as a shove for exactly one sub-step and then undoes itself:
+##  · `_phase_movement`'s standing branch glides the body back toward `_enemy_goal`
+##  · `_walk` re-picks that same stale goal on the branch that walks
+##  · `grid.reserved` still holds the tile the body LEFT, so two bodies end up holding one tile and a
+##    doorway is half as wide with nothing on screen to explain it
+## ⇒ `enemy_pos`, `_enemy_goal` and `_settle` all move here, and `_enemy_stale` is cleared because
+## this call IS the settle.
+##
+## ⚠ **It walks tile by tile rather than jumping to the endpoint.** A jump can land past a wall, past
+## a body, or on top of the attacker; stopping at the last legal tile is what makes 「지나쳐 넘어가지
+## 않는다」 a property of the search instead of a rule somebody has to remember.
+## **Returns whether anything actually moved**, which is what `_shove_victims` spends 소's
+## once-per-island charge on.
+func _shove(from_id: int, e: int, tiles: float) -> bool:
+	if e < 0 or e >= enemy_alive.size() or enemy_alive[e] == 0:
+		return false
+	var here: Vector2 = enemy_pos[e]
+	var away: Vector2 = here - soldier_pos[from_id]
+	if away.length() <= Rules.EPS:
+		return false
+	var dir := -away.normalized() if tiles > 0.0 else away.normalized()
+	var uid := ENEMY_UID_BASE + e
+	var best := here
+	var want := absf(tiles)
+	var steps := int(ceil(want))
+	# ⚠⚠ **BODIES NEVER CHANGE TIER BY BEING PUSHED** (티켓 19, the user: 「높은 데서 밀리면 안 떨어져.
+	# 안 떨어지는 걸로」). Before this, 소's charge shoved enemies UP onto a plateau and 다람쥐's pull
+	# dragged them DOWN off one — the decision inverted, by the same omission that put landed bodies on
+	# top of the wall: placement that never consulted the tier.
+	# ⚠ **The body's OWN level, not `can_step`.** A shove is not a step: it may not use a stair either,
+	# because a body flung a tier up a staircase is the falling rule wearing a different hat.
+	var stand_level := grid.level_of(_tile_of(here))
+	for k in range(1, steps + 1):
+		var reach := minf(float(k), want)
+		var tile := _tile_of(here + dir * reach)
+		if tile < 0:
+			break
+		var candidate := _point_of_tile(tile)
+		if candidate.distance_to(best) <= Rules.EPS:
+			continue
+		if grid.passable[tile] == 0:
+			break
+		if grid.level_of(tile) != stand_level:
+			break
+		var holder := int(grid.reserved[tile])
+		if holder >= 0 and holder != uid:
+			break
+		best = candidate
+	if best.distance_to(here) <= Rules.EPS:
+		return false
+	enemy_pos[e] = best
+	_enemy_goal[e] = best
+	_settle(uid, best)
+	_enemy_stale[e] = 0
+	return true
+
+
 func _status_at(s: int, e: int) -> int:
 	return s * enemy_alive.size() + e
 
 
-## Walks the status-tag table and writes every lit tier onto `primary` and the splash victims.
-## ⚠⚠ **An overwrite, never an accumulate**: re-hitting resets the clock to the lit tier's own values —
-## the magnitude must not add or fold onto itself, or six fast blows rebuild the -0.5 s mine here.
-func _apply_statuses(primary: int, splash: PackedInt32Array) -> void:
+## Seconds left of status `s` on enemy `e`, 0.0 for anything out of range or expired.
+##
+## ⚠ **The one public window onto `status_time`'s flat indexing.** `field_view` reads a bleed clock to
+## tint a body, and a view that re-derived `s * count + e` would be a second copy of the layout —
+## which is exactly the shape that silently reads the wrong enemy the day a status is appended.
+func status_left(s: int, e: int) -> float:
+	if e < 0 or e >= enemy_alive.size() or s < 0 or s >= Rules.status_count():
+		return 0.0
+	return status_time[_status_at(s, e)]
+
+
+## The magnitude of status `s` standing on enemy `e`, 0.0 for anything out of range. **The same one
+## window `status_left` is**, for the same reason: the flat layout is written down once.
+func status_mag_of(s: int, e: int) -> float:
+	if e < 0 or e >= enemy_alive.size() or s < 0 or s >= Rules.status_count():
+		return 0.0
+	return status_mag[_status_at(s, e)]
+
+
+## Writes what ONE blow leaves on `primary` and on the splash victims.
+##
+## ⚠⚠ **An overwrite, never an accumulate**: re-hitting resets the clock to the winning tier's own
+## values — the magnitude must not add or fold onto itself, or six fast blows rebuild the -0.5 s mine
+## here.
+##
+## ⚠⚠ **EVERY SOURCE FOR THIS BLOW IS RESOLVED BEFORE ANYTHING IS WRITTEN, AND THE STRONGEST WINS.**
+## A blow has two sources of a status now — the equipment tag tiers and the attacker's own species —
+## and they can name the SAME status. Writing them one after the other let whichever came last stand,
+## which measured as a 까마귀 wearing a full bleed set biting for 0.5 a second where a 늑대 wearing the
+## same set bit for 1.5: **the crow was PENALISED by its own passive**, and by equipment fitted
+## anywhere on the board, since `tag_count` sums the whole horde.
+func _apply_statuses(from_id: int, primary: int, splash: PackedInt32Array) -> void:
+	var best := {}
 	for r in Rules.tag_status_row_count():
 		var tier := Rules.tag_status_tier_at(r, army.loadout.tag_count(Rules.tag_status_tag_of(r)))
 		if tier.is_empty():
 			continue
 		var s := Rules.tag_status_status_of(r)
-		_put_status(s, primary, tier)
+		best[s] = Rules.stronger_status_tier(s, best.get(s, {}), tier)
+	# ⚠ **The attacker's SPECIES is a second SOURCE and not a second mechanism** (티켓 15): 까마귀
+	# bites bleed into whatever it hits with no equipment at all. Same `_put_status`, same overwrite
+	# rule, same generic `_phase_status` walk — a species row and a tag tier are indistinguishable by
+	# the time they reach the clock.
+	if from_id >= 0 and from_id < army.type_id.size():
+		var own := Rules.species_status_of(int(army.type_id[from_id]))
+		if not own.is_empty():
+			var os := int(own["status"])
+			best[os] = Rules.stronger_status_tier(os, best.get(os, {}), own)
+	for raw in best:
+		var st := int(raw)
+		var win: Dictionary = best[st]
+		_put_status(st, primary, win)
 		for v in splash:
-			_put_status(s, int(v), tier)
+			_put_status(st, int(v), win)
 
 
 func _put_status(s: int, e: int, tier: Dictionary) -> void:
@@ -1176,8 +1334,11 @@ func _the_landing_force_is_gone() -> bool:
 ##
 ## `goals` is a plain Array on purpose — a `PackedVector2Array` is copy-on-write and a write through
 ## a parameter would land in a copy, leaving every unit re-requesting the same first step forever.
+## `keep_level` is passed straight to `grid.step_toward` — -1 for everybody except a defender holding
+## high ground. See `_enemy_home_level`.
 func _walk(uid: int, pos: Vector2, goals: Array, gi: int, step_len: float,
-		field: PackedInt32Array, stop_at: Vector2, stop_dist: float) -> Vector2:
+		field: PackedInt32Array, stop_at: Vector2, stop_dist: float,
+		keep_level: int = -1) -> Vector2:
 	var remaining := step_len
 	var guard := 0
 	var here := pos
@@ -1185,11 +1346,19 @@ func _walk(uid: int, pos: Vector2, goals: Array, gi: int, step_len: float,
 		guard += 1
 		if guard > WALK_TILES_MAX:
 			break
-		if here.distance_to(stop_at) <= stop_dist + Rules.EPS:
+		# ⚠⚠ **`_dist` AND NOT `distance_to`, AND THIS ONE LINE FROZE THE GAME.** Everything else that
+		# asks "how far" moved onto the height-aware distance and this arrival test did not, which left
+		# a BAND at every tier boundary: a low tile inside a body's PLANAR reach of something standing a
+		# tier up. A body told to walk exits here on the first iteration, cannot attack because the real
+		# distance is 2.236, and never moves again — **12 seconds, zero pixels, nothing logged, and no
+		# time limit left to end the island on.** Measured with three wolves against a plateau lion.
+		# ⇒ **The stop test and the reach test have to be the same question**, or "arrived" and "in
+		# reach" disagree and the gap between them is a body standing still forever.
+		if _dist(here, stop_at) <= stop_dist + Rules.EPS:
 			break
 		var goal: Vector2 = goals[gi]
 		if here.distance_to(goal) <= Rules.EPS:
-			goal = grid.step_toward(uid, here, field)
+			goal = grid.step_toward(uid, here, field, keep_level)
 			goals[gi] = goal
 			if here.distance_to(goal) <= Rules.EPS:
 				# Every neighbour is taken or none is closer: the unit stands. That is the queue at
@@ -1236,7 +1405,7 @@ func _glide(pos: Vector2, goal: Vector2, step_len: float) -> Vector2:
 # --- targeting helpers ---------------------------------------------------------------------------
 
 ## The soldier's own range plus the reach bonus. The bonus is added HERE and never inside
-## `army.range_of`, which returns the beak's range and nothing else.
+## `army.range_of`, which returns the species board's range and nothing else.
 func _soldier_reach(i: int) -> float:
 	return army.range_of(i) + Rules.REACH_BONUS
 
@@ -1245,19 +1414,101 @@ func _enemy_reach(e: int) -> float:
 	return Rules.range_of(int(enemy_type[e])) + Rules.REACH_BONUS
 
 
+## **How far apart two bodies are, height included — and the ONLY place this file measures a
+## distance between bodies.** 티켓 19.
+##
+## Bodies keep 2D positions: height is a property of the TILE, not of the body, so nothing about
+## `soldier_pos`, the boats, the screen or three thousand existing net literals had to move to bring
+## the axis in. The ground's own height is looked up and folded in here.
+##
+## ⚠⚠ **Everything that asks "how far" goes through this — reach, target choice AND the pack radius.**
+## Making only the reach three-dimensional and leaving target choice planar would give the word
+## "distance" two meanings inside one file, and the wolf would keep picking the enemy over the wall
+## while being unable to touch it. **That it picks its own tier first is the point**: a body up a tier
+## is farther away, so the pack goes for what it can actually reach and the flow field walks the rest
+## to the stair.
+##
+## ⚠ **A tier is two tiles, so the neighbour across a boundary is sqrt(1 + 4) = 2.236** — outside a
+## melee reach of 1.5 and inside an archer's 4.5. **This is not the 숫자 보너스 the user refused**: no
+## range and no damage changed, the space they are measured in did.
+##
+## ⚠ **The equal-height branch returns `distance_to` unchanged rather than a square root of a sum with
+## a zero in it.** Every board in the game was flat until this ticket and most still are; taking the
+## same expression as before on those boards is what makes "no existing literal moves" a property of
+## the code instead of a hope about floating point.
+func _dist(a: Vector2, b: Vector2) -> float:
+	return _dist_from_height(a, grid.height_at(a), b)
+
+
+## The same measurement with `a`'s height supplied rather than looked up. **One caller needs it**:
+## the pack's seek point is a mean of positions and the ground under that mean is not the ground
+## anybody is standing on. See `_nearest_enemy`.
+func _dist_from_height(a: Vector2, a_h: float, b: Vector2) -> float:
+	var dh := a_h - grid.height_at(b)
+	if absf(dh) <= Rules.EPS:
+		return a.distance_to(b)
+	return sqrt(a.distance_squared_to(b) + dh * dh)
+
+
 ## `<=` with an epsilon. A diagonal neighbour is exactly 1.41421..., and a bare `<=` on that float
 ## boundary decides from frame to frame whether four melee can reach a target or eight can.
+##
+## ⚠ **Through `_dist`, so a swing, a shot and a bite all measure the same space.** The bear's splash
+## rides this function and therefore follows for free — `net_tiers` keeps a row on it anyway, because
+## what follows for free also disappears quietly.
 func _within(a: Vector2, b: Vector2, reach: float) -> bool:
-	return a.distance_to(b) <= reach + Rules.EPS
+	return _dist(a, b) <= reach + Rules.EPS
 
 
-func _nearest_enemy(from: Vector2) -> int:
+## Where soldier `i` LOOKS FROM when it picks a target — its own tile for most species, and the
+## centre of mass of its nearby own kind (itself included) for a species with a `Rules.SPECIES_PACK`
+## row.
+##
+## ⚠⚠ **This one function is the whole of 무리사냥.** Same point, same pick, so the pack bites one
+## enemy; `_phase_movement` then walks each of them at that enemy, so the pack ARRIVES as one body.
+## Nothing else in this file knows a pack exists.
+##
+## ⚠ **Ashore only, and its own species only.** A body still on a boat has no place on the ground to
+## average, and averaging across species would make a wolf's aim depend on where the crows are.
+func _seek_point_of(i: int) -> Vector2:
+	var st := int(army.type_id[i])
+	var radius := Rules.pack_radius_of(st)
+	if radius <= 0.0:
+		return soldier_pos[i]
+	var here: Vector2 = soldier_pos[i]
+	var sum := here
+	var n := 1
+	for k in soldier_state.size():
+		if k == i or soldier_state[k] != SoldierState.ASHORE:
+			continue
+		if int(army.type_id[k]) != st:
+			continue
+		# ⚠⚠ **THIS COMMENT USED TO SAY A PACKMATE A TIER UP "DROPS OUT AT 2.236" AND THAT WAS
+		# ARITHMETIC NOBODY DID.** A wolf's pack radius is 6.0; 2.236 is nowhere near it, so the
+		# packmate stays in the huddle and always did. The height belongs in this test because the
+		# radius is a distance and every distance in this file is measured the same way — **not because
+		# it excludes anybody at the sizes this game actually uses.**
+		if _dist(here, soldier_pos[k]) > radius + Rules.EPS:
+			continue
+		sum += soldier_pos[k]
+		n += 1
+	return sum / float(n)
+
+
+## Nearest living enemy to `from`, measured from the height `from_h`.
+##
+## ⚠⚠ **THE HEIGHT IS PASSED IN AND NOT LOOKED UP, BECAUSE `from` IS NOT ALWAYS A PLACE ANYONE
+## STANDS.** The pack's seek point is the MEAN of several bodies' positions, and `_dist` would read its
+## height off whatever tile that mean happens to round onto — so three wolves on the ground with one
+## packmate on a plateau were aiming from **two tiles up**, preferring the enemy above, and walking
+## into the wall. The asking body's own tile is the only height that means anything here.
+func _nearest_enemy(from: Vector2, from_h: float) -> int:
 	var best := -1
 	var best_d := 0.0
 	for e in enemy_alive.size():
 		if enemy_alive[e] == 0:
 			continue
-		var d: float = from.distance_to(enemy_pos[e])
+		var d: float = _dist_from_height(from, from_h, enemy_pos[e])
 		if best == -1 or d < best_d - Rules.EPS:
 			best = e
 			best_d = d
@@ -1278,7 +1529,7 @@ func _nearest_soldier(from: Vector2, detect: float, ashore_only: bool) -> int:
 				continue
 		elif not is_hittable(i):
 			continue
-		var d: float = from.distance_to(soldier_pos[i])
+		var d: float = _dist(from, soldier_pos[i])
 		if detect >= 0.0 and d > detect + Rules.EPS:
 			continue
 		if best == -1 or d < best_d - Rules.EPS:
@@ -1351,10 +1602,19 @@ func _free_tiles_from(target_tile: int, wanted: int) -> PackedInt32Array:
 	queue.append(target_tile)
 	seen[target_tile] = 1
 	var head := 0
+	# ⚠⚠ **THE LANDING'S OWN TIER, AND WITHOUT IT A BOAT PUT BODIES ON TOP OF THE WALL.** Measured on
+	# the real first island: asking this for four standing tiles from an approved landing handed back a
+	# tile ON THE PLATEAU — a place nothing can walk to and nothing can walk from. Worse than a
+	# misplaced body: `step_toward` reads a body's tier off the tile it stands on, so one dropped up
+	# there **becomes a legitimate plateau resident**, unreachable by every enemy, and the island can
+	# never end.
+	var want_level := grid.level_of(target_tile)
 	while head < queue.size() and out.size() < wanted:
 		var t := queue[head]
 		head += 1
-		if grid.passable[t] != 0 and grid.reserved[t] == -1:
+		# Collect only at the landing's own height. A body walks off a boat; it does not climb on the
+		# way out, so a full beach must NOT spill up the stair.
+		if grid.passable[t] != 0 and grid.reserved[t] == -1 and grid.level_of(t) == want_level:
 			out.append(t)
 		var tx := t % grid.w
 		var ty := t / grid.w
@@ -1364,7 +1624,16 @@ func _free_tiles_from(target_tile: int, wanted: int) -> PackedInt32Array:
 			if nx < 0 or ny < 0 or nx >= grid.w or ny >= grid.h:
 				continue
 			var nt := ny * grid.w + nx
-			if seen[nt] != 0 or grid.passable[nt] == 0:
+			# ⚠ **`can_step` and not `passable`** — the SEARCH may not cross a wall either, so a beach
+			# cannot borrow free tiles from a strip of land that is only reachable through the plateau.
+			# ⚠⚠ **THE TWO GUARDS OVERLAP AND THAT WAS MEASURED, NOT ASSUMED.** Removing either one
+			# alone reddens NOTHING on today's islands: this one already refuses to enqueue a plateau
+			# tile, and the collect test already refuses to hand one back. **Each covers the other for
+			# level 2.** What they do not share is at the edges — the collect test alone stops a body
+			# standing on a STAIR (level 1, which this one is right to walk through), and this one alone
+			# stops a search reaching land it cannot walk to. `net_tiers` carries a case for each, on
+			# boards built so the other guard cannot answer.
+			if seen[nt] != 0 or not grid.can_step(t, nt):
 				continue
 			seen[nt] = 1
 			queue.append(nt)

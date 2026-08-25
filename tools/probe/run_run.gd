@@ -51,28 +51,28 @@ const SPLIT_MIN_SEPARATION := 6.0
 
 ## ⚠⚠ **The route this probe walks, as node ids — and without one it walks NOWHERE.** A `Run` now
 ## starts in `State.MAP` and `_advance()` lands back in `MAP` instead of stepping `island_index`, so
-## the driver's old `BATTLE`/`REWARD` loop fell out on its first iteration and every policy played
+## the driver's old `BATTLE` loop fell out on its first iteration and every policy played
 ## **zero islands** — with no `[!!]` line, because a `break` is the loop's normal exit. That is how
 ## the design doc's HP table became unreproducible while reading as measured.
 ##
 ## Two routes, because the fork is what the map exists for and one route cannot show it:
 ##
-##  · `ROUTE_BEAK` — floor 2 right, floor 3 left. **Both pay the beak**, so the roster is only what
-##    node 0's cell reward added: 10 + 3 = 13. The FEWEST soldiers a run can field
-##  · `ROUTE_CELLS` — floor 2 left, floor 3 right. **Three cell nodes**, so the roster reaches
-##    10 + 3 x 3 = 19 and the run never picks a beak at all
+##  · `ROUTE_RIGHT` — floor 2 right, floor 3 left
+##  · `ROUTE_LEFT`  — floor 2 left, floor 3 right
+##
+## ⚠⚠ **THEY USED TO PAY DIFFERENT REWARDS AND NOW THEY DO NOT** (2026-08-25). The first route was
+## `ROUTE_BEAK`, whose two nodes paid the beak instead of bodies; the user deleted that reward —
+## 「부리 보상 없지 끝나면 카드보상으로 통일했잖아」 — so **every node on both routes pays the same
+## thing** and the two differ only in which ISLANDS they open. The comparison below is kept because
+## that island difference is real; **it is no longer a fork measurement and says so.**
 ##
 ## Both pass the chest (node 5) and end on the boss (node 6). ⚠ **Five nodes, four of them islands** —
 ## the old three-island runs are not comparable with these, and neither is the 49% the `TIME_LIMITS`
 ## comment carries.
 ##
-## ⚠⚠ **`ROUTE_CELLS` is the DEFAULT and that choice is not neutral, so it is written down**: the
-## policy sweep needs four island rows to compare and the beak branch dies on its second node, which
-## would leave the sweep with two. It is **not** the route that flatters the numbers by accident —
-## `_the_fork_costs` plays BOTH and prints that the beak branch **loses the run outright**, so the
-## harsher answer is on screen either way rather than hidden behind the default.
-const ROUTE_BEAK := [0, 2, 3, 5, 6]
-const ROUTE_CELLS := [0, 1, 4, 5, 6]
+## ⚠ **`ROUTE_LEFT` is the DEFAULT**, and `_the_fork_costs` plays BOTH, so neither is hidden.
+const ROUTE_RIGHT := [0, 2, 3, 5, 6]
+const ROUTE_LEFT := [0, 1, 4, 5, 6]
 
 
 func _initialize() -> void:
@@ -311,24 +311,20 @@ func _the_dominant_plan(near_rows: Array) -> void:
 			i + 1, int(row["sends"]), float(row["spread"]), float(row["first_blow"])])
 
 
-## ⚠⚠ **The fork, measured — the one thing the map exists for.** The same baseline plan walked down
-## the beak branch and down the cells branch, printed side by side: this is the number the design's
-## claim *"the fork asks what you are short of and how much HP you can spend"* stands or falls on, and
-## before this file could walk a route at all there was no way to produce it.
-##
-## ⚠ **What it currently reports is the ISLAND SHORTAGE, not the fork.** Three grids serve six
-## island-opening nodes, so node 2 (floor 2, right) opens the LION grid — the boss island, fought at
-## the second fight of the run. The two branches therefore differ mostly in which grids they draw, and
-## that is a level-design fact rather than a reward fact. It becomes a fork measurement the day the
-## three new grids land.
+## ⚠⚠ **THIS IS NO LONGER A FORK MEASUREMENT AND MUST NOT BE READ AS ONE** (2026-08-25). The two
+## branches used to pay different rewards; the beak is deleted and **every node now pays bodies**, so
+## what is printed below is purely the difference between the ISLANDS the two routes open.
+## ⚠ It is kept because that island difference is a real thing to watch — but the design claim it was
+## built for (*"the fork asks what you are short of"*) has nothing left to measure until a second
+## reward kind exists.
 func _the_fork_costs() -> void:
 	print("")
-	print("=== 갈림길 — 같은 계획, 두 갈래 (부리 쪽 vs 세포 쪽) ===")
+	print("=== 두 갈래 — 같은 계획, 다른 섬 (보상은 이제 양쪽이 같다) ===")
 	# Verbose on both, because the per-island rows ARE the finding: the summary line below cannot say
 	# which grid a branch drew, and that is what the two branches currently differ by.
-	var beak := _play_run("부리 쪽 %s" % str(ROUTE_BEAK), "near", false, true, ROUTE_BEAK)
-	var cells := _play_run("세포 쪽 %s" % str(ROUTE_CELLS), "near", false, true, ROUTE_CELLS)
-	for pair in [["부리 쪽 %s" % str(ROUTE_BEAK), beak], ["세포 쪽 %s" % str(ROUTE_CELLS), cells]]:
+	var right := _play_run("오른쪽 %s" % str(ROUTE_RIGHT), "near", false, true, ROUTE_RIGHT)
+	var left := _play_run("왼쪽 %s" % str(ROUTE_LEFT), "near", false, true, ROUTE_LEFT)
+	for pair in [["오른쪽 %s" % str(ROUTE_RIGHT), right], ["왼쪽 %s" % str(ROUTE_LEFT), left]]:
 		var rows: Array = pair[1]
 		var damage := 0.0
 		var lost := 0
@@ -340,11 +336,11 @@ func _the_fork_costs() -> void:
 				beaten += 1
 		print("  %s — 섬 %d개 중 %d개 승 · 총 피해 %.1f · 잃은 병사 %d" % [
 			str(pair[0]), rows.size(), beaten, damage, lost])
-	if beak.size() == cells.size():
+	if right.size() == left.size():
 		print("  ⚠ 두 갈래가 같은 수의 섬을 쳤다 — 갈림길이 길이로는 안 갈린다")
 	else:
 		print("  두 갈래가 친 섬 수가 다르다 (%d vs %d) — 한쪽이 더 일찍 끝났다"
-				% [beak.size(), cells.size()])
+				% [right.size(), left.size()])
 
 
 ## ⚠ **The speed ladder has to be arithmetically inert.** `Battle.step` runs whole sub-steps and
@@ -355,9 +351,12 @@ func _the_ladder_is_inert() -> void:
 	print("=== 배속 — 같은 계획을 1배속과 6배속으로 (똑같아야 한다) ===")
 	var a := Run.new()
 	var b := Run.new()
-	# ⚠ **A fresh `Run` stands on the MAP, not on an island.** `begin_island()` returns null until a
-	# node is entered, and the null then faults inside `_make_plan` two calls later with a message
-	# about `soldier_state` that says nothing about the cause. Node 0 is the map's fixed first node.
+	# ⚠ **A fresh `Run` stands on its OPENING BEAST CARD ROUND** (티켓 15), and before that on the map —
+	# never on an island. `begin_island()` returns null until a node is entered, and the null then
+	# faults inside `_make_plan` two calls later with a message about `soldier_state` that says nothing
+	# about the cause. ⚠ Both runs take the SAME card, or the two are not the same army.
+	_past_the_opening(a)
+	_past_the_opening(b)
 	a.enter_node(0)
 	b.enter_node(0)
 	var ba := a.begin_island()
@@ -384,13 +383,13 @@ func _the_ladder_is_inert() -> void:
 ## Plays one whole run and prints a line per island. Returns the per-island rows so a caller can
 ## compare two runs without re-reading the console.
 func _play_run(label: String, kind: String, reverse: bool, verbose := true,
-		route: Array = ROUTE_CELLS) -> Array:
+		route: Array = ROUTE_LEFT) -> Array:
 	if verbose:
 		print("")
 		print("=== %s ===" % label)
 	var run := Run.new()
 	var rows: Array = []
-	# Five nodes, four of them islands, plus a reward stop after each beak node, plus slack. A
+	# Five nodes, four of them islands, plus slack. A
 	# `while true` here would turn a stuck state machine into a silent hang, and a hang prints nothing
 	# at all.
 	var guard := 0
@@ -450,15 +449,6 @@ func _play_run(label: String, kind: String, reverse: bool, verbose := true,
 			run.finish_island(won)
 			if not won:
 				break
-		elif st == Run.State.REWARD:
-			var pick := _beak_pick(run.army)
-			if pick < 0:
-				print("  [!!] 부리를 달 살아 있는 병사가 없다 — 런이 멈춘다")
-				break
-			run.apply_beak(pick)
-			if verbose:
-				print("  부리 -> 병사 #%d (%s, HP %.1f)" % [
-					pick, Rules.name_of(int(run.army.type_id[pick])), run.army.hp[pick]])
 		elif st == Run.State.PICK:
 			# The branch whose absence would repeat this file's own history. Every win now draws six
 			# cards and stops here before the map; without this arm the loop fell into `else: break`
@@ -688,7 +678,11 @@ func _stalls(battle: Battle, prev_s: Array, stall_s: PackedFloat32Array,
 			acc["ashore_s"] = float(acc["ashore_s"]) + DT
 			var t := int(battle.soldier_target[i])
 			if t >= 0 and battle.enemy_alive[t] != 0:
-				chasing = here.distance_to(battle.enemy_pos[t]) \
+				# ⚠ `battle._dist` and not `distance_to` (티켓 19). "Chasing" means *out of reach*, and
+				# reach is measured with the ground's height in it now — a probe still asking the
+				# planar question would call a body standing at the foot of a wall "in reach" and
+				# report a stall of zero for the exact case the tier boundary creates.
+				chasing = battle._dist(here, battle.enemy_pos[t]) \
 						> battle.army.range_of(i) + Rules.REACH_BONUS + Rules.EPS
 		if chasing and here.distance_to(prev_s[i]) <= Rules.EPS:
 			stall_s[i] += DT
@@ -703,7 +697,7 @@ func _stalls(battle: Battle, prev_s: Array, stall_s: PackedFloat32Array,
 		if battle.enemy_alive[e] != 0:
 			var t := int(battle.enemy_target[e])
 			if t >= 0 and battle.is_hittable(t):
-				chasing = here.distance_to(battle.soldier_pos[t]) \
+				chasing = battle._dist(here, battle.soldier_pos[t]) \
 						> Rules.range_of(int(battle.enemy_type[e])) + Rules.REACH_BONUS + Rules.EPS
 		if chasing and here.distance_to(prev_e[e]) <= Rules.EPS:
 			stall_e[e] += DT
@@ -860,6 +854,15 @@ func _two_beaches(battle: Battle) -> Array:
 ## Fed a run that cannot be won: one soldier, one HP, against island 1's whole spawn list. If this
 ## reports anything but a loss the probe is grading in its own favour and every number above it is
 ## worth nothing.
+## Takes the opening beast card so the run reaches the map. ⚠ **A run opens on a card screen since
+## 티켓 15**, and `enter_node` refuses until one of its three beasts has been taken — a probe that
+## skipped this would play zero islands and print no `[!!]` line, which is this file's own named
+## silent-zero shape.
+func _past_the_opening(run: Run) -> void:
+	if run.state() == Run.State.PICK:
+		run.take_card(0)
+
+
 func _inverted_must_lose() -> void:
 	print("")
 	print("=== 뒤집기 — 반드시 져야 하는 런 (병사 1명, 1 HP) ===")
@@ -871,7 +874,9 @@ func _inverted_must_lose() -> void:
 	run.army.hp = h
 	print("  살아 있는 병사 %d명, 풀 %.1f" % [run.army.living_count(), _pool(run.army)])
 
-	# The same map step the ladder needs: no island is open until a node is entered.
+	# The same two steps the ladder needs: a run opens on its beast card round, and no island is open
+	# until a node is entered after it.
+	_past_the_opening(run)
 	run.enter_node(0)
 	var battle := run.begin_island()
 	var res := _play_island(battle, _make_plan(battle, "near", false))
@@ -892,16 +897,6 @@ func _pool(army: Army) -> float:
 		if army.alive[i] != 0:
 			total += army.hp[i]
 	return total
-
-
-## The beak goes on the healthiest living melee, falling back to ranged. `living_ids_of_type` is
-## already sorted highest-HP first and breaks ties on the smaller id, so two runs from identical
-## state bolt it onto the same soldier.
-func _beak_pick(army: Army) -> int:
-	var ids := army.living_ids_of_type(Rules.CELL_MELEE)
-	if ids.is_empty():
-		ids = army.living_ids_of_type(Rules.CELL_RANGED)
-	return -1 if ids.is_empty() else int(ids[0])
 
 
 # --- names ---------------------------------------------------------------------------------------
@@ -934,8 +929,6 @@ func _state_name(st: int) -> String:
 			return "지도"
 		Run.State.BATTLE:
 			return "진행 중"
-		Run.State.REWARD:
-			return "보상 대기"
 		Run.State.WON:
 			return "클리어"
 		Run.State.LOST:

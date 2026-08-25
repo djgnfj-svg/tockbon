@@ -27,10 +27,12 @@ const RARITY_LABELS := ["일반", "희귀", "영웅", "전설"]
 
 var run: Run = null
 
-## The item pictures, loaded once at init off `Look.ITEM_ART` — the same `load(Look.…)`-at-var-init
-## shape `field_view`'s picture block uses. An empty art row loads as `null` and the art leaf is
-## simply not called for it: **no picture is drawn rather than a wrong one** (티켓 12's closed fork).
-var _art: Array = _load_item_art()
+## Every picture a card can wear, loaded once at init and keyed by PATH — the same
+## `load(Look.…)`-at-var-init shape `field_view`'s picture block uses. **Keyed by path and not by id**
+## because a card is one of two kinds now and their ids overlap; `Look.card_art_path` is what turns a
+## card into a key, so this file never asks which kind it is holding. A card with no path draws no
+## picture rather than a wrong one (티켓 12's closed fork).
+var _art: Dictionary = _load_card_art()
 
 ## The cursor's card and how long it has been there; the pressed card and how long ago. Same shape as
 ## every other screen's hover/press pair.
@@ -150,10 +152,10 @@ func _card_box(k: int) -> Rect2:
 	return Rect2(rect.position + (rect.size - inner) * 0.5, inner)
 
 
-static func _load_item_art() -> Array:
-	var out: Array = []
-	for p in Look.ITEM_ART:
-		out.append(null if str(p) == "" else load(str(p)))
+static func _load_card_art() -> Dictionary:
+	var out: Dictionary = {}
+	for p in Look.card_art_paths():
+		out[str(p)] = load(str(p))
 	return out
 
 
@@ -171,7 +173,7 @@ func _deal_offset_of(k: int) -> Vector2:
 func _pulse_of(k: int) -> float:
 	if run == null:
 		return 0.0
-	var rarity := Rules.item_rarity_of(int(run.cards[k]))
+	var rarity := Rules.card_rarity_of(int(run.card_kind[k]), int(run.cards[k]))
 	var period := float(Look.RARITY_PULSE_SEC[rarity])
 	if period <= 0.0:
 		return 0.0
@@ -262,7 +264,7 @@ func _draw() -> void:
 	# The bursts first, in their own pass, so a legendary's rays sit BEHIND every card — one loop
 	# later and a middle card's rays would lie on top of its left neighbour but under its right one.
 	for k in Rules.CARDS_PER_WIN:
-		if Rules.item_rarity_of(int(run.cards[k])) != Rules.Rarity.LEGENDARY:
+		if Rules.card_rarity_of(int(run.card_kind[k]), int(run.cards[k])) != Rules.Rarity.LEGENDARY:
 			continue
 		var burst_col: Color = Look.COL_RARITY_GLOW[Rules.Rarity.LEGENDARY]
 		burst_col.a *= _reveal_alpha_of(k)
@@ -283,8 +285,9 @@ func _draw() -> void:
 		var fill := _card_fill(k)
 		fill.a *= reveal
 		_paint_card(box, fill, edge_width)
+		var kind := int(run.card_kind[k])
 		var item := int(run.cards[k])
-		var rarity := Rules.item_rarity_of(item)
+		var rarity := Rules.card_rarity_of(kind, item)
 		# The rarity frame and its glow, over the card's own border — the ladder tables answer how
 		# loud, and COMMON's 0-layer row means no call at all rather than an invisible one.
 		var layers := int(Look.RARITY_GLOW_LAYERS[rarity])
@@ -293,23 +296,23 @@ func _draw() -> void:
 			glow.a = float(Look.RARITY_GLOW_ALPHA[rarity]) \
 				* (1.0 + _pulse_of(k) * float(Look.RARITY_PULSE_GAIN[rarity])) * reveal
 			_paint_rarity_frame(box, glow, float(Look.RARITY_FRAME_WIDTH_PX[rarity]), layers)
-		var art: Texture2D = _art[item]
+		var art: Texture2D = _art.get(Look.card_art_path(kind, item))
 		if art != null:
 			var art_col := Look.COL_HUD_TEXT
 			art_col.a *= reveal
 			_paint_card_art(art, _art_rect(k), art_col)
 		var name_col := Look.COL_HUD_TEXT
 		name_col.a *= reveal
-		_paint_card_name(face, box.position + Look.CARD_PART_OFFSET_PX,
-			Rules.item_name_of(item), Look.CARD_PART_FONT_SIZE_PX, name_col)
+		_paint_card_name(face, box.position + Look.CARD_NAME_OFFSET_PX,
+			Rules.card_name_of(kind, item), Look.CARD_NAME_FONT_SIZE_PX, name_col)
 		# The rarity is carried by the COLOUR of the effect line and by one word in front of it — a
 		# tone alone cannot be told apart by a player who has seen two cards, and a word alone does not
 		# catch the eye across a spread.
 		var effect_col: Color = Look.COL_RARITY[rarity]
 		effect_col.a *= reveal
-		_paint_card_effect(face, box.position + Look.CARD_SPECIES_OFFSET_PX,
-			"%s  %s" % [str(RARITY_LABELS[rarity]), Rules.item_effect_text(item)],
-			Look.CARD_EFFECT_WRAP_W_PX, Look.CARD_SPECIES_FONT_SIZE_PX, effect_col)
+		_paint_card_effect(face, box.position + Look.CARD_EFFECT_OFFSET_PX,
+			"%s  %s" % [str(RARITY_LABELS[rarity]), Rules.card_effect_text_of(kind, item)],
+			Look.CARD_EFFECT_WRAP_W_PX, Look.CARD_EFFECT_FONT_SIZE_PX, effect_col)
 		if int(run.cards_taken[k]) != 0:
 			var mark := Look.COL_HUD_TEXT
 			mark.a = Look.PRESS_ALPHA_ON * _taken_of(k)
