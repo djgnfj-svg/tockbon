@@ -1,3 +1,5 @@
+Status: ✅ **접은 갈래의 기록으로 유효하다.** 마법진이 왜 접혔는지를 서술하고, 그 판단은 안 뒤집혔다.
+
 # The magic circle is dropped — it never came into focus in the user's head
 
 **Status**: ⚠⚠ **다시 뒤집혔다 — 접은 쪽이 이겼다 (2026-08-22 저녁, 사용자)**. 아침의 부활은

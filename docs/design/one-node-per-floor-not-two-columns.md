@@ -1,3 +1,5 @@
+Status: ⚠⚠ **지도와 함께 죽었다 (2026-08-26).** 섬이 하나가 되면서 지도 화면·노드 걷기·노드 보상이 코드에서 지워졌다. 층마다 노드 하나를 고르는 자리 자체가 없다.
+
 # The map offers one node per floor — not two columns you take one from each of
 
 **Status**: ⚠⚠ **the frame is dead (2026-08-26)** — **there is no map screen.** The map, node walking, node

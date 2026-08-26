@@ -1,3 +1,5 @@
+Status: ✅ **살아 있다.** 회차 사이의 성장이 숫자를 올리지 않고 내용을 연다는 원칙이고, 지금 방향에서도 그대로다 — 성장 카드가 장비 위주인 것이 같은 줄기다.
+
 # Between-run progress unlocks content; it does not raise numbers
 
 **Status**: ⚠ **REVERSED on 2026-08-16 by the user. Both are in: unlocks AND stat boosts.**

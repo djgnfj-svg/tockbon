@@ -1,3 +1,5 @@
+Status: ⚠⚠ **게임과 함께 죽었다.** 세포 게임의 몸을 그리는 방식이고, 그 게임은 2026-08-22 저녁에 접혔다. 지금 몸은 그림 파일이다.
+
 # The body is an outline drawn by code, not a sprite
 
 **Status**: ⚠⚠ **FULLY REVERSED (2026-08-24)** — 절반 뒤집힘이었다가 이날 전부 뒤집혔다. 아래 덧씀을 읽어라.

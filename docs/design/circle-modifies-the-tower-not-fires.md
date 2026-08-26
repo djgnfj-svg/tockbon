@@ -1,3 +1,5 @@
+Status: ⚠⚠ **틀이 죽었다.** 마법진 게임의 갈래이고 그 게임은 접혔다. 남는 것은 「보조 장치는 주된 것을 바꾸지, 제 것을 따로 쏘지 않는다」는 논증뿐이다.
+
 # A magic circle is not a turret — it changes what the tower fires
 
 **Status**: ⚠⚠ **the frame is dead (2026-08-26)** — there is no tower, no turret and no magic circle. The
