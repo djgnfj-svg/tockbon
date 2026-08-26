@@ -13,7 +13,7 @@
 #   Godot_v4.7.1-stable_win64.exe --path . -s tools/shot/shoot_field.gd
 extends SceneTree
 
-const SHOT := "res://tools/shot/field_%s.png"
+const SHOT := "res://tools/shot/out/field/field_%s.png"
 
 var _game: Game = null
 var _step := 0

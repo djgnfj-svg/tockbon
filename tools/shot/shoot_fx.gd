@@ -17,7 +17,7 @@
 #   Godot_v4.7.1-stable_win64.exe --path . -s tools/shot/shoot_fx.gd
 extends SceneTree
 
-const SHOT := "res://tools/shot/fx_%s.png"
+const SHOT := "res://tools/shot/out/fx/fx_%s.png"
 
 var _game: Game = null
 var _step := 0

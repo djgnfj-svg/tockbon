@@ -57,7 +57,7 @@ func _process(_delta: float) -> bool:
 			print("[big] window=%s  frame=%dx%d  content_scale=%s size=%s"
 				% [str(DisplayServer.window_get_size()), img.get_width(), img.get_height(),
 				   str(root.content_scale_mode), str(root.content_scale_size)])
-			img.save_png(ProjectSettings.globalize_path("res://tools/shot/big_closer.png"))
+			img.save_png(ProjectSettings.globalize_path("res://tools/shot/out/misc/big_closer.png"))
 		_:
 			return true
 	_step += 1

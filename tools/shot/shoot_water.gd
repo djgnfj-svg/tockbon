@@ -1,4 +1,4 @@
-# **Six seas, one island, one camera.** Saves `tools/shot/water_N_<name>.png`, one per candidate.
+# **Six seas, one island, one camera.** Saves `tools/shot/out/water/water_N_<name>.png`, one per candidate.
 #
 # WARNING **This exists because the sea cannot be decided in words** (2026-08-26, the user: "흠 아직은
 # 좀 애매하네 어딜 어떻게 수정해야 할지도 애매하고"). The dials that matter -- ripple strength, swell
@@ -12,7 +12,7 @@
 #   Godot_v4.7.1-stable_win64.exe --path . -s tools/shot/shoot_water.gd
 extends SceneTree
 
-const SHOT := "res://tools/shot/water_%d_%s.png"
+const SHOT := "res://tools/shot/out/water/water_%d_%s.png"
 
 # Each row is a whole LOOK, not one dial: a sea reads as a sea or does not, and moving one number at a
 # time produces six pictures nobody can tell apart.

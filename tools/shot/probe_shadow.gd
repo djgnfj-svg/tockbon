@@ -10,7 +10,7 @@
 #   Godot_v4.7.1-stable_win64.exe --path . -s tools/shot/probe_shadow.gd
 extends SceneTree
 
-const SHOT := "res://tools/shot/shadow_%s.png"
+const SHOT := "res://tools/shot/out/misc/shadow_%s.png"
 
 var _game: Game = null
 var _step := 0
