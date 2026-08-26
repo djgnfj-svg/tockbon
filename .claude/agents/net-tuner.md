@@ -18,7 +18,8 @@ exists — **do not go looking for those files.** Measure what this round is act
 ## Most important — do not kill a net while making it fast
 
 **"Does it still measure the same thing" comes before "it got faster".**
-`CLAUDE.md`'s "No fake nets" is this repo's most expensive lesson, and **speed work is the shortcut into that trap** —
+`CLAUDE.md`'s **"Nothing pretends to work"** is this repo's most expensive lesson and `docs/how-nets-lie.md` is its
+casebook. **Speed work is the shortcut into that trap** —
 lightening a check very easily makes it **pass by accident.**
 
 ⇒ **Whatever you change, this order, always:**
@@ -32,7 +33,8 @@ lightening a check very easily makes it **pass by accident.**
 
 ## How to measure
 
-**Don't guess. Measure.** And **leave the measurement in a comment right there** (`CLAUDE.md`).
+**Don't guess. Measure.** And **leave the measurement in a comment right there** — every entry in
+`docs/how-nets-lie.md` exists because a number was thrown away and had to be re-measured.
 
 ```powershell
 # Splits per-net time. Filter to run them one at a time.
@@ -72,13 +74,14 @@ checks that do not write to it.**
 
 ⇒ **And the trimmed cap needs its own assertion.** A fixed `for` loop always runs, so the risk is not "never
 runs" — it is **the margin silently eroding to zero** as someone trims again later. Assert
-`settled_at < cap - 1`, which is `CLAUDE.md`'s "assert the iteration count too" made concrete.
+`settled_at < cap - 1`. **A loop that always runs to its cap is measuring the cap, not the thing** — that is the
+shape `docs/how-nets-lie.md` collects.
 
 ### 3. Write down what you deliberately left alone
 
 Two of the most expensive checks in that repo were **correctly** expensive: one had to touch every chunk
 because its acceptance was "all of them wake and all of them sleep", and one ran 1,200 real ticks because
-that number came out of the design doc. **Cutting either would have been re-deciding the design, not
+that number came out of the ticket. **Cutting either would have been re-deciding the design, not
 trimming waste.**
 
 ⇒ **The report's "what I did not touch and why" is the most valuable line in it.** Without it, the next
@@ -127,9 +130,9 @@ not a lever**, and finding that out first prevents a round of chasing it.
 `tests/run_nets.ps1` runs **each net in its own process, in parallel**. `-Serial` restores the old
 single-process behavior — **for cross-checking when a parallel result looks wrong.**
 
-**Parallelizing fixed more than performance.** `CLAUDE.md` lists "amnesty has unlimited lifetime — wider than its
-string" as a fake-net shape (**a forged bark in the first net was covered by a declaration in the third, and it came
-out green**). **Splitting processes closes that hole structurally.** ⇒ **Do not break this property.**
+**Parallelizing fixed more than performance.** An amnesty used to outlive its own net — **a forged bark in the first
+net was covered by a declaration in the third, and it came out green.** The measurement and the fix are written at
+the top of `tests/run_nets.ps1`. **Splitting processes closes that hole structurally.** ⇒ **Do not break this property.**
 
 **This file must be saved as UTF-8 with BOM.** PowerShell 5.1 reads BOM-less UTF-8 as ANSI, mangling non-ASCII
 and **killing the parser.** If an editing tool strips the BOM, put it back:

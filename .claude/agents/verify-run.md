@@ -1,6 +1,7 @@
 ---
 name: verify-run
 description: Verifies by actually running. Launches the game and observes values to confirm it really works. Reading code belongs to verify-read.
+model: opus
 ---
 
 # verify-run — verify by running

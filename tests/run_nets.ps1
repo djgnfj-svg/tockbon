@@ -17,8 +17,8 @@
 #
 #  1. **Speed.** Running everything in one process is 332 seconds (measured). In parallel it is the time of the
 #     single slowest net.
-#  2. **The amnesty is confined to its own net.** CLAUDE.md lists "an amnesty's lifetime is unlimited — this is
-#     wider than its breadth" as a form of fake net: in one process the [EXPECT] entries on stdout are **all
+#  2. **The amnesty is confined to its own net.** An amnesty whose lifetime is unlimited is wider than its own
+#     breadth, and that is a fake net: in one process the [EXPECT] entries on stdout are **all
 #     collected first** and then stderr is compared against **the entire** list, so **there is no per-net or
 #     per-moment scope at all.**
 #     Measured: **a forged bark was put in the first net while the third net made the declaration, and it was green.**
@@ -57,8 +57,8 @@ $tmp = [System.IO.Path]::GetTempPath()
 #  shape does NOT reach the runner's zero-check detector, because the net never gets as far as `run()`.
 #  Only the stderr verdict below turns it red, so the round goes red for a reason that reads like broken code
 #  and is actually a missing import.
-#  **`--script` does not re-import on its own** (CLAUDE.md said it did, for two days, and four agents lost a
-#  round to it). Every plan that adds a class file walks into this, so the guard lives here rather than in
+#  **`--script` does not re-import on its own** (a rule file said it did, for two days, and four agents lost a
+#  round to it; that wrong line is gone now and this comment is what replaced it). Every plan that adds a class file walks into this, so the guard lives here rather than in
 #  someone's memory.
 #  A `.gd` with no `.uid` beside it is exactly "the engine has not seen this file yet", so the check is one
 #  directory walk and the import only runs on the rounds that would have gone red anyway.
@@ -122,7 +122,8 @@ function Get-Noise([string]$stdout, [string]$stderr) {
     return ,$noise
 }
 
-# -- The net list. The folder is scanned — it is not a hand-maintained list (CLAUDE.md).
+# -- The net list. **The folder is scanned — it is never a hand-maintained list**, because a list someone forgets
+#    to add to is a net that silently stops running.
 $netFiles = Get-ChildItem -Path (Join-Path $root "tests\nets") -Filter "net_*.gd" | Sort-Object Name
 $nets = @()
 foreach ($f in $netFiles) {
@@ -135,8 +136,7 @@ if ($nets.Count -eq 0) {
     exit 1
 }
 
-# **"It is not 0" is confirmed first.** CLAUDE.md: the reason the first line of a folder scan is always this
-#  is to block "if the scene cannot be stood up the check does not fail, it disappears" here too.
+# **"It is not 0" is confirmed first.** The first line after a folder scan is always this, to block "if the scene cannot be stood up the check does not fail, it disappears" here too.
 if ($netFiles.Count -lt 5) {
     Write-Host "[그물] tests/nets/ 에 그물이 $($netFiles.Count)개뿐이다. 스캔이 깨졌다." -ForegroundColor Red
     exit 1
@@ -363,7 +363,7 @@ foreach ($j in ($jobs | Sort-Object Net)) {
 
     # **The runner prints two different shapes and this used to match only one.** `[net] N passed` on a clean
     #  net, `[net] N failed / M` when anything failed — so a net with ONE failed assertion out of 31 displayed
-    #  as `통과 0`, which is the vanish signature CLAUDE.md teaches people to read as "it never loaded".
+    #  as `통과 0`, which is the vanish signature everyone here reads as "it never loaded" — see `docs/how-nets-lie`.
     #  The round total dropped by that whole net's worth (279 -> 248) for a single bad assert. Measured by
     #  verify-run, 2026-08-14: the per-net output said `[net] 1 failed / 31` while this column said 0.
     #  Both shapes are matched now, and the pass count is M - N on the failing shape.

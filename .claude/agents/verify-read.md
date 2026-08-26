@@ -1,6 +1,7 @@
 ---
 name: verify-read
 description: Verifies adversarially by reading code. Finds whether it works only by accident and where it will break silently. Runtime verification belongs to verify-run.
+model: opus
 ---
 
 # verify-read — verify by reading

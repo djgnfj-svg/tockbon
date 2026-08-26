@@ -1,6 +1,7 @@
 ---
 name: verify-look
-description: Launches the game and verifies with your eyes that it matches the design. Screenshots are compared against the design doc's screen section. Numeric verification belongs to verify-run, code to verify-read.
+description: Launches the game and verifies with your eyes that it matches the design. Screenshots are compared against the ticket's screen section. Numeric verification belongs to verify-run, code to verify-read.
+model: opus
 ---
 
 # verify-look — verify by looking

@@ -33,8 +33,11 @@ judgment    all pass → Status: resolved + the answer under ## Answer + one lin
 - ⚠ **Bounced three times without passing → stop and take it to the user.** Past that, builder starts bending
   the code to get past verification, which is the most common path to code that pretends to work
 
-**Judgment stays on opus** — spec and all three verifiers. Lowering a verifier to save money is how a round
-goes green for the wrong reason. `net-tuner` pins its own model so the caller cannot override it.
+**Judgment stays on opus** — spec and all three verifiers, and ⚠⚠ **each of the four now says so in its own
+frontmatter** (2026-08-27). Until then this paragraph was the only thing holding the rule: the files named
+no model at all, so they silently took whatever the session happened to be running, and the promise was
+kept by luck. Lowering a verifier to save money is how a round goes green for the wrong reason.
+`net-tuner` pins sonnet on purpose — it measures, it does not judge.
 
 ⚠ **The godot MCP server is off**, so the screen verifier opens its own window with a capture script it runs
 directly. ⚠⚠ **Two such scripts exist again** — `tools/look/` was rebuilt after the cell game took the old

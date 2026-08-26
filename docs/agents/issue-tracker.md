@@ -9,9 +9,12 @@ Issues and specs for this repo live as markdown files in `.scratch/`.
 ## Conventions
 
 - One feature per directory: `.scratch/<feature-slug>/`
-- The spec is `.scratch/<feature-slug>/spec.md`
+- ⚠⚠ **EDITED: there is no `spec.md`.** The upstream original put the spec in `.scratch/<slug>/spec.md`
+  and **this repo has never had that file.** What sits at the top of a directory is `map.md`, the map,
+  and `.scratch/README.md` is its source of truth. **A plan does not get its own file here — it is written
+  INTO the ticket as an `## Implementation plan` section**, which is what the `plan-into-ticket` skill does
 - Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`, never a single combined tickets file. **The slug is English** — `01-what-one-piece-is.md`. Every ticket on every map this repo has ever had uses one, and `.scratch/README.md` says the same
-- ⚠⚠ **EDITED: `Status:` is NOT the triage state here.** `Status:` is the wayfinding state — `open` · `claimed` · `resolved` — and `.scratch/README.md` is its source of truth. **A triage role goes on its own `Triage:` line** (see `triage-labels.md`). Collapsing the two would make a triaged ticket read as a claimed one
+- ⚠⚠ **EDITED: `Status:` is NOT the triage state here.** `Status:` is the wayfinding state — `open` · `claimed` · `resolved` — and `.scratch/README.md` is its source of truth. **A triage role goes on its own `Triage:` line** (see `triage-labels.md`). Collapsing the two would make a triaged ticket read as a claimed one. ⚠ **No ticket in this repo has ever carried a `Triage:` line** — the rule exists so that the day one does, it does not collide with `Status:`
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
 
 ## When a skill says "publish to the issue tracker"

@@ -138,7 +138,7 @@ folder's README, not the folder.**
 | Path | What it holds |
 |---|---|
 | `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **Nearly empty, and that is a defect** — there is no GDD. When one is written it is **one page** — 넘어가면 아무도 안 읽는다. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
-| `docs/agents/` | **What the imported skills read before they act, and the only configuration in `docs/`.** ⚠ **Not reading matter** — `to-spec` · `to-tickets` · `triage` · `code-review-mp` load it |
+| `docs/agents/` | **What the imported skills read before they act, and the only configuration in `docs/`.** ⚠ **Not reading matter** — `to-spec` · `to-tickets` · `triage` · `code-review-mp` · `wayfinder` load it |
 | `.scratch/island-hold/` | **Where planning lives, and the only map.** `map.md` is the map; `issues/NN-이름.md` are its tickets. **Status is a `Status:` line inside the file — files never move between folders.** `wayfinder` owns this |
 | `lessons-from-two-dead-games` | **What the two games that died actually measured** |
 | `how-nets-lie` | **Every green measured to be false.** Read it before writing a check and before believing a green round |
