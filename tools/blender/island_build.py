@@ -659,7 +659,10 @@ def _board_read():
     cells = {}
     for p in ob.data.polygons:
         c = p.center
-        cells[(int(math.floor(c.x + 0.5)), int(math.floor(c.y + 0.5)))] = c.z
+        # ⚠⚠ **A face's centre is at `x + 0.5`, so FLOOR IT BARE.** Rounding it — `floor(c.x + 0.5)` —
+        # pushes every tile one to the right, and the first run of this reader did exactly that: a 20x16
+        # island came back 21x17 and the 2x2 snap then ate 24 tiles that were never wrong.
+        cells[(int(math.floor(c.x)), int(math.floor(c.y)))] = c.z
     wid = max(k[0] for k in cells) + 1
     hgt = max(k[1] for k in cells) + 1
 
@@ -737,6 +740,12 @@ def build():
         bpy.data.objects.remove(ob, do_unlink=True)
     for me in list(bpy.data.meshes):
         bpy.data.meshes.remove(me)
+    # ⚠⚠ **MATERIALS TOO, and leaving them out cost byte-reproducibility.** Blender never reuses a name:
+    # a second `ground` becomes `ground.001`, and the glTF export writes that name into the file. So two
+    # bakes of the SAME island differed by exactly one byte — `ground.003` against `ground.007` — and
+    # every bake showed up as a diff that meant nothing. Measured 2026-08-27.
+    for ma in list(bpy.data.materials):
+        bpy.data.materials.remove(ma)
 
     lv = levels()
     hgt, wid = len(lv), len(lv[0])
