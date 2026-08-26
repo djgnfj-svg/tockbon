@@ -65,10 +65,20 @@ const HARBOUR_CHAR := "H"
 ## ⚠ **An unlisted character loads as level 0**, matching what the terrain legend does with an unknown
 ## letter: barking here would have to be forgiven by every net handing this function a fixture, and
 ## validating the legend is `net_tiers`' job.
-const TIER_CHARS := "./1"
+## ⚠⚠ **WIDENED 2026-08-26, and the reason is the stair** (the user: 「이점이 안전하고 그래서 농사
+## 같은것도 빌드 건물들도 2층이 유리하지 대신 비싸지」). Three levels meant the plateau was ONE step up
+## from a stair that was ONE step up from the ground, so the stair was a single knee-high ledge — and
+## a plateau whose whole value is「only one way up」cannot afford for that way up to be invisible. With
+## the level DIGITS reading as themselves, a stair can be as many treads as it needs.
+## ⚠ **`/` still means level 1** so nothing that spells a stair the old way silently becomes ground.
+## ⚠⚠ **BUT `1` NOW MEANS LEVEL 1, WHERE IT USED TO MEAN LEVEL 2.** Any fixture still written in the
+## old three-character legend measures a different island than it did. **`net_tiers` is the one that
+## has to be re-read**, and the nets are red already under the「measure them all once at the end」
+## decision, so this is a known cost and not a silent one.
+const TIER_CHARS := "./0123456789"
 ## `TIER_CHARS[k]` is level `TIER_LEVELS[k]`. Two arrays and not a dictionary, for the reason every
 ## flat table in this file is an Array: `const X := PackedInt32Array([...])` is a parse error on 4.7.
-const TIER_LEVELS := [0, 1, 2]
+const TIER_LEVELS := [0, 1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
 ## Every character a soldier may stand on: bare ground plus every letter that spawns a body.

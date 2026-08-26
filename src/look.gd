@@ -125,6 +125,19 @@ const CAM_YAW_DEG := 0.0
 ## Far enough back that the tallest cliff never crosses the near plane at any yaw, and the ortho
 ## projection makes the distance itself cost nothing in size.
 const CAM_DIST_TILES := 90.0
+## ⚠⚠ **THE CAMERA'S FAR PLANE, AND UNDER AN ORTHOGONAL CAMERA IT IS ALSO THE SHADOW RANGE**
+## (2026-08-26, the user: 「저 집에 생기는 그림자를 분석해보자」). Godot ignores
+## `directional_shadow_max_distance` when the camera is orthogonal and stretches the directional shadow
+## map over the camera's `far` instead — godot issue #58332. This camera was left at the default **4000**,
+## so one shadow map was being spread across four thousand tiles: about half a tile per texel, which is
+## WIDER THAN A TREE. **Nothing on the island cast a shadow onto anything**, and the only shadow left on
+## screen was the drawn blob under each object.
+## ⚠ **It has to clear `CAM_DIST_TILES` plus the island's own depth**, or the far side of the island
+## falls out of the shadow map and the boundary draws as a hard line. 140 clears 90 back plus a 16x12
+## island at any yaw, with room left over.
+## ⚠ **Smaller is sharper** — the whole map is spread over this number — but going under about 110 starts
+## putting the island's back edge on the boundary at full zoom-out.
+const CAM_FAR_TILES := 140.0
 
 ## One light. It is what makes the height read: a box 2.4 tall throws a shadow a box 1.0 tall does
 ## not, and that difference is the whole reason the field moved into 3D.
@@ -142,6 +155,10 @@ const SUN_ENERGY := 1.5
 ## ⚠⚠ **220 -> 70** (2026-08-26). One orthogonal split spreads its whole shadow map over this distance,
 ## so 220 tiles put a tree half a metre wide well under one texel and **nothing small cast anything.**
 ## The camera cannot see 220 tiles at any zoom; the range was paying for sea nobody looks at.
+## ⚠⚠ **AND IT DOES NOTHING, because this camera is orthogonal** (found 2026-08-26). Every number in
+## the history above was tuned against a setting the engine was not reading. The range that actually
+## applies is `CAM_FAR_TILES`. **Kept, not deleted**: it is what would apply if the camera ever became
+## perspective, and deleting it would let the next session tune it again believing it works.
 const SUN_SHADOW_DIST_TILES := 60.0
 ## ⚠ **Higher than Godot's default 1.0**, because one world unit here is a whole tile: the default is
 ## tuned for a metre and this world's metre is forty pixels of island.
@@ -156,26 +173,49 @@ const SUN_SHADOW_DIST_TILES := 60.0
 ## ⚠⚠ **Back up to 1.8, and the reason is worth keeping.** Lowering this to reach the props produced
 ## shadow ACNE — hard bands across the island's own flat top — long before it produced a tree's shadow.
 ## Measured across five values on 2026-08-26: at 2.5 nothing small casts, at 1.1 nothing small casts, at
-## 0.55 and 0.35 and 0.12 the ground stripes and the props STILL cast nothing readable. **This renderer's
-## directional shadow map cannot resolve a half-metre object at this scale**, and pushing the bias is
-## the wrong lever. ⇒ **Props and buildings get a drawn blob instead** — see `_blob` in `field_view`.
+## 0.55 and 0.35 and 0.12 the ground stripes and the props STILL cast nothing readable.
+## ⚠⚠ **THE CONCLUSION DRAWN FROM THAT MEASUREMENT WAS WRONG** (2026-08-26). It read: 「this renderer's
+## directional shadow map cannot resolve a half-metre object at this scale」. The renderer resolves it
+## fine. What could not resolve it was a shadow map stretched over the camera's default `far` of 4000
+## tiles — see `CAM_FAR_TILES`. **The five values were measured correctly and the cause was guessed**,
+## and the guess sent a whole round into the bias when the bias was never the lever.
+## ⚠ **1.8 survives the fix unchanged**: with `far` corrected, this value gives clean shadows and no acne,
+## and lowering it to 0.5 brings the stripes back. It was the right number for the wrong reason.
 const SUN_SHADOW_NORMAL_BIAS := 1.8
-## ⚠⚠ **A second light, dim, from the other side, casting nothing.** With one sun every surface facing
-## away from it gets ambient only, and on this island that is **the entire south-west coast as one
-## black slab** — the cliff there is 2.25 tiles of wall and every capture of the port shows it as a
-## hole rather than as rock. Raising the ambient instead would flatten the hills, which are the thing
-## the lighting exists to show. A fill light lifts the shaded faces and leaves the lit ones alone.
-const FILL_PITCH_DEG := -22.0
-const FILL_YAW_DEG := 155.0
-const FILL_ENERGY := 0.38
+## ⚠⚠ **THE FILL LIGHT IS GONE** (2026-08-26, the user: 「해 하나가 맞는듯」). A dim second light from
+## the other side used to lift every face the sun never reaches, and its own comment argued for it: with
+## one sun the whole shaded coast goes black. That argument was right and the cure was wrong. A second
+## LIGHT gives every object a second lit direction, so nothing on the island agrees about where the light
+## comes from — invisible while there were no cast shadows, and the first thing on screen once there
+## were. **The ambient does that job now**, and an ambient has no direction to disagree with.
+
+## --- the outline ------------------------------------------------------------------------------------
+## ⚠⚠ **BAD NORTH DRAWS EVERY MESH TWICE** (2026-08-26, the user: 「배드노스를 위주로 확인해봐」), and
+## 티켓 01 has the line from the talk: **the mesh is drawn inverted and pushed out a shell's width in a
+## dark colour, then drawn properly on top.** What comes out is a hard contour around every solid, and
+## it is a large part of why those islands read as OBJECTS rather than as shaded ground.
+## ⚠ **This repo lost that contour once already and noticed**: 티켓 01 records that when the grey rim
+## went, the island stopped reading as 「단단한 물체」 from above. This is that rim, done the way the
+## talk does it instead of as a band of geometry.
+const COL_OUTLINE := Color(0.115, 0.095, 0.080)
+## How far the inverted shell is pushed out, in tiles. ⚠ **It is a WORLD width, not a screen width**, so
+## it thickens as the camera zooms in — which is what a hand-inked line does, and the opposite of what a
+## post-process edge filter does.
+const OUTLINE_GROW := 0.022
 
 const COL_SKY := Color(0.055, 0.055, 0.075)
-const COL_AMBIENT := Color(0.520, 0.580, 0.680)
+## ⚠ **Warmed and lifted with the fill's removal.** A cold blue-grey was right while a second light was
+## adding its own colour to the shaded faces; alone, it turned every shaded face grey-blue.
+const COL_AMBIENT := Color(0.620, 0.680, 0.790)
 ## ⚠⚠ **Back up from 0.42.** The ambient was cut to make cast shadows read, and then the shadows ended
 ## up DRAWN instead (see `COL_BLOB`) — so the cut was paying for nothing and charging for it: the
 ## island's side walls face away from the sun, and with almost no ambient they went black. That black
 ## band is what read as a cliff between the land and the sea.
-const AMBIENT_ENERGY := 0.66
+## ⚠⚠ **0.66 -> 0.92, and it went up because the fill light went away** (2026-08-26, the user:
+## 「해 하나가 맞는듯」). The fill was lifting every face the sun could not reach; the ambient does that
+## now. **Raise these two together or the shaded side of the island goes black** — that is what the
+## fill's own comment warned about, and it is still true, only the cure is different.
+const AMBIENT_ENERGY := 0.92
 
 ## How far above its tile's top face a body's FEET sit. Zero would let a billboard's bottom row sink
 ## into the box it stands on at some yaws; a hair of lift costs nothing and never does.
@@ -331,37 +371,11 @@ const ZOOM_MAX := 2.2
 ## This is a bit over half a turn across the window, which is the range a single drag can hold.
 const CAM_YAW_PER_PX_DEG := 0.18
 
-## --- the blob a prop drops on the ground -----------------------------------------------------------
-## ⚠⚠ **A DRAWN shadow, not a cast one, and that is a decision** (2026-08-26). The sun casts and always
-## did; what it cannot do is resolve anything as small as a tree — five bias values were measured and
-## every one either lost the prop or striped the ground. **Bad North does not rely on a shadow map for
-## this either**: it bakes its shading into a low-resolution volume and reads it back. This is the same
-## idea at a tenth of the cost — a soft dark ellipse under each standing thing.
-## ⚠ It is offset along the sun's own direction, so the blobs agree with the shading on the objects.
-const COL_BLOB := Color(0.10, 0.13, 0.16, 0.30)
-## How wide the blob is against the thing standing on it.
-## ⚠⚠ **Raised 1.35 -> 2.2** (2026-08-26, the user: 「그림자 겉면이 좀 이상한데?」). At 1.35 a blob came
-## out almost exactly the width of the thing standing on it, so it spent nearly all of itself hidden
-## under that thing and what showed was a smudge peeping out at the trunk. **A drawn shadow has to be
-## visibly WIDER than its caster or it is not read as a shadow at all** — the same mistake was made
-## independently on the buildings an hour earlier.
-const BLOB_SPREAD := 2.2
-## ⚠ **Wider for a building than for a prop.** A prop's shape is narrower than its footprint, so a blob
-## at 1.35 shows all the way round it; a building fills its footprint exactly, and at 1.35 the shadow
-## disappeared under the walls.
-const BLOB_SPREAD_BUILD := 1.9
-## How much darker a building's blob is than a prop's. ⚠ **It has to rise with the spread**: the same
-## opacity over a much larger patch is much fainter everywhere, which is why widening the keep's shadow
-## alone did nothing visible.
-const BLOB_DARK_BUILD := 2.2
-## How far it slides away from the sun, in units of the caster's own height.
-## ⚠ **0.42 detached the tall ones.** A pine's blob slid most of a tile away and read as a separate
-## dark patch rather than as the tree's own shadow; the slide has to stay short enough that the blob and
-## its caster still touch.
-## ⚠⚠ **Cut to almost nothing.** A shadow that slides away from its caster stops being a contact
-## shadow, and contact is the whole job: it is what says the thing is ON the ground rather than hovering
-## over it. The lean is now a hint, not a displacement.
-const BLOB_SLIDE := 0.08
+## ⚠⚠ **THE DRAWN BLOB AND ITS FOUR NUMBERS ARE DELETED** (2026-08-26). `COL_BLOB`, `BLOB_SPREAD`,
+## `BLOB_SPREAD_BUILD`, `BLOB_DARK_BUILD` and `BLOB_SLIDE` stood here, each with a measurement behind it,
+## and every one of them was tuning a workaround for a bug that is now fixed — see `CAM_FAR_TILES`. The
+## disc pointed nowhere while the real shadow pointed away from the sun, and it slid TOWARD the sun
+## rather than away from it. ⚠ **Do not reintroduce it**: one sun, one shadow per object.
 const ZOOM_STEP := 1.15
 
 ## --- the survey ---------------------------------------------------------------------------------

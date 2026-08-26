@@ -13,6 +13,7 @@
 #
 # The shore is where every bit of the modelling budget goes, because it is the only place two
 # materials meet — the Bad North talk's own rule: detail lives where faces meet, not on faces.
+import io
 import bmesh
 import bpy
 import math
@@ -43,12 +44,14 @@ OUT = r"C:/Users/djgnf/Desktop/godot_games/tockbon/tools/blender/island_build.pn
 # ⚠ **The border ring must stay water**: the tiles around the edge are harbours, and a boat sails
 # from there.
 PIECES = [
-    "~~~~~~~~",
-    "~~....~~",
-    "~.....~~",
-    "~.....~~",
-    "~~..~~~~",
-    "~~~~~~~~",
+    "~~~~~~~~~~",
+    "~~~....~~~",
+    "~~......~~",
+    "~........~",
+    "~........~",
+    "~~......~~",
+    "~~~..~~~~~",
+    "~~~~~~~~~~",
 ]
 
 # ⚠⚠ **THE SECOND LEVEL, drawn on the SAME 2x2 piece grid** (2026-08-26). A raised ground drawn tile by
@@ -61,17 +64,47 @@ PIECES = [
 # as levels 0, 1 and 2, and a stair is simply the ODD level between two floors.
 # ⚠ **No separate mesh is needed for the raised ground.** `build_island` already walls any edge where a
 # tile meets a LOWER one, which is the same code that walls the coast.
+# ⚠⚠ **THE LEVEL BOARD IS WRITTEN IN TILES, NOT IN 2x2 PIECES** (2026-08-26). `PIECES` above stays on
+# the piece grid because it draws the island's OUTLINE, and 티켓 01's first rule is about the outline:
+# a coast that can only turn on even tiles reads as shape rather than as squares. **A level boundary is
+# not the outline.** It is inland, it is walked on, and forcing it onto the piece grid is what made the
+# stair a single 2x2 ledge — two tiles deep, one step tall, and invisible as a way up.
+#
+# **A digit is its own level.** `.` is 0. The plateau stands at **4** and the stair climbs 1-2-3 to reach
+# it, so「the only way up」is four treads a body walks rather than one knee-high step it hops.
+#
+# ⚠ **The plateau still turns on even tiles** — that is a choice made here, not a rule the board
+# enforces, and it keeps the raised ground reading as a piece of the island rather than as a patch.
+# ⚠ **The plateau never reaches the coast.** A rim of low ground all the way round is what lets the
+# raised part be seen AS raised.
 HIGH = [
-    "~~~~~~~~",
-    "~~....~~",
-    "~..11.~~",
-    "~../1.~~",
-    "~~..~~~~",
-    "~~~~~~~~",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
+    "........222222......",
+    "........222222......",
+    "......11222222......",
+    "......11222222......",
+    "........222222......",
+    "........222222......",
+    "....................",
+    "....................",
+    "....................",
+    "....................",
 ]
-# ⚠ **The plateau never reaches the coast.** The first one ran right out to the island's edge, so the
-# upper wall and the shore wall met and the island read as one grey block with a lid. A rim of ground
-# all the way round is what lets the raised part be seen AS raised.
+
+TIER_CHARS = "./0123456789"
+TIER_LEVELS = [0, 1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+
+def lvl_of(c):
+    """The level a board character stands for. **The same table `grid.gd` reads, in the same order.**"""
+    k = TIER_CHARS.find(c)
+    return TIER_LEVELS[k] if k >= 0 else 0
+
 
 PIECE = 2           # tiles per piece side
 
@@ -100,22 +133,21 @@ def _expand():
 ROWS = _expand()
 
 
-def _expand_tiers():
-    """`HIGH` -> the tile-level board, in step with `ROWS`.
+def _tiers():
+    """`HIGH` as the board the game walks on. **No expansion — it is already in tiles.**
 
-    ⚠ A piece that is water in `PIECES` is ground level here whatever `HIGH` says: the level board has
-    to be the same shape as the row board, and nothing stands on water.
+    ⚠ A tile that is water in `PIECES` is ground level whatever `HIGH` says: the level board has to be
+    the same shape as the row board, and nothing stands on water.
     """
     out = []
-    for py, pr in enumerate(HIGH):
+    for y, row in enumerate(HIGH):
         line = ""
-        for px, c in enumerate(pr):
-            ch = c if c in "./1" else "."
-            if PIECES[py][px] != ".":
-                ch = "."
-            line += ch * PIECE
-        for _ in range(PIECE):
-            out.append(line)
+        for x in range(len(ROWS[0])):
+            c = row[x] if x < len(row) else "."
+            if ROWS[y][x] in "~H":
+                c = "."
+            line += c
+        out.append(line)
     return out
 
 
@@ -123,22 +155,63 @@ ROWS = _expand()
 # ⚠⚠ **TWO LEVELS AGAIN** (2026-08-26 evening, the user: 「이제 자연스러운 2층을 만들어보고 거기에
 # 건물을 올려보자」). One level was the right thing while the flat island was being judged — the user's
 # own 「정말 단순해도 돼, 층이 없어도 돼」 — and the flat island passed, so the level comes back.
-TIERS = _expand_tiers()
+TIERS = _tiers()
 
 # --- the numbers the shape is made of -------------------------------------------------------------
 TOP_H = 0.26        # the walking surface, above the waterline. ⚠⚠ **This number IS the step the island
                     # stands on** (2026-08-26, the user: 「왜케 섬이 이렇게 한 칸 올라가 있지?」 —
                     # yes, it was, at 0.62). **The game reads this out of `island.json` as `base_h`**, so
                     # lowering it here lowers where every body stands and nothing else has to agree.
-LEVEL_H = 0.525     # ONE level step. ⚠⚠ **A stair is an odd level, not a kind of tile** — `grid.gd`
-                    # reads `.` `/` `1` as levels 0, 1, 2, so the plateau is TWO steps up and the stair
-                    # tread is the one in between. Collapsing them built the tread at full plateau
-                    # height: the stair had no step in it, and a body on the plateau floated a whole
-                    # level over the ground it was drawn on.
+LEVEL_H = 0.5       # ⚠⚠ **HALF A TILE, AND THIS IS THE DEFINITION** (2026-08-26, the user: 「한 칸 한
+                    # 칸을 그냥 쉽게 올라가는 거로 하자」). Until now the height of a storey was never
+                    # written down anywhere: the ground stood 0.26 above the water, the plateau stood
+                    # 1.05 above that, and the stair split the gap three ways — **two storeys spelled in
+                    # four notches**, with nothing saying which of them was「a floor」.
+                    #
+                    #   **一 notch = half a tile. A STOREY IS TWO NOTCHES; A STAIR IS ONE.**
+                    #
+                    #     ground 0 · stair 1 · second floor 2 · stair 3 · third floor 4
+                    #
+                    # ⚠⚠ **The battle rules already assumed exactly this** — `grid.gd` calls an ODD level
+                    # a stair tread, and a body may cross a gap of one notch and no more. So ground(0)
+                    # to second floor(2) is refused and the stair(1) between them is the only door, with
+                    # no rule change at all. **A third floor is levels 3 and 4 and costs nothing.**
+                    # ⚠ **Two storeys is the maximum for now** — the user: 「일단 이 층까지를 최대로 하고
+                    # 삼 층은 추후에 추가하자」.
+                    #
+                    # ⚠ **The stair's TREADS are drawn inside the stair PIECE, not spelled on the board.**
+                    # Cutting the walked notches finer to make treads was the wrong lever and cost a
+                    # round: it put twelve creases down one wall and the island read as a stack of
+                    # pancakes from a low angle.
 CUT = 0.42          # how far a rounded coastal corner is pulled IN along its outward diagonal
 BULGE = 0.22        # how far a headland corner is pushed OUT. ⚠ **Not named OUT** — that name is
                     # already the render path at the top of this file, and shadowing it made Blender try
                     # to render to the number 0.22.
+STEP_CUT = 0.20     # the same for a corner of the PLATEAU, and deliberately about half. ⚠⚠ **This edge
+                    # is walked on**: the coast can be pulled a whole `CUT` in because nothing stands
+                    # there, but the plateau's rim carries bodies, and every centimetre the drawn edge
+                    # moves away from the tile edge is a centimetre a body stands over nothing.
+STEP_BULGE = 0.12   # and how far one is pushed out.
+WALL_STEPS = 1      # ⚠⚠ **ONE crease per LEVEL, and three was a disaster.** `_cliff` cuts
+                    # `(l - nl) * WALL_STEPS` bands, so when the level unit halved and the plateau went
+                    # from level 2 to level 4, three bands per level became **twelve bands down one
+                    # wall** — from the side the island read as a stack of pancakes. The Bad North talk
+                    # is explicit and it is the opposite of what three bands did: **cracks go on the
+                    # edges, not down the middle of a cliff face.** One crease per level puts the break
+                    # exactly where the ground already steps, and the roughness below moves it off that
+                    # line so it is not a ruled stripe.
+                    # ⚠⚠ **How many horizontal bands a level wall is cut into** (2026-08-26, the user:
+                    # 「절벽 벽면이 너무 반듯함 ... 배드노스를 위주로 확인해봐」). A wall was ONE quad —
+                    # four vertices, two of them at the top and two at the bottom — so there was nowhere
+                    # for a bump to live and nowhere for a colour to change. 티켓 01 already carried the
+                    # rule from the Bad North talk: **detail lives where faces MEET, not on faces**, and
+                    # the talk is explicit that even the cracks go on the edges rather than down the
+                    # middle of a cliff face. Cutting the wall into bands MAKES those edges: three bands
+                    # give two new horizontal creases per wall, and a crease that is pushed in or out is
+                    # a silhouette break, not a texture.
+WALL_ROUGH = 0.105  # ⚠ How far a band's crease is pushed in or out, from the corner's own position. Same
+                    # trick the coastline uses, at a fifth the size — **this face is right beside ground
+                    # that bodies stand on**, and the wall may not wander far from the tile edge.
 WALL_DRAFT = 0.05   # how far the wall's FOOT sits outside its top edge. ⚠⚠ **This is not a beach.**
                     # 티켓 01 rule 2: a wall at exactly 90 degrees repeats visibly when tiles are stacked;
                     # leaning it a few degrees breaks the repeat without a single piece of clutter.
@@ -160,10 +233,20 @@ def levels():
                 line.append(-1)
             else:
                 # ⚠ **The same legend `grid.gd` reads, in the same order.** `.` 0 · `/` 1 · `1` 2.
-                line.append("./1".find(TIERS[y][x]) if TIERS[y][x] in "./1" else 0)
+                line.append(lvl_of(TIERS[y][x]))
         out.append(line)
     return out
 
+
+EDGE_TOPS = set()   # ⚠⚠ **Every ground vertex that stands on a level boundary** (2026-08-26, the user:
+                    # 「이 절벽 부분에 있는 색이 위에 있는 거로 쪼금 쪼금 넘어가야 되는 거예요 ... 살짝
+                    # 낭떠러지처럼」). Filled while the surface is built, read by `_paint`. **The earth
+                    # of the cliff climbs a little way onto the ground above it**, the way the turf
+                    # breaks and the bare soil shows at a drop. Without it the top is flat green right
+                    # to the edge and the wall reads as a painted band under a lawn.
+                    # ⚠ **This is a vertex SET, not a tile test.** Colour that lands on a tile boundary
+                    # redraws the grid (티켓 01, the material row); colour that lands on a shared corner
+                    # cannot, because both tiles use the same corner.
 
 COAST = []          # the real coastline, in SIM tile coordinates. ⚠⚠ **Filled by `build_island` and
                     # exported.** The sea draws its wash from this, and it has to be the line the mesh
@@ -172,10 +255,24 @@ COAST = []          # the real coastline, in SIM tile coordinates. ⚠⚠ **Fill
                     # 따라서 되는 게 아니라 그냥 네모나게 고정돼 있는 것 같은데"***).
 
 
+## --- BACK TO CALCULATING THE ISLAND ----------------------------------------------------------------
+## WARNING **The piece system was started and then PARKED, 2026-08-26** (the user: 「접고 그냥 게임 한 번
+## 보여주자」). `pieces.py` builds ten modules and an assembler in this file placed them; the assembly ran
+## and the pieces welded, but walls came out missing on some sides and the result was worse than what it
+## replaced. **Half a change of method is the worst place to leave a file**, so the calculating version
+## below was restored and the assembler removed.
+## WARNING **`pieces.py` is KEPT.** The ten modules are real and the approach is right -- the Bad North
+## talk starts from modelled pieces, not formulas. What is not done is the placer. **Whoever picks this
+## up: the shapes are already there; the missing part is which side gets which wall.**
+## WARNING **Everything else from that day survives here** -- the wider island, the half-tile notch, the
+## grey-violet cliff, the stone bleeding onto the lip, the level board written in tiles.
+
+
 def build_island(bm, lv):
     hgt = len(lv)
     wid = len(lv[0])
     COAST.clear()
+    EDGE_TOPS.clear()
     # ⚠⚠ **Y IS FLIPPED HERE, ON PURPOSE.** glTF's Y-up conversion turns Blender's +Y into Godot's -Z,
     # so an island built at y = 0..12 lands at z = -12..0 in the game and every body walks on water.
     # Flipping the row order here is the one place to fix it; doing it with a negative scale in Godot
@@ -269,7 +366,17 @@ def build_island(bm, lv):
         key = (cx, cy, l)
         if key not in cache:
             px, py = corner_xy(cx, cy)
-            cache[key] = bm.verts.new((px, py, corner(cx, cy, l)))
+            v = bm.verts.new((px, py, corner(cx, cy, l)))
+            cache[key] = v
+            # The lip of a drop: a corner where the level changes carries the cliff's own stone a little
+            # way onto the ground above it -- see `EDGE_EARTH`.
+            ls = set()
+            for dx, dy in ((-1, -1), (0, -1), (-1, 0), (0, 0)):
+                x, y = cx + dx, cy + dy
+                if 0 <= x < wid and 0 <= y < hgt and lv[y][x] >= 0:
+                    ls.add(lv[y][x])
+            if len(ls) > 1:
+                EDGE_TOPS.add(v)
         return cache[key]
 
     for y in range(hgt):
@@ -337,24 +444,40 @@ def _shore(bm, p0, p1, out, l, corner, corner_xy):
 
 
 GRASS = (0.760, 0.735, 0.520)
-GRASS_HIGH = (0.820, 0.800, 0.600)
+## WARNING **THE TOP OF THE PLATEAU HAS TO BE A COLOUR YOU CAN SEE FROM THE GROUND** (2026-08-26). It
+## used to be four hundredths brighter than `GRASS`, which is nothing: the raised ground and the ground
+## below it were the same tone, so the eye had only the wall to go on and read the whole thing as a box
+## sitting ON the sand rather than as sand that had been LIFTED.
+## WARNING **Brightness alone did not do it** -- a paler version of the same sand read as the same sand
+## with the sun on it. The tone has to move in HUE. And then it had to come DOWN: the first green that
+## was actually visible was a lime, and a small patch of high-saturation green on a pale yellow island
+## reads as a painted decal. **Turf is DARKER than dry sand, never lighter.**
+GRASS_HIGH = (0.655, 0.710, 0.450)
 SAND = (0.815, 0.780, 0.590)
-## ⚠⚠ **Earth, not stone** (2026-08-26, the user asked for a 「자연스러운」 second level). A neutral grey
-## on a vertical face that turns away from the sun goes almost black, and the plateau read as a concrete
-## box set on the grass. A warm brown reads as the SIDE OF THE GROUND — a bank the turf has broken over
-## — and it holds its colour in shade because the hue survives when the brightness does not.
-ROCK = (0.470, 0.392, 0.286)
-## ⚠ **The lip where the top meets the side.** Darker than the rock and slightly warmer, so it reads as
-## the ground's own edge in shadow rather than as a painted line.
-RIM = (0.300, 0.288, 0.262)
-## How far down the wall that lip reaches, as a fraction of the wall's whole height. Over about 0.3 it
-## stops being an edge and becomes a two-tone cliff.
-RIM_AT = 0.26
-
-
-# ⚠ **No sRGB conversion here, and that was tried.** `bm.loops.layers.color` makes a BYTE colour
-# layer, which Blender already treats as sRGB — converting first made the island nearly black. What
-# was actually too bright was the light, not the numbers.
+## WARNING **STONE, NOT EARTH** (2026-08-26, the user sent a Bad North frame: the cliff there is a dark
+## grey-violet and the ground above it is green). A warm brown was chosen back when the wall read as the
+## SIDE OF THE GROUND, and the lesson behind that choice still holds: a neutral GREY on a face turned
+## away from the sun goes almost black. **A violet-leaning grey is not neutral.** It keeps a hue in shade
+## the way the brown did, and it separates from green far harder, because brown sits beside green and
+## violet sits opposite it.
+## WARNING **Lifted for the GAME, not for the render** (2026-08-26). At 0.455/0.415/0.490 the cliff
+## looked right in Blender and came out ALMOST BLACK in the game: Blender lights it with a strong key,
+## the game with one sun and an ambient, and the outline pass darkens its edge on top of that. Ticket 01
+## already carries the rule -- a face turned away from the sun keeps almost no brightness -- so a colour
+## that works on a vertical face has to start much lighter than it looks like it should.
+ROCK = (0.615, 0.570, 0.660)
+## WARNING **The lip where the top meets the side, and there is a vertex row for it now.** Ticket 01's
+## own lesson said a colour given to the top of a wall bleeds down the whole face because **a wall had
+## only four vertices**. The pieces carry real rows, so a tone assigned near the top stops there.
+WALL_LIP = 0.16         # how far down the lip reaches, as a fraction of ONE notch
+WALL_LIP_DARK = 0.26    # how much darker the lip is than the rock
+WALL_AO = 0.20          # how much darker the FOOT of a wall is -- the shading Bad North bakes into a
+                        # volume, done here as a vertex ramp. It says the wall meets the ground rather
+                        # than being pasted onto it.
+## WARNING **A LIP, not a border** (2026-08-26, the user: the cliff's colour should eat a LITTLE way onto
+## the ground above it, "살짝 낭떠러지처럼"). At 0.55 the plateau's corners are mostly boundary corners
+## and the stone ate almost all the turf -- a green smudge in a violet tray.
+EDGE_EARTH = 0.30       # how much of the wall's stone bleeds onto the ground at the lip of a drop
 
 
 def _paint(bm):
@@ -373,20 +496,32 @@ def _paint(bm):
         steep = f.normal.z < 0.34
         for lp in f.loops:
             if steep:
-                # ⚠⚠ **THE DARK LIP IS GONE, AND THE REASON IS A LESSON ABOUT VERTEX COLOUR.** A rim
-                # tone was assigned to the top fifth of each wall to put the detail where the faces
-                # meet. It could not work: **a wall face has FOUR vertices** — two at the top, two far
-                # below the waterline — and vertex colour is interpolated between them, so a colour
-                # given to the top vertices bleeds down the whole face. Every fraction written into
-                # `RIM_AT` was ignored by the geometry, and the island's side came out black. The user
-                # read it as a cliff and asked what it was for (2026-08-26: 「저 절벽은 왜 있는 거임?」).
-                #
-                # ⇒ **A vertex colour can only vary where there is a vertex.** Detail at an edge needs a
-                # LOOP OF VERTICES at that edge; painting the corner and hoping is a gradient, not a lip.
-                c = ROCK
+                # ⚠⚠ **A wall is no longer one flat tone, and it took a vertex row to get there.** The
+                # note that used to stand here recorded why the first lip failed: a wall face had FOUR
+                # vertices, two at the top and two far below the waterline, so a dark colour on the top
+                # pair was interpolated across everything visible and the island's side went black.
+                # **That was a fact about the GEOMETRY, not about vertex colour** — see `WALL_STEPS`.
+                # Now the tone is read from how far this vertex has fallen below the floor above it:
+                # dark right under the top edge (the lip, which is the crease Bad North puts its detail
+                # on), light through the middle of the face, dark again at the foot (the contact shade).
+                z = lp.vert.co.z
+                lv_above = math.ceil((z - TOP_H) / LEVEL_H - 1e-4)
+                if lv_above < 0:
+                    lv_above = 0
+                depth = max(TOP_H + lv_above * LEVEL_H - z, 0.0)
+                lip = 1.0 - min(depth / (LEVEL_H * WALL_LIP), 1.0)
+                foot = min(depth / (LEVEL_H * 1.05), 1.0)
+                k = 1.0 - WALL_AO * foot - WALL_LIP_DARK * lip
+                c = tuple(ROCK[i] * k for i in range(3))
             else:
                 z = lp.vert.co.z
-                if z > TOP_H + LEVEL_H * 1.5:
+                # ⚠⚠ **The turf is the PLATEAU's, and the stair is not the plateau** (2026-08-26).
+                # This test was written when the plateau was level 2 and a stair was level 1, so half a
+                # level was a safe place to cut. With the stair grown to three treads, every tread above
+                # the halfway mark came out the plateau's green and the way up read as another patch of
+                # high ground rather than as the way to it. **Cut just below the top level instead**: only
+                # ground that is actually up there is turf.
+                if z > TOP_H + LEVEL_H * 1.4:
                     c = GRASS_HIGH
                 else:
                     t = (z - WATERLINE) / max(TOP_H - WATERLINE, 1e-6)
@@ -395,6 +530,11 @@ def _paint(bm):
                     # whole island: fully sand at the line, fully grass a third of the way up.
                     t = min(t * 3.0, 1.0)
                     c = tuple(SAND[i] + (GRASS[i] - SAND[i]) * t for i in range(3))
+                # ⚠⚠ **The cliff's earth climbing onto the ground above it.** Only the corners that sit
+                # on a level boundary carry it, and vertex colour fades from there to the next corner —
+                # so it is a lip of bare soil at the drop, not a stripe along a tile edge.
+                if lp.vert in EDGE_TOPS:
+                    c = tuple(c[i] + (ROCK[i] - c[i]) * EDGE_EARTH for i in range(3))
             lp[lay] = (*c, 1.0)
 
 
@@ -612,6 +752,26 @@ def _scatter_props():
             # blur the one line that says where the ground ends.
             if not all(land(x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
                 continue
+            # ⚠⚠ **And a tile on the EDGE OF A LEVEL stays bare too** (2026-08-26, the user: 「살짝
+            # 절벽에서 약간 올라타서 차지하는듯」). A tree standing on the last tile of the plateau hangs
+            # its canopy out over the wall below, so the thing that reads is not「a tree on high ground」
+            # but「a tree stuck to a cliff」. The coast already had this rule; the level boundary is the
+            # same silhouette problem one storey up, and it did not.
+            here = lvl_of(TIERS[y][x])
+            edge = False
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                nlv = lvl_of(TIERS[ny][nx])
+                # ⚠ **Only a tile that is HIGHER than its neighbour is an edge to avoid.** Barring
+                # every tile next to a step emptied the island: the plateau is four tiles across, so
+                # dropping its rim left a 2x2 the keep already stood on, and on the low ground every
+                # tile touching the plateau went too. Standing at the FOOT of a wall is fine — nothing
+                # hangs over anything. **Standing on top of one is the problem.**
+                if nlv < here:
+                    edge = True
+                    break
+            if edge:
+                continue
             eligible.append((h(x * 2.3 + 11.0, y * 2.3 - 7.0, 53.0), x, y))
     eligible.sort(reverse=True)
 
@@ -662,8 +822,7 @@ def _starting_builds():
         return 0 <= x < wid and 0 <= y < hgt and ROWS[y][x] not in "~H"
 
     def level(x, y):
-        c = TIERS[y][x]
-        return "./1".find(c) if c in "./1" else 0
+        return lvl_of(TIERS[y][x])
 
     mid_x, mid_y = wid * 0.5, hgt * 0.5
     best, at = None, None

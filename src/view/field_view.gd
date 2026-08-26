@@ -216,14 +216,11 @@ func _build_world() -> void:
 	_sun.shadow_normal_bias = Look.SUN_SHADOW_NORMAL_BIAS
 	_world.add_child(_sun)
 
-	# The fill. See `FILL_ENERGY`: it casts nothing, so it costs one more pass over the shaded faces and
-	# nothing else.
-	var fill := DirectionalLight3D.new()
-	fill.rotation_degrees = Vector3(Look.FILL_PITCH_DEG, Look.FILL_YAW_DEG, 0.0)
-	fill.light_energy = Look.FILL_ENERGY
-	fill.shadow_enabled = false
-	_world.add_child(fill)
-
+	# ⚠⚠ **THERE IS NO SECOND LIGHT, AND THAT IS A DECISION** (2026-08-26, the user: 「해 하나가 맞는듯」).
+	# A dim fill from the opposite side used to lift the faces the sun never reaches. It also gave every
+	# object a second lit direction, so nothing on the island agreed about where the light came from —
+	# and the moment real cast shadows appeared, that disagreement was the thing on screen. **What the
+	# fill was doing is now done by the ambient**, which has no direction to disagree with.
 	var e := Environment.new()
 	e.background_mode = Environment.BG_COLOR
 	e.background_color = Look.COL_SKY
@@ -240,6 +237,11 @@ func _build_world() -> void:
 	# with one division. Under the default KEEP_HEIGHT the same number would mean the visible height,
 	# and every camera literal measured against a 1280-wide viewport would quietly mean something else.
 	_cam.keep_aspect = Camera3D.KEEP_WIDTH
+	# ⚠⚠ **THIS LINE IS THE SHADOW RANGE, not a clipping detail.** Under an orthogonal camera Godot
+	# ignores `directional_shadow_max_distance` and spreads the directional shadow map over the camera's
+	# `far` instead. Left at the default 4000 it gave half a tile per texel and NOTHING on the island
+	# cast a shadow onto anything — see `Look.CAM_FAR_TILES` for the measurement.
+	_cam.far = Look.CAM_FAR_TILES
 	_world.add_child(_cam)
 	_place_camera()
 
@@ -629,6 +631,7 @@ func _rebuild_terrain() -> void:
 	# ⚠ **Vertex colours are OFF by default on an imported material.** Without this the island comes in
 	# as flat white and every tone the Blender script decided is thrown away silently.
 	_use_vertex_colours(_island)
+	_outline(_island)
 	_hand_the_sea_its_shoreline()
 	_rebuild_buildings()
 	_rebuild_props()
@@ -676,16 +679,6 @@ func _rebuild_buildings() -> void:
 		var t := int(d["y"]) * battle.grid.w + int(d["x"])
 		one.position = Vector3(cx, Islands.ground_h(battle.grid.level_of(t)), cy)
 		_builds.add_child(one)
-		var box := src.get_aabb()
-		# ⚠ The footprint, not the mesh's own width: a keep's roof overhangs its walls, and a blob cut
-		# to the roof reads as the building floating over its own shadow.
-		# ⚠⚠ **A building's blob has to be WIDER than the building** (2026-08-26, the user: 「집이 좀
-		# 그림자가 이상한데」). A tree's canopy is narrower than its blob, so the shadow shows as a skirt
-		# around it; the keep's footprint IS its blob, so the whole shadow sat underneath the walls and
-		# the hall looked like it was resting on nothing. **Not the same spread as a prop, on purpose.**
-		_blob(_builds, one.position,
-			maxf(float(fp.x), float(fp.y)) * 0.5 * Look.BLOB_SPREAD_BUILD, box.size.y,
-			Look.BLOB_DARK_BUILD)
 	# ⚠⚠ **NOT `_use_vertex_colours` here, and that call was the bug** (2026-08-26, the user: 「건물
 	# 벽면이 이상함」). It exists for the ISLAND, whose mesh carries a colour per vertex. **The buildings
 	# carry no colour attribute at all** — they are painted with one flat material per part — so turning
@@ -693,6 +686,7 @@ func _rebuild_buildings() -> void:
 	# is not there, and the walls came out in wedges of bright and dark that met at the triangle seams.
 	# ⚠ **The same mesh renders perfectly flat inside Blender**, which is what finally located it: the
 	# geometry was never the problem, and two rounds were spent on normals and coplanar faces first.
+	_outline(_builds)
 	lib.free()
 
 
@@ -794,79 +788,59 @@ func _rebuild_props() -> void:
 		var sc := float(d.get("scale", 1.0))
 		one.scale = Vector3(sc, sc, sc)
 		_props.add_child(one)
-		var box := src.get_aabb()
-		_blob(_props, one.position,
-			maxf(box.size.x, box.size.z) * 0.5 * sc * Look.BLOB_SPREAD,
-			box.size.y * sc)
+	_outline(_props)
 	lib.free()
 
 
-## --- the blob a standing thing drops on the ground -------------------------------------------------
-## ⚠⚠ **This is why the props have shadows and the shadow map is not what draws them.** Five bias values
-## were measured: every one either lost anything smaller than a cliff or striped the island's flat top.
-## A drawn ellipse costs two triangles, always reads, and cannot acne.
-var _blob_tex: ImageTexture = null
-var _blob_mesh: QuadMesh = null
-var _blob_mat: StandardMaterial3D = null
+## --- the drawn blob is GONE -------------------------------------------------------------------------
+## ⚠⚠ **Deleted 2026-08-26, and the reason it existed was a wrong diagnosis.** A dark disc was laid flat
+## under every prop and building because「the shadow map cannot resolve anything smaller than a cliff」.
+## It could all along — what could not was a shadow map stretched over the camera's default `far` of
+## 4000 tiles (see `Look.CAM_FAR_TILES`). With that fixed, real shadows land on the ground and the disc
+## became the second shadow on every object: **round, soft, and pointing nowhere**, beside a hard one
+## that points away from the sun. The user, seeing it: 「해 기준으로 그림자가 있어야 하는데 이게 좀 안
+## 그런거 같음」.
+## ⚠ **It also slid the WRONG WAY.** The disc was offset by `(sin(yaw), cos(yaw))`, which is toward the
+## sun; the cast shadow goes the other way. The offset was small enough that nobody caught it for the
+## whole time the disc was the only shadow there was.
+## ⚠⚠ **Do not bring it back as a fallback.** One sun, one shadow per object, is what the user chose
+## (2026-08-26: 「해 하나가 맞는듯」), and a second shadow with no direction is what that decision removes.
 
 
-## A soft round falloff, built once. **Generated, never an asset** — this repo paints nothing.
-func _blob_texture() -> ImageTexture:
-	if _blob_tex != null:
-		return _blob_tex
-	var n := 64
-	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
-	var mid := float(n) * 0.5
-	for y in n:
-		for x in n:
-			var d := Vector2(float(x) + 0.5 - mid, float(y) + 0.5 - mid).length() / mid
-			# ⚠⚠ **A DEFINED disc with a soft rim, not an airbrushed smudge** (2026-08-26, the user:
-			# 「그림자 겉면이 좀 이상한데?」). The first falloff was a squared ramp from the centre, which
-			# on flat-shaded art reads as a stain rather than as a shadow — **everything else on this
-			# island has an edge, and the one thing that did not was the shadow.** This holds full
-			# strength across most of the disc and falls off only in the outer fifth.
-			var a := 1.0 - smoothstep(0.62, 1.0, d)
-			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
-	_blob_tex = ImageTexture.create_from_image(img)
-	return _blob_tex
-
-
-func _blob(parent: Node3D, at: Vector3, radius: float, height: float, dark: float = 1.0) -> void:
-	if _blob_mesh == null:
-		_blob_mesh = QuadMesh.new()
-		_blob_mesh.size = Vector2(2.0, 2.0)
-		_blob_mat = StandardMaterial3D.new()
-		_blob_mat.albedo_color = Look.COL_BLOB
-		_blob_mat.albedo_texture = _blob_texture()
-		_blob_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		# Unshaded: it IS shadow. Lighting a shadow makes it brighten when the sun comes round.
-		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_blob_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var m := MeshInstance3D.new()
-	m.mesh = _blob_mesh
-	# ⚠⚠ **A wide blob needs a DARKER one, not just a bigger one** (2026-08-26). The keep's blob was
-	# widened to show past its walls and still could not be seen: the same opacity spread over thirty
-	# times the area is thirty times fainter at every point. **Area and strength move together.**
-	if is_equal_approx(dark, 1.0):
-		m.material_override = _blob_mat
-	else:
-		var mm := _blob_mat.duplicate() as StandardMaterial3D
-		var c := Look.COL_BLOB
-		mm.albedo_color = Color(c.r, c.g, c.b, clampf(c.a * dark, 0.0, 1.0))
-		m.material_override = mm
-	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# Lay it flat, then slide it away from the sun so it agrees with the shading on the object above it.
-	m.rotation_degrees = Vector3(-90.0, Look.SUN_YAW_DEG, 0.0)
-	# ⚠⚠ **CAPPED against the blob's own radius** (2026-08-26, the user: 「집이 좀 그림자가 이상한데」).
-	# The slide is a fraction of the caster's HEIGHT, which is right for a tree and wrong for the keep:
-	# at two metres tall it slid more than half a tile and the shadow came off the building entirely,
-	# leaving the hall looking like it was standing beside its own shadow. A shadow may lean away from
-	# the sun; it may not stop touching what casts it.
-	var slide := minf(height * Look.BLOB_SLIDE, radius * 0.5)
-	var yaw := deg_to_rad(Look.SUN_YAW_DEG)
-	m.position = at + Vector3(sin(yaw) * slide, 0.012, cos(yaw) * slide)
-	m.scale = Vector3(radius, radius, 1.0)
-	parent.add_child(m)
+## **Draws a mesh a second time, inverted and swollen, in near-black.** ⚠⚠ **This is the Bad North
+## outline**, and the talk describes exactly this: the mesh inside out, pushed out along its normals, in
+## a dark colour, with the real mesh drawn over it. What survives is a rim wherever the silhouette turns
+## away — a contour with no post-process, no second camera and no edge detection.
+##
+## ⚠ **`next_pass` and not a duplicated node.** A second `MeshInstance3D` would double the node count and
+## have to be kept in step with every move; a next pass is the same draw call's second half and cannot
+## fall out of sync.
+func _outline(n: Node) -> void:
+	if n is MeshInstance3D:
+		var mi := n as MeshInstance3D
+		var mesh := mi.mesh
+		if mesh != null:
+			for i in mesh.get_surface_count():
+				var m := mesh.surface_get_material(i)
+				var sm := m as StandardMaterial3D
+				# ⚠ **Only once.** These materials come out of a shared imported scene, so a second call
+				# would chain another shell onto the first and the outline would thicken every rebuild.
+				if sm == null or sm.next_pass != null:
+					continue
+				var shell := StandardMaterial3D.new()
+				shell.albedo_color = Look.COL_OUTLINE
+				# Unshaded: an outline that takes the light goes pale on the sunny side and stops being
+				# a line. It is ink, not a surface.
+				shell.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				# ⚠ **Front faces culled, so only the BACK of the swollen shell is drawn** — that is the
+				# whole trick. Without it the shell covers the object entirely.
+				shell.cull_mode = BaseMaterial3D.CULL_FRONT
+				shell.grow = true
+				shell.grow_amount = Look.OUTLINE_GROW
+				# It must not throw a shadow of its own: it is a shell around something that already does.
+				sm.next_pass = shell
+	for c in n.get_children():
+		_outline(c)
 
 
 func _use_vertex_colours(n: Node) -> void:
