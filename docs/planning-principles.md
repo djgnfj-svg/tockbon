@@ -20,13 +20,15 @@ against.** ⚠ **If the fight ever feels like dead air, this line is still the f
 the last.
 
 ⚠ **The record of the bend, kept because a cancelled bend argues for the principle rather than against it**:
-the user's own decision on 2026-08-18 was to plan everything in front of the start button and watch — see
-`plan-then-watch`. The bend was paid for by moving every decision ahead of that button.
+the user's own decision on 2026-08-18 was to plan everything in front of the start button and watch — the
+ticket that recorded it was called `plan-then-watch` and ⚠ **it no longer exists**, deleted with the cell
+game's planning folder. The bend was paid for by moving every decision ahead of that button.
 
 ⚠⚠ **2026-08-19 — the payment was deleted and the bend got 19–29× wider.** `plan-then-watch` paid for the
 bend with three candidates, and the only one that was concrete was **「a fight is short」**. The user then
 set a stage at **10–15 minutes** and deleted the time limit. The measured fight was **31 s**. **Nothing is
-built and nothing is accepted**; the arithmetic is in `push-inland`, and what it said about this line was:
+built and nothing is accepted**; the arithmetic was in `push-inland`, ⚠ **also deleted with that folder —
+the numbers survive only in this paragraph.** What it said about this line was:
 the boat becomes a live control again, **but a node offers at most R landing decisions in total** —
 **one action every 3.1 to 90 seconds depending on R.**
 ⚠⚠ **Both halves of that arithmetic are gone (2026-08-26)**: **the player places no boats** — the boats are

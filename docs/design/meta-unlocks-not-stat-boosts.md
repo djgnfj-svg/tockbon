@@ -1,11 +1,10 @@
-Status: ✅ **살아 있다.** 회차 사이의 성장이 숫자를 올리지 않고 내용을 연다는 원칙이고, 지금 방향에서도 그대로다 — 성장 카드가 장비 위주인 것이 같은 줄기다.
+Status: ⚠ **뒤집혔다 (2026-08-16, 사용자). 해금과 능력치 상승이 둘 다 들어갔다.** 살아 있는 것은 원칙이 아니라 **이 문서가 이름 붙인 함정** 하나다 — 해금 0개인 첫 판이 그 자체로 재미있어야 한다는 조건이고, 아직 한 번도 측정된 적이 없다.
 
 # Between-run progress unlocks content; it does not raise numbers
 
-**Status**: ⚠ **REVERSED on 2026-08-16 by the user. Both are in: unlocks AND stat boosts.**
 The reasoning below is kept because **the trap it names did not go away** — see 「뒤집은 뒤」 at the bottom.
-⚠⚠ **The trap is now due (2026-08-26)**: December is a **release**, not a demo, and a released roguelike
-ships with whatever meta layer it has. **The first run has to be worth playing with nothing unlocked** —
+⚠⚠ **The trap is due (2026-08-26)**: December is a **demo**, and a demo is the first thing anyone plays,
+so it is played with **nothing unlocked at all**. **The first run has to be worth playing on its own** —
 that condition is the live part of this doc, and it has never been measured.
 ⚠ It was decided for the open-field cell game, which no longer exists. **The design it pointed at,
 `cell-army-gdd`, is gone too** — deleted with the cell game, kept only in commit `62ff57d`, and **not

@@ -9,7 +9,14 @@ landing, not the nets, not the cleanup. **If a reply raises anything else, it is
 said so in the same breath: ***"너 너무 지금 좀대로 질문해"***.
 
 ⚠ **The bar is Bad North, and simple is explicitly allowed** — ***"정말 단순해도 돼. 층이 없어도
-돼"***. One level is enough. No plateau, no stairs, until the flat thing looks right.
+돼"***. ⚠⚠ **That was the morning of 2026-08-26 and the user reversed it the same evening**, once the
+flat island passed by eye — ***"이제 자연스러운 2층을 만들어보고 거기에 건물을 올려보자"***.
+**The island HAS a second storey and a stair, and they passed.** ⇒ **Do not delete them.**
+
+⚠⚠ **How a storey is measured, and this is the definition** (2026-08-26, the user): **one notch is half
+a tile · a storey is two notches · a stair is one notch.** So ground is level 0, the stair is level 1, the
+second storey is level 2 — and a body may cross **one** notch, which is what makes the stair the only way
+up. **A third storey is levels 3 and 4 and costs no rule change; nothing has been raised that high yet.**
 
 ⚠⚠ **Read [티켓 01 — 한 조각이 무엇인가] BEFORE opening Blender.** It was skipped once and the
 skip cost a round: a rule that was still live (**corners are not cut at 45°, they are slightly tilted**)

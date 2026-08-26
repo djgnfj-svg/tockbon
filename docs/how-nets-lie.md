@@ -425,7 +425,12 @@ right. Three separate causes, and each one alone looked like the whole story:
 ⇒ **When an edit appears to do nothing, suspect the cache before suspecting the maths.** Two of the three
 rounds here were spent correcting arithmetic that was already right.
 
-## The keep's shadow node exists, is visible, and does not draw (2026-08-26 — OPEN)
+## The keep's shadow node exists, is visible, and does not draw (2026-08-26 — CLOSED, the node is gone)
+
+⚠⚠ **Do not go looking for this node.** The whole drawn-shadow approach — a soft dark quad laid on the
+ground under every standing thing — was **deleted later the same day**, and the island now has exactly one
+kind of shadow: the real one the single sun casts. **The bug below was never solved; it was removed.**
+The entry is kept for its last paragraph, which is about evidence and outlives the node it was found on.
 
 **Measured, not guessed.** Every standing thing on the island gets a drawn shadow — a soft dark quad on
 the ground. The trees and rocks show theirs. **The keep does not, and the node is there:** a print at the

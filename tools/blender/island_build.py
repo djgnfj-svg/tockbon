@@ -58,10 +58,10 @@ PIECES = [
 # tile would put the grid straight back where the coastline just stopped showing it — the plateau has to
 # turn on the same even boundaries the coast does.
 #
-#   `.` ground level  ·  `1` the plateau  ·  `/` the step up to it
+#   `.` ground level  ·  `1` the stair  ·  `2` the plateau  ·  `/` an older spelling of the stair
 #
-# ⚠ **A `/` piece must touch both**, or the stair leads nowhere. `grid.gd` reads these three characters
-# as levels 0, 1 and 2, and a stair is simply the ODD level between two floors.
+# ⚠ **The stair must touch both**, or it leads nowhere. `grid.gd` reads a digit as its own level and
+# `/` as level 1, and a stair is simply the ODD level between two floors.
 # ⚠ **No separate mesh is needed for the raised ground.** `build_island` already walls any edge where a
 # tile meets a LOWER one, which is the same code that walls the coast.
 # ⚠⚠ **THE LEVEL BOARD IS WRITTEN IN TILES, NOT IN 2x2 PIECES** (2026-08-26). `PIECES` above stays on
@@ -70,8 +70,10 @@ PIECES = [
 # not the outline.** It is inland, it is walked on, and forcing it onto the piece grid is what made the
 # stair a single 2x2 ledge — two tiles deep, one step tall, and invisible as a way up.
 #
-# **A digit is its own level.** `.` is 0. The plateau stands at **4** and the stair climbs 1-2-3 to reach
-# it, so「the only way up」is four treads a body walks rather than one knee-high step it hops.
+# **A digit is its own level.** `.` is 0. ⚠⚠ **The board below stands the plateau at 2 and the stair at
+# 1** — one storey up, entered by a single tread. A three-tread stair to a plateau at 4 was written into
+# these comments once and **never reached the board**; `HIGH` is what runs, so the board is what is true.
+# A third floor is levels 3 and 4 and needs no rule change, but nothing has been raised that high yet.
 #
 # ⚠ **The plateau still turns on even tiles** — that is a choice made here, not a rule the board
 # enforces, and it keeps the raised ground reading as a piece of the island rather than as a patch.
@@ -516,11 +518,11 @@ def _paint(bm):
             else:
                 z = lp.vert.co.z
                 # ⚠⚠ **The turf is the PLATEAU's, and the stair is not the plateau** (2026-08-26).
-                # This test was written when the plateau was level 2 and a stair was level 1, so half a
-                # level was a safe place to cut. With the stair grown to three treads, every tread above
-                # the halfway mark came out the plateau's green and the way up read as another patch of
-                # high ground rather than as the way to it. **Cut just below the top level instead**: only
-                # ground that is actually up there is turf.
+                # Cutting at half a level was tried while a taller stair was being drawn, and every tread
+                # above the halfway mark came out the plateau's green, so the way up read as another patch
+                # of high ground rather than as the way to it. **Cut just below the top level instead**:
+                # only ground that is actually up there is turf. That still holds for the plateau at 2 and
+                # the stair at 1, and it keeps holding if the stair ever gains treads.
                 if z > TOP_H + LEVEL_H * 1.4:
                     c = GRASS_HIGH
                 else:
@@ -628,7 +630,109 @@ def sky():
     return w
 
 
+# --- THE BOARD THE USER PAINTS ---------------------------------------------------------------------
+# ⚠⚠ **The island is drawn by MOVING FACES, not by editing letters** (2026-08-27, the user chose this
+# over GridMap). `PIECES` and `HIGH` above are now only the SEED: the first bake has no board, so it
+# reads them, and then it lays a board over the island it just built. **From the second bake on, the
+# board is the source and the letters are ignored.**
+#
+#   · select faces and raise them — **each 0.5 in Z is one notch, two notches is a storey**
+#   · push a face below Z 0 — **that tile becomes sea**
+#   · bake again — the island follows the board, and a fresh board is laid over the result
+#
+# ⚠ **The outline still turns only on 2x2 pieces** — 티켓 01's first rule, and the reason the coast
+# stopped reading as squares. The reader ENFORCES it: a piece with any sea tile in it goes to sea whole,
+# and it prints how many tiles that cost so a silent trim never happens.
+# ⚠ **The board is REBUILT by every bake**, so nothing painted survives a bake it did not feed. That is
+# on purpose: a board that disagreed with the island it sits on is the drift this whole file exists to
+# prevent.
+BOARD_NAME = "ISLAND_BOARD"
+BOARD_SEA_Z = -0.5   # where a face has to sit to read as sea. Anything below 0 counts; this is clear of it.
+BOARD_LIFT = 0.05    # the whole object floats this far above the island, so the two do not z-fight.
+
+
+def _board_read():
+    """The painted board as `(rows, tiers)`, or `None` when there is no board yet."""
+    ob = bpy.data.objects.get(BOARD_NAME)
+    if ob is None or ob.type != 'MESH' or len(ob.data.polygons) == 0:
+        return None
+    cells = {}
+    for p in ob.data.polygons:
+        c = p.center
+        cells[(int(math.floor(c.x + 0.5)), int(math.floor(c.y + 0.5)))] = c.z
+    wid = max(k[0] for k in cells) + 1
+    hgt = max(k[1] for k in cells) + 1
+
+    # Blender builds the island with its rows reversed (see `build_island`), so undo that here.
+    land = {}
+    for (x, r), z in cells.items():
+        land[(x, hgt - 1 - r)] = None if z < 0.0 else max(0, int(round((z - TOP_H) / LEVEL_H)))
+
+    dropped = 0
+    for py in range(0, hgt - 1, 2):
+        for px in range(0, wid - 1, 2):
+            piece = [(px + dx, py + dy) for dx in (0, 1) for dy in (0, 1)]
+            if any(land.get(t) is None for t in piece):
+                for t in piece:
+                    if land.get(t) is not None:
+                        dropped += 1
+                    land[t] = None
+
+    rows, tiers = [], []
+    for y in range(hgt):
+        r_line, t_line = "", ""
+        for x in range(wid):
+            lv = land.get((x, y))
+            edge = x == 0 or y == 0 or x == wid - 1 or y == hgt - 1
+            if lv is None or edge:
+                # ⚠ The border ring is always harbour — a boat sails from there, and `_expand` has
+                # always done this. Land painted on the rim is trimmed to it.
+                r_line += "H" if edge else "~"
+                t_line += "."
+            else:
+                r_line += "."
+                # ⚠ A DIGIT, never `/`. Both read as the same level, but `HIGH` above is written in
+                # digits and a board that spelled it the other way would show as a diff in every bake.
+                t_line += "." if lv == 0 else str(min(lv, 9))
+        rows.append(r_line)
+        tiers.append(t_line)
+    print("board read: %dx%d, %d tiles trimmed to the 2x2 outline" % (wid, hgt, dropped))
+    return rows, tiers
+
+
+def _board_make(rows, tiers):
+    """Lay a fresh board over the island that was just built."""
+    hgt, wid = len(rows), len(rows[0])
+    bm = bmesh.new()
+    for y in range(hgt):
+        r = hgt - 1 - y
+        for x in range(wid):
+            sea = rows[y][x] in "~H"
+            z = BOARD_SEA_Z if sea else TOP_H + lvl_of(tiers[y][x]) * LEVEL_H
+            vs = [bm.verts.new((x + i, r + j, z)) for i, j in ((0, 0), (1, 0), (1, 1), (0, 1))]
+            bm.faces.new(vs)
+    me = bpy.data.meshes.new(BOARD_NAME)
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new(BOARD_NAME, me)
+    bpy.context.collection.objects.link(ob)
+    ob.location = (0.0, 0.0, BOARD_LIFT)
+    ob.hide_render = True          # it is a control surface, never a thing that gets rendered
+    ob.data.materials.append(mat("board", (0.20, 0.55, 0.95), rough=1.0, alpha=0.25))
+    # ⚠ Snap to 0.5 so a dragged face lands on a notch instead of between two.
+    ts = bpy.context.scene.tool_settings
+    ts.use_snap = True
+    ts.snap_elements = {'INCREMENT'}
+    return ob
+
+
 def build():
+    global ROWS, TIERS
+    # ⚠⚠ **Read the board BEFORE the wipe below deletes it.**
+    painted = _board_read()
+    if painted is not None:
+        ROWS, TIERS = painted
+
     for ob in list(bpy.data.objects):
         bpy.data.objects.remove(ob, do_unlink=True)
     for me in list(bpy.data.meshes):
@@ -711,6 +815,8 @@ def build():
     sc.render.filepath = OUT
     bpy.ops.render.render(write_still=True)
     export()
+    # ⚠ **After the export, so the board is never in the glb** and never in the render above.
+    _board_make(ROWS, TIERS)
     print("rendered", OUT, "faces", len(isl.data.polygons))
 
 

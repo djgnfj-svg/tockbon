@@ -64,10 +64,12 @@ const REACH_BONUS := 1.75
 ## above shoot the queue. **26 of 162 fights lost that way, and in 24 of them every surviving enemy was
 ## clustered on exactly those diagonal tiles.**
 ##
-## **The window is `(sqrt(3), 2.0)`** — above the tier diagonal, below the flat two-tile orthogonal.
-## 1.75 sits in it with **+0.018 above and -0.250 below**; the lower margin is thin and safe because
-## both bounds are exact (integers under a root, heights are exact multiples of `TIER_STEP_TILES`) and
-## `EPS` is 1e-4.
+## **The window is 「above the stair diagonal, below the flat two-tile orthogonal」.** ⚠⚠ **The numbers
+## in the paragraph above were measured while a notch was a whole tile, and a notch is half a tile now**
+## (2026-08-27, see `TIER_RISE_TILES`). **The defect and the fix are unchanged; only the margins moved.**
+## Today the stair diagonal is `sqrt(2 + 0.25)` = **1.5** and the flat two-tile orthogonal is **2.0**, so
+## the window is `(1.5, 2.0)` and **1.75 sits dead centre, +0.25 above and -0.25 below.** Both bounds are
+## exact (heights are exact multiples of `TIER_STEP_TILES`) and `EPS` is 1e-4.
 ##
 ## ⚠⚠ **IT IS NOT A MELEE-ONLY CHANGE AND NO VALUE COULD MAKE IT ONE.** This bonus is added to EVERY
 ## species' range, so raising it moves every species' reach. Swept over every tile-aligned pair at
@@ -91,8 +93,8 @@ const NO_DETECT := -1.0
 
 # --- Height: tiers and the stairs between them ------------------------------------------------------
 ## **A tile carries one integer, its LEVEL, and every height fact is derived from it.** 티켓 19's answer
-## table decided two tiers, one tier two tiles tall, a stair one tile wide, and the stair as the only
-## way up. The whole of "the stair is the only door" is `MAX_CLIMB_LEVELS` below: low ground is level 0,
+## table decided two tiers, a stair one tile wide, and the stair as the only way up. ⚠ **That table also
+## said one tier was two tiles tall and that half is dead** — see `TIER_RISE_TILES`: a tier is ONE tile. The whole of "the stair is the only door" is `MAX_CLIMB_LEVELS` below: low ground is level 0,
 ## a stair is level 1, high ground is level 2, so the boundary is a gap of two and the stair is two
 ## gaps of one.
 ##
@@ -103,8 +105,21 @@ const NO_DETECT := -1.0
 ##
 ## How tall one tier stands, in tiles. Everything below is derived from it and the number is not
 ## repeated anywhere else.
-const TIER_RISE_TILES := 2.0
+## ⚠⚠ **LOWERED 2.0 -> 1.0 (2026-08-27), and it was a LIE being corrected, not a balance change.**
+## The mesh has always been the source of the board: `island_build.py` writes `level_h` into
+## `island.json` and it is **0.5 — half a tile per notch**, which the user restated as 「한 층이 한 칸,
+## 계단은 반 칸」. This constant said one notch was a whole tile, so **the sim measured every height at
+## exactly twice what the ground the player looks at actually stands.** A body on the plateau computed
+## 2.0 tiles up while the drawn plateau stood 1.0 up.
+## ⚠ **`REACH_BONUS` survives the change and gets a WIDER margin, which is why nothing is retuned.**
+## Its window is 「above the stair diagonal, below the flat two-tile orthogonal」. At a 0.5 notch the
+## stair diagonal is `sqrt(2 + 0.25)` = **1.5** and the flat two-tile is still **2.0**, so the window
+## opens from `(1.732, 2.0)` to `(1.5, 2.0)`. **1.75 now sits with +0.25 above and -0.25 below**,
+## where before it had +0.018 above. The value that was measured in play stays the value.
+const TIER_RISE_TILES := 1.0
 ## How far ONE level rises — a stair tread. Half a tier, because a stair sits halfway up.
+## ⚠ **This is the number that must equal `level_h` in `island.json`.** Nothing asserts it across the
+## two files yet, and that silence is how the two drifted apart for a day. **0.5 today.**
 const TIER_STEP_TILES := TIER_RISE_TILES * 0.5
 ## The largest level difference a body may step across. **1**, so a stair is passable from both sides
 ## and a tier boundary is not.
