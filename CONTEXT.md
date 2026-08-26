@@ -13,7 +13,19 @@ uses only the English word is not an answer to the user**, and a symbol named in
 
 ---
 
-## 짐승과 종족 — **the one that was renamed**
+## ⚠⚠ **THE SIDES SWAPPED 2026-08-26 — read this before the tables below**
+
+**짐승은 이제 적이다. 플레이어는 검사 하나다.** 아래 표의 「짐승」은 **플레이어의 몸이 아니라 적의
+몸**을 가리키고, 「종족 · 빌드」는 **플레이어가 무엇으로 구성되는가를 더 이상 말하지 않는다.**
+
+| 지금 | 코드 | 무엇 |
+|---|---|---|
+| **검사** | **`SWORDSMAN`** | **플레이어의 몸, 그리고 유일한 병종** |
+| **짐승 넷** | **`WOLF` · `BEAR` · `CROW` · `LION`** | **적.** 배를 타고 온다 |
+| **섬** | **`Islands`** | ⚠⚠ **글자표가 아니라 파일이다** — `assets/terrain/island.json` 을 읽는다. **그 파일과 화면에 보이는 메시는 블렌더 스크립트 한 번이 같이 쓴다** |
+| **지도** | — | ⚠⚠ **`RunMap` 과 `MapView` 는 삭제됐다.** 섬은 하나뿐이고 노드 지도는 없다 |
+
+## 짐승과 종족 — **⚠ 아래는 공수가 뒤집히기 전의 낱말이다**
 
 | 한국어 | Code | What it is |
 |---|---|---|
@@ -34,8 +46,8 @@ uses only the English word is not an answer to the user**, and a symbol named in
 | 정한 말 | 코드가 지금 쓰는 것 | 상태 |
 |---|---|---|
 | 짐승 · beast | **`soldier` · `army` · `unit`** | ✅ **이미 종족 중립이다. 바꿀 이유가 없다** |
-| 짐승 다섯 종 | **`SQUIRREL` · `WOLF` · `COW` · `BEAR` · `CROW`** | ✅ **2026-08-25(티켓 15)에 바뀌었다.** `cell_melee` · `cell_ranged` 가 `WOLF` · `CROW` 가 되면서 **세포가 짐승 이름에서 사라졌다** |
-| 인간 넷 | **`SPEARMAN` · `ARCHER` · `SHIELDBEARER` · `WARRIOR`** | ✅ **제 줄을 가졌다.** ⚠ **그 전에는 소와 까마귀 줄을 빌려 쓰고 있었다** — 개명이 아니라 줄 이사였다 |
+| 짐승 다섯 종 | ⚠⚠ **`SWORDSMAN` · `WOLF` · `BEAR` · `CROW` · `LION`**(2026-08-26) | ✅ **2026-08-25(티켓 15)에 바뀌었다.** `cell_melee` · `cell_ranged` 가 `WOLF` · `CROW` 가 되면서 **세포가 짐승 이름에서 사라졌다** |
+| 인간 넷 | ⚠⚠ **삭제됐다** — 창병·궁수·방패병이 표에서 빠지고 **검사 하나**가 남았다 | ✅ **제 줄을 가졌다.** ⚠ **그 전에는 소와 까마귀 줄을 빌려 쓰고 있었다** — 개명이 아니라 줄 이사였다 |
 | — | **`cell_at` · `cells` · `_cell_centre`** | ✅ **격자 칸이다. 생물이 아니다 — 건드리지 않는다** |
 | — | **`title_cell_*` · `refit_cell_*`** | ✅ **화면의 칸이다. 건드리지 않는다** |
 
@@ -55,7 +67,7 @@ uses only the English word is not an answer to the user**, and a symbol named in
 | 한국어 | Code | What it is |
 |---|---|---|
 | 회차 | **`Run`** | 한 판. 지도의 어느 노드에 서 있고 무슨 보상이 기다리는가 |
-| 지도 | **`RunMap`** | 5층 7노드. 갈라졌다 합쳐지고 전체가 늘 보인다. 마지막은 보스 |
+| 지도 | ⚠⚠ **삭제됨** | 5층 7노드였다. **섬이 하나가 되면서 지도가 없어졌다**(2026-08-26) |
 | 섬 | **`Islands`** · **`Grid`** | 싸우는 판. 격자에 통행·물·해안·상륙 거리가 얹혀 있다 |
 | 전투 | **`Battle`** | 한 섬의 싸움. `step(dt)` 하나가 배·상륙·조준·이동·공격을 전부 민다 |
 | 명부 | **`Army`** | 섬을 건너 살아남는 병력. **죽으면 영영 죽는다** |
@@ -68,8 +80,8 @@ uses only the English word is not an answer to the user**, and a symbol named in
 
 | 한국어 | Code | What it is |
 |---|---|---|
-| 섬 화면 | **`FieldView`** | 지형·해안·바다의 배·몸·체력 |
-| 지도 화면 | **`MapView`** | 어디를 지나왔고 어디로 갈 수 있나 |
+| 섬 화면 | **`FieldView`** | 바다의 배·몸·체력, 그리고 **블렌더가 만든 섬 메시를 불러다 놓는 것.** ⚠ **지형을 만들지 않는다** |
+| 지도 화면 | ⚠⚠ **삭제됨** | `MapView` 는 지도와 함께 지워졌다 |
 | 보상 화면 | **`RewardView`** | **카드 세 장 중 하나.** 이긴 뒤에도 뜨고 **회차가 열릴 때도 뜬다**(그때는 짐승만) |
 | 껍데기 | **`Game`** | **입력을 읽는 유일한 파일**이고 `sim`과 `view`를 잇는 유일한 자리 |
 
