@@ -61,9 +61,11 @@ func _process(_delta: float) -> bool:
 		0:
 			_game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
 		1:
-			_game._unhandled_input(_click(Look.map_node_pos_px(0)))
+			# The opening beast card: the map used to be pressed here, and a card takes
+			# its place — the island opens the moment it is taken.
+			_game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
 		2:
-			_game._process(Look.MAP_TRAVEL_SEC)
+			pass
 		3:
 			for slot in 2:
 				_game._unhandled_input(_key(KEY_1 + slot))

@@ -135,8 +135,8 @@ func _battle_reads_the_army(t) -> void:
 	# -- army.damage_of(i): a fitted 팔 moves the FIRST blow the sub-step actually threw ------------
 	var plain := _adjacent_bison_battle(-1)
 	var armed := _adjacent_bison_battle(ITEM_DAMAGE)
-	var plain_hit := Rules.hp_of(Rules.SHIELDBEARER) - plain.enemy_hp[0]
-	var armed_hit := Rules.hp_of(Rules.SHIELDBEARER) - armed.enemy_hp[0]
+	var plain_hit := Rules.hp_of(Rules.WOLF) - plain.enemy_hp[0]
+	var armed_hit := Rules.hp_of(Rules.WOLF) - armed.enemy_hp[0]
 	t.eq(plain_hit, Rules.damage_of(Rules.WOLF), "빈 판 병사는 종류값 그대로 때린다 (자가 점검)")
 	t.ok(armed_hit > plain_hit,
 		"장비를 낀 병사가 첫 타격에서 더 큰 피해를 준다 (%.1f > %.1f) — battle.step 이 army.damage_of 를 읽는다"
@@ -181,7 +181,7 @@ func _battle_reads_the_army(t) -> void:
 func _enemies_stay_type_keyed(t) -> void:
 	var plain := _adjacent_bison_battle(-1)
 	var armed := _adjacent_bison_battle(3)
-	t.eq(plain.army.hp[0], Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.SHIELDBEARER),
+	t.eq(plain.army.hp[0], Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.WOLF),
 		"안 낀 병사는 들소의 종류값 그대로 맞는다 (자가 점검 — 즉시 타격 갈래)")
 	t.eq(armed.army.hp[0], plain.army.hp[0],
 		"팔을 낀 판이어도 들소가 주는 피해는 그대로다 — 적은 플레이어 판을 안 읽는다 (즉시 타격 갈래)")
@@ -209,7 +209,7 @@ func _slot_reserves_are_filtered_by_slot(t) -> void:
 	var id1 := a.recruit(0)
 	a.slot_id[id1] = 1
 	var grid := Grid.new()
-	grid.load_rows(Islands.rows_of(0))
+	grid.load_rows(Islands.rows())
 	var b := Battle.new()
 	b.setup(grid, a, [], 10.0)
 	var slot0 := b.slot_reserve_ids(0)
@@ -251,7 +251,7 @@ func _tile_key(p: Vector2, w: int) -> int:
 ## One melee soldier one tile from a stationary bison, `part` (a `Rules.Part`, or -1 for none) fitted
 ## into slot 0's board, driven exactly one sub-step through the real `battle.step`.
 func _adjacent_bison_battle(part: int) -> Battle:
-	var b := _adjacent_battle(part, Rules.SHIELDBEARER)
+	var b := _adjacent_battle(part, Rules.WOLF)
 	b.begin_frame()
 	b.step(Rules.SIM_SUBSTEP_SEC)
 	return b
@@ -299,7 +299,7 @@ func _walk_probe(part: int) -> Battle:
 	var grid := Grid.new()
 	grid.load_rows(_open_arena())
 	var b := Battle.new()
-	b.setup(grid, a, [{"type_id": Rules.SHIELDBEARER, "tile": _tile_key(Vector2(18, 5), _ARENA_W)}], 999.0)
+	b.setup(grid, a, [{"type_id": Rules.WOLF, "tile": _tile_key(Vector2(18, 5), _ARENA_W)}], 999.0)
 	b._committed = true
 	_ashore_at(b, 0, _WALK_START)
 	b.begin_frame()
@@ -617,15 +617,15 @@ func _tag_tiers(t) -> void:
 
 	# 범위 — 문턱 2/4, 효과 +0.5/+1.0. 소 판에 끼워도 늑대의 사거리가 는다.
 	var reach_one := Loadout.new()
-	_fit_n(reach_one, ITEM_RANGE, 1, Rules.COW)
+	_fit_n(reach_one, ITEM_RANGE, 1, Rules.SWORDSMAN)
 	t.ok(is_equal_approx(reach_one.stat_of(Rules.WOLF, Rules.ITEM_COL_RANGE), 0.0),
 		"범위 1개 — 문턱 2 미달이라 딱지 항이 없다 (창끝의 +1 은 소 판의 것이다)")
 	var reach_two := Loadout.new()
-	_fit_n(reach_two, ITEM_RANGE, 2, Rules.COW)
+	_fit_n(reach_two, ITEM_RANGE, 2, Rules.SWORDSMAN)
 	t.ok(is_equal_approx(reach_two.stat_of(Rules.WOLF, Rules.ITEM_COL_RANGE), 0.0 + 0.5),
 		"범위 2개 — 1층이 켜져 늑대 사거리에 +0.5")
 	var reach_four := Loadout.new()
-	_fit_n(reach_four, ITEM_RANGE, 4, Rules.COW)
+	_fit_n(reach_four, ITEM_RANGE, 4, Rules.SWORDSMAN)
 	t.ok(is_equal_approx(reach_four.stat_of(Rules.WOLF, Rules.ITEM_COL_RANGE), 0.0 + 1.0),
 		"범위 4개 — 2층 +1.0 이 대체한다, 합산 +1.5 가 아니다")
 

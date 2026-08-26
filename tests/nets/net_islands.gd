@@ -137,8 +137,8 @@ const EXPECT_UNCOVERED_COAST := [13, 14, 4]
 const EXPECT_DROPPABLE := [84, 76, 82]
 const EXPECT_START_SENDABLE := [84, 76, 82]
 
-## Seconds per island — unchanged by this plan (decided #9).
-const EXPECT_LIMITS := [60.0, 60.0, 90.0]
+## The island's clock. ⚠ **Nothing loses by it** — the user deleted the time-limit loss on 2026-08-24.
+const EXPECT_LIMIT := 20.0
 
 ## Ceiling on tiles crossed in one walk, matching `battle.gd`'s `WALK_TILES_MAX` order of magnitude on
 ## a grid 2.67x the old one's tile count.
@@ -146,36 +146,39 @@ const WALK_STEPS_MAX := 900
 const WALKER_ID := 999_999
 
 
-## The hand-authored islands. **A literal, and NOT `Islands.count()`** — the long map is generated
-## rather than typed, so `count()` includes it and every 48 x 32 expectation below would then be
-## asserted against a 144-column grid. `_the_long_map` carries that one's own numbers.
-const HAND_WRITTEN := 3
+## ⚠⚠ **THERE IS ONE ISLAND** (2026-08-26). Seven were deleted with the node map — three hand-authored
+## rectangles, one generated 144-wide map and four generated compact ones — because the user could not
+## draw eight. Every 48 x 32 expectation that used to live here went with them.
+const ROW_COUNT := 12
+const ROW_WIDTH := 16
 
 
 func run(t) -> void:
-	t.eq(Islands.ISLAND_ROWS.size(), HAND_WRITTEN, "손으로 쓴 섬은 셋이다")
-	# ⚠ 4 -> 8: the four compact islands (2026-08-24). **They are outside this suite on purpose** — see
-	# `Islands.SMALL_ISLANDS`. Nothing here measures them, and that is written down there too.
-	t.eq(Islands.count(), 8, "긴 지도와 작은 섬 넷까지 여덟이다 — 격자 크기가 상수에 박혀 있지 않다")
-	t.eq(Islands.TIME_LIMITS.size(), HAND_WRITTEN, "제한 시간도 손으로 쓴 섬마다 하나씩 있다")
-	for i in EXPECT_LIMITS.size():
-		t.eq(Islands.time_limit_of(i), float(EXPECT_LIMITS[i]),
-			"섬 %d 의 제한 시간은 %.0f초다" % [i + 1, float(EXPECT_LIMITS[i])])
+	# ⚠ **Read through the accessors, because the board is a FILE now** (2026-08-26) — the letter grid
+	# left `islands.gd` when Blender became the source of the island. A net naming the old consts would
+	# not just fail; it would be asserting that the board still lives in the game.
+	var rows := Islands.rows()
+	var tiers := Islands.tiers()
+	t.eq(rows.size(), ROW_COUNT, "섬은 열두 줄이다")
+	t.eq(tiers.size(), ROW_COUNT, "층 판도 같은 줄 수다")
+	for y in rows.size():
+		t.eq(str(rows[y]).length(), ROW_WIDTH, "%d 번째 줄이 %d 칸이다" % [y, ROW_WIDTH])
+		t.eq(str(tiers[y]).length(), ROW_WIDTH, "층 판 %d 번째 줄도 같다" % y)
+	t.eq(Islands.time_limit(), EXPECT_LIMIT, "섬의 제한 시간은 %.0f초다" % EXPECT_LIMIT)
 
 	var min_region_floor := _min_region_floor()
-	# ⚠ The 39 is a LITERAL on purpose. Writing the formula on both sides would let the roster grow and
+	# ⚠ The 27 is a LITERAL on purpose. Writing the formula on both sides would let the roster grow and
 	# the expectation grow with it, which is the shape that proves nothing.
-	# ⚠⚠ **23 -> 39** (티켓 15): a run opens with ten in one slot, and up to four more species arrive
-	# on cards with `SPECIES_CARD_BODIES` bodies each — 10 + 4x3 + 4x4 = 38, plus a tile of margin.
-	t.eq(min_region_floor, 39, "가장 좁아도 되는 상륙지 바닥은 39칸이다 (최대 병력 38 + 여유 1) — 자가 점검")
-	t.eq(_max_roster(), 38,
-		"그 최대 병력 38이 10 + 보상 칸 넷 x 3 + 짐승 카드 넷 x 4 다 (자가 점검)")
+	# ⚠⚠ **38 -> 26** (2026-08-26): the node rewards are deleted with the map, so a run grows on cards
+	# alone — 10 in the opening slot plus four species arriving with `SPECIES_CARD_BODIES` each.
+	t.eq(min_region_floor, 27, "가장 좁아도 되는 상륙지 바닥은 27칸이다 (최대 병력 26 + 여유 1) — 자가 점검")
+	t.eq(_max_roster(), 26, "그 최대 병력 26이 10 + 짐승 카드 넷 x 4 다 (자가 점검)")
 	_the_floor_actually_rejects_something(t, min_region_floor)
 
 	var walker_pairs := 0
 	var walker_steps := 0
-	for i in HAND_WRITTEN:
-		var rows := Islands.rows_of(i)
+	for i in 1:
+		var rows := Islands.rows()
 		var shape := _shape_errors(rows, EXPECT_ROWS, EXPECT_COLS)
 		t.eq(shape.size(), 0, "섬 %d 은 %d행 x %d자다 %s" % [i + 1, EXPECT_ROWS, EXPECT_COLS, str(shape)])
 		var illegal := _illegal_chars(rows)
@@ -411,7 +414,7 @@ func run(t) -> void:
 		t.eq(relocates, int(EXPECT_RELOCATES[i]),
 			"섬 %d — 1파 상륙지 중 함대가 항구를 옮기는 곳의 수" % (i + 1))
 
-		var spawns := Islands.spawns_of(i)
+		var spawns := Islands.spawns()
 		t.eq(spawns.size(), int(EXPECT_SPAWNS[i]), "섬 %d 의 적 수" % (i + 1))
 		var off_land := 0
 		for e in spawns.size():
@@ -567,7 +570,6 @@ func run(t) -> void:
 	t.ok(walker_pairs > 0, "걸어본 칸-적 짝이 실제로 있다 (%d개)" % walker_pairs)
 	t.ok(walker_steps > 0, "그 걷기들은 실제로 칸을 넘었다 (총 %d칸)" % walker_steps)
 
-	_the_long_map(t)
 	_every_spawn_is_an_enemy(t)
 	_self_check(t)
 
@@ -585,80 +587,6 @@ func run(t) -> void:
 ## ⚠ **The check that matters most is the last one**: every 8-way coast tile is sendable, exactly as
 ## on the three shipped islands. That is the denylist's own property, and it is what says the water
 ## rules did not quietly stop meaning anything at three times the width.
-func _the_long_map(t) -> void:
-	var i := Islands.LONG_ISLAND_INDEX
-	t.eq(i, 3, "긴 지도는 3번이다 — 손으로 쓴 셋 다음이다")
-	var rows := Islands.rows_of(i)
-	t.eq(rows.size(), 32, "긴 지도도 32줄이다 — 길어진 것은 가로뿐이다")
-	t.eq(_shape_errors(rows, 32, 144).size(), 0, "그리고 한 줄이 144자다 %s"
-		% str(_shape_errors(rows, 32, 144)))
-	t.eq(_illegal_chars(rows).size(), 0, "범례 밖 글자가 없다 %s" % str(_illegal_chars(rows)))
-	t.eq(_count_char(rows, "H"), 6, "항구가 여섯이다 (24칸마다 하나)")
-	t.eq(_count_char(rows, "S"), 23, "방패병이 스물셋이다 (6칸마다 하나)")
-	t.eq(_count_char(rows, "^"), 140, "북쪽 절벽이 140칸이다")
-	t.eq(Islands.spawns_of(i).size(), 23, "그리고 spawns_of 도 스물셋을 뽑는다")
-
-	# The derived clock, as the arithmetic rather than as a number typed in twice:
-	# `60 / 48 = 1.25 s per column`, `1.25 * 144 = 180`.
-	t.eq(Islands.time_limit_of(i), 180.0, "제한 시간이 180초다 — 섬 1의 칸당 1.25초 x 144칸")
-	t.eq(Islands.time_limit_of(0), 60.0, "섬 1의 60초는 그대로다 (자가 점검 — 유도의 출발점)")
-
-	var g := Grid.new()
-	g.load_rows(rows)
-	t.eq(g.w, 144, "격자가 144칸 폭으로 실린다")
-	t.eq(g.h, 32, "그리고 32칸 높이다")
-	t.eq(g.harbour_tiles.size(), 6, "항구 여섯이 전부 실렸다")
-	var passable_n := 0
-	var water_n := 0
-	for tile in g.passable.size():
-		if g.passable[tile] != 0:
-			passable_n += 1
-		if g.water[tile] != 0:
-			water_n += 1
-	t.eq(passable_n, 2520, "땅이 2520칸이다")
-	t.eq(water_n, 1948, "물이 1948칸이다")
-
-	# The 8-way coast, rebuilt here from `passable` + `water` and NEVER read off `sendable` — that is
-	# what makes the line under it a claim instead of a tautology.
-	var coast := 0
-	var uncovered := 0
-	for tile in g.passable.size():
-		if g.passable[tile] == 0:
-			continue
-		var tx := tile % g.w
-		var ty := tile / g.w
-		var wet := false
-		for k in Grid.NEIGHBOURS.size():
-			var nx := tx + int(Grid.NEIGHBOURS[k][0])
-			var ny := ty + int(Grid.NEIGHBOURS[k][1])
-			if nx < 0 or ny < 0 or nx >= g.w or ny >= g.h:
-				continue
-			if g.water[ny * g.w + nx] != 0:
-				wet = true
-		if not wet:
-			continue
-		coast += 1
-		if g.home_harbour_for(tile) < 0:
-			uncovered += 1
-	t.eq(coast, 174, "8방향으로 물에 닿은 땅이 174칸이다")
-	t.eq(uncovered, 0, "그리고 그 174칸 전부에 배를 보낼 수 있다 — 세 섬과 똑같은 성질이다")
-
-	# The floor under it: an INLAND tile is still refused. Without this "everything is sendable" would
-	# also be what a broken predicate that answered yes to everything looked like.
-	var inland := g.tile_index(72, 12)
-	t.eq(int(g.passable[inland]), 1, "가운데 (72,12)는 땅이다 (자가 점검)")
-	t.eq(g.home_harbour_for(inland), -1, "그런데 내륙이라 못 보낸다")
-
-	# And a boat really sails it: the longest route on this map is longer than anything the 48-column
-	# islands could produce, which is the whole point of a long map existing.
-	var far := g.tile_index(140, 20)
-	t.ok(g.home_harbour_for(far) >= 0, "동쪽 끝 (140,20)에도 보낼 수 있다 (자가 점검)")
-	var route := g.water_route(g.home_harbour_for(far), far)
-	t.ok(route.size() >= 2, "그리로 가는 항로가 있다 (%d점)" % route.size())
-	t.eq(route[route.size() - 1], Vector2(140.0, 20.0), "항로의 마지막 점이 그 상륙 칸이다")
-
-
-# -- nobody friendly stands on the far side ---------------------------------------------------------
 ## **The net that says the move actually happened.** 소 and 까마귀 were the enemy's rows and are the
 ## player's now, so a leftover spawn character would put a beast back on the island fighting for the
 ## humans — and it would look completely ordinary on screen.
@@ -670,13 +598,13 @@ func _the_long_map(t) -> void:
 ## reddens the legend check above instead, which is the point of having both).
 func _every_spawn_is_an_enemy(t) -> void:
 	var seen := 0
-	for i in Islands.count():
-		var rows := Islands.rows_of(i)
+	for i in 1:
+		var rows := Islands.rows()
 		var grid := Grid.new()
 		grid.load_rows(rows)
 		var allied := 0
 		var off_land := 0
-		for raw in Islands.spawns_of(i):
+		for raw in Islands.spawns():
 			var s: Dictionary = raw
 			seen += 1
 			if Rules.side_of(int(s["type_id"])) != Rules.Side.ENEMY:
@@ -722,8 +650,8 @@ func _self_check(t) -> void:
 		"~~~~~~~~~~~~",
 	])
 	var fx_spawns := [
-		{"type_id": Rules.SHIELDBEARER, "tile": 3 * 12 + 3},
-		{"type_id": Rules.ARCHER, "tile": 3 * 12 + 9},
+		{"type_id": Rules.WOLF, "tile": 3 * 12 + 3},
+		{"type_id": Rules.CROW, "tile": 3 * 12 + 9},
 	]
 	var reach := Rules.range_of(Rules.WOLF) + Rules.REACH_BONUS
 	var f0 := fx.flow_field(int(fx_spawns[0]["tile"]))
@@ -809,7 +737,7 @@ func _min_region_floor() -> int:
 func _max_roster() -> int:
 	var from_cards := (Rules.SUMMON_SLOT_MAX - Rules.START_SLOTS.size()) * Rules.SPECIES_CARD_BODIES
 	return Rules.roster_start_count() \
-		+ Rules.map_max_count_nodes_on_a_route() * Rules.roster_reward_count() \
+\
 		+ from_cards
 
 

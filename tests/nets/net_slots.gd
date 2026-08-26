@@ -55,17 +55,6 @@ func run(t) -> void:
 	t.root.add_child(game)
 	await t.pump_frames(2)
 
-	# Title -> map -> island, through the door the OS uses. `net_shell` owns the assertions about that
-	# path; here it is only how the shell reaches a planning screen.
-	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
-	# ⚠ The run opens on its beast card round; **seeded first** so which species the second slot holds
-	# is the same every round — every box, digit and bar row below counts against that.
-	game.run.seed_cards(1)
-	_take_opening_card(game)
-	game._unhandled_input(_press(Look.map_node_pos_px(0)))
-	game._process(Look.MAP_TRAVEL_SEC)
-	t.ok(game.battle != null, "섬이 열렸다 (자가 점검)")
-
 	# Swap in the spies and re-open, exactly as `net_shell` does: a spy starts with a null `battle`, so
 	# a deleted wiring line would leave every capture below empty rather than merely different.
 	for v: Node2D in [game.field_view, game.hud_view]:
@@ -695,7 +684,7 @@ func _the_three_lines_that_claimed_to_be_load_bearing(t, game: Game, fs: FieldVi
 	game._unhandled_input(_press(at))
 	t.ok(fs._summon_slot >= 0 and fs._summon_aim >= 0,
 		"화면이 슬롯 %d 로 칸 %d 를 조준하고 있다 (자가 점검)" % [fs._summon_slot, fs._summon_aim])
-	fs.setup(game.battle, game.battle.army, Islands.rows_of(0))
+	fs.setup(game.battle, game.battle.army, Islands.rows())
 	t.eq(fs._summon_slot, -1, "setup 이 조준한 슬롯을 지운다 — 섬이 바뀌면 조준도 같이 간다")
 	t.eq(fs._summon_aim, -1, "조준하던 칸도 지운다")
 

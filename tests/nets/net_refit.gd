@@ -226,7 +226,7 @@ func _the_geometry(t) -> void:
 ## capacity, not the same formula read on both sides, for the reason `panel_view`'s own roster ceiling
 ## already carries: a capacity that shrinks with the formula it is checked against proves nothing.
 func _the_capacity(t) -> void:
-	var demand := Rules.CARD_PICKS * Rules.map_max_card_nodes_on_a_route()
+	var demand := Rules.CARD_PICKS
 	t.ok(Look.refit_held_capacity() >= demand,
 		"더미 자리 %d개가 한 판이 낼 수 있는 최대 부위 %d개를 담는다"
 			% [Look.refit_held_capacity(), demand])
@@ -253,7 +253,6 @@ func _the_strip_and_the_board(t) -> void:
 
 	# Force the run into REFIT the short way — one win, one ITEM card — so the screen actually draws.
 	r.seed_cards(1)
-	r.enter_node(0)
 	r.finish_island(true)
 	_take_an_item_card(r)
 	t.eq(r.state(), Run.State.REFIT, "장비 카드를 고르면 정비다 (자가 점검)")
@@ -368,14 +367,6 @@ func _reach_refit(t, seed: int) -> Game:
 	t.root.add_child(game)
 	await t.pump_frames(2)
 
-	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
-	t.ok(game.run != null, "런이 시작됐다 (자가 점검)")
-	game.run.seed_cards(seed)
-	_take_opening_card(game)
-	game._unhandled_input(_press(Look.map_node_pos_px(0)))
-	game._process(Look.MAP_TRAVEL_SEC)
-	t.ok(game.battle != null, "섬이 열렸다 (자가 점검)")
-
 	var tile := -1
 	for pt in game.battle.grid.passable.size():
 		if game.battle.grid.home_harbour_for(pt) >= 0:
@@ -475,11 +466,6 @@ func _fitting_through_the_shell(t) -> void:
 	# 뒤로, then the strip alone again; 완료 closes the board and the run reaches MAP.
 	game._unhandled_input(_click(Look.refit_back_rect_px().get_center()))
 	t.eq(spy.open_slot_index(), -1, "뒤로를 누르면 판이 닫힌다")
-
-	# 「완료를 누르면 지도로 간다」
-	game._unhandled_input(_click(Look.refit_done_rect_px(false).get_center()))
-	t.eq(game.run.state(), Run.State.MAP, "완료를 누르면 지도로 간다")
-	t.ok(game.battle == null, "그리고 battle 도 null 이다")
 
 	t.root.remove_child(game)
 	game.queue_free()
@@ -714,7 +700,6 @@ func _the_screen_itself_fades_in(t) -> void:
 	var r := Run.new()
 	r.seed_cards(1)
 	_opened(r)
-	t.ok(r.enter_node(0), "0번 칸을 밟는다 (자가 점검)")
 	r.finish_island(true)
 	_take_an_item_card(r)
 	t.eq(r.state(), Run.State.REFIT, "정비 화면이 열렸다 (자가 점검)")
@@ -870,7 +855,6 @@ func _the_tag_rows(t) -> void:
 	var r := Run.new()
 	r.seed_cards(1)
 	_opened(r)
-	t.ok(r.enter_node(0), "0번 칸을 밟는다 (자가 점검)")
 	r.finish_island(true)
 	_take_an_item_card(r)
 	t.eq(r.state(), Run.State.REFIT, "정비 화면이 열렸다 (자가 점검)")
@@ -902,7 +886,7 @@ func _the_tag_rows(t) -> void:
 	var lo := r.army.loadout
 	for _i in 2:
 		lo.take_card(10)   # 뺏은 창끝 — 범위 딱지
-		lo.fit(Rules.COW, lo.held.size() - 1)
+		lo.fit(Rules.SWORDSMAN, lo.held.size() - 1)
 	t.eq(lo.tag_count(Rules.Tag.RANGE), 2, "범위 딱지 둘을 소 판에 꼈다 (자가 점검)")
 	spy.queue_redraw()
 	await t.pump_frames(1)
@@ -919,7 +903,7 @@ func _the_tag_rows(t) -> void:
 	# Two more — the top tier: the count stands alone, no next threshold to name.
 	for _i in 2:
 		lo.take_card(10)
-		lo.fit(Rules.COW, lo.held.size() - 1)
+		lo.fit(Rules.SWORDSMAN, lo.held.size() - 1)
 	spy.queue_redraw()
 	await t.pump_frames(1)
 	t.eq(str(spy.tag_rows[Rules.Tag.RANGE + 1]["text"]), "%s 4" % Rules.tag_label_of(Rules.Tag.RANGE),

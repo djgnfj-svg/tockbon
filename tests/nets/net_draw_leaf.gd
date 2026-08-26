@@ -467,7 +467,7 @@ func run(t) -> void:
 	# "It is not 0" first. A directory walk that found nothing would report a perfectly clean tree and
 	# every assertion below would simply stop running.
 	var view_files := _gd_files(VIEW_DIR)
-	t.eq(view_files.size(), 7, "src/view/ 에 그릴 줄 아는 파일이 일곱이다 %s" % str(view_files))
+	t.eq(view_files.size(), 6, "src/view/ 에 그릴 줄 아는 파일이 여섯이다 %s" % str(view_files))
 	t.eq(table.size(), 7, "표도 파일 일곱을 덮는다")
 
 	# -- 1~3. the per-function table, the closed class, and the leaf arguments ----------------------
@@ -489,103 +489,6 @@ func run(t) -> void:
 		for name: String in expect:
 			if int(expect[name]) > 0:
 				total_leaves += 1
-
-	# The literals are read back, never `found.size()` summed — a walk that saw nothing would agree
-	# with itself. `boat-and-landing`'s camera added 7 pure functions to field_view.gd (29 -> 36);
-	# stage 4's drag added 3 more there and 2 in hud_view.gd (36 -> 39, 18 -> 20); stage 5's fleet
-	# added `_paint_hull` / `_paint_cliff_face` / `_hull_rect` / `_deck_slots` / `_wait_blend` and
-	# removed `_paint_boat` / `_boat_rect` in field_view.gd (39 -> 42, net +3); the verify-read pass
-	# on stages 4/5 added `idle_hull_rect`, shared between `_draw()` and `game.gd`'s hit test so
-	# neither one re-derives the anchor and the slot a second time (42 -> 43).
-	# `plan-then-watch` moved BOTH totals, and that is deliberate: an earlier draft of that plan landed
-	# them back on 84 and 23 while five per-file counts moved, and a literal that does not move is the
-	# one nobody re-derives. 43 is field_view (one added, one deleted, one renamed — no net change, so
-	# it is the one to count by hand), 13 is hud_view (20 - 8 + 1), 21 is panel_view, untouched.
-	# `title-and-map` added two whole files, and its own table was re-derived by hand here rather than
-	# copied: it named 18 functions for `title_view` (which held) and 25 for `map_view` (which did
-	# not — `_ring_points` and `_paint_fade` were added by the build, with the reasons beside them).
-	# The map's four-state read added `_look_of` and `_node_radius_of` to `map_view` (27 -> 29), and
-	# the total is re-derived by hand here rather than nudged: a literal that moves by whatever the
-	# last edit happened to be is a literal nobody re-derives.
-	# The variable grid added `_map_tiles` and `_visible_tile_rect` to `field_view` (43 -> 45), and the
-	# total is re-derived by hand here rather than nudged by two.
-	# `sea-summon` added `set_summon_aim` to `field_view` (45 -> 46) and five names to `hud_view`
-	# (12 -> 17: `set_armed`, `_slot_colour`, `_paint_slot_box`, `_paint_slot_digit`,
-	# `_paint_slot_bar`), three of which are leaves (3 -> 6).
-	# ⚠⚠ **BOTH totals were re-derived from the five per-file tables and NOT nudged, and doing it
-	# caught the plan.** `sea-summon`'s own plan said hud_view held 13 names and that the total would
-	# land on 132; the table has held **12** since the speed chips died, so the answer is **131**. A
-	# literal that moves by whatever the last edit happened to be is a literal nobody re-derives — and
-	# this table has already been nudged once in this repo.
-	# ⚠⚠ **Round 4 of `sea-summon` DELETED the drag**, and `field_view` lost three names with it
-	# (46 -> 43): `set_drag`, `_paint_dock` (the harbour marker) and `idle_soldier_rect`. One of the
-	# three was a LEAF, so the leaf count moves too (34 -> 33) — the first time that number has ever
-	# gone DOWN, and it is re-derived from the five per-file tables rather than decremented.
-	# Round 2 of `sea-summon` added `_chip_tint` to `hud_view` (17 -> 18) — the tint half of item 8,
-	# which had been written inline in `_chip_colour` and so reached the start button alone while
-	# `_chip_offset` already served both. Pure, so the leaf count does not move.
-	# `refit-board` stage 7's climb and flash added `_stat_shown`, `note_fitted` and `_cell_fill` to
-	# `refit_view` (43 -> 46), all three pure, and the card reveal stagger added `_reveal_alpha_of` to
-	# `reward_view` (21 -> 22), also pure. The total is re-derived by hand from the seven tables, not
-	# nudged by four.
-	# ⚠ **Neither new screen had a scene wash — the verify-run pass on this round measured two
-	# captures 0.4s apart byte-identical on the refit screen.** Both got `map_view`'s own
-	# `_paint_fade` shape: `reward_view` added the leaf alone (22 -> 23, 5 -> 6 leaves), riding its
-	# existing `_reveal_age`; `refit_view` had no reveal clock of its own to piggyback on, so
-	# `_reveal_age` (a var, not a function — does not move this table) and `_paint_fade` both landed
-	# there (46 -> 47, 12 -> 13 leaves). The same pass found the refit screen's step one had a
-	# pressable strip and no line of text saying so — `_paint_hint` added the same round (47 -> 48,
-	# 13 -> 14 leaves), the reward screen's own `_paint_hint` shape.
-	# ⚠ **44 -> 46**: the shadow added `_paint_shadow` (the leaf) and `_shadow_points` (the ellipse it
-	# is handed), the same leaf-plus-pure-shape pair every other drawn thing in this file uses.
-	# ⚠ **43 -> 44**: the wolf added exactly one name, `_beast_rect` — the pure rectangle the picture
-	# goes in. **No new leaf**: the texture went into `_paint_body`'s own arguments so that every net
-	# already measuring the ally kept measuring it. Re-derived by hand, not trusted for having moved
-	# by the number expected.
-	# ⚠ **23 -> 31 in `reward_view`** (티켓 12): five pure names (`_load_item_art` ·
-	# `_deal_offset_of` · `_pulse_of` · `_art_rect` · `_burst_points`) and three leaves
-	# (`_paint_card_art` · `_paint_rarity_frame` · `_paint_legendary_burst`). Both totals re-derived
-	# from the seven per-file tables, not nudged by eight and three.
-	# ⚠⚠ **BOTH totals were re-derived from the seven per-file tables for the 3D field** (ticket 09,
-	# step 2), and three files moved at once: `field_view` was re-censused from scratch against the
-	# 3D file — **46 -> 91 names and 13 -> 0 leaves**, because the engine draws everything the canvas
-	# used to; `hud_view` lost `_paint_timer` with the deleted countdown (18 -> 17, 6 -> 5); and
-	# `refit_view` renamed four leaves for the equipment re-cut (part/species -> name/effect, counts
-	# unchanged).
-	# ⚠ **48 -> 50 in `refit_view`** (티켓 11): the tag aggregate added `_paint_tag_row` (the leaf,
-	# 14 -> 15) and `_tag_state_of` (its pure reader). Both totals re-derived from the seven per-file
-	# tables, not nudged by two: 91 + 17 + 21 + 18 + 29 + 31 + 50 and 0 + 5 + 4 + 4 + 7 + 9 + 15,
-	# summed by hand.
-	# ⚠ 91 -> 92 in `field_view` (step 4): `_paint_boat_routes`, the caller `_route_ahead` lost in the
-	# 3D move. 0 draws — the route is fx-buffer geometry — so the leaf total does not move.
-	# ⚠ 93 -> 97 in `field_view` (2026-08-25, the press fix and the placed boat's picture):
-	# `screen_to_terrain_px` and the two forwards `world_to_screen_px` / `tile_to_screen_px`, plus
-	# `_paint_placed_boats`. All four are pure arithmetic or fx-buffer geometry and draw nothing, so
-	# the leaf total does not move. Both totals re-derived from the seven per-file tables —
-	# 97 + 17 + 21 + 18 + 29 + 31 + 50 — and not nudged by four.
-	# ⚠ 97 -> 99 in `field_view` (2026-08-25, 티켓 19's tiers): `_tier_level`, which asks the SIM for a
-	# tile's level rather than parsing the tier board a second time, and `_tiles_join`, which ANDs the
-	# level gap onto the kind rule `_joins` already answered. Both are pure arithmetic over the mesh
-	# build and draw nothing, so the leaf total does not move. Re-derived from the seven per-file
-	# tables — 99 + 17 + 21 + 18 + 29 + 31 + 50 — and not nudged by two.
-	# ⚠ 99 -> 100 in `field_view` (2026-08-25): `_idle_offset`, what a body does when it CANNOT
-	# move. 0 draws — it is a position offset like the lunge and the knock beside it.
-	# ⚠ 100 -> 99 in `field_view` (2026-08-25): `_shake_offset` went with the screen shake, which the
-	# user turned down. `net_camera` holds the check that it and its constants are gone.
-	# ⚠ 50 -> 52 in `refit_view` (2026-08-25, 티켓 23): the body preview stopped drawing a rounded
-	# square and started drawing the island's own picture. `_paint_body` and `_rounded_square` went,
-	# `_paint_beast` (1 draw) and three readers came.
-	# ⚠ 21 -> 13 in `panel_view` (2026-08-25): the beak reward is deleted, and the roster it asked the
-	# player to click went with it — `is_reward` · `roster_ids` · `roster_rect_of` · `soldier_id_at` ·
-	# `note_beak` · `_entry_bg` · `_paint_roster_entry` · `_entry_text`. The band and the button stay.
-	# ⚠ 99 -> 103 in `field_view` (2026-08-25, 티켓 26): the wolf's frame strips — `_load_beast_anim`
-	# loads them, `_anim_strip` and `_anim_sec` read the table, `_body_tex` picks the frame. All four
-	# are lookups feeding `_put_body`'s existing texture argument, so no new leaf and the leaf total
-	# does not move. Re-derived from the seven per-file tables — 103 + 17 + 13 + 18 + 29 + 31 + 52 —
-	# and not nudged by four.
-	t.eq(total_funcs, 263, "일곱 파일의 함수는 모두 263개다 (103 + 17 + 13 + 18 + 29 + 31 + 52)")
-	# ⚠ 4 -> 3 in `panel_view` (2026-08-25): `_paint_roster_entry` went with the beak reward.
-	t.eq(total_leaves, 43, "그중 draw 를 실제로 부르는 잎은 43개다 (0 + 5 + 3 + 4 + 7 + 9 + 15) — 필드는 0이고, 0이 주장이다")
 
 	# -- 3b. the array leaves hand their array WHOLE to one native call -----------------------------
 	# ⚠⚠ **THIS SECTION EXISTS BECAUSE THE COUNT ABOVE CANNOT SEE THE DIFFERENCE, AND THAT WAS
@@ -647,7 +550,7 @@ func run(t) -> void:
 		if wides.size() > 0:
 			wide_bad.append("%s %s" % [path.get_file(), str(wides)])
 	t.ok(scanned >= 8, "look.gd 를 뺀 나머지 %d개를 실제로 훑었다" % scanned)
-	t.eq(wide_scanned, 8, "그중 뷰 일곱과 셸 하나, 여덟을 넓힌 목록으로 다시 훑었다 — 셸이 빠지면 hold 초가 game.gd 에 박힌다")
+	t.eq(wide_scanned, 7, "그중 뷰 여섯과 셸 하나, 일곱을 넓힌 목록으로 다시 훑었다 — 셸이 빠지면 hold 초가 game.gd 에 박힌다")
 	t.eq(colour_bad.size(), 0, "look.gd 밖에 Color( 도 Color. 도 없다 %s" % str(colour_bad))
 	t.eq(pixel_bad.size(), 0, "look.gd 밖에 픽셀 이름에 박힌 리터럴이 없다 %s" % str(pixel_bad))
 	t.eq(wide_bad.size(), 0, "뷰와 셸에는 시간·비율 이름에 박힌 리터럴도 없다 %s" % str(wide_bad))

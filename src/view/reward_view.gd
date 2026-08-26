@@ -61,13 +61,13 @@ func bind(r: Run) -> void:
 	queue_redraw()
 
 
-## 0..1, how far card `k` has faded in. `k` cards apart, `MAP_REVEAL_STEP_SEC` apart, each taking
-## `MAP_NODE_FADE_SEC` — `map_view._reveal_alpha_of`'s own constants, reused rather than redeclared,
+## 0..1, how far card `k` has faded in. `k` cards apart, `REVEAL_STEP_SEC` apart, each taking
+## `REVEAL_FADE_SEC` — `map_view._reveal_alpha_of`'s own constants, reused rather than redeclared,
 ## for the reason `look.gd`'s own header on that pair gives: the map already answered "how fast does
 ## one thing among several fade in" and a second answer here would be the same fact chosen twice.
 func _reveal_alpha_of(k: int) -> float:
-	var start := float(k) * Look.MAP_REVEAL_STEP_SEC
-	return clampf((_reveal_age - start) / Look.MAP_NODE_FADE_SEC, 0.0, 1.0)
+	var start := float(k) * Look.REVEAL_STEP_SEC
+	return clampf((_reveal_age - start) / Look.REVEAL_FADE_SEC, 0.0, 1.0)
 
 
 func card_rect_of(k: int) -> Rect2:
@@ -194,7 +194,7 @@ func _burst_points(k: int) -> PackedVector2Array:
 	var box := _card_box(k)
 	box.position += _deal_offset_of(k)
 	var centre := box.get_center()
-	var grow := clampf((_reveal_age - float(k) * Look.MAP_REVEAL_STEP_SEC) / Look.LEGEND_BURST_SEC,
+	var grow := clampf((_reveal_age - float(k) * Look.REVEAL_STEP_SEC) / Look.LEGEND_BURST_SEC,
 		0.0, 1.0)
 	var out := PackedVector2Array()
 	for i in Look.LEGEND_RAY_COUNT:

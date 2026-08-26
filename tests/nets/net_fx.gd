@@ -59,8 +59,8 @@ func run(t) -> void:
 func _attack_event_shape(t) -> void:
 	var army := _army_of([Rules.CROW, Rules.WOLF])
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
-		_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 9),   # idle: 8.9 tiles from the fight, outside detect 6
-		_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5),   # the one that swings
+		_spawn(ARENA_W, Rules.WOLF, 20, 9),   # idle: 8.9 tiles from the fight, outside detect 6
+		_spawn(ARENA_W, Rules.WOLF, 13, 5),   # the one that swings
 	], 999.0)
 	_ashore(b, 0, Vector2(3, 9))               # idle: 10.8 tiles away, outside its own 5.5 reach
 	_ashore(b, 1, Vector2(12, 5))
@@ -83,22 +83,22 @@ func _attack_event_shape(t) -> void:
 	t.eq(bool(theirs["from_enemy"]), true, "둘째 사건은 적이 때린 것이다")
 	t.eq(int(theirs["from"]), 1, "공격자 id 가 그 적의 인덱스다 (1번 들소가 때렸다)")
 	t.eq(int(theirs["to"]), 1, "표적이 1번 병사다")
-	t.eq(float(theirs["dmg"]), Rules.damage_of(Rules.SHIELDBEARER), "피해가 들소의 값이다")
+	t.eq(float(theirs["dmg"]), Rules.damage_of(Rules.WOLF), "피해가 들소의 값이다")
 
 	# The event is a fact ABOUT the damage, so the damage has to be in the columns too — an event
 	# appended by a function that no longer subtracts anything would pass every check above.
-	t.eq(b.enemy_hp[1], Rules.hp_of(Rules.SHIELDBEARER) - Rules.damage_of(Rules.WOLF),
+	t.eq(b.enemy_hp[1], Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.WOLF),
 			"사건만 나온 게 아니라 적 HP 가 실제로 줄었다")
-	t.eq(army.hp[1], Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.SHIELDBEARER),
+	t.eq(army.hp[1], Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.WOLF),
 			"병사 HP 도 실제로 줄었다")
-	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.SHIELDBEARER), "구경만 한 적은 안 맞았다")
+	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.WOLF), "구경만 한 적은 안 맞았다")
 	t.eq(army.hp[0], Rules.hp_of(Rules.CROW), "구경만 한 병사도 안 맞았다")
 
 	# A ranged blow is the same event with a non-zero range on the ATTACKER's type — that is the only
 	# thing telling item 1 (tracer) from item 2 (lunge), so the view has to be able to reach it.
 	var shooter := _army_of([Rules.CROW])
 	var r := _battle_of(_open(ARENA_W, ARENA_H), shooter,
-			[_spawn(ARENA_W, Rules.SHIELDBEARER, 12, 5)], 999.0)
+			[_spawn(ARENA_W, Rules.WOLF, 12, 5)], 999.0)
 	_ashore(r, 0, Vector2(8, 5))
 	r.begin_frame()
 	r.step(TICK_ONE)
@@ -117,9 +117,9 @@ func _attack_event_shape(t) -> void:
 func _splash_carries_only_real_victims(t) -> void:
 	var army := _army_of([Rules.CROW])
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
-		_spawn(ARENA_W, Rules.SHIELDBEARER, 12, 5),   # primary, 4.0 from the soldier
-		_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5),   # 1.0 from the primary — inside area 1.0
-		_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 6),   # 1.41421 from the primary — outside it
+		_spawn(ARENA_W, Rules.WOLF, 12, 5),   # primary, 4.0 from the soldier
+		_spawn(ARENA_W, Rules.WOLF, 13, 5),   # 1.0 from the primary — inside area 1.0
+		_spawn(ARENA_W, Rules.WOLF, 13, 6),   # 1.41421 from the primary — outside it
 	], 999.0)
 	_ashore(b, 0, Vector2(8, 5))
 	b.begin_frame()
@@ -136,16 +136,16 @@ func _splash_carries_only_real_victims(t) -> void:
 	# tick of drip on top of the blow. What this row is about is that the splashed sibling took the
 	# blow at all, and the row below (an untouched sibling at FULL hp) is the ceiling that keeps the
 	# `<=` from being satisfied by anything.
-	t.ok(b.enemy_hp[1] <= Rules.hp_of(Rules.SHIELDBEARER) - Rules.damage_of(Rules.CROW) + Rules.EPS,
+	t.ok(b.enemy_hp[1] <= Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.CROW) + Rules.EPS,
 			"splash 에 실린 그 적이 실제로 맞았다")
-	t.eq(b.enemy_hp[2], Rules.hp_of(Rules.SHIELDBEARER), "안 실린 형제는 안 맞았다")
+	t.eq(b.enemy_hp[2], Rules.hp_of(Rules.WOLF), "안 실린 형제는 안 맞았다")
 
 	# The same fixture with the sibling already dead. It is still inside the radius and must not be
 	# in `splash` — the check that separates "who took it" from "who was standing there".
 	var again := _army_of([Rules.CROW])
 	var c := _battle_of(_open(ARENA_W, ARENA_H), again, [
-		_spawn(ARENA_W, Rules.SHIELDBEARER, 12, 5),
-		_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5),
+		_spawn(ARENA_W, Rules.WOLF, 12, 5),
+		_spawn(ARENA_W, Rules.WOLF, 13, 5),
 	], 999.0)
 	_ashore(c, 0, Vector2(8, 5))
 	c.enemy_alive[1] = 0
@@ -156,7 +156,7 @@ func _splash_carries_only_real_victims(t) -> void:
 	t.eq(PackedInt32Array(dead_ev["splash"]).size(), 0, "반경 안이어도 이미 죽은 놈은 splash 에 안 실린다")
 	# ⚠ `<=` for the reason the row above carries: the crow's own bleed takes its first sip in the
 	# same sub-step as the blow.
-	t.ok(c.enemy_hp[0] <= Rules.hp_of(Rules.SHIELDBEARER) - Rules.damage_of(Rules.CROW) + Rules.EPS,
+	t.ok(c.enemy_hp[0] <= Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.CROW) + Rules.EPS,
 			"그래도 주 표적은 맞았다 — 빈 splash 가 '아무 일도 없었다'가 아니다")
 
 
@@ -169,8 +169,8 @@ func _death_events_come_after_the_attacks_that_caused_them(t) -> void:
 	var army := _army_of([Rules.WOLF])
 	army.hp[0] = 1.0
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
-		_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5),
-		_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 9),
+		_spawn(ARENA_W, Rules.WOLF, 13, 5),
+		_spawn(ARENA_W, Rules.WOLF, 20, 9),
 	], 999.0)
 	b.enemy_hp[0] = Rules.damage_of(Rules.WOLF)
 	_ashore(b, 0, Vector2(12, 5))
@@ -250,7 +250,7 @@ func _land_events(t) -> void:
 
 func _begin_frame_clears(t) -> void:
 	var army := _army_of([Rules.WOLF])
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5)], 999.0)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 13, 5)], 999.0)
 	_ashore(b, 0, Vector2(12, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -369,14 +369,14 @@ func _lion_declares_before_it_lands(t) -> void:
 	# lion's silence above could just as well be "the enemy never attacked at all".
 	var bison_army := _army_of([Rules.WOLF])
 	var bb := _battle_of(_open(ARENA_W, ARENA_H), bison_army,
-			[_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5)], 999.0)
+			[_spawn(ARENA_W, Rules.WOLF, 13, 5)], 999.0)
 	_ashore(bb, 0, Vector2(12, 5))
 	bb.begin_frame()
 	bb.step(TICK_ONE)
-	t.eq(bison_army.hp[0], Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.SHIELDBEARER),
+	t.eq(bison_army.hp[0], Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.WOLF),
 			"예고가 없는 들소는 첫 프레임에 그냥 때린다")
 	t.eq(bb.enemy_windup[0], 0.0, "들소는 예고를 안 건다")
-	t.eq(bb._windup_of(Rules.SHIELDBEARER), 0.0, "_windup_of 는 사자 말고 전부 0.0 이다")
+	t.eq(bb._windup_of(Rules.WOLF), 0.0, "_windup_of 는 사자 말고 전부 0.0 이다")
 	t.eq(bb._windup_of(Rules.LION), Rules.LION_WINDUP_SEC, "그리고 사자만 LION_WINDUP_SEC 이다")
 
 
@@ -433,7 +433,7 @@ func _windup_is_thrown_away_whole(t) -> void:
 func _events_do_not_move_the_sim(t) -> void:
 	var army := _army_of([Rules.WOLF, Rules.CROW])
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
-		_spawn(ARENA_W, Rules.SHIELDBEARER, 13, 5),
+		_spawn(ARENA_W, Rules.WOLF, 13, 5),
 		_spawn(ARENA_W, Rules.LION, 13, 7),
 	], 999.0)
 	_ashore(b, 0, Vector2(12, 5))
@@ -496,7 +496,7 @@ func _melee(frames: int, clear_each_frame: bool) -> Dictionary:
 	var army := _army_of(types)
 	var spawns := []
 	for k in 6:
-		spawns.append(_spawn(ARENA_W, Rules.SHIELDBEARER, 15 + k % 3, 4 + k / 3))
+		spawns.append(_spawn(ARENA_W, Rules.WOLF, 15 + k % 3, 4 + k / 3))
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, spawns, 9999.0)
 	for i in 13:
 		_ashore(b, i, Vector2(4 + i % 5, 3 + i / 5))

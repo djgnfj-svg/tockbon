@@ -263,8 +263,8 @@ func _a_tier_boundary_is_a_wall(t) -> void:
 ## bounded here so that raising the amplitude, lengthening a map, or shortening a tier reddens rather
 ## than quietly turning the plateau into another hill.
 func _the_hills_never_swallow_the_tier(t) -> void:
-	var rows := Islands.rows_of(4)
-	var tiers := Islands.tiers_of(4)
+	var rows := Islands.rows()
+	var tiers := Islands.tiers()
 	var g := Grid.new()
 	g.load_rows(rows, tiers)
 	var b := Battle.new()
@@ -396,7 +396,7 @@ func _no_body_is_taller_than_the_wall_behind_it(t) -> void:
 ## and the size the user rejected twice as too small.
 func _the_first_island_opens_with_room_around_it(t) -> void:
 	var g := Grid.new()
-	Islands.load_into(g, 4)
+	Islands.load_into(g)
 	var zoom := Look.survey_zoom_of(g.w, g.h)
 	t.eq(Vector2i(g.w, g.h), Vector2i(26, 20), "첫 노드가 여는 섬은 26 x 20 이다 (자가 점검)")
 	t.ok(zoom > Look.ZOOM_MIN + 0.01 and zoom < Look.ZOOM_MAX - 0.01,
@@ -440,7 +440,7 @@ func _every_body_effect_is_sized_off_the_picture(t) -> void:
 	# is measured as geometry in the air buffer.
 	var rows := _open(ARENA_W, ARENA_H)
 	var army := _army_of([Rules.WOLF])
-	var b := _battle_of(rows, army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 12, 6)], 999.0)
+	var b := _battle_of(rows, army, [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
 	_ashore(b, 0, Vector2(11.0, 6.0))
 	var fv := _view_of(b, rows)
 	var swung := false
@@ -465,7 +465,7 @@ func _every_body_effect_is_sized_off_the_picture(t) -> void:
 	# buffer is shared, a live fight keeps sparks and tracers in it, and 「the widest thing in the
 	# air buffer」 is not 「the halo」. An enemy alone on an empty arena puts exactly one disc there.
 	var quiet := _battle_of(rows, _army_of([]),
-		[_spawn(ARENA_W, Rules.SHIELDBEARER, 12, 6)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
 	var qv := _view_of(quiet, rows)
 	qv._process(1.0 / 60.0)
 	t.ok(qv._a_v.size() == 0, "싸움이 없으면 공중 버퍼가 비어 있다 (자가 점검)")
@@ -474,7 +474,7 @@ func _every_body_effect_is_sized_off_the_picture(t) -> void:
 	t.ok(qv._a_v.size() > 0, "맞은 표시 고리가 공중 버퍼에 실렸다 (자가 점검)")
 	var centre := _xz_centre_v3(qv._a_v)
 	var halo_px := _max_dist_v3(qv._a_v, centre) * Look.TILE_PX
-	var foe_half := Look.sprite_half_px(Rules.SHIELDBEARER)
+	var foe_half := Look.sprite_half_px(Rules.WOLF)
 	t.ok(halo_px > foe_half,
 		"고리 반지름 %.1fpx 가 제 그림 반폭 %.1fpx 보다 크다 — 안 그러면 몸 밑에 깔려 안 보인다"
 			% [halo_px, foe_half])
@@ -497,7 +497,7 @@ func _every_body_effect_is_sized_off_the_picture(t) -> void:
 	# ⚠ **And on the glass, at the zoom the first island actually opens at** — a ratio of the picture
 	# is worth nothing if the picture itself is 43 px. The 2.0 px snap floor is this repo's own.
 	var g := Grid.new()
-	Islands.load_into(g, 4)
+	Islands.load_into(g)
 	var zoom := Look.survey_zoom_of(g.w, g.h)
 	var wolf_knock := Look.HIT_KNOCK_RATIO * Look.sprite_half_px(Rules.WOLF) * zoom
 	var wolf_lunge := Look.LUNGE_PUSH_RATIO * Look.sprite_half_px(Rules.WOLF) * zoom
@@ -516,7 +516,7 @@ func _every_body_effect_is_sized_off_the_picture(t) -> void:
 ## cannot move is not a frozen picture. Both ends: silent before the threshold, moving after it.
 func _a_body_that_cannot_move_still_does_something(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.SHIELDBEARER, 12, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
 	var fv := _view_of(b, rows)
 	fv._process(1.0 / 60.0)
 	t.ok(fv._body.has("e0"), "몸 항목이 생겼다 (자가 점검)")
@@ -529,7 +529,7 @@ func _a_body_that_cannot_move_still_does_something(t) -> void:
 	# Past the threshold, and far enough past it that the sine is nowhere near its own zero.
 	fv._process(Look.IDLE_AFTER_SEC + Look.IDLE_PERIOD_SEC * 0.25)
 	var sway := fv._idle_offset("e0").length()
-	var cap := Look.IDLE_SWAY_RATIO * Look.sprite_half_px(Rules.SHIELDBEARER)
+	var cap := Look.IDLE_SWAY_RATIO * Look.sprite_half_px(Rules.WOLF)
 	t.ok(sway > 0.0, "문턱을 넘으면 흔들린다 (%.2f px)" % sway)
 	t.ok(sway <= cap + 0.001,
 		"그리고 제 그림 반폭의 %.0f%% 를 안 넘는다 (상한 %.2f px) — 한 대 맞은 것처럼 보이면 안 된다"
@@ -643,7 +643,7 @@ func _the_refusal_mark(t) -> void:
 ## 120 px cut is ONE piece = **6 vertices**, wearing `COL_TARGET_LINE`'s deliberate 0.12 alpha.
 func _the_intent_line(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.SHIELDBEARER, 14, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.WOLF, 14, 6)], 999.0)
 	_ashore(b, 0, Vector2(12.0, 6.0))
 	b.enemy_target[0] = 0
 	var fv := _view_of(b, rows)
@@ -751,7 +751,7 @@ func _the_death_burst_stands_in_the_camera_plane(t) -> void:
 ## **144 vertices**, `COL_HIT_HALO` with the flash's remaining fraction on its alpha.
 func _the_hit_halo(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.SHIELDBEARER, 12, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
 	t.eq(fv._a_v.size(), 0, "맞은 적 없는 프레임에는 헤일로가 없다 (바닥 — 무조건 그리는 잎은 여기서 갈린다)")
@@ -771,7 +771,7 @@ func _the_hit_halo(t) -> void:
 ## SAME body against its own resting frame, so the row is the difference the effect makes.
 func _body_effects_ride_the_pooled_fields(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.SHIELDBEARER, 12, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
 	var fv := _view_of(b, rows)
 	fv._body["e0"] = _body_entry(b.enemy_pos[0])
 	fv._process(0.0)
@@ -809,7 +809,7 @@ func _body_effects_ride_the_pooled_fields(t) -> void:
 	# reaching the sprite and not a constant this file could read for itself.
 	e0["knock"] = Look.HIT_KNOCK_SEC * 0.5
 	e0["knock_dir"] = Vector2(0.0, 1.0)
-	e0["knock_px"] = Look.HIT_KNOCK_RATIO * Look.sprite_half_px(Rules.SHIELDBEARER)
+	e0["knock_px"] = Look.HIT_KNOCK_RATIO * Look.sprite_half_px(Rules.WOLF)
 	fv._process(0.0)
 	t.ok(absf(_body_sprite(fv).position.z - (rest_pos.z + 3.08 / 40.0)) < 0.001,
 		"넉백 반창에서 몸이 정확히 3.08px 뒤로 밀려 있다 — 옛 1.5px 는 그림의 3%%였다")
@@ -834,7 +834,7 @@ func _the_boat_route_shrinks_with_the_sim(t) -> void:
 	# ⚠ One idle enemy far inland, or there is nothing to win against: a battle with zero enemies
 	# latches WON on its first step and the boat freezes mid-bay — measured, 4000 sub-steps of leg 0.
 	var b := _planning_battle_of(rows, _army_of([Rules.WOLF]),
-		[_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 9)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 20, 9)], 999.0)
 	var fv := _view_of(b, rows)
 	# The sendable tile FARTHEST from the harbour, so the route holds interior waypoints and the
 	# crossing lasts long enough for `leg` to advance while the boat is still at sea.
@@ -1142,7 +1142,7 @@ func _the_legs_run_on_time_not_on_distance(t) -> void:
 func _the_bite_rides_the_blow_that_lunges(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
 	var b := _battle_of(rows, _army_of([Rules.WOLF]),
-		[_spawn(ARENA_W, Rules.SHIELDBEARER, 12, 6)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
 	_ashore(b, 0, Vector2(11.0, 6.0))
 	var fv := _view_of(b, rows)
 	var walk := fv._anim_strip(Rules.WOLF, Look.Anim.WALK, true)
@@ -1208,9 +1208,9 @@ func _the_bite_rides_the_blow_that_lunges(t) -> void:
 		"그리고 걷기 띠로 돌아간다 — 안 돌아가면 입을 벌린 채 남은 싸움을 한다")
 
 	# ⚠ The other eight, through the SAME call: the enemy standing right there has no strip at all.
-	t.eq(fv._body_tex("e0", Rules.SHIELDBEARER, true), fv._beast_tex(Rules.SHIELDBEARER, true),
+	t.eq(fv._body_tex("e0", Rules.WOLF, true), fv._beast_tex(Rules.WOLF, true),
 		"띠 없는 종은 같은 호출로 서 있는 그림을 받는다")
-	t.ok(fv._body_tex("e0", Rules.SHIELDBEARER, true) != null, "그리고 그 그림은 비어 있지 않다")
+	t.ok(fv._body_tex("e0", Rules.WOLF, true) != null, "그리고 그 그림은 비어 있지 않다")
 
 
 # == 티켓 15: the bleed reaches the screen ============================================================
@@ -1231,8 +1231,8 @@ func _the_bite_rides_the_blow_that_lunges(t) -> void:
 func _a_bleeding_body_is_a_different_colour(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
 	var b := _battle_of(rows, _army_of([Rules.CROW]), [
-		_spawn(ARENA_W, Rules.SHIELDBEARER, 6, 5),    # 0 — bitten
-		_spawn(ARENA_W, Rules.SHIELDBEARER, 18, 9),   # 1 — the control sibling, far away
+		_spawn(ARENA_W, Rules.WOLF, 6, 5),    # 0 — bitten
+		_spawn(ARENA_W, Rules.WOLF, 18, 9),   # 1 — the control sibling, far away
 	], 999.0)
 	_ashore(b, 0, Vector2(3, 5))
 	b.begin_frame()

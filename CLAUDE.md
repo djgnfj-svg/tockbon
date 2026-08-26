@@ -1,14 +1,26 @@
-# tockbon — a **beast roguelike**, and `src/` runs
+# tockbon — **one island, held against the beasts**, and `src/` runs
 
-**Ten beasts take one island at a time from the humans who hold it.** You start as a wolf, the enemy is
-human, the first of them cavemen, and **there is no eating for parts** — the art could not carry it.
-**Hands do not move during a fight**: where you land decides who you fight, and that is the decision.
+**A human company holds one island and builds it up. The beasts come by boat.** ⚠⚠ **The sides were
+swapped 2026-08-26 by the user** — you were the beasts taking eight islands, and both halves of that
+turned over at once: **the island is ONE** (drawing eight was the thing the project could not afford)
+and **the beasts are now what lands on your coast.** The art bill of the swap is **zero**: the faceless
+low-poly spearman, archer and shieldbearer that were the enemy become the player, and the five beasts
+stay exactly where they are. **A timer brings a boss**, and **leaving the island to raid another** is
+how more islands are taken. **There is still no eating for parts** — the art could not carry it.
 
-**The frame, decided 2026-08-22**: a **demo in December**, not a release · **roguelike** · **funding**
-after the demo. **Whether December is also a release is decided the day the demo stands.**
+⚠ **`Hands do not move during a fight` is dead** (2026-08-25, the user, after playing Bad North).
+**Hands move**: squads are commanded on the board, at any time.
+
+**The frame, decided 2026-08-26** — ⚠⚠ **this overturns the 2026-08-22 frame, and the user said it in
+those words**: *"십이 월의 출시가 목표야. 빡세게 할 거야, 빡세게. 이게 메인이야."* ⇒ **December is a
+RELEASE, not a demo** · **roguelike** · **funding after it** · **raiding other islands is IN, not
+deferred.** ⚠ **A release carries what a demo did not** — saves, an options screen, sound, a store page
+and its builds, language.
 
 **The code runs and the game launches. There is no GDD.** ⚠ **What is being made is read out of
-`.scratch/cell-hook/`** — a map and nine tickets. **Read the map before deciding what this repo is.**
+`.scratch/island-hold/`** — opened 2026-08-26 when the sides swapped. ⚠⚠ **`.scratch/cell-hook/` is the
+map before the swap and is NOT deleted**: most of what it decided survives, and its map re-judges its own
+eleven open tickets one by one. **Read both maps before deciding what this repo is.**
 
 ⚠⚠ **`main` is not the whole repo.** Two sessions collided on it once and one rebuilt the docs around a
 game folded on another branch. ⇒ **Run `git ls-remote --heads origin` before concluding anything.**

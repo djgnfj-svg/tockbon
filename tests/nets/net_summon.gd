@@ -194,7 +194,7 @@ func _a_lake_no_boat_can_leave(t) -> void:
 ## that the rule does not fall over at three times the width.
 func _the_long_map_band(t) -> void:
 	var g := Grid.new()
-	g.load_rows(Islands.rows_of(Islands.LONG_ISLAND_INDEX))
+	g.load_rows(Islands.rows())
 	t.eq(g.w, 144, "긴 지도가 144칸 폭으로 실렸다 (자가 점검)")
 	var band := _band_tiles(g)
 	t.eq(band.size(), 1038, "긴 지도의 띠가 1038칸이다 (옛 값 1128 — 고리가 지도 크기에 비례하므로 긴 섬도 끝까지 닿는다)")
@@ -530,7 +530,7 @@ func _the_boat_has_no_harbour(t) -> void:
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns_of(0), Islands.time_limit_of(0))
+	b.setup(g, army, Islands.spawns(), Islands.time_limit())
 
 	var beach := int(_sendable_union(g)[0])
 	var sent := b.send(0, beach)
@@ -578,7 +578,7 @@ func _most_hurt_first(t) -> void:
 	army.hp[0] = 5.0
 	army.hp[1] = 3.0
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns_of(0), Islands.time_limit_of(0))
+	b.setup(g, army, Islands.spawns(), Islands.time_limit())
 	t.ok(army.hp[2] > army.hp[0] and army.hp[0] > army.hp[1],
 		"HP 순서와 아이디 순서가 실제로 어긋난다 (자가 점검)")
 
@@ -610,7 +610,7 @@ func _a_pinned_hold_does_not_grow_the_army(t) -> void:
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns_of(0), Islands.time_limit_of(0))
+	b.setup(g, army, Islands.spawns(), Islands.time_limit())
 
 	var band := _band_tiles(g)
 	var placed := 0
@@ -721,7 +721,7 @@ func _a_summoned_boat_goes_home_to_the_sea(t) -> void:
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns_of(0), Islands.time_limit_of(0))
+	b.setup(g, army, Islands.spawns(), Islands.time_limit())
 
 	var pressed := int(_band_tiles(g)[0])
 	t.ok(b.summon(0, pressed) >= 0, "바다에서 한 척 띄웠다 (자가 점검)")
@@ -755,7 +755,7 @@ func _a_mixed_plan_unloads_on_two_tiles(t) -> void:
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns_of(0), Islands.time_limit_of(0))
+	b.setup(g, army, Islands.spawns(), Islands.time_limit())
 
 	# Both aimed at ONE landing, which is the only arrangement that tests the spreading at all.
 	var pressed := int(_band_tiles(g)[0])
@@ -861,14 +861,14 @@ func _the_unit_table(t) -> void:
 	# copy of nothing — the NAMES are what the table stores — but its LENGTH is, so the length is
 	# pinned against the table: a row added without a pair here reddens this line before anything else.
 	var named := [
-		[Rules.SQUIRREL, "SQUIRREL"],
+		[Rules.SWORDSMAN, "SQUIRREL"],
 		[Rules.WOLF, "WOLF"],
-		[Rules.COW, "COW"],
+		[Rules.SWORDSMAN, "COW"],
 		[Rules.BEAR, "BEAR"],
 		[Rules.CROW, "CROW"],
-		[Rules.SPEARMAN, "SPEARMAN"],
-		[Rules.ARCHER, "ARCHER"],
-		[Rules.SHIELDBEARER, "SHIELDBEARER"],
+		[Rules.WOLF, "SPEARMAN"],
+		[Rules.CROW, "ARCHER"],
+		[Rules.WOLF, "SHIELDBEARER"],
 		[Rules.LION, "LION"],
 	]
 	t.eq(named.size(), Rules.UNITS.size(),
@@ -910,8 +910,8 @@ func _the_unit_table(t) -> void:
 		# row                   hp    dmg  period range  area  speed  detect
 		[Rules.WOLF,           14.0,  2.0,  1.0,   0.0,  0.0,  4.0,  Rules.NO_DETECT],
 		[Rules.CROW,            8.0,  1.5,  1.0,   4.0,  1.0,  4.0,  Rules.NO_DETECT],
-		[Rules.ARCHER,          6.0,  1.5,  1.0,   3.0,  0.0,  6.0,  12.0],
-		[Rules.SHIELDBEARER,   20.0,  3.0,  2.0,   0.0,  0.0,  2.5,  6.0],
+		[Rules.CROW,          6.0,  1.5,  1.0,   3.0,  0.0,  6.0,  12.0],
+		[Rules.WOLF,   20.0,  3.0,  2.0,   0.0,  0.0,  2.5,  6.0],
 	]
 	for raw2 in moved:
 		var row: Array = raw2
@@ -930,7 +930,7 @@ func _the_unit_table(t) -> void:
 
 func _island(i: int) -> Grid:
 	var g := Grid.new()
-	g.load_rows(Islands.rows_of(i))
+	g.load_rows(Islands.rows())
 	return g
 
 
@@ -944,11 +944,11 @@ func _island(i: int) -> Grid:
 ## all come out of ONE number and cannot name different islands.
 func _fresh(i: int) -> Battle:
 	var grid := Grid.new()
-	grid.load_rows(Islands.rows_of(i))
+	grid.load_rows(Islands.rows())
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
-	b.setup(grid, army, Islands.spawns_of(i), Islands.time_limit_of(i))
+	b.setup(grid, army, Islands.spawns(), Islands.time_limit())
 	return b
 
 

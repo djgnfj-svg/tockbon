@@ -548,573 +548,92 @@ func _place_camera() -> void:
 	_cam.look_at_from_position(target + back * Look.CAM_DIST_TILES, target, Vector3.UP)
 
 
-# --- the island, as a landscape ----------------------------------------------------------------------
-## ⚠⚠ **This was 5120 boxes in a `MultiMesh` for one afternoon and the user judged it: 「너무 딱딱해서
-## 재미가 없을까?」.** A box per tile gives the ground a HEIGHT and no SHAPE — every rise is a step and
-## every ramp is a stair. It is one mesh now, built from the same legend, with tile corners JOINED, so
-## a rise is a slope and a ramp really is diagonal.
-##
-## **What joins and what does not** is the whole design of this pass. A corner is averaged only across
-## tiles of the same KIND: land with land, water with water. Where two kinds meet, the corner stays put
-## on each side and a skirt drops from the higher one — which is what keeps a cliff a wall rather than
-## a helpful ramp up it, and what keeps the coast an edge instead of a beach that slides into the sea.
-##
-## ⚠ **Colours stay per tile even though heights are shared.** Every tile owns its own vertices, so the
-## corner it shares with its neighbour is at the same HEIGHT (no crack) and its own COLOUR (no smear).
-## Averaging colour as well would turn the legend into a gradient, and the legend is how the player
-## reads what is walkable.
-##
-## ⚠ **Flat shading, deliberately.** Every facet keeps its own plane, so a slope reads as a slope and a
-## step reads as a step. Smoothed normals would round the two into each other and the ground would stop
-## saying which of them it is.
-
-enum Kind { WATER, HOLE, CLIFF, RAMP, LAND }
+# --- the island: DELETED 2026-08-26 --------------------------------------------------------------
+# ⚠⚠ **569 lines that built the terrain mesh were deleted here, on the user's instruction**
+# (***"판을 완전히 갈아엎어야 돼. 마음에 하나도 안 들어 ... 일단 다 지우자"***). What stood here was a
+# hand-rolled landscape: value noise, stepped heights, shore fades, corner wetness, swell, rim
+# darkening, skirts and wall quads — and **the user judged the picture it made, three times.**
+#
+# ⚠ **What replaces it is not written yet.** The island is going to be built by the user in the editor
+# and read by the game, so nothing here should grow back: this file's job becomes *read the board the
+# user made*, not *invent one*. **The board is blank until then, and the game says so by drawing
+# nothing.**
+#
+# ⚠ **`_ground_h` survives as arithmetic only** — bodies still have to stand at their own level's
+# height, and that is a number from `sim`, not a picture.
 
 
-## The kind a legend character belongs to. **Not the colour and not the height** — it is the question
-## "does this join to that", and it is the only thing the joining rule reads.
-##
-## ⚠ **The ramp is its own kind now** (2026-08-24, the user: 「경사로 가능함?」). It used to fall through
-## to LAND, which joined it to the field below and walled it off from the cliff above — **a doorway
-## through a cliff drawn as a step.** It is the one character whose whole job is to be a slope.
-func _kind_of(ch: String) -> int:
-	match ch:
-		"~":
-			return Kind.WATER
-		"H":
-			return Kind.WATER
-		"#":
-			return Kind.HOLE
-		"^":
-			return Kind.CLIFF
-		"/":
-			return Kind.RAMP
-		_:
-			return Kind.LAND
-
-
-## **Whether two kinds share a corner — the whole shape of the island is in this one function.**
-##
-## | pair | joins | what that draws |
-## |---|---|---|
-## | land / land | yes | the rolling hills |
-## | land / water | **yes** | **a shore that shelves into the sea instead of a wall around the island** |
-## | land / ramp, ramp / cliff | **yes** | **a real diagonal from the field up through the cliff wall** |
-## | cliff / cliff | yes | a ridge that undulates instead of a row of identical blocks |
-## | anything / hole | no | a pit stays a pit |
-## | cliff / land, cliff / water | no | **the wall stays a wall** |
-##
-## ⚠⚠ **`land / water` joining is what makes the coast look like a coast**, and it is the one row that
-## trades something away: the shoreline is no longer a hard edge, so where exactly the water starts is
-## read off the COLOUR rather than off a cliff. That is the right trade — the legend was always what
-## said where you can walk, and a wall around an entire island is not what an island looks like.
-##
-## ⚠ **`cliff / land` deliberately does NOT join**, or every cliff would grow a helpful ramp up it on
-## all four sides and the one character whose job is to be that ramp would mean nothing.
-func _joins(a: int, b: int) -> bool:
-	if a == b:
-		return a != Kind.HOLE
-	if a == Kind.HOLE or b == Kind.HOLE:
-		return false
-	if a == Kind.RAMP or b == Kind.RAMP:
-		var other := b if a == Kind.RAMP else a
-		return other == Kind.LAND or other == Kind.CLIFF
-	if a == Kind.CLIFF or b == Kind.CLIFF:
-		return false
-	return true
-
-
-## The tier level of a tile, **read off the SIM and never re-derived here** (티켓 19, decision 4). The
-## grid already parsed the tier board; a second parse in this file would be the same fact computed in
-## two places, and the two would part company the day either legend moved. Off the island — the water
-## margin the terrain loop walks — answers 0, the same silence `_char_at` keeps with `~`.
-func _tier_level(tx: int, ty: int) -> int:
+## The world height of the ground under tile `(tx, ty)`. **Level times rise, and nothing else** —
+## every fade, swell and noise term that used to bend this number went with the mesh.
+func _ground_h(tx: int, ty: int) -> float:
 	if battle == null or battle.grid == null:
-		return 0
-	return battle.grid.level_at(tx, ty)
-
-
-## **Whether two tiles' corners are welded — the KIND rule and the TIER rule, in that order.** This is
-## what makes a tier a cube: two tiles a body cannot step between do not share a corner, so
-## `_corner_h` keeps them at their own heights and `_skirt` drops a wall down the gap. **The cliff and
-## the ramp have been in exactly that relationship since 2026-08-24** — this adds a second reason for
-## two tiles to refuse each other, not a second mechanism.
-##
-##   · high / high (level gap 0) — welded, so **the plateau's top keeps rolling with the hills**
-##   · low / high (gap 2) — refused, so a wall one tier tall drops between them. That is the cube
-##   · stair / either (gap 1) — welded, so a stair is a genuine diagonal, the way a ramp is
-##
-## ⚠⚠ **It reads the LEVEL and never `_tile_h`.** The heights carry the hill noise, so a threshold on
-## them would tear the ground open wherever the noise happened to open a gap. The noise is smaller
-## than a tier today, which makes that an accident rather than a rule — and an accident that holds is
-## the shape this repo files under greens that guarantee nothing.
-##
-## ⚠ **`Rules.MAX_CLIMB_LEVELS` and not a 1 typed here**, so the wall the eye sees and the wall the
-## walker refuses cannot be two different walls.
-func _tiles_join(tx: int, ty: int, nx: int, ny: int) -> bool:
-	if not _joins(_kind_of(_char_at(tx, ty)), _kind_of(_char_at(nx, ny))):
-		return false
-	return absi(_tier_level(tx, ty) - _tier_level(nx, ny)) <= Rules.MAX_CLIMB_LEVELS
-
-
-## The legend character at a tile, with everything off the island reading as open water — the same
-## fallback the colour lookup makes, made in one place so the two cannot disagree about where the
-## island ends.
-func _char_at(tx: int, ty: int) -> String:
-	if ty < 0 or ty >= rows.size():
-		return "~"
-	var row: String = String(rows[ty])
-	if tx < 0 or tx >= row.length():
-		return "~"
-	return row[tx]
-
-
-## Smooth value noise, deterministic, in `[0, 1]`. **Written out rather than pulled from
-## `FastNoiseLite`** for one reason: this has to give the same island on every machine and every run,
-## and that reproducibility is the point (see `HILL_SEED`).
-func _noise_at(x: float, y: float, cell: float) -> float:
-	var fx := x / cell
-	var fy := y / cell
-	var ix := int(floor(fx))
-	var iy := int(floor(fy))
-	var tx := fx - float(ix)
-	var ty := fy - float(iy)
-	# Smoothstep on both axes, so the value has no creases along the lattice — a linear blend leaves a
-	# visible fold down every cell boundary and the land reads as folded paper.
-	var sx := tx * tx * (3.0 - 2.0 * tx)
-	var sy := ty * ty * (3.0 - 2.0 * ty)
-	var a := _hash_at(ix, iy)
-	var b := _hash_at(ix + 1, iy)
-	var c := _hash_at(ix, iy + 1)
-	var d := _hash_at(ix + 1, iy + 1)
-	return lerpf(lerpf(a, b, sx), lerpf(c, d, sx), sy)
-
-
-func _hash_at(x: int, y: int) -> float:
-	var n := x * 374761393 + y * 668265263 + Look.HILL_SEED
-	n = (n ^ (n >> 13)) * 1274126177
-	return float((n ^ (n >> 16)) & 0xFFFF) / 65535.0
-
-
-## How high a tile stands: its legend height, plus the swell if it is land. **Two octaves**, the second
-## finer and smaller, so a hillside has a shoulder instead of being one clean dome.
-## ⚠⚠ **MEMOISED, AND IT IS NOT AN OPTIMISATION — IT IS THE FIX FOR A GAME THAT LAGGED.**
-## `_ground_h` is four `_corner_h`, each up to four `_tile_h`, each a `_swell_at` over several octaves
-## of noise with four hash lookups apiece — **about sixty hash calls for one tile's height.** That was
-## fine while only the terrain build called it, once per island. The 3D effect layer calls it **per
-## vertex, every frame**: fourteen intent lines cut into 20 px pieces is a few thousand vertices, so a
-## quiet frame was doing on the order of a hundred thousand hash calls in GDScript. The user found it
-## the first time they played it (2026-08-24: 「이게 왜 렉이 걸리지? 이딴게임하는데?」).
-## ⚠ Both caches are cleared by `_rebuild_terrain`, which is the one place the letters can change.
-var _tile_h_cache: Dictionary = {}
-var _ground_h_cache: Dictionary = {}
-
-
-## A single int key for a tile, negative coordinates included — the water margin walks off the grid on
-## every side, so a plain `y * w + x` would collide there.
-static func _tile_key(tx: int, ty: int) -> int:
-	return (ty + 4096) * 65536 + (tx + 4096)
+		return 0.0
+	if tx < 0 or ty < 0 or tx >= battle.grid.w or ty >= battle.grid.h:
+		return 0.0
+	# ⚠ **Asked of the board file, not of `look.gd`.** The heights belong to the mesh that was built,
+	# and the mesh and the file are written by the same run of the Blender script.
+	return Islands.ground_h(int(battle.grid.level[ty * battle.grid.w + tx]))
 
 
 func _tile_h(tx: int, ty: int) -> float:
-	var key := _tile_key(tx, ty)
-	if _tile_h_cache.has(key):
-		return float(_tile_h_cache[key])
-	var value := _tile_h_uncached(tx, ty)
-	_tile_h_cache[key] = value
-	return value
+	return _ground_h(tx, ty)
 
 
-func _tile_h_uncached(tx: int, ty: int) -> float:
-	var ch := _char_at(tx, ty)
-	# The tier lifts the whole tile, legend height and hill alike, so a plateau is the low ground
-	# raised bodily rather than a second kind of terrain with its own profile. `_ground_h` reads
-	# `_corner_h` reads this, so a body standing up there comes up with it for free — that is the one
-	# consumer this ticket did not have to wire.
-	var base := Look.terrain_height_of_char(ch) + float(_tier_level(tx, ty)) * Rules.TIER_STEP_TILES
-	var kind := _kind_of(ch)
-	if kind == Kind.LAND or kind == Kind.RAMP:
-		return base + _stepped(_swell_at(tx, ty) * Look.HILL_AMP_TILES * _shore_fade(tx, ty))
-	# A cliff takes a fraction of the same swell, so a ridge is a ridge and not a row of identical
-	# blocks. It reads the SAME noise as the land under it, so the ridge follows the ground it stands on.
-	if kind == Kind.CLIFF:
-		return base + _stepped(_swell_at(tx, ty) * Look.HILL_AMP_TILES * Look.HILL_CLIFF_RATIO)
-	return base
-
-
-## The swell, **snapped to a ladder of `Look.HILL_STEP_TILES`**. ⚠⚠ **This is what keeps a flat-topped
-## tile from being a staircase.** Unsnapped, 520 tiles take 520 heights and every single tile edge is a
-## step — which is exactly the board the user threw out on 2026-08-24 (「너무 딱딱해서 재미가 없을까?」).
-## Snapped, whole runs of tiles land on the same rung: the island reads as broad flats with an
-## occasional one-step rise, and the rise is a real edge the eye can count.
-func _stepped(h: float) -> float:
-	return roundf(h / Look.HILL_STEP_TILES) * Look.HILL_STEP_TILES
-
-
-## How much of the swell a tile is allowed, by how far it is from the sea. **0 on the shore itself.**
+## The island, as ONE MESH MADE IN BLENDER.
 ##
-## ⚠⚠ **A BEACH IS WHERE A BOAT UNLOADS AND IT WAS GROWING TERRACES** (2026-08-25, the user:
-## ***"갑자기 배가 도착해야 될 곳에 층이 생겼는데, 이러면 안 되고"***). Once tile tops went flat and
-## the swell went onto a ladder, a coast tile could land a full rung above its neighbour — so the
-## island's edge, the one place the whole game arrives through, grew steps out of noise. **The tiers
-## are authored in `islands.gd` and are the only height that is supposed to mean something**; this is
-## what keeps the hills from inventing more of them where they do the most damage.
+## ⚠⚠ **Nothing here generates terrain any more, and that is the point.** 569 lines of noise, stepped
+## heights, shore fades and skirts stood here and the user rejected the picture they made six times
+## (2026-08-26). The shape is now authored — `tools/blender/island_build.py` builds it and exports
+## `assets/terrain/island.glb`, and this function's whole job is to put that file on screen.
 ##
-## ⚠ Three bands rather than a smooth falloff, because the ladder quantises anyway: shore flat, the
-## ring behind it part-way up, everything further inland at full swell.
-func _shore_fade(tx: int, ty: int) -> float:
-	if _touches_water(tx, ty):
-		return 0.0
-	for k in Grid.NEIGHBOURS.size():
-		var nx := tx + int(Grid.NEIGHBOURS[k][0])
-		var ny := ty + int(Grid.NEIGHBOURS[k][1])
-		if _touches_water(nx, ny):
-			return Look.HILL_SHORE_FADE_MID
-	return 1.0
+## ⚠ **The mesh carries its own colour in VERTEX COLOURS**, so there is no palette here either. What
+## decides how the island looks lives in the Blender script, next to the shape it belongs to.
+const ISLAND_SCENE := "res://assets/terrain/island.glb"
+
+var _island: Node3D = null
 
 
-## How wet one CORNER of a tile is, in `[0, 1]` — the share of the four tiles meeting there that are
-## sea. ⚠⚠ **This is 「한 칸 자체가 다채로워야 한다」** (2026-08-25, the user: ***"해안에서 잔디로
-## 이어지는 형태가 돼야 되는데, 지금은 그냥 잔디 덩어리"***). One flat colour per tile makes an island
-## of identical stamps; colouring the four corners separately puts the sand→grass run **inside** the
-## tile, where the shore actually is. ⚠ The tile boundary does not dissolve with it — the boundary is
-## carried by the HEIGHT step now, not by the colour.
-func _corner_wet(tx: int, ty: int, dx: int, dy: int) -> float:
-	var wet := 0
-	for oy in [dy - 1, dy]:
-		for ox in [dx - 1, dx]:
-			if _kind_of(_char_at(tx + ox, ty + oy)) == Kind.WATER:
-				wet += 1
-	return float(wet) / 4.0
+func _rebuild_terrain() -> void:
+	if _world == null:
+		return
+	if _island != null:
+		_island.queue_free()
+		_island = null
+	if battle == null:
+		return
+	var packed := load(ISLAND_SCENE) as PackedScene
+	if packed == null:
+		return
+	_island = packed.instantiate() as Node3D
+	# ⚠⚠ **The Z offset, and it is not a fudge.** glTF's Y-up conversion maps Blender +Y to Godot −Z,
+	# so an island authored over 0..h in Blender arrives over −h..0 here. The Blender script already
+	# reverses the row order (so north stays north); this slides it back into 0..h, where the sim's
+	# tile coordinates are. Without it every body walks on open water beside the island.
+	_island.position.z = float(battle.grid.h)
+	_world.add_child(_island)
+	# ⚠ **Vertex colours are OFF by default on an imported material.** Without this the island comes in
+	# as flat white and every tone the Blender script decided is thrown away silently.
+	_use_vertex_colours(_island)
 
 
-## How far up the swell this tile sits, in `[0, 1]`. **Two octaves**, the second finer and smaller, so
-## a hillside has a shoulder instead of being one clean dome.
-##
-## ⚠ **The height and the colour read the SAME number.** Computing the tint from its own noise would
-## put the light patch next to the hill instead of on it, and nothing on screen would say so.
-func _swell_at(tx: int, ty: int) -> float:
-	var big := _noise_at(float(tx), float(ty), Look.HILL_CELL_TILES)
-	var fine := _noise_at(float(tx), float(ty), Look.HILL_CELL_TILES * Look.HILL_DETAIL_RATIO)
-	return big * (1.0 - Look.HILL_DETAIL_RATIO) + fine * Look.HILL_DETAIL_RATIO
+func _use_vertex_colours(n: Node) -> void:
+	if n is MeshInstance3D:
+		var mi := n as MeshInstance3D
+		var mesh := mi.mesh
+		if mesh != null:
+			for i in mesh.get_surface_count():
+				var m := mesh.surface_get_material(i)
+				if m is StandardMaterial3D:
+					(m as StandardMaterial3D).vertex_color_use_as_albedo = true
+	for c in n.get_children():
+		_use_vertex_colours(c)
 
 
-## The height of one corner of one tile. `dx`/`dy` are 0 or 1 and name which corner.
-##
-## ⚠⚠ **A TILE IS FLAT AND IT USED TO BE AVERAGED WITH ITS NEIGHBOURS** (2026-08-25, the user:
-## ***"한 칸을 직관적으로 안 보이니까"***). Averaging the four tiles at each corner is what makes a
-## hillside smooth — and it is also what **dissolves the grid**: with every corner shared, no edge on
-## the island is a tile edge, and the eye has nothing to count. A flat top per tile puts a real corner
-## at every tile boundary, which is the whole of 「한 칸이 보인다」.
-##
-## ⚠ **This is NOT the 「칸마다 상자」 that was rejected on 2026-08-24.** What died that day was every
-## tile standing at its own *unquantised* height, so the ground was a staircase with a step on every
-## single tile. `Look.HILL_STEP_TILES` is the difference: the swell is snapped to a ladder, so
-## neighbours land on the SAME rung most of the time and the island comes out as **broad flats with an
-## occasional one-step rise** rather than as 520 different heights.
-##
-## The signature is kept — `dx`/`dy` still name a corner — because `_skirt` asks a NEIGHBOUR for the
-## two corners along a shared edge, and that has to keep meaning what it meant.
-func _corner_h(tx: int, ty: int, _dx: int, _dy: int) -> float:
-	return _tile_h(tx, ty)
-
-
-## What a body standing on this tile stands ON: the middle of its four corners, so a wolf on a hillside
-## is at the height of the ground under it rather than at the height the legend would give a box.
-func _ground_h(tx: int, ty: int) -> float:
-	var key := _tile_key(tx, ty)
-	if _ground_h_cache.has(key):
-		return float(_ground_h_cache[key])
-	var value := (_corner_h(tx, ty, 0, 0) + _corner_h(tx, ty, 1, 0)
-		+ _corner_h(tx, ty, 0, 1) + _corner_h(tx, ty, 1, 1)) * 0.25
-	_ground_h_cache[key] = value
-	return value
-
-
-## Whether any of the four tiles orthogonally next to this one is open water. **Four and not eight**:
-## a diagonal touch is a corner, and colouring a tile that only meets the sea at one point puts sand
-## where the eye sees none.
-func _touches_water(tx: int, ty: int) -> bool:
-	for d in [[0, -1], [0, 1], [-1, 0], [1, 0]]:
-		if _kind_of(_char_at(tx + int(d[0]), ty + int(d[1]))) == Kind.WATER:
-			return true
-	return false
-
-
-## Whether the summonable band is showing: before the commit, and never after it.
-##
-## ⚠⚠ **It goes with the slot boxes at the commit.** After the commit `Battle.summon` refuses
-## everything and `hud_view` stops drawing the slots, so a sea still wearing "your hand goes here"
-## would be the only mark on the field that lies. Measured on the flat board: adding this test ran the
-## whole round green, which is why `net_slots` reads the band's tile count on both sides of `commit()`.
+## Whether the summon band is showing. **Survives the terrain's deletion** — it is a fact about the
+## plan, not about the ground, and it was only ever sitting in that section by accident.
 func _band_on() -> bool:
 	return battle != null and not battle.committed()
 
-
-## The colour a tile is painted, band and all. The band is a BLEND into the tile's own colour and never
-## a second surface on top of it: a second surface costs a depth fight, and a blend is what a check
-## reads as two fills being different.
-## ⚠⚠ **The `band` argument is gone and so is the green wash it painted** (2026-08-24, the user:
-## 「초록색이 있을 필요는 없다」). Where a boat may be put down is a RING on the water now, drawn by
-## `_rebuild_ring`, and the rule behind it became a circle to match (`Rules.SUMMON_RADIUS_TILES`).
-## ⇒ **Nothing about a tile's colour depends on the plan any more**, which is also why the terrain mesh
-## no longer has to be rebuilt at the commit.
-func _tile_colour(tx: int, ty: int) -> Color:
-	var ch := _char_at(tx, ty)
-	# A stair is the one tile of a tier boundary a body may climb, and geometry alone does not say so:
-	# a one-tile diagonal in a long wall is small, and from 40 degrees at `ZOOM_MIN` it is what the eye
-	# has to find. **Before the land tint below**, and returned outright, so nothing washes it back
-	# toward the field it sits in — a colour mixed in the wrong order was measured drifting the wrong
-	# way on this repo's bleed tint (티켓 15).
-	if Grid.is_stair_level(_tier_level(tx, ty)):
-		return Look.COL_STAIR
-	var col := Look.terrain_colour_of_char(ch)
-	# High ground drifts lighter. See `COL_LAND_HIGH`: from 40 degrees at `ZOOM_MIN` this is what makes
-	# a hill a hill, and the geometry alone is not.
-	if _kind_of(ch) == Kind.LAND:
-		col = col.lerp(Look.COL_LAND_HIGH, _swell_at(tx, ty))
-	# ⚠⚠ **The shore tone is NOT applied here any more** (2026-08-25). It used to be a whole-tile
-	# lerp gated on `_touches_water`, which paints a coast tile one flat sand colour right up to its
-	# inland edge — an island of identical stamps with a hard line where the stamps stop. It is a
-	# per-CORNER blend now (`_corner_wet`), so the sand runs out inside the tile that touches the sea.
-	return col
-
-
-## One mesh for the whole island, `WATER_MARGIN_TILES` wider than the grid on every side so no zoom
-## shows bare background at its edge.
-##
-## ⚠ **Built once per island and once more at the commit**, never per frame — it is tens of thousands
-## of triangles, and the only thing about it that changes mid-island is the band.
-func _rebuild_terrain() -> void:
-	# The letters are about to be read again, so every cached height is about to be about a different
-	# island. **Cleared here and nowhere else** — this is the only function the grid can change under.
-	_tile_h_cache.clear()
-	_ground_h_cache.clear()
-	if _terrain == null:
-		return
-	var tiles := _map_tiles()
-
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	# -1 is "no smoothing group": every triangle keeps its own normal. See the header.
-	st.set_smooth_group(-1)
-
-	# ⚠⚠ **Water is not in this mesh at all, and the margin ring is gone with it.** The sea is one
-	# shaded quad under everything (`water.gdshader`), so a water tile here would be a second flat
-	# surface fighting it for the same pixels — which is exactly what it was, and it is what made the
-	# sea draw as stripes. Skipping them also cuts the mesh to the island itself: on the shipped maps
-	# that is 1536 tiles instead of 5120, with the water half of those gone too.
-	# ⚠ A hole (`#`) is NOT water and stays: it is a pit in the land, and the sea showing through one
-	# would say it can be sailed.
-	for ty in range(tiles.y):
-		for tx in range(tiles.x):
-			if _kind_of(_char_at(tx, ty)) == Kind.WATER:
-				continue
-			var col := _tile_colour(tx, ty)
-			var h00 := _corner_h(tx, ty, 0, 0)
-			var h10 := _corner_h(tx, ty, 1, 0)
-			var h01 := _corner_h(tx, ty, 0, 1)
-			var h11 := _corner_h(tx, ty, 1, 1)
-			var x0 := float(tx)
-			var z0 := float(ty)
-			var a := Vector3(x0, h00, z0)
-			var b := Vector3(x0 + 1.0, h10, z0)
-			var c := Vector3(x0 + 1.0, h11, z0 + 1.0)
-			var d := Vector3(x0, h01, z0 + 1.0)
-			_tile_top(st, col, tx, ty, a, b, c, d)
-
-			# The four skirts. **A skirt is what a box's side used to be**, and it is emitted only
-			# where the neighbour is genuinely lower — a slope that already meets its neighbour needs
-			# no wall, and emitting one anyway would put a hairline seam down every hillside.
-			_skirt(st, col, tx, ty, 0, -1, a, b)
-			_skirt(st, col, tx, ty, 0, 1, c, d)
-			_skirt(st, col, tx, ty, -1, 0, d, a)
-			_skirt(st, col, tx, ty, 1, 0, b, c)
-
-	st.generate_normals()
-	_terrain.mesh = st.commit()
-	# The sea sits at the water's own surface height, so it and the margin tiles are one flat plane
-	# rather than two at a hairline apart.
-	_sea.position = Vector3(float(tiles.x) * 0.5,
-		Look.TERRAIN_H_WATER - Look.SEA_DROP_TILES, float(tiles.y) * 0.5)
-	_rebuild_ring()
-	_terrain.material_override = _terrain_material()
-	_built_for = "%dx%d:%d" % [tiles.x, tiles.y, rows.size()]
-
-
-## The ring on the water: **the outer edge of where a boat may be put down, drawn as the circle it now
-## is.**
-##
-## ⚠⚠ **The centre and the radius are read off the SIM, never chosen here.** `Grid.summon_centre()` and
-## `Grid.summon_radius()` are the same two numbers `can_summon_at` tests against, so the drawn
-## circle cannot promise a tile the sim then refuses. That guarantee used to belong to the green wash
-## (which asked `can_summon_at` per tile); it belongs to these two lines now, and it is the reason the
-## wash could be deleted rather than merely restyled.
-##
-## ⚠ **It says nothing about the INNER edge.** A boat still has to be `SUMMON_BAND_MIN_TILES` off the
-## shore, and that bound is a distance from the coast rather than from the middle — it is not a circle
-## and it cannot be drawn as one. **Not drawn at all today**, and written down here as missing rather
-## than left to be discovered by pressing just off a beach and being refused.
-func _rebuild_ring() -> void:
-	if _ring == null or battle == null or battle.grid == null:
-		return
-	var centre := battle.grid.summon_centre()
-	var r := battle.grid.summon_radius()
-	var half := Look.SUMMON_RING_W_TILES * 0.5
-	var y := Look.TERRAIN_H_WATER + Look.SEA_DROP_TILES
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.set_smooth_group(-1)
-	var n := Look.SUMMON_RING_SEGMENTS
-	for k in n:
-		var a0 := TAU * float(k) / float(n)
-		var a1 := TAU * float(k + 1) / float(n)
-		var i0 := Vector3(cos(a0) * (r - half), y, sin(a0) * (r - half))
-		var o0 := Vector3(cos(a0) * (r + half), y, sin(a0) * (r + half))
-		var i1 := Vector3(cos(a1) * (r - half), y, sin(a1) * (r - half))
-		var o1 := Vector3(cos(a1) * (r + half), y, sin(a1) * (r + half))
-		_quad(st, Look.COL_SUMMON_RING, i0, o0, o1, i1)
-	st.generate_normals()
-	_ring.mesh = st.commit()
-	_ring.position = Vector3(centre.x, 0.0, centre.y)
-	_ring.visible = _band_on()
-
-
-## A tile's top face: **an inner panel with a darker border around it.** See `Look.TILE_RIM_TILES` —
-## this border is the tile boundary made visible, and it is the answer to 「한 칸이 안 보인다」.
-##
-## The corners carry their own colours (`_corner_wet`), so a shore runs out INSIDE the tile that
-## touches the sea instead of stopping dead at that tile's inland edge, and the border inherits those
-## same four colours one shade down rather than being a colour of its own.
-func _tile_top(st: SurfaceTool, col: Color, tx: int, ty: int,
-		a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
-	var land := _kind_of(_char_at(tx, ty)) == Kind.LAND
-	var ca := _shored(col, tx, ty, 0, 0) if land else col
-	var cb := _shored(col, tx, ty, 1, 0) if land else col
-	var cc := _shored(col, tx, ty, 1, 1) if land else col
-	var cd := _shored(col, tx, ty, 0, 1) if land else col
-	# ⚠ The inset moves x and z only. A flat top means all four corners share a height, so pulling the
-	# panel in cannot tilt it — and on the one kind of tile that is NOT flat (a ramp) the panel follows
-	# the same plane its corners already describe.
-	var t := Look.TILE_RIM_TILES
-	var ai := Vector3(a.x + t, a.y, a.z + t)
-	var bi := Vector3(b.x - t, b.y, b.z + t)
-	var ci := Vector3(c.x - t, c.y, c.z - t)
-	var di := Vector3(d.x + t, d.y, d.z - t)
-	_quad4(st, ca, cb, cc, cd, ai, bi, ci, di)
-	# ⚠ **One darkening per SIDE, not one for the tile.** See `Look.TILE_RIM_DARKEN_FLAT` — a border
-	# that is the same on all four sides of every tile is a chessboard, and a chessboard says the same
-	# thing everywhere. The sides that differ are the ones worth a line.
-	var kn := _rim_darken(tx, ty, 0, -1)
-	var ke := _rim_darken(tx, ty, 1, 0)
-	var ks := _rim_darken(tx, ty, 0, 1)
-	var kw := _rim_darken(tx, ty, -1, 0)
-	_quad4(st, ca.darkened(kn), cb.darkened(kn), cb.darkened(kn), ca.darkened(kn), a, b, bi, ai)
-	_quad4(st, cb.darkened(ke), cc.darkened(ke), cc.darkened(ke), cb.darkened(ke), b, c, ci, bi)
-	_quad4(st, cc.darkened(ks), cd.darkened(ks), cd.darkened(ks), cc.darkened(ks), c, d, di, ci)
-	_quad4(st, cd.darkened(kw), ca.darkened(kw), ca.darkened(kw), cd.darkened(kw), d, a, ai, di)
-
-
-## How dark this tile's border is along one side, by what is on the other side of it.
-func _rim_darken(tx: int, ty: int, dx: int, dy: int) -> float:
-	var nx := tx + dx
-	var ny := ty + dy
-	if _kind_of(_char_at(nx, ny)) == Kind.WATER:
-		return Look.TILE_RIM_DARKEN_EDGE
-	if absf(_tile_h(nx, ny) - _tile_h(tx, ty)) > 0.01:
-		return Look.TILE_RIM_DARKEN_STEP
-	return Look.TILE_RIM_DARKEN_FLAT
-
-
-## Two triangles, wound so the face points up, with one colour on all four corners.
-func _quad(st: SurfaceTool, col: Color, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
-	for v in [a, c, b, a, d, c]:
-		st.set_color(col)
-		st.add_vertex(v)
-
-
-## The same quad with **a colour per corner**, `ca`..`cd` matching `a`..`d`.
-func _quad4(st: SurfaceTool, ca: Color, cb: Color, cc: Color, cd: Color,
-		a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
-	var verts := [a, c, b, a, d, c]
-	var cols := [ca, cc, cb, ca, cd, cc]
-	for i in verts.size():
-		st.set_color(cols[i])
-		st.add_vertex(verts[i])
-
-
-## `col` with the shore tone mixed in by how wet that corner is.
-func _shored(col: Color, tx: int, ty: int, dx: int, dy: int) -> Color:
-	return col.lerp(Look.COL_SHORE, Look.SHORE_BLEND * _corner_wet(tx, ty, dx, dy))
-
-
-## Drops a wall from this tile's edge to whatever the neighbour's edge sits at, when the neighbour is
-## lower. The neighbour's own corner heights are asked for rather than guessed, so the wall lands
-## exactly on the surface below it and no gap opens at the join.
-func _skirt(st: SurfaceTool, col: Color, tx: int, ty: int, dx: int, dy: int, a: Vector3, b: Vector3) -> void:
-	var nx := tx + dx
-	var ny := ty + dy
-	# The neighbour's two corners along the shared edge, named by which side the edge is on.
-	var na := 0.0
-	var nb := 0.0
-	if dy == -1:
-		na = _corner_h(nx, ny, 0, 1)
-		nb = _corner_h(nx, ny, 1, 1)
-	elif dy == 1:
-		na = _corner_h(nx, ny, 1, 0)
-		nb = _corner_h(nx, ny, 0, 0)
-	elif dx == -1:
-		na = _corner_h(nx, ny, 1, 1)
-		nb = _corner_h(nx, ny, 1, 0)
-	else:
-		na = _corner_h(nx, ny, 0, 0)
-		nb = _corner_h(nx, ny, 0, 1)
-	if na >= a.y - 0.001 and nb >= b.y - 0.001:
-		return
-	var pad := Look.TERRAIN_SKIRT_PAD
-	# Darkened so a wall is told from the top face it hangs off even when the sun is straight on it —
-	# the cliff-face line the flat board drew did the same job with a leaf and a width constant.
-	#
-	# ⚠⚠ **WOUND BOTTOM-EDGE FIRST, AND IT USED TO BE TOP-EDGE FIRST** (2026-08-25). The old order
-	# gave every one of the four skirts a normal pointing back INTO the tile it hangs off, so a wall
-	# was lit by whatever happened to be behind it. On the plateau's south face that is neither light:
-	# **it drew as a black rectangle under the plateau, and the first read of it was 「그림자가 너무
-	# 진하다」.** It is not a shadow — turning `shadow_enabled` off left the rectangle exactly as it
-	# was, which is what named the cause. ⚠ `generate_normals` derives the normal from the winding, so
-	# this reversal IS the fix; the material stays two-sided for the yaws that see a wall from behind.
-	#
-	# ⚠⚠ **A WALL THAT LANDS IN THE SEA IS ROCK, AND IT USED TO BE GRASS ONE SHADE DOWN.** That is
-	# right for a one-tile step between two fields; the coast is now three tiles (`TERRAIN_H_WATER`),
-	# and three tiles of the tile's own green is what made the island read as a slab of paper with a
-	# green edge rather than as a block of land. Rock, and darker at its foot than at its top.
-	var foot_a := Vector3(a.x, na - pad, a.z)
-	var foot_b := Vector3(b.x, nb - pad, b.z)
-	if _kind_of(_char_at(tx + dx, ty + dy)) == Kind.WATER:
-		_wall_quad(st, Look.COL_SEA_WALL.darkened(Look.SEA_WALL_FOOT_DARKEN), Look.COL_SEA_WALL,
-			foot_a, foot_b, b, a)
-		return
-	_quad(st, col.darkened(0.15), foot_a, foot_b, b, a)
-
-
-## A skirt with **two colours: one along its foot and one along its top.** Same winding as `_quad` —
-## `a`/`b` are the foot edge and `c`/`d` the top — so the two functions cannot disagree about which
-## way a wall faces.
-func _wall_quad(st: SurfaceTool, foot: Color, top: Color,
-		a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
-	var verts := [a, c, b, a, d, c]
-	var cols := [foot, top, foot, foot, top, top]
-	for i in verts.size():
-		st.set_color(cols[i])
-		st.add_vertex(verts[i])
-
-
-func _terrain_material() -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	# ⚠ Two-sided: a skirt's winding depends on which way it faces, and a one-sided wall seen from
-	# behind is a hole in the island.
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	return mat
 
 
 # --- the bodies, as billboards ------------------------------------------------------------------------

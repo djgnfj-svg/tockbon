@@ -694,11 +694,11 @@ func _melee_reaches_a_diagonal_one_level_up(t) -> void:
 func _an_enemy_posted_high_holds_its_tier(t) -> void:
 	var high := _battle_on(HOLD_ROWS, HOLD_TIERS, [Rules.WOLF, Rules.WOLF],
 		[Vector2(1, 3), Vector2(1, 4)],
-		[{"type_id": Rules.SHIELDBEARER, "tile": 3 * HOLD_W + 13}])
+		[{"type_id": Rules.WOLF, "tile": 3 * HOLD_W + 13}])
 	t.eq(high.grid.level_of(3 * HOLD_W + 13), 2, "그 방패병은 고원 위에서 시작한다 (자가 점검)")
-	t.ok(Rules.detect_of(Rules.SHIELDBEARER) > 3.0,
+	t.ok(Rules.detect_of(Rules.WOLF) > 3.0,
 		"그리고 탐지 반경이 늑대들을 실제로 본다 (%.1f 타일, 자가 점검) — 안 보이면 안 움직이는 게 당연해진다"
-			% Rules.detect_of(Rules.SHIELDBEARER))
+			% Rules.detect_of(Rules.WOLF))
 	# ⚠⚠ **THE SELF-CHECK THAT STOPS THIS ROW BEING VACUOUS.** 「It never left the plateau」 is also true
 	# of a plateau nothing can leave. The route down has to EXIST for the refusal to mean anything, so
 	# the game's own field is asked whether the enemy's tile is reachable from where the wolves stand —
@@ -729,7 +729,7 @@ func _an_enemy_posted_high_holds_its_tier(t) -> void:
 	# The other end. Same species, same board, posted on the LOW ground: it must still come.
 	var low := _battle_on(HOLD_ROWS, HOLD_TIERS, [Rules.WOLF, Rules.WOLF],
 		[Vector2(1, 3), Vector2(1, 4)],
-		[{"type_id": Rules.SHIELDBEARER, "tile": 3 * HOLD_W + 5}])
+		[{"type_id": Rules.WOLF, "tile": 3 * HOLD_W + 5}])
 	t.eq(low.grid.level_of(3 * HOLD_W + 5), 0, "대조군의 방패병은 낮은 층에서 시작한다 (자가 점검)")
 	var start_low: Vector2 = low.enemy_pos[0]
 	var moved_low := false
@@ -764,8 +764,8 @@ func _an_enemy_posted_high_holds_its_tier(t) -> void:
 func _a_pack_aims_from_where_its_bodies_stand(t) -> void:
 	var b := _battle_on(CLIMB_ROWS, CLIMB_TIERS, [Rules.WOLF, Rules.WOLF, Rules.WOLF],
 		[Vector2(5, 3), Vector2(5, 4), Vector2(8, 3)], [
-			{"type_id": Rules.ARCHER, "tile": 1 * CLIMB_W + 5},
-			{"type_id": Rules.ARCHER, "tile": 5 * CLIMB_W + 8},
+			{"type_id": Rules.CROW, "tile": 1 * CLIMB_W + 5},
+			{"type_id": Rules.CROW, "tile": 5 * CLIMB_W + 8},
 		])
 	t.eq(b.grid.level_at(5, 1), 0, "적 0 은 낮은 층에 선다 (자가 점검)")
 	t.eq(b.grid.level_at(8, 5), 2, "적 1 은 고원 위에 선다 (자가 점검)")
@@ -793,8 +793,8 @@ func _a_pack_aims_from_where_its_bodies_stand(t) -> void:
 ## that shape passing.
 func _a_shove_never_changes_a_bodys_tier(t) -> void:
 	# -- 다람쥐 pulls TOWARD itself: from the low ground it would drag a plateau body down --------------
-	var pull := _shove_board([Rules.SQUIRREL], [Vector2(4, 3)], Vector2(6, 3), CLIMB_TIERS)
-	var pull_flat := _shove_board([Rules.SQUIRREL], [Vector2(4, 3)], Vector2(6, 3), [])
+	var pull := _shove_board([Rules.SWORDSMAN], [Vector2(4, 3)], Vector2(6, 3), CLIMB_TIERS)
+	var pull_flat := _shove_board([Rules.SWORDSMAN], [Vector2(4, 3)], Vector2(6, 3), [])
 	t.eq(pull.grid.level_at(6, 3), 2, "끌려갈 적이 고원 위에 선다 (자가 점검)")
 	t.ok(pull._within(pull.soldier_pos[0], pull.enemy_pos[0], pull._soldier_reach(0)),
 		"다람쥐는 벽 너머의 그 적을 실제로 때릴 수 있다 (자가 점검 — 못 때리면 아래가 공허하다)")
@@ -806,8 +806,8 @@ func _a_shove_never_changes_a_bodys_tier(t) -> void:
 		"그런데 층이 있으면 고원 위의 적은 끌려 내려오지 않는다 (%s)" % str(pull.enemy_pos[0]))
 
 	# -- 소 charges AWAY: from the low ground it would drive a body up onto the plateau ----------------
-	var push := _shove_board([Rules.COW], [Vector2(4, 3)], Vector2(5, 3), CLIMB_TIERS)
-	var push_flat := _shove_board([Rules.COW], [Vector2(4, 3)], Vector2(5, 3), [])
+	var push := _shove_board([Rules.SWORDSMAN], [Vector2(4, 3)], Vector2(5, 3), CLIMB_TIERS)
+	var push_flat := _shove_board([Rules.SWORDSMAN], [Vector2(4, 3)], Vector2(5, 3), [])
 	t.eq(push.grid.level_at(5, 3), 0, "들이받힐 적은 낮은 층에 서고 (자가 점검)")
 	t.eq(push.grid.level_at(6, 3), 2, "그 등 뒤가 고원이다 (자가 점검)")
 	push_flat._shove_victims(0, 0, PackedInt32Array())
@@ -832,9 +832,9 @@ func _a_shove_never_changes_a_bodys_tier(t) -> void:
 ## The domain is asserted first: a search that returned nothing would satisfy "none of them is high".
 func _a_landing_never_puts_a_body_on_the_plateau(t) -> void:
 	var g := Grid.new()
-	Islands.load_into(g, FIRST_ISLAND)
+	Islands.load_into(g)
 	var b := Battle.new()
-	b.setup(g, Army.new(), Islands.spawns_of(FIRST_ISLAND), 999.0)
+	b.setup(g, Army.new(), Islands.spawns(), 999.0)
 	# ⚠⚠ **The tile moved with the island and the choice is not arbitrary.** (16,3) was a shore on the
 	# rectangle and is inland on the drawn coast. (22,2) is picked because it is **the approved landing
 	# nearest the plateau** — it touches the plateau's own corner diagonally, so the ten-tile search
@@ -896,11 +896,8 @@ func _a_landing_never_puts_a_body_on_the_plateau(t) -> void:
 ## below is true of a flat island, and a check that is vacuous is a check that will stay green when
 ## the plateau is deleted.
 func _the_first_island_carries_a_real_plateau(t) -> void:
-	t.eq(Rules.map_island_of(0), FIRST_ISLAND,
-		"첫 노드가 여는 섬은 %d 번이다 — 층을 실은 그 섬이다 (자가 점검)" % FIRST_ISLAND)
-
-	var rows := Islands.rows_of(FIRST_ISLAND)
-	var tiers := Islands.tiers_of(FIRST_ISLAND)
+	var rows := Islands.rows()
+	var tiers := Islands.tiers()
 	var g := Grid.new()
 	g.load_rows(rows, tiers)
 
@@ -948,7 +945,7 @@ func _the_first_island_carries_a_real_plateau(t) -> void:
 
 	# The enemies. Half of them stand on the plateau, which is the whole of "the first island teaches
 	# that high ground has to be climbed" — an empty plateau teaches nothing.
-	var spawns := Islands.spawns_of(FIRST_ISLAND)
+	var spawns := Islands.spawns()
 	t.eq(spawns.size(), ISLAND_ENEMIES, "첫 섬의 적은 여섯이다 (자가 점검)")
 	var on_high := 0
 	for raw in spawns:
@@ -989,8 +986,8 @@ func _the_first_island_carries_a_real_plateau(t) -> void:
 ## Derived outside Godot: 54 landing tiles x 6 defenders = 324 pairs, 0 unreachable.
 func _every_landing_reaches_every_enemy_on_the_first_island(t) -> void:
 	var g := Grid.new()
-	g.load_rows(Islands.rows_of(FIRST_ISLAND), Islands.tiers_of(FIRST_ISLAND))
-	var spawns := Islands.spawns_of(FIRST_ISLAND)
+	g.load_rows(Islands.rows(), Islands.tiers())
+	var spawns := Islands.spawns()
 	var landings := _landings_of(g)
 	# The domain, first. `0 unreachable` over an empty set is the emptiest green there is.
 	t.eq(landings.size(), ISLAND_LANDINGS, "첫 섬의 상륙지는 %d 칸이다" % ISLAND_LANDINGS)
@@ -1029,12 +1026,12 @@ func _the_reach_check_can_actually_fail(t) -> void:
 ## board that is present must match its rows row for row.
 func _no_tier_board_is_a_different_shape_from_its_island(t) -> void:
 	var boarded := 0
-	for i in Islands.count():
-		var tiers := Islands.tiers_of(i)
+	for i in 1:
+		var tiers := Islands.tiers()
 		if tiers.is_empty():
 			continue
 		boarded += 1
-		var rows := Islands.rows_of(i)
+		var rows := Islands.rows()
 		t.eq(tiers.size(), rows.size(), "섬 %d — 단 판의 행 수가 지형 판과 같다" % i)
 		var bad_width := 0
 		var bad_chars := []
@@ -1085,9 +1082,9 @@ func _an_island_number_is_loaded_through_one_door(t) -> void:
 			% str(offenders))
 	# ⚠ **Inverting the INSTRUMENT.** A scanner that matches nothing passes the row above forever, so
 	# it is handed the exact line it exists to find and one it must not fire on.
-	t.ok(_calls_load_rows("\tg.load_rows(Islands.rows_of(i))"),
+	t.ok(_calls_load_rows("\tg.load_rows(Islands.rows())"),
 		"그 훑기가 실제로 그 호출을 잡는다 (계측기 자가 점검)")
-	t.ok(not _calls_load_rows("\tIslands.load_into(g, i)"),
+	t.ok(not _calls_load_rows("\tIslands.load_into(g)"),
 		"그리고 제대로 된 호출에는 안 문다 (계측기 자가 점검)")
 
 
@@ -1132,7 +1129,7 @@ func _pair_battle(species: Array, at: Array, enemies_at: Array = []) -> Battle:
 	var spawns := []
 	for raw in where:
 		var p: Vector2 = raw
-		spawns.append({"type_id": Rules.SHIELDBEARER, "tile": int(p.y) * PAIR_W + int(p.x)})
+		spawns.append({"type_id": Rules.WOLF, "tile": int(p.y) * PAIR_W + int(p.x)})
 	return _battle_on(PAIR_ROWS, PAIR_TIERS, species, at, spawns)
 
 
@@ -1165,7 +1162,7 @@ func _battle_on(rows: Array, tiers: Array, species: Array, at: Array, spawns: Ar
 ## walking, reservation or pathfinding; only whether the blow lands from exactly that pair of tiles.
 func _pinned_damage(attacker: Vector2, victim: Vector2) -> float:
 	var b := _battle_on(CLIMB_ROWS, CLIMB_TIERS, [Rules.WOLF], [attacker],
-		[{"type_id": Rules.SHIELDBEARER, "tile": int(victim.y) * CLIMB_W + int(victim.x)}])
+		[{"type_id": Rules.WOLF, "tile": int(victim.y) * CLIMB_W + int(victim.x)}])
 	b.enemy_pos[0] = victim
 	b.army.hp[0] = 9999.0
 	var hp0 := float(b.enemy_hp[0])
@@ -1187,7 +1184,7 @@ func _pinned_damage(attacker: Vector2, victim: Vector2) -> float:
 ## board `tiers` — pass `[]` for the flat control.
 func _shove_board(species: Array, at: Array, enemy: Vector2, tiers: Array) -> Battle:
 	return _battle_on(CLIMB_ROWS, tiers, species, at,
-		[{"type_id": Rules.SHIELDBEARER, "tile": int(enemy.y) * CLIMB_W + int(enemy.x)}])
+		[{"type_id": Rules.WOLF, "tile": int(enemy.y) * CLIMB_W + int(enemy.x)}])
 
 
 ## Ashore the way a landing leaves a body — state, position, goal AND the tile reservation. State

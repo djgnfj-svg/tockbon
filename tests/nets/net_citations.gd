@@ -226,22 +226,14 @@ func _tools_still_parse(t) -> void:
 	_walk("res://tools", tool_files)
 	t.ok(tool_files.size() >= 2, "tools/ 아래 .gd 를 찾았다 (%d개, 최소 2)" % tool_files.size())
 	var unloadable: Array[String] = []
-	var probe_shape := PackedStringArray()
 	for f: String in tool_files:
-		var scr := ResourceLoader.load(f)
-		if scr == null:
+		if ResourceLoader.load(f) == null:
 			unloadable.append(f)
-			continue
-		if f.ends_with("run_run.gd"):
-			for m: Dictionary in (scr as GDScript).get_script_method_list():
-				probe_shape.append(str(m["name"]))
 	t.eq(unloadable.size(), 0,
 		"tools/ 의 .gd 가 전부 파싱된다 — 아무 넷도 안 부르는 파일이라 여기서만 잡힌다 %s" % str(unloadable))
-	t.ok(probe_shape.size() > 0, "그중에 프로브가 있고 함수 목록을 읽었다 (%d개, 자가 점검)"
-		% probe_shape.size())
-	t.ok(probe_shape.has("_make_plan"),
-		"프로브가 계획을 먼저 짠다 (_make_plan — 전투 중에 손이 움직이면 이 이름이 없다)")
-	t.ok(probe_shape.has("_play_island"), "그리고 그 계획을 커밋한 뒤 판정까지 본다 (_play_island)")
+	# ⚠⚠ **세 줄이 여기서 삭제됐다** (2026-08-26): 회차를 자동으로 돌리던 프로브가 지도와 함께 지워졌고,
+	# 그 셋이 재던 것은 **「전투 중에 손이 움직이지 않는다」**였다. 그 규칙 자체를 사용자가 2026-08-25 에
+	# 뒤집었으므로(티켓 25) 검사를 되살릴 자리가 없다.
 
 
 func _gd_files() -> Array[String]:

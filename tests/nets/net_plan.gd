@@ -64,7 +64,7 @@ func run(t) -> void:
 ## end and has to move.
 func _uncommitted_step_touches_nothing(t) -> void:
 	var army := _army_of(Rules.WOLF, 2)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 7, 5)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 7, 5)], 999.0)
 	t.ok(b.send(0, _tile_of(6, 4)) >= 0 and b.send(1, _tile_of(6, 6)) >= 0,
 			"두 척을 계획해 뒀다 (자가 점검)")
 
@@ -95,7 +95,7 @@ func _uncommitted_step_touches_nothing(t) -> void:
 
 func _commit_refuses_an_empty_plan(t) -> void:
 	var army := _army_of(Rules.WOLF, 2)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 7, 5)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 7, 5)], 999.0)
 	t.ok(not b.commit(), "빈 계획으로는 시작이 안 된다")
 	t.ok(not b.committed(), "거절당한 시작은 상태도 안 건드린다")
 	t.ok(b.send(0, _tile_of(6, 4)) >= 0, "한 척을 계획했다 (자가 점검)")
@@ -106,7 +106,7 @@ func _commit_refuses_an_empty_plan(t) -> void:
 
 func _the_plan_is_sealed_by_the_commit(t) -> void:
 	var army := _army_of(Rules.WOLF, 3)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 7, 5)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 7, 5)], 999.0)
 	var uid := b.send(0, _tile_of(6, 4))
 	t.ok(uid >= 0 and b.send(1, _tile_of(6, 6)) >= 0, "두 척을 계획해 뒀다 (자가 점검)")
 	t.ok(b.commit(), "확정했다 (자가 점검)")
@@ -143,7 +143,7 @@ func _there_is_no_cap(t) -> void:
 	var g := _island_grid(0)
 	var army := _army_of(Rules.WOLF, FULL_ROSTER)
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns_of(0), Islands.time_limit_of(0))
+	b.setup(g, army, Islands.spawns(), Islands.time_limit())
 	var landing := _isle1_landing()
 	t.ok(g.home_harbour_for(landing) >= 0, "(28,20) 은 어느 항구에서든 보낼 수 있는 칸이다 (자가 점검)")
 
@@ -168,7 +168,7 @@ func _there_is_no_cap(t) -> void:
 
 func _send_refusals(t) -> void:
 	var army := _army_of(Rules.WOLF, 3)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 7, 5)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 7, 5)], 999.0)
 	var good := _tile_of(6, 4)
 
 	t.eq(b.send(-1, good), -1, "없는 병사 번호(-1)는 거절된다")
@@ -207,7 +207,7 @@ func _a_boat_leaves_from_its_own_harbour(t) -> void:
 		"H~~~~~~~~~~~~~~~",
 	]
 	var army := _army_of(Rules.WOLF, 2)
-	var b := _battle_of(rows, army, [_spawn(16, Rules.SHIELDBEARER, 14, 1)], 999.0)
+	var b := _battle_of(rows, army, [_spawn(16, Rules.WOLF, 14, 1)], 999.0)
 	var landing := 2 * 16 + 12          # (12,2): the east harbour is the nearest that can see it
 	var hb := b.grid.home_harbour_for(landing)
 	t.ok(hb >= 0, "그 칸을 볼 수 있는 항구가 있다 (자가 점검)")
@@ -291,7 +291,7 @@ func _formation_of(t, order: Array, landing: int) -> Dictionary:
 	var g := _island_grid(0)
 	var army := _army_of(Rules.WOLF, 2)
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns_of(0), Islands.time_limit_of(0))
+	b.setup(g, army, Islands.spawns(), Islands.time_limit())
 	for raw in order:
 		var sid := int(raw)
 		t.ok(b.send(sid, landing) >= 0, "%d번 병사를 상륙지로 보냈다 (자가 점검)" % sid)
@@ -344,7 +344,7 @@ func _thirteen_aimed_at_one_tile_stand_on_thirteen(t) -> void:
 	var g := _island_grid(0)
 	var army := _army_of(Rules.WOLF, FULL_ROSTER)
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns_of(0), Islands.time_limit_of(0))
+	b.setup(g, army, Islands.spawns(), Islands.time_limit())
 	var landing := _isle1_landing()
 	for i in FULL_ROSTER:
 		t.ok(b.send(i, landing) >= 0, "%d번을 한 칸에 겹쳐 보냈다 (자가 점검)" % i)
@@ -369,7 +369,7 @@ func _the_empty_boat_goes_home_and_vanishes(t) -> void:
 	var army := _army_of(Rules.WOLF, 1)
 	# A live enemy far from the crossing, or `enemies_left() == 0` latches WON on the first sub-step
 	# and every step after it returns before the boat has moved an inch.
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 999.0)
 	var landing := _tile_of(6, 5)
 	var uid := b.send(0, landing)
 	t.ok(uid >= 0 and b.commit(), "한 척을 보내고 확정했다 (자가 점검)")
@@ -440,7 +440,7 @@ func _one_slice_and_six_are_the_same_fight(t) -> void:
 	var a: Battle = slow["battle"]
 	var c: Battle = fast["battle"]
 	t.ok(a.elapsed > 0.0 and c.elapsed > 0.0, "두 판 다 실제로 흘렀다 (자가 점검)")
-	t.ok(a.enemy_hp[0] < Rules.hp_of(Rules.SHIELDBEARER), "잘게 쪼갠 쪽에서 적이 실제로 맞았다 (자가 점검)")
+	t.ok(a.enemy_hp[0] < Rules.hp_of(Rules.WOLF), "잘게 쪼갠 쪽에서 적이 실제로 맞았다 (자가 점검)")
 	_compare_arms(t, a, c, "같은 시간을 120조각으로 나눠도 20조각으로 나눠도 같은 싸움이다")
 
 
@@ -557,14 +557,14 @@ func _the_substep_itself_is_pinned(t) -> void:
 	# Ceiling: the fastest unit (the crow, 6 tiles/s) must not cross a quarter of a tile in one
 	# sub-step, or reservation contention — which 「the order you drop is the order」 now rides on —
 	# resolves by iteration order instead of by geometry.
-	t.ok(Rules.speed_of(Rules.ARCHER) * Rules.SIM_SUBSTEP_SEC <= 0.25,
+	t.ok(Rules.speed_of(Rules.CROW) * Rules.SIM_SUBSTEP_SEC <= 0.25,
 			"가장 빠른 놈도 한 서브스텝에 0.25칸을 못 넘는다 (%.3f칸)"
-			% (Rules.speed_of(Rules.ARCHER) * Rules.SIM_SUBSTEP_SEC))
+			% (Rules.speed_of(Rules.CROW) * Rules.SIM_SUBSTEP_SEC))
 
 
 func _zero_stops_the_clock(t) -> void:
 	var army := _army_of(Rules.WOLF, 1)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 999.0)
 	t.ok(b.send(0, _tile_of(6, 5)) >= 0 and b.commit(), "보내고 확정했다 (자가 점검)")
 	b.begin_frame()
 	b.step(Rules.SIM_SUBSTEP_SEC)
@@ -694,7 +694,7 @@ func _the_comparison_itself(t) -> void:
 func _skirmish() -> Dictionary:
 	var army := _army_of(Rules.WOLF, 4)
 	var b := _battle_of(_bay(), army,
-			[_spawn(ARENA_W, Rules.SHIELDBEARER, 8, 5), _spawn(ARENA_W, Rules.SHIELDBEARER, 9, 4)], 999.0)
+			[_spawn(ARENA_W, Rules.WOLF, 8, 5), _spawn(ARENA_W, Rules.WOLF, 9, 4)], 999.0)
 	return {"battle": b, "army": army}
 
 
@@ -733,7 +733,7 @@ func _bay() -> Array:
 
 func _island_grid(i: int) -> Grid:
 	var g := Grid.new()
-	g.load_rows(Islands.rows_of(i))
+	g.load_rows(Islands.rows())
 	return g
 
 

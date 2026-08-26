@@ -133,7 +133,7 @@ func _setup_opens_at_the_survey_zoom(t) -> void:
 ## to -144. y is centred at 640 - 1120.12 = **-480.12**. Hand literals, both.
 func _setup_on_the_long_map(t) -> void:
 	var army := Army.new()
-	var long_rows := Islands.rows_of(Islands.LONG_ISLAND_INDEX)
+	var long_rows := Islands.rows()
 	var g := Grid.new()
 	g.load_rows(long_rows)
 	t.eq(g.w, 144, "긴 지도가 144칸 폭으로 실렸다 (자가 점검)")
@@ -526,7 +526,7 @@ func _the_engine_agrees_with_the_forward(t) -> void:
 	t.root.add_child(vp)
 	var fv := FieldView.new()
 	vp.add_child(fv)
-	var rows := Islands.rows_of(0)
+	var rows := Islands.rows()
 	var g := Grid.new()
 	g.load_rows(rows)
 	var army := Army.new()

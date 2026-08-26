@@ -84,7 +84,6 @@ func _won_run(seed: int = 1) -> Run:
 	if seed >= 0:
 		r.seed_cards(seed)
 	_opened(r)
-	r.enter_node(0)
 	r.finish_island(true)
 	return r
 
@@ -456,7 +455,7 @@ func _the_leaves_draw_what_they_were_handed(t) -> void:
 ## 「카드 화면이 열리면 카드가 하나씩 나타난다」 — floor: every card starts effectively invisible, not
 ## snapped straight to its resting alpha; the stagger: card 0 is already ahead of the last card
 ## mid-reveal; ceiling: every card settles at its full, un-revealed alpha (read off `_card_fill`), so the
-## beat never gets stuck dim. `MAP_NODE_FADE_SEC` / `MAP_REVEAL_STEP_SEC` are `map_view`'s own reveal
+## beat never gets stuck dim. `REVEAL_FADE_SEC` / `REVEAL_STEP_SEC` are `map_view`'s own reveal
 ## constants, reused rather than redeclared.
 ##
 ## ⚠⚠ Bounded on BOTH ends on purpose — `combat-juice`'s own header names four beats this repo shipped
@@ -476,7 +475,7 @@ func _the_cards_fade_in_staggered(t) -> void:
 	t.eq(alpha_bad, 0, "화면이 열린 첫 프레임에는 카드 셋이 전부 알파 0에 가깝다 — 튀어나오지 않는다")
 
 	# The stagger: age past card 0's own fade window, nowhere near the last card's start.
-	spy._fx_step(Look.MAP_NODE_FADE_SEC * 0.6)
+	spy._fx_step(Look.REVEAL_FADE_SEC * 0.6)
 	spy.queue_redraw()
 	await t.pump_frames(1)
 	var a0 := (spy.cards[0]["bg"] as Color).a
@@ -486,7 +485,7 @@ func _the_cards_fade_in_staggered(t) -> void:
 	t.ok(a5 <= 0.05, "마지막 카드는 이 시점에 아직 시작도 안 했다 (%.2f)" % a5)
 
 	# The ceiling: age past the LAST card's own fade window entirely.
-	var full := float(Rules.CARDS_PER_WIN - 1) * Look.MAP_REVEAL_STEP_SEC + Look.MAP_NODE_FADE_SEC
+	var full := float(Rules.CARDS_PER_WIN - 1) * Look.REVEAL_STEP_SEC + Look.REVEAL_FADE_SEC
 	spy._fx_step(full)
 	spy.queue_redraw()
 	await t.pump_frames(1)
@@ -497,10 +496,10 @@ func _the_cards_fade_in_staggered(t) -> void:
 		if not is_equal_approx(shown, want):
 			settle_bad += 1
 	t.eq(settle_bad, 0, "다 나타나면 카드 셋 다 원래 알파로 정확히 도착한다 — 흐린 채로 안 남는다")
-	t.ok(Look.MAP_NODE_FADE_SEC >= 0.084 and Look.MAP_NODE_FADE_SEC <= 0.40,
-		"카드 한 장의 등장이 다섯 프레임~0.40초다 (%.2f)" % Look.MAP_NODE_FADE_SEC)
-	t.ok(Look.MAP_REVEAL_STEP_SEC >= 0.03 and Look.MAP_REVEAL_STEP_SEC < 0.084,
-		"카드 사이 간격이 0.03초 이상, 다섯 프레임 밑이다 (%.2f) — 간격은 박자가 아니라 사이다" % Look.MAP_REVEAL_STEP_SEC)
+	t.ok(Look.REVEAL_FADE_SEC >= 0.084 and Look.REVEAL_FADE_SEC <= 0.40,
+		"카드 한 장의 등장이 다섯 프레임~0.40초다 (%.2f)" % Look.REVEAL_FADE_SEC)
+	t.ok(Look.REVEAL_STEP_SEC >= 0.03 and Look.REVEAL_STEP_SEC < 0.084,
+		"카드 사이 간격이 0.03초 이상, 다섯 프레임 밑이다 (%.2f) — 간격은 박자가 아니라 사이다" % Look.REVEAL_STEP_SEC)
 
 	t.root.remove_child(spy)
 	spy.queue_free()

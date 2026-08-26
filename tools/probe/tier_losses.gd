@@ -22,8 +22,6 @@ func _open(seed_value: int) -> Battle:
 	run.seed_cards(seed_value)
 	if run.state() == Run.State.PICK:
 		run.take_card(0)
-	if not run.enter_node(0):
-		return null
 	return run.begin_island()
 
 

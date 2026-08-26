@@ -48,9 +48,6 @@ func _one(seed: int) -> void:
 	run.seed_cards(seed)
 	if run.state() == Run.State.PICK:
 		run.take_card(0)
-	if not run.enter_node(0):
-		print("  [!!] 섬을 못 열었다")
-		return
 	var battle := run.begin_island()
 	var names := []
 	for i in battle.army.type_id.size():

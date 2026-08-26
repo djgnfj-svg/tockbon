@@ -19,15 +19,19 @@ class_name Rules
 # 데서」; the five-beast roster is that place. **The numbers moved unchanged** — the wolf is the one
 # row a whole run has been played on, and re-tuning it while renaming it would make a later
 # difference unattributable.
-const SQUIRREL := 0
+## ⚠⚠ **THE SIDES SWAPPED 2026-08-26.** The player was five beasts and the enemy was three humans and
+## a lion; **the player is now ONE human — a swordsman — and the beasts are what he fights.** The user
+## decided both halves: 「상대를 오히려 지금까지 만들었던 몬스터들로 하면 되잖아」 and 「병사가 아직
+## 종류가 많을 필요가 없어. 검사 하나 만 있으면 돼. 움직이는 거에 초점을 맞추고 싶어」.
+##
+## ⚠ **Four rows left the table** — 다람쥐 · 소 (never wired to anything but a shove) and 창병 · 방패병
+## (the player's job now, and one swordsman is what it is). **Their art is still in `assets/`**, so a
+## row coming back is a row, not a drawing.
+const SWORDSMAN := 0
 const WOLF := 1
-const COW := 2
-const BEAR := 3
-const CROW := 4
-const SPEARMAN := 5
-const ARCHER := 6
-const SHIELDBEARER := 7
-const LION := 8
+const BEAR := 2
+const CROW := 3
+const LION := 4
 
 ## ⚠ **`TYPE_COUNT` is DELETED, not renamed.** It meant two different things at once — the table's
 ## height and the number of equipment boards — and those stopped being the same number the day the
@@ -128,34 +132,30 @@ const MAX_CLIMB_LEVELS := 1
 ## it to 5 is the one change that gives the boss a losable band, and that is an open design decision
 ## for the user, not a tuning knob. Until it is decided the probe's fourth policy fails on purpose
 ## rather than being quietly retired — see the first slice plan, "the boss still has no band".
-## ⚠⚠ **FOUR ROWS ARE TRANSPLANTS AND FOUR ARE FIRST DRAFTS, and which is which decides what a later
-## measurement means.** `WOLF` carries `CELL_MELEE`'s numbers and `CROW` carries `CELL_RANGED`'s,
-## unchanged, because the wolf is the only row a whole run has ever been played on. `SHIELDBEARER`
-## carries `BISON`'s and `ARCHER` carries the old enemy `CROW`'s, because the three soldiers on screen
-## had their weapons chosen from what those rows DO (reach 3 got the bow, slow and tough got the
-## shield — `field_view` says so), so moving the numbers keeps the picture and the number agreeing.
-## **`SQUIRREL` · `COW` · `BEAR` · `SPEARMAN` are first values and nothing has measured them**, the
-## same standing `RARITY_WEIGHT` carries — 티켓 05 결정 16 puts the tuning in the user's hands.
+## ⚠⚠ **WHICH ROWS ARE MEASURED AND WHICH ARE FIRST DRAFTS decides what a later measurement means.**
+## `WOLF` carries `CELL_MELEE`'s numbers and `CROW` carries the old enemy crow's, unchanged through two
+## side swaps, because the wolf is the only row a whole run has ever been played on. **`SWORDSMAN` is
+## interpolated between the two humans a run was played against** (see its own comment in the table);
+## **`BEAR` and `LION` are first values and nothing has measured them.**
 ##
-## ⚠ **`SPEARMAN` gets a row and stands on no island.** 티켓 16 is what gives it a spawn character.
-## ⚠⚠ **`SQUIRREL`'s `range` of 2.0 IS NOT A TASTE CALL — the pull needs somewhere to pull TO.** At
-## range 0 its reach is `REACH_BONUS` alone, so everything it bites already stands within 1.5 tiles
-## and a one-tile pull lands on the squirrel's own tile, where `_shove` correctly refuses to put a
-## body: the passive would have been in the table and inert on screen. Range 2 gives the pull room.
-## It is still a first value — how far, and whether a puller should out-range a wolf at all, is the
-## user's to set.
-## ⚠⚠ **`BEAR`'s `area` of 1.5 IS the bear's 휘두르기, and it is the whole of it.** `_phase_attacks`
-## already hands `area_of` to `_hit_enemies` and `_hit_enemies` already walks a radius, so the passive
-## cost zero lines in `battle.gd`. 1.5 is the lion's value — a first value, not a measured one.
+## ⚠ **The lion's range stays 0 on purpose**: raising it to 5 is the one change that gives the boss a
+## losable band, and that is an open design decision for the user, not a tuning knob.
 const UNITS := [
-	["SQUIRREL", 8.0, 1.5, 0.8, 2.0, 0.0, 5.5, NO_DETECT, Side.PLAYER, "다람쥐"],
-	["WOLF", 14.0, 2.0, 1.0, 0.0, 0.0, 4.0, NO_DETECT, Side.PLAYER, "늑대"],
-	["COW", 26.0, 3.0, 1.6, 0.0, 0.0, 3.0, NO_DETECT, Side.PLAYER, "소"],
-	["BEAR", 30.0, 3.5, 1.8, 0.0, 1.5, 2.8, NO_DETECT, Side.PLAYER, "곰"],
-	["CROW", 8.0, 1.5, 1.0, 4.0, 1.0, 4.0, NO_DETECT, Side.PLAYER, "까마귀"],
-	["SPEARMAN", 16.0, 2.5, 1.5, 1.0, 0.0, 3.0, 6.0, Side.ENEMY, "창병"],
-	["ARCHER", 6.0, 1.5, 1.0, 3.0, 0.0, 6.0, 12.0, Side.ENEMY, "궁수"],
-	["SHIELDBEARER", 20.0, 3.0, 2.0, 0.0, 0.0, 2.5, 6.0, Side.ENEMY, "방패병"],
+	# ⚠⚠ **The swordsman's numbers sit BETWEEN the spearman's and the shieldbearer's, deliberately.**
+	# Those two were the humans a whole run was played against, so their row is the only measured
+	# ground this table has for a human body: 16/20 HP, 2.5/3.0 damage, 1.5/2.0 period, 3.0/2.5 speed.
+	# **A sword has no reach**, so the range column is 0 where the spear had 1 — and the period and the
+	# speed take the faster of the two, because a swordsman that is slower than a spearman AND has less
+	# reach is a row that loses for a reason nobody chose.
+	# ⚠ **`NO_DETECT` because the player's bodies are commanded, not triggered** — the detect column is
+	# what makes a defender stand still until something walks near it.
+	["SWORDSMAN", 18.0, 2.5, 1.2, 0.0, 0.0, 3.2, NO_DETECT, Side.PLAYER, "검사"],
+	# ⚠⚠ **The beasts crossed sides and their numbers did NOT move.** The wolf is the one row a whole
+	# run has been played on; re-tuning it in the same edit that flips its side would make a later
+	# difference unattributable. **They gained a detect radius** — an enemy has to notice something.
+	["WOLF", 14.0, 2.0, 1.0, 0.0, 0.0, 4.0, 6.0, Side.ENEMY, "늑대"],
+	["BEAR", 30.0, 3.5, 1.8, 0.0, 1.5, 2.8, 6.0, Side.ENEMY, "곰"],
+	["CROW", 8.0, 1.5, 1.0, 4.0, 1.0, 4.0, 12.0, Side.ENEMY, "까마귀"],
 	["LION", 140.0, 4.0, 1.5, 0.0, 1.5, 2.5, 2.0, Side.ENEMY, "사자"],
 ]
 
@@ -253,17 +253,11 @@ const LION_WINDUP_SEC := 0.6
 ## Starting force: 10 soldiers (`roster_start_count()`, below `START_SLOTS`). A run starts from this
 ## identical state every time — no meta, no unlocks, no carry between runs.
 ##
-## ⚠ **`START_MELEE` / `START_RANGED` / `REWARD_MELEE` / `REWARD_RANGED` are DELETED, not renamed.**
-## They were per-TYPE and the roster is per-SLOT — `START_SLOTS` and `SLOT_PAY` below are where the two
-## counts live. What a `Reward.COUNT` node pays is `slot_pay_of` per registered slot: more soldiers at
-## FULL HP, applied on the win with nothing to click, so the run goes straight to the card screen.
-## ⚠ **A second reward kind used to open a pick screen of its own** — the beak — and it is deleted
-## (2026-08-25). Every fight node pays this one thing now.
-##
-## ⚠ It is a NODE's reward and no longer an island's. A route may step on up to
-## `map_max_count_nodes_on_a_route()` of them, which is why nothing downstream may assume one per run —
-## the roster capacity and `net_islands`' landing-region floor both ride on that accessor. See
-## `title-and-map`, the reward-belongs-to-the-node refutation box.
+## ⚠⚠ **EVERY NODE REWARD IS DELETED** (2026-08-26), together with the seven-node map that paid them:
+## `Reward`, `NodeKind`, `MAP_NODES`, `MAP_EDGES`, `SLOT_PAY`, `slot_pay_of` and `roster_reward_count`
+## are all gone. **A run grows on cards and nothing else now.**
+## ⚠ **`START_MELEE` / `START_RANGED` / `REWARD_MELEE` / `REWARD_RANGED` went earlier and for a
+## different reason** — they were per-TYPE and the roster is per-SLOT.
 
 # --- The summon slots ------------------------------------------------------------------------------
 ## What the number keys hold, and how far out to sea a summon may be pressed. See `sea-summon`.
@@ -309,19 +303,11 @@ const SUMMON_SLOT_MAX := 5
 ## species and the second arrives on the opening card screen. **The ten did not move**, only how it is
 ## split.
 const START_SLOTS := [
-	[WOLF, 10],
+	[SWORDSMAN, 10],
 ]
 
 const _START_COL_TYPE := 0
 const _START_COL_BODIES := 1
-
-## What a `Reward.COUNT` node adds, **indexed by SLOT NUMBER**. ⚠⚠ **That is a leftover and it is
-## written down as one** (티켓 15): the amounts are exactly what `SUMMON_SLOTS` paid, but which
-## SPECIES they reach now depends on what is registered in that slot, which is a per-run fact. The
-## user pinned the amounts for this ticket (***"이번 티켓에선 손대지 말고"***), so they moved
-## unchanged; a slot past the end of this table pays nothing.
-const SLOT_PAY := [2, 1]
-
 
 ## The unit row slot `slot` OPENS bound to, or `SUMMON_UNBOUND` past the opening table. **Only
 ## `add_starting_force` reads this** — a live slot is `Army.slot_type_of`.
@@ -338,29 +324,11 @@ static func start_bodies_of(slot: int) -> int:
 	return int((START_SLOTS[slot] as Array)[_START_COL_BODIES])
 
 
-## How many bodies a `Reward.COUNT` node adds to slot `slot`. 0 for a slot this table does not reach.
-static func slot_pay_of(slot: int) -> int:
-	if slot < 0 or slot >= SLOT_PAY.size():
-		return 0
-	return int(SLOT_PAY[slot])
-
-
 ## The force a run opens with, summed over the opening table rather than written beside it.
 static func roster_start_count() -> int:
 	var sum := 0
 	for s in START_SLOTS.size():
 		sum += start_bodies_of(s)
-	return sum
-
-
-## The MOST a `Reward.COUNT` node can pay — the whole pay table, whatever a given run has registered.
-## ⚠ **It is a capacity bound and not what any one run receives**: a run with one slot collects only
-## `slot_pay_of(0)`. `net_islands`' landing-region floor wants the bound, which is why this sums the
-## table instead of asking a run.
-static func roster_reward_count() -> int:
-	var sum := 0
-	for s in SLOT_PAY.size():
-		sum += slot_pay_of(s)
 	return sum
 
 
@@ -601,10 +569,9 @@ static func tag_stat_bonus_at(r: int, count: int) -> float:
 ## is new every island, so 「per island」 costs no reset code — it comes free with the object.
 ##
 ## ⚠ **First values, not measured ones.**
-const SPECIES_SHOVE := [
-	[SQUIRREL, 1.0, false],
-	[COW, -2.0, true],
-]
+## ⚠⚠ **EMPTY since 2026-08-26.** Its two rows were 다람쥐 and 소, and both left the unit table with the
+## side swap. **The table stays** because the mechanic is wired and one row brings it back.
+const SPECIES_SHOVE := []
 
 const _SHOVE_COL_TYPE := 0
 const _SHOVE_COL_TILES := 1
@@ -851,17 +818,13 @@ enum CardKind { ITEM, SPECIES }
 
 ## One row per beast card: the `UNITS` row it registers, and how rare the card is.
 ##
-## ⚠ **The rarities are first values**, the standing `RARITY_WEIGHT` carries — nothing has measured
-## whether a bear should be rarer than a squirrel. ⚠ **The wolf keeps a row although a run opens
-## already holding it**: the table is per species, and the draw refuses a species already registered
-## rather than this table having a hole in it.
-const SPECIES_CARDS := [
-	[SQUIRREL, Rarity.RARE],
-	[WOLF, Rarity.COMMON],
-	[COW, Rarity.RARE],
-	[BEAR, Rarity.EPIC],
-	[CROW, Rarity.RARE],
-]
+## ⚠⚠ **EMPTY since 2026-08-26, and that is a DECISION, not a gap.** The five rows here registered a
+## beast into a summon slot, and **the beasts are the enemy now** — `Army.register_species` refuses a
+## row on the enemy's side, so every one of them would have been a card that cannot be picked.
+## ⚠⚠ **The user chose what fills the hole**: 「성장 카드는 장비 위주로 주자」. An empty pool is exactly
+## that — `Run._draw_cards` falls through to equipment for every card, including the opening round.
+## ⚠ **The table stays** because the mechanic is wired end to end; a second player body is one row.
+const SPECIES_CARDS := []
 
 const _SPECIES_CARD_COL_TYPE := 0
 const _SPECIES_CARD_COL_RARITY := 1
@@ -871,7 +834,7 @@ const _SPECIES_CARD_COL_RARITY := 1
 ## be one line.
 ##
 ## ⚠⚠ **IT MUST NOT BE 0.** A card that only registers a slot adds **a button that refuses when you
-## press it** — the same failure the user hit from the other side with `Reward.COUNT` (a thing that is
+## press it** — the same failure the user hit from the other side with the deleted count reward (a thing that is
 ## there and is not on screen), built backwards.
 ##
 ## **Why four**: the old second slot opened with four bodies, so 「둘째 종이 도착한다」 is the size this
@@ -1158,165 +1121,3 @@ static func speed_mul_of(slot: int) -> float:
 ##
 ## ⚠ The exemption in particular must NOT be restored by anyone reading the 97 / 83 / 94 column of
 ## 2.1's table as an improvement: it was a Chebyshev 1, which is what let a boat land one tile INLAND.
-
-
-# --- The map ---------------------------------------------------------------------------------------
-## The shape of a run: which nodes exist, what each one pays, and which ones may follow which.
-##
-## It is here and not in `run.gd` because what a node PAYS changes what happens, and because `run.gd`
-## already reads this file — `rules.gd` referencing `Run` would close a class cycle. `Run.State` stays
-## on `Run` for the same reason in reverse: nothing here needs it.
-##
-## ⚠ **Nothing in this section is generated and no seed is read.** The map is authored, identical every
-## run, and `title-and-map` records that as a decision rather than a stage that was skipped: a map that
-## is the same every time is the one whose four routes can be walked exhaustively by a net.
-
-## ⚠ The chest is GONE — 「일단 전부 다 monster 노드로 만들면 될듯」. Every node opens an island now, so
-## the island column has no -1 in it any more and `NodeKind` has two entries.
-enum NodeKind { FIGHT, BOSS }
-
-## What a node pays on the way out. Moved here from `Run` so the table below can name it.
-##
-## ⚠ `HEAL` is GONE with the chest that was its only payer — see `NodeKind`'s own header.
-## ⚠⚠ **`BEAK` IS GONE TOO** (2026-08-25, the user: 「부리 보상 없지 끝나면 카드보상으로 통일했잖아」).
-## It was the dead cell game's reward — +1 range bolted onto ONE surviving body, dying with that body —
-## still paying out on two of seven nodes. 티켓 06 closed the growth loop as **win -> one card of
-## three** and 티켓 05 fixed it at three cards all the way through; the beak node was a leftover nobody
-## removed. **The +1-range mechanic went with it**: it hung on nothing else.
-## ⚠⚠ **AND SO EVERY NODE NOW PAYS THE SAME THING.** Seven nodes, six `COUNT` and one boss `NONE` —
-## the reward column no longer forks anything. **This is what 「통일」 costs and it is written here
-## rather than left to be noticed**: the table keeps its column so a second reward kind is one row.
-enum Reward { NONE, COUNT }
-
-## One row is ONE NODE: floor, kind, reward, island index.
-##
-## ⚠ The reward is the NODE's and not the KIND's. Keyed by kind, every fight node would pay the
-## identical thing and a fork could never put two payouts side by side — see `title-and-map`, the
-## reward-belongs-to-the-node refutation box. That is why this table has a reward column at all.
-## ⚠⚠ **Today every fight node DOES pay the identical thing** — the beak was the only other kind and
-## the user removed it. The column is kept for the reason above, not because it currently forks.
-##
-## ⚠ `const X := PackedInt32Array([...])` is a parse error on 4.7.1, so this is a plain const Array and
-## every read below casts.
-##
-## ⚠⚠ **EVERY NODE NOW HAS ITS OWN GRID** (2026-08-24). The column used to be three grids serving seven
-## nodes, declared temporary; the four compact islands in `islands.gd` are the three-new-grids this
-## table was waiting for, and one more. **The run walks four small islands, then the two big ones, then
-## the boss** — smallest first, so the map grows under the player instead of opening at full size.
-## ⚠ The boss stays on grid 2 because grid 2 is the only one with a lion in its rows.
-const MAP_NODES := [
-	[0, NodeKind.FIGHT, Reward.COUNT, 4],   # 0 — floor 1, fixed, where every run lands
-	[1, NodeKind.FIGHT, Reward.COUNT, 5],   # 1 — floor 2 left
-	[1, NodeKind.FIGHT, Reward.COUNT, 6],   # 2 — floor 2 right  (was BEAK until 2026-08-25)
-	[2, NodeKind.FIGHT, Reward.COUNT, 7],   # 3 — floor 3 left   (was BEAK until 2026-08-25)
-	[2, NodeKind.FIGHT, Reward.COUNT, 0],   # 4 — floor 3 right
-	[3, NodeKind.FIGHT, Reward.COUNT, 1],   # 5 — floor 4
-	[4, NodeKind.BOSS,  Reward.NONE,  2],   # 6 — floor 5, the lion, the run ends here
-]
-
-const _MAP_COL_FLOOR := 0
-const _MAP_COL_KIND := 1
-const _MAP_COL_REWARD := 2
-const _MAP_COL_ISLAND := 3
-
-## Directed and upward only. A run never walks down, so an edge is a permission and nothing else — and
-## because every edge climbs exactly one floor, a route's length is the floor count and a walker over
-## this table always terminates.
-##
-## Both floor-2 nodes reach both floor-3 nodes on purpose: branches that split and rejoin are what stop
-## one bad turn locking the rest of the map. Delete `[2,4]` and the map still walks, still draws, and
-## quietly becomes two corridors.
-const MAP_EDGES := [[0, 1], [0, 2], [1, 3], [1, 4], [2, 3], [2, 4], [3, 5], [4, 5], [5, 6]]
-
-
-static func map_node_count() -> int:
-	return MAP_NODES.size()
-
-
-static func map_floor_of(n: int) -> int:
-	return int(MAP_NODES[n][_MAP_COL_FLOOR])
-
-
-static func map_kind_of(n: int) -> int:
-	return int(MAP_NODES[n][_MAP_COL_KIND])
-
-
-static func map_reward_of(n: int) -> int:
-	return int(MAP_NODES[n][_MAP_COL_REWARD])
-
-
-## The island this node opens, or **-1** for a node with no fight. -1 is not an error and not a
-## sentinel to be clamped: it is what makes the chest cost no grid at all.
-static func map_island_of(n: int) -> int:
-	return int(MAP_NODES[n][_MAP_COL_ISLAND])
-
-
-## How many floors the map has. Derived from the table rather than written beside it, because a floor
-## count written twice is the second copy that rots the day a floor is added.
-static func map_floor_count() -> int:
-	var top := -1
-	for n in range(map_node_count()):
-		top = maxi(top, map_floor_of(n))
-	return top + 1
-
-
-static func map_edge_count() -> int:
-	return MAP_EDGES.size()
-
-
-static func map_edge_from(e: int) -> int:
-	return int(MAP_EDGES[e][0])
-
-
-static func map_edge_to(e: int) -> int:
-	return int(MAP_EDGES[e][1])
-
-
-## The most `Reward.COUNT` nodes a single route can step on — 3 on the map as authored.
-##
-## ⚠ **Walked over the table, never written as a literal 3.** `net_islands`' landing-region floor and
-## the roster capacity both ride on this number, and a hand-written 3 beside a table that can grow is
-## exactly the second copy this repo has watched rot twice. Change `MAP_NODES` and this moves with it.
-static func map_max_count_nodes_on_a_route() -> int:
-	var best := 0
-	for n in range(map_node_count()):
-		if map_floor_of(n) == 0:
-			best = maxi(best, _map_max_count_from(n))
-	return best
-
-
-## Terminates because every edge climbs exactly one floor: the recursion can only run `map_floor_count()`
-## deep. A node with no outgoing edge is the end of a route and contributes only itself.
-static func _map_max_count_from(n: int) -> int:
-	var here := 1 if map_reward_of(n) == Reward.COUNT else 0
-	var best := -1
-	for e in range(map_edge_count()):
-		if map_edge_from(e) == n:
-			best = maxi(best, _map_max_count_from(map_edge_to(e)))
-	if best < 0:
-		return here
-	return here + best
-
-
-## The most card-paying nodes a single route can step on. ⚠ **A node pays cards iff it is not the
-## boss** — every fight now pays six cards on the win — so this walks the SAME shape
-## `map_max_count_nodes_on_a_route()` does, never written as a literal. `Look.refit_held_capacity()`'s
-## floor rides on it: a hand-written literal beside a table that can grow is the second copy this repo
-## has watched rot twice.
-static func map_max_card_nodes_on_a_route() -> int:
-	var best := 0
-	for n in range(map_node_count()):
-		if map_floor_of(n) == 0:
-			best = maxi(best, _map_max_card_from(n))
-	return best
-
-
-static func _map_max_card_from(n: int) -> int:
-	var here := 0 if map_kind_of(n) == NodeKind.BOSS else 1
-	var best := -1
-	for e in range(map_edge_count()):
-		if map_edge_from(e) == n:
-			best = maxi(best, _map_max_card_from(map_edge_to(e)))
-	if best < 0:
-		return here
-	return here + best

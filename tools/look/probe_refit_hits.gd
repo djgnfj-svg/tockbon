@@ -22,7 +22,6 @@ func _run() -> void:
 	game.set_process(false)
 	game._start_run()
 	game.run.seed_cards(20260821)
-	game.run.enter_node(0)
 	game.run.finish_island(true)
 	game._show_state()
 	_click(game, Look.card_rect_px(0).get_center())

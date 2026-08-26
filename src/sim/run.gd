@@ -1,57 +1,51 @@
 class_name Run
 extends RefCounted
-## Session state: which node of the map the army is standing on, which reward is waiting to be taken,
-## and whether the run is still going. One island's fight lives in `battle.gd`, the map's shape is
-## `rules.gd`'s node table and the walk over it is `map.gd`; this file is everything between them.
+## Session state: whether the island is open, which cards are on the table, and whether the run is
+## still going. One island's fight lives in `battle.gd`; this file is everything around it.
+##
+## ⚠⚠ **THE MAP IS GONE** (2026-08-26). Seven nodes and eight islands were deleted together — the user
+## could not draw eight islands and said so (`idea-inbox` 328). **There is one island**, and a run is
+## the opening card round, that island, and an end.
+##
+## ⚠⚠ **What replaces the map is not built yet.** 「제한 시간이 지나면 보스가 온다」 and the waves that
+## bring the beasts ashore are decided but unbuilt, so **winning the island ends the run** — see
+## `finish_island`. That is a placeholder that says so out loud rather than a loop pretending to be one.
 ##
 ## **`army` is built in exactly two places — `_init` and `restart` — and nowhere else.** HP carries
-## across islands by identity: the same rows, the same ids, the same wounds. So `begin_island` hands
-## `battle` the roster this object already holds instead of making one. Building a fresh `Army` there
-## instead would heal every soldier between islands **while a check that only counts
-## soldiers stayed green**, which is the mutation the first-slice plan names for `net_run` to bite on.
+## by identity: the same rows, the same ids, the same wounds. So `begin_island` hands `battle` the
+## roster this object already holds instead of making one. Building a fresh `Army` there instead would
+## heal every soldier **while a check that only counts soldiers stayed green**.
 ##
-## Every value that changes what happens lives in `rules.gd`, and the islands' own facts — how many
-## there are, their grids, their spawns, their time limits — live in `islands.gd`. Nothing here holds a
-## second copy of either; a number counted in two places diverges.
+## Every value that changes what happens lives in `rules.gd`, and the island's own facts — its grid,
+## its spawns, its clock — live in `islands.gd`. Nothing here holds a second copy of either; a number
+## counted in two places diverges.
+
+
+## Where the run is. `BATTLE` means the island is open and `begin_island` will build its fight;
+## `PICK` means cards are up and some are waiting to be taken; `REFIT` means the taken cards are ready
+## to be laid into a board; `WON` and `LOST` are both terminal until `restart`.
 ##
-## ⚠ **The 「cell army GDD」 this line used to cite does not exist** (2026-08-25, 티켓 23) — the deleted
-## cell game's design document. The session loop is read out of `.scratch/cell-hook/`'s map. See the
-## first-slice plan's "The sim — shapes and entry, and the first-slice plan's "The sim — shapes and entry
-## points" for the signatures below.
-
-
-## Where the run is. `MAP` means the node map is open and a node is waiting to be pressed; `BATTLE`
-## means an island is open and `begin_island` will build its fight; a card pick is
-## waiting; `PICK` means the six cards are up and two are waiting to be taken; `REFIT` means the two
-## taken cards are ready to be laid into a board; `WON` and `LOST` are both terminal until `restart`.
+## ⚠⚠ **`MAP` IS GONE** (2026-08-26), deleted with the map screen and the seven islands behind it. A
+## state nothing can enter is a screen nobody can reach, and leaving it would keep every check about it
+## green. **`REWARD` went the same way on 2026-08-25.**
 ##
-## ⚠ **`MAP` is FIRST so it is 0**, and a default-constructed int therefore lands on the map rather
-## than in a battle against an island nobody entered. ⚠ **Nothing anywhere may compare a state against
-## a literal int** — `net_run` pins `State.MAP == 0` and the rest by name.
-## ⚠⚠ **`REWARD` IS GONE** (2026-08-25): its only producer was a `Reward.BEAK` node, and the user
-## deleted that reward — 「부리 보상 없지 끝나면 카드보상으로 통일했잖아」. A state nothing can enter
-## is a screen nobody can reach, and leaving it would keep every check about it green.
-enum State { MAP, BATTLE, PICK, REFIT, WON, LOST }
+## ⚠ **`BATTLE` is FIRST so it is 0**, and a default-constructed int therefore lands on the island
+## rather than in a state nothing sets. ⚠⚠ **Nothing anywhere may compare a state against a literal
+## int** — `net_run` pins these by name.
+enum State { BATTLE, PICK, REFIT, WON, LOST }
 
 
-## The island the node the army is standing on opened. **It never leaves the range of real islands.**
-## An out-of-range index here would read as a real island to every caller that indexes with it and
-## would only fault later, inside whichever of them indexed first.
-##
-## ⚠ **It is no longer the run's position.** The position is `map.at()`; this is written only by
-## `enter_node`, and `_advance` does not touch it. A `+ 1` put back here walks the run past an island
-## nobody chose, and the map is then a picture the run ignores.
-var island_index := 0
-
-## The roster that survives islands. Never rebuilt outside `_reset`.
+## The roster that survives the run. Never rebuilt outside `_reset`.
 var army: Army = null
 
-## The route walked so far. Built in `_reset` beside `army` — **the two places a run's state is built
-## stay exactly two.**
-var map: RunMap = null
+var _state := State.BATTLE
 
-var _state := State.MAP
-var _pending := Rules.Reward.NONE
+## ⚠⚠ **The placeholder that stands where the waves will.** True once the island has been held. It is
+## what makes `_advance` end the run instead of re-opening the island, and it exists because **there is
+## exactly one island**: without it a cleared island would either re-open forever (a loop dressed as a
+## wave) or leave `WON` unreachable (a screen nobody can get to).
+## ⚠ **When waves are built this is what they replace** — a wave counter answers the same question.
+var _island_cleared := false
 
 ## `Rules.CARDS_PER_WIN` cards. **`cards[k]` means an ITEM id or a `UNITS` row depending on
 ## `card_kind[k]`** — a card is one of two things since 티켓 15.
@@ -63,8 +57,7 @@ var card_kind := PackedInt32Array()
 var cards_taken := PackedByteArray()
 
 ## ⚠⚠ **The first RNG in `src/sim/`, and it is bounded on purpose**: one object, one reader
-## (`_draw_cards`), one seed verb. **The map stays authored** — `title-and-map`'s reason for that (four
-## routes a net can walk exhaustively) is untouched.
+## (`_draw_cards`), one seed verb.
 var _rng := RandomNumberGenerator.new()
 
 ## Whether the round currently on the table was dealt beasts-only. **Read by `seed_cards` alone**, so
@@ -84,20 +77,17 @@ func restart() -> void:
 
 
 func _reset() -> void:
-	island_index = 0
 	army = Army.new()
 	army.add_starting_force()
-	map = RunMap.new()
-	_state = State.MAP
-	_pending = Rules.Reward.NONE
+	_state = State.BATTLE
+	_island_cleared = false
 	cards = PackedInt32Array()
 	card_kind = PackedInt32Array()
 	cards_taken = PackedByteArray()
 	_rng.randomize()
-	# ⚠⚠ **A RUN OPENS ON A CARD SCREEN, NOT ON THE MAP** (2026-08-25, the user: 「시작하자마자 세 개
-	# 중에 하나 고르는 거 그거 하고 가자」). Three cards, **beasts only** — equipment here would make
-	# the one species a run holds stronger instead of splitting the horde, which pushes the fork this
-	# game is about a whole island later.
+	# ⚠⚠ **A RUN OPENS ON A CARD SCREEN** (2026-08-25, the user: 「시작하자마자 세 개 중에 하나 고르는
+	# 거 그거 하고 가자」). Three cards, **beasts only** — equipment here would make the one species a
+	# run holds stronger instead of splitting the horde.
 	_draw_cards(true)
 	_state = State.PICK
 
@@ -116,71 +106,40 @@ func seed_cards(s: int) -> void:
 		_draw_cards(_round_is_beasts_only)
 
 
-## The map screen's ONE verb: step onto a node. Returns false and changes nothing when the run is not
-## on the map or the node is not reachable — the caller validates its own click, matching `RunMap.enter`
-## and `grid.load_rows`.
-##
-## Reachability is asked of `map.enter` and nowhere else here. Testing `is_reachable` first and then
-## calling `enter` would be the same rule written twice, free to disagree the day one of them grows a
-## clause.
-##
-## ⚠ **Every node opens an island now — the chest is gone.** `enter_node` used to have a second branch
-## for a node with no island (`island < 0`, applying its reward on the spot and staying on the map);
-## that branch is DELETED rather than left unreachable, because an unreachable arm reads as a supported
-## case. No node's `map_island_of` is ever negative any more.
-func enter_node(n: int) -> bool:
-	if _state != State.MAP:
-		return false
-	if not map.enter(n):
-		return false
-	island_index = Rules.map_island_of(n)
-	_state = State.BATTLE
-	return true
-
-
-## Builds the current island's fight and hands it back. Returns `null` when no island is open — **on
-## the map**, during a reward pick, or once the run is over — so a caller that ignores `state()` gets a
-## null instead of a fight on an island the army has already left or has not chosen yet.
+## Builds the island's fight and hands it back. Returns `null` unless the island is actually open, so
+## a caller that ignores `state()` gets a null instead of a fight during a card pick or after the end.
 ##
 ## The `Grid` is new every time. `load_rows` does clear reservations, but a grid built here can never
-## be one another `Battle` still holds unit ids inside, and that costs 1536 tiles once per island
-## (`boat-and-landing`'s 48 x 32 grid, up from 576).
+## be one another `Battle` still holds unit ids inside.
 func begin_island() -> Battle:
 	if _state != State.BATTLE:
 		return null
 	var grid := Grid.new()
-	Islands.load_into(grid, island_index)
+	Islands.load_into(grid)
 	var battle := Battle.new()
-	battle.setup(grid, army, Islands.spawns_of(island_index), Islands.time_limit_of(island_index))
+	battle.setup(grid, army, Islands.spawns(), Islands.time_limit())
 	return battle
 
 
-## Closes the island. A loss is terminal at once; a win queues the reward of **the node the run is
-## standing on**, and the reward is what decides whether the run stops for a pick or goes back to the
-## map by itself.
+## Closes the island. **Both outcomes are terminal.**
 ##
-## Ignored unless an island is actually open, so a loss cannot be un-lost, a finished run cannot be
-## reopened, and a reward waiting to be picked cannot be skipped past.
+## ⚠⚠ **A WIN PAYS ITS CARDS AND THEN ENDS THE RUN, AND THE ENDING IS A PLACEHOLDER.** What used to
+## follow a win was the map: cards, then the next of eight islands. The map is deleted and **what
+## replaces it — waves, and a boss on a clock — is decided but unbuilt** (`.scratch/island-hold/`).
+## ⚠ **The cards are still paid** so the card and refit screens stay reachable; sending the run back
+## into the same island instead would be a loop dressed as a wave, and this repo does not do that.
 ##
-## ⚠ **The double-close hole this guard used to leave is now closed by the map, not by this line.**
-## It used to open the next island by itself, so a second call closed *that* one and the run walked
-## past an island nobody fought; now a win lands in `MAP` and the second call falls out on the guard
-## above. ⚠ **That is a property of `_advance` no longer stepping `island_index`** — put the step back
-## and this paragraph becomes a lie again as well.
-## ⚠ **Six cards are drawn on every win, before the node's own reward is queued** — 「6개중 2택」, paid
-## by every fight ON TOP of the node's own reward (open question A, closed). ⚠ **A node pays cards iff
-## it is not the boss** — the boss node is the one node that ends the run, and `map.is_finished()` is
-## the same fact `_advance()` checks first; a route walk cannot ask `map.is_finished()` and a standing
-## run cannot ask a route, so this is the one place both directions agree.
+## Ignored unless the island is actually open, so a loss cannot be un-lost and a finished run cannot be
+## reopened.
 func finish_island(won: bool) -> void:
 	if _state != State.BATTLE:
 		return
 	if not won:
 		_state = State.LOST
 		return
-	if not map.is_finished():
-		_draw_cards()
-	_queue_reward(map.at())
+	_island_cleared = true
+	_draw_cards()
+	_advance()
 
 
 ## `Rules.CARDS_PER_WIN` independent draws. `cards_taken` is cleared with them, so a stale mark from a
@@ -238,39 +197,6 @@ func _species_pool() -> PackedInt32Array:
 	return out
 
 
-## Queues the node's reward and resolves it as far as it can go on its own. **One dispatch**, so a
-## reward that needs no fight and one that did are applied by the same lines.
-func _queue_reward(n: int) -> void:
-	_pending = Rules.map_reward_of(n)
-	match _pending:
-		Rules.Reward.COUNT:
-			take_count_reward()
-		_:
-			_advance()
-
-
-## `Rules.Reward.NONE` or `COUNT` — what is waiting to be taken right now.
-func pending_reward() -> int:
-	return _pending
-
-
-## A `COUNT` node's reward: more soldiers, at full HP, appended to the roster that is already carrying
-## the survivors. `Army.recruit` is what fills their HP, so no starting value is written twice.
-##
-## Applied the moment it is queued, because there is nothing to choose — it is public only so that the
-## applying of the reward and the naming of it are the same function in all three cases.
-func take_count_reward() -> void:
-	if _pending != Rules.Reward.COUNT:
-		return
-	# ⚠ **Over the RUN's own slots** — the pay table is indexed by slot number and a run that has
-	# registered fewer slots than the table has rows collects only the rows it reaches.
-	for s in army.slot_count():
-		for _i in range(Rules.slot_pay_of(s)):
-			army.recruit(s)
-	_pending = Rules.Reward.NONE
-	_advance()
-
-
 ## Takes card `k`. Refused (and nothing changes) unless the run is in `PICK`, `k` is in range, that
 ## card has not already been taken, and fewer than `Rules.CARD_PICKS` have been taken so far.
 ##
@@ -324,9 +250,7 @@ func _cards_taken_count() -> int:
 	return n
 
 
-## Closes the refit screen. Refused unless the run is actually in `REFIT`. ⚠ **The boss pays no cards**
-## (`Reward.NONE`, and `_advance` checks `map.is_finished()` first), so this arm exists only so a
-## future boss-that-pays cannot end a run on the refit screen.
+## Closes the refit screen. Refused unless the run is actually in `REFIT`.
 func close_refit() -> bool:
 	if _state != State.REFIT:
 		return false
@@ -334,27 +258,24 @@ func close_refit() -> bool:
 	return true
 
 
-## `State.MAP`, `State.BATTLE`, `State.PICK`, `State.REFIT`, `State.WON` or
-## `State.LOST`.
+## `State.BATTLE`, `State.PICK`, `State.REFIT`, `State.WON` or `State.LOST`.
 func state() -> int:
 	return _state
 
 
-## The reward is settled: `WON` if the map is finished; else `PICK` if there is a card still undrawn
-## from (`cards.size() > 0 and taken < CARD_PICKS`); else `MAP`.
+## The card round is settled: `PICK` while a card is still undrawn from; then `WON` if the island has
+## already been held, else the island opens.
 ##
-## ⚠⚠ **The `PICK` arm is ABOVE the `MAP` arm.** Below it, the cards are drawn and never shown and the
-## round stays green — the roster grows, the run walks back to the map, and every
-## check that only counts soldiers stays green.
+## ⚠⚠ **The `PICK` arm is ABOVE the `BATTLE` arm.** Below it, the cards are drawn and never shown and
+## the round stays green — the roster grows, the run walks onto the island, and every check that only
+## counts soldiers stays green.
 ##
-## ⚠ **It does not touch `island_index`.** Walking to the next island by itself is what the old
-## `island_index + 1` did, and a map added on top of that just gets walked past — the map appears, the
-## run ignores it, and every check that only counts islands stays green. Which node comes next is the
-## player's press, and `enter_node` is the only writer.
+## ⚠ **Losing is not decided here.** `finish_island` owns that, and `_island_cleared` is the only thing
+## this function reads about the island at all.
 func _advance() -> void:
-	if map.is_finished():
-		_state = State.WON
-	elif cards.size() > 0 and _cards_taken_count() < Rules.CARD_PICKS:
+	if cards.size() > 0 and _cards_taken_count() < Rules.CARD_PICKS:
 		_state = State.PICK
+	elif _island_cleared:
+		_state = State.WON
 	else:
-		_state = State.MAP
+		_state = State.BATTLE

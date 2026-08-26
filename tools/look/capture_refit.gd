@@ -48,7 +48,6 @@ func _run() -> void:
 	# --- a won fight, which is what pays the six cards --------------------------------------------
 	_game._start_run()
 	_game.run.seed_cards(20260821)
-	_game.run.enter_node(0)
 	_game.run.finish_island(true)
 	_game._show_state()
 	print("capture_refit: state after a win = %d (PICK is %d)" % [_game.run.state(), Run.State.PICK])

@@ -22,7 +22,7 @@ const STAIR := Vector2(13.0, 7.0)
 func _initialize() -> void:
 	print("[탐침3] 계단 위에서 고원의 몸에 닿는가 — 대조군을 붙여서")
 	var g := Grid.new()
-	Islands.load_into(g, ISLAND)
+	Islands.load_into(g)
 	print("  계단 %s 단 %d · 근접 실제 사거리 %.2f (사거리 0 + REACH_BONUS %.1f)"
 			% [str(STAIR), g.level_at(13, 7), Rules.REACH_BONUS, Rules.REACH_BONUS])
 	print("  단 하나의 높이 %.1f 타일 (TIER_STEP_TILES)" % Rules.TIER_STEP_TILES)
@@ -46,7 +46,7 @@ func _case(spot: Vector2) -> void:
 	# one archer, on the tile under test; everything else off the board
 	var keep := -1
 	for e in battle.enemy_alive.size():
-		if keep < 0 and int(battle.enemy_type[e]) == Rules.ARCHER:
+		if keep < 0 and int(battle.enemy_type[e]) == Rules.CROW:
 			keep = e
 			continue
 		battle.enemy_alive[e] = 0
@@ -109,8 +109,6 @@ func _stood_up() -> Battle:
 	run.seed_cards(99)
 	if run.state() == Run.State.PICK:
 		run.take_card(0)
-	if not run.enter_node(0):
-		return null
 	var battle := run.begin_island()
 	var tile := -1
 	for t in battle.grid.passable.size():

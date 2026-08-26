@@ -11,15 +11,15 @@ extends Node2D
 ## Nothing here is `@onready` and nothing here is `@export`: every field below is assigned by `_ready`
 ## or by `_open_island`, so there is no path where the engine fills one in and the wiring is not run.
 ##
-## Draw order is tree order for `Node2D` siblings, so the five children are added field -> hud -> map
-## -> title -> panel and the panel lands on top of everything. Map and title never coexist (one needs
-## a `Run` on the map, the other needs no run at all), so their relative order decides nothing — it is
-## fixed anyway so nobody has to reason about it twice. There is no `CanvasLayer`.
+## Draw order is tree order for `Node2D` siblings, so the children are added field -> hud -> title ->
+## panel and the panel lands on top of everything. There is no `CanvasLayer`.
 ##
-## ⚠ **THREE SCREENS LIVE IN THIS ONE NODE and they are told apart by `run` alone**: `run == null` is
-## the title, `run.state() == MAP` is the map, and everything else is an island. `title-and-map`
-## records why the title is not a `Run.State`: before 시작하기 there is no run, and a state on an
-## object that does not exist cannot be reached.
+## ⚠⚠ **THE MAP SCREEN IS DELETED** (2026-08-26) with the seven nodes and the eight islands behind it.
+## `map_view`, `_map_input`, `_enter_map_screen`, `_enter_node` and `_pending_node` all went with it.
+##
+## ⚠ **TWO SCREENS LIVE IN THIS ONE NODE and they are told apart by `run` alone**: `run == null` is the
+## title, and everything else is the island. The title is not a `Run.State` because before 시작하기
+## there is no run, and a state on an object that does not exist cannot be reached.
 ##
 ## The input table this file implements is `plan-then-watch`, section "Input", with `title-and-map`'s
 ## two branches and `sea-summon`'s two on top of it. ⚠ The landing is authored before a start button,
@@ -47,7 +47,6 @@ var battle: Battle = null
 
 var field_view: FieldView = null
 var hud_view: HudView = null
-var map_view: MapView = null
 var reward_view: RewardView = null
 var refit_view: RefitView = null
 var title_view: TitleView = null
@@ -64,10 +63,10 @@ var panel_view: PanelView = null
 var _panning := false
 
 ## Seconds the shell is standing still, holding a moment on screen before it walks the run forward.
-## Two things ride it — the verdict pause and the map ring's walk — and they never overlap, because a
-## hold does not call `step` and so cannot see a second outcome, and `_release_hold` moves the state
-## on the frame it expires. `combat-juice`, item "승패 전환".
-## ⚠ **A third rode it until 2026-08-25** — the beak stain — and it went with the reward.
+## One thing rides it — the verdict pause — and `_release_hold` moves the state on the frame it
+## expires. `combat-juice`, item "승패 전환".
+## ⚠ **Two others rode it and are gone**: the beak stain (2026-08-25) and the map ring's travel walk
+## (2026-08-26).
 ##
 ## **Declared with an explicit type and not `:= 0.0` on purpose.** `net_draw_leaf`'s literal scan
 ## reads `src/shell/` as well, and a bare `_hold_sec := <number>` is exactly the shape it is widened
@@ -75,16 +74,6 @@ var _panning := false
 ## zero is a "nothing is held" sentinel, not a duration, and it is written so the scan can keep
 ## biting the duration.
 var _hold_sec: float = 0.0
-
-## The map node a press has been accepted for, while the you-are-here ring is still walking the edge
-## toward it, or -1. **The sim does not know yet**: `run.enter_node` is called by `_release_hold` and
-## not by the click, which is what buys the travel its 0.45 s to play in.
-##
-## ⚠ Cutting straight to the island instead would make the map's work invisible — the walk IS the
-## progress readout. **The beak pick had the same shape and it is deleted** (2026-08-25) — this is the
-## last deferred call in the shell, and the reason is the same: the beat needs a frame, and delaying
-## the CALL is the fix that does not edit the sim.
-var _pending_node := -1
 
 ## `sea-summon`'s four. `_armed_slot` is which slot a number key has armed, or -1; `_summon_down` is
 ## true while a summon press is being held; `_summon_at` is the tile under the cursor and
@@ -114,14 +103,12 @@ var _summon_beat_sec: float = 0.0
 func _ready() -> void:
 	field_view = FieldView.new()
 	hud_view = HudView.new()
-	map_view = MapView.new()
 	reward_view = RewardView.new()
 	refit_view = RefitView.new()
 	title_view = TitleView.new()
 	panel_view = PanelView.new()
 	add_child(field_view)
 	add_child(hud_view)
-	add_child(map_view)
 	add_child(reward_view)
 	add_child(refit_view)
 	add_child(title_view)
@@ -140,27 +127,21 @@ func _ready() -> void:
 ## to stay drawable. The views are still re-bound, because the panel reads `run.state()` and has to
 ## learn that the island it is sitting on top of is finished.
 func _open_island() -> void:
-	# A slot armed on island 1 must not survive onto island 2, and the tile it was aiming at would name
-	# a different piece of water there. Cleared unconditionally, not only when a new island actually
-	# opens: a REWARD transition (`opened == null`) still has to drop an aim that was live when the
-	# panel came up.
+	# Cleared unconditionally and not only when an island actually opens: a transition with
+	# `opened == null` still has to drop an aim that was live when the panel came up.
 	_disarm()
 	var opened := run.begin_island()
 	if opened != null:
 		battle = opened
-		# A fresh `Grid` and a fresh `Battle` per island, but the SAME `Army` — that is how HP and the
-		# every fitted item carry across islands. The army handed to the field is `run.army`, the same object
-		# `begin_island` just gave the battle; rebuilding it anywhere would heal the run between
-		# islands while a check that only counted soldiers stayed green.
+		# A fresh `Grid` and a fresh `Battle`, but the SAME `Army` — that is how HP and every fitted
+		# item carry. The army handed to the field is `run.army`, the same object `begin_island` just
+		# gave the battle; rebuilding it anywhere would heal the run while a check that only counted
+		# soldiers stayed green.
 		#
 		# The field is handed the island's legend ROWS as well, because `grid.passable` is one byte and
 		# water and a hole are both 0 in it: coloured from passability alone the sea and the pits come
 		# out the same tone and the map reads as one shape.
-		#
-		# The rows are read with `run.island_index` straight after `begin_island`, which does not
-		# advance it. Taking them from anywhere else would let the field draw one island's terrain
-		# under another island's units, and both halves would look plausible.
-		field_view.setup(battle, run.army, Islands.rows_of(run.island_index))
+		field_view.setup(battle, run.army, Islands.rows())
 		hud_view.bind(battle)
 	panel_view.bind(run, battle)
 
@@ -181,12 +162,9 @@ func _close_island() -> void:
 
 
 ## The one mapping from `run.state()` to a screen. Three copies of a state->screen dispatch is three
-## places to forget a new state — `_close_island` and `_enter_node`'s else arm both call this instead
-## of deciding for themselves.
+## places to forget a new state — `_close_island` calls this instead of deciding for itself.
 func _show_state() -> void:
 	match run.state():
-		Run.State.MAP:
-			_enter_map_screen()
 		Run.State.PICK:
 			_enter_pick_screen()
 		Run.State.REFIT:
@@ -216,9 +194,8 @@ func _show_state() -> void:
 ## ⚠ **The early return was SPLIT rather than moved, and the half that matters kept its place.**
 ## `title-and-map` pins this function's first line, and its stated reason is that both new views age
 ## their own clocks — making the shell hand time down would be one clock in two places. That reason is
-## untouched: neither `map_view` nor `title_view` is given a second of time by this file. What changed
-## is that a hold can now run while there is no battle at all (the map's travel walk), so the battle
-## guard sits below the hold instead of above it. `begin_frame()` still sits directly under the run
+## untouched: `title_view` is not given a second of time by this file. The battle guard sits below the
+## hold rather than above it, which is where the map's travel walk left it. `begin_frame()` still sits directly under the run
 ## check and above everything else that touches `battle`, which is the one position `combat-juice`
 ## allows it in.
 func _process(delta: float) -> void:
@@ -276,18 +253,11 @@ func _process(delta: float) -> void:
 		_hold_sec = Look.HOLD_OUTCOME_SEC
 
 
-## What the shell does when a hold runs out: step onto the map node the ring has just walked to, or
-## close the island that was left standing on screen.
+## What the shell does when a hold runs out: close the island that was left standing on screen.
 ##
-## The two are exclusive by construction and the order only decides which is read first. A map hold
-## runs with `battle == null`, so it can never reach `_close_island` below.
-## ⚠ **A third branch — bolting on the beak — was deleted with the reward** (2026-08-25).
+## ⚠ **Two other branches were deleted from here** — bolting on the beak (2026-08-25) and stepping onto
+## a map node the ring had walked to (2026-08-26). **One hold, one thing to do.**
 func _release_hold() -> void:
-	if _pending_node >= 0:
-		var n := _pending_node
-		_pending_node = -1
-		_enter_node(n)
-		return
 	_close_island()
 
 
@@ -312,7 +282,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	#
 	# ⚠ **It stays BELOW the title branch and that is safe, measured against the code rather than
 	# assumed**: a hold is armed by `_process` (which returns on `run == null`), by `_click_panel`
-	# (which itself returns early while a hold runs) or by `_map_input` (which needs a run). The only
+	# (which itself returns early while a hold runs). The only
 	# path to `run == null` is the restart button inside `_click_panel`, and `_hold_sec` is 0 there.
 	# The next reader will otherwise "fix" this order.
 	#
@@ -329,15 +299,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		# a gesture in flight.
 		_summon_down = false
 		return
-	# ⚠ **The map branch sits ABOVE the mouse block below**, and that is measured against the code
-	# rather than tidy: the fall-through at the bottom of `_on_left_press` is `_panning = true`, so a
-	# click on a node would otherwise pan the camera over the island still sitting behind the map.
-	if run.state() == Run.State.MAP:
-		_map_input(event)
-		return
-	# ⚠⚠ **The `PICK` and `REFIT` branches sit BESIDE the `MAP` branch, above the `battle != null`
-	# block.** Below it, a click on a card or a cell falls through to `_panning = true` — the field is
-	# `null` on both these screens, but `_on_left_press` does not know that until it gets there.
+	# ⚠⚠ **The `PICK` and `REFIT` branches sit ABOVE the `battle != null` block.** Below it, a click on
+	# a card or a cell falls through to `_panning = true` — the field is `null` on both these screens,
+	# but `_on_left_press` does not know that until it gets there.
 	if run.state() == Run.State.PICK:
 		_pick_input(event)
 		return
@@ -434,32 +398,6 @@ func _quit_the_game() -> void:
 	get_tree().quit()
 
 
-## The map screen's whole input table: one hover and one press, and the press is the run's only verb
-## on this screen.
-##
-## ⚠ **Reachability is asked of the SIM and not of the view's own picture.** `map_view.is_node_pressable`
-## calls `RunMap.is_reachable`, which is the same call `run.enter_node` makes when the hold expires, so
-## a press can never be offered on screen and refused a moment later.
-func _map_input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion:
-		map_view.set_hover((event as InputEventMouseMotion).position)
-		return
-	if not (event is InputEventMouseButton):
-		return
-	var click := event as InputEventMouseButton
-	if click.button_index != MOUSE_BUTTON_LEFT or not click.pressed:
-		return
-	var n := map_view.node_at(click.position)
-	if n < 0 or not run.map.is_reachable(n):
-		return
-	# The view is told first and the sim is told last: `enter_node` leaves
-	# `MAP` on the spot, and `map_view._draw` returns the instant it does — so the ring would have zero
-	# frames to walk in however long the shell then waited.
-	map_view.note_press(n)
-	_pending_node = n
-	_hold_sec = Look.MAP_TRAVEL_SEC
-
-
 ## The reward screen's whole input table: one hover and one press.
 ##
 ## ⚠ **Whether a card may be taken is asked of the SIM**, exactly as the map asks `run.map.is_reachable`
@@ -533,50 +471,13 @@ func _refit_input(event: InputEvent) -> void:
 		run.army.loadout.unfit(open_beast, part)
 
 
-## 시작하기: a brand new run, and the map rather than an island. **`Run.restart()` is not called here**
-## — a fresh `Run` is what 시작하기 means, and `restart` stays alive for `net_run` to keep `_reset`
-## honest about fields added to one path and not the other.
+## 시작하기: a brand new run. **`Run.restart()` is not called here** — a fresh `Run` is what 시작하기
+## means, and `restart` stays alive for `net_run` to keep `_reset` honest about fields added to one
+## path and not the other.
 func _start_run() -> void:
 	run = Run.new()
-	# ⚠ **`_show_state()` and not `_enter_map_screen()`** — a run opens on its beast card round now, and
-	# a hard-wired map screen here would draw the map over a pick nobody could see.
+	# ⚠ **`_show_state()` and not a hard-wired screen** — a run opens on its card round.
 	_show_state()
-
-
-## Steps onto a node once its ring has finished walking. A node that opens an island hands over to
-## `_open_island`; a chest opens none — its reward already landed inside `enter_node` — so the map
-## simply comes back, and `map_view` notices the pool moved and climbs the 「힘」 number to it.
-func _enter_node(n: int) -> void:
-	if not run.enter_node(n):
-		return
-	if run.state() == Run.State.BATTLE:
-		_open_island()
-	else:
-		_show_state()
-
-
-## Puts the map on screen and takes the island off it.
-##
-## ⚠⚠ **`battle = null` is the one lever that silences `field_view` AND `hud_view` at once**, and it is
-## the opposite of what `_open_island` does on purpose: the island the run just left has to stop being
-## drawn, stop panning, and take its clock and its start button with it. `field_view._draw` gates on
-## `battle == null`, and so does `hud_view._draw`.
-##
-## The `setup(null, ...)` and `bind(null)` calls under it are not redundant in the way that matters:
-## `field_view` holds its OWN reference and would keep drawing the last island's terrain if only this
-## file's field were cleared.
-func _enter_map_screen() -> void:
-	battle = null
-	field_view.setup(null, null, [])
-	_disarm()
-	hud_view.bind(null)
-	map_view.bind(run)
-	# The node the run is standing on is the one that was just cleared, and -1 (a run that has landed
-	# nowhere yet) is a no-op. Asked of the map rather than remembered here — the shell keeping its own
-	# "which node did I just win" would be `path` written down a second time.
-	map_view.note_cleared(run.map.at())
-	panel_view.bind(run, null)
-	title_view.visible = false
 
 
 ## Six cards are up. The shape of `_enter_map_screen`: the island stops being drawable and the panel
@@ -910,13 +811,12 @@ func _click_panel(at: Vector2) -> void:
 		return
 	if panel_view.button_hit(at):
 		# ⚠ **Back to the TITLE, not to a fresh island.** `run == null` IS the title screen, so this is
-		# one line — but `battle` must be nulled in the same breath or the boss island keeps drawing
-		# behind it, and `map_view` must be unbound or a finished map stays on screen under the menu.
+		# one line — but `battle` must be nulled in the same breath or the island keeps drawing behind
+		# it.
 		run = null
 		battle = null
 		field_view.setup(null, null, [])
 		hud_view.bind(null)
-		map_view.bind(null)
 		panel_view.bind(null, null)
 		title_view.visible = true
 

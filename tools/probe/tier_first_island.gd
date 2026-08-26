@@ -46,7 +46,7 @@ func _initialize() -> void:
 
 func _shape() -> void:
 	var g := Grid.new()
-	Islands.load_into(g, ISLAND)
+	Islands.load_into(g)
 	var lv := {0: 0, 1: 0, 2: 0}
 	var stairs: Array = []
 	for t in g.level.size():
@@ -76,7 +76,7 @@ func _shape() -> void:
 			% [send_low + send_high, send_low, send_high])
 
 	print("  적:")
-	for raw2 in Islands.spawns_of(ISLAND):
+	for raw2 in Islands.spawns():
 		var sp2: Dictionary = raw2
 		var p: Vector2 = g.tile_point(int(sp2["tile"]))
 		print("    %-10s @ %s · 단 %d · 사거리 %.1f (실제 %.1f)" % [
@@ -94,9 +94,6 @@ func _play(label: String, kind: String) -> Dictionary:
 	var run := Run.new()
 	if run.state() == Run.State.PICK:
 		run.take_card(0)
-	if not run.enter_node(0):
-		print("  [!!] 노드 0 을 못 밟았다.")
-		return {"label": label, "won": false, "ended": false}
 	var battle := run.begin_island()
 	if battle == null:
 		print("  [!!] begin_island 가 null 이다.")

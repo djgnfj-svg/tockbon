@@ -39,6 +39,12 @@ extends RefCounted
 ## file describes canvas space, "at zoom 1.0", unless it says otherwise.
 const VIEWPORT_W_PX := 1280.0
 const VIEWPORT_H_PX := 720.0
+## ⚠⚠ **The island mesh's heights are NOT here.** They live in `assets/terrain/island.json`, written
+## by the same Blender run that writes the mesh, and `Islands.ground_h` reads them. A copy in this file
+## would be the second place a height is written, and the first thing that happens then is that a body
+## sinks into the ground for a reason nobody can find.
+
+
 const TILE_PX := 40.0
 
 ## **The board is laid back 40 degrees** (2026-08-24, the user picked the angle by eye off the horde
@@ -400,7 +406,9 @@ static func survey_zoom_of(w_tiles: int, h_tiles: int) -> float:
 # port) and deleted the `D` legend character; the colour is the same value under its new name.
 ## (`COL_HARBOUR` and `COL_GRID_LINE` were deleted 2026-08-24 — the harbour marker and the lattice
 ## both died with the flat board and nothing read either.)
-const COL_WATER := Color(0.086, 0.145, 0.255)
+## ⚠⚠ **Re-pitched off the reference picture the user supplied** (2026-08-26): a soft grey-green sea,
+## not a navy one. The old navy read as night and fought the pale khaki island for attention.
+const COL_WATER := Color(0.400, 0.500, 0.530)
 ## ⚠⚠ **RAISED 2026-08-25 — it was `(0.203, 0.259, 0.184)` and that is not a green on screen.** The
 ## ambient is a cold blue-grey (`COL_AMBIENT`) and a near-grey green under it comes out as **stone with
 ## a tint**, which is what made a whole island read as one washed slab. Saturation up and value up: the
@@ -520,7 +528,7 @@ const COL_ROUTE := Color(0.851, 0.780, 0.600, 0.55)
 ## the island stops having a shape. Only a look at the real frame settles it.
 ## Blended into `COL_WATER` (green 0.145) it reaches **green 0.363**, which is what a check reads.
 ##
-## ⚠ **Deliberately NOT `COL_START` / `COL_WIN` / `COL_NODE_CHEST` re-typed.** Those are a press, a
+## ⚠ **Deliberately NOT `COL_START` / `COL_WIN` re-typed.** Those are a press, a
 ## verdict and a map node; a value shared by two concepts diverges the first time one of them is tuned.
 ##
 ## ⚠ (`COL_SUMMON_BAND` was deleted 2026-08-24. It washed every summonable water tile green; the
@@ -542,7 +550,7 @@ const SUMMON_RING_SEGMENTS := 96
 ## **The sea, as two tones a shader moves between.** `COL_WATER` is the trough; this is the crest.
 ## ⚠ Close together on purpose: the sea is the background this whole game is read against, and water
 ## that draws attention is water that competes with the ten bodies fighting on top of it.
-const COL_WATER_CREST := Color(0.145, 0.231, 0.361)
+const COL_WATER_CREST := Color(0.455, 0.560, 0.588)
 ## How wide one swell is (in tiles, inverted) and how fast it travels. Slow — a fast sea reads as a
 ## flowing river, and this one is meant to sit still enough to plan on.
 const WATER_WAVE_SCALE := 0.22
@@ -578,24 +586,15 @@ const COL_START := Color(0.302, 0.541, 0.404)
 ## all out, wears the same tone. It is the same claim — *there is a place here and nothing is in it* —
 ## so it is the same value rather than a second grey.
 ##
-## The node tones differ in HUE as well as in shape and size, which is the whole point: Slay the
-## Spire's map is criticised for symbols that differ in neither, and that is the same failure shape the
-## user hit on the plan screen. See `title-and-map`, the map table.
-## ⚠ **`COL_NODE_CHEST` is GONE with the chest** (`parts-on-a-board-not-on-the-body`, 「일단 전부 다
-## monster 노드로 만들면 될듯」). `NodeKind` has two entries now, so two tones is the whole of it.
-## ⚠ **Neither is an existing constant re-typed.** They are near-neighbours of `COL_ALLY` and
-## `COL_LOSE` in hue and deliberately not equal to them: a node is not a body and not a verdict, and a
-## value shared by two concepts diverges the first time one of them is tuned.
+## ⚠⚠ **`COL_NODE_FIGHT` and `COL_NODE_BOSS` ARE GONE** (2026-08-26) with the node map itself. They
+## were the last two colours in this file that belonged to a screen rather than to the board.
 const COL_SLOT_OFF := Color(0.420, 0.420, 0.440)
-const COL_NODE_FIGHT := Color(0.373, 0.678, 0.941)
-const COL_NODE_BOSS := Color(0.933, 0.322, 0.290)
 
-# Combat juice. Seven, and every one of them is a colour no existing name can stand in for.
+# Combat juice. Every one of them is a colour no existing name can stand in for.
 # Items 8, 9, 4 and the shake margin deliberately REUSE what is already above — COL_WIN / COL_LOSE,
 # COL_BUTTON, COL_ALLY / COL_ENEMY, COL_WATER — because the same value under two names
 # diverges the first time one of them is tuned.
 const COL_FLASH := Color(1.0, 1.0, 1.0)
-
 ## What a bleeding body's colour is dragged toward. ⚠ **The VALUES here are eye values and this
 ## ticket does not judge them** — how red, and how dark, is `verify-look`'s to say.
 const COL_BLEED := Color(0.42, 0.03, 0.06)
@@ -666,7 +665,10 @@ const COL_HIT_HALO := Color(1.0, 1.0, 1.0, 0.35)
 ## read as four rather than as one blob. Every other species is that same 1.29x off the row before it,
 ## so the herd keeps the proportions the user already judged: **the bear is still 0.62 across and
 ## still takes a tile to itself**, which is what a bear is for.
-const BODY_RADIUS_RATIO := [0.142, 0.22, 0.277, 0.31, 0.174, 0.22, 0.155, 0.245, 0.342]
+## ⚠⚠ **FIVE, in `Rules.UNITS` order since the sides swapped**: 검사 · 늑대 · 곰 · 까마귀 · 사자.
+## **The swordsman takes the shieldbearer's 0.245** — it is the same drawing at the same scale, and a
+## new number here would change how big a body reads for a reason nobody chose.
+const BODY_RADIUS_RATIO := [0.245, 0.22, 0.31, 0.174, 0.342]
 
 ## Corner rounding as a fraction of that body's own radius — this is the "shape" half of telling
 ## types apart. The heavy walkers are boxy; the small and the flying are nearly circles.
@@ -734,6 +736,10 @@ const HUMAN_BOW_R := "res://assets/human/bow_r.png"
 const HUMAN_BOW_L := "res://assets/human/bow_l.png"
 const HUMAN_SHIELD_R := "res://assets/human/shield_r.png"
 const HUMAN_SHIELD_L := "res://assets/human/shield_l.png"
+## ⚠⚠ **THE PLAYER, since 2026-08-26.** The same body again with a sword in its hands — drawn back
+## when the humans were the enemy, which is exactly why the swap cost no art at all.
+const HUMAN_SWORD_R := "res://assets/human/sword_r.png"
+const HUMAN_SWORD_L := "res://assets/human/sword_l.png"
 
 ## ⚠⚠ **`IDLE` IS NOT A STRIP.** It is the standing picture every row already has and every row
 ## without a strip falls back to, which is why it carries no frame count and why the frame table below
@@ -779,18 +785,14 @@ const BEAST_FRAME_SEC := 0.12
 ## picture when the row says nothing, so **there is no species named anywhere in `field_view`**. A
 ## second list — "these ones have frames" — is the shape that has to be hand-synced with this one, and
 ## the day they disagree the wrong animal walks.
+## ⚠⚠ **FIVE ROWS SINCE THE SIDES SWAPPED** (2026-08-26): the swordsman the player is, and the four
+## beasts he fights. The spear, bow and shield pictures are still constants above and still on disk —
+## **the player's second weapon is a row here, not a drawing.**
 const BEAST_TEX := [
-	[BEAST_SQUIRREL_R, BEAST_SQUIRREL_L, NO_ANIM_FRAMES],
+	[HUMAN_SWORD_R, HUMAN_SWORD_L, NO_ANIM_FRAMES],
 	[BEAST_WOLF_R, BEAST_WOLF_L, WOLF_ANIM_FRAMES],
-	[BEAST_BULL_R, BEAST_BULL_L, NO_ANIM_FRAMES],
 	[BEAST_BEAR_R, BEAST_BEAR_L, NO_ANIM_FRAMES],
 	[BEAST_CROW_R, BEAST_CROW_L, NO_ANIM_FRAMES],
-	[HUMAN_SPEAR_R, HUMAN_SPEAR_L, NO_ANIM_FRAMES],
-	# ⚠ **The weapon is read off what the row DOES, not off its name.** The archer reaches 3 tiles and
-	# the shieldbearer walks in, so the one that shoots carries the bow — a picture that disagreed with
-	# the reach would be the loudest lie on the island.
-	[HUMAN_BOW_R, HUMAN_BOW_L, NO_ANIM_FRAMES],
-	[HUMAN_SHIELD_R, HUMAN_SHIELD_L, NO_ANIM_FRAMES],
 	["", "", NO_ANIM_FRAMES],
 ]
 
@@ -1440,10 +1442,11 @@ const REFIT_HELD_EFFECT_FONT_SIZE_PX := 14    # ≥ 12; ≤ REFIT_CELL_EFFECT_FO
                                               # wrapped lines have to fit the 64-tall row, and the
                                               # fit is MEASURED by net_refit, not asserted here
 const REFIT_HELD_EFFECT_WRAP_W_PX := 204.0
-## ⚠⚠ **`refit_held_capacity()` = 2 × 5 = 10, and it must stay ≥ `Rules.CARD_PICKS *
-## Rules.map_max_card_nodes_on_a_route()` = 8.** `panel_view.roster_ids` shipped a cap that silently
-## dropped the overflow and its comment said the cap never bit — it bit. This one is pinned against
-## the map, not against a guess.
+## ⚠⚠ **`refit_held_capacity()` = 2 × 5 = 10, and it must stay ≥ `Rules.CARD_PICKS`.** It used to be
+## pinned against the map's longest route (`CARD_PICKS × map_max_card_nodes_on_a_route()` = 8) and
+## **the map is deleted** (2026-08-26): one card round is all a run has until waves are built.
+## ⚠ `panel_view.roster_ids` shipped a cap that silently dropped the overflow and its comment said the
+## cap never bit — it bit. **When waves start paying cards this bound has to be re-pinned to them.**
 const REFIT_HELD_ROWS := 5                    # `300 + 4×84 + 64 = 700`, hit bottom 708 ≤ 720
 
 ## ⚠ A ROW, not a column — `refit_stat_origin_px` steps this in X. It used to step in Y, which
@@ -1600,6 +1603,22 @@ const TITLE_SLOT_FONT_SIZE_PX := 40
 ## `96 + ~200 = 296 <= 360` across, `58 <= 88` down.
 const TITLE_SLOT_TEXT_OFFSET_PX := Vector2(96.0, 58.0)
 
+## --- the reveal beats, shared by every screen that stages things in ------------------------------
+## ⚠⚠ **These were the node map's own beats and the first two are RENAMED**
+## (2026-08-26): the screen they were written for is deleted, and `reward_view` and
+## `refit_view` are what read them now. **A constant named after a screen that no longer exists is the
+## next reader's wrong guess.**
+##
+## ⚠⚠ `REVEAL_STEP_SEC` is deliberately BELOW the five-frame floor and it is not an oversight: it is
+## the offset BETWEEN beats, not a beat. The beat is `REVEAL_FADE_SEC`, and that one is above the
+## floor.
+const REVEAL_FADE_SEC := 0.18             # >= 0.084 (five frames); <= 0.40
+const REVEAL_STEP_SEC := 0.06             # >= 0.03, under which a staggered row appears all at once
+
+## How long a number takes to climb to a new value. ⚠ **A climb, not a fade** — the digits count.
+const NUMBER_CLIMB_SEC := 0.60            # >= 0.30; <= 1.00
+
+
 ## The background: **TILES** drifting behind the menu, drawn by code. **No image file** — see the
 ## decision "the body is a line drawn by code", which forbids a sprite here as much as in the fight.
 ## ⚠⚠ **THEY WERE CELLS UNTIL 2026-08-25** (티켓 23) — nine translucent CIRCLES, the deleted cell
@@ -1619,243 +1638,6 @@ const TITLE_TILE_ALPHA := 0.14            # >= 0.06 or there is no background at
                                           # disabled button
 const TITLE_TILE_A_FREQ := 0.13
 const TITLE_TILE_B_FREQ := 0.19
-
-
-# ---------------------------------------------------------------------------------------------
-# The node map — EVERY KNOB THIS SCREEN HAS IS BETWEEN HERE AND THE NEXT BANNER
-# ---------------------------------------------------------------------------------------------
-#
-# Written to be changed by hand, one number at a time, without reading any other file. Six groups,
-# in the order you would tune them:
-#
-#   1. WHERE THE SEVEN CIRCLES SIT   MAP_NODE_POS_PX
-#   2. HOW BIG THEY ARE              MAP_NODE_R_PX · MAP_BOSS_R_PX
-#   3. WHICH OF THE FOUR STATES      MAP_NODE_PAST_SCALE · MAP_NODE_LOCKED_SCALE
-#      A CIRCLE IS IN                MAP_NODE_PAST_ALPHA   (+ PRESS_ALPHA_ON / _OFF, shared with
-#                                    the title screen, in the "Pressable things" block above)
-#   4. THE LINES BETWEEN THEM        MAP_LINE_*
-#   5. THE MARKS ON TOP              MAP_HERE_RING_* · MAP_BOSS_RING_* · MAP_GLYPH_* · MAP_PULSE_*
-#   6. THE BEATS (how long each      MAP_NODE_FADE_SEC · MAP_REVEAL_STEP_SEC · MAP_TRAVEL_SEC ·
-#      little animation takes)       MAP_CLEAR_FILL_SEC · NUMBER_CLIMB_SEC
-#
-# ⚠ **The node COLOURS are not here** — `COL_NODE_FIGHT` / `COL_NODE_BOSS` live in the colours block
-# near the top of this file, with every other colour in the game. One concept, one place: a colour
-# written in two blocks is a colour that diverges.
-# ⚠ **This said THREE and named `COL_NODE_CHEST` as one of them** (corrected 2026-08-25, 티켓 23). The
-# chest node was deleted and so was its colour; the block up top says so on its own line, so this one
-# was pointing a reader at a constant that has not existed for a while.
-#
-# ⚠ **A node is drawn in one of FOUR states, and every number in group 3 belongs to exactly one of
-# them.** The state machine itself is `map_view._look_of` and there is no second copy of it:
-#
-#   HERE    the node the army is standing on — full radius, full colour, wrapped by the here ring
-#   OPEN    a node the army may step onto next — full radius, full colour, white border, pulsing
-#   PAST    walked and finished with — MAP_NODE_PAST_SCALE radius, MAP_NODE_PAST_ALPHA
-#   LOCKED  not reachable from where the army stands — MAP_NODE_LOCKED_SCALE radius, no colour at
-#           all (`dimmed`), PRESS_ALPHA_OFF
-#
-# The four are told apart by SIZE, by BRIGHTNESS and by what is drawn on top — three channels, so
-# no one of them is carrying the read alone and a colour-blind player loses none of it. That is the
-# whole of the fix the user asked for with 「현재 위치 제대로 표현해야 되고」.
-
-## One centre per node, indexed by the node id in `Rules.MAP_NODES`. **Absolute viewport pixels.**
-##
-## ⚠ **The vertical arithmetic is what killed the previous draft's "160 px apart" rule**: five floors
-## at 160 px is 640 px of gaps, plus the boss's 56 and the bottom ring's 52 = 748 px against a 720 px
-## screen. The real minimum is **120 px**, because two hit circles are `48 + 48 = 96` across.
-## Margins, against the literals 1280 x 720: bottom `620 + 52 = 672`; top `110 - 64 = 46`;
-## sides `470 - 48 = 422` and `810 + 48 = 858`.
-##
-## A `const` Array of `Vector2` literals — **measured on 4.7.1 before it was written**, because the
-## packed form is a parse error and this repo has been bitten by the const-expression rules twice.
-## It is read-only with no element typing, so `map_node_pos_px` casts.
-const MAP_NODE_POS_PX := [
-	Vector2(640.0, 620.0), Vector2(470.0, 500.0), Vector2(810.0, 500.0),
-	Vector2(470.0, 380.0), Vector2(810.0, 380.0), Vector2(640.0, 250.0),
-	Vector2(640.0, 110.0),
-]
-
-## Drawn radii, and they are the radius of a node in its BIGGEST state (HERE or OPEN). The two
-## scales below shrink it for the other two. The boss is the biggest thing on the map by construction.
-const MAP_NODE_R_PX := 40.0               # >= 28, under which a glyph inside the node draws at under
-                                          # 2 px strokes; <= 52, since 2 * 52 = 104 against a 120 px
-                                          # vertical gap leaves 16 px and two nodes touch
-const MAP_BOSS_R_PX := 56.0               # > MAP_NODE_R_PX; <= 70, from 56 + 48 = 104 < 140
-
-## **Size is the second channel that says which of the four states a node is in**, and it is a
-## channel on purpose: brightness alone is one signal, and one signal is what the user could not
-## read at rest. Both are FRACTIONS of the radius above — HERE and OPEN have no entry here because
-## they are drawn at the full radius, which is what keeps `map_node_hit_radius_px` a single number.
-##
-## AT MAP_NODE_R_PX = 40 THESE ARE 34.4 px AND 30.0 px, against 40.0 px for a node on offer.
-## At MAP_BOSS_R_PX = 56 they are 48.2 px and 42.0 px.
-##
-##   MAP_NODE_PAST_SCALE   raise it toward 1.0 and a node you have already walked stops being
-##                         distinguishable from one you may walk next; drop it toward the locked
-##                         scale and "walked" and "cannot reach" become one picture.
-##   MAP_NODE_LOCKED_SCALE raise it and the map flattens into seven identical circles — the defect
-##                         this pair exists to remove; drop it and a locked node is a dot whose
-##                         glyph no longer fits inside it (the glyph does NOT shrink with the node,
-##                         deliberately: a reward you cannot reach yet is still a reward you have to
-##                         be able to read, because reading it is how you choose the route).
-const MAP_NODE_PAST_SCALE := 0.86         # > MAP_NODE_LOCKED_SCALE + 0.08; <= 0.94
-const MAP_NODE_LOCKED_SCALE := 0.75       # >= 0.62 — under it the widest glyph (1.08 x
-                                          # MAP_GLYPH_R_PX = 22.7 px) no longer fits inside
-                                          # 40 x scale; <= 0.86, or the size channel says nothing
-
-## **Brightness is the third channel.** A walked node keeps its HUE — you must be able to see what
-## the place you came through was — and sits between a node on offer (`PRESS_ALPHA_ON`, 1.0) and one
-## out of reach (`PRESS_ALPHA_OFF`, 0.30, and with its colour taken away entirely by `dimmed`).
-const MAP_NODE_PAST_ALPHA := 0.62         # >= 0.45, or a walked node is confused with a locked one;
-                                          # <= 0.85, or it is confused with a node on offer
-
-## **The you-are-here ring — this is the mark that answers 「지금 내가 어디 있나」.** It has to sit
-## OUTSIDE the node it marks or it hides inside it, and it is the only closed ring on the screen that
-## is not part of the boss, which is what makes it unambiguous rather than merely visible.
-## ⚠ Before the first node is entered there is no ring at all, and that is correct: the army has not
-## landed anywhere yet, and a ring drawn then would say "you are here" about a place you are not.
-const MAP_HERE_RING_R_PX := 52.0          # > MAP_NODE_R_PX; <= 68, from 68 + 48 = 116 < 120
-const MAP_HERE_RING_WIDTH_PX := 6.0       # >= 4 — at 2 px this ring is a hairline and the one thing
-                                          # on screen saying where you are stops carrying; <= 8, over
-                                          # which it swallows the node it is meant to point at
-
-## The boss's nested inner rings. ⚠ **Its own constant and NOT `MAP_HERE_RING_WIDTH_PX` reused.**
-## They were one number until this round, so thickening the you-are-here ring silently thickened the
-## boss as well — two concepts sharing a knob is exactly what stops a person tuning either.
-const MAP_BOSS_RING_WIDTH_PX := 5.0       # >= 2.0 (snap floor); <= MAP_BOSS_RING_STEP_PX - 4, or two
-                                          # neighbouring rings' strokes touch and read as one band
-
-## How many straight segments a drawn circle is built from. One number for the ring, the node outlines
-## and the boss's nested rings, so a circle cannot be smooth in one place and faceted in another.
-const MAP_RING_SEGMENTS := 32             # >= 16, under which a 56 px circle visibly has corners;
-                                          # <= 64, over which the outlines cost more than they show
-
-## The three line weights, and they are three because a line says one of three things: walked,
-## choosable, neither. **Travelled must be thicker than choosable and choosable than dim**, each by
-## more than the 2.0 px snap floor, or two of the three are the same picture.
-##
-## ⚠ **PAST WAS 8.0 AND THE SENTENCE ABOVE WAS FALSE OF IT.** `8 - 6 = 2` is the snap floor exactly,
-## not more than it, and its own inline comment said only `> MAP_LINE_OPEN_WIDTH_PX` while its
-## sibling one line down said `+ 2` — the fix applied to one value and not to the other, which is
-## this repo's own named shape. Measured on the shipped frame before it moved: three pale lines and
-## no way to say which was the road taken. At 9.0 both steps are 3.0 px.
-const MAP_LINE_PAST_WIDTH_PX := 9.0       # > MAP_LINE_OPEN_WIDTH_PX + 2; <= 12
-const MAP_LINE_OPEN_WIDTH_PX := 6.0       # > MAP_LINE_DIM_WIDTH_PX + 2; <= 8
-const MAP_LINE_DIM_WIDTH_PX := 3.0        # >= 2.0; <= 4
-
-## The same three, on the brightness channel. Ordered the same way and for the same reason: the
-## width ladder carries most of the read, and these must never invert it.
-const MAP_LINE_PAST_ALPHA := 1.0          # >= MAP_LINE_OPEN_ALPHA; <= 1.0
-const MAP_LINE_OPEN_ALPHA := 0.9          # > MAP_LINE_DIM_ALPHA + 0.3; <= MAP_LINE_PAST_ALPHA
-const MAP_LINE_DIM_ALPHA := 0.25          # >= 0.15, under which the unwalked map is invisible and
-                                          # "the whole map is always visible" dies; <= 0.45
-
-## The pulse on a node you may step onto. On an otherwise still screen it is the ONLY motion saying
-## "here", which is why it is pinned at both ends: it is never zero, and it never exceeds its radius.
-## ⚠ Xbox Accessibility Guideline 118 forbids flashing above roughly 3 per second; this is 1.1/s.
-const MAP_PULSE_SEC := 0.9                # >= 0.5 or it flickers; <= 1.4 or it is not read as motion
-const MAP_PULSE_R_PX := 4.0               # >= 2.0 (snap floor), and +-4 on a 40 px radius is 10%, the
-                                          # smallest change that reads; <= 8 or a pulsing node reaches
-                                          # its neighbour's hit circle
-
-## The reveal, floor by floor from the bottom. **This is what teaches the map's direction**, and it is
-## what the design uses INSTEAD of a sentence on screen.
-## ⚠⚠ `MAP_REVEAL_STEP_SEC` is deliberately BELOW the five-frame floor and it is not an oversight: it
-## is the offset BETWEEN beats, not a beat. The beat is `MAP_NODE_FADE_SEC`, and that one is above the
-## floor. Total `0.06 * 4 + 0.18 = 0.42 s`.
-const MAP_NODE_FADE_SEC := 0.18           # >= 0.084 (five frames); <= 0.40
-const MAP_REVEAL_STEP_SEC := 0.06         # >= 0.03, under which seven nodes appear in 0.21 s and the
-                                          # direction is not taught; <= 0.12 or the reveal is a wait
-
-## The ring walking the edge to the node just chosen, before the island opens.
-## ⚠ **Cut straight to the island and the map's work is invisible** — the travel IS the progress
-## readout, and the shell holds for exactly this long so that it plays.
-const MAP_TRAVEL_SEC := 0.45              # >= 0.25 or the ring teleports; <= 0.70 or it is a wait
-
-## The node just won filling in, and the army's 「힘」 number climbing after a `Reward.COUNT` win.
-## ⚠⚠ **RENAMED FROM `MAP_HEAL_SEC`** (2026-08-25, 티켓 23). 「회복」 was the reward of a CHEST node
-## that was deleted; nothing heals anything any more. What this times is a NUMBER climbing to a new
-## value — the map's 힘 readout and the refit dashboard's five columns, which is also why a name
-## mentioning the map was wrong twice over.
-## ⚠ Its floor is 0.30 because the number has to be WATCHED climbing — without it a win
-## that raised the pool and a win that did not look identical on screen.
-const MAP_CLEAR_FILL_SEC := 0.25          # >= 0.084; <= 0.50
-const NUMBER_CLIMB_SEC := 0.60                # >= 0.30; <= 1.00
-
-## The glyph inside a node — what that node PAYS. Without it the two nodes on a floor are identical
-## to the pixel, and the fork has nothing to choose between.
-##
-## ⚠ **RAISED 13 -> 21 because 13 did not work**, and the failure was not subtle: the reward was
-##「a few pixels of line art inside a 40 px circle」 and could not be told apart at all. The three
-## shapes at 21 px, measured rather than estimated (`map_view._glyph_points` builds them):
-##   COUNT (cells)  three squares 11.8 px on a side, 16.8 px apart, spanning 22.7 px out
-##   (BEAK          a triangle — deleted 2026-08-25 with the reward it marked)
-##   HEAL (chest)   a cross 42 px across both ways
-## At 13 those were a 7.3 px square, a 22.6 px triangle and a 26 px cross.
-##
-## ⚠ **It does NOT scale with the node.** A locked node shrinks to `MAP_NODE_LOCKED_SCALE` and its
-## glyph does not, because what a place pays is how you choose the route TO it — shrinking the answer
-## on the nodes you are choosing between is the one place it must not shrink.
-const MAP_GLYPH_R_PX := 21.0              # >= 12 — under it the three COUNT squares fall to 6.7 px
-                                          # and a 3 px stroke fills them solid, which is the defect
-                                          # this number was raised to fix; <= 26, from the widest
-                                          # glyph (1.08 x this, plus half a stroke) having to fit
-                                          # inside the SMALLEST drawn node, 40 x MAP_NODE_LOCKED_SCALE
-const MAP_GLYPH_WIDTH_PX := 3.0           # >= 2.0 (snap floor); <= 5 — half of a COUNT square's
-                                          # 11.8 px side, over which three squares read as three
-                                          # blobs
-
-## **How present the glyph is in each of the four states — the INK's own ladder, not the fill's.**
-##
-## ⚠ **These two are new because reusing the fill's numbers shipped an unreadable glyph.** The ink is
-## `COL_PANEL_BG`, a dark tone drawn ON the node so the reward reads as cut out of it — and the fill
-## it is cut out of gets DIMMER as the state gets colder. So handing the ink the fill's own alpha
-## darkens both sides of the same contrast at once, and the two converge instead of separating.
-## Measured on the shipped frame: a LOCKED glyph at `PRESS_ALPHA_OFF` 0.30 against a fill also at
-## 0.30 came out at **1.3 : 1**, and on the opening frame six of the seven nodes are LOCKED — which
-## is the whole of the user's 「what a node gives cannot be told apart」.
-##
-## HERE and OPEN have no entry here: they are drawn at `PRESS_ALPHA_ON` and the fill under them is
-## opaque, which already measures 5.2 : 1.
-##
-## ⚠ **The ratios these buy are PLAIN Rec.709 luminance ratios and NOT WCAG's offset form**, and
-## that is arithmetic rather than a lowered bar: the ink's own luminance is 0.088 and a LOCKED fill
-## over the clear colour is 0.328, so WCAG's `(L+0.05)` form tops out at **2.7 : 1 with the glyph
-## fully opaque**. 3 : 1 is not reachable on this pair without changing the ink or the fill, and a
-## floor nothing can pass is not a floor. `net_map` pins the plain ratio at 1.8 and measures 2.5
-## (PAST) and 2.0 (LOCKED) at the values below.
-const MAP_GLYPH_PAST_ALPHA := 0.80        # >= 0.70 — under it a walked node's reward drops under the
-                                          # 1.8 ratio; <= 1.0. It is deliberately ABOVE
-                                          # MAP_NODE_PAST_ALPHA 0.62: the node dims, the answer on it
-                                          # does not
-const MAP_GLYPH_LOCKED_ALPHA := 0.75      # >= 0.65 (same floor, against the dimmer LOCKED fill);
-                                          # <= 1.0. ⚠ It does NOT track PRESS_ALPHA_OFF and must not
-                                          # be folded back into it — that sharing is what shipped the
-                                          # defect. What a place PAYS is how the route is chosen
-                                          # BEFORE it can be walked, so it is the one thing on a
-                                          # locked node that stays readable
-
-## The boss, drawn as three nested rings on top of its circle. Their THICKNESS is
-## `MAP_BOSS_RING_WIDTH_PX`, up beside the you-are-here ring it used to share a constant with.
-const MAP_BOSS_RINGS := 3                 # exactly 3 — the design's "three nested circles"
-const MAP_BOSS_RING_STEP_PX := 14.0       # >= 6 or three rings are one thick ring; <= 18, from
-                                          # 56 - 2 * 18 = 20 > 0
-
-## 「병사 %d · 힘 %.0f」, top left. ⚠ **This is the only data on the map screen**, because
-## `hud_view._draw` returns on `battle == null` and draws nothing here at all — without it there is no
-## way to answer "what am I short of" from the screen, which is the whole question the fork asks.
-const MAP_ARMY_POS_PX := Vector2(24.0, 44.0)   # y >= MAP_ARMY_FONT_SIZE_PX (a baseline at 0 is off
-                                          # screen); x + text width <= 470 - 48 = 422, clear of the
-                                          # leftmost node column
-const MAP_ARMY_FONT_SIZE_PX := 26         # > HUD_FONT_SIZE_PX 22 — it is the only readout on this
-                                          # screen; <= 30
-
-## Kind -> how many sides its shape has, indexed by `Rules.NodeKind`: 0 is a circle. ⚠ **The diamond
-## (4 sides) was the chest's and left with it** — `NodeKind` has two entries, FIGHT and BOSS, and both
-## are circles told apart by size and colour alone. **A TABLE and not a branch in `map_view`.** Adding
-## the elite one day then costs `rules.gd` plus this line and **no view edit**; written as a branch it
-## costs a view edit forever after.
-const MAP_NODE_SIDES := [0, 0]
 
 
 # ---------------------------------------------------------------------------------------------
@@ -2507,42 +2289,6 @@ static func title_slot_rect_px(slot_index: int) -> Rect2:
 ## the day the pad changes only one of them would move.
 static func title_slot_hit_rect_px(slot_index: int) -> Rect2:
 	return title_slot_rect_px(slot_index).grow(PRESS_HIT_PAD_PX)
-
-
-## Node `n`'s centre. A `const` Array loses element typing, so this cast is the same one every read of
-## a const Array in this file makes.
-static func map_node_pos_px(n: int) -> Vector2:
-	return MAP_NODE_POS_PX[n]
-
-
-## Drawn radius by node kind. The boss is bigger; everything else is one size, because "how big" is
-## one of the three axes (shape, colour, size) the kinds are told apart on.
-static func map_node_radius_px(kind: int) -> float:
-	return MAP_BOSS_R_PX if kind == Rules.NodeKind.BOSS else MAP_NODE_R_PX
-
-
-## The pressable radius: the drawn one plus the shared pad. **48 and 64 are written nowhere** — they
-## are this sum, so moving the pad moves both.
-##
-## ⚠ **It is ONE number per kind and does not follow the four states, which is why the two state
-## scales are both below 1.0.** A node on offer is drawn at the full radius and pulses out by
-## `MAP_PULSE_R_PX` on top of that — 40 + 4 = 44 against a hit radius of 48 — so the drawn rim never
-## reaches past the circle you can press. Give HERE or OPEN a scale ABOVE 1.0 and that inverts: the
-## visible edge of a node stops being pressable, silently, with every net still green.
-static func map_node_hit_radius_px(kind: int) -> float:
-	return map_node_radius_px(kind) + PRESS_HIT_PAD_PX
-
-
-static func map_node_sides_of(kind: int) -> int:
-	return int(MAP_NODE_SIDES[kind])
-
-
-static func map_node_colour_of(kind: int) -> Color:
-	match kind:
-		Rules.NodeKind.BOSS:
-			return COL_NODE_BOSS
-		_:
-			return COL_NODE_FIGHT
 
 
 ## What a thing that cannot be pressed looks like: **all of its saturation gone and its alpha down to

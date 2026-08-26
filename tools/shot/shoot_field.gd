@@ -77,9 +77,13 @@ func _process(_delta: float) -> bool:
 		0:
 			_game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
 		1:
-			_game._unhandled_input(_click(Look.map_node_pos_px(0)))
+			# The opening beast card: the map used to be pressed here, and a card takes
+			# its place — the island opens the moment it is taken.
+			_game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
 		2:
-			_game._process(Look.MAP_TRAVEL_SEC)
+			# The opening card is EQUIPMENT now (the beast cards left the table with the side swap),
+			# so the run stops on the refit screen and the island is one more press away.
+			_game._unhandled_input(_click(_game.refit_view.done_hit_rect().get_center()))
 		3:
 			_save("1_planning")
 		4:
@@ -124,10 +128,10 @@ func _process(_delta: float) -> bool:
 			# seen on the island the shell opens first. The field is pointed at island 2 directly here,
 			# through the same `setup` the shell uses, purely so a human can look at it.
 			var grid := Grid.new()
-			Islands.load_into(grid, 2)
+			Islands.load_into(grid)
 			var b := Battle.new()
-			b.setup(grid, _game.run.army, Islands.spawns_of(2), Islands.time_limit_of(2))
-			_game.field_view.setup(b, _game.run.army, Islands.rows_of(2))
+			b.setup(grid, _game.run.army, Islands.spawns(), Islands.time_limit())
+			_game.field_view.setup(b, _game.run.army, Islands.rows())
 			for _i in 6:
 				_game.field_view.turn_by(Look.CAM_YAW_STEP_DEG)
 			for _i in 2:

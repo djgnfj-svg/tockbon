@@ -100,7 +100,7 @@ func _crossing_arithmetic_is_literal(t) -> void:
 	var army := _army_of(Rules.WOLF, 1)
 	# A live enemy far from the crossing, or `enemies_left() == 0` latches WON on the first sub-step
 	# and every step after it returns before the boat has moved.
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 999.0)
 	var landing := _tile_of(6, 5)
 	t.ok(b.send(0, landing) >= 0 and b.commit(), "한 척을 보내고 확정했다 (자가 점검)")
 	t.ok(absf(float(b.boats[0]["dist"]) - BAY_DIST) <= 1e-5,
@@ -137,14 +137,14 @@ func _crossing_arithmetic_is_literal(t) -> void:
 ## the ratio of the distances, because `t = distance / speed` and there is only one speed now.
 func _crossing_scales_with_distance(t) -> void:
 	var near_army := _army_of(Rules.WOLF, 1)
-	var nb := _battle_of(_bay(), near_army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
+	var nb := _battle_of(_bay(), near_army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 999.0)
 	t.ok(nb.send(0, _tile_of(6, 5)) >= 0 and nb.commit(), "가까운 해안으로 보냈다 (자가 점검)")
 	var near_steps := _drive_until_ashore(t, nb, 0, "가까운 해안")
 
 	# A separate, deeper bay — `_bay()`'s own coast is a single column, so its harbour-to-coast
 	# distance never varies enough to test a ratio against.
 	var far_army := _army_of(Rules.WOLF, 1)
-	var fb := _battle_of(_far_bay(), far_army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
+	var fb := _battle_of(_far_bay(), far_army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 999.0)
 	t.ok(fb.send(0, _tile_of(16, 5)) >= 0 and fb.commit(), "먼 해안으로 보냈다 (자가 점검)")
 	var far_steps := _drive_until_ashore(t, fb, 0, "먼 해안")
 
@@ -166,7 +166,7 @@ func _crossing_scales_with_distance(t) -> void:
 
 func _boats_do_not_share(t) -> void:
 	var army := _army_of(Rules.WOLF, FULL_ROSTER)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 999.0)
 	var landing := _tile_of(6, 5)
 	var made := 0
 	for i in FULL_ROSTER:
@@ -198,7 +198,7 @@ func _boats_do_not_share(t) -> void:
 ## the boat going around the `#` at (5,3); what went is the row of collinear waypoints after it.
 func _the_boat_really_sails_on_water(t) -> void:
 	var army := _army_of(Rules.WOLF, 1)
-	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.SHIELDBEARER, 2, 1)], 999.0)
+	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.WOLF, 2, 1)], 999.0)
 	var beach := 2 * 12 + 9
 	t.eq(b.grid.home_harbour_for(beach), 0, "그 해안의 집 항구는 하나뿐인 0번이다 (자가 점검)")
 	# ⚠ **The label says only what this line asserts.** It used to read 「예전 규칙이 거절하던 해안으로
@@ -246,7 +246,7 @@ func _the_boat_really_sails_on_water(t) -> void:
 ## `leg` that jumps backwards redraws water the boat has already crossed.
 func _leg_only_goes_forward(t) -> void:
 	var army := _army_of(Rules.WOLF, 1)
-	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.SHIELDBEARER, 2, 1)], 999.0)
+	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.WOLF, 2, 1)], 999.0)
 	var beach := 2 * 12 + 9
 	t.ok(b.send(0, beach) >= 0 and b.commit(), "보내고 확정했다 (자가 점검)")
 	var path: PackedVector2Array = b.boats[0]["path"]
@@ -284,7 +284,7 @@ func _leg_only_goes_forward(t) -> void:
 ## as long as the polyline.
 func _return_leg_is_the_outbound_path_reversed(t) -> void:
 	var army := _army_of(Rules.WOLF, 1)
-	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.SHIELDBEARER, 2, 1)], 999.0)
+	var b := _battle_of(_shadow_bay(), army, [_spawn(12, Rules.WOLF, 2, 1)], 999.0)
 	var beach := 2 * 12 + 9
 	t.ok(b.send(0, beach) >= 0 and b.commit(), "보내고 확정했다 (자가 점검)")
 	var out_path := PackedVector2Array(b.boats[0]["path"])
@@ -319,7 +319,7 @@ func _return_leg_is_the_outbound_path_reversed(t) -> void:
 
 func _return_leg_is_simulated(t) -> void:
 	var army := _army_of(Rules.WOLF, 1)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 999.0)
 	var landing := _tile_of(6, 5)
 	var uid := b.send(0, landing)
 	t.ok(uid >= 0 and b.commit(), "한 척을 보내고 확정했다 (자가 점검)")
@@ -369,7 +369,7 @@ func _relocation_sends_the_boat_to_the_right_harbour(t) -> void:
 		"~~H~~~~~~~~~~~~~",
 	]
 	var army := _army_of(Rules.WOLF, 1)
-	var b := _battle_of(rows, army, [_spawn(16, Rules.SHIELDBEARER, 10, 4)], 999.0)
+	var b := _battle_of(rows, army, [_spawn(16, Rules.WOLF, 10, 4)], 999.0)
 	var landing := 3 * 16 + 2   # (2,3), on the bar's seaward edge
 	var home := b.grid.home_harbour_for(landing)
 	t.eq(home, 0, "이 상륙지의 집 항구는 물길이 짧은 0번이다 (자가 점검)")
@@ -402,7 +402,7 @@ func _relocation_sends_the_boat_to_the_right_harbour(t) -> void:
 ## half that would stay green if `send` refused *after* appending.
 func _send_refusals(t) -> void:
 	var army := _army_of(Rules.WOLF, 4)
-	var b := _battle_of(_two_harbours(), army, [_spawn(12, Rules.SHIELDBEARER, 8, 1)], 999.0)
+	var b := _battle_of(_two_harbours(), army, [_spawn(12, Rules.WOLF, 8, 1)], 999.0)
 	var west := _th_tile(2, 2)
 
 	t.eq(b.send(-1, west), -1, "없는 병사 번호로는 배가 안 생긴다")
@@ -431,7 +431,7 @@ func _send_refusals(t) -> void:
 ## screen would say no about a drop that half happened.
 func _a_refused_drop_makes_no_boat(t) -> void:
 	var army := _army_of(Rules.WOLF, 2)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 999.0)
 	# An inland tile with no water 8-neighbour at all — the denylist's own refusal case, not a tile
 	# that happens to be off the grid.
 	var inland := _tile_of(12, 5)
@@ -490,7 +490,7 @@ func _reach_is_per_harbour(t) -> void:
 ## asks `_free_tiles_from` for one tile after the one before it has already reserved its own.
 func _unload_placement(t) -> void:
 	var army := _army_of(Rules.WOLF, 4)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.SHIELDBEARER, 20, 1)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 999.0)
 	var landing := _tile_of(6, 5)
 	for i in 4:
 		t.ok(b.send(i, landing) >= 0, "%d번을 같은 칸으로 보냈다 (자가 점검)" % i)
@@ -536,7 +536,7 @@ const _PORT_LANDING_Y := 5.0
 ## "the fourth is still aboard" for the wrong reason.
 func _boat_waits_for_shore(t) -> void:
 	var army := _army_of(Rules.WOLF, 4)
-	var b := _battle_of(_cove(), army, [_spawn(COVE_W, Rules.SHIELDBEARER, 3, 2)], 999.0)
+	var b := _battle_of(_cove(), army, [_spawn(COVE_W, Rules.WOLF, 3, 2)], 999.0)
 	var landing := 3 * COVE_W + 3
 	for i in 4:
 		t.ok(b.send(i, landing) >= 0, "%d번을 좁은 해안으로 보냈다 (자가 점검)" % i)
@@ -557,14 +557,14 @@ func _boat_waits_for_shore(t) -> void:
 
 func _cargo_rides_the_boat(t) -> void:
 	var army := _army_of(Rules.CROW, 1)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.ARCHER, 3, 2)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.CROW, 3, 2)], 999.0)
 	t.ok(b.send(0, _tile_of(6, 5)) >= 0 and b.commit(), "보내고 확정했다 (자가 점검)")
 	_drive(b, 6)
 	t.eq(b.soldier_pos[0], Vector2(b.boats[0]["pos"]), "화물은 배 위치를 그대로 탄다")
 	t.ok(b.soldier_pos[0].distance_to(b.enemy_pos[0]) < army.range_of(0) + Rules.REACH_BONUS,
 			"까마귀는 그 병사의 사거리 안에 있다")
 	_drive(b, 18)
-	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.ARCHER), "그래도 배 위에서는 못 쏜다")
+	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.CROW), "그래도 배 위에서는 못 쏜다")
 	t.ok(army.hp[0] < Rules.hp_of(Rules.CROW), "맞기는 맞는다")
 
 
