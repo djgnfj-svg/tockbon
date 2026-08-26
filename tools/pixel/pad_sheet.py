@@ -9,7 +9,7 @@ The pad rule is that doc's, verbatim: **bottom pad is 0** (feet stay on the last
 **left/right pad is symmetric** (the flip idiom depends on `minx + maxx == w - 1`), the rest goes on top.
 
 Usage:
-    python tools/pixel/pad_sheet.py assets/monster/bull_walk.png 88 56
+    python tools/pixel/pad_sheet.py assets/beast/bull_walk.png 88 56
 """
 import sys
 from pathlib import Path

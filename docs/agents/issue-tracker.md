@@ -1,8 +1,8 @@
 # Issue tracker: Local Markdown
 
 ⚠ **This repo already ran this convention before this file existed.** `docs/plans/` was deleted on
-2026-08-22 and planning moved to `.scratch/`, so the seed template below is edited in two places to match
-what `.scratch/README.md` already says. **Those two edits are marked.**
+2026-08-22 and planning moved to `.scratch/`, so the seed template below is edited in one place to match
+what `.scratch/README.md` already says. **That edit is marked.**
 
 Issues and specs for this repo live as markdown files in `.scratch/`.
 
@@ -10,7 +10,7 @@ Issues and specs for this repo live as markdown files in `.scratch/`.
 
 - One feature per directory: `.scratch/<feature-slug>/`
 - The spec is `.scratch/<feature-slug>/spec.md`
-- Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`, never a single combined tickets file. ⚠ **EDITED: the slug here is Korean** — `01-소환-띠.md`
+- Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`, never a single combined tickets file. **The slug is English** — `01-what-one-piece-is.md`. Every ticket on every map this repo has ever had uses one, and `.scratch/README.md` says the same
 - ⚠⚠ **EDITED: `Status:` is NOT the triage state here.** `Status:` is the wayfinding state — `open` · `claimed` · `resolved` — and `.scratch/README.md` is its source of truth. **A triage role goes on its own `Triage:` line** (see `triage-labels.md`). Collapsing the two would make a triaged ticket read as a claimed one
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
 

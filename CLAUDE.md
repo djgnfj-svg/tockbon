@@ -1,26 +1,51 @@
 # tockbon — **one island, held against the beasts**, and `src/` runs
 
+## ⚠⚠ **THIS WEEK IS THE MAP. NOTHING ELSE.** (set 2026-08-26 by the user)
+
+***"이번 주에 맵만 제대로 만들어도 되거든? 그러니까 이거에 좀 포커스를 맞춰줄래?"***
+
+**Every round this week is about the ground the game is played on.** Not the bodies, not the beasts
+landing, not the nets, not the cleanup. **If a reply raises anything else, it is off-task** — the user
+said so in the same breath: ***"너 너무 지금 좀대로 질문해"***.
+
+⚠ **The bar is Bad North, and simple is explicitly allowed** — ***"정말 단순해도 돼. 층이 없어도
+돼"***. One level is enough. No plateau, no stairs, until the flat thing looks right.
+
+⚠⚠ **Read [티켓 01 — 한 조각이 무엇인가] BEFORE opening Blender.** It was skipped once and the
+skip cost a round: a rule that was still live (**corners are not cut at 45°, they are slightly tilted**)
+got trampled while the rules the user had just overturned were the only ones honoured by accident.
+
+
 **A human company holds one island and builds it up. The beasts come by boat.** ⚠⚠ **The sides were
 swapped 2026-08-26 by the user** — you were the beasts taking eight islands, and both halves of that
 turned over at once: **the island is ONE** (drawing eight was the thing the project could not afford)
 and **the beasts are now what lands on your coast.** The art bill of the swap is **zero**: the faceless
-low-poly spearman, archer and shieldbearer that were the enemy become the player, and the five beasts
-stay exactly where they are. **A timer brings a boss**, and **leaving the island to raid another** is
+low-poly human body that was the enemy becomes the player — **one swordsman, and no other player type** —
+and the beasts stay exactly where they are as **wolf, bear, crow and lion**. **The boats are the beasts'
+— the player never places one.** **A timer brings a boss**, and **leaving the island to raid another** is
 how more islands are taken. **There is still no eating for parts** — the art could not carry it.
 
 ⚠ **`Hands do not move during a fight` is dead** (2026-08-25, the user, after playing Bad North).
 **Hands move**: squads are commanded on the board, at any time.
 
-**The frame, decided 2026-08-26** — ⚠⚠ **this overturns the 2026-08-22 frame, and the user said it in
-those words**: *"십이 월의 출시가 목표야. 빡세게 할 거야, 빡세게. 이게 메인이야."* ⇒ **December is a
-RELEASE, not a demo** · **roguelike** · **funding after it** · **raiding other islands is IN, not
-deferred.** ⚠ **A release carries what a demo did not** — saves, an options screen, sound, a store page
-and its builds, language.
+**The frame** — ⚠⚠ **December is a DEMO, not a release** (2026-08-26, the user, in two words:
+*"12월 데모로 변경"*). · **roguelike** · **funding after it** · **raiding other islands is IN, not
+deferred.**
+
+⚠⚠ **This is the SECOND reversal of the same line and both halves are kept on purpose.** 2026-08-22 set
+「a demo, not a release」. 2026-08-26 morning overturned it — the user: *"십이 월의 출시가 목표야.
+빡세게 할 거야, 빡세게. 이게 메인이야."* — and 2026-08-26 evening put it back. **Do not treat either
+wording as settled by argument**; it is settled by whichever the user said last, and that is now DEMO.
+
+⚠ **What the reversal RETURNS**: a demo does not have to carry saves, an options screen, sound, a store
+page and its builds, or language. **None of those were built, so nothing is lost by the change** — they
+simply stop being December's problem.
 
 **The code runs and the game launches. There is no GDD.** ⚠ **What is being made is read out of
-`.scratch/island-hold/`** — opened 2026-08-26 when the sides swapped. ⚠⚠ **`.scratch/cell-hook/` is the
-map before the swap and is NOT deleted**: most of what it decided survives, and its map re-judges its own
-eleven open tickets one by one. **Read both maps before deciding what this repo is.**
+`.scratch/island-hold/`** — opened 2026-08-26 when the sides swapped, and ⚠⚠ **it is the only planning
+map there is.** The maps that came before it were deleted 2026-08-26 together with the direction they
+belonged to; what was still true in them was carried into `island-hold` and into the docs below.
+**Do not go looking for a second map, and do not cite one.**
 
 ⚠⚠ **`main` is not the whole repo.** Two sessions collided on it once and one rebuilt the docs around a
 game folded on another branch. ⇒ **Run `git ls-remote --heads origin` before concluding anything.**
@@ -58,7 +83,7 @@ files drifts.
 
 **Grilling is how this repo asks** (2026-08-24, the user: *"그릴링 쓰자"*). ⚠⚠ **This replaces
 「exactly one question」**, which the user set 2026-08-22 (*"하나 씩 하나 씩 해줘 하나 씩"*) and
-reversed here. **The record of the reversal lives in `idea-inbox`, never in this file.**
+reversed here. **This paragraph is the record of that reversal, and it is now the only one.**
 
 **Hold the open decisions as a tree.** The **frontier** is every decision whose prerequisites are already
 settled — the questions askable **now**, without guessing at an answer you have not heard yet.
@@ -100,27 +125,23 @@ label says is worse than a red. If you can't do it, say you can't.**
 
 # The docs
 
-**`docs/` is two folders and five loose files; planning lives outside it in `.scratch/`.** **Open a
+**`docs/` is two folders and three loose files; planning lives outside it in `.scratch/`.** **Open a
 folder's README, not the folder.**
 
 | Path | What it holds |
 |---|---|
 | `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **Nearly empty, and that is a defect** — there is no GDD. When one is written it is **one page** — 넘어가면 아무도 안 읽는다. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
 | `docs/agents/` | **What the imported skills read before they act, and the only configuration in `docs/`.** ⚠ **Not reading matter** — `to-spec` · `to-tickets` · `triage` · `code-review-mp` load it |
-| `.scratch/<일>/` | **Where planning lives.** `map.md` is the map; `issues/NN-이름.md` are its tickets. **Status is a `Status:` line inside the file — files never move between folders.** `wayfinder` owns this |
+| `.scratch/island-hold/` | **Where planning lives, and the only map.** `map.md` is the map; `issues/NN-이름.md` are its tickets. **Status is a `Status:` line inside the file — files never move between folders.** `wayfinder` owns this |
 | `lessons-from-two-dead-games` | **What the two games that died actually measured** |
-| `idea-inbox` | **What the user said, before anyone decided what to do with it.** One row per remark, verbatim, dated, with a state |
-| `acceptance-debt` | **What shipped and nobody has looked at**, and under 「본 것」 **the user's own words about a game, never deleted** — they are the only judgement this repo has ever received about whether a game of its own was any good. Filled at `wrap-up`; a row leaves only when the user says they looked |
 | `how-nets-lie` | **Every green measured to be false.** Read it before writing a check and before believing a green round |
 | `planning-principles` | **How to judge a direction.** Survived both resets on purpose — read it first |
 
-- **What the user says in passing goes into `idea-inbox` that turn** — verbatim, dated, with a state, and
-  **nothing is deleted from it**
-- **A picked idea becomes a ticket on the map**, not a design doc. **What is built is read out of `src/`
-  and `tests/nets/`.** **When a fork is taken, record the rejected branch in `docs/design/`**
-- **When the user says they looked at something, their own words go into `acceptance-debt` that turn** —
-  ⚠⚠ **verbatim.** 「잘되네」「조작감이 너무 ㅈ같음」「참 애매하네」 were lost once with a deleted doc, and
-  they were the only measurement this repo had of whether the game is any good
+- **An idea the user picks becomes a ticket on the map**, not a design doc. **What is built is read out of
+  `src/` and `tests/nets/`.** **When a fork is taken, record the rejected branch in `docs/design/`**
+- ⚠ **The user's own words about a game are a measurement, and this repo has had very few of them.** When
+  the user says what they thought of something they played, **quote them verbatim into the ticket it
+  belongs to** — never paraphrase, and never leave the judgement only in chat
 - **Skeleton first, flesh later.** Do not demand every `TBD` be filled before implementing
 
 # How the code is laid out
@@ -131,13 +152,14 @@ whole game headless in seconds.
 | Path | The rule it obeys |
 |---|---|
 | `src/sim/` | **Never touches the tree.** No `Node`, no `_draw`, no `Input`, no `get_node`, no `$`. Every file is constructible and drivable with `.new()` and nothing else |
-| `src/view/` | **Reads `sim`, never writes it.** Everything that is a Node or draws lives here. ⚠ **The six 2D views expose a `_paint_*` hook** so a net can assert the arguments; **the field does not** — it builds a 3D world instead, and what replaces the hook is ticket 09's first question |
+| `src/view/` | **Reads `sim`, never writes it.** Everything that is a Node or draws lives here. ⚠ **Every view exposes `_paint_*` hooks**, the field included — but the field's hooks build a 3D world, so **asserting their arguments does not measure what the player sees.** What a net measures in this folder is the three-fold surface named in `CONTEXT.md`, not the hook |
 | `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. It builds its children in code, so a net calling `_ready()` exercises the real wiring |
 | `src/look.gd` | **Every presentation constant, in exactly one file.** `src/sim/rules.gd` holds every constant that changes what happens |
 
-⚠⚠ **Measured 2026-08-24: of 2841 checks, 1033 were tied to drawing in 2D and about 480 did not survive
-the field moving to 3D.** What survived measured **input → state**; what died asserted pixels. ⇒ **Prefer
-the shape that survives; reach for pixels only when the pixels are the subject.**
+⚠⚠ **When the field moved to 3D it took a large share of the checks with it** — the ones that died were
+the ones tied to drawing in 2D. What survived measured **input → state**; what died asserted pixels.
+⇒ **Prefer the shape that survives; reach for pixels only when the pixels are the subject.**
 
-⚠ **`CONTEXT.md` holds the magic-circle words and is wrong.** It is the glossary **and the three agreed
-test seams**; `tdd` will not write a test at a seam that is not named there.
+⚠ **`CONTEXT.md` is the glossary and the three agreed test seams** — `tdd` will not write a test at a seam
+that is not named there. ⚠ **Parts of its vocabulary are older than the swap** and still read as though the
+beast were the player. **Where a word in it disagrees with `src/`, the code is what is true.**

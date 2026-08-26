@@ -1,0 +1,34 @@
+{
+ "builds": [
+  {
+   "kind": "keep",
+   "w": 2,
+   "h": 2,
+   "label": "본채"
+  },
+  {
+   "kind": "house",
+   "w": 1,
+   "h": 1,
+   "label": "집"
+  },
+  {
+   "kind": "tower",
+   "w": 1,
+   "h": 1,
+   "label": "망루"
+  },
+  {
+   "kind": "store",
+   "w": 1,
+   "h": 1,
+   "label": "창고"
+  },
+  {
+   "kind": "wall",
+   "w": 1,
+   "h": 1,
+   "label": "돌담"
+  }
+ ]
+}

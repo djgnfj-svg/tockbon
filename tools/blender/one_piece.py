@@ -1,5 +1,9 @@
 # Puts ONE piece in the Blender scene and nothing else, for the user to look at in the viewport.
 #
+# ⚠⚠ **This file is the PIECE VIEWER. `island_build.py` is the board.** Nothing here is exported and
+# nothing here is what the game loads — this script exists only so a single tile can be judged up close.
+# ⚠ Ticket 01 records that this purpose was re-guessed six times; that is why it is stated up here.
+#
 # ⚠⚠ **The user asked for one piece three times and got an island twice** (2026-08-26:
 # ***"내가 큐브 하나만 보고 싶다고 했어 다시. 기억해서 큐브 하나만 보여주게 해줘"***). This file
 # exists so that request has somewhere to live: it clears the scene and builds a single 2x2 piece.

@@ -1,6 +1,9 @@
 """Crops out the bolt head only — 32x16 (head+tail) -> 16x16 (head only).
 
-    python crop_head.py out/fire_head/fire_head_08_seed1407674110_32px.png --out assets/spell/bolt_fire.png
+    python crop_head.py out/fire_head/fire_head_08_seed1407674110_32px.png --out assets/<folder>/bolt_fire.png
+
+⚠ **No spell folder ships any more** — the bolt was the magic-circle game's and went with it. The
+ destination is whichever `assets/` folder the caller is filling.
 
 **Discarding the tail is the whole of this tool.** The tail is drawn by code (`spell_view._draw_trail`) —
  the grounds are "the bolt head image" in `docs/design/circle-rune-glyph.md` and the point is speed:

@@ -178,10 +178,14 @@ func run(t) -> void:
 	var walker_pairs := 0
 	var walker_steps := 0
 	for i in 1:
-		var rows := Islands.rows()
-		var shape := _shape_errors(rows, EXPECT_ROWS, EXPECT_COLS)
+		# ⚠⚠ **Named `board`, not `rows`.** A second `var rows` here shadowed the one declared at the
+		# top of this function, and GDScript refuses to parse a shadowed local — so THE WHOLE FILE
+		# failed to compile and the round reported `islands 통과 0`. A net that cannot be parsed is the
+		# loudest kind of nothing: it asserts nothing at all while looking like one line of red.
+		var board := Islands.rows()
+		var shape := _shape_errors(board, EXPECT_ROWS, EXPECT_COLS)
 		t.eq(shape.size(), 0, "섬 %d 은 %d행 x %d자다 %s" % [i + 1, EXPECT_ROWS, EXPECT_COLS, str(shape)])
-		var illegal := _illegal_chars(rows)
+		var illegal := _illegal_chars(board)
 		t.eq(illegal.size(), 0, "섬 %d 에 범례 밖 글자가 없다 %s" % [i + 1, str(illegal)])
 
 		var h_count := _count_char(rows, "H")

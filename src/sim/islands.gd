@@ -48,6 +48,31 @@ static func rows() -> Array:
 	return _load()["rows"] as Array
 
 
+## **The real coastline**, as flat `[ax, ay, bx, by]` quads in tile units. ⚠⚠ **Not the tile grid.**
+## Coastal corners are cut and pushed when the island is built, so the line the mesh actually ends on
+## stopped being the line between a land tile and a water tile. Anything drawing the shore reads THIS.
+static func coast() -> Array:
+	return _load().get("coast", []) as Array
+
+
+## **What is already standing when the island opens**, as `{"kind": String, "x": int, "y": int}` with
+## `x`/`y` the LOW corner of the building's footprint in tile coordinates.
+##
+## ⚠ Right now that is one keep and nothing else — the user: 「처음 집만 지어져 있고 나머지는 유저가
+## 지을 거야」. Placed by the same run that shapes the ground, on the block of land nearest the middle.
+static func builds() -> Array:
+	return _load().get("builds", []) as Array
+
+
+## **What is scattered on the ground** — trees, rocks, bushes — as
+## `{"kind", "x", "y", "ox", "oy", "yaw", "scale"}`.
+##
+## ⚠ **Decided when the island is built, never at run time.** The same island always dresses itself the
+## same way, so a screenshot is repeatable and a player who leaves and comes back finds it unchanged.
+static func props() -> Array:
+	return _load().get("props", []) as Array
+
+
 ## The island's height board.
 static func tiers() -> Array:
 	return _load()["tiers"] as Array

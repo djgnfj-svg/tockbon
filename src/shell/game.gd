@@ -334,8 +334,23 @@ func _unhandled_input(event: InputEvent) -> void:
 				_on_left_press(click.position)
 			else:
 				_on_left_release(click.position)
+		elif click.button_index == MOUSE_BUTTON_RIGHT:
+			# ⚠⚠ **Right-drag turns the board** (2026-08-26, the user: 「회전은 오른쪽 마우스 누르고
+			# 돌릴 수 있었으면 좋겠음」). Q and E stay: they turn by a fixed notch, which is what a
+			# check can drive and what a keyboard hand wants. **This is the same camera and the same
+			# `turn_by`** — a second path to one state, never a second state.
+			_turning = click.pressed
+			_turn_from = click.position
 	elif event is InputEventMouseMotion:
 		var motion := event as InputEventMouseMotion
+		if _turning:
+			# ⚠ **Horizontal travel only.** Adding the vertical axis to the tilt here was tried on paper
+			# and dropped: R and F step the tilt, and a drag that changed two things at once made every
+			# accidental diagonal a lost camera the user then had to fix by hand.
+			var dx := motion.position.x - _turn_from.x
+			_turn_from = motion.position
+			field_view.turn_by(dx * Look.CAM_YAW_PER_PX_DEG)
+			return
 		# The panel is asked here too, and not only on press: a drag begun on the field before the
 		# panel opened must not keep panning (or sending) behind it once it does — `panel_active()`
 		# becoming true mid-drag is what `_on_left_press` alone cannot catch.
@@ -593,6 +608,12 @@ func _on_left_press(at: Vector2) -> void:
 ## ⚠ **This used to hold the drag's release — the third PLAN BRANCH the commit gate lived on.** With
 ## the drag deleted the only thing left here is ending the summon press and dropping the pan, and both
 ## are unconditional: there is nothing left that could author a landing on a release.
+## Whether the right button is down and the board is being turned by the mouse, and where the last
+## motion left it. **Two plain fields and no state machine**: a drag is a button and a previous point.
+var _turning := false
+var _turn_from := Vector2.ZERO
+
+
 func _on_left_release(at: Vector2) -> void:
 	if _summon_down:
 		# **The slot stays ARMED**, so the next press streams again with no key press in between. Only

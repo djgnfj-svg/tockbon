@@ -272,7 +272,8 @@ is a reader like any other.
 exact at every zoom, yaw and pitch").
 
 **그 초록 밑에 결함이 셋 있었다. 하나가 아니라 셋이다.** 전부 `Camera3D.unproject_position` 을 기준으로
-실측했다(`tools/probe/probe_pick.gd`):
+실측했다. ⚠ **그 측정을 돌린 탐침 `probe_pick.gd` 는 그 뒤 지워졌고, 남은 것은 아래 표다** —
+다시 재려면 탐침부터 새로 써야 한다:
 
 | 결함 | 무엇이었나 | 얼마나 틀렸나 |
 |---|---|---|
@@ -373,3 +374,131 @@ exact at every zoom, yaw and pitch").
 
 ⚠⚠ **빨강을 거르는 필터로는 못 본다** — `x net_` 같은 필터는 **빨강 표시 줄이 애초에 없으므로**
 아무것도 안 보여 준다. **종료 코드와 stderr 의 침묵사 검출이 유일한 문이다.**
+
+## The island was rebuilt and the game kept drawing the old one (2026-08-26)
+
+**Measured, not reasoned.** `tools/blender/island_build.py` writes `assets/terrain/island.glb`, and the
+game loads that file. The Blender run said `exported glb + json`, the file's timestamp moved, and the
+game **drew the previous island anyway** — three screenshots were taken of a mesh that no longer existed
+on disk, and nothing anywhere said so.
+
+⚠⚠ **The cause is Godot's import cache.** A `.glb` is imported into `.godot/imported/*.scn`, and a run
+started with `-s` does not notice that the source changed. The cached scene was 90 minutes older than
+the file it came from.
+
+⇒ **After every Blender rebuild, run the engine once with `--headless --import` before shooting or
+playing.** Without it the picture on screen is evidence about a file that is gone.
+
+⚠ **This is the exact shape this document exists for**: every signal said the change had landed. The
+tool printed success, the file changed, the game launched, the screenshot saved. Only the picture was
+of the wrong thing, and a picture cannot go red.
+
+
+## A whole net file reported zero and read as one line of red (2026-08-26)
+
+**Measured.** `tests/nets/net_islands.gd` printed `islands 통과 0 [실패]` for at least a day. It was read
+as "the island checks are red, and the island changed, so of course they are".
+
+⚠⚠ **The file did not compile.** A `var rows` inside a loop shadowed a `var rows` at the top of the same
+function, GDScript refuses to parse a shadowed local, and **the entire file was skipped.** Not one of its
+checks ran. Renaming the inner one brought **35 back to green immediately** and the rest are the ordinary
+"the island changed" reds.
+
+⇒ **A net reporting 통과 0 is not a very red net. It is a net that did not run.** The two look identical
+in the summary line and mean opposite things: one is a measurement, the other is the absence of one.
+**Read the runner's per-file line before believing a zero.**
+
+## A colour was written three times and landed wrong twice (2026-08-26)
+
+**Measured while building the first buildings.** Their palette came out pale pink, then near-black, then
+right. Three separate causes, and each one alone looked like the whole story:
+
+1. **The export carried two colour attributes** (`COLOR_0` and `COLOR_1`) and Godot read the empty one —
+   every building came in pure white. ⇒ The buildings are painted with materials now, not vertex colours;
+   the ground still uses vertex colours, and that difference is deliberate and written down where it lives.
+2. **glTF stores base colour in LINEAR** and a colour is picked in sRGB. Written straight through, every
+   tone lands several shades too light.
+3. ⚠⚠ **Blender keeps materials between runs of a script.** `flat_mat` reused one by name, so the FIRST
+   run's colours survived every rebuild — the fix for (2) appeared to do nothing, which sent the next
+   attempt off to convert twice and produce black. **The build script clears materials now.**
+
+⇒ **When an edit appears to do nothing, suspect the cache before suspecting the maths.** Two of the three
+rounds here were spent correcting arithmetic that was already right.
+
+## The keep's shadow node exists, is visible, and does not draw (2026-08-26 — OPEN)
+
+**Measured, not guessed.** Every standing thing on the island gets a drawn shadow — a soft dark quad on
+the ground. The trees and rocks show theirs. **The keep does not, and the node is there:** a print at the
+moment it is added reports position `(7.68, 1.322, 5.46)`, `visible = true`, scale `1.9`. The plateau's
+surface is at `1.31`, so it sits a centimetre above it, exactly as the props' do above theirs.
+
+⚠ **What was tried and did not change it**: widening it, darkening it, using the shared material instead
+of a duplicated one, capping how far it slides from its caster, and lifting it five times further off the
+ground. **All five produced a pixel-identical frame.**
+
+⇒ **It is not a size, a colour, a material or a depth-bias problem.** Something else is stopping that one
+node from being drawn, and this entry exists so the next attempt does not start by re-running these five.
+
+⚠⚠ **The lesson that generalises**: a node reporting `visible = true` at the right position with the
+right scale is **not** evidence that it is on screen. It is evidence that the code that creates it ran.
+
+## The keep looks right in Blender and wrong in the game (2026-08-26 — OPEN)
+
+**Measured both ends.** The same mesh, rendered inside Blender by the script that builds it, is cleanly
+flat-shaded: every face one tone, every edge hard. **In the game its white walls and its stone base come
+out in wedges of bright and dark that meet at the triangle seams.**
+
+⚠ **The mesh is not the problem, and this is now established rather than assumed.** The exported file
+splits vertices per face (a two-box `wall` exports 48 vertices for 12 quads — the count flat shading
+requires), carries `NORMAL` and `POSITION` and no colour attribute, and the Blender render of it is
+correct.
+
+⚠ **Four fixes were tried on the game side and every one produced a pixel-identical frame**:
+- `bm.normal_update()` before `to_mesh`, and `Mesh.shade_flat()` on top of the old per-polygon flag
+- sinking every stacked part so no two faces share a plane (coplanar faces z-fight, which looks like
+  exactly this) — kept, because it is correct regardless
+- not calling `_use_vertex_colours` on the buildings, which was switching on
+  `vertex_color_use_as_albedo` for a mesh with no vertex colours
+- reimporting the asset each time, so none of the above was tested against a stale cache
+
+⇒ **Still open.** Written down so the next attempt starts after these four rather than at them.
+
+⚠⚠ **The lesson**: "it renders wrong" is not one question. **Where it renders wrong is the first
+measurement**, and taking it — the same mesh in the DCC tool and in the engine — cut the search space in
+half in one step, after two rounds of guessing had cut it by nothing.
+
+## A dial that could not reach the screen (2026-08-26)
+
+**Measured.** The sea's ripple was given a strength dial, and four candidate values were rendered side by
+side to pick from. **All four came out identically flat.** The dial was not weak; it was multiplied by
+zero.
+
+⚠⚠ **The cause was a fade written as "far from the camera".** The ripple faded out beyond a distance
+from the camera, to stop fine detail aliasing when zoomed out. **This game's camera is ORTHOGONAL and
+sits far back**, so every point on the sea was already past the fade. On an orthogonal projection,
+distance-from-camera is not a stand-in for "small on screen" — a near tile and a far tile are drawn at
+exactly the same size.
+
+⇒ **Before comparing candidates, prove the dial moves the picture at all.** Four renders were spent
+comparing four numbers that could not differ.
+
+## The approved picture was of numbers the game did not have (2026-08-26)
+
+**Measured.** The tool that renders water candidates overrides the shader's uniforms so each candidate
+can differ. It also silently overrode the ripple strength to a value the game did not use. **The user
+approved a look from a sheet the game could not reproduce**, and would have found the difference on the
+next launch.
+
+⇒ **A comparison tool must start every candidate from the SHIPPED values** and change only what the
+candidate names. Anything it overrides on the way past is a lie about what was chosen.
+
+## A shadow the size of its caster is not a shadow (2026-08-26)
+
+**Measured twice, independently, an hour apart** — once on the buildings and once on the props. A drawn
+ground shadow was sized from the caster's own footprint. **Almost all of it lands underneath the caster**,
+so what shows is a smudge peeping out at the base, and on the small props nothing showed at all.
+
+⚠ It also has to get DARKER as it gets wider: the same opacity spread over thirty times the area is
+thirty times fainter everywhere. Widening the keep's shadow alone changed nothing visible.
+
+⇒ **Size and strength are one decision, not two.**

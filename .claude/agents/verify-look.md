@@ -21,9 +21,11 @@ writes and runs directly, and **in this project there is no bridge to have right
 local file is not in the repo**, so check the session's own tool list rather than assuming either way. The
 bridge section below is for when it is attached.
 
-⚠⚠ **2026-08-22 — `tools/look/` no longer exists.** It went with the cell game, and **there is no screen to
-capture yet**: `src/` is empty. **The first stage that draws anything writes a new capture script**, and the
-shape it takes is this:
+⚠⚠ **That sentence has turned over twice.** `tools/look/` was emptied with the cell game on 2026-08-22,
+and **it exists again**: `src/` runs, the game launches, and the folder holds **two scripts that both run** —
+`capture_refit.gd` (twelve frames of the reward pick and the refit board) and `probe_refit_hits.gd`
+(headless, reads no pixels, answers which control a press reaches). **Read `tools/look/README.md` before
+writing a third.** The shape a capture script takes is this:
 
 ```
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://<capture-script>.gd -- <output-dir>
@@ -41,7 +43,7 @@ written into the repo.
 
 **Not `--headless`.** No swapchain, `root.get_texture()` comes back blank, every PNG is a black rectangle **with
 no error anywhere** — and one of the deleted tools *hung* there instead, waiting on a `frame_post_draw` that
-never comes. `capture_map.gd` refuses `--headless` outright rather than writing the rule down.
+never comes. `capture_refit.gd` refuses `--headless` outright rather than writing the rule down.
 
 **A capture harness is an instrument, so invert it before trusting it.** ⚠⚠ **2026-08-22 — the capture
 harness this paragraph described went with the cell game, and so did every name it pinned** (`capture_map.gd`,
@@ -49,7 +51,8 @@ harness this paragraph described went with the cell game, and so did every name 
 is general**: take a **known-answer frame first**, because anything that re-centres or re-zooms between the
 write and the shutter **quietly undoes a staged camera, and the failure looks exactly like a change that had
 no effect.** Stage a camera through the values the view composes each frame, **never** by writing `position`
-directly — and **rebuild this paragraph's concrete half the day a capture tool exists again.**
+directly. ⇒ **The concrete half lives in `tools/look/README.md` now** — `capture_refit.gd` shoots the title
+first for exactly this reason.
 that node reserves the composition for one place.
 
 **Is there a path for the thing you want to see to reach the screen?** The most common miss, and it reads as a
@@ -118,7 +121,7 @@ This isolation is why this agent exists separately. Expensive observation is dig
 
 **Documented here rather than on everybody, because you are the only agent that would use it.**
 **Right now it is switched off in the machine-local settings file (**not in the repo — check the session's own tool list**) and `godot_*` does not exist in the session** —
-`capture_map.gd` was written on 2026-08-17 under exactly that condition and is the supported path. Read this
+the scripts in `tools/look/` were written under exactly that condition and are the supported path. Read this
 section only when the user has re-enabled the server.
 
 The bridge (`127.0.0.1:6550`) accepts **one client**, and `godot_*` is verify-look only; everything else is

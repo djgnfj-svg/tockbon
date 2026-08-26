@@ -130,15 +130,36 @@ const CAM_DIST_TILES := 90.0
 ## not, and that difference is the whole reason the field moved into 3D.
 const SUN_PITCH_DEG := -52.0
 const SUN_YAW_DEG := -35.0
-const SUN_ENERGY := 1.15
+## ⚠⚠ **Raised with the ambient and the fill LOWERED, and the three move together** (2026-08-26, the
+## user: 「그림자도 있어야 할 듯?」). Shadows were switched on and correct the whole time; what erased
+## them was light arriving from everywhere else. A shadow is not drawn by the sun, it is the absence of
+## the sun — so it can only be as dark as the rest of the lighting lets it be.
+const SUN_ENERGY := 1.5
 ## ⚠ **How far from the camera shadows are still cast, in tiles, and it is not decoration.** Godot's
 ## default is 100 and the camera sits `CAM_DIST_TILES` back, so the far half of the island fell outside
 ## it and the boundary drew as **a hard line straight across the sea** — seen in the first capture of
 ## this port before anything else was judged. It has to clear the camera distance plus the whole island.
-const SUN_SHADOW_DIST_TILES := 220.0
+## ⚠⚠ **220 -> 70** (2026-08-26). One orthogonal split spreads its whole shadow map over this distance,
+## so 220 tiles put a tree half a metre wide well under one texel and **nothing small cast anything.**
+## The camera cannot see 220 tiles at any zoom; the range was paying for sea nobody looks at.
+const SUN_SHADOW_DIST_TILES := 60.0
 ## ⚠ **Higher than Godot's default 1.0**, because one world unit here is a whole tile: the default is
 ## tuned for a metre and this world's metre is forty pixels of island.
-const SUN_SHADOW_NORMAL_BIAS := 2.5
+## ⚠⚠ **2.5 -> 0.55, and this is what was actually eating the shadows** (2026-08-26, the user: 「그림자도
+## 있어야 할 듯?」). The bias pushes the shadow lookup along the surface normal to stop a flat face
+## shading itself; at 2.5 world units it also pushed the lookup clean past anything SMALLER than 2.5
+## units — every tree, rock and bush on the island. It was set when the only things casting were tiles
+## and cliffs, which are big enough not to notice.
+## ⚠ **0.55 was too far the other way**: with the bias almost off, the island's own flat top shadowed
+## itself and drew as horizontal bands. The range that works is narrow — enough to lift the lookup off a
+## flat face, less than the height of the smallest thing meant to cast.
+## ⚠⚠ **Back up to 1.8, and the reason is worth keeping.** Lowering this to reach the props produced
+## shadow ACNE — hard bands across the island's own flat top — long before it produced a tree's shadow.
+## Measured across five values on 2026-08-26: at 2.5 nothing small casts, at 1.1 nothing small casts, at
+## 0.55 and 0.35 and 0.12 the ground stripes and the props STILL cast nothing readable. **This renderer's
+## directional shadow map cannot resolve a half-metre object at this scale**, and pushing the bias is
+## the wrong lever. ⇒ **Props and buildings get a drawn blob instead** — see `_blob` in `field_view`.
+const SUN_SHADOW_NORMAL_BIAS := 1.8
 ## ⚠⚠ **A second light, dim, from the other side, casting nothing.** With one sun every surface facing
 ## away from it gets ambient only, and on this island that is **the entire south-west coast as one
 ## black slab** — the cliff there is 2.25 tiles of wall and every capture of the port shows it as a
@@ -146,11 +167,15 @@ const SUN_SHADOW_NORMAL_BIAS := 2.5
 ## the lighting exists to show. A fill light lifts the shaded faces and leaves the lit ones alone.
 const FILL_PITCH_DEG := -22.0
 const FILL_YAW_DEG := 155.0
-const FILL_ENERGY := 0.45
+const FILL_ENERGY := 0.38
 
 const COL_SKY := Color(0.055, 0.055, 0.075)
 const COL_AMBIENT := Color(0.520, 0.580, 0.680)
-const AMBIENT_ENERGY := 0.75
+## ⚠⚠ **Back up from 0.42.** The ambient was cut to make cast shadows read, and then the shadows ended
+## up DRAWN instead (see `COL_BLOB`) — so the cut was paying for nothing and charging for it: the
+## island's side walls face away from the sun, and with almost no ambient they went black. That black
+## band is what read as a cliff between the land and the sea.
+const AMBIENT_ENERGY := 0.66
 
 ## How far above its tile's top face a body's FEET sit. Zero would let a billboard's bottom row sink
 ## into the box it stands on at some yaws; a hair of lift costs nothing and never does.
@@ -295,7 +320,48 @@ const ZOOM_MIN := 0.50
 ## 0.50 the vertical margin disappears and `_clamp_cam` has nothing to centre into. It buys 11%, and
 ## 11% is all this lever has: **the survey has to show the whole island, so the island's size is what
 ## bounds it.** The rest came out of the sprite ratio above.
-const ZOOM_MAX := 1.0
+## ⚠⚠ **Raised 1.0 -> 2.2** (2026-08-26, the user: 「좀 더 확대할 수 있어야 하고」). The old ceiling was
+## reasoned as "one tile is 40 px, today's scale — never zoom in past that, nothing is gained". That was
+## written when the ground was drawn in 2D and there was genuinely nothing more to see. **The island is
+## an authored mesh now**: its coast, its rim and the buildings on it all carry detail that only exists
+## above that line.
+const ZOOM_MAX := 2.2
+## ⚠ **Degrees of yaw per pixel of right-drag.** At 0.5 a screen-width drag spins the board more than
+## three full turns and the hand loses where north was; at 0.05 it takes four drags to see the far side.
+## This is a bit over half a turn across the window, which is the range a single drag can hold.
+const CAM_YAW_PER_PX_DEG := 0.18
+
+## --- the blob a prop drops on the ground -----------------------------------------------------------
+## ⚠⚠ **A DRAWN shadow, not a cast one, and that is a decision** (2026-08-26). The sun casts and always
+## did; what it cannot do is resolve anything as small as a tree — five bias values were measured and
+## every one either lost the prop or striped the ground. **Bad North does not rely on a shadow map for
+## this either**: it bakes its shading into a low-resolution volume and reads it back. This is the same
+## idea at a tenth of the cost — a soft dark ellipse under each standing thing.
+## ⚠ It is offset along the sun's own direction, so the blobs agree with the shading on the objects.
+const COL_BLOB := Color(0.10, 0.13, 0.16, 0.30)
+## How wide the blob is against the thing standing on it.
+## ⚠⚠ **Raised 1.35 -> 2.2** (2026-08-26, the user: 「그림자 겉면이 좀 이상한데?」). At 1.35 a blob came
+## out almost exactly the width of the thing standing on it, so it spent nearly all of itself hidden
+## under that thing and what showed was a smudge peeping out at the trunk. **A drawn shadow has to be
+## visibly WIDER than its caster or it is not read as a shadow at all** — the same mistake was made
+## independently on the buildings an hour earlier.
+const BLOB_SPREAD := 2.2
+## ⚠ **Wider for a building than for a prop.** A prop's shape is narrower than its footprint, so a blob
+## at 1.35 shows all the way round it; a building fills its footprint exactly, and at 1.35 the shadow
+## disappeared under the walls.
+const BLOB_SPREAD_BUILD := 1.9
+## How much darker a building's blob is than a prop's. ⚠ **It has to rise with the spread**: the same
+## opacity over a much larger patch is much fainter everywhere, which is why widening the keep's shadow
+## alone did nothing visible.
+const BLOB_DARK_BUILD := 2.2
+## How far it slides away from the sun, in units of the caster's own height.
+## ⚠ **0.42 detached the tall ones.** A pine's blob slid most of a tile away and read as a separate
+## dark patch rather than as the tree's own shadow; the slide has to stay short enough that the blob and
+## its caster still touch.
+## ⚠⚠ **Cut to almost nothing.** A shadow that slides away from its caster stops being a contact
+## shadow, and contact is the whole job: it is what says the thing is ON the ground rather than hovering
+## over it. The lean is now a hint, not a displacement.
+const BLOB_SLIDE := 0.08
 const ZOOM_STEP := 1.15
 
 ## --- the survey ---------------------------------------------------------------------------------
@@ -408,7 +474,11 @@ static func survey_zoom_of(w_tiles: int, h_tiles: int) -> float:
 ## both died with the flat board and nothing read either.)
 ## ⚠⚠ **Re-pitched off the reference picture the user supplied** (2026-08-26): a soft grey-green sea,
 ## not a navy one. The old navy read as night and fought the pale khaki island for attention.
-const COL_WATER := Color(0.400, 0.500, 0.530)
+## ⚠⚠ **Darkened 2026-08-26** (the user: 「먼바다는 진하게 가자, 깊은 데 사실상」). The open sea was
+## within a shade of the sky and of the shallows, so the pale band around the island read as a glow
+## rather than as shallow water. **Depth is told by contrast**: the shallows can only look shallow
+## against water that looks deep.
+const COL_WATER := Color(0.255, 0.375, 0.410)
 ## ⚠⚠ **RAISED 2026-08-25 — it was `(0.203, 0.259, 0.184)` and that is not a green on screen.** The
 ## ambient is a cold blue-grey (`COL_AMBIENT`) and a near-grey green under it comes out as **stone with
 ## a tint**, which is what made a whole island read as one washed slab. Saturation up and value up: the
@@ -550,11 +620,115 @@ const SUMMON_RING_SEGMENTS := 96
 ## **The sea, as two tones a shader moves between.** `COL_WATER` is the trough; this is the crest.
 ## ⚠ Close together on purpose: the sea is the background this whole game is read against, and water
 ## that draws attention is water that competes with the ten bodies fighting on top of it.
-const COL_WATER_CREST := Color(0.455, 0.560, 0.588)
+const COL_WATER_CREST := Color(0.330, 0.455, 0.485)
 ## How wide one swell is (in tiles, inverted) and how fast it travels. Slow — a fast sea reads as a
 ## flowing river, and this one is meant to sit still enough to plan on.
-const WATER_WAVE_SCALE := 0.22
-const WATER_WAVE_SPEED := 0.18
+## ⚠⚠ **Chosen by eye from six candidates rendered side by side** (2026-08-26). The user: 「적당히만
+## 다르면 될 듯」 — the two that changed the sea's COLOUR or its contrast hardest were rejected for being
+## too far from what was there; this one is bigger, slower swell and nothing else.
+const WATER_WAVE_SCALE := 0.14
+const WATER_WAVE_SPEED := 0.13
+## ⚠⚠ **How far apart the two sea tones are pushed at the crest** (2026-08-26, the user: ***"물 자체가
+## 임팩트가 있는 건가?"***). The shader was written deliberately quiet on the reasoning that the sea is
+## the background bodies are read against, and quiet turned out to mean invisible — the surface read as
+## one flat colour. This lifts the crest away from the trough beyond the two constants above, which are
+## still only a few percent apart.
+const WATER_CONTRAST := 2.6
+
+## --- the ripple the light catches ------------------------------------------------------------------
+## ⚠⚠ **What a shop-bought water shader would call its normal map.** Three sine waves gave the sea a
+## shape but no surface: the swell was visible and the water between the crests was a flat colour, and
+## that is what read as "just code" (2026-08-26, the user: ***"물 자체가 임팩트가 있는 건가?"***).
+## Sea of Thieves solves it with four scrolling noise maps; this is the same idea evaluated instead of
+## sampled, which costs a little more and owes nothing to an asset store.
+## How many ripples per tile. Above about 3.5 they fall under a pixel at ZOOM_MIN and turn to noise.
+const WATER_RIPPLE_SCALE := 1.9
+## How fast the two noise layers drift apart. Slow: a ripple that races reads as rain, not as sea.
+const WATER_RIPPLE_SPEED := 0.14
+## How hard the ripple bends the surface normal. ⚠ **This is the whole dial between "glassy" and
+## "choppy"** — at 0 the sea is the old flat colour and at 4 it boils.
+## ✅ **Raised to what the approved screenshots were actually rendered with** (2026-08-26). ⚠ The sheets
+## the user picked from were shot at this value, not at the 1.6 that was in this file — shipping the
+## older number would mean the game never looked like the picture that was approved.
+const WATER_RIPPLE_STRENGTH := 4.2
+## ⚠ **How far from the camera the ripple fades out, in world units.** Detail finer than a pixel is not
+## detail, it is fizz — and the far sea is exactly where a repeating pattern gets spotted
+## (2026-08-26, the user: 「줌을 뒤로 땡겼을 때 바다에 패턴이 보이는 문제가 있음」).
+const WATER_RIPPLE_FADE := 46.0
+## ⚠ **Which way the wind runs.** Ripples are long ACROSS the wind and short along it; without a
+## direction the noise is round, and round noise on water reads as fog or as marble.
+const WATER_RIPPLE_WIND_DEG := 24.0
+## How far they are drawn out along that wind. 1.0 is round; under about 0.5 they become streaks.
+const WATER_RIPPLE_STRETCH := 0.34
+## How hard the streaks are chopped into lengths. 0 leaves them running the whole sea; above about 3
+## they stop being streaks and become speckle.
+## ⏳ **PROVISIONAL — 3 of 4 candidates, not yet judged on a screen that can show it** (2026-08-26, the
+## user: 「이건 모바일로는 잘 안 보인다, 어디에다가 기록하고」). Four values were rendered side by side —
+## 0.0 unbroken · 1.4 dashes · 2.6 shorter · 2.6 with a wider grain — and the difference does not survive
+## a phone screen. **This is the recommended one, standing in until it is looked at on a monitor.**
+const WATER_RIPPLE_CHOP := 2.6
+
+## --- the wash where the sea meets the land ---------------------------------------------------------
+## ⚠⚠ **The shoreline is drawn BY THE SEA, and that is the second answer to a question that failed
+## once.** A bright ring was built as a mesh laid on the water and it read as a white plate: an object
+## floating on the surface, because that is what it was. **This band is part of the water itself** —
+## the sea shader is handed how far every point is from land, and it foams where that distance is
+## small. Nothing is placed, so there is nothing to be seen lying on top.
+##
+## ⚠ **It breathes.** A still band is a painted edge; the user asked for ***"바닷물이 첨벙첨벙하면서
+## 올라오는"***, and a band whose width moves is the cheapest thing that reads as water running up a
+## shore and back.
+const COL_WATER_FOAM := Color(0.880, 0.930, 0.945)
+## ⚠⚠ **The shallows — what actually joins the land to the sea** (2026-08-26, the user: 「땅하고 바다하고
+## 부드럽게 이어져서 바다 주름이 좀 괜찮게 보이는 거를 목표로」). ⚠ **This is NOT the sloped beach coming
+## back**: the ground still ends at a straight wall, exactly as decided. The join is made in the WATER,
+## by the sea paling over a stretch as it comes up to the land, which is what a real shore does and what
+## a hard edge between two flat colours never will.
+## ⚠ Kept close to the sea's own tone, only lighter and a shade greener. Far from it and this becomes the
+## white plate the mesh band already failed as.
+const COL_WATER_SHALLOW := Color(0.560, 0.700, 0.690)
+## How wide that stretch is, in tiles. **Several times the foam's reach**: the foam is the last hand's
+## width of water and this is the approach to it.
+const WATER_SHALLOW_TILES := 3.2
+## How far out the foam reaches at its widest, in TILES. Under about 0.2 it is a line rather than a
+## wash; over about 1.2 it stops looking like a shore and starts looking like shallow sea.
+## ⚠⚠ **How far out the travelling wave LINES live, in tiles** (2026-08-26). The shore used to be one
+## band that widened and narrowed as a whole, and the user saw it at once: 「다 똑같이 움직이니까
+## 이상함」. It is now the standard shoreline shape — a gradient off the land run through a cosine, so
+## there are several lines at once and each one moves inward. This is the stretch they live in.
+const WATER_FOAM_TILES := 2.6
+## How fast a line travels in, in cycles per second. **Slow**: a shore washes about once every three
+## seconds, and faster reads as a flicker.
+const WATER_FOAM_SPEED := 0.28
+## How many lines are inside that reach at once. Above about 4 they crowd into stripes.
+const WATER_FOAM_BANDS := 2.2
+## How thin each line is. It is an exponent on a cosine: 1 is a soft gradient, 8 is a hard edge.
+## ✅ **Chosen by eye from four thicknesses** (2026-08-26, the user: 「3번이 적당하네」). ⚠ **A high
+## exponent is the CHEAP way to a thin line** — it costs one `pow` and no extra sampling — but it also
+## means the line's width is not a distance anybody can read off this number. If the shore ever has to
+## be a measured width, this is the wrong dial.
+const WATER_FOAM_SHARP := 26.0
+## ⚠⚠ **How far the phase drifts ALONG the coast, in radians — the thing that stops the lines being
+## concentric.** At 0 every stretch of shore crests at the same instant, which is the defect this
+## replaced. Near π the two sides of a headland are in opposite phase.
+const WATER_FOAM_BREAK := 3.1
+## How quickly that drift changes as you walk along the coast. Small: a stretch of shore has to act
+## together over a few tiles or the lines shatter into speckle.
+const WATER_FOAM_BREAK_SCALE := 0.22
+## ⚠ **The thin permanent lip right at the land**, separate from the lines. Water always touches the
+## shore; the lines are what runs up over it.
+const WATER_FOAM_LIP_TILES := 0.18
+## ⚠⚠ **How hard the sheltered coast is spared.** Waves arrive FROM somewhere — the shore facing into
+## the wind takes them and the lee shore is nearly flat. A ring of identical surf all the way round is
+## what says nothing is actually arriving. Shares the ripple's wind direction on purpose: one weather.
+## ✅ **Chosen by eye from four** (2026-08-26): all-round · gentle · this · strong. The user: 「3번이
+## 맞긴 한데」.
+const WATER_FOAM_LEE := 2.4
+## The farthest distance the field stores, in tiles. Everything beyond is "open sea" and identical.
+const WATER_FIELD_SPAN_TILES := 4.0
+## Texels per tile in that field. **4 is not an optimisation, it is the shape of the answer**: at 1 the
+## foam steps square at tile edges, which is the grid drawn back in water.
+const WATER_FIELD_SUBDIV := 4
 
 # HUD and panel.
 const COL_HUD_TEXT := Color(0.918, 0.937, 0.961)

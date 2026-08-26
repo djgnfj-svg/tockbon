@@ -16,7 +16,10 @@ nothing, which reads as a jagged white fringe — the same fringe `cutbg.py` des
 Pixels that are *partly* background get partial alpha instead.
 
 Usage:
-    python tools/pixel/cut_white_bg.py assets/ui/research_panel.png
+    python tools/pixel/cut_white_bg.py assets/<folder>/research_panel.png
+
+⚠ **There is no UI asset folder any more** — `research_panel.png` belonged to the deleted game and the
+path above is whichever `assets/` folder the caller is filling. The measurement stands; the file is gone.
 """
 import sys
 from collections import deque

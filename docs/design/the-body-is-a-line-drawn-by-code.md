@@ -1,12 +1,16 @@
 # The body is an outline drawn by code, not a sprite
 
-**Status**: ⚠⚠ **FULLY REVERSED (2026-08-24)** — 절반 뒤집힘이었다가 이날 전부 뒤집혔다. 아래 덧씀을 읽어라
+**Status**: ⚠⚠ **FULLY REVERSED (2026-08-24)** — 절반 뒤집힘이었다가 이날 전부 뒤집혔다. 아래 덧씀을 읽어라.
+⚠⚠ **2026-08-26에 진영이 뒤집히면서 명부도 뒤집혔다** — **아군은 저폴리 검사 하나, 적은 짐승 넷**이다.
+**그림값은 0이었다**: 적이던 저폴리 병사가 플레이어가 되고 짐승은 있던 자리에 그대로 남았다.
+**이 문서의 교훈은 그 사건에서 한 번 더 값을 했다** — 아래 덧씀의 마지막 절을 볼 것.
 
 ## What was decided
 
 **A rounded square drawn as a line, one dot at the centre, empty between them.** Drawn by code, not loaded
 from an image, **with images left open as a later swap** (the user's words: build it this way and change it
-later if it wants changing). Details in the GDD's *Screen*.
+later if it wants changing). Details were in the GDD's *Screen*. ⚠ **That GDD is gone** — deleted with
+the cell game and not revived, so this paragraph is the whole of it.
 
 **And a worn part takes the host's colour, not the prey's.** Eating a cheetah's legs does not paste cheetah
 onto the body — the cell digested it.
@@ -62,13 +66,16 @@ The bodies getting big enough that seeing the ground through them reads as a mis
 
 ## ⚠⚠ 덧씀 (2026-08-24) — **전부 뒤집혔다. 지우지 않는다**
 
-**판 위의 몸은 이제 전부 그림이다.** 아군은 늑대와 까마귀, 적은 얼굴 없는 저폴리 병사 셋(창병·궁수·
-방패병). **코드가 그리는 선으로 남은 몸은 마지막 보스 사자 하나뿐이고, 그건 사자를 어디로 보낼지가
-안 정해져서지 이 결정이 살아 있어서가 아니다.**
+**판 위의 몸은 이제 전부 그림이다.** ⚠⚠ **누가 어느 편인지는 2026-08-26에 뒤집혔다** — 그날까지는
+아군이 짐승이고 적이 얼굴 없는 저폴리 병사였다. **지금은 아군이 저폴리 검사 하나이고, 적이 짐승
+넷(늑대 · 곰 · 까마귀 · 사자)이다.** 몸은 양쪽 다 그대로 그림이다.
 
 ⚠ **그런데 이 문서가 옳았던 이유는 안 뒤집혔다.** 「그림은 나중에 갈아 끼울 수 있게 열어 둔다」가
 그것이고, 실제로 그 자리 하나(`_beast_tex`)만 고쳐서 다섯 번 갈아 끼웠다 — 원시인, 대두 병사,
 저폴리 병사, 그리고 짐승 다섯 종. **선으로 시작한 덕에 그림이 싸게 들어왔다.**
+⚠⚠ **2026-08-26에 그 이음매가 여섯 번째로 값을 했다**: 진영이 통째로 뒤집혔는데 **그림은 한 장도 새로
+안 그렸다** — 적이던 병사가 플레이어 자리로 옮겨 앉았을 뿐이다. **방향이 뒤집혀도 그림값이 0이려면
+그림이 들어오는 자리가 하나여야 한다.**
 
 ⚠⚠ **속을 비운 이유(먹은 부위가 host 의 색을 입는다)는 같이 죽었다** — 먹기가 범위 밖으로 나갔고,
 부위 자체가 2026-08-24 에 장비 목록으로 갈아엎어졌다.

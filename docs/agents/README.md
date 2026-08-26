@@ -9,5 +9,5 @@ is configuration the skills read, not documentation a person reads.
 | `triage-labels.md` | `triage` — the five role strings |
 | `domain.md` | `domain-modeling` and anything exploring the code — points at `CONTEXT.md` |
 
-⚠ **`CLAUDE.md` does not know this folder exists**, and its doc table says `docs/` is *one folder and five
-loose files*. **Only the user edits that file**, so the table is stale until they do.
+⚠⚠ **Only the user edits `CLAUDE.md`.** Its doc table already names this folder. When something here needs
+that file to change, **report it to the user** — never edit it in.

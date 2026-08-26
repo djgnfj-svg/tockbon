@@ -1,6 +1,7 @@
 """Turn a cream-ground line-art generation into the ink-on-alpha asset this repo already ships.
 
-**The existing `assets/circle/socket_glyph_*.png` were measured, and this matches them by construction**:
+**The magic-circle game's `socket_glyph_*.png` were measured before that game's asset folder was deleted,
+and this matches them by construction**:
 one flat colour (26,24,22) everywhere, and **the picture lives entirely in the alpha channel** — a stroke is
 alpha 255, the cream ground is 0, and the ring's inner hole is ~9. Nothing about the drawing is in the RGB.
 

@@ -19,68 +19,133 @@ import math
 
 OUT = r"C:/Users/djgnf/Desktop/godot_games/tockbon/tools/blender/island_build.png"
 
-# The island the game actually holds (`src/sim/islands.gd`). `~`/`H` are water, everything else land.
-ROWS = [
-    "~~~~~~~~~~~~~~~~",
-    "~~~..........~~~",
-    "~~..W......C..~~",
-    "~~.........C..~~",
-    "~~........B...~~",
-    "~~....~~......~~",
-    "~~~.W.~~...W.~~~",
-    "~~~~~~~~~~~~~~~~",
-    "~~~~~~~~~~~~~~~~",
-    "~~~~~~~~~~~~~~~~",
-    "~~~~~~~~~~~~~~~~",
-    "~~~H~~~~H~~~~H~~",
-]
-TIERS = [
-    "................",
-    "................",
-    "..........11....",
-    "........../1....",
-    "..........11....",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
-    "................",
+# The island. ⚠⚠ **THE WHOLE OUTER RING IS HARBOUR (`H`), and that is a decision** (2026-08-26, the
+# user: ***"바다랑 만나는 모든 접점에서 상대가 올 수 있었으면 좋겠거든"***). Boats sail FROM a harbour,
+# so three harbours on the south edge meant every beast landed on the south shore and the other three
+# sides were decoration. A harbour on every border tile makes the whole coastline a place they can come
+# from. ⚠ **The landing rule itself was already open** — `grid.gd` refuses only cliff and inland — so
+# this is the one edit that was needed.
+#
+# ⚠ **No beast stands on it.** The garrison letters (`W`/`B`/`C`/`L`) were cleared
+# 2026-08-26 by the user: the beasts arrive BY BOAT now, so a body already standing on the ground is a
+# leftover of the direction where the player landed and fought a garrison. The letters still parse --
+# `islands.gd` keeps reading them -- so a wave can place one later without touching this legend.
+# ⚠⚠ **This grid is the SOURCE, not a copy of one** — see `export()` at the foot of this file:
+# the game reads the mesh and the board this script writes, and owns neither. `~`/`H` are water, the rest land.
+# ⚠⚠ **THE ISLAND IS DRAWN ON A 2x2 GRID, NOT A 1x1 ONE** (2026-08-26). 티켓 01, rule 1: a piece
+# that is one tile makes the grid show no matter how it is carved, and that was the cause of six
+# rejected renders in a row. **`PIECES` below is the real drawing surface** — one character is one 2x2
+# piece — and `ROWS` is expanded from it. An outline that can only turn on even tiles is an outline
+# whose steps read as SHAPE rather than as squares.
+#
+#   `.` land  ·  `~` open water
+#
+# ⚠ **The border ring must stay water**: the tiles around the edge are harbours, and a boat sails
+# from there.
+PIECES = [
+    "~~~~~~~~",
+    "~~....~~",
+    "~.....~~",
+    "~.....~~",
+    "~~..~~~~",
+    "~~~~~~~~",
 ]
 
-## ⚠⚠ **Thickness is a RATIO to the island's width, not a number** (2026-08-26). This island is 16
-## tiles across; 0.42 read as a table. The reference picture sits near 1:25 of the width.
-TOP_H = 0.62        # the low level's walking surface, above the waterline
-LEVEL_H = 1.05      # how far the plateau stands over it. It is a cliff; it has to read as one.
-## ⚠⚠ **THE COAST IS TWO THINGS, NOT ONE** (2026-08-26, the user: ***"지금 거의 다 절벽이잖아. 이게
-## 왜 다 절벽처럼 만들어졌는지 모르겠고 ... 바다하고 닿는 부분은 좀 다르게 표현할 수 있을까?"***).
-## The first island gave every water-facing edge the same steep wall, so the whole outline read as one
-## cliff ring. **Bad North's own list is 걸을 수 있는 곳 · 못 걷는 곳 · 절벽** — a coast a boat can land
-## on and a coast it cannot are different things and have to LOOK different.
-##
-##   · **BEACH** — wades far out, barely drops, sand. This is where a landing happens.
-##   · **CLIFF** — drops hard, pushes out almost nothing, rock. Nothing lands here.
-BEACH_OUT = 1.10    # how far a beach reaches into the water. ⚠ This is also its AREA seen from
-                    # above, and from above is the only place this game is looked at.
-BEACH_DOWN = 0.30   # how little it drops on the way. ⚠ **Not too little**: at 0.16 the slope came out
-                    # under 10° and every beach face read as flat ground, so the whole island went
-                    # green again and the sand was never drawn.
-CLIFF_OUT = 0.10
-CLIFF_DOWN = 0.86
-MID_OUT = 0.11      # the shore breaks once on the way down
-MID_AT = 0.45
-ROLL = 0.055        # the walking surface wanders this much. Small: it is ground, not rock.
-WATERLINE = 0.02    # where a beach corner is dragged down to. **Essentially the water's own level** —
-                    # the point is that land and sea share a line rather than stacking.
-SIDE = 0.11         # how far the shore wanders. ⚠ **Kept small below the waterline** — bigger values
-                    # made ragged flaps that showed straight through the see-through sea.
-BAND_W = 0.38       # the bright shallow band that rings the coast. **This band is what makes a coast
-                    # read as a coast** — an edge between two materials does not.
-# ⚠ **Close to the sea, not to white.** A band far lighter than the water reads as a painted plate
-# lying on it; it has to look like the same water, only shallower.
-SHALLOW = (0.520, 0.618, 0.642)
+# ⚠⚠ **THE SECOND LEVEL, drawn on the SAME 2x2 piece grid** (2026-08-26). A raised ground drawn tile by
+# tile would put the grid straight back where the coastline just stopped showing it — the plateau has to
+# turn on the same even boundaries the coast does.
+#
+#   `.` ground level  ·  `1` the plateau  ·  `/` the step up to it
+#
+# ⚠ **A `/` piece must touch both**, or the stair leads nowhere. `grid.gd` reads these three characters
+# as levels 0, 1 and 2, and a stair is simply the ODD level between two floors.
+# ⚠ **No separate mesh is needed for the raised ground.** `build_island` already walls any edge where a
+# tile meets a LOWER one, which is the same code that walls the coast.
+HIGH = [
+    "~~~~~~~~",
+    "~~....~~",
+    "~..11.~~",
+    "~../1.~~",
+    "~~..~~~~",
+    "~~~~~~~~",
+]
+# ⚠ **The plateau never reaches the coast.** The first one ran right out to the island's edge, so the
+# upper wall and the shore wall met and the island read as one grey block with a lid. A rim of ground
+# all the way round is what lets the raised part be seen AS raised.
 
+PIECE = 2           # tiles per piece side
+
+
+def _expand():
+    """`PIECES` → the tile grid the game reads. **One place, so the two cannot drift.**
+
+    Every border tile becomes a harbour (`H`): boats sail from harbours, and the user asked for the
+    beasts to be able to come from every point where the sea meets the land.
+    """
+    rows = []
+    for pr in PIECES:
+        line = "".join((("." if c == "." else "~") * PIECE) for c in pr)
+        for _ in range(PIECE):
+            rows.append(line)
+    w, hgt = len(rows[0]), len(rows)
+    out = []
+    for y, r in enumerate(rows):
+        if y == 0 or y == hgt - 1:
+            out.append("H" * w)
+        else:
+            out.append("H" + r[1:-1] + "H")
+    return out
+
+
+ROWS = _expand()
+
+
+def _expand_tiers():
+    """`HIGH` -> the tile-level board, in step with `ROWS`.
+
+    ⚠ A piece that is water in `PIECES` is ground level here whatever `HIGH` says: the level board has
+    to be the same shape as the row board, and nothing stands on water.
+    """
+    out = []
+    for py, pr in enumerate(HIGH):
+        line = ""
+        for px, c in enumerate(pr):
+            ch = c if c in "./1" else "."
+            if PIECES[py][px] != ".":
+                ch = "."
+            line += ch * PIECE
+        for _ in range(PIECE):
+            out.append(line)
+    return out
+
+
+ROWS = _expand()
+# ⚠⚠ **TWO LEVELS AGAIN** (2026-08-26 evening, the user: 「이제 자연스러운 2층을 만들어보고 거기에
+# 건물을 올려보자」). One level was the right thing while the flat island was being judged — the user's
+# own 「정말 단순해도 돼, 층이 없어도 돼」 — and the flat island passed, so the level comes back.
+TIERS = _expand_tiers()
+
+# --- the numbers the shape is made of -------------------------------------------------------------
+TOP_H = 0.26        # the walking surface, above the waterline. ⚠⚠ **This number IS the step the island
+                    # stands on** (2026-08-26, the user: 「왜케 섬이 이렇게 한 칸 올라가 있지?」 —
+                    # yes, it was, at 0.62). **The game reads this out of `island.json` as `base_h`**, so
+                    # lowering it here lowers where every body stands and nothing else has to agree.
+LEVEL_H = 0.525     # ONE level step. ⚠⚠ **A stair is an odd level, not a kind of tile** — `grid.gd`
+                    # reads `.` `/` `1` as levels 0, 1, 2, so the plateau is TWO steps up and the stair
+                    # tread is the one in between. Collapsing them built the tread at full plateau
+                    # height: the stair had no step in it, and a body on the plateau floated a whole
+                    # level over the ground it was drawn on.
+CUT = 0.42          # how far a rounded coastal corner is pulled IN along its outward diagonal
+BULGE = 0.22        # how far a headland corner is pushed OUT. ⚠ **Not named OUT** — that name is
+                    # already the render path at the top of this file, and shadowing it made Blender try
+                    # to render to the number 0.22.
+WALL_DRAFT = 0.05   # how far the wall's FOOT sits outside its top edge. ⚠⚠ **This is not a beach.**
+                    # 티켓 01 rule 2: a wall at exactly 90 degrees repeats visibly when tiles are stacked;
+                    # leaning it a few degrees breaks the repeat without a single piece of clutter.
+WALL_DOWN = 0.62    # how far the wall carries on below the waterline. Enough that no angle sees under
+                    # the island; the sea is opaque, so nothing below this is ever looked at.
+WATERLINE = 0.02    # the water's own level. ⚠⚠ **A coastal corner sits HERE** — that is what joins the
+                    # land to the sea (2026-08-26, the user: 「바다랑 땅이 바로 되는 거」).
 
 def h(x, y, k):
     return math.sin(x * 1.7 + k) * math.cos(y * 2.3 - k)
@@ -94,14 +159,23 @@ def levels():
             if ch in "~H":
                 line.append(-1)
             else:
-                line.append(1 if TIERS[y][x] in "1/" else 0)
+                # ⚠ **The same legend `grid.gd` reads, in the same order.** `.` 0 · `/` 1 · `1` 2.
+                line.append("./1".find(TIERS[y][x]) if TIERS[y][x] in "./1" else 0)
         out.append(line)
     return out
+
+
+COAST = []          # the real coastline, in SIM tile coordinates. ⚠⚠ **Filled by `build_island` and
+                    # exported.** The sea draws its wash from this, and it has to be the line the mesh
+                    # actually ends on — the tile grid stopped being that line the moment coastal
+                    # corners started being cut and pushed (2026-08-26, the user: ***"저 임팩트가 면을
+                    # 따라서 되는 게 아니라 그냥 네모나게 고정돼 있는 것 같은데"***).
 
 
 def build_island(bm, lv):
     hgt = len(lv)
     wid = len(lv[0])
+    COAST.clear()
     # ⚠⚠ **Y IS FLIPPED HERE, ON PURPOSE.** glTF's Y-up conversion turns Blender's +Y into Godot's -Z,
     # so an island built at y = 0..12 lands at z = -12..0 in the game and every body walks on water.
     # Flipping the row order here is the one place to fix it; doing it with a negative scale in Godot
@@ -111,50 +185,91 @@ def build_island(bm, lv):
     def top_of(l):
         return TOP_H + l * LEVEL_H
 
-    def is_beach(cx, cy):
-        """Whether the coast AT THIS CORNER is a beach rather than a cliff. **Decided per corner, not
-        per edge**, so the transition between the two is a slope and not a step."""
-        # ⚠⚠ **A LOW frequency on purpose.** At 0.42 the answer flipped from one corner to the next
-        # and the sand came out as a chequerboard — the grid, drawn in material instead of geometry.
-        # A beach has to be a STRETCH of coast, so the function that decides it has to change slowly.
-        return h(cx * 0.15, cy * 0.15, 9.0) > -0.30
-
-    def water_touch(cx, cy):
-        """How many of the four tiles around grid corner (cx, cy) are water. 0..4."""
-        n = 0
+    def coastal(cx, cy):
+        """Whether grid corner (cx, cy) is on the coast — some tile around it is water."""
         for dx, dy in ((-1, -1), (0, -1), (-1, 0), (0, 0)):
             x, y = cx + dx, cy + dy
             if not (0 <= x < wid and 0 <= y < hgt) or lv[y][x] < 0:
+                return True
+        return False
+
+    def solid_around(cx, cy):
+        """How many of the four tiles at this corner are land. 4 = inland, 1 = an outside corner."""
+        n = 0
+        for dx, dy in ((-1, -1), (0, -1), (-1, 0), (0, 0)):
+            x, y = cx + dx, cy + dy
+            if 0 <= x < wid and 0 <= y < hgt and lv[y][x] >= 0:
                 n += 1
         return n
 
-    def corner(cx, cy, l):
-        """⚠⚠ **THE GROUND COMES DOWN TO MEET THE WATER, and this function is the whole of it**
-        (2026-08-26, the user: ***"바다하고 동일선상이 있어야 되거든. 그래서 바닷물이 첨벙첨벙하면서
-        올라오는 애니메이션까지도 생각하고 있고"***). Every render before this stood the entire island
-        on a plinth: the top sat at a fixed height and the coast fell off it, so land and sea never
-        met — they were stacked. **A wave cannot run up a plinth.**
+    def corner_xy(cx, cy):
+        """⚠⚠ **WHERE A COASTAL CORNER ACTUALLY SITS, and it is not always on the grid**
+        (2026-08-26, the user: ***"어디는 동그랗게 끝나고 또 어디는 또 다르게 끝나고 해야 될 거
+        같은데?"***).
 
-        Now a corner that touches water is pulled DOWN toward the waterline, so the beach walks into
-        the sea at the sea's own level and there is somewhere for the water to wash over.
-        ⚠ **A cliff corner is not pulled** — that coast is supposed to be a wall, and pulling it would
-        delete the difference the last round just built."""
-        base = top_of(l) + h(cx, cy, 2.1) * ROLL
-        if l != 0:
-            return base
-        t = water_touch(cx, cy)
-        if t == 0 or not is_beach(cx, cy):
-            return base
-        # Two touching tiles is the open coast; one is an inside corner and stays higher.
-        pull = 1.0 if t >= 2 else 0.55
-        return base * (1.0 - pull) + WATERLINE * pull + h(cx, cy, 11.3) * 0.03
+        A coastline whose every corner sits exactly on its grid point is a staircase, and a staircase
+        reads as a diagram. This moves each coastal corner by an amount decided by **its own position
+        and nothing else** — the same corner always gets the same answer, so neighbouring tiles that
+        share it stay welded and the surface never splits.
+
+        Three treatments, chosen by a hash of the corner:
+          · **cut**   — pulled in along the outward diagonal. With the bevel on top this reads ROUND.
+          · **out**   — pushed out a little; the coast bulges.
+          · **square**— left alone. ⚠ **Some corners must stay square** or the variety itself becomes
+                        a texture, and the island goes back to reading as one repeated thing.
+        ⚠ Inland corners are never moved: they are not the silhouette, and moving them would ripple a
+        wobble across ground the bodies walk on.
+        """
+        if not coastal(cx, cy):
+            return (float(cx), float(cy))
+        k = h(cx * 1.7, cy * 1.7, 31.0)          # -1..1, stable per corner
+        n = solid_around(cx, cy)
+        if n == 0 or n == 4:
+            return (float(cx), float(cy))
+        # The outward direction: away from the land around this corner.
+        ox = oy = 0.0
+        for dx, dy in ((-1, -1), (0, -1), (-1, 0), (0, 0)):
+            x, y = cx + dx, cy + dy
+            solid = 0 <= x < wid and 0 <= y < hgt and lv[y][x] >= 0
+            ox += (-1.0 if solid else 1.0) * (dx + 0.5) * 2.0
+            oy += (-1.0 if solid else 1.0) * (dy + 0.5) * 2.0
+        m = max((ox * ox + oy * oy) ** 0.5, 1e-6)
+        ox, oy = ox / m, oy / m
+        if k > 0.30:
+            d = -CUT * (0.6 + 0.4 * k)           # in: a rounded end
+        elif k < -0.45:
+            d = BULGE * (0.6 + 0.4 * -k)           # out: a headland
+        else:
+            d = 0.0                              # square
+        return (float(cx) + ox * d, float(cy) + oy * d)
+
+    def corner(cx, cy, l):
+        """The height of a grid corner.
+
+        ⚠⚠ **A CORNER ON THE COAST SITS AT THE WATERLINE** (2026-08-26, the user: 「일단 부드럽게
+        이어지는 거 해보자, 지금도 바다랑 너무 벽으로 텀이 있잖아」). The land used to hold its full
+        height right to its last vertex, so where it ended a wall stood up out of the sea and the island
+        read as a slab dropped on the water.
+
+        ⚠ **This is NOT the old beach coming back, and the difference is the DISTANCE.** That one waded
+        a whole tile and more out into the water on a shallow ramp with its own sand colour, and it made
+        the island read as clay. This drops the outermost ring of vertices and nothing else: the fall is
+        `TOP_H` over one tile — about fifteen degrees — and the wall below it ends up entirely under an
+        opaque sea, where nobody ever sees it.
+
+        ⚠ Inland corners are untouched. The ground the bodies walk on stays perfectly flat.
+        """
+        if l == 0 and coastal(cx, cy):
+            return WATERLINE
+        return top_of(l)
 
     cache = {}
 
     def vert(cx, cy, l):
         key = (cx, cy, l)
         if key not in cache:
-            cache[key] = bm.verts.new((cx, cy, corner(cx, cy, l)))
+            px, py = corner_xy(cx, cy)
+            cache[key] = bm.verts.new((px, py, corner(cx, cy, l)))
         return cache[key]
 
     for y in range(hgt):
@@ -184,13 +299,13 @@ def build_island(bm, lv):
                 if nl >= 0:
                     _cliff(bm, vert, p0, p1, l, nl, corner)
                 else:
-                    # ⚠ **Which kind of coast, decided by POSITION and nothing random.** A continuous
-                    # function thresholded, so neighbouring edges mostly agree and the beaches come out
-                    # in stretches instead of alternating tile by tile.
-                    mx = (p0[0] + p1[0]) * 0.5
-                    my = (p0[1] + p1[1]) * 0.5
-                    beach = h(mx * 0.15, my * 0.15, 9.0) > -0.30
-                    _shore(bm, p0, p1, (dx, dy), l, corner, beach)
+                    _shore(bm, p0, p1, (dx, dy), l, corner, corner_xy)
+                    # ⚠ **Back to the sim's row order.** The mesh was built on reversed rows so glTF
+                    # lands it the right way up; the game's tiles were never reversed. One flip here
+                    # is what keeps the sea's shoreline on top of the island's.
+                    ax, ay = corner_xy(*p0)
+                    bx, by = corner_xy(*p1)
+                    COAST.append([ax, hgt - ay, bx, hgt - by])
 
 
 def _cliff(bm, vert, p0, p1, l, nl, corner):
@@ -202,36 +317,39 @@ def _cliff(bm, vert, p0, p1, l, nl, corner):
     bm.faces.new((t1, t0, b0, b1))
 
 
-def _shore(bm, p0, p1, out, l, corner, beach):
-    """Where the land ends. Two bands down to a foot that wades out under the water.
+def _shore(bm, p0, p1, out, l, corner, corner_xy):
+    """Where the land ends: **one wall, straight down.**
 
-    ⚠ **The two kinds differ in one pair of numbers and nothing else** — how far out and how far down.
-    A beach is long and shallow; a cliff is short and deep. The material is then read off the resulting
-    face angle, so the picture and the shape cannot disagree.
+    No outward reach, no wobble, no midway break. The two top vertices sit on the tile edge and the two
+    below them sit directly under it, so the island's silhouette from above IS the tile outline — which
+    is the shape a flat-shaded piece of land needs to read as one object.
+    ⚠ **`out` is no longer used and the argument is gone with it.** It existed to push a beach away
+    from the island; nothing is pushed anywhere now.
     """
+    ax, ay = corner_xy(p0[0], p0[1])
+    bx, by = corner_xy(p1[0], p1[1])
+    t0 = bm.verts.new((ax, ay, corner(p0[0], p0[1], l)))
+    t1 = bm.verts.new((bx, by, corner(p1[0], p1[1], l)))
     ox, oy = out
-    far = BEACH_OUT if beach else CLIFF_OUT
-    down = BEACH_DOWN if beach else CLIFF_DOWN
-    wob = SIDE * (0.5 if beach else 1.0)
-    verts = []
-    for (px, py) in (p0, p1):
-        tz = corner(px, py, l)
-        mz = tz - (tz + down) * MID_AT + h(px, py, 7.4) * wob * 0.5
-        m = (px + ox * (far * 0.35) + h(px, py, 6.1) * wob,
-             py + oy * (far * 0.35) + h(py, px, 6.9) * wob, mz)
-        f = (px + ox * far + h(px, py, 3.7) * wob,
-             py + oy * far + h(py, px, 4.2) * wob,
-             -down + h(px, py, 5.5) * wob * 0.4)
-        verts.append((bm.verts.new((px, py, tz)), bm.verts.new(m), bm.verts.new(f)))
-    (t0, m0, f0), (t1, m1, f1) = verts
-    bm.faces.new((t1, t0, m0, m1))
-    bm.faces.new((m1, m0, f0, f1))
+    b0 = bm.verts.new((ax + ox * WALL_DRAFT, ay + oy * WALL_DRAFT, -WALL_DOWN))
+    b1 = bm.verts.new((bx + ox * WALL_DRAFT, by + oy * WALL_DRAFT, -WALL_DOWN))
+    bm.faces.new((t1, t0, b0, b1))
 
 
 GRASS = (0.760, 0.735, 0.520)
 GRASS_HIGH = (0.820, 0.800, 0.600)
 SAND = (0.815, 0.780, 0.590)
-ROCK = (0.520, 0.520, 0.500)
+## ⚠⚠ **Earth, not stone** (2026-08-26, the user asked for a 「자연스러운」 second level). A neutral grey
+## on a vertical face that turns away from the sun goes almost black, and the plateau read as a concrete
+## box set on the grass. A warm brown reads as the SIDE OF THE GROUND — a bank the turf has broken over
+## — and it holds its colour in shade because the hue survives when the brightness does not.
+ROCK = (0.470, 0.392, 0.286)
+## ⚠ **The lip where the top meets the side.** Darker than the rock and slightly warmer, so it reads as
+## the ground's own edge in shadow rather than as a painted line.
+RIM = (0.300, 0.288, 0.262)
+## How far down the wall that lip reaches, as a fraction of the wall's whole height. Over about 0.3 it
+## stops being an edge and becomes a two-tone cliff.
+RIM_AT = 0.26
 
 
 # ⚠ **No sRGB conversion here, and that was tried.** `bm.loops.layers.color` makes a BYTE colour
@@ -255,10 +373,20 @@ def _paint(bm):
         steep = f.normal.z < 0.34
         for lp in f.loops:
             if steep:
+                # ⚠⚠ **THE DARK LIP IS GONE, AND THE REASON IS A LESSON ABOUT VERTEX COLOUR.** A rim
+                # tone was assigned to the top fifth of each wall to put the detail where the faces
+                # meet. It could not work: **a wall face has FOUR vertices** — two at the top, two far
+                # below the waterline — and vertex colour is interpolated between them, so a colour
+                # given to the top vertices bleeds down the whole face. Every fraction written into
+                # `RIM_AT` was ignored by the geometry, and the island's side came out black. The user
+                # read it as a cliff and asked what it was for (2026-08-26: 「저 절벽은 왜 있는 거임?」).
+                #
+                # ⇒ **A vertex colour can only vary where there is a vertex.** Detail at an edge needs a
+                # LOOP OF VERTICES at that edge; painting the corner and hoping is a gradient, not a lip.
                 c = ROCK
             else:
                 z = lp.vert.co.z
-                if z > TOP_H + LEVEL_H * 0.5:
+                if z > TOP_H + LEVEL_H * 1.5:
                     c = GRASS_HIGH
                 else:
                     t = (z - WATERLINE) / max(TOP_H - WATERLINE, 1e-6)
@@ -332,59 +460,6 @@ def water(wid, hgt):
     return ob
 
 
-def band(lv):
-    """The bright shallow ring around the whole coast, traced from the island's outline at walking
-    height. **This is the single thing that makes the reference picture read as an island** — the coast
-    stops being a line between two materials and becomes a band with width."""
-    hgt, wid = len(lv), len(lv[0])
-    bm = bmesh.new()
-    made = {}
-
-    def v(px, py, z):
-        key = (round(px, 3), round(py, 3), round(z, 3))
-        if key not in made:
-            made[key] = bm.verts.new((px, py, z))
-        return made[key]
-
-    for y in range(hgt):
-        for x in range(wid):
-            if lv[y][x] < 0:
-                continue
-            for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0)):
-                nx, ny = x + dx, y + dy
-                inside = 0 <= nx < wid and 0 <= ny < hgt and lv[ny][nx] >= 0
-                if inside:
-                    continue
-                if dx == 0 and dy == -1:
-                    p0, p1 = (x, y), (x + 1, y)
-                elif dx == 1:
-                    p0, p1 = (x + 1, y), (x + 1, y + 1)
-                elif dy == 1:
-                    p0, p1 = (x + 1, y + 1), (x, y + 1)
-                else:
-                    p0, p1 = (x, y + 1), (x, y)
-                w = BAND_W + 0.22 * h(p0[0] * 0.3, p0[1] * 0.3, 12.0)
-                # ⚠⚠ **ABOVE the waterline, not below it.** In Blender the band sat under a
-                # see-through sea and showed through; the game's sea is opaque, so a band under it is
-                # a band nobody sees. It is a hair over the surface here — high enough to draw, low
-                # enough that the land still meets the water at the land's own edge.
-                a0 = v(p0[0], p0[1], 0.020)
-                a1 = v(p1[0], p1[1], 0.020)
-                b0 = v(p0[0] + dx * w, p0[1] + dy * w, 0.012)
-                b1 = v(p1[0] + dx * w, p1[1] + dy * w, 0.012)
-                bm.faces.new((a0, a1, b1, b0))
-    bm.normal_update()
-    me = bpy.data.meshes.new("band")
-    bm.to_mesh(me)
-    bm.free()
-    ob = bpy.data.objects.new("band", me)
-    bpy.context.collection.objects.link(ob)
-    ob.data.materials.append(mat("shallow", SHALLOW))
-    for p in ob.data.polygons:
-        p.use_smooth = False
-    return ob
-
-
 def sky():
     """A gradient, not a flat colour. **The water has to have something to reflect** or the reflection
     is one tone and the surface goes dead."""
@@ -454,12 +529,11 @@ def build():
         o.select_set(False)
 
     b = isl.modifiers.new("bevel", 'BEVEL')
-    b.width = 0.035
+    b.width = 0.06
     b.segments = 2
     b.limit_method = 'ANGLE'
     b.angle_limit = math.radians(24.0)
 
-    band(lv)
     water(wid, hgt)
 
     sun = bpy.data.objects.new("sun", bpy.data.lights.new("sun", 'SUN'))
@@ -500,6 +574,120 @@ def build():
     print("rendered", OUT, "faces", len(isl.data.polygons))
 
 
+def _scatter_props():
+    """**What is scattered on the ground: trees, rocks, bushes.** As
+    `{"kind", "x", "y", "ox", "oy", "yaw", "scale"}` -- the tile, where inside it, which way round, and
+    how big.
+
+    WARNING **Decided HERE and never at run time.** The same island always dresses itself the same way,
+    so a screenshot is repeatable and a player who leaves and comes back finds the same island. The
+    answer comes out of the tile's own position, exactly as the coastline's cut corners do.
+
+    WARNING **Nothing is scattered on a building's footprint, or right against the coast.** The keep
+    needs its ground clear to read, and a tree hanging over the water edge fights the one silhouette the
+    island has.
+    """
+    hgt, wid = len(ROWS), len(ROWS[0])
+    taken = set()
+    for b in _starting_builds():
+        w = 2 if b["kind"] == "keep" else 1
+        for dy in range(w):
+            for dx in range(w):
+                taken.add((b["x"] + dx, b["y"] + dy))
+
+    def land(x, y):
+        return 0 <= x < wid and 0 <= y < hgt and ROWS[y][x] not in "~H"
+
+    # WARNING **Chosen by RANK, not by threshold.** The first version compared the noise against fixed
+    # numbers (`k > 0.72` for a pine, and so on) and the island came out with ten props, no pines and no
+    # rocks at all -- the function's real spread never reached the high cuts. Ranking every eligible
+    # tile and taking bands off the top gives the same stable, position-derived answer while
+    # GUARANTEEING that every kind actually appears.
+    eligible = []
+    for y in range(hgt):
+        for x in range(wid):
+            if not land(x, y) or (x, y) in taken:
+                continue
+            # A tile touching water stays bare: the coast is the island's silhouette, and props on it
+            # blur the one line that says where the ground ends.
+            if not all(land(x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                continue
+            eligible.append((h(x * 2.3 + 11.0, y * 2.3 - 7.0, 53.0), x, y))
+    eligible.sort(reverse=True)
+
+    n = len(eligible)
+    out = []
+    for rank, (_k, x, y) in enumerate(eligible):
+        share = (rank + 0.5) / max(n, 1)
+        if share > 0.62:
+            continue                                  # most ground stays open
+        j = h(x * 5.1 - 3.0, y * 5.1 + 9.0, 71.0)
+        if share < 0.16:
+            # WARNING The cut is BELOW zero on purpose. At `j > 0` the five tiles in this band all
+            # happened to fall negative and not one pine was planted -- a kind that exists in the file
+            # and never appears on the island is the same defect as one that was never modelled.
+            kind = "pine" if j > -0.25 else "tree"
+        elif share < 0.34:
+            kind = "rock" if j > 0.1 else "bush"
+        else:
+            kind = "stone"
+        out.append({
+            "kind": kind,
+            "x": x, "y": y,
+            # Off the tile's centre, so a scatter does not come out on a lattice -- the same mistake in
+            # a different coat as painting one colour per tile.
+            "ox": round(0.30 * h(x * 7.7, y * 7.7, 17.0), 3),
+            "oy": round(0.30 * h(y * 7.7, x * 7.7, 23.0), 3),
+            "yaw": round(180.0 * j, 1),
+            # ⚠ **Raised from about 1.0 to about 1.7** (2026-08-26, the user: 「더 키워주고」). At life
+            # size against a one-metre tile the props read as gravel from the game's distance; the
+            # island is looked at from far enough that scenery has to be a little unreal to register.
+            "scale": round(1.48 + 0.44 * (1.0 - share), 3),
+        })
+    return out
+
+
+def _starting_builds():
+    """**What is already standing when the island opens.** Right now that is one thing: the keep.
+
+    The user: the first house is already built and the player puts up everything else, and the run is
+    LOST if the island's middle house burns. So the keep is placed here, by the same run that shapes the
+    ground, on the 2x2 block of land closest to the middle of the island. Nothing else is placed.
+
+    Tiles are the SIM's row order -- `ROWS` as written, not the reversed copy the mesh is built on.
+    """
+    hgt, wid = len(ROWS), len(ROWS[0])
+
+    def land(x, y):
+        return 0 <= x < wid and 0 <= y < hgt and ROWS[y][x] not in "~H"
+
+    def level(x, y):
+        c = TIERS[y][x]
+        return "./1".find(c) if c in "./1" else 0
+
+    mid_x, mid_y = wid * 0.5, hgt * 0.5
+    best, at = None, None
+    for y in range(hgt - 1):
+        for x in range(wid - 1):
+            if not (land(x, y) and land(x + 1, y) and land(x, y + 1) and land(x, y + 1)):
+                continue
+            if not (land(x + 1, y) and land(x + 1, y + 1)):
+                continue
+            # ⚠⚠ **The keep stands on the HIGHEST flat block, and only then on the most central one**
+            # (2026-08-26, the user: 「자연스러운 2층을 만들어보고 거기에 건물을 올려보자」). A plateau
+            # exists to be the place worth holding; putting the hall anywhere else makes it scenery.
+            lv = {level(x, y), level(x + 1, y), level(x, y + 1), level(x + 1, y + 1)}
+            if len(lv) != 1:
+                continue                            # never straddling a step
+            d = (x + 1.0 - mid_x) ** 2 + (y + 1.0 - mid_y) ** 2
+            key = (-lv.pop(), d)
+            if best is None or key < best:
+                best, at = key, (x, y)
+    if at is None:
+        return []
+    return [{"kind": "keep", "x": at[0], "y": at[1]}]
+
+
 def export():
     """⚠⚠ **THE ISLAND IS EXPORTED TWICE: as a MESH and as a BOARD, and both come from this file.**
 
@@ -513,7 +701,7 @@ def export():
     base = r"C:/Users/djgnf/Desktop/godot_games/tockbon/assets/terrain"
     os.makedirs(base, exist_ok=True)
     for o in bpy.data.objects:
-        o.select_set(o.name in ("island", "band"))
+        o.select_set(o.name == "island")
     bpy.ops.export_scene.gltf(filepath=base + "/island.glb", export_format='GLB',
                               use_selection=True, export_apply=True, export_yup=True)
     for o in bpy.data.objects:
@@ -523,6 +711,9 @@ def export():
         "h": len(ROWS),
         "rows": list(ROWS),
         "tiers": list(TIERS),
+        "coast": COAST,
+        "builds": _starting_builds(),
+        "props": _scatter_props(),
         "base_h": TOP_H,
         "level_h": LEVEL_H,
     }

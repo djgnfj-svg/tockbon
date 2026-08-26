@@ -138,7 +138,8 @@ PRESETS = {
     #  Circle, rune and glyph lie on the assembly window (bright paper) and the bolt is light, but the monster
     #  **stands next to the player on the stage.**
     #  => The standard to match is not "does it suit the assembly window" but **"does it live in the same world as
-    #   `assets/character/wizard_body.png`"**. That image was actually measured:
+    #   the player's own body"**. The standard was measured on `wizard_body.png`, the deleted game's player
+    #   sprite — the file and its folder are both gone, and the numbers are the only part that survived:
     #   the darkest color is **`(79,52,76)` — a dark purple, not pure black** — and it has 35 colors.
     #  That is why style carries `dark desaturated outline` and not `black outline` —
     #   a pure black outline **disappears** on the sky `#0e0e13` (sum 41), leaving the fill to carry the silhouette alone.

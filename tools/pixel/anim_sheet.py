@@ -12,7 +12,7 @@ locks onto, so it is the thing that must not move.
 looking at a sheet still frame by frame hides exactly the stutter this script is padding against.
 
 Usage:
-    python tools/pixel/anim_sheet.py tools/pixel/out/anim_bull assets/monster/bull_walk.png [--fps 10]
+    python tools/pixel/anim_sheet.py tools/pixel/out/anim_bull assets/beast/bull_walk.png [--fps 10]
 """
 import argparse
 import re

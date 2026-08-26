@@ -30,20 +30,24 @@ One `_sheet.png` comes out; pick from it and move the choice to `assets/`.
 **`monster` preset output cannot be moved as-is** — it carries a chroma-green ground. Cut it first:
 
 ```powershell
-& $py tools\pixel\cutbg.py tools\pixel\out\boss_bull\boss_bull_05_seed1882469963_96px.png assets\monster\bull_body.png
+& $py tools\pixel\cutbg.py tools\pixel\out\boss_bull\boss_bull_05_seed1882469963_96px.png assets\beast\bull_body.png
 ```
 
 **Why a script and not "erase the background color"**: downscaling blends the edge into the ground, so an
 exact-color match leaves a **green fringe**, and on the stage's `#0E0E13` that fringe is the brightest thing
 on screen. `cutbg.py` cuts by "green dominates" and then pulls the cast out of the surviving edge pixels.
 
-**`sigil` output takes a third path — `ink.py`.** A sigil is black line art on cream, and the shipped
-`assets/circle/socket_glyph_*.png` were measured to be **one flat colour `(26,24,22)` with the entire drawing
-in the alpha channel.** `ink.py` reproduces that: invert luminance into alpha, resample with LANCZOS (never
-k_centroid — the `sigil` preset carries `down: 0` because k_centroid's dominant-colour blocks eat thin lines).
+**`sigil` output takes a third path — `ink.py`.** A sigil is black line art on cream, and the magic-circle
+game's `socket_glyph_*.png` were measured — **before that game and its whole sigil folder were deleted** —
+to be **one flat colour `(26,24,22)` with the entire drawing in the alpha channel.** `ink.py` reproduces
+that: invert luminance into alpha, resample with LANCZOS (never k_centroid — the `sigil` preset carries
+`down: 0` because k_centroid's dominant-colour blocks eat thin lines).
+
+⚠ **Nothing sigil-shaped ships today**, so the destination below is whichever `assets/` folder the caller
+is filling; the folders that exist are `beast`, `human`, `item`, `terrain` and `font`.
 
 ```powershell
-& $py tools\pixel\ink.py tools\pixel\out\ring2_spread_c\ring2_spread_c_02_seed920739551.png assets\circle\ring_spread.png 288
+& $py tools\pixel\ink.py tools\pixel\out\ring2_spread_c\ring2_spread_c_02_seed920739551.png assets\<folder>\ring_spread.png 288
 ```
 
 Neither `cutbg.py` (chroma green, monsters) nor `cut_white_bg.py` (flood from the border, UI panels) fits:
@@ -225,8 +229,9 @@ in `gen.py` protects it — write the phrase, do not invent one.
 | **Beasts** | `raw` | `low poly 3d render, faceted flat shaded polygons, plain light grey material, on a plain solid bright chroma green background` — ⚠ **this is not pixel art** |
 | **Humans** | `monster` | `oversized round bald head, small stubby body, thick black outline` — chibi pixel art |
 
-**They do not match each other on purpose** (`.scratch/cell-hook/issues/15`, the user delegated the
-choice). One realistic-cartoon batch was thrown away whole before this split was found.
+**They do not match each other on purpose** — the user delegated the choice. ⚠ **The ticket that
+recorded it was deleted with the old planning maps on 2026-08-26, so this row is the only copy.**
+One realistic-cartoon batch was thrown away whole before this split was found.
 
 **`--lora` is 0 everywhere.** Turn on the 4-walk LoRA and even a UI prompt yields **a human spritesheet**
 (measured in the original `PROMPTS.md`). It is 1.0 only when generating characters, and that is the original pipeline's job.
@@ -256,7 +261,13 @@ the inner hole ratio differs per layer (layer 1: 0 · layer 2: 1/2 · layer 3: 2
 **Terrain is not here.** It is destroyed in 4px cell units and the shader colors each cell
 (`cell_materials.DEFS`) — there is no place for a tile image to go.
 
-## What to generate next — the user's call
+## ⚠⚠ DEAD — what the magic game was going to generate next
+
+⚠⚠ **Do not work this list.** Every destination in it is gone: `assets/fx/`, `assets/stage/`,
+`assets/circle/`, `blast_fx.gd` and `cell_grid.gdshader` were deleted with the magic game, and so were the
+two design docs it cites. **The folders that exist are `beast`, `human`, `item`, `terrain` and `font`.**
+It is kept only as the record of what that pipeline cost and what came out of it — **the next thing to
+generate is decided on the live map, not here.**
 
 Right now the only things on screen that are **art are the character body, the staff and the bolt head — four items**;
 everything else is a shape drawn by code.

@@ -13,17 +13,26 @@ was for the same reason.** One line each. Keep it one line each when adding.
 If there is time spent watching something roll on by itself, the game is stifling.
 **This one line is why a whole tower-defence direction was folded.**
 
-⚠ **This is the principle the current game bends the hardest**, and knowingly: the user's own decision on
-2026-08-18 was **plan the whole landing, press start, watch** — see `plan-then-watch`. The bend is paid for
-by moving every decision in front of the start button. **If the fight ever feels like dead air, this line is
-the first thing to re-read**, not the last.
+⚠⚠ **The bend was cancelled on 2026-08-25 and the principle now stands unbent** — the user played Bad
+North and reversed **plan the whole landing, press start, watch**: **hands move, and squads are commanded
+on the board at any time.** ⇒ Nothing is being watched roll by, and **this line is no longer being paid
+against.** ⚠ **If the fight ever feels like dead air, this line is still the first thing to re-read**, not
+the last.
+
+⚠ **The record of the bend, kept because a cancelled bend argues for the principle rather than against it**:
+the user's own decision on 2026-08-18 was to plan everything in front of the start button and watch — see
+`plan-then-watch`. The bend was paid for by moving every decision ahead of that button.
 
 ⚠⚠ **2026-08-19 — the payment was deleted and the bend got 19–29× wider.** `plan-then-watch` paid for the
 bend with three candidates, and the only one that was concrete was **「a fight is short」**. The user then
 set a stage at **10–15 minutes** and deleted the time limit. The measured fight was **31 s**. **Nothing is
-built and nothing is accepted**; the arithmetic is in `push-inland`, and what it says about this line is:
+built and nothing is accepted**; the arithmetic is in `push-inland`, and what it said about this line was:
 the boat becomes a live control again, **but a node offers at most R landing decisions in total** —
-**one action every 3.1 to 90 seconds depending on R, which is undecided.** ⇒ **Re-read this line now.**
+**one action every 3.1 to 90 seconds depending on R.**
+⚠⚠ **Both halves of that arithmetic are gone (2026-08-26)**: **the player places no boats** — the boats are
+the beasts' — and **there are no nodes**, because the game is one island held against waves. **What the
+paragraph still proves is the shape**: a plan-then-watch loop prices its own dead air, and this one priced
+it at up to 90 seconds an action before anyone noticed.
 
 ## 2. Planning cannot decide whether something is fun
 

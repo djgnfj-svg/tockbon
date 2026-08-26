@@ -2,7 +2,12 @@
 
 **Status**: ⚠ **REVERSED on 2026-08-16 by the user. Both are in: unlocks AND stat boosts.**
 The reasoning below is kept because **the trap it names did not go away** — see 「뒤집은 뒤」 at the bottom.
-It was decided for the open-field cell game, which no longer exists; the live design is `cell-army-gdd`.
+⚠⚠ **The trap is now due (2026-08-26)**: December is a **release**, not a demo, and a released roguelike
+ships with whatever meta layer it has. **The first run has to be worth playing with nothing unlocked** —
+that condition is the live part of this doc, and it has never been measured.
+⚠ It was decided for the open-field cell game, which no longer exists. **The design it pointed at,
+`cell-army-gdd`, is gone too** — deleted with the cell game, kept only in commit `62ff57d`, and **not
+revived.** There is no GDD; what is being made is read out of `.scratch/island-hold/`.
 
 ## What was decided
 
@@ -20,7 +25,10 @@ percentage. The layer is built **after** the core loop stands.
 ## What's tied to it
 
 The starting percentages in the GDD are meant to be **playable as they are**, because nothing will ever
-raise them.
+raise them. ⚠ **That GDD is gone and its percentages with it** — the rule outlived the numbers: whatever a
+run starts with has to be playable as it stands. ⚠⚠ And the clause after the comma **was reversed on
+2026-08-16** — numbers do get raised now, which is exactly why the trap above is a condition and not a
+footnote.
 
 ## Conditions to reopen
 

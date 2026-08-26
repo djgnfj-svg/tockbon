@@ -160,6 +160,14 @@ func _build_world() -> void:
 	sea_mat.set_shader_parameter("crest", Look.COL_WATER_CREST)
 	sea_mat.set_shader_parameter("wave_scale", Look.WATER_WAVE_SCALE)
 	sea_mat.set_shader_parameter("wave_speed", Look.WATER_WAVE_SPEED)
+	sea_mat.set_shader_parameter("contrast", Look.WATER_CONTRAST)
+	sea_mat.set_shader_parameter("ripple_scale", Look.WATER_RIPPLE_SCALE)
+	sea_mat.set_shader_parameter("ripple_speed", Look.WATER_RIPPLE_SPEED)
+	sea_mat.set_shader_parameter("ripple_strength", Look.WATER_RIPPLE_STRENGTH)
+	sea_mat.set_shader_parameter("ripple_fade_tiles", Look.WATER_RIPPLE_FADE)
+	sea_mat.set_shader_parameter("ripple_wind_deg", Look.WATER_RIPPLE_WIND_DEG)
+	sea_mat.set_shader_parameter("ripple_stretch", Look.WATER_RIPPLE_STRETCH)
+	sea_mat.set_shader_parameter("ripple_chop", Look.WATER_RIPPLE_CHOP)
 	_sea.material_override = sea_mat
 	# ⚠⚠ **The sea casts nothing, and that is a fix rather than an optimisation.** A flat quad 400
 	# tiles across shadows ITSELF at grazing angles, and the whole sea drew as diagonal stripes — the
@@ -589,8 +597,15 @@ func _tile_h(tx: int, ty: int) -> float:
 ## ⚠ **The mesh carries its own colour in VERTEX COLOURS**, so there is no palette here either. What
 ## decides how the island looks lives in the Blender script, next to the shape it belongs to.
 const ISLAND_SCENE := "res://assets/terrain/island.glb"
+## ⚠ **The buildings arrive as one file with one node per kind**, and the game clones out of it. Loading
+## a scene per building would be five imports for five boxes.
+const BUILDINGS_SCENE := "res://assets/buildings/buildings.glb"
+## The scatter — trees, rocks, bushes. One file, one node per kind, cloned out of.
+const PROPS_SCENE := "res://assets/props/props.glb"
 
 var _island: Node3D = null
+var _builds: Node3D = null
+var _props: Node3D = null
 
 
 func _rebuild_terrain() -> void:
@@ -614,6 +629,244 @@ func _rebuild_terrain() -> void:
 	# ⚠ **Vertex colours are OFF by default on an imported material.** Without this the island comes in
 	# as flat white and every tone the Blender script decided is thrown away silently.
 	_use_vertex_colours(_island)
+	_hand_the_sea_its_shoreline()
+	_rebuild_buildings()
+	_rebuild_props()
+
+
+## **Puts the standing buildings on the ground.** ⚠ **Nothing is placed by eye**: the kind comes from
+## the island file, the footprint comes from the building table, and the height comes from the tile the
+## building stands on. All three are written by the two Blender runs, so a building cannot end up half
+## a tile off or floating over a step.
+##
+## ⚠⚠ **This draws them and nothing else.** They do not block a body, they do not burn, and losing the
+## run when the keep burns is not wired. Saying so here is cheaper than someone reading a picture of a
+## keep as a keep that works.
+func _rebuild_buildings() -> void:
+	if _world == null:
+		return
+	if _builds != null:
+		_builds.queue_free()
+		_builds = null
+	if battle == null:
+		return
+	var placed := Islands.builds()
+	if placed.is_empty():
+		return
+	var packed := load(BUILDINGS_SCENE) as PackedScene
+	if packed == null:
+		return
+	var lib := packed.instantiate()
+	_builds = Node3D.new()
+	_world.add_child(_builds)
+	for row in placed:
+		var d := row as Dictionary
+		var kind := str(d["kind"])
+		var src := lib.find_child(kind, true, false) as MeshInstance3D
+		if src == null:
+			continue
+		var fp := Builds.footprint_of(kind)
+		if fp == Vector2i.ZERO:
+			continue
+		var one := src.duplicate() as MeshInstance3D
+		# The footprint's CENTRE, in tile units — the mesh is authored about its own centre, so a
+		# building placed by its low corner would sit half a footprint off in both directions.
+		var cx := float(d["x"]) + float(fp.x) * 0.5
+		var cy := float(d["y"]) + float(fp.y) * 0.5
+		var t := int(d["y"]) * battle.grid.w + int(d["x"])
+		one.position = Vector3(cx, Islands.ground_h(battle.grid.level_of(t)), cy)
+		_builds.add_child(one)
+		var box := src.get_aabb()
+		# ⚠ The footprint, not the mesh's own width: a keep's roof overhangs its walls, and a blob cut
+		# to the roof reads as the building floating over its own shadow.
+		# ⚠⚠ **A building's blob has to be WIDER than the building** (2026-08-26, the user: 「집이 좀
+		# 그림자가 이상한데」). A tree's canopy is narrower than its blob, so the shadow shows as a skirt
+		# around it; the keep's footprint IS its blob, so the whole shadow sat underneath the walls and
+		# the hall looked like it was resting on nothing. **Not the same spread as a prop, on purpose.**
+		_blob(_builds, one.position,
+			maxf(float(fp.x), float(fp.y)) * 0.5 * Look.BLOB_SPREAD_BUILD, box.size.y,
+			Look.BLOB_DARK_BUILD)
+	# ⚠⚠ **NOT `_use_vertex_colours` here, and that call was the bug** (2026-08-26, the user: 「건물
+	# 벽면이 이상함」). It exists for the ISLAND, whose mesh carries a colour per vertex. **The buildings
+	# carry no colour attribute at all** — they are painted with one flat material per part — so turning
+	# `vertex_color_use_as_albedo` on told the renderer to multiply their albedo by a vertex colour that
+	# is not there, and the walls came out in wedges of bright and dark that met at the triangle seams.
+	# ⚠ **The same mesh renders perfectly flat inside Blender**, which is what finally located it: the
+	# geometry was never the problem, and two rounds were spent on normals and coplanar faces first.
+	lib.free()
+
+
+## **Tells the sea where the land is.** ⚠⚠ **This is what replaces the shore band that failed.** A ring
+## built as geometry sat ON the water and read as a plate; the coastline is drawn by the sea itself now,
+## and the only thing the sea needs for that is a distance-to-land map.
+##
+## Built once per island, on the CPU, at `Look.WATER_FIELD_SUBDIV` texels per tile. ⚠ **One texel per
+## tile is not enough** — the foam then steps square at tile edges, which is the grid drawn back in
+## water after the geometry stopped drawing it.
+func _hand_the_sea_its_shoreline() -> void:
+	if _sea == null or battle == null:
+		return
+	var g := battle.grid
+	var sub := int(Look.WATER_FIELD_SUBDIV)
+	var span := float(Look.WATER_FIELD_SPAN_TILES)
+	var tw := g.w * sub
+	var th := g.h * sub
+
+	# ⚠⚠ **The REAL coastline, not the tile grid.** Coastal corners are cut and pushed when the island
+	# is built, so a field measured to square tiles put a square wash around a coast that is not square
+	# (2026-08-26, the user saw it before the code did). `Islands.coast()` is the line the mesh actually
+	# ends on, exported beside the mesh by the same run that shaped it.
+	var coast := Islands.coast()
+
+	var img := Image.create(tw, th, false, Image.FORMAT_L8)
+	if coast.is_empty():
+		img.fill(Color(1.0, 1.0, 1.0))
+	else:
+		for py in th:
+			for px in tw:
+				var at := Vector2((float(px) + 0.5) / float(sub), (float(py) + 0.5) / float(sub))
+				var best := span
+				for seg in coast:
+					var a := Vector2(float(seg[0]), float(seg[1]))
+					var b := Vector2(float(seg[2]), float(seg[3]))
+					var ab := b - a
+					var len2 := ab.length_squared()
+					# The nearest point ON the segment, clamped to its ends — measuring to the infinite
+					# line would foam along the coast's continuation out into open sea.
+					var u := 0.0 if len2 <= 0.0 else clampf((at - a).dot(ab) / len2, 0.0, 1.0)
+					var d := at.distance_to(a + ab * u)
+					if d < best:
+						best = d
+				var v := clampf(best / span, 0.0, 1.0)
+				img.set_pixel(px, py, Color(v, v, v))
+
+	var mat := _sea.material_override as ShaderMaterial
+	if mat == null:
+		return
+	mat.set_shader_parameter("land_field", ImageTexture.create_from_image(img))
+	mat.set_shader_parameter("field_size", Vector2(float(g.w), float(g.h)))
+	mat.set_shader_parameter("field_span", span)
+	mat.set_shader_parameter("foam", Look.COL_WATER_FOAM)
+	mat.set_shader_parameter("foam_tiles", Look.WATER_FOAM_TILES)
+	mat.set_shader_parameter("foam_speed", Look.WATER_FOAM_SPEED)
+	mat.set_shader_parameter("foam_bands", Look.WATER_FOAM_BANDS)
+	mat.set_shader_parameter("foam_sharp", Look.WATER_FOAM_SHARP)
+	mat.set_shader_parameter("foam_break", Look.WATER_FOAM_BREAK)
+	mat.set_shader_parameter("foam_break_scale", Look.WATER_FOAM_BREAK_SCALE)
+	mat.set_shader_parameter("foam_lip_tiles", Look.WATER_FOAM_LIP_TILES)
+	mat.set_shader_parameter("foam_lee", Look.WATER_FOAM_LEE)
+	mat.set_shader_parameter("shallow", Look.COL_WATER_SHALLOW)
+	mat.set_shader_parameter("shallow_tiles", Look.WATER_SHALLOW_TILES)
+
+
+## **Dresses the island.** ⚠ Everything about where each prop goes was decided when the island was
+## built; this reads the list and clones. **Nothing is randomised here** — a scatter that rolled dice at
+## load time would give a different island every launch and no screenshot would mean anything.
+func _rebuild_props() -> void:
+	if _world == null:
+		return
+	if _props != null:
+		_props.queue_free()
+		_props = null
+	if battle == null:
+		return
+	var placed := Islands.props()
+	if placed.is_empty():
+		return
+	var packed := load(PROPS_SCENE) as PackedScene
+	if packed == null:
+		return
+	var lib := packed.instantiate()
+	_props = Node3D.new()
+	_world.add_child(_props)
+	for row in placed:
+		var d := row as Dictionary
+		var src := lib.find_child(str(d["kind"]), true, false) as MeshInstance3D
+		if src == null:
+			continue
+		var one := src.duplicate() as MeshInstance3D
+		var t := int(d["y"]) * battle.grid.w + int(d["x"])
+		one.position = Vector3(
+			float(d["x"]) + 0.5 + float(d.get("ox", 0.0)),
+			Islands.ground_h(battle.grid.level_of(t)),
+			float(d["y"]) + 0.5 + float(d.get("oy", 0.0)))
+		one.rotation.y = deg_to_rad(float(d.get("yaw", 0.0)))
+		var sc := float(d.get("scale", 1.0))
+		one.scale = Vector3(sc, sc, sc)
+		_props.add_child(one)
+		var box := src.get_aabb()
+		_blob(_props, one.position,
+			maxf(box.size.x, box.size.z) * 0.5 * sc * Look.BLOB_SPREAD,
+			box.size.y * sc)
+	lib.free()
+
+
+## --- the blob a standing thing drops on the ground -------------------------------------------------
+## ⚠⚠ **This is why the props have shadows and the shadow map is not what draws them.** Five bias values
+## were measured: every one either lost anything smaller than a cliff or striped the island's flat top.
+## A drawn ellipse costs two triangles, always reads, and cannot acne.
+var _blob_tex: ImageTexture = null
+var _blob_mesh: QuadMesh = null
+var _blob_mat: StandardMaterial3D = null
+
+
+## A soft round falloff, built once. **Generated, never an asset** — this repo paints nothing.
+func _blob_texture() -> ImageTexture:
+	if _blob_tex != null:
+		return _blob_tex
+	var n := 64
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var mid := float(n) * 0.5
+	for y in n:
+		for x in n:
+			var d := Vector2(float(x) + 0.5 - mid, float(y) + 0.5 - mid).length() / mid
+			# ⚠⚠ **A DEFINED disc with a soft rim, not an airbrushed smudge** (2026-08-26, the user:
+			# 「그림자 겉면이 좀 이상한데?」). The first falloff was a squared ramp from the centre, which
+			# on flat-shaded art reads as a stain rather than as a shadow — **everything else on this
+			# island has an edge, and the one thing that did not was the shadow.** This holds full
+			# strength across most of the disc and falls off only in the outer fifth.
+			var a := 1.0 - smoothstep(0.62, 1.0, d)
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
+	_blob_tex = ImageTexture.create_from_image(img)
+	return _blob_tex
+
+
+func _blob(parent: Node3D, at: Vector3, radius: float, height: float, dark: float = 1.0) -> void:
+	if _blob_mesh == null:
+		_blob_mesh = QuadMesh.new()
+		_blob_mesh.size = Vector2(2.0, 2.0)
+		_blob_mat = StandardMaterial3D.new()
+		_blob_mat.albedo_color = Look.COL_BLOB
+		_blob_mat.albedo_texture = _blob_texture()
+		_blob_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		# Unshaded: it IS shadow. Lighting a shadow makes it brighten when the sun comes round.
+		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_blob_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var m := MeshInstance3D.new()
+	m.mesh = _blob_mesh
+	# ⚠⚠ **A wide blob needs a DARKER one, not just a bigger one** (2026-08-26). The keep's blob was
+	# widened to show past its walls and still could not be seen: the same opacity spread over thirty
+	# times the area is thirty times fainter at every point. **Area and strength move together.**
+	if is_equal_approx(dark, 1.0):
+		m.material_override = _blob_mat
+	else:
+		var mm := _blob_mat.duplicate() as StandardMaterial3D
+		var c := Look.COL_BLOB
+		mm.albedo_color = Color(c.r, c.g, c.b, clampf(c.a * dark, 0.0, 1.0))
+		m.material_override = mm
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Lay it flat, then slide it away from the sun so it agrees with the shading on the object above it.
+	m.rotation_degrees = Vector3(-90.0, Look.SUN_YAW_DEG, 0.0)
+	# ⚠⚠ **CAPPED against the blob's own radius** (2026-08-26, the user: 「집이 좀 그림자가 이상한데」).
+	# The slide is a fraction of the caster's HEIGHT, which is right for a tree and wrong for the keep:
+	# at two metres tall it slid more than half a tile and the shadow came off the building entirely,
+	# leaving the hall looking like it was standing beside its own shadow. A shadow may lean away from
+	# the sun; it may not stop touching what casts it.
+	var slide := minf(height * Look.BLOB_SLIDE, radius * 0.5)
+	var yaw := deg_to_rad(Look.SUN_YAW_DEG)
+	m.position = at + Vector3(sin(yaw) * slide, 0.012, cos(yaw) * slide)
+	m.scale = Vector3(radius, radius, 1.0)
+	parent.add_child(m)
 
 
 func _use_vertex_colours(n: Node) -> void:
