@@ -594,77 +594,69 @@ static func tag_stat_bonus_at(r: int, count: int) -> float:
 ## and a once-per-island charge is spent by the move rather than by the attempt. **Read that block
 ## before building anything that moves a body without it walking.**
 
-## --- The species that hunt as one -------------------------------------------------------------
-## One row per species that picks its target from the centre of mass of its own kind nearby, itself
-## included: the `UNITS` row and how far 「nearby」 reaches, in tiles.
+## --- 무리사냥 / THE PACK RULE: DELETED 2026-08-27 --------------------------------------------------
+## `SPECIES_PACK`, `_PACK_COL_TYPE`, `_PACK_COL_TILES` and `pack_radius_of` are gone, and with them
+## `Battle._seek_point_of`, its call site in `_phase_targeting`, and `tools/probe/pack_spread.gd`.
+## The table held ONE row — `[WOLF, 6.0]` — and it was looked up against the PLAYER's roster:
+## `_seek_point_of` asked `pack_radius_of(army.type_id[i])`, the only player row is SWORDSMAN, and
+## **the wolf became an ENEMY with the side swap (2026-08-26)**. ⇒ **`pack_radius_of` answered 0.0 on
+## every call in the game and the huddle returned on its first line, every frame, for a whole day.**
 ##
-## ⚠⚠ **ONE NUMBER BUYS BOTH HALVES OF 무리사냥.** Picking from a shared point makes a pack bite the
-## same enemy (티켓 06's own sentence), and the movement phase then walks each of them at THAT enemy —
-## so they arrive as one body. **There is no formation code**, and a second rule for the shape would
-## be a second thing to keep in step with the first.
+## ⚠⚠ **WHAT THE RULE WAS, IN ONE SENTENCE, BECAUSE IT COST A TICKET TO ARRIVE AT IT.** A body picked
+## its target from the CENTRE OF MASS of its own kind nearby, itself included. **One number bought both
+## halves of 무리사냥**: a shared point makes a pack bite the same enemy (티켓 06's own sentence), and
+## the movement phase then walks each of them at THAT enemy, so they arrive as one body. **There was no
+## formation code and there must not be one** — a second rule for the shape is a second thing to keep in
+## step with the first. ⚠ **Nearby and never GLOBAL**: a global centre drags a body that landed on the
+## far beach toward one point, and where you land is the decision this whole game is about.
 ##
-## ⚠⚠ **NEARBY AND NEVER GLOBAL.** A global centre of mass drags a wolf that landed on the far beach
-## toward one point — and where you land is the decision this whole game is about.
-##
-## ⚠ **First value, not a measured one.**
-##
-## ⚠⚠ **NOTHING READS THIS TABLE ANY MORE, AND THAT IS THE SIDE SWAP** (2026-08-26). `_seek_point_of`
-## in `battle.gd` is its only reader and it runs over the PLAYER's bodies; the player table is
-## SWORDSMAN alone and the one row here is WOLF, which is an enemy now. **So the pack path returns on
-## its first line every time and the huddle never runs.** The enemy side has no pack behaviour at all.
-## ⇒ **This is a table waiting for a rule, not a rule that is running.** Do not cite 무리사냥 as a
-## thing the game currently does.
-const SPECIES_PACK := [
-	[WOLF, 6.0],
-]
-
-## ⚠⚠ **THE PACK TABLE ABOVE IS A TARGETING RULE AND IT DOES NOTHING TO FORMATION — measured, not
-## suspected** (2026-08-25, `tools/probe/pack_spread.gd`). `_seek_point_of` only changes WHERE a body
-## LOOKS FROM when it picks a target; every body then walks its own flow field alone. Ten wolves
-## crossing the first island, pack radius 6.0 against the same run with it forced to 0.0:
+## ⚠⚠ **AND IT DID NOT DO WHAT ITS NAME SAYS — MEASURED, NOT SUSPECTED** (2026-08-25,
+## `tools/probe/pack_spread.gd`). It was a TARGETING rule with **no authority over formation at all**:
+## it changed only WHERE a body LOOKED FROM, and every body then walked its own flow field alone. Ten
+## wolves crossing the first island, radius 6.0 against the same run with it forced to 0.0:
 ##
 ##   씨앗 7 — spread 1.60 / widest 4.93 / touching 85%  BOTH WAYS, identical to two decimals
 ##   씨앗 1 — 1.79 vs 1.90    씨앗 99 — 1.85 vs 1.84
 ##
-## ⚠ `how-nets-lie` already records the check labelled 「무리가 한 덩어리로 움직인다」 passing
-## with this radius at zero. **It passes because the radius changes nothing**, and that is now measured
-## rather than inferred. The table stays what it is — a rule about who gets bitten.
+## ⚠⚠ **THAT IS THE MOST IMPORTANT THING ON THIS PAGE AND IT IS A LESSON ABOUT INSTRUMENTS, NOT ABOUT
+## WOLVES.** The net labelled 「무리가 한 덩어리로 움직인다」 **passed with the radius forced to zero**:
+## it was built on a board carrying ONE enemy, where every seek point answers the same id, so pack-on
+## and pack-off produced the identical decimal. **The probe was the only instrument that ever measured
+## this rule honestly, and it is the only reason we know the rule was hollow rather than merely dead.**
+## ⇒ **A check on a rule that chooses BETWEEN things needs at least two things to choose between**, and
+## a probe that prints numbers and judges nothing catches what an assertion phrased as a hope cannot.
+## `how-nets-lie` carries the entry.
 ##
-## --- ⚠⚠ A COHESION THROTTLE WAS BUILT HERE AND TAKEN BACK OUT, because it was measured ------------
-## 2026-08-25, the user, watching a fight: ***"좀더 배드노스 같이 합쳐져야할듯"***. So a rule was added
-## that slowed any body further along toward its target than the group's centre of mass was. Measured
-## with `pack_spread` on the first island, ten wolves and four others:
+## --- ⚠⚠ A COHESION THROTTLE WAS BUILT HERE AND TAKEN BACK OUT, and it too was measured -------------
+## 2026-08-25, the user, watching a fight: ***"좀더 배드노스 같이 합쳐져야할듯"***. A rule was added that
+## slowed any body further along toward its target than the group's centre of mass was. Measured with
+## the same probe on the first island, ten wolves and four others:
 ##
 ##   gentle (3.0 tiles of lead, floor 0.35) — spread 1.79/1.60/1.85 -> **1.81/1.59/1.75**, and fights
 ##       15% longer
 ##   hard   (1.0 tile,          floor 0.10) — spread -> **1.64/1.63/1.64**, still nothing, and fights
 ##       **19.0s -> 34.3s**
 ##
-## ⇒ **The lever has no authority over the spread and a large cost in time.** Keeping it would have
-## been a mechanism whose measured effect is noise, which is the shape this file's own header calls
-## code that pretends to work.
+## ⇒ **The lever had no authority over the spread and a large cost in time.** ⚠ **Do not rebuild it
+## without re-running the measurement first**: that makes two cohesion mechanisms measured at noise, and
+## ***"좀더 배드노스 같이 합쳐져야할듯"*** is still an OPEN request with no working answer.
 ##
-## ⚠⚠ **AND THE SAME PROBE SAYS THE GROUP IS ALREADY TOGETHER**, which is the finding that matters more
-## than the reverted rule: **89% of bodies have another within one tile**, fourteen of them average
-## **1.7–1.9 distinct targets** between them, and **78% of samples have the whole group facing one
-## way.** Whatever reads as scattered on screen, the formation is not it — so the next place to look is
-## the PICTURE, and the number pointing there is that a body's sprite is **1.23 tiles wide standing on
-## 1-tile centres**, so a dense group necessarily overlaps into one mass.
+## ⚠⚠ **AND THE SAME PROBE SAYS THE GROUP IS ALREADY TOGETHER**, which outlives every line of the rule:
+## **89% of bodies have another within one tile**, fourteen of them average **1.7–1.9 distinct targets**
+## between them, and **78% of samples have the whole group facing one way.** Whatever reads as scattered
+## on screen, the formation is not it — **the next place to look is the PICTURE**, and the number
+## pointing there is that a body's sprite is **1.23 tiles wide standing on 1-tile centres**, so a dense
+## group necessarily overlaps into one mass.
 ##
-const _PACK_COL_TYPE := 0
-## ⚠ Named `_TILES` and not `_RADIUS`: `net_draw_leaf`'s pixel sweep reads every file under `src/`
-## outside `look.gd` and `radius` is one of the size-ish suffixes it bites, so a column constant
-## wearing that word reads as a presentation literal in a rules file. The distance IS in tiles.
-const _PACK_COL_TILES := 1
-
-
-## How far species `type_id` looks for its own kind when picking a target. **0.0 for a species with
-## no row**, which is what makes a lone hunter a table lookup rather than a branch.
-static func pack_radius_of(type_id: int) -> float:
-	for r in SPECIES_PACK.size():
-		if int((SPECIES_PACK[r] as Array)[_PACK_COL_TYPE]) == type_id:
-			return float((SPECIES_PACK[r] as Array)[_PACK_COL_TILES])
-	return 0.0
+## ⚠ **A NAMING RULE THE COLUMN CONSTANT CARRIED, and it governs every table in this file.** It was
+## `_PACK_COL_TILES` and deliberately never `_PACK_COL_RADIUS`: `net_draw_leaf`'s pixel sweep reads every
+## file under `src/` outside `look.gd`, and `radius` is one of the size-ish suffixes it bites — a column
+## constant wearing that word reads as a presentation literal in a rules file. **The distance was in
+## TILES.**
+##
+## ⚠ **The enemy side has no pack behaviour at all and never had one.** If 무리사냥 comes back it comes
+## back on the ENEMY scan in `battle.gd` first; **a table alone would be dead the day it is typed**,
+## which is precisely what this block is the record of.
 
 
 ## --- The status table ------------------------------------------------------------------------------
@@ -730,6 +722,16 @@ static func tag_status_status_of(r: int) -> int:
 ## ⚠ **This resolves the sources of ONE BLOW and is not a stacking rule.** What lands on a body is a
 ## single tier, exactly as before; what changed is that a blow with two sources no longer lets
 ## whichever was written last stand.
+##
+## ⚠⚠ **KEPT ON PURPOSE THOUGH ITS SECOND SOURCE DIED 2026-08-27, and here is exactly what it measures
+## today so nobody has to re-derive it.** `SPECIES_STATUS` was one of the two sources and it is deleted;
+## the other — `TAG_STATUS_TIERS` — is live and `_apply_statuses` still folds every row through this
+## function. **But no two rows in that table name the same `Status`** (출혈 -> BLEED, 디버프 -> SLOW),
+## so through `_apply_statuses` one argument is ALWAYS `{}` and only the two empty-arms below can fire.
+## ⇒ **The magnitude comparison is unreachable from `step` until a SECOND row names a status some other
+## row already names**, and `net_battle` exercises that arm by calling this function directly, which its
+## own header says so. **Do not read a green on that row as proof the fight resolves two sources** — it
+## proves the arithmetic, and the fight has nothing to resolve yet.
 static func stronger_status_tier(status: int, a: Dictionary, b: Dictionary) -> Dictionary:
 	if a.is_empty():
 		return b
@@ -754,44 +756,39 @@ static func tag_status_tier_at(r: int, count: int) -> Dictionary:
 	return lit
 
 
-## --- The species that leave a status behind ---------------------------------------------------
-## One row per species whose blow leaves a status on what it hits: the `UNITS` row, the `Status`, its
-## magnitude and its duration in seconds.
+## --- 종 고유 상태이상 / THE SPECIES-STATUS TABLE: DELETED 2026-08-27 ------------------------------
+## `SPECIES_STATUS`, its four column constants and `species_status_of` are gone, and so is the arm of
+## `Battle._apply_statuses` that read them. The table held ONE row — `[CROW, Status.BLEED, 0.5, 2.0]` —
+## and `_apply_statuses` looked it up with `army.type_id[from_id]`, which is the PLAYER's roster: the
+## only player row is SWORDSMAN and **the crow became an ENEMY with the side swap (2026-08-26)**.
+## ⇒ **`species_status_of` returned `{}` on every blow struck in the game.**
 ##
-## ⚠⚠ **THIS IS A SECOND SOURCE AND NOT A SECOND MECHANISM.** It writes through the same
-## `_put_status` the equipment tags write through, and `_phase_status` walks `STATUS_KIND` without
-## ever knowing a status by name — so 까마귀's 출혈 costs one row here and nothing at all in
-## `battle.gd`'s ageing or damage-over-time code.
+## ⚠⚠ **출혈 AND 감속 ARE ALIVE AND NOTHING HERE TOUCHES THEM.** They come off EQUIPMENT TAGS
+## (`TAG_STATUS_TIERS`, two live rows), which is a different path entirely. **Only the SPECIES-innate
+## arm died**, and `Status`, `STATUS_KIND`, `_put_status` and `_phase_status` are all untouched.
 ##
-## ⚠ **First values, and deliberately the SAME numbers the 출혈 tag's first tier carries** (0.5 a
-## second for 2 seconds). ⚠⚠ **A crow wearing bleed equipment gets the HIGHER of the two and not the
-## last one written** — `Battle._apply_statuses` resolves both sources of a blow through
-## `stronger_status_tier` before anything reaches the body. Written the naive way the crow's own
-## passive OVERWROTE its equipment and cut a full bleed set to 22% of what the same set gives a wolf.
-const SPECIES_STATUS := [
-	[CROW, Status.BLEED, 0.5, 2.0],
-]
-
-const _SPECIES_STATUS_COL_TYPE := 0
-const _SPECIES_STATUS_COL_STATUS := 1
-const _SPECIES_STATUS_COL_MAG := 2
-const _SPECIES_STATUS_COL_SEC := 3
-
-
-## What species `type_id` leaves on what it hits, as `{"status": .., "mag": .., "sec": ..}` — **empty
-## for a species with no row**, which is what makes this a table lookup with no branch behind it.
-## ⚠ The `mag`/`sec` keys match `tag_status_tier_at`'s, so `_put_status` takes either without asking
-## which table it came from.
-static func species_status_of(type_id: int) -> Dictionary:
-	for r in SPECIES_STATUS.size():
-		var row: Array = SPECIES_STATUS[r]
-		if int(row[_SPECIES_STATUS_COL_TYPE]) == type_id:
-			return {
-				"status": int(row[_SPECIES_STATUS_COL_STATUS]),
-				"mag": float(row[_SPECIES_STATUS_COL_MAG]),
-				"sec": float(row[_SPECIES_STATUS_COL_SEC]),
-			}
-	return {}
+## ⚠⚠ **THE DEFECT THIS TABLE CAUSED OUTLIVES IT, BECAUSE THE NEXT SECOND SOURCE WILL CAUSE IT AGAIN.**
+## A blow had two sources of one status — the equipment tier and the attacker's own species — and they
+## could name the SAME status. Written the naive way, one write after the other, whichever landed LAST
+## stood: a 까마귀 wearing a full bleed set (tier 2, **1.5 a second for 3 s**) bit for its own passive's
+## **0.5 / 2.0**, which is **22% of what the identical set gives a 늑대**. **The crow was PENALISED by
+## its own passive** — and by equipment fitted anywhere on the board, since `tag_count` sums the whole
+## horde. ⇒ **`stronger_status_tier` is the fix and it is KEPT.** Every source of one blow is resolved
+## before anything is written, and **any second source that ever arrives goes through it, not around
+## it.**
+##
+## ⚠⚠ **AND IT SILENTLY DISARMED A CHECK — THIS IS THE FAKE GREEN, AND IT WAS MEASURED.**
+## `net_battle`'s 「상태는 광역의 형제에게도 실린다」 was written with the CROW as the shooter, so
+## deleting the splash arm of the equipment-tag loop **did not redden it**: this table re-supplied
+## identical values through the other door and the named mutation did not bite. The fix was to make the
+## shooter the BEAR, which splashes and carries no species row of its own. ⇒ **A fixture whose subject
+## has a SECOND source of the thing being measured measures nothing.**
+##
+## ⚠ **What the table was for, if it ever comes back**: 2026-08-24, the user — 「독부터 해서 정말 많이
+## 있을듯」. It was a second SOURCE and never a second mechanism: it wrote through the same `_put_status`,
+## with the same overwrite rule and the same generic `_phase_status` walk, so a species row and a tag
+## tier were indistinguishable by the time they reached the clock. **That shape is the one to rebuild** —
+## and on the ENEMY side, which is where the crow now stands.
 
 
 ## Every threshold `tag` can light, ascending, walked over BOTH tier tables — the refit aggregate

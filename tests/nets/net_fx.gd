@@ -216,9 +216,13 @@ func _death_events_come_after_the_attacks_that_caused_them(t) -> void:
 func _land_events(t) -> void:
 	var army := _army_of([Rules.WOLF, Rules.WOLF])
 	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.LION, 20, 9)])
-	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
-	t.ok(b.send(0, landing) >= 0, "병사 하나를 배에 실었다")
-	t.ok(b.send(1, landing) >= 0, "병사 둘을 배에 실었다 — 한 명에 한 척이다")
+	# ⚠ **Two separate presses, never `a and b`.** A short-circuit would let a refused second summon
+	# hide behind the first, and this row's whole subject is that TWO bodies land.
+	var sea := _summonable_water_on(b)
+	t.ok(sea >= 0, "띠 안에 소환할 물 칸이 있다 (자가 점검 — 없으면 아래가 전부 공허하다)")
+	t.ok(b.summon(0, sea) >= 0, "병사 하나를 배에 실었다")
+	t.ok(b.summon(0, sea) >= 0, "병사 둘을 배에 실었다 — 한 명에 한 척이다")
+	t.eq(b.boats.size(), 2, "배가 정확히 두 척이다 — 둘째 소환이 거부되지 않았다")
 	t.ok(b.commit(), "시작을 눌러 두 척을 다 띄웠다")
 
 	var lands := []
@@ -539,15 +543,30 @@ func _split() -> Array:
 
 
 ## A bay: rows 3-7 are water for the first six columns, land from column 6 on, one harbour at (2,5).
-## `_PORT_LANDING` (6,5) is the coast the harbour can see, straight across open water.
-const _PORT_LANDING := Vector2(6, 5)
-
+##
+## ⚠⚠ **`_PORT_LANDING` (6,5) WAS DELETED 2026-08-27 WITH THE HARBOUR.** It named the coast tile the
+## harbour could see straight across open water, and it was the argument `Battle.send` took. **A summon
+## takes the other kind of tile**: WATER inside the band, never a beach. ⇒ Neither end of a crossing is
+## a fixture constant any more — the origin is found on the grid by `_summonable_water_on`, and the
+## beach is whatever `summon_landing_of` picks. **The `H` in the board below is kept** so this bay stays
+## the same shape it was measured on; nothing derives anything from it now.
 func _port() -> Array:
 	var rows := _open(ARENA_W, ARENA_H)
 	for y in range(3, 8):
 		rows[y] = "~~~~~~" + ".".repeat(ARENA_W - 7) + "~"
 	rows[5] = "~~H~~~" + ".".repeat(ARENA_W - 7) + "~"
 	return rows
+
+
+## The first tile inside the summon band. ⚠ **The name says WATER on purpose** — `send` took a BEACH and
+## `summon` takes water, and handing one verb the other's tile is a silent `-1`. That confusion cost a
+## red round once; the name is what stops it costing a second.
+func _summonable_water_on(b: Battle) -> int:
+	var g := b.grid
+	for tile in g.w * g.h:
+		if g.can_summon_at(tile):
+			return tile
+	return -1
 
 
 func _grid_of(rows: Array) -> Grid:

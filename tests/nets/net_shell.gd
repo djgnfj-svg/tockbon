@@ -349,13 +349,20 @@ func run(t) -> void:
 	await t.pump_frames(3)
 	t.eq(game.battle.elapsed, 0.0,
 		"확정 전에는 셸이 프레임을 돌려도 시계가 정확히 0이다 — 계획하는 동안은 공짜다")
-	var probe_tile := -1
-	for pt in game.battle.grid.passable.size():
-		if game.battle.grid.home_harbour_for(pt) >= 0:
-			probe_tile = pt
-			break
-	t.ok(probe_tile >= 0 and game.battle.send(0, probe_tile) >= 0 and game.battle.commit(),
-		"한 척을 보내고 확정했다 (자가 점검)")
+	# ⚠⚠ **THIS PROBE ASKED FOR A BEACH AND IT ASKS FOR WATER NOW.** It walked `passable` for a tile
+	# `grid.home_harbour_for` answered on and then `Battle.send` a boat there; **the drag, `send` and
+	# the whole harbour system behind them are deleted** (2026-08-27). ⚠ **The SUBJECT was never the
+	# harbour** — it is the shell driving the clock, and a boat on the board is only how a `commit()`
+	# becomes legal at all, so this is re-aimed rather than dropped.
+	# ⚠⚠ **The two verbs take different KINDS of tile**: `send` took a beach, `summon` takes WATER
+	# inside the band and answers -1 to anything else. Handing it a beach reddens this row for a reason
+	# that has nothing to do with the shell — it cost one red round once, and the helper's name is what
+	# stops it a second time.
+	var probe_tile := _summonable_water_on(game.battle)
+	t.ok(probe_tile >= 0, "소환 띠 안의 물 칸을 찾았다 (자가 점검 — 못 찾으면 아래가 전부 공허하다)")
+	t.ok(game.battle.summon(0, probe_tile) >= 0 and game.battle.commit(),
+		"한 명을 불러내고 확정했다 (자가 점검)")
+	t.eq(game.battle.boats.size(), 1, "그리고 배가 실제로 한 척 떠 있다 (바닥 — 빈 판이면 시계가 안 간다)")
 	# ⚠ **Enough frames to cross ONE sub-step.** `step` consumes whole `Rules.SIM_SUBSTEP_SEC` chunks
 	# and carries the leftover, so three headless frames can accumulate less than 1/60 s and leave
 	# `elapsed` at exactly 0 for a reason that says nothing about the shell.
@@ -564,9 +571,14 @@ func run(t) -> void:
 	# built once, so "a second coat per frame" has no per-frame pass left to hide in.
 	t.ok(not fs.has_method("_paint_overlay"),
 		"타일 덧칠 훅 자체가 없다 — 초록 해안을 그릴 방법이 남아 있지 않다")
-	# ⚠ The row comparing `send`'s whole domain with one harbour's reach went with the drag. `send` is
-	# still in the sim — `tools/probe/run_run.gd` is its last reader — but nothing on screen answers to
-	# it any more, so a SHELL net is the wrong place to keep measuring it.
+	# ⚠ The row comparing `send`'s whole domain with one harbour's reach went with the drag.
+	# ⚠⚠ **And `send` itself is now DELETED from the sim** (2026-08-27), with `can_land_at`, `sendable`,
+	# `water_route`, `home_harbour_for` and the rest of the harbour tables — it had zero callers in
+	# `src/` once the drag went, so the domain that row compared no longer exists to be compared.
+	# **What outlives it**: the claim was 「the droppable union is WIDER than any one harbour's reach」,
+	# a floor that made the union a claim rather than a rename. A summon has no harbour to be wider
+	# than, so the claim has no successor here — the band's own two numbers are what `net_summon`
+	# holds to instead, floor and ceiling both.
 
 	# -- item 8: a refused START shakes the button, and an accepted one does not ---------------------
 	# ⚠ **This runs FIRST, while `boats` is still empty**, because an empty plan is the only thing that
@@ -933,6 +945,28 @@ func run(t) -> void:
 	_every_lose_reason_reads_differently(t)
 
 
+## The first tile on this island's grid that a summon press is allowed on — **WATER inside the band,
+## and the name says so on purpose.**
+##
+## ⚠⚠ **THE TWO VERBS TOOK DIFFERENT KINDS OF TILE AND IT COST A RED ROUND.** The deleted `Battle.send`
+## took a BEACH — a passable land tile a boat could unload onto — and every probe in this file used to
+## find one by walking `passable` for a tile `grid.home_harbour_for` answered on. `summon` takes water
+## and returns -1 for a beach, silently, so a fixture that hands it one reddens a row about the SHELL
+## for a reason that is entirely about tiles.
+##
+## ⚠ **Found on the grid in front of it, never typed.** A tile a net hard-codes is a tile that describes
+## one map, and every subject in this file has always been the shell rather than which map is open.
+##
+## ⚠ Deliberately the SAME shape and the same name as `net_run`'s own helper rather than a clever twin —
+## two spellings of one search is how the beach/water confusion comes back.
+func _summonable_water_on(b: Battle) -> int:
+	var g := b.grid
+	for tile in g.w * g.h:
+		if g.can_summon_at(tile):
+			return tile
+	return -1
+
+
 ## Presses a map node the way a hand does — through `_unhandled_input`, then the ring's walk run out
 ## by hand. `game.set_process(false)` is in force by the time this is called, so the hold would never
 ## expire on its own; a headless frame is 6.9 ms and `MAP_TRAVEL_SEC` would be 66 frames of guessing
@@ -943,13 +977,15 @@ func run(t) -> void:
 ## (`plan-then-watch`, 4.3) — `step` returns before `_phase_clock`, so an emptied `enemy_alive` would
 ## never be latched at all and the hold below would wait forever on a verdict that never comes.
 func _win_the_open_island(t, game: Game, label: String) -> void:
-	var tile := -1
-	for pt in game.battle.grid.passable.size():
-		if game.battle.grid.home_harbour_for(pt) >= 0:
-			tile = pt
-			break
-	t.ok(tile >= 0 and game.battle.send(0, tile) >= 0 and game.battle.commit(),
-		"%s 섬에 한 명 보내고 시작을 눌렀다 (자가 점검)" % label)
+	# ⚠⚠ **RE-AIMED FROM `send` ONTO `summon`, SAME SUBJECT.** This walked `passable` for a tile
+	# `grid.home_harbour_for` answered on and sent a boat to it; the harbour half is deleted and
+	# `summon` takes WATER inside the band, never a beach (a beach is a silent -1). What this helper
+	# is for has not moved: the island only needs to be COMMITTED so the hold below has a verdict to
+	# wait on, and one body on one boat is the cheapest legal plan there is.
+	var tile := _summonable_water_on(game.battle)
+	t.ok(tile >= 0, "%s 섬에서 소환 띠 안의 물 칸을 찾았다 (자가 점검)" % label)
+	t.ok(game.battle.summon(0, tile) >= 0 and game.battle.commit(),
+		"%s 섬에 한 명 불러내고 시작을 눌렀다 (자가 점검)" % label)
 	game.battle.enemy_alive.fill(0)
 	# ⚠ **Two whole sub-steps, never 0.016.** `step` consumes whole `Rules.SIM_SUBSTEP_SEC` chunks and
 	# carries the leftover, and 0.016 is a hair UNDER 1/60 — on a fresh island with no leftover banked
@@ -1267,14 +1303,16 @@ func _wheel(at: Vector2, up: bool) -> InputEventMouseButton:
 	return ev
 
 
-## How many bytes of a `PackedByteArray` are non-zero. Used for "the droppable union is wider than one
-## harbour's own reach", which is what makes the union a claim rather than a rename.
-func _count_set(arr: PackedByteArray) -> int:
-	var n := 0
-	for v in arr:
-		if v != 0:
-			n += 1
-	return n
+## ⚠⚠ **`_count_set` IS DELETED AND THIS BLOCK IS ITS RECORD.** It counted the non-zero bytes of a
+## `PackedByteArray`, and it existed for exactly one claim: 「the droppable union is WIDER than any one
+## harbour's own reach」 — the row that kept `Grid.sendable`'s union from being a rename of one
+## harbour's field. **`sendable` and every harbour table are deleted** (2026-08-27) and that row went
+## with the drag, which left this helper with no caller but its own two reader-checks below.
+##
+## ⚠ **A helper whose only reader is its own self-test is a fake green of the exact shape this repo
+## has just found twice** — it reports two more passing rows and measures nothing that ships. Deleted
+## rather than kept "in case", because the thing it counted has no successor: a summon has no harbour
+## to be wider than, and the band is held to its own floor AND ceiling in `net_summon` instead.
 
 
 # -- the readers themselves, inverted -----------------------------------------------------------------
@@ -1303,8 +1341,8 @@ func _the_readers_themselves(t) -> void:
 		"at": Vector2.ZERO, "fsize": 1, "col": Look.COL_HUD_TEXT})
 	t.ok(not _start_button(fake).is_empty(), "흔들린 시작 버튼도 찾는다 — 거절 프레임이 바로 그 프레임이다")
 
-	t.eq(_count_set(PackedByteArray([0, 0, 0])), 0, "_count_set — 전부 0이면 0이다")
-	t.eq(_count_set(PackedByteArray([1, 0, 2])), 2, "_count_set — 0 아닌 것만 센다")
+	# ⚠ The two `_count_set` reader-rows are deleted with the helper itself — see its record above.
+	# They measured a counting loop whose only caller had already gone with the drag.
 
 	# A `HudView` is a `Node2D`, not a `RefCounted` — built outside the tree it still has to be freed by
 	# hand, or the round ends with a leaked `CanvasItem` RID and the wrapper reddens on stderr. Measured

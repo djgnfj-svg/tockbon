@@ -366,18 +366,82 @@ func _take_an_item_card(r: Run) -> void:
 	r.take_card(0)
 
 
+## The first tile on this island's grid that `summon` will actually accept — **WATER inside the summon
+## band, never a beach.**
+##
+## ⚠⚠ **THE NAME CARRIES THE KIND ON PURPOSE, AND SO DOES `net_run`'s TWIN.** The scan this replaces
+## asked `home_harbour_for` for a passable LAND tile a drag could unload onto; `summon` takes water, and
+## a fixture that hands it a beach gets a bare -1 and reddens the whole file for a reason that has
+## nothing to do with the refit screen. **That confusion has already cost one red round**, so the kind
+## of tile is in the name rather than in a comment somebody can skip.
+##
+## ⚠ **Found on the grid in front of it, never hard-coded** — the same reason `net_run`'s copy is a
+## search: a literal tile index describes one map, and nothing this file measures is about which map.
+func _summonable_water_on(b: Battle) -> int:
+	var g := b.grid
+	for tile in g.w * g.h:
+		if g.can_summon_at(tile):
+			return tile
+	return -1
+
+
 func _reach_refit(t, seed: int) -> Game:
 	var game := Game.new()
 	t.root.add_child(game)
 	await t.pump_frames(2)
 
-	var tile := -1
-	for pt in game.battle.grid.passable.size():
-		if game.battle.grid.home_harbour_for(pt) >= 0:
-			tile = pt
-			break
-	t.ok(tile >= 0 and game.battle.send(0, tile) >= 0 and game.battle.commit(),
-		"한 명 보내고 시작을 눌렀다 (자가 점검)")
+	# ⚠⚠ **THE SHELL OPENS ON THE TITLE, AND THIS HELPER USED TO WALK STRAIGHT PAST IT (fixed
+	# 2026-08-27).** The line under the two pumped frames used to be `for pt in
+	# game.battle.grid.passable.size()`, which was true only while `Game._ready()` still built a `Run`
+	# and opened an island for itself. **It does not**: `_ready` sets `run = null` and never assigns
+	# `battle`, and `_process` returns on its very first line while there is no run — so no number of
+	# pumped frames will ever make an island appear, and **all six fixtures that come through here died
+	# on a null `battle`.**
+	#
+	# ⚠⚠ **THE FIX DRIVES THE SHELL AND POKES NOTHING.** Assigning `game.run` from a net (or calling
+	# `_open_island()` behind the input door) would leave every check below measuring the poke instead
+	# of the wiring — and the wiring is the whole reason `Game` builds its six children inside `_ready()`
+	# rather than parking them in `game.tscn`. The walk is: 시작하기 · the opening card · 완료.
+	t.ok(game.run == null and game.battle == null,
+		"켜자마자는 타이틀이다 — 판도 전투도 아직 없다 (자가 점검)")
+	game._unhandled_input(_click(Look.title_slot_hit_rect_px(TitleView.SLOT_START).get_center()))
+	t.ok(game.run != null, "시작하기를 누르자 판이 생겼다 (자가 점검)")
+	t.eq(game.run.state(), Run.State.PICK, "그리고 여는 카드 판이 떴다 (자가 점검)")
+
+	# ⚠⚠ **`seed` IS ACTUALLY SPENT HERE, AND UNTIL THIS ROUND IT NEVER WAS.** Every call site named
+	# one and nothing read it: `Run._reset`'s own `_rng.randomize()` drove every draw, so which held
+	# card `_fitting_through_the_shell` pressed and which dashboard column
+	# `_the_dashboard_reads_the_same_function_the_fight_does` watched climb were a different experiment
+	# every round. A parameter that documents a determinism the file does not have is the shape
+	# 「Nothing pretends to work」 names, and it could not be spent before this round because there was
+	# no `Run` to hand it to until the title was pressed.
+	# ⚠ **It lands BEFORE the opening card is taken**, because `Run.seed_cards` refuses to re-deal a
+	# round somebody has already picked from. One seed fixes BOTH card rounds — the win's own
+	# `_draw_cards` comes off the same stream.
+	game.run.seed_cards(seed)
+
+	_open_through_the_shell(t, game)
+	t.ok(game.battle != null, "여는 카드와 완료를 지나 첫 섬이 열렸다 (자가 점검)")
+
+	# ⚠⚠ **RE-AIMED FROM `send` ONTO `summon` (2026-08-27).** This scan read `home_harbour_for` over
+	# `grid.passable` to find a BEACH a drag could unload onto, then called `Battle.send`. **The drag,
+	# `Battle.send` and the whole harbour half are deleted**, so the only way a body leaves the reserve
+	# is a summon. ⚠ **The two verbs take different kinds of tile**: `send` took a beach, `summon` takes
+	# WATER inside the band, and handing `summon` a beach answers -1 for a reason that has nothing to do
+	# with the refit screen. `_summonable_water_on` says in its own name which kind it returns.
+	# ⚠ Nothing about the harbour is lost here — this fixture never measured one. It needed a body on
+	# the island so the fight could be WON and the card round could open, and that is all it needs now.
+	var water := _summonable_water_on(game.battle)
+	t.ok(water >= 0, "이 섬에 소환할 수 있는 물칸이 있다 (자가 점검)")
+	t.ok(water >= 0 and game.battle.summon(0, water) >= 0 and game.battle.commit(),
+		"물칸으로 한 명 불러내고 시작을 눌렀다 (자가 점검)")
+	# ⚠ **A FLOOR UNDER THE LINE ABOVE, AND `boats.size() > 0` IS NOT IT.** `commit()` refuses outright
+	# on an empty `boats`, so any row asserting that a boat exists is re-stating a conjunct that has
+	# already passed — the exact fake-green shape this repo has just found twice. What `commit`
+	# does NOT check is whether the boat is CARRYING anybody, and a body reaching the island is the one
+	# thing every fixture downstream of this helper depends on.
+	t.eq((game.battle.boats[0] as Dictionary)["soldiers"].size(), 1,
+		"그 배에 병사가 하나 실려 있다 (자가 점검) — 빈 배가 떠난 게 아니다")
 	game.battle.enemy_alive.fill(0)
 	game._process(Rules.SIM_SUBSTEP_SEC * 2.0)
 	t.eq(game.battle.outcome(), Battle.Outcome.WON, "섬을 이겼다 (자가 점검)")
@@ -1043,11 +1107,27 @@ func _opened(r: Run) -> Run:
 	return r
 
 
-## ⚠⚠ **`_take_opening_card(game)` STOOD HERE AND IS DELETED (2026-08-27).** It pressed card 0 through
-## the real shell to get past the OPENING BEAST ROUND — the `Game`-side twin of `_opened`. Two reasons
-## it cannot measure anything any more: **no fixture in this file ever called it** (it was already
-## nothing but a definition), and **the round it existed to skip is not a beast round.** Every card is
-## equipment now, so an opening press lands the shell on the REFIT screen instead of walking the run
-## back onto the island — a helper that pressed only the card would leave its caller stranded there.
-## ⚠ **If a fixture ever needs the shell-side walk, it has to press the card AND 완료**, which is the
-## same two steps `_opened` now takes on the sim side.
+## Walks a `Game` past the OPENING CARD ROUND through the real input door and leaves it standing on its
+## first island — the `Game`-side twin of `_opened`, taking the **same two steps**: press card 0, then
+## press 완료. Card 0 always, so the fixture is the same run every time.
+##
+## ⚠⚠ **`_take_opening_card(game)` STOOD HERE, WAS DELETED 2026-08-27, AND THIS IS IT BACK IN ITS
+## TWO-STEP FORM.** The version that was deleted pressed the card and stopped, which was correct while
+## the opening round was a BEAST round: a beast paid a summon slot and bodies rather than the held pile,
+## an empty pile is what `Run.take_card` forks on, and the run walked straight on to the island.
+## **The beast arm of the card table is deleted**, so card 0 is equipment, the pile is not empty, and
+## the press lands the shell on the REFIT screen — a one-press helper strands its caller there. That is
+## exactly what its own deletion note predicted: 「if a fixture ever needs the shell-side walk, it has to
+## press the card AND 완료」. The other reason it was deleted — **no fixture called it** — ended the same
+## week: `_reach_refit` starts at the title now, because the shell stopped opening an island for itself.
+##
+## ⚠ **완료 is asked of the VIEW for its own rect** (`done_hit_rect()`) rather than read out of
+## `Look.refit_done_rect_px(open)` with a hand-written `open` flag. **The button moves when a board is
+## open**, `RefitView.bind` has just reset `_open_slot` to -1, and a fixture that guessed the flag would
+## aim at the position the button is not in the moment somebody opens a board before calling this.
+func _open_through_the_shell(t, game: Game) -> void:
+	t.eq(game.run.state(), Run.State.PICK, "여는 카드 판에 서 있다 (자가 점검)")
+	game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
+	t.eq(game.run.state(), Run.State.REFIT, "여는 카드를 고르자 정비 화면이 열렸다 (자가 점검)")
+	game._unhandled_input(_click(game.refit_view.done_hit_rect().get_center()))
+	t.eq(game.run.state(), Run.State.BATTLE, "완료를 누르자 첫 섬으로 내려갔다 (자가 점검)")

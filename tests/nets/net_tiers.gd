@@ -149,7 +149,6 @@ func run(t) -> void:
 	_a_wolf_climbs_the_stair_and_kills_what_is_up_there(t)
 	_melee_reaches_a_diagonal_one_level_up(t)
 	_an_enemy_posted_high_holds_its_tier(t)
-	_a_pack_aims_from_where_its_bodies_stand(t)
 	# ⚠⚠ **「밀려도 층이 안 바뀐다」 IS A LIVE USER DECISION WHOSE MECHANISM WAS DELETED 2026-08-27.**
 	# 티켓 19, the user's own words: ***"높은 데서 밀리면 안 떨어져. 안 떨어지는 걸로."*** This row
 	# measured it, and measured each direction against its own FLAT control on the same board — because
@@ -372,10 +371,12 @@ func _a_walker_refuses_the_wall_and_takes_the_stair(t) -> void:
 ## by a targeting bug, or by the fixture being broken** — that is the exact shape that let 「무리가 한
 ## 덩어리로 움직인다」 pass on a board with one enemy on it.
 ##
-## ⚠ **The pairs sit 12 tiles apart and that number is load-bearing.** `Rules.pack_radius_of(WOLF)` is
-## 6.0, so two wolves any closer would average into one seek point and each pair would stop being its
-## own experiment. **The pack radius is itself one of the readers moving to the height metric**, which
-## is why it cannot be waved off as a detail of the fixture.
+## ⚠⚠ **The pairs sit 12 tiles apart, and the reason is now HISTORY — read this before closing the gap.**
+## It was load-bearing against `Rules.pack_radius_of(WOLF)`, which was 6.0: two wolves any closer averaged
+## into one seek point and each pair stopped being its own experiment. **무리사냥 is deleted (2026-08-27)
+## and nothing reads across bodies any more**, so today the spacing does one smaller job — it keeps the
+## two pairs from targeting into each other. ⇒ **The day anything cross-body lands again — formation,
+## cohesion, a shared aim — this number is re-derived against ITS radius and never inherited from here.**
 const PAIR_ROWS := [
 	"~~~~~~~~~~~~~~~~~~~~",
 	"~..................~",
@@ -754,41 +755,30 @@ func _an_enemy_posted_high_holds_its_tier(t) -> void:
 		"그 적은 낮은 층에 머문다 — 붙들려서가 아니라 거기 있는 적을 쫓아서다 (자가 점검)")
 
 
-## ⚠⚠ **THE PACK'S SEEK POINT IS A MEAN, AND A MEAN IS NOT A PLACE ANYBODY STANDS.** 무리사냥 aims from
-## the centre of the huddle, and the distance function used to read that point's height off whatever
-## tile it rounded onto — so **two wolves on the ground with one packmate on the plateau were aiming
-## from two tiles up**, preferring the enemy above and walking into the wall.
+## --- 「무리는 제 몸이 선 자리에서 조준한다」 삭제됨 2026-08-27 ------------------------------------------
+## ⚠⚠ **DELETED WITH `Rules.SPECIES_PACK`, `Rules.pack_radius_of` AND `Battle._seek_point_of`.** The row
+## drove `b._seek_point_of(k)` directly on a board built so the pack's mean landed on a plateau tile
+## **nobody was standing on** — wolves at (5,3), (5,4) and (8,3) average to (6, 3.33), which rounds to
+## (6,3), level 2. The table it needed was looked up against the PLAYER's roster and the wolf has been an
+## ENEMY since 2026-08-26, so **the function it called returned on its first line in every real fight.**
 ##
-## The board makes the mean land on a plateau tile on purpose: wolves at (5,3), (5,4) and (8,3) average
-## to (6, 3.33), which rounds to (6,3) — level 2, where none of them is standing.
+## ⚠⚠ **THE BUG IT CAUGHT IS STILL LIVE AS A SHAPE, AND IS RECORDED WHERE THE CODE IS.** `_dist` read
+## `a`'s height off whatever tile `a` rounds onto, so **two wolves on the ground with one packmate on the
+## plateau were all aiming from a tier up**, preferring the enemy above and walking into the wall. That
+## is the whole reason `_nearest_enemy` ever took a separate `from_h`. **Both that argument and
+## `_dist_from_height` are folded away now that every `from` is a place a body stands** — see the
+## deletion blocks on `Battle._dist` and `Battle._nearest_enemy`. ⇒ **Anything that ever measures from a
+## mean, a formation anchor or a cursor puts the height back, and does not let it be rounded off the
+## ground.**
 ##
-## ⚠ **The claim is a PAIR from one seek point, which is what makes it about the height and not about
-## the point.** Two enemies sit at almost the same distance from that mean: from the ground the low one
-## is nearer (2.54 against 3.28) and from the plateau the high one is (2.61 against 3.23). **So the two
-## ground wolves must choose the low enemy and the plateau wolf must choose the high one — same mean,
-## three bodies, two answers.** Read the height off the mean and all three choose the same enemy, which
-## is the shape this row exists to refuse.
-func _a_pack_aims_from_where_its_bodies_stand(t) -> void:
-	var b := _battle_on(CLIMB_ROWS, CLIMB_TIERS, [Rules.WOLF, Rules.WOLF, Rules.WOLF],
-		[Vector2(5, 3), Vector2(5, 4), Vector2(8, 3)], [
-			{"type_id": Rules.CROW, "tile": 1 * CLIMB_W + 5},
-			{"type_id": Rules.CROW, "tile": 5 * CLIMB_W + 8},
-		])
-	t.eq(b.grid.level_at(5, 1), 0, "적 0 은 낮은 층에 선다 (자가 점검)")
-	t.eq(b.grid.level_at(8, 5), 2, "적 1 은 고원 위에 선다 (자가 점검)")
-	t.eq(b.grid.level_at(5, 3), 0, "늑대 둘은 낮은 층 (자가 점검)")
-	t.eq(b.grid.level_at(8, 3), 2, "늑대 하나는 고원 위 (자가 점검)")
-	var seek := b._seek_point_of(0)
-	t.eq(b.grid.level_at(int(round(seek.x)), int(round(seek.y))), 2,
-		"무리의 조준점 %s 이 실제로 고원 칸 위로 떨어진다 — 아무도 안 서 있는 자리다 (자가 점검)" % str(seek))
-	for k in 3:
-		t.ok(b._seek_point_of(k).distance_to(seek) <= Rules.EPS,
-			"늑대 %d 도 같은 조준점을 쓴다 — 셋의 답이 갈리는 이유가 조준점일 수 없다 (자가 점검)" % k)
+## ⚠ **AND THE FIXTURE SHAPE IS THE PART WORTH COPYING.** The claim was a PAIR read off ONE seek point:
+## two enemies at almost the same distance from the mean, the low one nearer from the ground (2.54
+## against 3.28) and the high one nearer from the plateau (2.61 against 3.23) — **same mean, three
+## bodies, two answers.** Read the height off the mean instead and all three choose the same enemy, which
+## is exactly the outcome the row existed to refuse. **A row that asserts ONE answer cannot tell a right
+## answer from a stuck one.**
 
-	b.step(1.0 / 60.0)
-	t.eq(int(b.soldier_target[0]), 0, "낮은 층의 늑대는 낮은 층의 적을 고른다")
-	t.eq(int(b.soldier_target[1]), 0, "옆의 늑대도 마찬가지다")
-	t.eq(int(b.soldier_target[2]), 1, "그런데 고원 위의 늑대는 고원 위의 적을 고른다 — 같은 조준점, 다른 답")
+
 func _a_landing_never_puts_a_body_on_the_plateau(t) -> void:
 	var g := Grid.new()
 	Islands.load_into(g)
@@ -1067,11 +1057,20 @@ func _gd_files_under(roots: Array) -> Array:
 
 # == helpers ==========================================================================================
 
-## Whether ANY harbour may put a boat down on this tile. `can_land_at` is the game's own rule; a
-## second definition here would be the one that rots.
+## Whether ANY summon puts a body down on this tile. **The game's own rule, never a second definition
+## here** — a copy is the one that rots.
+##
+## ⚠⚠ **IT ASKED THE HARBOURS UNTIL 2026-08-27.** It was `for hb in harbour_tiles: can_land_at(hb, tile)`
+## — did any harbour's boat have permission to unload here. **The harbour system is deleted**, and the
+## only thing that puts a body ashore now is a summon, so the question became: is this tile the landing
+## of any legal summon press?
+##
+## ⚠ **The shape of the answer changed with it.** A harbour's permission table was a per-harbour SET of
+## allowed beaches; a summon has exactly ONE landing per press. So a tile is a landing here iff some
+## band tile beaches on it — which is why this walks the band rather than the harbours.
 func _is_landing(g: Grid, tile: int) -> bool:
-	for hb in g.harbour_tiles.size():
-		if g.can_land_at(hb, tile):
+	for t in g.w * g.h:
+		if g.can_summon_at(t) and g.summon_landing_of(t) == tile:
 			return true
 	return false
 

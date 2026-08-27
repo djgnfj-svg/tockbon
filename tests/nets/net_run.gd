@@ -1,5 +1,6 @@
 extends RefCounted
-## The session: a run over the node map, the three rewards, the two ways to lose, and restart.
+## The session: the card round a run opens on, the roster it carries across an island, and the two
+## ways to lose.
 ##
 ## **The half of this that matters is that HP carries by IDENTITY and not by count.** A `begin_island`
 ## that built a fresh `Army` for every island would heal every wound, resurrect every corpse and drop
@@ -8,12 +9,46 @@ extends RefCounted
 ## specific value, and the object itself is compared with `==` so a copied roster is a red rather than
 ## a coincidence. Rebuilding the roster inside `begin_island` reddens seven checks here.
 ##
-## ⚠ **The run no longer walks a line of islands and `island_index` is no longer its position.** The
-## position is `map.at()`; `island_index` is only what `enter_node` last wrote, and `_advance` does not
-## touch it. **The row that measures that is 「`finish_island(true)` 는 `island_index` 를 혼자 안
-## 옮긴다」**, and the mutation it exists for is putting `island_index += 1` back into `_advance`: the
-## map would appear, the run would ignore it, and every check that only counted islands would stay
-## green. The graph itself — floors, edges, routes, reachability — is `net_map`'s.
+## ⚠⚠ **THE NODE MAP IS DELETED AND FIVE THINGS IN THIS FILE DIED WITH IT** (2026-08-26 for the map,
+## 2026-08-27 for the last of these). None of them are coming back as written; what they knew is here.
+##
+##  · **`Run.island_index` and the row 「`finish_island(true)` 는 `island_index` 를 혼자 안 옮긴다」** —
+##    the run's position used to be a counter, then `map.at()`, and the row existed for one mutation:
+##    putting `island_index += 1` back into `_advance`. **The map would appear, the run would ignore
+##    it, and every check that only counted islands would stay green.** ⚠ The field does not exist in
+##    `run.gd` any more (grepped 2026-08-27, no reader and no writer anywhere in `src/`), and **there
+##    is exactly one island**, so a position has nothing to be a position among.
+##
+##  · **`ISLE1_LANDING_X` / `_Y` / `ISLE1_W` (28, 20, 48)** — island 1's cheapest sendable tile from its
+##    start harbour, as a hand literal. ⚠⚠ **It was already dead before the map**: the day the first
+##    node stopped opening island 1 that literal named WATER on a map 24 wide, and it was replaced by a
+##    search on the grid in front of it. **A landing a suite hard-codes is a landing that describes one
+##    map** — see `_summonable_water_on`, which is that search and still stands.
+##
+##  · **`ROUTE_ALL_CELLS` / `ROUTE_TWO_BEAKS` and the two route walks** — 「경로가 다르면 명부가
+##    다르다」, two whole runs by the two extreme routes of the seven-node graph, and what came out the
+##    other end had to DIFFER. ⚠⚠ **It was a FLOOR and not a ceiling, and the reason is the one worth
+##    keeping: a map whose routes all produce the same roster is a corridor with pictures on it, and
+##    that is the exact shape that killed this repo's second game — an advantage with no cost is not a
+##    decision.** The names were already historical (`ROUTE_TWO_BEAKS`'s two nodes paid the beak until
+##    2026-08-25, when the user deleted that reward).
+##
+##  · **`_the_route_is_what_the_board_holds` and its `fit_into_slot0` policy** — §8.4's 「경로가 다르면
+##    명부만이 아니라 판도 다르다」. ⚠ **The fixed fit policy was the whole trick**: without it two
+##    boards fitted by two different hands differ for a reason that has nothing to do with the map.
+##    ⚠⚠ **It was deliberately UNSEEDED and that was measured, not sloppy**: both routes were 5 nodes
+##    and 4 non-boss wins, every win paid the same number of cards, so a SEEDED run drew the identical
+##    card sequence on both routes and the two boards came out guaranteed equal. It failed 100% of
+##    seeded runs, not flakily.
+##
+##  · **The `Reward` / `Run.State` / `NodeKind` key rows** — ⚠⚠ **MEASURED 2026-08-25: putting `BEAK`
+##    back into `Reward`, and `REWARD` back into `Run.State`, left the WHOLE ROUND GREEN at 3231
+##    checks.** The payouts were closed; the WORDS were not. **A member nobody pays yet costs nothing
+##    today and is exactly how a deleted mechanic comes back one file at a time.** ⚠ That is not
+##    tidiness: `panel_view.panel_active`'s own header argues for an ALLOW-list because **one added
+##    `Run.State` member breaks it five ways at once** — a red band painting over the live screen while
+##    `panel_active()` reads true. `Run.State` still has five members and nothing here watches them;
+##    **the day a sixth is added, this paragraph is the argument for putting that row back.**
 ##
 ## Nothing here drives a fight to its natural end. Winning an island honestly takes a real battle and
 ## that is `net_battle`'s job; this file calls `finish_island(true)` directly, which is the same door
@@ -21,29 +56,20 @@ extends RefCounted
 ## has to read off the fight rather than be told.
 
 
-## Island 1's cheapest sendable tile from its start harbour, written as two literals. Both losses below
-## have to COMMIT the island before `step` will do anything at all (`plan-then-watch`, 4.3), and a
-## commit refuses a plan with no boats — so each of them authors the smallest plan there is.
-const ISLE1_LANDING_X := 28
-const ISLE1_LANDING_Y := 20
-const ISLE1_W := 48
-
-## The two routes walked below, as node ids and nothing else. **They are the whole of the fork**: the
-## ⚠⚠ **The two route names are historical**: `ROUTE_TWO_BEAKS`'s two nodes paid the beak until
-## 2026-08-25, when the user deleted that reward. **Both routes pay bodies at every node now** and the
-## names are kept only so the diff of that day reads. The first steps on three `COUNT` nodes, the second on one `COUNT` node and two ex-beak
-## nodes. `net_map` proves those are the extremes of the real graph; this file proves the run ends up
-## in a different place depending on which one the hand picked.
-const ROUTE_ALL_CELLS := [0, 1, 4, 5, 6]
-const ROUTE_TWO_BEAKS := [0, 2, 3, 5, 6]
-
-
-## Every win now stops for the card pick before the map (「6개중 2택」), and `enter_node` refuses
-## unless `_state == MAP` — so a route walk that does not take the two cards and close the board
-## between two wins never reaches the second node at all. A no-op when the run has not stopped for a
-## pick (a `REWARD` win has not reached `PICK` yet; the boss pays no cards at all), so a caller may call
-## this after every `finish_island(true)` unconditionally.
-func _take_two_and_close_refit(r: Run, fit_into_slot0: bool = false) -> void:
+## Takes the round's card and closes the refit board behind it, so a run that has stopped for a pick
+## walks on to its ending. A no-op when the run has not stopped for one, so a caller may call this
+## after every `finish_island(true)` unconditionally.
+##
+## ⚠⚠ **IT WAS `_take_two_and_close_refit` AND THE TWO IS GONE.** `Rules.CARD_PICKS` is **1**; the
+## 「6개중 2택」 the old name and its header described was the node map's card screen, deleted with the
+## map. ⚠ **A helper whose name says two while it takes one is worse than a wrong comment** — it reads
+## as a fixture that exercises the multi-pick path, and there is no multi-pick path.
+##
+## ⚠ **`fit_into_slot0` went with the route walks** (see the file header). It fitted whatever landed
+## into slot 0's own board, in the order taken, so two routes could be compared under IDENTICAL fitting
+## behaviour; with no route to compare, its only caller passed the default and the two `fit(0, 0)`
+## calls it made could never both land — one card is taken, so the second fit had nothing to fit.
+func _take_the_card_and_close_refit(r: Run) -> void:
 	if r.state() != Run.State.PICK:
 		return
 	# ⚠⚠ **THE BEAST FALLBACK IS DELETED WITH THE BEAST CARD** (2026-08-27). This used to scan the
@@ -55,14 +81,6 @@ func _take_two_and_close_refit(r: Run, fit_into_slot0: bool = false) -> void:
 	# ⚠ **What the scan guarded is still worth knowing**: the day a card pays BODIES again, this is
 	# the line that has to come back, or every roster count in this file starts measuring the draw.
 	r.take_card(0)
-	if fit_into_slot0:
-		# A FIXED policy — always fit whatever landed into slot 0's own board, in the order taken —
-		# used by `_the_route_is_what_the_board_holds` so the two routes are compared under IDENTICAL
-		# fitting behaviour and only the CARDS the route itself produced can make the boards differ.
-		# `fit(0, 0)` twice: after the first fit consumes held index 0, the second taken card is the
-		# new index 0.
-		r.army.loadout.fit(0, 0)
-		r.army.loadout.fit(0, 0)
 	r.close_refit()
 
 
@@ -150,8 +168,10 @@ func _a_run_opens_on_a_card_round(t) -> void:
 	var r := Run.new()
 	t.eq(r.state(), Run.State.PICK, "새 회차는 섬이 아니라 카드 화면에서 연다")
 	t.eq(r.army.slot_count(), 1, "그리고 칸 하나로 연다")
-	t.eq(r.army.slot_type_of(0), Rules.WOLF, "그 칸은 늑대다")
-	t.eq(r.army.living_count(), 10, "늑대 열 마리다 (리터럴 — 작은 섬 넷의 밀도가 이 열에 맞춰져 있다)")
+	# ⚠⚠ **늑대가 아니라 검사다** (2026-08-27). `Rules.START_SLOTS` 의 한 줄은 `SWORDSMAN` 이고, 늑대는
+	# 편이 바뀌면서 적 줄로 갔다 — 「짐승을 뽑아 쓰던 회차」의 마지막 흔적이 이 두 줄이었다.
+	t.eq(r.army.slot_type_of(0), Rules.SWORDSMAN, "그 칸은 검사다")
+	t.eq(r.army.living_count(), 10, "검사 열 명이다 (리터럴 — 섬의 적 밀도가 이 열에 맞춰져 있다)")
 
 	var items := 0
 	for k in Rules.CARDS_PER_WIN:
@@ -253,8 +273,11 @@ func _starting_state(t) -> void:
 	# this row walks past it and then measures the opening roster, which is what it always measured.
 	t.eq(r.state(), Run.State.PICK, "시작 상태는 카드 고르기다")
 	t.eq(r.army.living_count(), Rules.roster_start_count(), "시작 병력은 10")
-	t.eq(r.army.living_ids_of_type(Rules.WOLF).size(), Rules.start_bodies_of(0), "열 마리 전부 늑대다")
-	t.eq(r.army.living_ids_of_type(Rules.CROW).size(), 0, "까마귀는 아직 없다 — 카드로 온다")
+	# ⚠⚠ **「열 마리 전부 늑대다」 였고 늑대는 이제 적이다.** 개막 표가 세우는 몸은 검사 열이고, 회차가
+	# 짐승을 몸으로 갖는 길은 없어졌다 — 「까마귀는 카드로 온다」 던 아래 줄은 그 카드가 지워지면서 (2026-08-27)
+	# 주어를 잃었다. 남긴 것은 그 줄이 실제로 재던 것: **적 편 종은 명부에 한 마리도 없다.**
+	t.eq(r.army.living_ids_of_type(Rules.SWORDSMAN).size(), Rules.start_bodies_of(0), "열 명 전부 검사다")
+	t.eq(r.army.living_ids_of_type(Rules.WOLF).size(), 0, "늑대는 명부에 없다 — 짐승은 이제 적이고 카드로도 안 온다")
 	_opened(r)
 
 
@@ -263,7 +286,7 @@ func _starting_state(t) -> void:
 func _hp_carries_by_identity(t) -> void:
 	# ⚠⚠ **SEEDED, and it is kept seeded on purpose.** The reason it had to be seeded is gone with the
 	# beast card — an unseeded fixture used to register a random second species off the opening round,
-	# and a later round of three beast cards then made `_take_two_and_close_refit` take one, bringing
+	# and a later round of three beast cards then made `_take_the_card_and_close_refit` take one, bringing
 	# four bodies into every roster count below (**measured: this net went red about one run in six on
 	# an unchanged tree**). No card pays a body now, so the draw cannot move these numbers at all —
 	# but a fixture that names its seed is the one that stays readable when it next can.
@@ -290,57 +313,30 @@ func _hp_carries_by_identity(t) -> void:
 	t.eq(r.army.hp[9], 2.5, "9번의 상처도 그대로다")
 	t.eq(r.army.alive[7], 0, "7번은 여전히 죽어 있다 — 죽음은 영구다")
 	t.eq(r.army.hp[7], 0.0, "죽은 7번의 HP 는 0이다")
-	t.eq(r.army.type_id[3], Rules.WOLF, "3번의 병종도 바뀌지 않았다")
+	t.eq(r.army.type_id[3], Rules.SWORDSMAN, "3번의 병종도 바뀌지 않았다")
 
 
-# -- rewards ------------------------------------------------------------------------------------------
+# -- the two ways to lose ------------------------------------------------------------------------------
 
-## ⚠⚠ **MEASURED 2026-08-25: putting `BEAK` back into `Reward`, and `REWARD` back into `Run.State`,
-## left the WHOLE ROUND GREEN at 3231 checks.** The payouts are closed — the two ex-beak nodes cannot
-## quietly stop paying bodies without eight checks reddening — but the WORDS were not: a member nobody
-## pays yet costs nothing today and is exactly how a deleted mechanic comes back one file at a time.
-##
-## ⚠ **This is not tidiness.** `panel_view.panel_active`'s own header argues for an ALLOW-list on the
-## ground that **one added `Run.State` member breaks it five ways at once** — a red band painting over
-## the live screen while `panel_active()` reads true. That argument is only worth what a check makes
-## it worth, and until this row there was none.
-##
-## ⚠ The KEYS and not the size: a size alone passes a rename, and 티켓 23 is a ticket about names.
-##
-## ⚠ Mutation: add any member to any of the three; rename one.
-## 「경로가 다르면 명부가 다르다」 — two whole runs over the same map by the two extreme routes, and
-## what comes out the other end has to DIFFER. **This is a floor, not a ceiling**: a map whose four
-## routes all produce the same roster is a corridor with pictures on it, and that is the exact shape
-## that killed this repo's second game — an advantage with no cost is not a decision.
-## Walks one route end to end and reports what came out. Every step goes through the run's own public
-## verbs — `enter_node`, `finish_island` — because a walk that poked at fields would
-## measure the fixture.
-## ⚠ `seed` and `fit_into_slot0` both default to "off", so every EXISTING call keeps behaving exactly
-## as before — a route walk that never fits anything is unaffected by either argument, and its own
-## comparisons (roster count, pool) do not depend on which cards were drawn, only on how many.
-## ⚠ §8.4's dropped row: 「경로가 다르면 명부만이 아니라 판도 다르다」. The check above already proves
-## the ROSTER differs by route; nothing anywhere checked the BOARD, and `grep -n 'board\|loadout'` over
-## this file found nothing before this row. A FIXED fit policy (`fit_into_slot0`) is what makes the
-## claim about the ROUTE and not about which slot a hand happened to fit into — without it, two boards
-## fit by two different policies would differ for a reason that has nothing to do with the map.
-##
-## ⚠⚠ **Deliberately UNSEEDED, and that is not an oversight — it is measured to be the only option.**
-## Both routes here are 5 nodes, 4 non-boss wins each (`ROUTE_ALL_CELLS` / `ROUTE_TWO_BEAKS`'s own
-## sizes), and every non-boss win now pays six cards regardless of the node's OWN reward kind — so a
-## seeded run draws the IDENTICAL card sequence on both routes (same call count, same RNG stream) and
-## a fixed policy then fits the identical sequence into the identical slot: the boards are GUARANTEED
-## equal, not just usually equal. Confirmed by running it seeded first — it failed 100% of runs, not
-## flakily. Unseeded, this is the exact same "two runs, overwhelmingly likely to disagree" shape
-## `_the_route_is_what_the_run_takes` right above already accepts for the roster and the pool.
 ## The wipe. Driven through `battle.step` rather than asserted, because "every soldier is dead" is a
 ## verdict the fight has to reach on its own — the session only reads it.
+##
+## ⚠⚠ **IT OPENED THE RUN'S OWN ISLAND UNTIL 2026-08-27 AND IT CANNOT ANY MORE.** `_phase_clock` asks
+## 「are the enemies gone?」 FIRST, and **the board the user drew carries no spawn character at all** —
+## so `begin_island()`'s fight is WON on its first sub-step and freezes there (`step` breaks out of the
+## sub-step loop the moment the outcome is not RUNNING). Every row below would then be reading a fight
+## that never ran. ⇒ **The island is loaded exactly as the run loads it and ONE beast is put on it by
+## the fixture**, which is the smallest thing that makes a loss reachable at all.
+## ⚠ **The day beasts are drawn onto the board this fixture should be re-read, not deleted**: what it
+## exists to say is that a wipe is latched by the FIGHT, and that is true whoever placed the beast.
 func _wipe_loses(t) -> void:
 	var r := _seeded_open(5)
-	var b := r.begin_island()
+	var b := _island_with_one_beast(r.army)
 	t.eq(b.outcome(), Battle.Outcome.RUNNING, "전투는 굴러가는 상태로 시작한다")
+	t.eq(b.enemies_left(), 1, "픽스처가 짐승 한 마리를 세웠다 (자가 점검 — 0마리면 섬이 첫 칸에 이겨 버린다)")
 	# The smallest plan there is, then the start button: without a commit `step` returns before
 	# `_phase_clock` and the wipe would never be latched at all.
-	t.ok(b.send(0, _summonable_on(b)) >= 0 and b.commit(), "한 명을 보내고 시작을 눌렀다 (자가 점검)")
+	t.ok(b.summon(0, _summonable_water_on(b)) >= 0 and b.commit(), "한 명을 불러내고 시작을 눌렀다 (자가 점검)")
 	for i in range(r.army.type_id.size()):
 		r.army.kill(i)
 	t.eq(r.army.living_count(), 0, "병사가 하나도 안 남았다")
@@ -351,8 +347,8 @@ func _wipe_loses(t) -> void:
 	t.ok(b.enemies_left() > 0, "적이 아직 남아 있다 — 적을 다 죽여서 끝난 게 아니다")
 
 
-## The clock, through a real `Run`. One soldier is landed and nine stay at the harbour, which is the
-## smallest plan a commit will accept.
+## The clock, through a real `Run`'s roster. One soldier is sent out and nine stay in reserve, which is
+## the smallest plan a commit will accept.
 ##
 ## ⚠⚠ **THIS ROW HAS BEEN INVERTED TWICE AND THE SECOND INVERSION DELETED ITS SUBJECT.** It began as
 ## "the clock ends the island". 2026-08-24 turned it into "the clock ends nothing" (the user: 「제한 시간
@@ -365,10 +361,17 @@ func _wipe_loses(t) -> void:
 ## absence of an enum value, but an island that outlives any duration a limit would plausibly have had.
 ## ⚠ **The 5-second mark is a yardstick, not a rule.** Nothing in `src/` reads it; it is here so the
 ## number this row steps past is a number a reader can compare against.
+## ⚠⚠ **AND THE YARDSTICK ONLY MEANS ANYTHING BECAUSE THE FIXTURE PUTS A BEAST ON THE ISLAND** — see
+## `_wipe_loses`. On the empty board the fight is WON on sub-step one and `elapsed` never reaches a
+## sixtieth of a second, so 「시계가 5초를 넘겼다」 would have been red for a reason that has nothing to
+## do with a clock. **With one beast standing there the 5 seconds cannot be dodged whoever wins**: a
+## swordsman needs six blows at 1.2 s to take 14 HP off a wolf, and a wolf needs nine at 1.0 s to take
+## 18 off a swordsman — the shorter of the two is already past the yardstick before the crossing.
 func _the_clock_ends_nothing(t) -> void:
 	var r := _seeded_open(5)
-	var b := r.begin_island()
-	t.ok(b.send(0, _summonable_on(b)) >= 0 and b.commit(), "한 명만 보내고 시작을 눌렀다 (자가 점검)")
+	var b := _island_with_one_beast(r.army)
+	t.eq(b.enemies_left(), 1, "픽스처가 짐승 한 마리를 세웠다 (자가 점검)")
+	t.ok(b.summon(0, _summonable_water_on(b)) >= 0 and b.commit(), "한 명만 불러내고 시작을 눌렀다 (자가 점검)")
 	# ⚠ **One sub-step per call, never `step(1.0)`.** `step` consumes whole `Rules.SIM_SUBSTEP_SEC`
 	# sub-steps and carries the leftover, so a 1.0 s call runs **59** of them and not 60 — the residue
 	# after sixty subtractions lands a hair under the sub-step in IEEE double — and the run would need
@@ -386,8 +389,13 @@ func _the_clock_ends_nothing(t) -> void:
 		"지는 길은 전멸과 상륙 병력 소멸뿐이다 — 시간으로 지는 길은 없다")
 	t.ok(b.elapsed >= yardstick - Rules.EPS,
 		"그런데 시계는 %.0f초를 넘겨 갔다 (%.6f초) — 안 돈 게 아니다" % [yardstick, b.elapsed])
-	t.eq(b.enemies_left(), Islands.spawns().size(),
-		"적은 하나도 안 죽었다 — 한 명으로는 못 죽인다")
+	# ⚠⚠ **THE ROW 「적은 하나도 안 죽었다 — 한 명으로는 못 죽인다」 IS DELETED AND IT WAS A FALSE GREEN
+	# WAITING TO HAPPEN.** It read `t.eq(b.enemies_left(), Islands.spawns().size())`, and both sides go
+	# to **0** on the board the user drew — an emptied table making an equality true, which is the exact
+	# shape this repo just found in `shove_tiles_of`. What it meant is now said where it can be false:
+	# the fixture stands one beast up and asserts it, above.
+	t.eq(Battle.Lose.keys(), ["NONE", "WIPED", "LANDING_LOST"],
+		"지는 이유는 이 셋뿐이다 — 시간이라는 이름이 아예 없다 (이름까지 못 박는다: 크기만 재면 개명을 놓친다)")
 
 
 # -- restart -------------------------------------------------------------------------------------------
@@ -405,24 +413,47 @@ func _restart_resets(t) -> void:
 	first.kill(1)
 	r.finish_island(true)
 	# 승리도 카드를 냈다 — 고르고 정비를 닫아야 회차가 끝까지 간다.
-	_take_two_and_close_refit(r)
+	_take_the_card_and_close_refit(r)
 	t.eq(r.state(), Run.State.WON, "재시작 전에는 끝난 상태다")
 
 
 ## ⚠⚠ **Found on the grid in front of it, not typed.** It used to be island 1's own literal tile, and
 ## the day the first node stopped opening island 1 (2026-08-24 — every node has its own grid now) that
-## literal named water on a map 24 wide. **A landing this suite hard-codes is a landing that describes
-## one map**, and the thing being checked here has never been about which map.
-## ⚠ **`send` takes a LANDING, which is LAND, and `summon` takes a water tile — two different verbs
-## and it cost a red round to notice.** So this asks the grid's own question: is there a harbour whose
-## boat can reach this beach?
-func _summonable_on(b: Battle) -> int:
+## literal named water on a map 24 wide. **A tile this suite hard-codes is a tile that describes one
+## map**, and the thing being checked here has never been about which map.
+##
+## ⚠⚠ **IT ASKED FOR A LANDING AND IT ASKS FOR WATER NOW.** It read `home_harbour_for` and
+## `can_land_at` to find a beach a DRAG could reach; **the drag, `Battle.send` and the whole harbour
+## system behind them are deleted**, so the only way a body leaves the reserve is a summon — and
+## `summon` takes a WATER tile inside the band, never a beach. ⚠ **That the two verbs take different
+## kinds of tile cost a red round to notice once**; the name says which one this is so it cannot happen
+## twice.
+func _summonable_water_on(b: Battle) -> int:
 	var g := b.grid
 	for tile in g.w * g.h:
-		var home := g.home_harbour_for(tile)
-		if home >= 0 and g.can_land_at(home, tile):
+		if g.can_summon_at(tile):
 			return tile
 	return -1
+
+
+## The run's own island with **one wolf standing on it**, and the roster handed straight in so HP still
+## carries by identity.
+##
+## ⚠⚠ **THE FIXTURE EXISTS BECAUSE AN EMPTY ISLAND IS ALREADY WON.** `Islands.spawns()` reads the board
+## file, the board file holds no spawn character, and `_phase_clock` checks 「enemies gone」 before either
+## loss — so a fight built the way `Run.begin_island` builds one latches WON on its first sub-step and
+## every row that drives `step` afterwards is reading a frozen fight.
+##
+## ⚠ **Level 0 and not the plateau, deliberately.** `flow_field` honours `can_step`, so a beast standing
+## two notches up is reachable only through the stair; that is a real and interesting property and it is
+## `net_tiers`' business, not a thing these two rows should depend on.
+func _island_with_one_beast(army: Army) -> Battle:
+	var g := Grid.new()
+	Islands.load_into(g)
+	var tile := g.tile_index(5, 10)
+	var b := Battle.new()
+	b.setup(g, army, [{"type_id": Rules.WOLF, "tile": tile}])
+	return b
 
 
 ## Walks past the OPENING CARD ROUND and onto the island. ⚠⚠ **A run opens on a card screen since
@@ -447,7 +478,7 @@ func _opened(r: Run) -> Run:
 ##
 ## ⚠⚠ **THE SPECIES REGISTRATION LOOP IS DELETED 2026-08-27 AND IT WAS NOT DECORATION.** It registered
 ## every player species so that no LATER card could be a beast: an unregistered fixture could be dealt
-## three beast cards, `_take_two_and_close_refit` would take one, and four bodies would land inside
+## three beast cards, `_take_the_card_and_close_refit` would take one, and four bodies would land inside
 ## whatever roster count was being asserted. **No card can pay a body any more**, so the loop guards
 ## nothing — and it was adding four empty summon slots to every fixture in this file for that reason
 ## alone.

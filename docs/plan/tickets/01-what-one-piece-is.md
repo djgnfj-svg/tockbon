@@ -186,9 +186,21 @@ Status: open
 | 무엇 | 어떻게 보나 | 언제 |
 |---|---|---|
 | **물주름이 토막으로 끊기는 정도** | ⚠ **모바일에서는 안 보인다.** 모니터에서 섬에 붙어 바다를 볼 것. 후보는 `tools/shot/out/water/water_*.png` | 2026-08-26 |
-| **건물 다섯** (본채·집·망루·창고·돌담) | 지금 섬에 서 있는 것은 본채 하나뿐. 나머지 넷은 `assets/buildings/buildings_look.png` 에 나란히 렌더돼 있다 | 2026-08-26 |
+| **건물 다섯** (본채·집·망루·창고·돌담) | 지금 섬에 서 있는 것은 본채 하나뿐. 나머지 넷은 `tools/shot/out/pieces/buildings_look.png` 에 나란히 렌더돼 있다 | 2026-08-26 |
 | **조형물 다섯**(침엽수·활엽수·바위·돌·덤불)과 배치 | 섬을 열면 바로 보인다 | 2026-08-26 |
 | ~~**2 층과 계단**~~ | ✅ **판정 났다 (2026-08-26 밤)** — ***"전반적으로는 볼만한데"*** | |
+
+⚠ **`buildings_look.png` MOVED 2026-08-27 — it used to be cited as `assets/buildings/buildings_look.png`.**
+It is a reference render of the five buildings side by side, waiting for the user's eye; **no code has
+ever loaded it** (grepped: only its own `.import` sidecar and this one line named it). Sitting under
+`assets/` it was imported by the engine and shipped inside the Windows and the Web build — 627 KB of
+picture in a game that never draws it. It now lives beside the other pictures a ticket cites by path,
+under `tools/shot/out/`, which carries a `.gdignore` so the engine does not import it and is covered by
+`tools/*` in **both** export presets' `exclude_filter`, so it no longer ships. Its `.import` sidecar was
+deleted in the same breath, because outside `assets/` there is nothing left to import.
+⇒ **The rule this is an instance of: a picture a ticket points at is not an asset. Only what the game
+LOADS belongs under `assets/`.** `buildings.glb` and `buildings.json` stay — `field_view` and
+`sim/builds` load those two by path.
 
 **⚠⚠ 화면에 올렸는데 사용자가 못 본 것 — 2026-08-26 밤** (***"게임화면지금못봄"***)
 
@@ -229,8 +241,14 @@ Status: open
 **「블렌더에서 맞는 값이 게임에서 죽는다」**이므로, 판정은 게임의 빛 아래에서 나야 한다.
 **저 넷 중 하나라도 여기서 다시 만지면 이 창은 거짓말을 하게 된다.**
 
-⚠ **`-- --shot` 은 열 조각을 각도 둘로 찍고 끝난다** — 앞 두 라운드가 사용자가 모바일이라 판정 자체를
-못 받았기 때문에 붙였다. **창을 대신하지는 않는다.** 돌려 봐야 아는 것이 코너다.
+⚠ **`-- --shot1` saves three yaws of the current aim and quits** — added because two earlier rounds
+could not be judged at all while the user was on mobile. **It does not replace the window.** A corner is
+something you have to turn to see.
+⚠⚠ **`--shot`, which walked all ten pieces at two angles, was deleted 2026-08-27.** It made sense against
+`pieces.glb`; the live target `island.glb` holds exactly ONE mesh, so it had degenerated to shooting the
+same piece twice. **Its two measurements are recorded in the viewer itself**: why the second shot turns
+the sea off (the coast wall runs from y −0.62 to +0.02, and an opaque sea leaves only the top 0.05
+visible — the first run of that mode photographed a white line), and why two angles existed at all.
 
 ⚠ **`-- --glb res://assets/terrain/island.glb` 를 붙이면 실제 섬을 같은 창으로 본다.**
 

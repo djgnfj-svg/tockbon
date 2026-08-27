@@ -30,7 +30,7 @@ var _created: Array = []
 
 func run(t) -> void:
 	_setup_opens_at_the_survey_zoom(t)
-	_setup_on_the_long_map(t)
+	_setup_on_the_real_island(t)
 	_visible_ground_divides_by_the_pitch(t)
 	_screen_to_world_at_the_corners(t)
 	_world_to_tile_floors_at_the_boundary(t)
@@ -68,9 +68,14 @@ func _fv() -> FieldView:
 ## It used to prove the opening zoom is not the constant by checking it stood 0.05 above the floor —
 ## a claim that is simply false once this grid clamps, and one that would have been "fixed" by deleting
 ## it. **A survey that is only ever the floor cannot be told from a constant**, so the claim is made on
-## a grid that does NOT clamp: 26 x 20, the size the first map node opens, where the survey answers
-## `1280 / (26 * 40 * 1.40)` = **0.87912**, strictly inside both bounds. Revert `setup` to the constant
-## and that row reddens.
+## a grid that does NOT clamp: 26 x 20, where the survey answers `1280 / (26 * 40 * 1.40)` = **0.87912**,
+## strictly inside both bounds. Revert `setup` to the constant and that row reddens.
+##
+## ⚠ **26 x 20 was 「the size the first map node opens」 when this was written, and the node map is
+## deleted.** It is the size of the ONE island now, which is why the same number turns up again in
+## `_setup_on_the_real_island` — there against the real board, here against a hand-built all-water grid
+## of the same shape. **The two are not one row twice**: this one proves the formula on a fixture the
+## file controls, that one proves `setup` asks the GRID rather than `Look.GRID_W`.
 func _setup_opens_at_the_survey_zoom(t) -> void:
 	var fv := _fv()
 	fv.zoom = Look.ZOOM_MAX          # a stale value from a previous island, on purpose
@@ -126,40 +131,56 @@ func _setup_opens_at_the_survey_zoom(t) -> void:
 		"자가 점검 — 줌 0.8 에서는 섬 전체가 한 번에 안 보인다는 뜻이다")
 
 
-## ⚠⚠ **THE CAPABILITY ROW: the camera asks the GRID how big the map is.** The long map is 144 x 32;
-## its survey (1280 / 6624 = 0.193) is under the wheel's own floor, so it opens clamped at
-## `ZOOM_MIN` 0.50 — visible ground (2560, 2240.24). x is WIDER than the view: the clamp holds the
-## centre in [1280, 4480] and setup's `cam_px = ZERO` survives at **0.00** where the 48-map centres
-## to -144. y is centred at 640 - 1120.12 = **-480.12**. Hand literals, both.
-func _setup_on_the_long_map(t) -> void:
+## ⚠⚠ **THE CAPABILITY ROW: the camera asks the GRID how big the map is**, and every literal in it was
+## re-derived 2026-08-27 when the board it was written against was deleted.
+##
+## **It was the 144 x 32 long map** — a map that existed to prove the capability and was never played
+## (`idea-inbox` row 52, the user: *"긴 맵 하나 하고 한 칸짜리 맵만 있으면 돼있듯 … 추후에 확장 가능하게
+## 코딩만 해주고"*). Its survey (1280 / 6624 = 0.193) fell under the wheel's floor, so it opened clamped
+## at `ZOOM_MIN` with visible ground (2560, 2240.24), x WIDER than the view, `cam_px = ZERO` surviving
+## the clamp at 0.00, and a pan east stopping at a hand-derived **3200.00**. **That map is deleted with
+## the other seven islands**, and it took the only fixture this file had where the map is wider than the
+## screen — so the pan-to-the-far-end half of this row has no subject any more and is recorded here
+## rather than kept as a green about a map nobody can open.
+##
+## **What replaces it is the REAL island, which is 26 x 20**, and it makes the same claim from the other
+## side: the survey answers `min(1280 / (26 * 40 * 1.40), 720 / (20 * 40 * 1.40 * sin 40°))` =
+## **0.87912**, strictly inside both wheel bounds, where the 48 x 32 default clamps to `ZOOM_MIN`.
+## Visible ground is (1456.00, 1274.14) — **wider AND taller than the 1040 x 800 island** — so
+## `_clamp_cam` centres BOTH axes and `cam_px` lands at **(-208.00, -237.07)**. Hand literals, all four.
+func _setup_on_the_real_island(t) -> void:
 	var army := Army.new()
-	var long_rows := Islands.rows()
+	var rows := Islands.rows()
 	var g := Grid.new()
-	g.load_rows(long_rows)
-	t.eq(g.w, 144, "긴 지도가 144칸 폭으로 실렸다 (자가 점검)")
-	t.eq(g.h, 32, "높이는 그대로 32칸이다 (자가 점검)")
+	g.load_rows(rows)
+	t.eq(g.w, 26, "섬이 26칸 폭으로 실렸다 (자가 점검)")
+	t.eq(g.h, 20, "높이는 20칸이다 (자가 점검)")
 	var b := Battle.new()
 	b.setup(g, army, [])
 
 	var fv := _fv()
-	fv.setup(b, army, long_rows)
-	t.eq(fv._map_tiles(), Vector2i(144, 32), "field_view 가 격자에게 크기를 묻는다")
-	t.eq(fv.zoom, Look.ZOOM_MIN, "긴 지도의 서베이는 휠 바닥(0.50)에 걸려 멈춘다 — 다 보일 수 없는 지도다")
-	t.ok(fv.cam_px.distance_to(Vector2(0.0, -480.12)) < 0.1,
-		"긴 지도에서 setup 뒤 cam_px 가 (0.00, -480.12) 이다 — x 는 가운데 맞춤이 아니라 물려서 잡힌다 (%.2f, %.2f)"
+	fv.setup(b, army, rows)
+	t.eq(fv._map_tiles(), Vector2i(26, 20), "field_view 가 격자에게 크기를 묻는다")
+	t.ok(absf(fv.zoom - 0.87912) < 0.001,
+		"섬의 서베이가 0.87912 다 (1280 / 1456, 손 산수) — 얻은 값 %.5f" % fv.zoom)
+	t.ok(fv.cam_px.distance_to(Vector2(-208.0, -237.07)) < 0.1,
+		"setup 뒤 cam_px 가 (-208.00, -237.07) 이다 — 두 축 다 가운데 맞춤이다 (%.2f, %.2f)"
 			% [fv.cam_px.x, fv.cam_px.y])
 
-	# The self-check that makes the number a claim: the 48-column fixture above landed x at -144, and
-	# `Look.GRID_W` is still 48 — so this is not two names for one answer.
+	# The self-check that makes those numbers a claim: `Look.GRID_W` is still 48, and a view that read
+	# the constant instead of the grid would have answered `ZOOM_MIN` and (-320.00, -480.12) — the
+	# fixture in the row above. So this is not two names for one answer.
 	t.eq(Look.GRID_W, 48, "Look.GRID_W 는 여전히 48이다 (격자 없는 뷰의 기본값으로만 남았다)")
-	t.ok(absf(fv.cam_px.x - (-144.0)) > 100.0,
-		"긴 지도의 x 는 48칸짜리의 -144 와 전혀 다르다 — 상수를 읽었다면 둘이 같았다")
+	t.ok(absf(fv.zoom - Look.ZOOM_MIN) > 0.05,
+		"그리고 이 줌은 48x32 가 걸리는 바닥이 아니다 — 상수를 읽었다면 둘이 같았다")
 
-	# And the pan really reaches the far end: centre max = 5760 - 1280 = 4480, so cam_px stops at
-	# 4480 - 1280 = **3200.0** — the middle-ground-point rule's own stop, as a hand literal.
+	# ⚠ **The island is SMALLER than the view at its opening zoom, so pushing east moves nothing.** That
+	# is the clamp's own centring rule read from the far side, and it is the half that replaces the long
+	# map's 3200.00 stop: on a map narrower than the screen there is no stop to reach, only a middle.
 	fv.pan_by(Vector2(-50000.0, 0.0))
-	t.ok(absf(fv.cam_px.x - 3200.0) < 0.1,
-		"동쪽 끝까지 밀면 cam_px.x 가 3200.00 에서 멈춘다 (얻은 값 %.2f)" % fv.cam_px.x)
+	t.ok(absf(fv.cam_px.x - (-208.0)) < 0.1,
+		"동쪽 끝까지 밀어도 cam_px.x 가 -208.00 그대로다 — 화면보다 좁은 섬은 가운데에 묶인다 (얻은 값 %.2f)"
+			% fv.cam_px.x)
 	fv.battle = null
 
 

@@ -4,65 +4,66 @@ extends RefCounted
 ## view, no shell** — every object here is built with `.new()`.
 ##
 ## ⚠⚠ **THE ROW THIS FILE EXISTS FOR IS THE ZERO-HARBOUR ONE.** `sea-summon`'s structural sentence is
-## that a summon has NO harbour: `send` names the destination and derives the origin from a harbour,
-## and this names the origin and derives the destination from the coast. The way that claim dies
-## quietly is somebody satisfying an existing net by calling `home_harbour_for` inside `summon`, or
-## seeding the band off `sendable`. On the three shipped islands both would still pass everything else
-## in this file, because every one of them has harbours and all their water is connected. So there is
-## a fixture with **no `H` at all**: the band still fills, `summon` still works, and `send` refuses
-## every tile on the same grid.
+## that a summon has NO harbour: the deleted `send` named the destination and derived the origin from a
+## harbour, and this names the origin and derives the destination from the coast. The way that claim
+## died quietly was somebody satisfying an existing net by seeding the band off the harbour tables. On
+## the shipped island that would still pass everything else in this file, because it has harbour
+## characters all the way round its border and all its water is connected. So there is a fixture with
+## **no `H` at all**: the band still fills and `summon` still works on it.
 ##
-## ⚠ **Every bound below is a LITERAL**, re-measured off `islands.gd` rather than read back off the
-## grid under test. A check that asks the subject for its own expectation is this repo's named false
-## green.
+## ⚠ **Every bound below is a LITERAL**, derived outside Godot from a from-scratch reimplementation of
+## `_summon_field` rather than read back off the grid under test. A check that asks the subject for its
+## own expectation is this repo's named false green.
 ##
 ## The mutation paired with each row is written beside it. `sea-summon` section 6.1 is the table.
-
-
-## ⚠⚠ **THE BAND INVERTED — it is a MINIMUM distance from land now, not a maximum**, on the user's own
-## sentence after playing (*"해안선에 배를 배치하는게 아니라 좀 거리를 둬야함 … 배가 가는게 중요하니까"*).
-## Every literal in this block moved with it, and all of them were re-derived outside Godot from a
-## from-scratch reimplementation of `_summon_field` before being typed in here.
 ##
-## The three shipped islands' band sizes at `Rules.SUMMON_BAND_MIN_TILES = 6`. Measured off the rows,
-## not counted back off a `Grid`. ⚠ At `>= 4` they are 470 / 460 / 478 and at `>= 8` they are
-## 256 / 256 / 256 — which is what a `>=` moved by two reads as.
-## ⚠⚠ **THE CEILING IS 10 AND IT IS A CLIFF, not taste**: at `>= 12` the band is 48 tiles and resolves
-## to **2 distinct landings on every island**. `rules.gd` carries the sweep.
-## ⚠⚠ **RE-MEASURED 2026-08-24 when the band gained an OUTER edge** (`Rules.SUMMON_RADIUS_RATIO`, on
-## the user's 「섬 기준으로 동그랗게」). It was `[360, 360, 366]` while the band had a floor and no
-## ceiling. **The cost is stated rather than argued down: 78 band tiles per island, and 4 of the 34
-## landings each island could be attacked from.** The old numbers are kept in this comment because the
-## drop is the price of the decision and not a bug to be found again later.
-const BAND_AT_MIN_6 := [282, 282, 288]
-
-## How many LANDINGS the band can reach, against how many coast tiles the drag can reach.
+## ⚠⚠ **EVERY ISLAND LITERAL IN THIS FILE WAS RE-MEASURED 2026-08-27 AGAINST THE ONE 26 x 20 BOARD.**
+## The three 48 x 32 islands and the 144 x 32 long map are deleted, and the numbers that stood here
+## were theirs. **What the old numbers knew, kept because it is the price of a decision and not a bug
+## to be found again later**:
 ##
-## ⚠⚠ **THE OLD NOTE HERE IS NOW FALSE AND IS KEPT AS THE CORRECTION.** It read *"`SUMMON_BAND_TILES`
-## 2 -> 1 does NOT bite this row and that is measured"* — true of a band hugging the coast, where the
-## count was 82 / 75 / 80 at d = 1, 2 AND 3. **Under a minimum distance the constant bites this row
-## hard**: 45 / 40 / 43 at `>= 3`, 42 / 38 / 40 at `>= 4`, **34 / 35 / 34 at `>= 6`**, 30 / 31 / 25 at
-## `>= 10`, and **2 / 2 / 2 at `>= 12`**. Moving the band out
-## really does cost the player addressable coastline, which is the trade `sea-summon` §3.3 predicted
-## and the user's decision overrode.
-## ⚠⚠ **RE-MEASURED 2026-08-24 with the ring** (see `BAND_AT_MIN_6`). It was `[34, 35, 34]`.
-## **Four landings per island stopped being reachable** — that is what the outer edge costs, and it is
-## written here rather than smoothed away because it is the one number that says how much of an island
-## the player can still choose to attack.
-const LANDINGS_FROM_BAND := [30, 31, 30]
-const SENDABLE_COAST := [84, 76, 82]
+##  · **`BAND_AT_MIN_6 = [282, 282, 288]`** — band sizes at `>= 6` hops from land. At `>= 4` they were
+##    470 / 460 / 478 and at `>= 8` 256 / 256 / 256, which is what a `>=` moved by two reads as; before
+##    the ring was added (`SUMMON_RADIUS_RATIO`, on the user's 「섬 기준으로 동그랗게」) they were
+##    360 / 360 / 366. ⚠⚠ **THE CEILING WAS 10 AND IT WAS A CLIFF, not taste**: at `>= 12` the band fell
+##    to 48 tiles and resolved to **2 distinct landings on every island**.
+##  · **`LANDINGS_FROM_BAND = [30, 31, 30]` against `SENDABLE_COAST = [84, 76, 82]`** — the derivation
+##    cost the player **half the coastline**: many sea tiles share one nearest landing, and the four
+##    biggest catchments were corner landings of 40 / 40 / 72 / 84 tiles against a MEDIAN catchment of
+##    8. `sea-summon` §3.3 predicted that trade and the user's decision overrode its verdict.
+##  · **The long map's own row** — 1128 band tiles, 138 landings, a longest crossing of 17.96 s against
+##    5.96 s on a 48-column island. ⚠ Its finding was that **a straight coast keeps its catchments**:
+##    140 of 174 coast tiles stayed individually addressable there against 34 of 84 on a ring-shaped
+##    island, because far-out sea drains to many different nearest landings instead of to four corners.
+##    **That is the argument for a long island, and it is the one thing worth re-measuring if one is
+##    ever drawn again.**
 
-## Water on island 0 a press must be REFUSED on. ⚠⚠ **It is both ends again as of 2026-08-24**: the
-## shoreline inside `SUMMON_BAND_MIN_TILES`, AND the open ocean outside the ring
-## (`Rules.SUMMON_RADIUS_RATIO`). It was 364 while the band had no outer edge and only the shore could
-## refuse; the ring put 78 ocean tiles back on the refusing side. A self-check for that arm: at 0 it
-## would be vacuous.
-const NEAR_WATER_ISLAND_0 := 442
+
+## ⚠⚠ **THE BAND IS A MINIMUM distance from land, not a maximum**, on the user's own sentence after
+## playing (*"해안선에 배를 배치하는게 아니라 좀 거리를 둬야함 … 배가 가는게 중요하니까"*).
+##
+## The island's band at `Rules.SUMMON_BAND_MIN_TILES = 3`. ⚠⚠ **Twenty-two tiles, and the number is
+## small because BOTH ends of the band bite on a 26 x 20 board**: the moat is only about six hops wide,
+## so `>= 4` leaves 6 tiles and `>= 5` leaves **none at all**. The ring (`SUMMON_RADIUS_RATIO` 0.46
+## about the middle of the grid) takes the rest. **This is a real thing to watch when the island is
+## next re-shaped** — one more hop of minimum distance empties the band and every press becomes a
+## refusal, with `can_summon_at` still perfectly correct.
+const BAND_TILES := 22
+
+## How many LANDINGS the band can reach, against how many coast tiles there are to reach. ⚠ The
+## second is the coastal set `_summon_field` seeds from — *passable AND touching water on any of eight
+## sides* — which is what the deleted per-harbour `sendable` table used to answer, tile for tile.
+const LANDINGS_FROM_BAND := 16
+const COASTAL_TILES := 72
+
+## Water a press must be REFUSED on: it has a landing, so it is not open ocean the field never reached,
+## but it is inside `SUMMON_BAND_MIN_TILES` of the shore or outside the ring. **A self-check for that
+## arm: at 0 it would be vacuous.**
+const NEAR_WATER := 242
 
 
 func run(t) -> void:
 	_the_band(t)
-	_the_long_map_band(t)
 	_a_lake_no_boat_can_leave(t)
 	_no_land_is_summonable(t)
 	_the_landing_of_every_band_tile(t)
@@ -83,33 +84,31 @@ func run(t) -> void:
 
 
 # -- G1 --------------------------------------------------------------------------------------------
-## ⚠ Mutation: `can_summon_at`'s `<=` -> `<` (⇒ 90 / 82 / 88).
+## ⚠ Mutation: move `can_summon_at`'s comparison by one hop — at `>= 4` the band is 6 tiles and at
+## `>= 5` it is **empty**, which is how narrow the moat on a 26 x 20 board is.
 func _the_band(t) -> void:
-	for i in 3:
-		var g := _island(i)
-		var band := _band_tiles(g)
-		t.eq(band.size(), int(BAND_AT_MIN_6[i]),
-			"섬 %d 의 소환 가능한 바다 칸이 %d 개다" % [i, int(BAND_AT_MIN_6[i])])
-	t.eq(Rules.SUMMON_BAND_MIN_TILES, 6,
-		"띠는 해안에서 여섯 홉 이상 떨어진 물이다 (이 파일의 리터럴이 재는 값 — 자가 점검)")
+	var g := _island()
+	var band := _band_tiles(g)
+	t.eq(band.size(), BAND_TILES, "섬의 소환 가능한 바다 칸이 %d 개다" % BAND_TILES)
+	t.eq(Rules.SUMMON_BAND_MIN_TILES, 3,
+		"띠는 해안에서 세 홉 이상 떨어진 물이다 (이 파일의 리터럴이 재는 값 — 자가 점검)")
 	# ⚠ The DIRECTION, asserted separately from the number: a tile one hop out is refused and a tile far
 	# out is allowed. Under the old rule both answers were the other way round, so a check that only
 	# read the count would have passed a band that inverted back.
-	var g0 := _island(0)
 	var hugging := -1
 	var out_at_sea := -1
-	for tile in g0.w * g0.h:
-		if g0.water[tile] == 0:
+	for tile in g.w * g.h:
+		if g.water[tile] == 0:
 			continue
-		if g0.summon_landing_of(tile) < 0:
+		if g.summon_landing_of(tile) < 0:
 			continue
-		if hugging < 0 and not g0.can_summon_at(tile):
+		if hugging < 0 and not g.can_summon_at(tile):
 			hugging = tile
-		if out_at_sea < 0 and g0.can_summon_at(tile):
+		if out_at_sea < 0 and g.can_summon_at(tile):
 			out_at_sea = tile
 	t.ok(hugging >= 0 and out_at_sea >= 0, "가까운 물과 먼 물을 하나씩 찾았다 (자가 점검)")
-	t.ok(not g0.can_summon_at(hugging), "해안에 붙은 물은 거절한다 — 예전 규칙은 여기만 받아들였다")
-	t.ok(g0.can_summon_at(out_at_sea), "떨어진 물은 받아들인다 — 예전 규칙은 여기를 거절했다")
+	t.ok(not g.can_summon_at(hugging), "해안에 붙은 물은 거절한다 — 예전 규칙은 여기만 받아들였다")
+	t.ok(g.can_summon_at(out_at_sea), "떨어진 물은 받아들인다 — 예전 규칙은 여기를 거절했다")
 
 
 ## ⚠⚠ **THE LINE THE INVERSION MADE LOAD-BEARING, AND IT WAS GREEN WHEN DELETED.** `can_summon_at`
@@ -172,53 +171,31 @@ func _a_lake_no_boat_can_leave(t) -> void:
 	# The floor: the OUTER sea on the same grid is summonable, so the refusal above is not "this grid
 	# has no band at all".
 	var band := _band_tiles(g)
-	t.eq(band.size(), 152, "같은 격자의 바깥 바다는 152칸이 소환 지점이다 (고리 밖은 이제 띠가 아니다 — 옛 값 351)")
+	# ⚠ **RE-PRICED 2026-08-27 when `SUMMON_BAND_MIN_TILES` read 3 rather than 6**: 152 -> 296 on the
+	# same rows. **The fixture is not a claim about 296** — it is a claim that the OUTER sea of this
+	# grid is summonable while the walled lake in the middle is not, and the count is here only so
+	# 「바깥 바다도 비어 있다」 cannot pass as agreement.
+	t.eq(band.size(), 296, "같은 격자의 바깥 바다는 296칸이 소환 지점이다 (고리 밖은 띠가 아니다 — 옛 값 152 at >= 6)")
 	var no_landing := 0
 	for raw in band:
 		if g.summon_landing_of(int(raw)) < 0:
 			no_landing += 1
-	t.eq(no_landing, 0, "그리고 그 152칸은 전부 갈 상륙지가 있다 — 띠는 언제나 상륙지의 부분집합이다")
+	t.eq(no_landing, 0, "그리고 그 296칸은 전부 갈 상륙지가 있다 — 띠는 언제나 상륙지의 부분집합이다")
 
 
-## ⚠⚠ **THE 144 x 32 MAP, because the band that changed is the one thing a long map is FOR.** The user's
-## reason for moving it out was *"배가 가는게 중요하니까"* — the crossing is the thing worth watching —
-## and a map three times as wide is where a crossing has room to be long.
+## ⚠⚠ **`_the_long_map_band` STOOD HERE AND ITS MAP IS DELETED** (2026-08-27). It loaded the 144 x 32
+## board and measured 1038 band tiles, 132 landings and a longest crossing of **17.96 s** at
+## `BOAT_SPEED` 4.0 — three times the 5.96 s a 48-column island could offer. **The user's reason for
+## moving the band out to sea was *"배가 가는게 중요하니까"*, and a map three times as wide is where a
+## crossing has room to be long**, so that row was the one number saying whether the rule bought
+## anything. ⚠ Its second finding is the one to re-read before a long island is drawn again: **a
+## STRAIGHT coast keeps its catchments** (140 of 174 coast tiles individually addressable, against 34
+## of 84 on a ring-shaped island), because far-out sea drains to many different nearest landings
+## instead of collapsing onto four corners.
 ##
-## Derived outside Godot from the same from-scratch reimplementation as the three islands above:
-## **1128 band tiles · 138 distinct landings · crossing 1.60 / 3.18 / 17.96 s** at `BOAT_SPEED` 4.0.
-## ⚠ **The catchment barely collapses here** — 140 of 174 coast tiles stay individually addressable
-## against 34 of 84 on island 1 — because the coast is one long straight line rather than a ring, so
-## far-out sea drains to many different nearest landings instead of to four corners.
-##
-## ⚠ This map is **not wired into `Rules.MAP_NODES`** and no node opens it; what is measured here is
-## that the rule does not fall over at three times the width.
-func _the_long_map_band(t) -> void:
-	var g := Grid.new()
-	g.load_rows(Islands.rows())
-	t.eq(g.w, 144, "긴 지도가 144칸 폭으로 실렸다 (자가 점검)")
-	var band := _band_tiles(g)
-	t.eq(band.size(), 1038, "긴 지도의 띠가 1038칸이다 (옛 값 1128 — 고리가 지도 크기에 비례하므로 긴 섬도 끝까지 닿는다)")
-	var reached := {}
-	var no_route := 0
-	var longest := 0.0
-	for raw in band:
-		var tile := int(raw)
-		reached[g.summon_landing_of(tile)] = true
-		var route := g.summon_route(tile)
-		if route.size() < 2:
-			no_route += 1
-			continue
-		var d := 0.0
-		for k in range(1, route.size()):
-			d += route[k - 1].distance_to(route[k])
-		longest = maxf(longest, d)
-	t.eq(no_route, 0, "그 1038칸 전부에서 항로가 나온다 — 띠 안에 못 가는 칸이 없다")
-	t.eq(reached.size(), 132, "그리고 그 띠가 닿는 상륙지가 132곳이다 (옛 값 138 — 고리가 비례하지 않으면 43곳까지 떨어졌다)")
-	# ⚠ **The whole point of a long map, as a number**: the longest crossing here is three times the
-	# longest on a 48-column island (5.96 tiles-per-second-worth), which is what the user asked the band
-	# to buy. The bound is a literal derived outside Godot, not read back off the route.
-	t.ok(absf(longest / Rules.BOAT_SPEED - 17.96) < 0.05,
-		"가장 긴 항해가 17.96초다 (실제 %.2f) — 48칸짜리 섬의 5.96초보다 세 배 길다" % (longest / Rules.BOAT_SPEED))
+## ⚠ **It is not replaced by a row on the 26 x 20 island.** Every crossing there is a couple of hops,
+## and 「the crossing is long enough to be worth watching」 is exactly the claim that board cannot make
+## — asserting it against a two-second sail would be a green measuring the opposite of what it says.
 
 
 # -- G2 --------------------------------------------------------------------------------------------
@@ -234,16 +211,15 @@ func _no_land_is_summonable(t) -> void:
 	var land_hits := 0
 	var dry_hits := 0
 	var checked := 0
-	for i in 3:
-		var g := _island(i)
-		for tile in g.w * g.h:
-			checked += 1
-			if g.passable[tile] != 0 and g.can_summon_at(tile):
-				land_hits += 1
-			if g.can_summon_at(tile) and g.water[tile] == 0:
-				dry_hits += 1
-	t.eq(checked, 3 * 48 * 32, "세 섬의 칸을 전부 봤다 (자가 점검 — 0개면 깨끗한 게 아니라 안 돈 것이다)")
-	t.eq(land_hits, 0, "육지 칸은 어떤 섬에서도 소환 지점이 아니다")
+	var g := _island()
+	for tile in g.w * g.h:
+		checked += 1
+		if g.passable[tile] != 0 and g.can_summon_at(tile):
+			land_hits += 1
+		if g.can_summon_at(tile) and g.water[tile] == 0:
+			dry_hits += 1
+	t.eq(checked, 26 * 20, "섬의 칸을 전부 봤다 (자가 점검 — 0개면 깨끗한 게 아니라 안 돈 것이다)")
+	t.eq(land_hits, 0, "육지 칸은 소환 지점이 아니다")
 	t.eq(dry_hits, 0, "그리고 소환 가능한 칸은 전부 물이다")
 
 
@@ -254,48 +230,45 @@ func _the_landing_of_every_band_tile(t) -> void:
 	var bad := 0
 	var inland := 0
 	var seen := 0
-	for i in 3:
-		var g := _island(i)
-		for tile in _band_tiles(g):
-			seen += 1
-			var landing := g.summon_landing_of(int(tile))
-			if landing < 0 or g.passable[landing] == 0:
-				bad += 1
-				continue
-			if not _touches_water(g, landing):
-				inland += 1
-	t.eq(seen, 282 + 282 + 288, "세 섬의 띠 칸 852개를 전부 봤다 (자가 점검)")
+	var g := _island()
+	for tile in _band_tiles(g):
+		seen += 1
+		var landing := g.summon_landing_of(int(tile))
+		if landing < 0 or g.passable[landing] == 0:
+			bad += 1
+			continue
+		if not _touches_water(g, landing):
+			inland += 1
+	t.eq(seen, BAND_TILES, "섬의 띠 칸 %d개를 전부 봤다 (자가 점검)" % BAND_TILES)
 	t.eq(bad, 0, "띠의 모든 칸이 상륙할 수 있는 육지 칸을 가리킨다")
 	t.eq(inland, 0, "그리고 그 육지 칸은 전부 물에 닿아 있다 — 내륙을 가리키는 칸이 없다")
 
 
 # -- G4 --------------------------------------------------------------------------------------------
 ## ⚠ Mutation: seed only from ORTHOGONALLY adjacent water (4-way) — the corner landings drop out.
-## ⚠⚠ **`SUMMON_BAND_MIN_TILES` DOES bite this row now**, which is the opposite of what its old comment
-## said: under a maximum the landing count was flat at 82 / 75 / 80 for every value, and under a
-## minimum it falls with distance (45 / 40 / 43 at 3, **42 / 38 / 40 at 4**, 34 / 35 / 34 at 6). The
-## band size row above is no longer the only thing that number moves.
+## ⚠⚠ **`SUMMON_BAND_MIN_TILES` DOES bite this row**, which is the opposite of what its first comment
+## said. On the deleted 48 x 32 boards: under a MAXIMUM the landing count was flat at 82 / 75 / 80 for
+## every value, and under a MINIMUM it fell with distance (45 / 40 / 43 at 3, 42 / 38 / 40 at 4,
+## 34 / 35 / 34 at 6). **The band size row above is not the only thing that number moves**, and on a
+## 26 x 20 board it bites harder still — the band itself empties at 5.
 func _what_the_derivation_costs(t) -> void:
-	for i in 3:
-		var g := _island(i)
-		var reached := {}
-		for tile in _band_tiles(g):
-			reached[g.summon_landing_of(int(tile))] = true
-		t.eq(reached.size(), int(LANDINGS_FROM_BAND[i]),
-			"섬 %d 에서 띠가 닿는 상륙지가 %d 곳이다" % [i, int(LANDINGS_FROM_BAND[i])])
-		t.eq(_sendable_union(g).size(), int(SENDABLE_COAST[i]),
-			"섬 %d 에서 드래그가 닿는 해안이 %d 칸이다 (오늘의 제스처 — 자가 점검)"
-				% [i, int(SENDABLE_COAST[i])])
-	# ⚠⚠ **THE COST OF THE DERIVATION WENT FROM TWO TILES TO HALF THE COASTLINE, and it is stated as a
-	# number rather than softened.** Under the old hugging band the derivation lost 2 / 1 / 2 coast
-	# tiles. Moving the band out to four hops means many sea tiles share one nearest landing, so the
-	# player can still address **exactly half** of what a drag could: 42 of 84, 38 of 76, 40 of 82.
-	# `sea-summon` §3.3 predicted this and measured the shape of it (the four biggest catchments are
-	# corner landings, 40 / 40 / 72 / 84 tiles at this distance against a MEDIAN catchment of 8); the
-	# user's decision overrides its verdict, and the price is written here where it can be re-measured.
-	t.eq(SENDABLE_COAST[0] - LANDINGS_FROM_BAND[0], 54, "섬 0 에서 도출이 잃는 것은 54칸이다 — 해안의 64%")
-	t.eq(SENDABLE_COAST[1] - LANDINGS_FROM_BAND[1], 45, "섬 1 에서는 45칸")
-	t.eq(SENDABLE_COAST[2] - LANDINGS_FROM_BAND[2], 52, "섬 2 에서는 52칸")
+	var g := _island()
+	var reached := {}
+	for tile in _band_tiles(g):
+		reached[g.summon_landing_of(int(tile))] = true
+	t.eq(reached.size(), LANDINGS_FROM_BAND,
+		"띠가 닿는 상륙지가 %d 곳이다" % LANDINGS_FROM_BAND)
+	t.eq(_coastal_tiles(g).size(), COASTAL_TILES,
+		"그런데 배가 닿을 수 있는 해안은 %d 칸이다 (자가 점검)" % COASTAL_TILES)
+	# ⚠⚠ **THE COST OF THE DERIVATION IS MOST OF THE COASTLINE, and it is stated as a number rather
+	# than softened.** Under the old band hugging the coast the derivation lost 2 tiles; a band held
+	# out at sea means many sea tiles share one nearest landing, so the player can address 16 of 72.
+	# `sea-summon` §3.3 predicted this and measured the shape of it on the deleted islands (the four
+	# biggest catchments were corner landings, 40 / 40 / 72 / 84 tiles against a MEDIAN catchment of
+	# 8); **the user's decision overrides its verdict, and the price is written here where it can be
+	# re-measured** rather than argued down.
+	t.eq(COASTAL_TILES - LANDINGS_FROM_BAND, 56,
+		"도출이 잃는 것은 56칸이다 — 해안의 78%")
 
 
 # -- G5 --------------------------------------------------------------------------------------------
@@ -309,36 +282,35 @@ func _every_route_is_water_then_one_beach(t) -> void:
 	var not_adjacent := 0
 	var bent := 0
 	var seen := 0
-	for i in 3:
-		var g := _island(i)
-		for raw in _band_tiles(g):
-			var tile := int(raw)
-			seen += 1
-			var path := g.summon_route(tile)
-			if path.size() < 2:
-				short_routes += 1
-				continue
-			if path[0] != g.tile_point(tile):
-				wrong_start += 1
-			if path[path.size() - 1] != g.tile_point(g.summon_landing_of(tile)):
-				wrong_end += 1
-			if path.size() > 2:
-				bent += 1
-			# ⚠⚠ **The last WATER waypoint must touch the landing**, and this is the row that measures
-			# the descent's same-landing restriction. The landing is APPENDED after the walk, so a
-			# descent that drifted onto another beach's field still ends on the right tile in the array
-			# — the line simply teleports across the sea to get there. Measured: without this line,
-			# deleting `if int(summon_landing[nt]) != want: continue` from `summon_route` was green.
-			var beach: Vector2 = path[path.size() - 2]
-			var shore := g.tile_point(g.summon_landing_of(tile))
-			if maxf(absf(beach.x - shore.x), absf(beach.y - shore.y)) > 1.0:
-				not_adjacent += 1
-			for k in path.size() - 1:
-				var wp: Vector2 = path[k]
-				var wt := int(wp.y) * g.w + int(wp.x)
-				if wt < 0 or wt >= g.water.size() or g.water[wt] == 0:
-					dry_waypoints += 1
-	t.eq(seen, 282 + 282 + 288, "세 섬의 띠 칸 852개의 항로를 전부 걸었다 (자가 점검)")
+	var g := _island()
+	for raw in _band_tiles(g):
+		var tile := int(raw)
+		seen += 1
+		var path := g.summon_route(tile)
+		if path.size() < 2:
+			short_routes += 1
+			continue
+		if path[0] != g.tile_point(tile):
+			wrong_start += 1
+		if path[path.size() - 1] != g.tile_point(g.summon_landing_of(tile)):
+			wrong_end += 1
+		if path.size() > 2:
+			bent += 1
+		# ⚠⚠ **The last WATER waypoint must touch the landing**, and this is the row that measures
+		# the descent's same-landing restriction. The landing is APPENDED after the walk, so a
+		# descent that drifted onto another beach's field still ends on the right tile in the array
+		# — the line simply teleports across the sea to get there. Measured: without this line,
+		# deleting `if int(summon_landing[nt]) != want: continue` from `summon_route` was green.
+		var beach: Vector2 = path[path.size() - 2]
+		var shore := g.tile_point(g.summon_landing_of(tile))
+		if maxf(absf(beach.x - shore.x), absf(beach.y - shore.y)) > 1.0:
+			not_adjacent += 1
+		for k in path.size() - 1:
+			var wp: Vector2 = path[k]
+			var wt := int(wp.y) * g.w + int(wp.x)
+			if wt < 0 or wt >= g.water.size() or g.water[wt] == 0:
+				dry_waypoints += 1
+	t.eq(seen, BAND_TILES, "섬의 띠 칸 %d개의 항로를 전부 걸었다 (자가 점검)" % BAND_TILES)
 	t.eq(short_routes, 0, "띠의 모든 칸에서 항로가 최소 두 점이다")
 	t.eq(wrong_start, 0, "항로의 첫 점이 누른 그 칸이다 — 배는 거기서 태어난다")
 	t.eq(wrong_end, 0, "항로의 끝 점이 도출된 상륙지다")
@@ -349,9 +321,13 @@ func _every_route_is_water_then_one_beach(t) -> void:
 
 
 # -- G6 --------------------------------------------------------------------------------------------
-## ⚠⚠ **THE ROW THIS FILE EXISTS FOR.** Mutation: make `_summon_field` seed from `sendable[0]`, or make
-## `summon` derive its landing from `home_harbour_for` — either one turns this grid's every press into
-## a refusal while every other row in this file stays green.
+## ⚠⚠ **THE ROW THIS FILE EXISTS FOR.** Mutation: seed `_summon_field` from anything that starts at a
+## harbour tile, or make `summon` derive its landing from one — either turns this grid's every press
+## into a refusal while every other row in this file stays green.
+## ⚠ **The two mutations used to be named as `sendable[0]` and `home_harbour_for`, and both symbols are
+## deleted** (2026-08-27). **The mutation is not gone with them**: the seed loop is one line away from
+## being written 「from the water a harbour can reach」 the next time somebody adds a harbour table, and
+## this fixture — no `H` anywhere — is the only thing in the repo that would notice.
 func _a_grid_with_no_harbours(t) -> void:
 	var g := Grid.new()
 	# ⚠⚠ **GROWN TWICE NOW — 6x6 -> 10x10 -> 24x24 — and this time it is sized for the CEILING.** A
@@ -386,18 +362,17 @@ func _a_grid_with_no_harbours(t) -> void:
 		"~~~~~~~~~~~~~~~~~~~~~~~~",
 	])
 	t.eq(g.harbour_tiles.size(), 0, "이 격자에는 항구가 하나도 없다 (자가 점검)")
-	t.eq(g.water_fields.size(), 0, "그래서 물 필드도 하나도 없다 (자가 점검)")
-
+	# ⚠⚠ **TWO ROWS STOOD HERE AND BOTH NAMED DELETED SYMBOLS** (2026-08-27). `t.eq(g.water_fields.size(),
+	# 0)` said the per-harbour water BFS table was empty on a harbourless grid, and a loop over
+	# `home_harbour_for` said **the drag refused every tile of this grid in the same breath** — the
+	# contrast was the check, because a one-sided row is satisfied by a grid where nothing works at all.
+	# **`water_fields`, `home_harbour_for` and the drag itself are gone**, so the contrast has only one
+	# side left and it is the side that still exists: a summon works here.
+	# ⚠ **The claim is not weaker for it and the fixture is why**: this grid has no `H` anywhere, so a
+	# `summon` that had quietly grown a harbour dependency would refuse every press on it while every
+	# other row in this file stayed green.
 	var band := _band_tiles(g)
 	t.ok(band.size() > 0, "그래도 띠는 채워진다 — %d 칸 (항구가 아니라 해안에서 자란다)" % band.size())
-
-	# Every tile refused by `send`, on the same grid, in the same breath. A one-sided row would be
-	# satisfied by a grid where nothing works at all.
-	var refused := 0
-	for tile in g.w * g.h:
-		if g.home_harbour_for(tile) < 0:
-			refused += 1
-	t.eq(refused, g.w * g.h, "그리고 같은 격자에서 드래그는 모든 칸을 거절한다 — 갈 항구가 없다")
 
 	var army := Army.new()
 	army.add_starting_force()
@@ -409,26 +384,28 @@ func _a_grid_with_no_harbours(t) -> void:
 	t.eq(b.boats.size(), 1, "배가 한 척 생겼다")
 	var boat: Dictionary = b.boats[0]
 	t.eq(int(boat["target"]), g.summon_landing_of(pressed), "그 배의 목적지가 도출된 상륙지다")
-	t.eq(b.send(0, int(boat["target"])), -1,
-		"같은 상륙지로 send 는 여전히 -1 이다 — 소환에는 항구가 필요 없다는 것이 바로 이 줄이다")
+	t.eq(Vector2(boat["pos"]), g.tile_point(pressed),
+		"그리고 그 배는 누른 바다 칸에 서 있다 — 항구 하나 없는 격자에서 출발점을 스스로 만들었다")
 
 
 # -- G7 --------------------------------------------------------------------------------------------
 ## ⚠ Mutation: build the summon field inside `can_summon_at` — the per-press BFS `sea-summon` refuses,
 ## because `field_view` asks that question once per visible tile per frame while aiming.
 func _the_field_is_built_once(t) -> void:
-	var g := _island(0)
+	# ⚠⚠ **`water_field_builds` WAS THE SIBLING OF THIS COUNTER AND IT IS DELETED** (2026-08-27, with the
+	# harbour system). Two rows here read it — 「물 필드는 항구 수 그대로다」 before and after sixty
+	# reads — and their job was to prove the summon BFS had NOT been folded into the harbour one.
+	# ⚠ **The trap they named is still live and it is why the surviving counter is asserted twice**:
+	# *do not fold a second BFS into a counter to make a red go away, and do not raise a counter's
+	# expected value either.* Two facts, two counters — and there is one fact left.
+	var g := _island()
 	t.eq(g.summon_field_builds, 1, "소환 필드는 섬을 불러올 때 딱 한 번 지어진다")
-	var harbours := g.harbour_tiles.size()
-	t.eq(g.water_field_builds, harbours,
-		"물 필드는 항구 수 그대로다 (%d) — 소환 BFS 가 그 안에 접혀 들어가지 않았다" % harbours)
 
 	for k in 20:
 		g.can_summon_at(k * 7)
 		g.summon_landing_of(k * 7)
 		g.summon_route(k * 7)
 	t.eq(g.summon_field_builds, 1, "예순 번 읽어도 소환 필드는 그대로 한 번이다")
-	t.eq(g.water_field_builds, harbours, "그리고 물 필드도 안 움직였다")
 
 
 # -- G8 --------------------------------------------------------------------------------------------
@@ -518,36 +495,41 @@ func _the_tie_break(t) -> void:
 
 
 # -- B1 / B6 ---------------------------------------------------------------------------------------
-## ⚠ Mutation: make `summon` call `home_harbour_for` and sail from the harbour it picks.
 ## ⚠⚠ **THIS ROW USED TO READ `boat["home"]` AND THAT KEY IS DELETED** with the drag it belonged to.
-## The claim it carried — *a summoned boat has no harbour* — is stronger read off the PATH: a boat
-## `send` builds starts AT a harbour tile and a summoned one starts at the pressed sea tile, which is
-## a fact about where it actually is rather than about a field somebody remembered to write.
-## **Both boats are built side by side in ONE function** so the contrast is the check rather than two
-## rows that could each be satisfied alone.
+## The claim it carries — *a summoned boat has no harbour* — is stronger read off the PATH, which is a
+## fact about where the hull actually is rather than about a field somebody remembered to write.
+##
+## ⚠⚠ **AND THE CONTRAST IT WAS WRITTEN AS IS DELETED TOO** (2026-08-27). Both boats used to be built
+## side by side in ONE function — `send` from a harbour, `summon` from the pressed sea tile — so the
+## comparison was the check rather than two rows that could each be satisfied alone. **`Battle.send`
+## has no callers left in `src/` and is gone**, so there is no second boat to hold this one against.
+## ⚠ **What replaces the contrast is the board itself**: this island's `H` characters are its whole
+## border ring, 88 of them, and the row below walks every one to say the boat did not start on any —
+## a summon that had grown a harbour dependency would start on one of them and nothing else here
+## would notice.
 func _the_boat_has_no_harbour(t) -> void:
-	var g := _island(0)
+	var g := _island()
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
 	b.setup(g, army, Islands.spawns())
 
-	var beach := int(_sendable_union(g)[0])
-	var sent := b.send(0, beach)
-	t.ok(sent >= 0, "드래그로 한 척 띄웠다 (자가 점검)")
-	var sent_boat: Dictionary = b.boats[0]
-	var sent_from := Vector2(sent_boat["path"][0])
-	var is_harbour := false
-	for raw_h in g.harbour_tiles:
-		if g.tile_point(int(raw_h)) == sent_from:
-			is_harbour = true
-	t.ok(is_harbour, "send 로 띄운 배는 항구 칸에서 출발한다 (%s)" % str(sent_from))
-
-	var pressed := int(_band_tiles(g)[0])
+	# ⚠⚠ **The pressed tile is chosen to NOT be a harbour character, and that is not fussiness.** This
+	# board's `H` ring is the whole border, and part of the band sits on it — press one of those and
+	# 「소환한 배는 항구에서 안 뜬다」 is violated by the fixture rather than by the code. **Pressing a
+	# harbour tile is perfectly legal**; it is simply not the press this row is about.
+	var pressed := -1
+	for raw_p in _band_tiles(g):
+		if not _is_harbour(g, int(raw_p)):
+			pressed = int(raw_p)
+			break
+	t.ok(pressed >= 0, "항구 글자가 아닌 띠 칸을 하나 찾았다 (자가 점검)")
 	var summoned := b.summon(0, pressed)
-	t.ok(summoned >= 0, "바다를 눌러 한 척 더 띄웠다")
-	t.eq(b.boats.size(), 2, "배가 두 척이다")
-	var sum_boat: Dictionary = b.boats[1]
+	t.ok(summoned >= 0, "바다를 눌러 한 척 띄웠다")
+	t.eq(b.boats.size(), 1, "배가 한 척이다")
+	t.ok(g.harbour_tiles.size() > 0, "그런데 이 판에는 항구 글자가 실제로 있다 (%d칸 — 자가 점검, 0이면 아래 줄이 공허하다)"
+		% g.harbour_tiles.size())
+	var sum_boat: Dictionary = b.boats[0]
 	var sum_from := Vector2(sum_boat["path"][0])
 	var summoned_at_harbour := false
 	for raw_h2 in g.harbour_tiles:
@@ -571,7 +553,7 @@ func _the_boat_has_no_harbour(t) -> void:
 ## ⚠ Mutation: `slot_reserve_ids` returns them in id order, or in `living_ids_of_type`'s own
 ## healthiest-first order — the second is the OLD behaviour and this row is written to fail it.
 func _most_hurt_first(t) -> void:
-	var g := _island(0)
+	var g := _island()
 	var army := Army.new()
 	army.add_starting_force()
 	# HP order and id order now disagree: 2..5 are full, 0 is hurt and 1 is nearly gone.
@@ -598,7 +580,10 @@ func _most_hurt_first(t) -> void:
 	# `army.living_ids_of_type` keeps its documented healthiest-first order. ⚠ Its one caller used to
 	# be the probe putting the beak on the healthiest body; **the beak reward is deleted** (2026-08-25)
 	# and the ORDER is still the documented contract, so the split stays asserted here.
-	t.eq(int(army.living_ids_of_type(Rules.WOLF)[0]), 2,
+	# ⚠ **`Rules.WOLF` stood here and the opening roster is `Rules.SWORDSMAN` now** — the wolf crossed
+	# to the enemy's side, `Rules.START_SLOTS` is one row of ten swordsmen, and this call would have
+	# indexed an EMPTY array and taken the whole net down with it rather than reddening one row.
+	t.eq(int(army.living_ids_of_type(Rules.SWORDSMAN)[0]), 2,
 		"army.living_ids_of_type 는 여전히 멀쩡한 몸부터다 — 문서가 그렇게 적어 뒀다")
 
 
@@ -606,7 +591,7 @@ func _most_hurt_first(t) -> void:
 ## ⚠ Mutation: drop the `RESERVE` filter in `slot_reserve_ids` — the same six bodies board twenty
 ## boats. **The hold changes the SPEED of placing, never the AMOUNT: the roster is the cap.**
 func _a_pinned_hold_does_not_grow_the_army(t) -> void:
-	var g := _island(0)
+	var g := _island()
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
@@ -647,22 +632,25 @@ func _a_pinned_hold_does_not_grow_the_army(t) -> void:
 ## are kept for the reason `send` keeps its own pair; the record is here so the green is not read as
 ## covering a line it does not.
 func _seven_refusals(t) -> void:
-	var g := _island(0)
+	var g := _island()
 	var band := _band_tiles(g)
 	var good := int(band[0])
 
-	# 1 — committed.
-	var a := _fresh(0)
-	t.ok(a.send(0, int(_sendable_union(g)[0])) >= 0, "확정하려면 배가 한 척은 있어야 한다 (자가 점검)")
+	# 1 — committed. ⚠ **The boat that makes the commit legal used to be a DRAG** (`send` onto the first
+	# tile the harbour tables allowed); `send` is deleted, so the plan is authored the one way left —
+	# a summon on a different band tile than the one pressed afterwards, so the refusal below is the
+	# commit talking and not 「that tile is already taken」.
+	var a := _fresh()
+	t.ok(a.summon(0, int(band[1])) >= 0, "확정하려면 배가 한 척은 있어야 한다 (자가 점검)")
 	t.ok(a.commit(), "확정했다 (자가 점검)")
 	_refuses(t, a, 0, good, "확정한 뒤에는 거절한다")
 
 	# 2 — slot below range.
-	_refuses(t, _fresh(0), -1, good, "슬롯 -1 은 거절한다")
+	_refuses(t, _fresh(), -1, good, "슬롯 -1 은 거절한다")
 	# 3 — slot above range.
 	# ⚠ Off the END of the RUN's own slots, whatever the run has registered — derived so a fourth
 	# registration does not turn this row into a rewrite.
-	var fresh := _fresh(0)
+	var fresh := _fresh()
 	_refuses(t, fresh, fresh.army.slot_count(), good, "회차의 칸 수를 넘는 슬롯은 거절한다")
 	# 4 — ⚠⚠ **THE UNBOUND ARM.** Every slot the run HAS registered is bound, so the `< 0` vs `<= 0`
 	# rule is driven through the out-of-range door: `army.slot_type_of` answers `SUMMON_UNBOUND` there.
@@ -682,7 +670,7 @@ func _seven_refusals(t) -> void:
 			land = tile
 			break
 	t.ok(land >= 0, "육지 칸을 하나 찾았다 (자가 점검)")
-	_refuses(t, _fresh(0), 0, land, "육지를 누르면 거절한다")
+	_refuses(t, _fresh(), 0, land, "육지를 누르면 거절한다")
 
 	# 6 — water too CLOSE to the coast. ⚠ **This arm flipped with the band**: it used to be the open
 	# ocean. The self-check is what stops it being vacuous.
@@ -693,13 +681,13 @@ func _seven_refusals(t) -> void:
 			near_count += 1
 			if near < 0:
 				near = tile
-	t.eq(near_count, NEAR_WATER_ISLAND_0,
-		"섬 0 에서 해안에 너무 가까운 물이 %d 칸이다 (자가 점검 — 0개면 이 팔은 공허하다)"
-			% NEAR_WATER_ISLAND_0)
-	_refuses(t, _fresh(0), 0, near, "해안에 붙은 물을 누르면 거절한다")
+	t.eq(near_count, NEAR_WATER,
+		"해안에 너무 가깝거나 고리 밖이라 거절되는 물이 %d 칸이다 (자가 점검 — 0개면 이 팔은 공허하다)"
+			% NEAR_WATER)
+	_refuses(t, _fresh(), 0, near, "해안에 붙은 물을 누르면 거절한다")
 
 	# 7 — the slot is dry.
-	var dry := _fresh(0)
+	var dry := _fresh()
 	# ⚠ Derived from the opening table, not a literal 6 — slot 0's body count moved to ten (티켓 15).
 	for k in Rules.start_bodies_of(0):
 		t.ok(dry.summon(0, int(band[k])) >= 0, "마르기 전에는 %d번째도 나간다 (자가 점검)" % k)
@@ -724,11 +712,8 @@ func _refuses(t, b: Battle, slot: int, tile: int, label: String) -> void:
 ## ⚠ Mutation: delete `back.reverse()` in `_phase_landings`, or add a return-to-harbour
 ## branch to it — a summoned boat has `home == -1` and would sail to harbour -1.
 func _a_summoned_boat_goes_home_to_the_sea(t) -> void:
-	var g := _island(0)
-	var army := Army.new()
-	army.add_starting_force()
-	var b := Battle.new()
-	b.setup(g, army, Islands.spawns())
+	var b := _fresh_with_a_beast()
+	var g := b.grid
 
 	var pressed := int(_band_tiles(g)[0])
 	t.ok(b.summon(0, pressed) >= 0, "바다에서 한 척 띄웠다 (자가 점검)")
@@ -757,18 +742,34 @@ func _a_summoned_boat_goes_home_to_the_sea(t) -> void:
 # -- B7 --------------------------------------------------------------------------------------------
 ## ⚠ Mutation: make `_free_tiles_from` refuse to walk over reserved tiles — the second boat waits out
 ## the island at a coast with an empty beach two tiles away.
+##
+## ⚠⚠ **IT WAS A DRAG AND A SUMMON AND IT IS TWO SUMMONS NOW** (2026-08-27). `Battle.send` is deleted,
+## so 「섞인 계획」 has nothing to mix; **what the row actually measures is unchanged** — two boats aimed
+## at ONE landing, which is the only arrangement that tests the spreading at all — and two band tiles
+## that share a landing are what produce it. ⚠ **They must be found rather than typed**: 22 band tiles
+## resolve to 16 landings here, so a pair exists, but which pair is a fact about the board.
 func _a_mixed_plan_unloads_on_two_tiles(t) -> void:
-	var g := _island(0)
-	var army := Army.new()
-	army.add_starting_force()
-	var b := Battle.new()
-	b.setup(g, army, Islands.spawns())
+	var b := _fresh_with_a_beast()
+	var g := b.grid
 
-	# Both aimed at ONE landing, which is the only arrangement that tests the spreading at all.
-	var pressed := int(_band_tiles(g)[0])
+	var band := _band_tiles(g)
+	var first := {}
+	var pressed := -1
+	var pressed2 := -1
+	for raw in band:
+		var tile := int(raw)
+		var lz := g.summon_landing_of(tile)
+		if first.has(lz):
+			pressed = int(first[lz])
+			pressed2 = tile
+			break
+		first[lz] = tile
+	t.ok(pressed >= 0 and pressed2 >= 0,
+		"같은 상륙지를 가리키는 띠 칸 두 개를 찾았다 (자가 점검 — 못 찾으면 아래가 겹침을 못 잰다)")
 	var landing := g.summon_landing_of(pressed)
-	t.ok(b.send(0, landing) >= 0, "드래그로 한 척 (자가 점검)")
-	t.ok(b.summon(0, pressed) >= 0, "소환으로 한 척 (자가 점검)")
+	t.eq(g.summon_landing_of(pressed2), landing, "그 둘의 상륙지가 실제로 같다 (자가 점검)")
+	t.ok(b.summon(0, pressed) >= 0, "한 척 (자가 점검)")
+	t.ok(b.summon(0, pressed2) >= 0, "또 한 척 (자가 점검)")
 	t.eq(b.boats.size(), 2, "둘이 같은 상륙지를 노린다")
 	t.ok(b.commit(), "확정했다 (자가 점검)")
 
@@ -779,7 +780,7 @@ func _a_mixed_plan_unloads_on_two_tiles(t) -> void:
 		ashore = b.ashore_ids()
 		if ashore.size() >= 2:
 			break
-	t.eq(ashore.size(), 2, "섞인 계획의 두 척이 둘 다 병력을 내렸다")
+	t.eq(ashore.size(), 2, "한 상륙지를 노린 두 척이 둘 다 병력을 내렸다")
 	t.ok(b.soldier_pos[int(ashore[0])] != b.soldier_pos[int(ashore[1])],
 		"그리고 서로 다른 칸에 섰다 — 한 해변에 겹쳐 쌓이지 않는다")
 
@@ -851,7 +852,7 @@ func _the_run_slots(t) -> void:
 ##
 ## ⚠ Mutation: `slot >= army.slot_count()` -> `slot >= Rules.SUMMON_SLOT_MAX`.
 func _an_unregistered_slot_sends_nobody(t) -> void:
-	var b := _fresh(0)
+	var b := _fresh()
 	var unbound := b.army.slot_count()
 	t.ok(unbound < Rules.SUMMON_SLOT_MAX, "등록 안 된 칸이 상한 안쪽에 있다 (자가 점검)")
 	t.eq(b.slot_reserve_ids(unbound).size(), 0, "등록 안 된 칸의 예비 병력은 비어 있다")
@@ -946,27 +947,48 @@ func _the_unit_table(t) -> void:
 
 # -- helpers ---------------------------------------------------------------------------------------
 
-func _island(i: int) -> Grid:
+## The island, loaded the way the game loads it — terrain AND tier board together.
+##
+## ⚠⚠ **IT TOOK AN ISLAND INDEX AND IGNORED IT** (dropped 2026-08-27). `_island(i)` built the same grid
+## whatever `i` was, which was harmless only while every caller happened to pass 0 — a row written
+## tomorrow with `_island(1)` would have measured island 0 and passed for the wrong reason, silently.
+## **There is one island, so there is no index.** ⚠ **The same defect ate `_fresh(g: Grid)` before it**:
+## that one took a grid and built island 0 internally regardless. **A parameter nothing reads is a lie
+## about what a fixture is measuring**, and this file has now been bitten by it twice.
+## ⚠ It reads `load_into` rather than `load_rows`: a grid loaded without its tier board comes up flat,
+## draws, plays, and says nothing.
+func _island() -> Grid:
 	var g := Grid.new()
-	g.load_rows(Islands.rows())
+	Islands.load_into(g)
 	return g
 
 
-## A fresh `Battle` on island `i` with the starting force. **A new `Army` every time** — the refusal
+## A fresh `Battle` on the island with the starting force. **A new `Army` every time** — the refusal
 ## rows board and un-board bodies, and a shared roster would let one arm's state leak into the next.
-##
-## ⚠⚠ **THIS TOOK A `Grid` AND IGNORED IT.** It was `_fresh(g: Grid)` and built island 0 internally
-## whatever it was handed, which was green only because every caller happens to pass island 0's grid:
-## a row written tomorrow with `_fresh(_island(1))` would have measured island 0 and passed for the
-## wrong reason, silently. The argument is the island INDEX now, so the rows, the spawns and the limit
-## all come out of ONE number and cannot name different islands.
-func _fresh(i: int) -> Battle:
-	var grid := Grid.new()
-	grid.load_rows(Islands.rows())
+func _fresh() -> Battle:
+	var b := Battle.new()
 	var army := Army.new()
 	army.add_starting_force()
+	b.setup(_island(), army, Islands.spawns())
+	return b
+
+
+## The same fixture with **one wolf standing on the island**, for the two rows that actually run the
+## sim.
+##
+## ⚠⚠ **AN EMPTY ISLAND IS ALREADY WON, AND THAT FREEZES `step`.** `_phase_clock` asks 「are the enemies
+## gone?」 before anything else, and **the board the user drew carries no spawn character at all** — so
+## the first sub-step after a commit latches `Outcome.WON` and `step` breaks out of its sub-step loop
+## for good. A boat would never sail, never land and never turn round, and every row driving frames
+## would be reading a fight that stopped before it started.
+## ⚠ **Only the rows that call `step` use this.** The refusal and band rows never turn a frame, so
+## giving them an enemy would be a fixture detail nothing measures.
+func _fresh_with_a_beast() -> Battle:
 	var b := Battle.new()
-	b.setup(grid, army, Islands.spawns())
+	var army := Army.new()
+	army.add_starting_force()
+	var g := _island()
+	b.setup(g, army, [{"type_id": Rules.WOLF, "tile": g.tile_index(5, 10)}])
 	return b
 
 
@@ -978,17 +1000,29 @@ func _band_tiles(g: Grid) -> PackedInt32Array:
 	return out
 
 
-## Every tile SOME harbour can land on. On all three shipped islands the water is one connected body,
-## so each harbour's own set is the same one — the union is written out anyway rather than reading
-## `sendable[0]`, because a fixture with two pools would make those different numbers.
-func _sendable_union(g: Grid) -> PackedInt32Array:
+## Every tile a boat can beach on: **passable, and touching water on any of eight sides.**
+##
+## ⚠⚠ **IT WAS `_sendable_union` AND IT ASKED THE HARBOURS** — every tile SOME harbour could land on,
+## looped over `can_land_at`. **That whole table is deleted**, and this is the same set written the way
+## `_summon_field`'s own seed loop writes it. ⚠ On every island this repo has shipped the two answered
+## tile for tile (84 / 76 / 82 there, 72 here), which is why the swap costs nothing — **but it is the
+## definition that survived, not the numbers**: 8-way and not 4-way, which is the user's 「어디든지」.
+func _coastal_tiles(g: Grid) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	for tile in g.w * g.h:
-		for hb in g.harbour_tiles.size():
-			if g.can_land_at(hb, tile):
-				out.append(tile)
-				break
+		if g.passable[tile] != 0 and _touches_water(g, tile):
+			out.append(tile)
 	return out
+
+
+## Is `tile` one of the board's `H` characters? Used by `_the_boat_has_no_harbour`, whose fixture must
+## press a sea tile that is NOT one — this island's harbour ring is its whole border and part of the
+## band sits on it.
+func _is_harbour(g: Grid, tile: int) -> bool:
+	for raw in g.harbour_tiles:
+		if int(raw) == tile:
+			return true
+	return false
 
 
 func _touches_water(g: Grid, tile: int) -> bool:

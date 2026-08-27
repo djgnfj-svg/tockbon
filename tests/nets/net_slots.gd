@@ -55,6 +55,15 @@ func run(t) -> void:
 	t.root.add_child(game)
 	await t.pump_frames(2)
 
+	# ⚠⚠ **THE SHELL OPENS ON THE TITLE AND THIS FILE WALKED STRAIGHT PAST IT** (fixed 2026-08-27).
+	# **Every row below opens with `game._open_island()`**, which reads `run.begin_island()` — and
+	# `Game._ready()` sets `run = null` and opens no island for itself, so the very first row died on a
+	# null `run` before it measured one thing. **The fix drives the shell and pokes no field**: 시작하기,
+	# the opening card, 완료 — all through `_unhandled_input`, the same three presses `net_refit` walks.
+	# ⚠ Once the run is standing on its island, `begin_island()` hands back a FRESH `Battle` on every
+	# call, so each row's own `_open_island()` is still the real reset it always was.
+	_walk_from_the_title_to_the_island(t, game)
+
 	# Swap in the spies and re-open, exactly as `net_shell` does: a spy starts with a null `battle`, so
 	# a deleted wiring line would leave every capture below empty rather than merely different.
 	for v: Node2D in [game.field_view, game.hud_view]:
@@ -183,7 +192,7 @@ func _the_number_keys(t, game: Game, hs: HudSpy) -> void:
 ## ⚠ Mutation L5: fire one per frame (drop the accumulator), or read the cadence as 0.0.
 func _the_press_and_the_beat(t, game: Game, fs: FieldView) -> void:
 	var g: Grid = game.battle.grid
-	var tile := _a_band_tile(g, 0)
+	var tile := _a_band_water_tile(g, 0)
 	var at := _park_on(fs, g, tile)
 	game._unhandled_input(_key(KEY_1))
 	t.eq(game.battle.boats.size(), 0, "누르기 전에는 배가 없다 (자가 점검)")
@@ -214,8 +223,8 @@ func _the_press_and_the_beat(t, game: Game, fs: FieldView) -> void:
 func _the_sweep(t, game: Game, fs: FieldView) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
-	var a_tile := _a_band_tile(g, 0)
-	var b_tile := _a_band_tile(g, 40)
+	var a_tile := _a_band_water_tile(g, 0)
+	var b_tile := _a_band_water_tile(g, 40)
 	t.ok(a_tile != b_tile, "두 바다 칸이 서로 다르다 (자가 점검)")
 
 	game._unhandled_input(_key(KEY_1))
@@ -239,7 +248,7 @@ func _the_sweep(t, game: Game, fs: FieldView) -> void:
 func _the_release(t, game: Game, fs: FieldView) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
-	var tile := _a_band_tile(g, 0)
+	var tile := _a_band_water_tile(g, 0)
 	var at := _park_on(fs, g, tile)
 	game._unhandled_input(_key(KEY_1))
 	game._unhandled_input(_press(at))
@@ -261,7 +270,7 @@ func _the_release(t, game: Game, fs: FieldView) -> void:
 func _a_dry_slot(t, game: Game, fs: FieldView) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
-	var tile := _a_band_tile(g, 0)
+	var tile := _a_band_water_tile(g, 0)
 	var at := _park_on(fs, g, tile)
 	game._unhandled_input(_key(KEY_1))
 	game._unhandled_input(_press(at))
@@ -314,7 +323,7 @@ func _outside_the_band(t, game: Game, fs: FieldView) -> void:
 func _after_the_commit(t, game: Game, fs: FieldView, hs: HudSpy) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
-	var tile := _a_band_tile(g, 0)
+	var tile := _a_band_water_tile(g, 0)
 	var at := _park_on(fs, g, tile)
 	game._unhandled_input(_key(KEY_1))
 	game._unhandled_input(_press(at))
@@ -498,7 +507,7 @@ func _the_aim_marks(t, game: Game, fs: FieldView) -> void:
 func _the_slot_row(t, game: Game, fs: FieldView, hs: HudSpy) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
-	var tile := _a_band_tile(g, 0)
+	var tile := _a_band_water_tile(g, 0)
 	var at := _park_on(fs, g, tile)
 	game._unhandled_input(_key(KEY_1))
 	await t.pump_frames(2)
@@ -604,8 +613,6 @@ func _the_boxes_clear_the_army(t, game: Game, fs: FieldView) -> void:
 
 # -- helpers ---------------------------------------------------------------------------------------
 
-## The `n`-th summonable tile on this grid, in row-major order. A stable pick rather than a hand-typed
-## index, so a fixture stays valid if the rows are ever edited.
 # -- the bounce -------------------------------------------------------------------------------------
 
 ## ⚠⚠ **`_arming_mid_drag_cancels_the_drag` IS DELETED, SUBJECT AND ALL.** It measured the collision
@@ -638,7 +645,15 @@ func _the_band_goes_with_the_boxes(t, game: Game, fs: FieldView, hs: HudSpy) -> 
 	t.ok(fs._ring.visible, "확정 전에는 링이 실제로 보인다 (자가 점검)")
 	t.eq(hs.boxes.size() > 0, true, "그리고 슬롯 상자도 그려진다 (자가 점검)")
 
-	t.ok(game.battle.send(0, int(_sendable_tile(g))) >= 0, "확정할 배를 하나 놓았다 (자가 점검)")
+	# ⚠⚠ **RE-AIMED FROM `send` ONTO `summon` (2026-08-27), AND THE TILE CHANGED KIND WITH IT.**
+	# `Battle.send` took a BEACH — a passable land tile a boat unloaded onto — and it is deleted whole
+	# with the harbour half. `Battle.summon` takes WATER inside the summon band, so a fixture that
+	# handed it the old beach would get -1 and redden this row for a reason that has nothing to do with
+	# the ring. **What the row measures is untouched**: it only ever needed ONE boat standing in the
+	# plan, because `commit()` refuses an empty one.
+	var water := _a_band_water_tile(g, 0)
+	t.ok(water >= 0, "확정할 배를 띄울 바다 칸을 찾았다 (자가 점검)")
+	t.ok(game.battle.summon(0, water) >= 0, "그 바다 칸에 배를 하나 불러냈다 (자가 점검)")
 	t.ok(game.battle.commit(), "확정했다 (자가 점검)")
 	hs.boxes.clear()
 	await t.pump_frames(2)
@@ -662,7 +677,7 @@ func _the_three_lines_that_claimed_to_be_load_bearing(t, game: Game, fs: FieldVi
 	# event, end the hold, and beat.
 	game._open_island()
 	var g: Grid = game.battle.grid
-	var tile := _a_band_tile(g, 0)
+	var tile := _a_band_water_tile(g, 0)
 	var at := _park_on(fs, g, tile)
 	game._unhandled_input(_key(KEY_1))
 	game._unhandled_input(_press(at))
@@ -716,7 +731,7 @@ func _the_three_lines_that_claimed_to_be_load_bearing(t, game: Game, fs: FieldVi
 func _a_refused_key_flashes_as_well_as_shakes(t, game: Game, hs: HudSpy) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
-	var drain := _a_band_tile(g, 0)
+	var drain := _a_band_water_tile(g, 0)
 	# Slot 1 (ranged) is drained rather than slot 0, so the accepted-press control at the bottom of this
 	# row still has a wet slot to arm.
 	var spent := 0
@@ -770,7 +785,7 @@ func _a_refused_key_flashes_as_well_as_shakes(t, game: Game, hs: HudSpy) -> void
 func _an_armed_slot_that_has_run_dry_is_not_green(t, game: Game, fs: FieldView, hs: HudSpy) -> void:
 	game._open_island()
 	var g: Grid = game.battle.grid
-	var tile := _a_band_tile(g, 0)
+	var tile := _a_band_water_tile(g, 0)
 	var at := _park_on(fs, g, tile)
 	game._unhandled_input(_key(KEY_1))
 	await t.pump_frames(2)
@@ -956,14 +971,27 @@ func _a_press_away_from_the_centre(t, game: Game, fs: FieldView) -> void:
 		"그 배의 상륙 고리가 바닥 버퍼에 그려져 있다 — 무르는 조작에 그림이 생겼다")
 
 
-func _sendable_tile(g: Grid) -> int:
-	for tile in g.w * g.h:
-		if g.home_harbour_for(tile) >= 0:
-			return tile
-	return -1
+## ⚠⚠ **`_sendable_tile(g)` IS DELETED, SUBJECT AND ALL (2026-08-27).** It walked the grid for the
+## first tile with a `home_harbour_for(tile) >= 0` — **a BEACH a harbour could unload a boat onto** —
+## and its one caller handed the answer to `Battle.send`. **`Grid.home_harbour_for` and `Battle.send`
+## are both deleted**: the drag that put a body on a boat at a harbour is gone, `send` had no caller
+## left in `src/`, and the derived harbour machinery went with it. There is no such thing as a
+## "sendable tile" any more, so this could not be re-aimed — it could only be replaced by its
+## successor, and its successor already stood two functions below it.
+##
+## ⚠ **WHAT IT KNEW THAT OUTLIVES IT, and it is the trap that cost a red round**: `send` took a BEACH
+## and `summon` takes WATER inside the band. They are not interchangeable and a fixture that swaps one
+## for the other gets a silent -1. **That is why the helper below is named for the KIND of tile it
+## returns** rather than for the verb it feeds — the same reason `net_run.gd`'s
+## `_summonable_water_on` carries "water" in its name.
 
 
-func _a_band_tile(g: Grid, n: int) -> int:
+## The `n`-th tile of the summon band on this grid — **WATER, always**, in row-major order. A stable
+## pick rather than a hand-typed index, so a fixture stays valid if the island is ever re-cut.
+##
+## ⚠ **This was `_a_band_tile` until 2026-08-27.** It always returned water; the name did not say so,
+## and it sat one screen away from a helper that returned a beach.
+func _a_band_water_tile(g: Grid, n: int) -> int:
 	var seen := 0
 	for tile in g.w * g.h:
 		if not g.can_summon_at(tile):
@@ -1124,9 +1152,29 @@ func _wheel(at: Vector2, up: bool) -> InputEventMouseButton:
 	return ev
 
 
-## Takes the OPENING BEAST CARD through the real input door. ⚠⚠ **A run opens on a card screen since
-## 티켓 15** (「시작하자마자 세 개 중에 하나 고르는 거」), so the map sits one press further from the
-## title than it used to. Card 0, always, so the fixture is the same run every time.
-func _take_opening_card(game: Game) -> void:
-	if game.run != null and game.run.state() == Run.State.PICK:
-		game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
+## Walks the shell from the TITLE down onto its first island, through the real input door and nothing
+## else: 시작하기 · the opening card · 완료. Card 0 always, so the fixture is the same run every round.
+##
+## ⚠⚠ **THIS REPLACES `_take_opening_card`, WHICH PRESSED THE CARD AND STOPPED.** One press reached the
+## island only while the opening round was a BEAST round — a beast paid no held card, `Run.take_card`
+## forked on the empty pile, and the run walked straight on. **The beast arm of the card table is
+## deleted**, so card 0 is equipment, the pile is not empty, and the press lands the shell on the REFIT
+## screen; a one-press walk strands its caller there. (It was also dead code here: nothing called it.)
+##
+## ⚠ **Nothing is poked.** Assigning `game.run` or reaching for `_start_run()` would leave every row
+## below measuring the poke instead of the wiring — and the wiring is the whole reason `Game` builds
+## its six children inside `_ready()`.
+## ⚠ 완료 is asked of the VIEW for its own rectangle rather than read out of `Look` with a hand-written
+## `board_open` flag: **the button moves when a board is open**, and a guessed flag aims at the
+## position the button is not in.
+func _walk_from_the_title_to_the_island(t, game: Game) -> void:
+	t.ok(game.run == null and game.battle == null,
+		"켜자마자는 타이틀이다 — 판도 전투도 아직 없다 (자가 점검)")
+	game._unhandled_input(_click(Look.title_slot_hit_rect_px(TitleView.SLOT_START).get_center()))
+	t.eq(game.run.state(), Run.State.PICK, "시작하기를 누르자 여는 카드 판이 떴다 (자가 점검)")
+	game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
+	t.eq(game.run.state(), Run.State.REFIT, "여는 카드를 고르자 정비 화면이 열렸다 (자가 점검)")
+	game._unhandled_input(_click(game.refit_view.done_hit_rect().get_center()))
+	t.eq(game.run.state(), Run.State.BATTLE, "완료를 누르자 첫 섬으로 내려갔다 (자가 점검)")
+	t.ok(game.battle != null and game.battle.grid != null,
+		"그래서 아래 모든 줄이 밟고 설 전투와 판이 생겼다 (자가 점검)")

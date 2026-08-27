@@ -20,10 +20,22 @@ build/
 # MCP 설정 — 엔진·Aseprite 실행 경로가 이 PC 절대경로로 박혀 있다.
 .mcp.json
 
-# 임시 스크린샷 등 루트 이미지
+# Scratch screenshots dropped at the repo root — reference shots pasted in during a round, never assets.
+# **A png and its `.import` sidecar are ONE thing and both halves must be ignored together.** Godot writes
+# the sidecar next to the image on import; ignoring only the png leaves the sidecar tracked, and then the
+# repo carries a file whose `source_file=` points at an image that is not in the repo — the same mistake
+# already made once under `tools/blender/`, recorded further down.
+# ⚠ **Both entries are root-anchored (`/`)** so they cannot swallow an `image.png` that a future asset
+#  folder legitimately tracks. `image copy.png` was left unanchored and half-covered until 2026-08-27.
+# ⚠⚠ **An ignore rule does not untrack what is already tracked.** `image copy.png.import` was committed
+#  before this rule existed and is still in the index; it needs a `git rm --cached` to actually leave.
+# Note: `export_presets.cfg` also names `image.png, image copy.png` in its exclude_filter, so an exported
+#  build drops them even if a working copy has them on disk. That filter is the build's half of the same
+#  decision — if a name here changes, change it there too.
 /image.png
 /image.png.import
-image copy.png
+/image copy.png
+/image copy.png.import
 
 # 에셋 생성 후보 — 한 번에 수십 장씩 나온다. 🔴 **고른 것만** assets/ 로 옮겨 커밋한다.
 tools/pixel/out/

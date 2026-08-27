@@ -16,9 +16,14 @@ extends RefCounted
 ## roster this object already holds instead of making one. Building a fresh `Army` there instead would
 ## heal every soldier **while a check that only counts soldiers stayed green**.
 ##
-## Every value that changes what happens lives in `rules.gd`, and the island's own facts — its grid,
-## its spawns, its clock — live in `islands.gd`. Nothing here holds a second copy of either; a number
+## Every value that changes what happens lives in `rules.gd`, and the island's own facts — its grid
+## and its spawns — live in `islands.gd`. Nothing here holds a second copy of either; a number
 ## counted in two places diverges.
+## ⚠ **「its clock」 stood in that list until 2026-08-27 and there is no island clock any more.**
+## `Islands.TIME_LIMIT_SEC` was deleted with `Lose.TIMEOUT` and `battle.setup`'s fourth parameter —
+## three dead things holding each other up. **A run-long timer that brings a boss is decided and
+## unbuilt** (see `finish_island`), and it belongs to THIS file rather than to one island, so nothing
+## should go looking for it in `islands.gd` when it is built.
 
 
 ## Where the run is. `BATTLE` means the island is open and `begin_island` will build its fight;

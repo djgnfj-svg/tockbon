@@ -37,8 +37,11 @@ extends SceneTree
 ##   `--glb res://assets/terrain/island.glb`   look at the baked island instead of the ten pieces
 ##   `--at X,Z`                                aim at a spot rather than the middle
 ##   `--zoom N`                                start N tiles wide
-##   `--shot`                                  render every mesh from two angles and quit
 ##   `--shot1`                                 render THIS aim from three yaws and quit
+##
+## ⚠ **`--shot` stood beside `--shot1` until 2026-08-27 and is gone** — the tombstone where `_shoot_all`
+## stood, below `_zoom`, carries what it knew. `--shot1` is the flag that survived, because it is the one
+## the sculpt agent's own command line actually carries.
 
 const GLB := "res://assets/terrain/pieces.glb"
 
@@ -122,17 +125,14 @@ func _initialize() -> void:
 		if xz.size() == 2:
 			_focus = Vector3(float(xz[0]), 0.0, float(xz[1]))
 			_place_camera()
-	# ⚠ **`--shot1` saves exactly what `--at` and `--zoom` framed and quits**, which `--shot` cannot do:
-	# that mode walks every mesh and re-frames each one, so it would throw the aim away.
+	# ⚠ **`--shot1` saves exactly what `--at` and `--zoom` framed and quits.** It is the only
+	# fire-and-quit path left; `--shot`, which walked every mesh instead and therefore threw the aim
+	# away, was deleted 2026-08-27 — see the tombstone below `_zoom`.
+	# ⚠ **`"--shot1" in cli` is an exact array-element test, not a prefix test**, which is why the two
+	# flags could sit here side by side without `--shot` swallowing `--shot1`. Keep it exact if a second
+	# shot flag is ever added back.
 	if "--shot1" in cli:
 		_shoot_one(at)
-	# ⚠ **`--shot` is the same viewer with a hand made of code**, so a picture that can be looked at on
-	# a phone comes out of the identical camera, light and outline the interactive window uses. It was
-	# added because the last two rounds of judgement never happened: the user was on mobile and could
-	# not see the screen (2026-08-26, ticket 04). **It is not a substitute for the window** — it cannot
-	# be turned, and turning is how a corner is judged.
-	if "--shot" in cli:
-		_shoot_all()
 
 
 ## Every top-level child of the baked scene is one piece, in the order `pieces.py` built them.
@@ -464,39 +464,40 @@ func _zoom(by: float) -> void:
 	_place_camera()
 
 
-## Walks all ten pieces plus the row, saves each, and quits. **Two angles per piece** — the game's own
-## yaw, and one turned 55° — because the shore wall and the turned corner are the two things ticket 01
-## keeps failing on and neither of them shows from straight ahead.
-func _shoot_all() -> void:
-	# ⚠⚠ **THE SECOND SHOT TURNS THE SEA OFF, AND THAT IS NOT A PREFERENCE.** The two walls hang from
-	# the waterline DOWNWARDS — `wall_coast` runs from y -0.62 to +0.02 — so an opaque sea plane hides
-	# all but the top 0.05 of them and the first run of this mode photographed **a white line**. A
-	# coast wall is the piece ticket 01 has failed on most often; a picture that cannot show it is not
-	# a picture of it.
-	var views := [
-		{"tag": "sea", "yaw": Look.CAM_YAW_DEG, "sea": true},
-		{"tag": "bare", "yaw": Look.CAM_YAW_DEG + 55.0, "sea": false},
-	]
-	for i in _pieces.size():
-		_row = false
-		_view_tiles = ONE_VIEW_TILES
-		_index = i
-		_show()
-		for view: Dictionary in views:
-			_yaw = float(view["yaw"])
-			_sea.visible = bool(view["sea"])
-			_place_camera()
-			await _settle(4)
-			await _save_shot(String(view["tag"]))
-	_sea.visible = true
-	_row = true
-	_view_tiles = ROW_VIEW_TILES
-	_yaw = Look.CAM_YAW_DEG
-	_show()
-	await _settle(4)
-	await _save_shot()
-	print("piece_viewer: %d 조각 · 각도 둘 · 나란히 한 장" % _pieces.size())
-	quit()
+## ⚠⚠ **TOMBSTONE — `_shoot_all()` and its `--shot` flag stood here and were deleted 2026-08-27.**
+##
+## **What it did.** Given `-- --shot`, it drove the viewer with a hand made of code: for each of the ten
+## meshes in the loaded glb it framed the piece, photographed it twice — once at the game's own yaw with
+## the sea plane ON, once turned 55° with the sea OFF — then switched to the ten-in-a-row view, saved one
+## last frame, printed a count and quit. Everything it saved went to `SHOT_DIR`, the same folder `S`
+## still writes to.
+##
+## **Why it is dead.** Its only entry was its own CLI flag; nothing in `src/`, `tests/` or any script
+## invoked it, and no round ever consumed its output folder. It was also aimed at a file that can no
+## longer exist: it was written for `pieces.glb`'s ten meshes, and `pieces.py` — the only thing that
+## could bake that file — was deleted 2026-08-27. The live target, `island.glb`, holds **ONE** mesh, so
+## "walk every mesh from two angles and then line them up in a row" degenerates to one piece
+## photographed twice plus a row of one. `--shot1` does that job properly and is the flag the sculpt
+## agent's command line actually carries.
+##
+## **What it knew, and it outlives the code.** ⚠⚠ **THE SECOND SHOT TURNED THE SEA OFF, AND THAT WAS
+## NOT A PREFERENCE.** The two wall pieces hang from the waterline DOWNWARDS — `wall_coast` ran from
+## y -0.62 to +0.02 — so an opaque sea plane hides all but the top 0.05 of them, and the first run of
+## this mode photographed **a white line**. A coast wall is the piece ticket 01 has failed on most
+## often; a picture that cannot show it is not a picture of it. ⇒ **`G` (sea off) is not a garnish. Any
+## future judgement of a wall piece is taken with the sea off, whatever takes the picture.**
+##
+## ⚠ **Why two angles and not one**: the shore wall and the slightly-tilted corner are the two things
+## ticket 01 keeps failing on, and neither of them shows from straight ahead. The 55° turn existed for
+## the corner. **This is the argument for `Q`/`E` still being hand controls** — turning is how a corner
+## is judged, and a still picture cannot be turned.
+##
+## ⚠ **Why it was added at all** (2026-08-26, ticket 04): two rounds of judgement never happened because
+## the user was on mobile and could not see the screen, so a picture that survives a phone was worth
+## having. **It was never a substitute for the window**, and its own header said so.
+##
+## **`_shoot_one()` below is what remains of this idea**, and `_settle()` is shared with it — neither is
+## orphaned by this deletion.
 
 
 ## One frame, from three yaws, at whatever `--at` / `--zoom` aimed at. Three because a stair read from a

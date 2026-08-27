@@ -58,16 +58,25 @@ func run(t) -> void:
 	_bleed_off_below_threshold(t)
 	_bleed_refreshes_and_never_stacks(t)
 	_bleed_death_passes_the_same_substep(t)
+	_the_bleed_stops_when_its_tier_runs_out(t)
 	_status_rides_the_splash(t)
+	_a_status_tier_is_strong_the_way_its_kind_reads(t)
 	_slow_makes_the_hit_enemy_walk_less(t)
 	_slow_expires_back_to_full_speed(t)
 	_slow_refreshes_and_never_stacks(t)
 	_enemy_blows_carry_no_status(t)
-	# -- 티켓 15: the five passives ------------------------------------------------------------------
+	# -- 티켓 15: the passives that are still ON THE BOARD ---------------------------------------------
+	# ⚠⚠ **THREE ROWS WERE DELETED HERE 2026-08-27 AND ALL THREE HAD STOPPED MEASURING.**
+	# 「까마귀는 장비 없이도 문다」, 「늑대가 무리로 사냥한다」 and 「까마귀 제 종의 출혈이 장비를 안
+	# 덮어쓴다」 went with `Rules.SPECIES_STATUS` and `Rules.SPECIES_PACK`. Both tables are looked up
+	# against the PLAYER's roster and **both held a single beast row that became an ENEMY on 2026-08-26**,
+	# so `species_status_of` answered `{}` and `pack_radius_of` answered 0.0 on every call in the game.
+	# ⇒ **What survived the cut did so by moving to a live source**: the bleed CEILING is now driven off
+	# the equipment tag (`_the_bleed_stops_when_its_tier_runs_out`), and the kind-dependent strength
+	# comparison is now labelled as the arithmetic it is
+	# (`_a_status_tier_is_strong_the_way_its_kind_reads`). The reasoning each deleted row carried is
+	# written where the row stood.
 	_the_bear_sweeps(t)
-	_the_crow_bleeds_with_no_equipment(t)
-	_the_wolves_hunt_as_one(t)
-	_a_crows_own_bleed_never_weakens_its_equipment(t)
 	# ⚠⚠ **THREE SHOVE ROWS WERE DELETED HERE 2026-08-27, AND THEY HAD ALREADY STOPPED MEASURING.**
 	# 「다람쥐 끌어당김 · 소 돌진」, 「막힌 밀치기는 충전을 안 태운다」 and 「밀치기가 목표와 예약을 함께
 	# 옮긴다」 went with `Rules.SPECIES_SHOVE`. The table emptied on 2026-08-26 when 다람쥐 and 소 left
@@ -83,75 +92,44 @@ func run(t) -> void:
 	# decision that a body never changes tier by being pushed.
 
 
-# -- 티켓 15 fix: two sources, one blow, the STRONGER stands -------------------------------------------
-## ⚠⚠ **MEASURED AS A REAL DEFECT, not a worry.** 까마귀 has a bleed row of its own AND reads the
-## horde's bleed tag count like every other species. Written as two writes in a row the species value
-## landed last, so a full bleed set (tier 2, 1.5 a second for 3 s) reached a crow's target as
-## **0.5 / 2.0** — 22% of what the same set gives a wolf. **Equipment fitted anywhere on the board
-## penalised the crow specifically**, since `tag_count` sums every board.
+# -- 상태이상 층의 강약: 종류마다 반대로 읽는다 ---------------------------------------------------------
+## ⚠⚠ **THE FIXTURE THAT STOOD HERE IS DELETED AND THE ARITHMETIC IT PROTECTED IS NOT.** It was
+## 「까마귀 제 종의 출혈이 장비를 약하게 만들지 않는다」: a crow, five bleed items, a wolf control wearing
+## the identical five, and a bare crow — all of it aimed at a REAL defect that
+## `Rules.stronger_status_tier` fixed. **`Rules.SPECIES_STATUS` is deleted (2026-08-27)**, so a blow now
+## has exactly one source and the fixture has nothing to resolve.
 ##
-## ⚠ **Five copies, because tier 2's threshold is five.** Nothing else in this file drives more than
-## three, which is why nothing caught it.
+## ⚠⚠ **THE DEFECT IS WORTH KEEPING BECAUSE THE NEXT SECOND SOURCE WILL REPEAT IT.** Written as two
+## writes in a row, the species value landed LAST: a full bleed set (2층, 초당 1.5 · 3초) reached a
+## crow's target as **0.5 / 2.0 — 22% of what the same set gives a 늑대.** Equipment fitted ANYWHERE on
+## the board penalised the crow specifically, because `tag_count` sums every board. ⚠ **It needed FIVE
+## copies to show**, since tier 2's threshold is five and nothing else in this file drives more than
+## three — which is exactly why nothing caught it.
 ##
-## ⚠ Mutation: write the species tier after the tag tier instead of resolving them; compare two DOT
-## tiers with `<` instead of `>`.
-func _a_crows_own_bleed_never_weakens_its_equipment(t) -> void:
-	var lit := Rules.tag_status_tier_at(_bleed_row(), 5)
-	t.ok(not lit.is_empty(), "출혈 딱지 다섯이면 2층이 켜진다 (자가 점검)")
-	t.eq(float(lit["mag"]), 1.5, "그 2층의 세기가 초당 1.5 다 (리터럴)")
-	t.eq(float(lit["sec"]), 3.0, "지속은 3초다 (리터럴)")
-	var own := Rules.species_status_of(Rules.CROW)
-	t.ok(float(own["mag"]) < float(lit["mag"]),
-		"까마귀 제 종의 출혈은 그 2층보다 약하다 (자가 점검 — 이게 뒤집히면 아래가 공허하다)")
-
-	# The crow, wearing the same five a wolf would wear.
-	var crow_army := _army_of([Rules.CROW])
-	_worn(crow_army, ITEM_BLEED, 5, Rules.SWORDSMAN)
-	var cb := _battle_of(_open(ARENA_W, ARENA_H), crow_army,
-		[_spawn(ARENA_W, Rules.WOLF, 12, 5)])
-	_ashore(cb, 0, Vector2(9, 5))
-	cb.begin_frame()
-	cb.step(TICK_ONE)
-	t.ok(cb.enemy_hp[0] < Rules.hp_of(Rules.WOLF), "까마귀가 실제로 때렸다 (자가 점검)")
-	t.eq(cb.status_mag_of(Rules.Status.BLEED, 0), float(lit["mag"]),
-		"까마귀가 문 적의 출혈 세기가 장비 2층 그대로다 — 제 종 줄이 장비를 덮어쓰지 않는다")
-	# ⚠ One sub-step of ageing is already off it: `_phase_status` runs after `_phase_attacks` inside
-	# the same sub-step. The species row's own 2.0 would read 1.983 here, so this still separates them.
-	# ⚠ Compared with a tolerance, not with `eq`: `status_time` is a `PackedFloat32Array` and the
-	# 32-bit round trip puts the value a few 1e-8 off the 64-bit expectation.
-	t.ok(absf(cb.status_left(Rules.Status.BLEED, 0)
-			- (float(lit["sec"]) - Rules.SIM_SUBSTEP_SEC)) < 1e-4,
-		"지속도 2층 그대로다 — 세기만 살리고 시간을 깎지도 않는다 (%.4f)"
-			% cb.status_left(Rules.Status.BLEED, 0))
-
-	# The CONTROL: a wolf wearing the identical five reads the identical numbers.
-	var wolf_army := _army_of([Rules.WOLF])
-	_worn(wolf_army, ITEM_BLEED, 5, Rules.SWORDSMAN)
-	var wb := _battle_of(_open(ARENA_W, ARENA_H), wolf_army,
-		[_spawn(ARENA_W, Rules.WOLF, 12, 5)])
-	_ashore(wb, 0, Vector2(11, 5))
-	wb.begin_frame()
-	wb.step(TICK_ONE)
-	t.eq(wb.status_mag_of(Rules.Status.BLEED, 0), cb.status_mag_of(Rules.Status.BLEED, 0),
-		"같은 다섯을 낀 늑대와 까마귀가 정확히 같은 세기로 물린다 — 종이 벌을 안 받는다")
-
-	# The other direction: with NO equipment the species row is the only source and stands on its own.
-	var bare := _army_of([Rules.CROW])
-	var bb := _battle_of(_open(ARENA_W, ARENA_H), bare,
-		[_spawn(ARENA_W, Rules.WOLF, 12, 5)])
-	_ashore(bb, 0, Vector2(9, 5))
-	bb.begin_frame()
-	bb.step(TICK_ONE)
-	t.eq(bb.status_mag_of(Rules.Status.BLEED, 0), float(own["mag"]),
-		"딱지가 하나도 없으면 제 종의 세기가 그대로 선다 — 강한 쪽을 고르는 것이지 장비만 보는 게 아니다")
-
-	# ⚠ And the SLOW kind is compared the other way round: a smaller multiplier is the stronger one.
+## ⚠⚠ **AND THE ONE ROW THAT SURVIVES IS A DIRECT CALL, WHICH THIS FILE'S HEADER OTHERWISE FORBIDS.**
+## No two rows of `TAG_STATUS_TIERS` name the same `Status`, so through `step` one argument is always
+## `{}` and **only the empty-arms of `stronger_status_tier` can fire.** The kind-dependent comparison —
+## a DOT is stronger when BIGGER, a SLOW when SMALLER, and one comparison for both hands a slowed enemy
+## the weakest slow on the field — is therefore unreachable from a fight today. ⇒ **It is measured as
+## arithmetic, labelled as arithmetic, and a green here is NOT evidence that a fight resolves two
+## sources.** The day a second source lands, this becomes a `step`-driven row again.
+func _a_status_tier_is_strong_the_way_its_kind_reads(t) -> void:
 	var slow_a := {"mag": 0.5, "sec": 2.0}
 	var slow_b := {"mag": 0.7, "sec": 2.0}
 	t.eq(float(Rules.stronger_status_tier(Rules.Status.SLOW, slow_a, slow_b)["mag"]), 0.5,
 		"감속은 배율이 작은 쪽이 강하다 — DOT 과 반대로 읽는다")
 	t.eq(float(Rules.stronger_status_tier(Rules.Status.BLEED, slow_a, slow_b)["mag"]), 0.7,
-		"출혈은 큰 쪽이 강하다 — 같은 두 값을 종류에 따라 반대로 고른다 (계기 자가 점검)")
+		"출혈은 큰 쪽이 강하다 — 같은 두 값을 종류에 따라 반대로 고른다")
+	# ⚠ Either side may be empty, and that is the arm a fight actually runs today.
+	t.eq(float(Rules.stronger_status_tier(Rules.Status.BLEED, {}, slow_b)["mag"]), 0.7,
+		"한쪽이 비면 남은 쪽이 그대로 선다 — 지금 싸움이 실제로 도는 갈래다")
+	t.ok(Rules.stronger_status_tier(Rules.Status.BLEED, {}, {}).is_empty(),
+		"둘 다 비면 아무것도 안 남는다")
+	# ⚠ Ties on magnitude break on the LONGER duration, so an equally strong source that lasts longer
+	# is not silently discarded.
+	t.eq(float(Rules.stronger_status_tier(Rules.Status.BLEED,
+			{"mag": 0.5, "sec": 2.0}, {"mag": 0.5, "sec": 3.0})["sec"]), 3.0,
+		"세기가 같으면 오래가는 쪽이 이긴다")
 
 
 ## The `TAG_STATUS_TIERS` row that carries 출혈, found rather than written as an index.
@@ -162,211 +140,65 @@ func _bleed_row() -> int:
 	return -1
 func _with_char(row: String, at: int, ch: String) -> String:
 	return row.substr(0, at) + ch + row.substr(at + 1)
-# -- 티켓 15: 늑대 — 무리사냥 -------------------------------------------------------------------------
-## **A wolf picks its target from the centre of mass of the wolves NEAR IT, itself included.**
+# -- 무리사냥: 「늑대가 무리로 사냥한다」 삭제됨 2026-08-27 --------------------------------------------
+## ⚠⚠ **THIS ROW AND ITS HELPER `_max_pair` ARE DELETED WITH `Rules.SPECIES_PACK`, `Rules.pack_radius_of`
+## AND `Battle._seek_point_of`.** It asked `pack_radius_of(Rules.WOLF)` for a radius of 6.0 and then
+## drove five fixtures through it; the table was read against the PLAYER's roster and the wolf has been
+## an ENEMY since 2026-08-26, so **the rule under test had not run once in a real fight since that day.**
 ##
-## ⚠⚠ **ONE LINE BUYS BOTH HALVES.** Picking from a shared point makes them bite the same enemy
-## (티켓 06's own sentence), and `_phase_movement` then walks each of them at that enemy — so they
-## arrive as one body. **There is no formation code and there must not be**: a second rule for the
-## shape would be a second thing to keep in step with the first.
+## ⚠⚠ **WHAT IT CAUGHT, WHICH IS THE ONLY REASON THIS PARAGRAPH EXISTS.** An earlier version of the same
+## row had ONE enemy on the board, and `_nearest_enemy` answers the same id from any point at all — so
+## three bodies walking at one target converge whatever the rule says. **Forcing the radius to 0.0 left
+## it green and pack-on and pack-off printed the identical decimal**, which `tools/probe/pack_spread.gd`
+## then measured properly and `how-nets-lie` records. ⇒ **A row about a rule that CHOOSES
+## between things must put at least two things in front of it to choose between**, and the rewrite that
+## fixed it — two enemies placed so a lone hunter SPLITS, plus a control species that demonstrably does
+## split — is the shape to copy, not the wolf.
 ##
-## ⚠ **Nearby and never GLOBAL.** A global centre drags a wolf that landed on the far beach toward one
-## point, which deletes 「어디에 내리느냐」 — the decision this whole game is.
+## ⚠ **Two more things it knew.** The bound on 「도착했을 때 서로 얼마나 가까운가」 was DERIVED and never
+## guessed: three bodies all inside one enemy's reach are at most twice that reach from each other, by
+## the triangle inequality. And its far target had to be a **LION**: `REACH_BONUS` went 1.5 -> 1.75 and a
+## 20 HP body then died before the third attacker was inside reach, so the loop broke with the
+## measurement never taken — **a target that outlives the arrival is what lets the arrival be measured.**
 ##
-## ⚠ Mutation: `_nearest_enemy(_seek_point_of(i))` back to `_nearest_enemy(soldier_pos[i])` (the floor
-## bites); make `_seek_point_of` ignore the radius and average every wolf (the ceiling bites).
-func _the_wolves_hunt_as_one(t) -> void:
-	var radius := Rules.pack_radius_of(Rules.WOLF)
-	t.ok(radius > 0.0, "늑대에게 무리 반경이 있다")
-	t.eq(radius, 6.0, "그 반경이 6칸이다 (리터럴 — 첫 값이고 잰 값이 아니다)")
-	t.eq(Rules.pack_radius_of(Rules.CROW), 0.0, "까마귀에게는 없다 — 표가 둘을 가른다")
-
-	# -- the FLOOR: two wolves 4 apart, each with its OWN nearer enemy, bite the same one -------------
-	# A(5,5) and B(9,5) are 4.0 apart, so the centre is (7,5).
-	#   P(7,9)  — 4.00 from the centre, 4.47 from each wolf: the PACK's pick
-	#   Q(2,5)  — 3.00 from A, 5.00 from the centre: A's own pick without the rule
-	#   R(12,5) — 3.00 from B, 5.00 from the centre: B's own pick without the rule
-	var pack := _army_of([Rules.WOLF, Rules.WOLF])
-	var pb := _battle_of(_open(ARENA_W, ARENA_H), pack, [
-		_spawn(ARENA_W, Rules.WOLF, 7, 9),
-		_spawn(ARENA_W, Rules.WOLF, 2, 5),
-		_spawn(ARENA_W, Rules.WOLF, 12, 5),
-	])
-	_ashore(pb, 0, Vector2(5, 5))
-	_ashore(pb, 1, Vector2(9, 5))
-	pb.begin_frame()
-	pb.step(TICK_ONE)
-	t.eq(int(pb.soldier_target[0]), 0, "늑대 A 가 무리의 표적을 문다 — 제 최근접이 아니라")
-	t.eq(int(pb.soldier_target[1]), 0, "늑대 B 도 같은 놈을 문다")
-
-	# -- the CEILING: the same three enemies, but the wolves are 12 apart -----------------------------
-	# Outside the radius each wolf's centre is itself, so each takes its own nearest. **Without this
-	# row 「전부 한 놈만 문다」 would pass the floor above.**
-	var apart := _army_of([Rules.WOLF, Rules.WOLF])
-	var ab := _battle_of(_open(ARENA_W, ARENA_H), apart, [
-		_spawn(ARENA_W, Rules.WOLF, 2, 9),
-		_spawn(ARENA_W, Rules.WOLF, 14, 9),
-	])
-	_ashore(ab, 0, Vector2(2, 5))
-	_ashore(ab, 1, Vector2(14, 5))
-	t.ok(ab.soldier_pos[0].distance_to(ab.soldier_pos[1]) > radius,
-		"두 늑대가 반경 밖이다 (자가 점검)")
-	ab.begin_frame()
-	ab.step(TICK_ONE)
-	t.eq(int(ab.soldier_target[0]), 0, "반경 밖 늑대는 제 최근접을 문다")
-	t.eq(int(ab.soldier_target[1]), 1, "다른 쪽도 제 것을 문다 — 둘이 다르다")
-
-	# -- the CONTROL: two crows in the pack arrangement each take their own --------------------------
-	var crows := _army_of([Rules.CROW, Rules.CROW])
-	var cb := _battle_of(_open(ARENA_W, ARENA_H), crows, [
-		_spawn(ARENA_W, Rules.WOLF, 7, 9),
-		_spawn(ARENA_W, Rules.WOLF, 2, 5),
-		_spawn(ARENA_W, Rules.WOLF, 12, 5),
-	])
-	_ashore(cb, 0, Vector2(5, 5))
-	_ashore(cb, 1, Vector2(9, 5))
-	cb.begin_frame()
-	cb.step(TICK_ONE)
-	t.eq(int(cb.soldier_target[0]), 1, "같은 배치의 까마귀 A 는 제 최근접을 문다")
-	t.eq(int(cb.soldier_target[1]), 2, "까마귀 B 도 제 것을 문다 — 무는 점을 나누는 것은 이 종이다")
-
-	# -- the SHAPE, on TWO enemies far apart -------------------------------------------------------
-	# ⚠⚠ **THE OLD FIXTURE HERE MEASURED NOTHING AND THAT WAS MEASURED.** It had ONE enemy, so
-	# `_nearest_enemy` answers the same id from any point at all and three bodies walking at one
-	# target converge whatever the pack rule says: killing the radius to 0.0 left it green, and
-	# pack-on and pack-off produced **the identical decimal**. `tightest > 0.0` was true forever,
-	# since two bodies cannot share a tile.
-	#
-	# ⇒ **Two enemies, placed so a lone hunter SPLITS.** Every soldier stands closer to a different
-	# one than the pack's own centre does, so pack-off sends them to two corners of the island and
-	# pack-on sends all three to one body.
-	#
-	# ⚠ **The bound is DERIVED, not guessed**: three bodies all inside one enemy's reach are, by the
-	# triangle inequality, at most twice that reach from each other.
-	# ⚠⚠ **ENEMY 0 IS A LION AND IT WAS A SHIELDBEARER UNTIL 2026-08-25.** Nothing about the pack claim
-	# moved; the WINDOW to observe it closed. `REACH_BONUS` went 1.5 -> 1.75 (티켓 19: melee could not
-	# hit a diagonal one tier up), so the first wolves to arrive open fire from further out and a
-	# 20 HP shieldbearer **died before the third wolf was inside reach** — the loop below broke on
-	# `enemy_alive[0] == 0` with `together` never set. A target that outlives the arrival is what lets
-	# the arrival be measured; 140 HP does, and the lion's detect of 2.0 is the smallest on the table,
-	# so it also does not walk out from under the measurement. **The claim, the layout and the bound
-	# are untouched.**
-	var three := _army_of([Rules.WOLF, Rules.WOLF, Rules.WOLF])
-	var mb := _battle_of(_open(ARENA_W, ARENA_H), three, [
-		_spawn(ARENA_W, Rules.LION, 2, 2),
-		_spawn(ARENA_W, Rules.WOLF, 21, 10),
-	])
-	_ashore(mb, 0, Vector2(11, 4))
-	_ashore(mb, 1, Vector2(12, 6))
-	_ashore(mb, 2, Vector2(11, 8))
-	t.ok(_max_pair(mb, 3) <= radius, "셋이 서로 무리 반경 안에 있다 (자가 점검)")
-	mb.begin_frame()
-	mb.step(TICK_ONE)
-	t.eq(int(mb.soldier_target[0]), 0, "셋이 무리의 표적을 문다 — A")
-	t.eq(int(mb.soldier_target[1]), 0, "셋이 무리의 표적을 문다 — B")
-	t.eq(int(mb.soldier_target[2]), 0, "셋이 무리의 표적을 문다 — C")
-
-	# ⚠ The CONTROL, in the SAME layout: crows have no pack row, and they demonstrably split.
-	var trio := _army_of([Rules.CROW, Rules.CROW, Rules.CROW])
-	var sp := _battle_of(_open(ARENA_W, ARENA_H), trio, [
-		_spawn(ARENA_W, Rules.WOLF, 2, 2),
-		_spawn(ARENA_W, Rules.WOLF, 21, 10),
-	])
-	_ashore(sp, 0, Vector2(11, 4))
-	_ashore(sp, 1, Vector2(12, 6))
-	_ashore(sp, 2, Vector2(11, 8))
-	sp.begin_frame()
-	sp.step(TICK_ONE)
-	var split := {}
-	for i in 3:
-		split[int(sp.soldier_target[i])] = true
-	t.eq(split.size(), 2, "같은 배치의 까마귀 셋은 두 갈래로 갈린다 — 이 배치가 실제로 가른다 (자가 점검)")
-
-	# And the pack ARRIVES as one body: every wolf inside the SAME enemy's reach at the same moment.
-	var reach := Rules.range_of(Rules.WOLF) + Rules.REACH_BONUS
-	var together := -1.0
-	for _k in 700:
-		mb.begin_frame()
-		mb.step(TICK_ONE)
-		if mb.enemy_alive[0] == 0:
-			break
-		var all_in := true
-		for i in 3:
-			if mb.soldier_pos[i].distance_to(mb.enemy_pos[0]) > reach + Rules.EPS:
-				all_in = false
-				break
-		if all_in:
-			together = _max_pair(mb, 3)
-			break
-	t.ok(together >= 0.0, "셋이 같은 적의 사거리 안에 동시에 들어간다 — 한 덩어리로 도착한다")
-	t.ok(together <= 2.0 * reach + Rules.EPS,
-		"그 순간 셋의 최대 상호 거리가 사거리의 두 배 안이다 (%.2f <= %.2f) — 삼각부등식이 주는 상한이다"
-			% [together, 2.0 * reach])
-
-	# The other end: the crows in the same layout never manage it, because two of them left for the
-	# other corner. **Without this the row above would pass on any three bodies that happen to meet.**
-	var crow_reach := Rules.range_of(Rules.CROW) + Rules.REACH_BONUS
-	var crows_together := false
-	for _k in 700:
-		sp.begin_frame()
-		sp.step(TICK_ONE)
-		if sp.enemy_alive[0] == 0 or sp.enemy_alive[1] == 0:
-			break
-		var all_in := true
-		for i in 3:
-			if sp.soldier_pos[i].distance_to(sp.enemy_pos[0]) > crow_reach + Rules.EPS:
-				all_in = false
-				break
-		if all_in:
-			crows_together = true
-			break
-	t.ok(not crows_together, "까마귀 셋은 한 적 앞에 다 모이지 않는다 — 갈라진 채로 간다")
-
-	# -- the WAY BACK: one wolf alone picks exactly as it did before ----------------------------------
-	var lone := _army_of([Rules.WOLF])
-	var lb := _battle_of(_open(ARENA_W, ARENA_H), lone, [
-		_spawn(ARENA_W, Rules.WOLF, 12, 5),
-		_spawn(ARENA_W, Rules.WOLF, 6, 5),
-	])
-	_ashore(lb, 0, Vector2(3, 5))
-	lb.begin_frame()
-	lb.step(TICK_ONE)
-	t.eq(int(lb.soldier_target[0]), 1, "혼자인 늑대는 무게중심이 제 자리라 예전과 똑같이 고른다")
+## ⇒ **The rule itself, why it was hollow as well as dead, and the reverted cohesion throttle are in
+## `rules.gd` where `SPECIES_PACK` stood.** Do not rebuild this row from this comment alone.
 
 
-## The largest distance between any two of the first `n` ashore soldiers.
-func _max_pair(b: Battle, n: int) -> float:
-	var worst := 0.0
-	for i in n:
-		for j in range(i + 1, n):
-			worst = maxf(worst, b.soldier_pos[i].distance_to(b.soldier_pos[j]))
-	return worst
-
-
-# -- 티켓 15: 까마귀 — 출혈 ---------------------------------------------------------------------------
-## ⚠⚠ **EVERY ROW HERE RUNS ON A BOARD WITH NOTHING FITTED, AND THAT IS THE ROW.** The 출혈 tag needs
-## three copies of a bleed item before its tier lights, so on an empty board `_apply_statuses`' old
-## path cannot turn bleed on at all — which makes 「the SPECIES is the source」 provable by itself
-## rather than by argument.
+# -- 티켓 11: the bleed CEILING — a lit tier stops when its own duration runs out ----------------------
+## ⚠⚠ **THIS ROW WAS 「까마귀는 장비 없이도 문다」 AND ITS SUBJECT IS DELETED** (2026-08-27,
+## `Rules.SPECIES_STATUS`). The crow's innate bleed was looked up against the PLAYER's roster and the
+## crow has been an ENEMY since 2026-08-26, so the source it measured answered `{}` on every blow.
+## **What it also measured is alive and had no other home**, which is why this is a rewrite and not a
+## deletion: `_bleed_drips_after_the_blow` runs 30 sub-steps of a 2-second tier and therefore never
+## reaches the end of one. ⇒ **The ceiling — 「표의 지속 시간이 지나면 멎는다」 — lives here**, driven off
+## the equipment tag instead of the species row.
 ##
-## ⚠ Mutation: drop the species walk from `_apply_statuses`; give the bear a `SPECIES_STATUS` row (the
-## control bites).
-func _the_crow_bleeds_with_no_equipment(t) -> void:
+## ⚠⚠ **THE ENEMY IS PARKED FAR AWAY RATHER THAN THE SOLDIER BEING PULLED OFF THE ISLAND, AND THAT WAS
+## MEASURED.** Sending the biter back to RESERVE ends the island on the spot
+## (`_the_landing_force_is_gone`), `step` returns before `_phase_status`, and **the bleed clock then
+## FREEZES instead of expiring** — the ceiling read 1.97 of its 2.00 seconds with the whole fixture
+## looking correct.
+##
+## ⚠ **The geometry is load-bearing and is the crow's, deliberately.** 19 tiles of parked distance
+## against a 4.0-speed body is what keeps the biter out of its own 5.75 reach for the whole measured
+## window; the closing self-check at the bottom is what proves it rather than assuming it.
+##
+## ⚠ Mutation: drop the ageing line in `_phase_status`; clamp `tag_status_tier_at`'s `sec` to a large
+## number (both ends bite).
+func _the_bleed_stops_when_its_tier_runs_out(t) -> void:
 	var army := _army_of([Rules.CROW])
-	t.eq(army.loadout.tag_count(Rules.Tag.BLEED), 0, "판에 출혈 딱지가 하나도 없다 (자가 점검)")
+	_worn(army, ITEM_BLEED, 3, Rules.SWORDSMAN)
+	var lit := Rules.tag_status_tier_at(_bleed_row(), 3)
+	t.ok(not lit.is_empty(), "출혈 딱지 셋이면 1층이 켜진다 (자가 점검)")
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army,
 		[_spawn(ARENA_W, Rules.WOLF, 6, 5)])
 	_ashore(b, 0, Vector2(3, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
-	t.ok(b.enemy_hp[0] < Rules.hp_of(Rules.WOLF), "까마귀가 실제로 때렸다 (자가 점검)")
-	t.ok(b.status_left(Rules.Status.BLEED, 0) > 0.0,
-		"딱지 하나 없이도 까마귀가 때린 적에게 출혈이 걸린다 — 출처는 장비가 아니라 종이다")
+	t.ok(b.enemy_hp[0] < Rules.hp_of(Rules.WOLF), "실제로 때렸다 (자가 점검)")
+	t.ok(b.status_left(Rules.Status.BLEED, 0) > 0.0, "맞은 적에게 출혈이 걸렸다 (자가 점검)")
 
-	# ⚠⚠ **The enemy is PARKED far away rather than the soldier being pulled off the island.** Sending
-	# the crow back to RESERVE ends the island on the spot (`_the_landing_force_is_gone`), `step`
-	# returns before `_phase_status`, and the bleed clock then freezes instead of expiring — measured:
-	# the ceiling below read 1.97 of its 2.00 seconds with the whole fixture looking correct.
 	var parked := Vector2(ARENA_W - 2, 5)
 	b.enemy_pos[0] = parked
 	b._enemy_goal[0] = parked
@@ -378,35 +210,23 @@ func _the_crow_bleeds_with_no_equipment(t) -> void:
 	t.ok(b.enemy_hp[0] < hp_before,
 		"손이 떨어진 뒤에도 피가 계속 흐른다 (%.3f -> %.3f) — 바닥" % [hp_before, b.enemy_hp[0]])
 
-	# The CEILING: it stops when the table's own duration runs out, and never before.
-	var secs: float = float(Rules.species_status_of(Rules.CROW).get("sec", 0.0))
-	t.ok(secs > 0.0, "표가 지속 시간을 갖고 있다 (자가 점검)")
+	# The CEILING: it stops when the lit tier's own duration runs out, and never before.
+	var secs: float = float(lit["sec"])
+	t.ok(secs > 0.0, "켜진 층이 지속 시간을 갖고 있다 (자가 점검)")
 	var settle := int(ceil(float(secs) / Rules.SIM_SUBSTEP_SEC)) + 4
 	for _k in settle:
 		b.begin_frame()
 		b.step(TICK_ONE)
-	t.eq(b.status_left(Rules.Status.BLEED, 0), 0.0, "표의 지속 시간이 지나면 멎는다 — 천장")
+	t.eq(b.status_left(Rules.Status.BLEED, 0), 0.0, "켜진 층의 지속 시간이 지나면 멎는다 — 천장")
 	var hp_stopped := b.enemy_hp[0]
 	for _k in 30:
 		b.begin_frame()
 		b.step(TICK_ONE)
 	t.eq(b.enemy_hp[0], hp_stopped, "그리고 그 뒤로는 한 방울도 안 흐른다")
-	# The fixture's own floor: the crow never got back into reach, so nothing above was re-applied.
+	# The fixture's own floor: the biter never got back into reach, so nothing above was re-applied.
 	t.ok(b.soldier_pos[0].distance_to(b.enemy_pos[0])
 			> Rules.range_of(Rules.CROW) + Rules.REACH_BONUS,
-		"그동안 까마귀는 사거리 밖에 머물렀다 — 재적용이 아니라 만료다 (자가 점검)")
-
-	# The CONTROL: the bear hits just as hard on the same empty board and leaves nothing behind.
-	var bear := _army_of([Rules.BEAR])
-	var bb := _battle_of(_open(ARENA_W, ARENA_H), bear,
-		[_spawn(ARENA_W, Rules.WOLF, 12, 5)])
-	_ashore(bb, 0, Vector2(11, 5))
-	bb.begin_frame()
-	bb.step(TICK_ONE)
-	t.ok(bb.enemy_hp[0] < Rules.hp_of(Rules.WOLF), "곰도 실제로 때렸다 (자가 점검)")
-	t.eq(bb.status_left(Rules.Status.BLEED, 0), 0.0,
-		"그런데 곰이 때린 적에게는 출혈이 안 걸린다 — 무는 것은 이 종이지 아무 타격이나가 아니다")
-	t.ok(Rules.species_status_of(Rules.BEAR).is_empty(), "표에 곰 줄이 없다")
+		"그동안 무는 쪽은 사거리 밖에 머물렀다 — 재적용이 아니라 만료다 (자가 점검)")
 # -- 티켓 15: 곰 — 휘두르기 ---------------------------------------------------------------------------
 ## **The bear's whole passive is one number in `UNITS`' `area` column** — `_phase_attacks` already
 ## hands `Rules.area_of(st)` to `_hit_enemies`, and `_hit_enemies` already walks a radius. `battle.gd`
@@ -614,11 +434,14 @@ func _area_splash(t) -> void:
 	var full := Rules.hp_of(Rules.WOLF)
 	var splash := full - Rules.damage_of(Rules.CROW)
 	t.eq(b.soldier_target[0], 0, "광역 공격의 주 표적은 최근접이다")
-	# ⚠ **A `<=` and not an equality since 티켓 15**: 까마귀's own bleed rides its blow and
-	# `_phase_status` takes its first sip in the SAME sub-step, so the exact figure carries a tick of
-	# drip on top. The claim is about the BLOW landing; the drip is `_the_crow_bleeds_with_no_equipment`'s.
-	t.ok(b.enemy_hp[0] <= splash + Rules.EPS, "주 표적이 맞았다")
-	t.ok(b.enemy_hp[1] <= splash + Rules.EPS, "반경 1.0 — 직교 1.0 칸의 형제도 맞았다")
+	# ⚠⚠ **AN EQUALITY AGAIN SINCE 2026-08-27, AND THE LOOSENING IS WORTH REMEMBERING.** This read
+	# `t.ok(hp <= expected + EPS)` for two days: 까마귀 carried an innate bleed (`Rules.SPECIES_STATUS`)
+	# that rode its own blow, and `_phase_status` took its first sip inside the SAME sub-step — so the
+	# exact figure carried a tick of drip on top. **That table is deleted and the drip with it**, so the
+	# blow is once more the only thing that touches this number. ⇒ **A bound loosened to admit a second
+	# effect is tightened back the day that effect goes**, or the row quietly stops pinning the blow.
+	t.eq(b.enemy_hp[0], splash, "주 표적이 타격 몰만큼 정확히 깎였다")
+	t.eq(b.enemy_hp[1], splash, "반경 1.0 — 직교 1.0 칸의 형제도 같은 몴만큼 맞았다")
 	t.eq(b.enemy_hp[2], full, "반경 1.0 — 대각 1.41421 칸의 형제는 안 맞았다")
 
 	# area 1.5 (the lion): now the diagonal sibling burns too.
@@ -667,13 +490,15 @@ func _no_friendly_fire(t) -> void:
 	_ashore(b, 1, Vector2(13, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
-	# ⚠ **A `<=` and not an equality since 티켓 15**: 까마귀's own bleed rides its blow and
-	# `_phase_status` takes its first sip in the SAME sub-step, so the exact figure carries a tick of
-	# drip on top. The claim is about the BLOW landing; the drip is `_the_crow_bleeds_with_no_equipment`'s.
-	t.ok(b.enemy_hp[0]
-			<= Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.CROW)
-				- Rules.damage_of(Rules.WOLF) + Rules.EPS,
-			"원거리와 근접이 둘 다 방패병을 때렸다 — 광역이 실제로 터졌다")
+	# ⚠⚠ **AN EQUALITY AGAIN SINCE 2026-08-27, AND THE LOOSENING IS WORTH REMEMBERING.** This read
+	# `t.ok(hp <= expected + EPS)` for two days: 까마귀 carried an innate bleed (`Rules.SPECIES_STATUS`)
+	# that rode its own blow, and `_phase_status` took its first sip inside the SAME sub-step — so the
+	# exact figure carried a tick of drip on top. **That table is deleted and the drip with it**, so the
+	# blow is once more the only thing that touches this number. ⇒ **A bound loosened to admit a second
+	# effect is tightened back the day that effect goes**, or the row quietly stops pinning the blow.
+	t.eq(b.enemy_hp[0],
+			Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.CROW) - Rules.damage_of(Rules.WOLF),
+			"원거리와 근접의 몴이 정확히 둘 다 들어갔다 — 광역이 실제로 터졌다")
 	t.eq(army.hp[1], Rules.hp_of(Rules.WOLF) - Rules.damage_of(Rules.WOLF),
 			"아군 오사 없음 — 광역 반경 안에 선 아군은 들소 몫만 잃었다")
 	t.eq(army.hp[0], Rules.hp_of(Rules.CROW), "쏜 병사 자신도 안 다쳤다")
@@ -721,16 +546,32 @@ func _death_is_permanent(t) -> void:
 	t.eq(army.living_count(), 1, "살아 있는 병사는 한 명이다")
 
 	# The next island is left in the PLANNING state on purpose: 「a dead soldier never boards again」 is
-	# a `send` refusal now, and `send` is the only call that can be asked it. It is also `_port()` and
-	# not `_lane()`, because `_lane()` has no harbour and `send` would refuse both soldiers for a
-	# reason that has nothing to do with death — a check that passes for the wrong reason.
+	# a refusal only the boarding call can be asked, and **that call is `summon` now.**
+	#
+	# ⚠⚠ **`send` NAMED A BODY AND `summon` NAMES A SLOT, so the question moved and the row moved with
+	# it.** The old pair read `send(1, ...) >= 0` and `send(0, ...) == -1`: the caller chose which
+	# soldier boarded, and the refusal was aimed at the dead one by id. Nothing chooses by id any more —
+	# a press draws from the LIVING half of the slot (`Battle.slot_reserve_ids` ->
+	# `Army.living_ids_of_slot`), so the same rule is measured as **what the slot can still supply**:
+	# a roster of two rows of one species, one of them dead, fills exactly ONE boat and refuses the
+	# second. The dead row sits in the roster the whole time and never reaches the water.
+	#
+	# ⚠ It is `_port()` and not `_lane()`, and that reason survived the harbour deletion with a new
+	# subject. It used to be 「`_lane()` has no harbour」; it is now 「`_lane()` is a one-tile channel,
+	# so no water in it is `Rules.SUMMON_BAND_MIN_TILES` hops off the shore」 — every press there is
+	# refused for a reason that has nothing to do with death, which is a check passing for the wrong
+	# reason either way.
 	var next_island := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 18, 9)])
-	var next_landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
+	var sea := _summonable_water_on(next_island)
+	# The fixture's own floor, and it is stated HERE because this is the first row in `run()` that
+	# summons: a bay holding no water inside the band would redden every summon row in this file at
+	# once, and this is the one line that says which of the two things went wrong.
+	t.ok(sea >= 0, "픽스처의 만 안에 소환 가능한 물칸이 있다 (자가 점검)")
 	t.eq(next_island.soldier_state[0], Battle.SoldierState.DEAD, "다음 섬에서도 예비가 아니라 DEAD 로 선다")
-	t.ok(next_island.send(1, next_landing) >= 0, "살아남은 병사는 보낼 수 있다")
+	t.ok(next_island.summon(0, sea) >= 0, "살아남은 병사는 불러낼 수 있다")
 	var aboard: Array = (next_island.boats[0] as Dictionary)["soldiers"]
-	t.eq(int(aboard[0]), 1, "배에 탄 것은 살아남은 1번이다")
-	t.eq(next_island.send(0, next_landing), -1, "죽은 병사는 다시 못 보낸다")
+	t.eq(int(aboard[0]), 1, "배에 탄 것은 살아남은 1번이다 — 죽은 0번이 아니다")
+	t.eq(next_island.summon(0, sea), -1, "그 칸에 살아 있는 예비가 없으면 두 번째 소환은 거절이다 — 죽은 줄은 칸을 채워 주지 않는다")
 	t.eq(next_island.boats.size(), 1, "그 거절은 배를 한 척도 안 늘렸다")
 
 
@@ -742,30 +583,51 @@ func _phase_order(t) -> void:
 	# boats BEFORE landings: a crossing that completes this frame unloads this frame, not next.
 	var ferry_army := _army_of([Rules.WOLF])
 	var ferry := _planning_battle_of(_port(), ferry_army, [_spawn(ARENA_W, Rules.LION, 20, 9)])
-	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
-	t.ok(ferry.send(0, landing) >= 0, "부두 없는 항구에서도 배가 뜬다")
+	# ⚠⚠ **ONE ASSERTION WAS DELETED HERE, 2026-08-27, AND IT IS THE ONLY ONE IN THIS FILE WHOSE
+	# SUBJECT WAS THE HARBOUR ITSELF.** It read 「부두 없는 항구에서도 배가 뜬다」 — a `send` onto a beach
+	# whose origin harbour `grid.home_harbour_for` derived, on a `_port()` whose single `H` tile has no
+	# dock tile beside it. **`send`, `home_harbour_for` and the dock table are all deleted**, and a
+	# summon has no harbour at all to be dockless with: the press is on open water inside the band and
+	# the landing is derived from the press. ⇒ **There is nothing left for that sentence to be about.**
+	# What it knew and what outlives it: **a departure must not need a second tile's blessing**, which
+	# `summon` now satisfies by construction rather than by measurement here — `net_summon` owns the
+	# grid with zero harbour tiles that says so, and that is where a reader should go looking.
+	var sea := _summonable_water_on(ferry)
+	t.ok(ferry.summon(0, sea) >= 0, "만 안쪽 물칸을 눌러 배 한 척을 띄웠다 (자가 점검)")
 	t.ok(ferry.commit(), "그리고 시작 버튼이 그 배를 실제로 출발시킨다 (자가 점검)")
 	# ⚠ **Driven one sub-step at a time, never as one coarse `step(dist / speed)`.** A coarse call
 	# stops a sub-step short: `_substep_acc` subtracts the sub-step repeatedly and the last residue
 	# lands a hair under it in IEEE double, so this row would read as "it did not unload" when what it
 	# measured was floating point.
 	#
-	# ⚠⚠ **RE-MEASURED TWICE.** `speed-off-open-landing` moved it off 4.0: `_port()`'s bay is open
-	# water, but `water_route` descends a HOP-COUNT field where a diagonal and an orthogonal step both
-	# cost 1, so it picked four diagonals — `4 x sqrt(2) = 5.656854` tiles, arriving on sub-step 85.
-	# The route SMOOTHER then string-pulled that V out: the route is `(2,5) (5,4) (6,5)` and the
-	# crossing is `sqrt(10) + sqrt(2) = 4.576491` tiles = `68.647` sub-steps, arrival on **69**.
-	# ⚠ It is still not the 4.0 straight line, and that is `_entry_water_tile` choosing (5,4) over
-	# (5,5) as the tile to beach from — a one-tile dogleg at the very end, not a smoothing failure.
-	# The literal moved twice; it did not become a formula.
-	t.ok(absf(float(ferry.boats[0]["dist"]) - 4.576491) <= 1e-5,
-			"이 항로는 정확히 sqrt(10) + sqrt(2) = 4.576491칸이다 (자가 점검)")
-	t.ok(absf(float(ferry.boats[0]["dist"]) / float(ferry.boats[0]["speed"]) * 60.0 - 68.647) <= 0.01,
-			"곧 68.647 서브스텝이다 — 도착은 그 다음 서브스텝인 69에 걸린다 (자가 점검)")
-	for _i in 68:
+	# ⚠⚠ **RE-MEASURED A THIRD TIME, 2026-08-27, AND THE ARRIVAL SUB-STEP IS NO LONGER A LITERAL.**
+	# The two earlier figures were the harbour route's: `4 x sqrt(2) = 5.656854` off the raw hop-count
+	# field, then `sqrt(10) + sqrt(2) = 4.576491` once the smoother string-pulled it, arriving on 69.
+	# **Both were `grid.water_route`'s, which is deleted**, and the summon route is a different walk:
+	# it descends `summon_hops` from the pressed tile `(2,5)` rather than climbing to a harbour, the
+	# smoother pulls `(2,5) (1,4) (0,3)` straight, and `summon_landing_of` beaches it at `(1,2)` — so
+	# the crossing is `2 x sqrt(2) + sqrt(2) = 3 x sqrt(2) = 4.242641` tiles, `63.640` sub-steps,
+	# arrival on **64**.
+	#
+	# ⚠⚠ **THE LITERAL AND THE SEAM ARE NOW TWO SEPARATE ASSERTIONS, ON PURPOSE.** The route moved
+	# three times in five days and each move silently invalidated the loop count below it — a row that
+	# reddens on the count alone cannot tell 「the route changed」 from 「the phase order broke」, which
+	# are opposite verdicts. So the literal is a SELF-CHECK that names the route, and the arrival
+	# sub-step is DERIVED from the boat's own `dist` and `speed` against `_arrived`'s own test
+	# (`t * speed + EPS >= dist`). ⚠ The derivation is not a restatement of the phase order: swap
+	# `_phase_landings` in front of `_phase_boats` and the unload slips to the sub-step AFTER this one,
+	# which is exactly what the pair below refuses.
+	var dist: float = float(ferry.boats[0]["dist"])
+	var per_substep: float = float(ferry.boats[0]["speed"]) * Rules.SIM_SUBSTEP_SEC
+	t.ok(absf(dist - 4.242641) <= 1e-5,
+			"이 항로는 정확히 3 x sqrt(2) = 4.242641칸이다 (자가 점검 — 소환 항로가 움직이면 여기가 먼저 빨개진다)")
+	var arrive := int(ceil((dist - Rules.EPS) / per_substep))
+	t.eq(arrive, 64, "곧 64번째 서브스텝에 닿는다 (자가 점검 — 63.640 서브스텝짜리 항해다)")
+	for _i in arrive - 1:
 		ferry.begin_frame()
 		ferry.step(TICK_ONE)
-	t.eq(ferry.soldier_state[0], Battle.SoldierState.TRANSIT, "68 서브스텝에는 아직 배 위다 (자가 점검)")
+	t.eq(ferry.soldier_state[0], Battle.SoldierState.TRANSIT,
+			"닿기 한 서브스텝 전에는 아직 배 위다 (자가 점검)")
 	ferry.begin_frame()
 	ferry.step(TICK_ONE)
 	t.eq(ferry.soldier_state[0], Battle.SoldierState.ASHORE,
@@ -827,9 +689,13 @@ func _phase_order(t) -> void:
 ## ***"실패조건은 시작하기하고 못깨면 이지 제한시간을 계속 기다리고 있길래"***.
 ##
 ## `_phase_clock` lost on `army.living_count() == 0`, and `living_count` counts every soldier that is
-## not dead — **reserves at the harbour included.** After the commit `send` refuses everything, so a
-## reserve can never be landed: hold anyone back, lose everyone you sent, and the run is decided and
-## cannot end. The old test could not fire at all.
+## not dead — **every unsummoned reserve included.** After the commit the boarding call refuses
+## everything, so a reserve can never be landed: hold anyone back, lose everyone you put ashore, and
+## the run is decided and cannot end. The old test could not fire at all.
+## ⚠ **That sentence used to say 「reserves at the harbour」 and there is no harbour** (2026-08-27):
+## a reserve now stands nowhere at all — `setup` parks it at `OFFMAP` — until a press on the water
+## draws it out of its slot. The RULE is untouched; only where the held-back body is imagined to be
+## standing has gone.
 ##
 ## ⚠ **The margin is the whole check.** `elapsed <= time_limit` was also true of the behaviour being
 ## fixed — that is `how-nets-lie`'s *a ceiling with no floor* exactly — so this asserted the GAP to a
@@ -837,21 +703,26 @@ func _phase_order(t) -> void:
 ## ⚠⚠ **THE LIMIT WAS DELETED 2026-08-27 AND THE FLOOR IS WHAT SURVIVED IT.** With no clock to run
 ## out, the gap has nothing to be a gap FROM; what still says the island ended early is the pair of
 ## bounds below — the fight really ran (`elapsed > 0`) and it was over inside two seconds against a
-## crossing of about 1.2. **The ceiling went, the floor stayed**, which is the right half to keep.
+## crossing of about 1.06 (**it was 1.14 under the deleted harbour route**, and the two-second ceiling
+## was chosen wide enough that the change did not move it). **The ceiling went, the floor stayed**,
+## which is the right half to keep.
 ##
 ## ⚠ **And `living_count() == 2` is the floor under it.** Two soldiers are still alive when the island
 ## is lost. Restore the old condition and that is the line that cannot be satisfied.
 func _reserves_do_not_hold_the_run_open(t) -> void:
 	var army := _army_of([Rules.WOLF, Rules.WOLF, Rules.WOLF])
 	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)])
-	var landing := _tile_key(_PORT_LANDING, ARENA_W)
-	t.ok(b.send(0, landing) >= 0, "셋 중 한 명만 보냈다 (자가 점검)")
+	var sea := _summonable_water_on(b)
+	t.ok(b.summon(0, sea) >= 0, "셋 중 한 명만 불러냈다 (자가 점검)")
 	t.ok(b.commit(), "그리고 시작을 눌렀다 (자가 점검)")
-	t.eq(b.soldier_state[1], Battle.SoldierState.RESERVE, "1번은 항구에 남았다 (자가 점검)")
+	# ⚠ **Which of the three boards is `slot_reserve_ids`' choice and not this fixture's** — the slot's
+	# living reserves, lowest HP first and ties to the lower id, so three untouched wolves hand over 0.
+	# The two rows below are what say so; nothing here names a body.
+	t.eq(b.soldier_state[1], Battle.SoldierState.RESERVE, "1번은 예비로 남았다 (자가 점검)")
 	t.eq(b.soldier_state[2], Battle.SoldierState.RESERVE, "2번도 남았다 (자가 점검)")
 	# The premise, asserted rather than assumed: a reserve can never join the fight after the commit,
 	# which is what makes holding one back a decision that is already over.
-	t.eq(b.send(1, landing), -1, "확정 뒤에는 남은 병사를 못 내린다 — 이 검사의 전제다")
+	t.eq(b.summon(0, sea), -1, "확정 뒤에는 남은 병사를 못 불러낸다 — 이 검사의 전제다")
 
 	var n := 0
 	while n < 400 and b.soldier_state[0] != Battle.SoldierState.ASHORE:
@@ -870,14 +741,14 @@ func _reserves_do_not_hold_the_run_open(t) -> void:
 
 	t.eq(b.outcome(), Battle.Outcome.LOST, "상륙한 병사가 다 죽으면 그 자리에서 진다")
 	t.eq(b.lose_reason(), Battle.Lose.LANDING_LOST,
-		"패인은 전멸이 아니라 상륙 실패다 — 항구에 산 병사가 남아 있다")
+		"패인은 전멸이 아니라 상륙 실패다 — 아직 안 불러낸 산 병사가 남아 있다")
 	t.ok(b.enemies_left() > 0, "적은 아직 남아 있다 — 승리와 헷갈릴 여지가 없다 (%d마리)" % b.enemies_left())
 	# ⚠⚠ **THE LINE THE OLD RULE CANNOT PASS.**
-	t.eq(army.living_count(), 2, "그런데 병사는 아직 둘이 살아 있다 — 항구에 선 예비 병력이다")
+	t.eq(army.living_count(), 2, "그런데 병사는 아직 둘이 살아 있다 — 한 번도 안 불러낸 예비 병력이다")
 	# The margin. Both ends: the fight really ran, and it ended nowhere near the clock.
 	t.ok(b.elapsed > 0.0, "시계는 실제로 돌았다 (%.4f초)" % b.elapsed)
 	t.ok(b.elapsed < 2.0,
-		"그런데 2초도 안 걸렸다 (%.4f초) — 건너는 데 약 1.2초다. 기다릴 것이 없어졌으면 기다리지 않는다"
+		"그런데 2초도 안 걸렸다 (%.4f초) — 건너는 데 약 1.06초다. 기다릴 것이 없어졌으면 기다리지 않는다"
 			% b.elapsed)
 
 
@@ -888,11 +759,17 @@ func _reserves_do_not_hold_the_run_open(t) -> void:
 func _a_soldier_at_sea_does_hold_it_open(t) -> void:
 	var army := _army_of([Rules.WOLF, Rules.WOLF, Rules.WOLF])
 	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)])
-	var landing := _tile_key(_PORT_LANDING, ARENA_W)
-	t.ok(b.send(0, landing) >= 0 and b.send(1, landing) >= 0, "둘을 보냈다 (자가 점검)")
-	t.ok(b.commit(), "2번은 항구에 남긴 채 시작했다 (자가 점검)")
+	var sea := _summonable_water_on(b)
+	# ⚠ **Two presses on the SAME water tile, and each is its own statement.** They were one `and`ed
+	# line under `send`; a short-circuit there would have hidden a refused second boat behind a true
+	# first, and with `summon` the second press is the interesting one — it must draw the NEXT living
+	# reserve of the slot rather than the body already aboard.
+	t.ok(b.summon(0, sea) >= 0, "한 명을 불러냈다 (자가 점검)")
+	t.ok(b.summon(0, sea) >= 0, "같은 물칸에서 한 명 더 불러냈다 (자가 점검)")
+	t.eq(b.boats.size(), 2, "배가 두 척 떴다 — 둘째 소환이 첫째를 덮어쓰지 않았다 (자가 점검)")
+	t.ok(b.commit(), "2번은 예비로 남긴 채 시작했다 (자가 점검)")
 
-	# Five sub-steps in, both are still at sea — the crossing is about seventy.
+	# Five sub-steps in, both are still at sea — the crossing is sixty-four of them.
 	for _f in 5:
 		b.begin_frame()
 		b.step(TICK_ONE)
@@ -921,10 +798,10 @@ func _a_soldier_at_sea_does_hold_it_open(t) -> void:
 	b.step(TICK_ONE)
 	t.eq(b.outcome(), Battle.Outcome.LOST, "그 마지막 한 명까지 죽고 나서야 진다")
 	t.eq(b.lose_reason(), Battle.Lose.LANDING_LOST, "패인은 상륙 실패다 — 2번이 아직 살아 있다")
-	t.eq(army.living_count(), 1, "항구의 2번은 그때도 살아 있다")
+	t.eq(army.living_count(), 1, "한 번도 안 불러낸 2번은 그때도 살아 있다")
 
 
-## ⚠⚠ **BOTH LOSS REASONS ARE TRUE AT ONCE HERE, AND THE PRECEDENCE IS THE CHECK.** Send everybody,
+## ⚠⚠ **BOTH LOSS REASONS ARE TRUE AT ONCE HERE, AND THE PRECEDENCE IS THE CHECK.** Summon everybody,
 ## kill everybody: the landing force is gone AND every soldier is dead. `WIPED` wins, because "every
 ## soldier is dead" is the stronger claim and the more useful one to read. **An unstated precedence is
 ## what diverges later** — a reader of `_phase_clock` who reordered the two would break nothing that
@@ -936,8 +813,12 @@ func _a_soldier_at_sea_does_hold_it_open(t) -> void:
 func _wiped_wins_when_both_are_true(t) -> void:
 	var army := _army_of([Rules.WOLF, Rules.WOLF])
 	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)])
-	var landing := _tile_key(_PORT_LANDING, ARENA_W)
-	t.ok(b.send(0, landing) >= 0 and b.send(1, landing) >= 0, "둘 다 보냈다 — 항구에 아무도 안 남는다 (자가 점검)")
+	var sea := _summonable_water_on(b)
+	t.ok(b.summon(0, sea) >= 0, "한 명을 불러냈다 (자가 점검)")
+	t.ok(b.summon(0, sea) >= 0, "둘 다 불러냈다 — 예비에 아무도 안 남는다 (자가 점검)")
+	# The floor under 「nobody is left behind」: with the slot emptied a third press must be refused,
+	# and without this line the row is also satisfied by a slot that only ever handed over one body.
+	t.eq(b.summon(0, sea), -1, "그리고 세 번째 소환은 거절이다 — 칸이 실제로 비었다 (자가 점검)")
 	t.ok(b.commit(), "그리고 시작을 눌렀다 (자가 점검)")
 	for _f in 5:
 		b.begin_frame()
@@ -989,29 +870,49 @@ func _the_gate_itself(t) -> void:
 ## The bison below has BOTH a boat (nearer, moving) and a real ashore soldier (farther, at a NAMED
 ## tile) inside its detect radius at once. Under the correct rule it can only ever see the ashore
 ## soldier and walks toward THAT tile. Under the mutation the boat is nearer than the ashore soldier
-## from the very first frame (measured: ~4.8 tiles against the ashore soldier's constant 5.0), so the
-## bison targets it instead, asks `flow_field` for a path to water, and freezes at its start tile for
-## the whole window — two different, checkable outcomes, not the same one twice.
+## for the whole window, so the bison targets it instead, asks `flow_field` for a path to water, and
+## freezes at its start tile — two different, checkable outcomes, not the same one twice.
+##
+## ⚠⚠ **THE WHOLE ARRANGEMENT WAS RE-MEASURED 2026-08-27, BECAUSE THE CROSSING MOVED.** `send` sailed
+## from the `H` tile at (2,5) EAST to the beach at (6,5), straight across the middle of the map, and
+## the bison stood at (7,4) reading ~4.8 tiles to the boat against the ashore soldier's constant 5.0.
+## **`summon` sails the other way**: the press lands on (2,5) — the only band tile this bay holds with
+## a lower index than (3,5) — and `summon_landing_of` beaches it at (1,2), so the boat runs NORTH-WEST
+## into the corner and away from (7,4) entirely. At (7,4) the boat ends the window 8.8 tiles off, past
+## the bison's detect 6 and FARTHER than the ashore soldier — **the mutation would have stopped biting
+## while every assertion below stayed green.** ⇒ **The bison moved to (2,8)**, under the corner the
+## boat now sails into.
+##
+## ⚠ **The two distances, measured on the new route** (boat speed 4.0, so 0.3 s is 1.2 tiles along
+## `(2,5) -> (0,3)`): the bison reads **3.00 tiles to the boat at the first sub-step and 3.94 at the
+## last**, against **5.10 tiles to the ashore soldier**, which does not move. Both are inside its
+## detect 6, and the boat is the nearer of the two at every sub-step of the window — which is the one
+## property the mutation needs in order to bite.
 ##
 ## ⚠ **The ashore soldier is RANGED, not melee, and that is load-bearing.** A melee ashore soldier
 ## advances on ITS OWN nearest enemy — this bison — independent of anything under test here, which
 ## moves the "static, named tile" the assertions below are built on and corrupted an earlier draft of
 ## this fixture (measured: a melee stand-in closed enough distance in 0.3s to occasionally overtake the
 ## boat as nearest even under the CORRECT rule, and the check passed by accident). Placed within its
-## own 5.5-tile reach of the bison, a ranged soldier stops and shoots instead of walking, so it never
-## moves at all — the fixed point the rest of this test needs.
+## own 5.75-tile reach of the bison, a ranged soldier stops and shoots instead of walking, so it never
+## moves at all. ⚠⚠ **That fixed point is now ASSERTED and not assumed** — the row below reads the
+## ashore soldier's position back, because every distance in this function is measured from it and a
+## silent drift would leave the whole arrangement looking correct.
 func _in_transit_is_hit_but_cannot_hit(t) -> void:
 	var army := _army_of([Rules.CROW, Rules.CROW])
 	var b := _planning_battle_of(_port(), army, [
-		_spawn(ARENA_W, Rules.CROW, 3, 2),    # ~3.0 tiles from the boat 0.3s into a 1.33s crossing
-		_spawn(ARENA_W, Rules.WOLF, 7, 4),   # sees BOTH the boat and the ashore soldier below
+		_spawn(ARENA_W, Rules.CROW, 3, 2),   # 3.16 tiles from the boat at the press, inside its 5.75
+		_spawn(ARENA_W, Rules.WOLF, 2, 8),   # sees BOTH the boat and the ashore soldier below
 	])
-	var ashore_target := Vector2(7, 9)   # 5.0 tiles from the bison, inside its detect 6 and the
-	                                      # ranged soldier's own 5.5-tile reach of the bison — it stops
+	var ashore_target := Vector2(7, 9)   # 5.10 tiles from the bison, inside its detect 6 and inside
+	                                      # the ranged soldier's own 5.75 reach of it — so it stops
 	_ashore(b, 1, ashore_target)
 	var bison_start: Vector2 = b.enemy_pos[1]
-	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
-	b.send(0, landing)
+	# ⚠ **The ashore soldier is placed BEFORE the press, and the order is load-bearing.** `summon`
+	# draws from `slot_reserve_ids`, which is the slot's RESERVE bodies — soldier 1 is already ashore
+	# by this line, so the one who boards is soldier 0 without this fixture naming him.
+	var sea := _summonable_water_on(b)
+	b.summon(0, sea)
 	b.commit()
 	for _f in 3:
 		b.begin_frame()
@@ -1021,11 +922,13 @@ func _in_transit_is_hit_but_cannot_hit(t) -> void:
 	t.eq(army.hp[0], Rules.hp_of(Rules.CROW) - Rules.damage_of(Rules.CROW),
 			"까마귀가 배 위의 병사를 실제로 쐈다")
 	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.CROW), "배 위의 병사는 사거리 안이어도 못 때린다")
+	t.eq(b.soldier_pos[1], ashore_target,
+			"상륙해 있는 병사는 한 발짝도 안 움직였다 — 아래 거리들이 재는 기준점이다 (자가 점검)")
 	t.ok(b.enemy_pos[1].distance_to(bison_start) > 0.1,
 			"그리고 들소는 실제로 움직였다 (%.2f칸) — 배를 쫓다 얼어붙은 게 아니라는 증거다"
 			% b.enemy_pos[1].distance_to(bison_start))
 	t.ok(b.enemy_pos[1].distance_to(ashore_target) < ashore_target.distance_to(bison_start) - 0.3,
-			"움직인 방향이 상륙한 병사 쪽이다 (남은 거리 %.2f칸, 시작 5.00칸) — 배 쪽으로 얼어붙지 않고 이름 붙은 그 칸을 향해 실제로 걸었다는 뜻이다"
+			"움직인 방향이 상륙한 병사 쪽이다 (남은 거리 %.2f칸, 시작 5.10칸) — 배 쪽으로 얼어붙지 않고 이름 붙은 그 칸을 향해 실제로 걸었다는 뜻이다"
 			% b.enemy_pos[1].distance_to(ashore_target))
 
 
@@ -1128,14 +1031,15 @@ func _bleed_death_passes_the_same_substep(t) -> void:
 ## 1.0 area, and the sibling bleeds like the primary. Mutation: delete the splash loop in
 ## `_apply_statuses`.
 ## ⚠⚠ **THE SHOOTER IS THE BEAR AND THAT IS THE WHOLE OF WHY THIS ROW MEASURES ANYTHING.** It was the
-## crow — the one player species that bleeds by ITSELF (`Rules.SPECIES_STATUS`) — so deleting the
-## splash arm of the tag loop entirely left this green: the species table re-supplied identical values
-## through the other door. **Measured: the named mutation did not bite.** The bear splashes (`area`
-## 1.5) and carries no status row of its own, so the equipment tag is the only source left.
+## 까마귀, which used to carry a bleed of its own through `Rules.SPECIES_STATUS`, and **deleting the
+## splash arm of the tag loop entirely left this row GREEN**: the species table re-supplied identical
+## values through the other door. **Measured — the named mutation did not bite.** The bear splashes
+## (`area` 1.5) and has no passive of any kind, so the equipment tag is the only source that can reach
+## the sibling. ⚠⚠ **`SPECIES_STATUS` is deleted (2026-08-27) and this row keeps the bear anyway**: the
+## rule it taught is 「a fixture whose subject has a SECOND source of the thing being measured measures
+## nothing」, and the next passive to arrive would silently re-arm the same hole here.
 func _status_rides_the_splash(t) -> void:
 	var army := _army_of([Rules.BEAR])
-	t.ok(Rules.species_status_of(Rules.BEAR).is_empty(),
-		"곰은 제 종의 상태이상이 없다 (자가 점검 — 이게 무너지면 이 줄은 다시 아무것도 안 재다)")
 	_worn(army, ITEM_BLEED, 3, Rules.SWORDSMAN)
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
 		_spawn(ARENA_W, Rules.WOLF, 12, 5),   # primary, 1.0 from the soldier
@@ -1248,12 +1152,14 @@ func _slow_refreshes_and_never_stacks(t) -> void:
 	for _f in 69:
 		b.begin_frame()
 		b.step(TICK_ONE)
-	# ⚠ **A `<=` and not an equality since 티켓 15**: 까마귀's own bleed rides its blow and
-	# `_phase_status` takes its first sip in the SAME sub-step, so the exact figure carries a tick of
-	# drip on top. The claim is about the BLOW landing; the drip is `_the_crow_bleeds_with_no_equipment`'s.
-	t.ok(b.enemy_hp[0] <= Rules.hp_of(Rules.WOLF) - 2.0 * Rules.damage_of(Rules.CROW)
-			+ Rules.EPS,
-		"두 번째 타격이 들어갔다 (자가 점검)")
+	# ⚠⚠ **AN EQUALITY AGAIN SINCE 2026-08-27, AND THE LOOSENING IS WORTH REMEMBERING.** This read
+	# `t.ok(hp <= expected + EPS)` for two days: 까마귀 carried an innate bleed (`Rules.SPECIES_STATUS`)
+	# that rode its own blow, and `_phase_status` took its first sip inside the SAME sub-step — so the
+	# exact figure carried a tick of drip on top. **That table is deleted and the drip with it**, so the
+	# blow is once more the only thing that touches this number. ⇒ **A bound loosened to admit a second
+	# effect is tightened back the day that effect goes**, or the row quietly stops pinning the blow.
+	t.eq(b.enemy_hp[0], Rules.hp_of(Rules.WOLF) - 2.0 * Rules.damage_of(Rules.CROW),
+		"타격이 정확히 두 번 들어갔다 (자가 점검)")
 	var travelled := 0.0
 	var prev: Vector2 = b.enemy_pos[0]
 	for _f in 30:
@@ -1376,22 +1282,51 @@ func _lane() -> Array:
 	return rows
 
 
-## The open arena with a bay on its west side: rows 3-7 are open water for the first six columns, one
-## harbour tile sitting inside it at (2,5). The coast begins at column 6 — `_PORT_HARBOUR` (2,5) and
-## `_PORT_LANDING` (6,5) are 4.0 tiles apart in a straight line, and ⚠ **the boat sails 4.576491**:
-## the route smoother pulls the hop-count BFS's four-diagonal V (5.656854) down to `(2,5) (5,4) (6,5)`,
-## and the remainder over the straight line is `_entry_water_tile` beaching from (5,4) rather than
-## (5,5). `boat.dist` / `boat.speed` is still the right way to time a crossing here — it is the
-## POLYLINE's length over the speed.
-const _PORT_HARBOUR := Vector2(2, 5)
-const _PORT_LANDING := Vector2(6, 5)
-
+## The open arena with a bay on its west side: rows 3-7 are open water for the first six columns, and
+## the coast begins at column 6. **This is the one fixture in this file a boat can sail on**, and every
+## row that summons uses it.
+##
+## ⚠⚠ **BOTH OF THIS FIXTURE'S TILE CONSTANTS ARE DELETED (2026-08-27) AND NEITHER HAS A SUCCESSOR.**
+## `_PORT_HARBOUR` (2,5) named the `H` tile a boat departed from and `_PORT_LANDING` (6,5) named the
+## beach `send` was handed; the pair was 4.0 tiles apart in a straight line and the boat sailed
+## 4.576491 of `grid.water_route`'s smoothed polyline. **`send`, `water_route` and `home_harbour_for`
+## are all deleted**: a summon names ONE tile, the water the player pressed, and the grid derives the
+## other end from it. ⇒ **Neither end of a crossing is a fixture constant any more** — the origin comes
+## out of `_summonable_water_on` and the landing out of `grid.summon_landing_of`, and a row that wants
+## the length asks the boat.
+##
+## ⚠ **The `H` tile at (2,5) STAYS, and it is decoration now.** `grid.harbour_tiles` is still filled
+## from it and nothing in `summon`'s path reads that table — which makes this bay the fixture that
+## would catch a harbour creeping back into a departure, not the one that proves it has not.
+##
+## ⚠⚠ **THE BAND THIS BAY HOLDS IS TWO TILES WIDE AND THAT IS WORTH KNOWING BEFORE EDITING IT.**
+## `Rules.SUMMON_BAND_MIN_TILES` is 3 hops off the shore and `Grid.summon_radius()` is
+## `max(w, h) * 0.46 = 11.04` about the centre (12,6), and the only water satisfying both is **(2,5)
+## and (3,5)** — (1,5) misses the ring by 0.005 of a tile. **Narrowing the bay or moving the coast east
+## empties the band**, and then every summon row in this file reddens at once;
+## `_death_is_permanent` carries the one line that says so out loud.
 func _port() -> Array:
 	var rows := _open(ARENA_W, ARENA_H)
 	for y in range(3, 8):
 		rows[y] = "~~~~~~" + ".".repeat(ARENA_W - 7) + "~"
 	rows[5] = "~~H~~~" + ".".repeat(ARENA_W - 7) + "~"
 	return rows
+
+
+## The lowest-indexed WATER tile a summon may be pressed on, or -1. **The name says which kind of tile
+## it hands back, deliberately** — `net_run` carries the identical helper for the identical reason.
+##
+## ⚠⚠ **THE DELETED `send` TOOK A BEACH AND `summon` TAKES WATER, AND CONFUSING THE TWO COST A RED
+## ROUND.** A land tile handed to `summon` is refused by `Grid.can_summon_at` and comes back as -1 —
+## a refusal that looks exactly like a broken plan and has nothing to do with what any row here
+## measures. Searching the grid is also what keeps the fixture honest: a hard-coded tile is a tile that
+## describes one bay, and this bay's band has moved twice already.
+func _summonable_water_on(b: Battle) -> int:
+	var g := b.grid
+	for tile in g.w * g.h:
+		if g.can_summon_at(tile):
+			return tile
+	return -1
 
 
 ## A wall pierced by a single tile at (5,4).

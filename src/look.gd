@@ -911,26 +911,43 @@ const BEAST_BEAR_L := "res://assets/beast/bear_l.png"
 const BEAST_CROW_R := "res://assets/beast/crow_r.png"
 const BEAST_CROW_L := "res://assets/beast/crow_l.png"
 
-## The enemy. **Two pictures, the same shape as the wolf's two** — no walk, no throw, no death frame.
+## **The spearman, the shield soldier and the archer — CARD PICTURES, and nothing else.** They were
+## the enemy once, back when the humans were what you played against.
 ##
-## ⚠⚠ **ONE BODY, REUSED** (2026-08-24, the user: 「병사 하나를 만들어서 걔네들이 창을 던지는 걸로 …
-## 창 던지기 뭐 활쏘기, 뭐 방패병 이런 애들인데, 그 캐릭터 하나를 일단 돌려 쓰는 걸로」). The spear is
-## the first weapon; the bow and the shield are the same body with the hands changed, which is what
-## makes a human enemy cheap where five beasts would be five drawings.
+## ⚠⚠ **ONE PICTURE EACH, NOT TWO, SINCE 2026-08-27 — and this is the difference between them and
+## every other body constant in this file.** `HUMAN_SPEAR_L`, `HUMAN_BOW_L` and `HUMAN_SHIELD_L` stood
+## here and were deleted with their three `.png` files and their three `.import` sidecars. **A body on
+## the island needs a left-facing file** — `BEAST_TEX` is a right column and a left column, and
+## `beast_tex_path` picks between them by `facing_right` — so a half with only a right file cannot be
+## put on the field at all. **`ITEM_ART` needs only the right one**, because a card never faces left:
+## rows 10, 11 and 14 draw 뺏은 창끝, 방패 조각 and 사냥꾼의 눈 with exactly these three constants.
+## ⇒ **Do not delete the `_R` half.** It is the last thing holding three of the eighteen card pictures.
 ##
-## ⚠ **It is a big head on a stubby body and NOT a realistic man** (the user: 「좀 너무 리얼해 몬스터
-## 들이 … 게임처럼 보여야 되지 않을까 대가리가 큰 형태」). The realistic caveman that stood here first
-## could not be read at all on the island — at the size a body is drawn, proportion is the only thing
-## that survives, and a big head is the cheapest proportion that survives it.
+## ⚠⚠ **WHY THE LEFT HALVES DIED, AND IT IS A DECISION, NOT A CLEANUP.** The 2026-08-26 side swap made
+## the humans the player and the beasts the enemy, which left these three as bodies for enemy roles
+## that no longer exist. The user closed the remaining door 2026-08-27: **a second player weapon is
+## not being built**, so nothing was ever going to walk these pictures onto the island again.
+##
+## ⚠ **What the deleted half carried, kept here because it outlives the files**: they were two files
+## and not one plus a flip, for the reason `BEAST_WOLF_*` still states — flipping inside `_draw` costs
+## a `draw_set_transform`, and `net_draw_leaf` counts every `draw_*` call site, so a mirrored copy on
+## disk keeps the leaf at exactly one call. **A second player body now costs new ART, not a new table
+## row** — that is the whole price of this deletion, and it is the sentence that used to be wrong.
+##
+## ⚠ **ONE BODY, REUSED** (2026-08-24, the user, translated: "make one soldier and have them throw
+## spears … spear-throwing, archery, shield soldiers and so on — reuse that one character for now").
+## The spear was the first weapon; the bow and the shield are **the same body with the hands changed**,
+## generated from the spearman's OWN seed with one clause of the prompt swapped. That is why the three
+## still read as one army on the cards rather than as three drawings that happen to be red, and it is
+## why a human enemy was cheap where five beasts would have been five drawings.
+##
+## ⚠ **It is a big head on a stubby body and NOT a realistic man** (the user, translated: "the
+## monsters are a bit too real … shouldn't it look like a game, a big-headed shape"). The realistic
+## caveman that stood here first could not be read at all on the island — at the size a body is drawn,
+## proportion is the only thing that survives, and a big head is the cheapest proportion that does.
 const HUMAN_SPEAR_R := "res://assets/human/spear_r.png"
-const HUMAN_SPEAR_L := "res://assets/human/spear_l.png"
-## ⚠⚠ **The same body with the hands changed, and that is the whole argument for a human enemy.**
-## Bow and shield were generated from the spearman's OWN seed with one clause of the prompt swapped,
-## so the three stand together as one army rather than as three drawings that happen to be red.
 const HUMAN_BOW_R := "res://assets/human/bow_r.png"
-const HUMAN_BOW_L := "res://assets/human/bow_l.png"
 const HUMAN_SHIELD_R := "res://assets/human/shield_r.png"
-const HUMAN_SHIELD_L := "res://assets/human/shield_l.png"
 ## ⚠⚠ **THE PLAYER, since 2026-08-26.** The same body again with a sword in its hands — drawn back
 ## when the humans were the enemy, which is exactly why the swap cost no art at all.
 const HUMAN_SWORD_R := "res://assets/human/sword_r.png"
@@ -981,8 +998,14 @@ const BEAST_FRAME_SEC := 0.12
 ## second list — "these ones have frames" — is the shape that has to be hand-synced with this one, and
 ## the day they disagree the wrong animal walks.
 ## ⚠⚠ **FIVE ROWS SINCE THE SIDES SWAPPED** (2026-08-26): the swordsman the player is, and the four
-## beasts he fights. The spear, bow and shield pictures are still constants above and still on disk —
-## **the player's second weapon is a row here, not a drawing.**
+## beasts he fights.
+## ⚠⚠ **"The player's second weapon is a row here, not a drawing" STOOD ON THIS LINE AND IT IS NOW
+## FALSE** (2026-08-27). It was true while the spear, bow and shield each had a right file AND a left
+## file sitting unused on disk: a sixth row could have been written with two existing paths and a body
+## would have walked. **The three `_L` files were deleted** — the user settled 2026-08-27 that a second
+## player weapon is not being built — and a row needs BOTH columns, so those three constants can only
+## be card art now. ⇒ **A second player body costs a new DRAWING, not a new row**, and the estimate
+## anyone makes off this table has to include that.
 const BEAST_TEX := [
 	[HUMAN_SWORD_R, HUMAN_SWORD_L, NO_ANIM_FRAMES],
 	[BEAST_WOLF_R, BEAST_WOLF_L, WOLF_ANIM_FRAMES],
