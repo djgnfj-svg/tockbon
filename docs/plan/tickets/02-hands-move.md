@@ -73,7 +73,7 @@ Status: open
 
 메러디스(디자이너): ***"found a really nice solution for gamepad controls, by treating the game more
 like a turn-based game."*** 포인터가 없으니 **숄더로 부대 순환 · 왼쪽 스틱으로 물방울 커서를 갈 수
-있는 칸 사이로 스냅 · A 로 확정.**
+있는 조각 사이로 스냅 · A 로 확정.**
 
 ⚠ **Konsoll 2018 강연 자막 전문을 받아 확인했고, 명령 UI 이야기는 한 줄도 없다.**
 
