@@ -163,12 +163,16 @@ func run(t) -> void:
 		t.eq(str(tiers[y]).length(), ROW_WIDTH, "층 판 %d 번째 줄도 같다" % y)
 
 	var min_region_floor := _min_region_floor()
-	# ⚠ The 27 is a LITERAL on purpose. Writing the formula on both sides would let the roster grow and
+	# ⚠ The 11 is a LITERAL on purpose. Writing the formula on both sides would let the roster grow and
 	# the expectation grow with it, which is the shape that proves nothing.
-	# ⚠⚠ **38 -> 26** (2026-08-26): the node rewards are deleted with the map, so a run grows on cards
-	# alone — 10 in the opening slot plus four species arriving with `SPECIES_CARD_BODIES` each.
-	t.eq(min_region_floor, 27, "가장 좁아도 되는 상륙지 바닥은 27칸이다 (최대 병력 26 + 여유 1) — 자가 점검")
-	t.eq(_max_roster(), 26, "그 최대 병력 26이 10 + 짐승 카드 넷 x 4 다 (자가 점검)")
+	# ⚠⚠ **38 -> 26 -> 10** (2026-08-27): 38 fell to 26 when the node rewards died with the map, and 26
+	# fell to 10 when the BEAST CARD was deleted. `Rules.SPECIES_CARD_BODIES` stood here as the four
+	# bodies each of the four card-filled summon slots arrived with; **there is no card that can fill a
+	# summon slot any more**, so a run cannot gain a single body after `setup` and the largest roster it
+	# can ever field IS the opening table. ⚠ The SUMMON SLOT system itself is untouched — what died is
+	# the only thing that used to write into it, so the term is worth zero rather than absent in spirit.
+	t.eq(min_region_floor, 11, "가장 좁아도 되는 상륙지 바닥은 11칸이다 (최대 병력 10 + 여유 1) — 자가 점검")
+	t.eq(_max_roster(), 10, "그 최대 병력 10이 개막 표 그대로다 — 회차 중에 병력이 느는 길이 없다 (자가 점검)")
 	_the_floor_actually_rejects_something(t, min_region_floor)
 
 	var walker_pairs := 0
@@ -724,21 +728,26 @@ func _cut_of(grid: Grid) -> int:
 ## to one value and not to its siblings": it does not bite on the three shipped grids (smallest region
 ## is in the hundreds) and a new grid with a 15-tile landing region would pass green and stall a boat
 ## forever.
-## ⚠⚠ **AND THE BEAST CARDS ARE IN IT NOW** (티켓 15). A run registers up to `SUMMON_SLOT_MAX`
-## species and every one after the opening table arrives with `SPECIES_CARD_BODIES` bodies, so the
-## largest roster grew by four times four. Leaving them out would have left this floor's own label —
-## 「최대 병력 + 여유 1」 — claiming more than the number measures, which is this repo's false green.
+## ⚠⚠ **THE BEAST CARDS WERE IN IT AND ARE NOT ANY MORE** (2026-08-27, and this line replaces 티켓 15's
+## own). The term read `(SUMMON_SLOT_MAX - START_SLOTS.size()) * SPECIES_CARD_BODIES` — four card-filled
+## summon slots, four bodies each — and **every symbol in it is deleted**: the beast card has been
+## unreachable since the sides swapped (`Rules.SPECIES_CARDS` went to `[]`, so `_draw_cards` could never
+## write a `SPECIES` card), and the enum member, the body count and the pool are now gone outright.
+## ⚠ **This is NOT the summon slot system being written off**: `SUMMON_SLOT_MAX` and `START_SLOTS` are
+## both alive and `register_species` still works. What died is the only thing that ever filled a slot
+## mid-run, so the arithmetic that priced those bodies has nothing left to price — the term is zero, not
+## forgotten. Leaving it in would have left this floor's own label — 「최대 병력 + 여유 1」 — claiming
+## more than the number measures, which is this repo's false green; taking it out keeps the label true.
 func _min_region_floor() -> int:
 	return _max_roster() + 1
 
 
-## The largest roster a run can ever field: the opening table, plus every `Reward.COUNT` node a single
-## route can step on, plus a body count for every species a card can still register.
+## The largest roster a run can ever field. ⚠ **That is now the opening table and nothing else** — the
+## `Reward.COUNT` nodes died with the map and the beast card died with the side swap, so no path exists
+## from `setup` to one more body. The call still goes through `Rules` rather than a literal, so a bigger
+## opening table moves the floor instead of leaving it behind.
 func _max_roster() -> int:
-	var from_cards := (Rules.SUMMON_SLOT_MAX - Rules.START_SLOTS.size()) * Rules.SPECIES_CARD_BODIES
-	return Rules.roster_start_count() \
-\
-		+ from_cards
+	return Rules.roster_start_count()
 
 
 ## The length of the water route from harbour `hb` to `landing`, in tiles — what a crossing actually
@@ -834,17 +843,24 @@ func _reaches(grid: Grid, start_tile: int, enemy_tile: int, reach: float, field:
 ## already true before the roster rewrite.** Every island is ONE connected passable component — 744,
 ## 760 and 716 tiles — so moving the floor between 2, 5, 6 and 14 never crosses 716 and the mutation
 ## moves nothing but the self-check one line above. ⇒ **The floor is given a bite the way the
-## sealed-enemy fixture gives the walker one: a synthetic `Grid` with a pocket of exactly 13 passable
+## sealed-enemy fixture gives the walker one: a synthetic `Grid` with a pocket of exactly 9 passable
 ## tiles holding a sendable tile.** The roster floor must REJECT it and the old capacity floor of 5
 ## must ACCEPT it — which is the whole difference between the two formulas, stated as a number.
+##
+## ⚠⚠ **The pocket was 13 tiles and had to SHRINK to 9 when the beast card was deleted** (2026-08-27).
+## It was never a claim about 13; it was a claim about a pocket that sits BETWEEN the two formulas, and
+## the roster floor fell from 27 to 11 the moment `SPECIES_CARD_BODIES` stopped being reachable — which
+## put 13 on the passing side and would have turned this whole fixture green while measuring nothing.
+## ⚠ **A fixture whose bite depends on a constant must be re-priced when that constant moves**, and the
+## re-pricing is the point: 5 <= 9 < 11 is the same sentence 5 <= 13 < 27 used to say.
 func _the_floor_actually_rejects_something(t, floor_now: int) -> void:
 	var g := Grid.new()
 	g.load_rows([
 		"~~~~~~~~~~~~~~~~",
 		"~....~~~~~~~~~~~",
 		"~....~~~~~~~~~~~",
-		"~....~~~~~~~~~~~",
 		"~.~~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~",
 		"~~~~~~~~~~~~~~~~",
 		"~~H~~~~~~~~~~~~~",
 		"~~~~~~~~~~~~~~~~",
@@ -853,7 +869,7 @@ func _the_floor_actually_rejects_something(t, floor_now: int) -> void:
 	for tile in g.passable.size():
 		if g.passable[tile] != 0:
 			pocket += 1
-	t.eq(pocket, 13, "합성 주머니는 정확히 13칸이다 (자가 점검)")
+	t.eq(pocket, 9, "합성 주머니는 정확히 9칸이다 (자가 점검)")
 
 	var sendable_here := -1
 	for tile in g.passable.size():
@@ -865,7 +881,7 @@ func _the_floor_actually_rejects_something(t, floor_now: int) -> void:
 			"그 칸이 든 땅덩이가 주머니 전부다 — 하나의 연결 성분이다 (자가 점검)")
 
 	t.ok(pocket < floor_now,
-			"상륙 구역은 최대 병력보다 크다 — 13칸 주머니는 지금 바닥(%d)에 걸린다" % floor_now)
+			"상륙 구역은 최대 병력보다 크다 — 9칸 주머니는 지금 바닥(%d)에 걸린다" % floor_now)
 	t.ok(pocket >= 5,
 			"그리고 옛 정원 바닥 5는 그 주머니를 통과시켰다 — 두 식의 차이가 여기서 갈린다")
 

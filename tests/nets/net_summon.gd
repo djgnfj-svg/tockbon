@@ -623,6 +623,13 @@ func _a_pinned_hold_does_not_grow_the_army(t) -> void:
 	# ⚠ **The counts are DERIVED from the opening table and only its own value is a literal.** Slot 0
 	# opened with six while the run started on two species; it opens with ten since the second one
 	# moved to a card (티켓 15).
+	# ⚠⚠ **AND THE CARD THAT SECOND SPECIES MOVED TO IS DELETED** (2026-08-27, with the whole BEAST
+	# CARD: `SPECIES_CARDS`, `SPECIES_CARD_BODIES`, `CardKind.SPECIES` and `Run._take_species_card`).
+	# **Nothing changes on this row and that is the point** — the derivation reads `start_bodies_of(0)`
+	# and the opening table did not move, so the ten is still the ten. What died is the sentence's
+	# second half: a run can no longer take that second species back on a card, so the ten is now the
+	# roster for the WHOLE run and not just for its opening. The old wording is kept rather than
+	# rewritten because it says where the ten came from, and that history is still what set it.
 	t.eq(Rules.start_bodies_of(0), 10, "개막 첫 칸의 병력이 열이다 (이 줄의 리터럴이 재는 값 — 자가 점검)")
 	t.eq(placed, Rules.start_bodies_of(0), "슬롯 1 을 스무 번 눌러도 그 칸이 가진 만큼만 나간다")
 	t.eq(refused, 20 - Rules.start_bodies_of(0), "나머지는 거절이다 — 꾹 눌러도 군대가 늘지 않는다")
@@ -782,6 +789,17 @@ func _a_mixed_plan_unloads_on_two_tiles(t) -> void:
 ## CONSTANT table saying 「칸 s 는 영원히 종 t 에 묶여 있다」, and that sentence stopped being true the
 ## day a card could fill a slot — a constant holding a per-run fact is a shape this repo has paid for.
 ## What survives is the three lessons its header carried, and they are all below.
+##
+## ⚠⚠ **THE CARD THAT ORIGINALLY JUSTIFIED THIS MOVE IS DELETED** (2026-08-27 — the BEAST CARD, table
+## and mechanism together; `CardKind` is one member wide now and every card is an item). **The move
+## itself is NOT reverted and this row is not weakened**, because the reason it was made is not the
+## only reason it holds: `Army.register_species` is still a live door that changes the slot count
+## while a run is being played — 티켓 15's 「슬롯 자체를 강화한다」 economy and the raid path both open
+## it — and a `const` table cannot answer a question whose answer moves. ⚠ **What IS now false is the
+## historical clause above**: as of today nothing in `src/` fills a slot mid-run, so the four
+## registration rows below are the only thing measuring that door. **They are written down here
+## rather than argued away**: if that door is ever closed too, this whole row is what should be
+## re-read before `Army.slots` is folded back into a constant.
 ##
 ## ⚠ Mutation: put an enemy row in a slot; count slots with a literal; answer `0` for an empty slot.
 func _the_run_slots(t) -> void:

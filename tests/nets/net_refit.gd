@@ -352,14 +352,18 @@ func _the_strip_and_the_board(t) -> void:
 ## `_the_dashboard_reads_the_same_function_the_fight_does` watched climb, were a different experiment
 ## every round — the BELLY-cell workaround below existed only because of this, and the dashboard row
 ## bound only whichever one column the draw happened to move.
-## Takes the first ITEM card of the draw. ⚠ **A card can be a BEAST since 티켓 15**, and a beast pick
-## pays a slot and bodies instead of the held pile — so it walks back to the map and this screen never
-## opens. Every fixture below wants the refit screen, so every one of them takes an item.
+## Takes the card that pays the held pile — card 0, because every card pays it. Every fixture below
+## wants the refit screen, and a card in the pile is what opens it.
+##
+## ⚠⚠ **THE `card_kind` SEARCH THIS HELPER USED TO BE IS DELETED (2026-08-27).** It walked the three
+## drawn cards for the first `CardKind.ITEM`, because **a card could be a BEAST**: a beast pick paid a
+## summon slot and bodies instead of the held pile, so it walked back to the map and the refit screen
+## never opened. **The beast arm of the card table is gone**, `CardKind` has one member, and a loop that
+## can only ever stop at k = 0 measures nothing while still reading as a filter — the shape 「Nothing
+## pretends to work」 names. ⚠ **`Run.card_kind` itself is ALIVE** (one column, one value); what died is
+## the branch, not the column, and `net_cards` is where the column is measured.
 func _take_an_item_card(r: Run) -> void:
-	for k in Rules.CARDS_PER_WIN:
-		if int(r.card_kind[k]) == Rules.CardKind.ITEM:
-			r.take_card(k)
-			return
+	r.take_card(0)
 
 
 func _reach_refit(t, seed: int) -> Game:
@@ -389,15 +393,14 @@ func _reach_refit(t, seed: int) -> Game:
 	game.refit_view = spy
 	game.add_child(spy)
 
-	# ⚠⚠ **AN ITEM CARD, CHOSEN OFF `card_kind`.** A card can be a BEAST since 티켓 15, and a beast
-	# pick leaves the held pile empty — so it walks back to the map and the screen this helper exists
-	# to reach never opens. The index is derived rather than fixed at 0.
-	var pick := -1
-	for k in Rules.CARDS_PER_WIN:
-		if int(game.run.card_kind[k]) == Rules.CardKind.ITEM:
-			pick = k
-			break
-	t.ok(pick >= 0, "이 씨앗의 세 장에 장비가 하나는 있다 (자가 점검)")
+	# ⚠⚠ **CARD 0, AND THE `card_kind` SEARCH THAT USED TO DERIVE IT IS DELETED (2026-08-27).** The
+	# index was read off `card_kind` because **a card could be a BEAST**, and a beast pick left the held
+	# pile empty — the run walked back to the map and the screen this helper exists to reach never
+	# opened. **The beast arm of the card table is gone**, so every drawn card pays the pile and card 0
+	# always lands on refit. ⚠ The self-check that rode with it (「이 씨앗의 세 장에 장비가 하나는 있다」)
+	# is deleted with it: with one kind of card it could not go red on any seed, and a green that cannot
+	# go red is not a measurement.
+	var pick := 0
 	game._unhandled_input(_click(Look.card_rect_px(pick).get_center()))
 	t.eq(game.run.state(), Run.State.REFIT, "장비 카드를 고르자 정비 화면이 열렸다 (자가 점검)")
 	return game
@@ -1020,19 +1023,31 @@ func _press(at: Vector2) -> InputEventMouseButton:
 	return ev
 
 
-## Walks past the OPENING BEAST ROUND. ⚠⚠ **A run opens on a card screen since 티켓 15** (「시작하자
-## 마자 세 개 중에 하나 고르는 거」), so `enter_node` refuses until one of its three beasts has been
-## taken — every fixture below that steps onto the map has to pass through it first. Card 0, always,
-## so the fixture is the same run every time.
+## Walks past the OPENING CARD ROUND and leaves the run standing on its island. ⚠ **A run opens on a
+## card screen** (「시작하자마자 세 개 중에 하나 고르는 거」), so every fixture below that wants a fight,
+## a win, or a SECOND card round has to pass through it first. Card 0, always, so the fixture is the
+## same run every time.
+##
+## ⚠⚠ **IT TAKES TWO STEPS NOW, AND THE SECOND STEP IS THE BEAST CARD'S ESTATE (2026-08-27).** This was
+## one `take_card(0)` and nothing else, because the opening round was a BEAST round: a beast paid a
+## summon slot and bodies rather than the held pile, an empty pile is what `take_card` forks on, and the
+## run went straight on to the island. **The beast arm of the card table is deleted**, so card 0 is
+## equipment, the pile is no longer empty, and the run now stops on the refit screen — `close_refit()`
+## is what carries it the last step. ⚠ Without it every caller is handed a run already sitting in
+## `REFIT`, and 「REFIT 상태가 아니면 슬롯 띠조차 안 그려진다」 measures the opposite of what it says.
 func _opened(r: Run) -> Run:
 	if r.state() == Run.State.PICK:
 		r.take_card(0)
+	if r.state() == Run.State.REFIT:
+		r.close_refit()
 	return r
 
 
-## Takes the OPENING BEAST CARD through the real input door. ⚠⚠ **A run opens on a card screen since
-## 티켓 15** (「시작하자마자 세 개 중에 하나 고르는 거」), so the map sits one press further from the
-## title than it used to. Card 0, always, so the fixture is the same run every time.
-func _take_opening_card(game: Game) -> void:
-	if game.run != null and game.run.state() == Run.State.PICK:
-		game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
+## ⚠⚠ **`_take_opening_card(game)` STOOD HERE AND IS DELETED (2026-08-27).** It pressed card 0 through
+## the real shell to get past the OPENING BEAST ROUND — the `Game`-side twin of `_opened`. Two reasons
+## it cannot measure anything any more: **no fixture in this file ever called it** (it was already
+## nothing but a definition), and **the round it existed to skip is not a beast round.** Every card is
+## equipment now, so an opening press lands the shell on the REFIT screen instead of walking the run
+## back onto the island — a helper that pressed only the card would leave its caller stranded there.
+## ⚠ **If a fixture ever needs the shell-side walk, it has to press the card AND 완료**, which is the
+## same two steps `_opened` now takes on the sim side.

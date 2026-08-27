@@ -1459,27 +1459,23 @@ const ITEM_ART := [
 ]
 
 
-## The picture on a card of either kind. ⚠ **A beast card wears the beast's own field picture** — the
-## one the body will actually be, so the card and the island cannot show two different animals.
-## `""` for a card with no picture, which the art leaf is simply not called for.
+## The picture on a card. `""` for a card with no picture, which the art leaf is simply not called for.
+## ⚠ **The beast arm was deleted 2026-08-27** with the beast card — it returned the species' own field
+## picture, so a card and the island could never show two different animals.
 static func card_art_path(kind: int, value: int) -> String:
-	if kind == Rules.CardKind.SPECIES:
-		return beast_tex_path(value, true)
 	if value < 0 or value >= ITEM_ART.size():
 		return ""
 	return str(ITEM_ART[value])
 
 
 ## Every distinct path a card could ever wear, so a screen can load them once instead of per frame.
-## ⚠ **Walked over both tables rather than listed**, or a new card face is a picture nobody loads.
+## ⚠ **Walked over the table rather than listed**, or a new card face is a picture nobody loads.
+## ⚠ **It walked TWO tables until 2026-08-27** — the second was the beast cards' own species pictures,
+## and it went with them. A second card kind puts its loop back here and nowhere else.
 static func card_art_paths() -> PackedStringArray:
 	var out := PackedStringArray()
 	for i in ITEM_ART.size():
 		var p := card_art_path(Rules.CardKind.ITEM, i)
-		if p != "" and not out.has(p):
-			out.append(p)
-	for r in Rules.species_card_count():
-		var p := card_art_path(Rules.CardKind.SPECIES, Rules.species_card_type_of(r))
 		if p != "" and not out.has(p):
 			out.append(p)
 	return out

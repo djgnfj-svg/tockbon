@@ -839,66 +839,33 @@ const CARD_PICKS := 1
 
 
 ## --- What a card can BE ---------------------------------------------------------------------------
-## ⚠⚠ **A card is one of two things now** (티켓 15): a piece of equipment, or a BEAST — a summon slot
-## filled with a species, plus bodies of it. `Run.cards[k]` holds an item id under `ITEM` and a
-## `UNITS` row under `SPECIES`, and `Run.card_kind[k]` is which.
-enum CardKind { ITEM, SPECIES }
+## **A card is a piece of equipment.** `Run.cards[k]` holds an item id and `Run.card_kind[k]` says
+## which kind that is — and today there is only the one.
+## ⚠ **It was two from 티켓 15 to 2026-08-26**: the second was a BEAST, a summon slot filled with a
+## species plus bodies of it. The sides swapped and it became unpickable.
+## ⚠⚠ **ONE MEMBER SINCE 2026-08-27**, when the beast card was deleted. It is kept as an enum, and
+## `card_name_of`/`card_rarity_of`/`card_effect_text_of` still take a `kind` they now ignore, because
+## the shape those three exist for is 「the screen never asks what kind a card is」 — collapsing them to
+## one argument moves that question back onto `reward_view` the day a second kind arrives.
+## ⚠ **`kind` is therefore dead weight that is being carried on purpose.** If no second kind is decided
+## on, it should go, and going means the enum, the `card_kind` column in `Run`, and three signatures.
+enum CardKind { ITEM }
 
-## One row per beast card: the `UNITS` row it registers, and how rare the card is.
+## ⚠⚠ **THE BEAST CARD WAS DELETED 2026-08-27, TABLE AND MECHANISM TOGETHER.** `SPECIES_CARDS`,
+## `SPECIES_CARD_BODIES`, `SPECIES_CARD_WEIGHT`, `species_card_count/type_of/rarity_of` and every
+## branch that read them are gone.
 ##
-## ⚠⚠ **EMPTY since 2026-08-26, and that is a DECISION, not a gap.** The five rows here registered a
-## beast into a summon slot, and **the beasts are the enemy now** — `Army.register_species` refuses a
-## row on the enemy's side, so every one of them would have been a card that cannot be picked.
-## ⚠⚠ **The user chose what fills the hole**: 「성장 카드는 장비 위주로 주자」. An empty pool is exactly
-## that — `Run._draw_cards` falls through to equipment for every card, including the opening round.
-## ⚠ **The table stays** because the mechanic is wired end to end; a second player body is one row.
-const SPECIES_CARDS := []
-
-const _SPECIES_CARD_COL_TYPE := 0
-const _SPECIES_CARD_COL_RARITY := 1
-
-## How many bodies of that species arrive with the card. **2026-08-25, the user, with 「일단」 on it**
-## — so it is ONE constant and 4 is written nowhere else: changing what a beast card is worth has to
-## be one line.
+## ⚠⚠ **THE TABLE HAD BEEN EMPTY SINCE 2026-08-26 AND THE MECHANISM WAS THEREFORE UNREACHABLE.** The
+## five rows registered a beast into a summon slot, and the beasts became the ENEMY: `Army.register_species`
+## refuses a row on the enemy's side, so every row would have been a card that cannot be picked. The
+## user chose what fills the hole in the same breath: 「성장 카드는 장비 위주로 주자」.
 ##
-## ⚠⚠ **IT MUST NOT BE 0.** A card that only registers a slot adds **a button that refuses when you
-## press it** — the same failure the user hit from the other side with the deleted count reward (a thing that is
-## there and is not on screen), built backwards.
-##
-## **Why four**: the old second slot opened with four bodies, so 「둘째 종이 도착한다」 is the size this
-## game has already been played at.
-const SPECIES_CARD_BODIES := 4
-
-## The chance ONE card is a beast rather than an item. ⚠⚠ **The kind is rolled BEFORE what is inside
-## it, for the reason `_draw_cards` already gives about rarity**: roll straight over one pooled list
-## and adding an item makes beasts quietly rarer, so the drop table moves whenever the CONTENT moves.
-##
-## ⚠ **It is a weight and NOT a reservation.** 2026-08-25 the user cut the earlier plan's 「세 장 중 한
-## 장은 늘 짐승」: every card rolls its own kind, so some rounds hold no beast at all and some hold
-## three. `1/3` keeps the frequency that plan argued for — one beast per round in expectation — and
-## drops only the guarantee.
-##
-## ⚠ **This is a FLAT weight and it is not the last word.** 티켓 18 tilts the pool toward the species a
-## run is already using; nothing here may be written down as 「영원히 균등」, or that ticket starts by
-## deleting a sentence.
-const SPECIES_CARD_WEIGHT := 1.0 / 3.0
-
-
-static func species_card_count() -> int:
-	return SPECIES_CARDS.size()
-
-
-static func species_card_type_of(r: int) -> int:
-	return int((SPECIES_CARDS[r] as Array)[_SPECIES_CARD_COL_TYPE])
-
-
-## The card rarity of beast row `type_id`, or `Rarity.COMMON` for a row with no card.
-static func species_card_rarity_of(type_id: int) -> int:
-	for r in SPECIES_CARDS.size():
-		if int((SPECIES_CARDS[r] as Array)[_SPECIES_CARD_COL_TYPE]) == type_id:
-			return int((SPECIES_CARDS[r] as Array)[_SPECIES_CARD_COL_RARITY])
-	return Rarity.COMMON
-
+## ⚠ **The table was kept for one more day on the argument that 「a second player body is one row」.**
+## That argument is what this deletion rejects: `_draw_cards` could not write `CardKind.SPECIES` at
+## all with an empty pool, so `_take_species_card` was dead code behind a dead branch behind an empty
+## table — three layers, none of which any check could enter. **Wiring that nothing can reach is not
+## wiring that is ready, it is wiring that is unmeasured**, and a second player body needs the pool,
+## the weight and the recruit path re-argued from what that body actually is.
 
 ## --- One card's face, whatever kind it is ---------------------------------------------------------
 ## ⚠⚠ **These three exist so `reward_view` never asks what kind a card is.** A screen that branched on
@@ -906,14 +873,10 @@ static func species_card_rarity_of(type_id: int) -> int:
 ## of the two gets missed.
 
 static func card_name_of(kind: int, value: int) -> String:
-	if kind == CardKind.SPECIES:
-		return label_of(value)
 	return item_name_of(value)
 
 
 static func card_rarity_of(kind: int, value: int) -> int:
-	if kind == CardKind.SPECIES:
-		return species_card_rarity_of(value)
 	return item_rarity_of(value)
 
 
@@ -921,8 +884,6 @@ static func card_rarity_of(kind: int, value: int) -> int:
 ## rule `item_effect_text` carries, and the reason the cards said 「다리」 for a round after legs
 ## stopped existing.
 static func card_effect_text_of(kind: int, value: int) -> String:
-	if kind == CardKind.SPECIES:
-		return "소환 칸 +1 · %d마리" % SPECIES_CARD_BODIES
 	return item_effect_text(value)
 
 

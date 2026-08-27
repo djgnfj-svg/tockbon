@@ -267,7 +267,8 @@ func run(t) -> void:
 	# exists for**: put `if run == null: return` back at the top of `_unhandled_input` and 시작하기
 	# becomes unpressable, because with no run there is no way to make one.
 	# ⚠⚠ 「시작하기는 지도가 아니라 카드 세 장을 연다」 (티켓 15) — floor: `state() == PICK`; ceiling:
-	# `battle == null`. The beast round is what 시작하기 opens.
+	# `battle == null`. ⚠ **It was the BEAST round until 2026-08-27** and it is an equipment round now:
+	# the beast card is deleted whole and `CardKind` has exactly one member left.
 	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
 	t.ok(game.run != null, "시작하기를 누르면 런이 생긴다")
 	t.eq(game.run.state(), Run.State.PICK, "그리고 카드 세 장이 열린다")
@@ -277,19 +278,27 @@ func run(t) -> void:
 	# green with nothing readable on the glass.
 	t.ok(not game.title_view.visible, "그리고 타이틀이 카드 위에 안 남는다")
 	t.ok(game.reward_view.run == game.run, "카드 화면이 그 런을 물었다")
-	var opening_beasts := 0
+	# ⚠⚠ **THIS ROW COUNTED `Rules.CardKind.SPECIES` AND THAT MEMBER IS DELETED** (2026-08-27). What it
+	# measured was 「the opening round is beasts only」 — and that claim had already stopped being
+	# measurable on 2026-08-26, when the sides swapped and `SPECIES_CARDS` went to `[]`: with an empty
+	# pool `_draw_cards` could not write the kind at all, so the row was counting its own emptiness.
+	# ⚠ **Rewritten rather than deleted, because the kind COLUMN is still real.** `card_kind` still
+	# carries one value per drawn card, and that `_draw_cards` fills it for every one of the three is
+	# the floor under every `card_kind` read further down this file.
+	var opening_items := 0
 	for k in Rules.CARDS_PER_WIN:
-		if int(game.run.card_kind[k]) == Rules.CardKind.SPECIES:
-			opening_beasts += 1
-	t.eq(opening_beasts, Rules.CARDS_PER_WIN, "세 장이 전부 짐승이다")
+		if int(game.run.card_kind[k]) == Rules.CardKind.ITEM:
+			opening_items += 1
+	t.eq(opening_items, Rules.CARDS_PER_WIN, "세 장이 전부 장비 카드다 — 카드 종류는 이제 하나뿐이다")
 	_take_opening_card(game)
 	t.eq(game.run.state(), Run.State.BATTLE, "한 장을 집으면 그때 섬이 열린다 — 지도는 없다")
-	# ⚠⚠ **Every remaining species registered here, so no LATER card in this whole walk can be a
-	# beast.** This file's rows are about the shell's screen wiring and its roster arithmetic, and a
-	# beast card would both skip the refit screen every walk below asserts and add bodies to counts
-	# that are naming reward amounts. Registration adds no bodies of its own.
-	for ty in Rules.player_type_count():
-		game.run.army.register_species(ty)
+	# ⚠⚠ **THE 「REGISTER EVERY REMAINING SPECIES」 FIXTURE IS DELETED** (2026-08-27). It filled every
+	# summon slot up front so that no LATER card in this whole walk could be a beast, because a beast
+	# pick would both skip the refit screen the walks below assert and add `SPECIES_CARD_BODIES` bodies
+	# to counts that are naming reward amounts. **There is no beast card left to guard against.**
+	# ⚠ **Deleting it moves no number, which is why it is a deletion and not a rewrite**: the player
+	# side is one row (검사), `add_starting_force` has already registered it, and `register_species`
+	# refused every call in that loop as a duplicate — the slot count was 1 with it and is 1 without it.
 	t.eq(game.quits, 1, "시작하기가 종료를 부르지도 않았다")
 	t.eq(game.title_view._press_slot, TitleView.SLOT_START,
 		"시작하기도 눌린 그림이 들어갔다 — 두 살아 있는 칸 다 확인한다")
@@ -647,14 +656,24 @@ func run(t) -> void:
 				"%d번 슬롯에서 한 명 더 내보냈다 (자가 점검)" % slot_i)
 			guard += 1
 	await t.pump_frames(1)
-	t.eq(b.boats.size(), Rules.roster_start_count() + Rules.SPECIES_CARD_BODIES,
-		"명단 전부를 내보낼 수 있다 — 배 수에 상한이 없다")
+	# ⚠⚠ **THE EXPECTATION READ `roster_start_count() + SPECIES_CARD_BODIES` — 10 + 4 = 14 — AND THE
+	# `+ 4` IS DELETED WITH THE BEAST CARD** (2026-08-27). Those four bodies arrived on the opening card
+	# back when a card could hand a summon slot a species; **an equipment card recruits nobody**, so what
+	# stands on the beach is the opening table alone. `START_SLOTS` is one row of ten ⇒ **10 boats**.
+	# ⚠ **The ten is not written on the assertion's own side** (it is in the label, where a wrong number
+	# reads as a wrong number rather than as a green): `roster_start_count()` sums the table, so an
+	# opening table that is re-tuned moves this expectation with it instead of reddening a hand copy.
+	t.eq(b.boats.size(), Rules.roster_start_count(),
+		"명단 전부(시작 병력 열 명)를 내보낼 수 있다 — 배 수에 상한이 없다")
 	t.ok(b.boats.size() > before_fill, "그리고 실제로 늘었다 (자가 점검)")
 	var all_transit := 0
 	for si5 in b.soldier_state.size():
 		if b.soldier_state[si5] == Battle.SoldierState.TRANSIT:
 			all_transit += 1
-	t.eq(all_transit, Rules.roster_start_count() + Rules.SPECIES_CARD_BODIES, "열넷 전부 배에 탔다")
+	# ⚠ The same arithmetic as the row above, read off the SOLDIERS instead of the boats. **14 became 10
+	# because the four bodies the beast card used to bring with it are gone**, not because anything
+	# refused to sail — the boat count one row up is what would catch that.
+	t.eq(all_transit, Rules.roster_start_count(), "열 명 전부 배에 탔다")
 	t.eq(b.elapsed, 0.0, "열 척을 내보내는 동안에도 시계는 정확히 0이다")
 
 	# -- the start button commits, and the screen changes with it --------------------------------------
@@ -958,8 +977,11 @@ func _win_the_open_island(t, game: Game, label: String) -> void:
 func _take_one_and_close_refit(r: Run) -> void:
 	if r.state() != Run.State.PICK:
 		return
-	# ⚠ **An ITEM card** — a beast pick brings bodies with it, which every roster count downstream
-	# would then be measuring instead of the reward arithmetic it claims to measure.
+	# ⚠ **An ITEM card — and it is the only kind there is since 2026-08-27.** The fork used to matter
+	# because a beast pick brought bodies with it and every roster count downstream would then have been
+	# measuring those instead of the reward arithmetic it claims to measure. **`CardKind.SPECIES` is
+	# deleted**, so the search can no longer fail — it is kept rather than replaced by `take_card(0)`
+	# because it reads the kind the sim actually wrote instead of assuming what it wrote.
 	var pick := 0
 	for k in Rules.CARDS_PER_WIN:
 		if int(r.card_kind[k]) == Rules.CardKind.ITEM:
@@ -1010,12 +1032,14 @@ func _two_presses_reach_the_first_island(t) -> void:
 	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
 	presses += 1
 	# ⚠⚠ **TWO AGAIN** (2026-08-26): the map node was the third press and the map is deleted, so the
-	# opening beast card is now the last thing between the title and the island.
+	# opening card is now the last thing between the title and the island.
+	# ⚠ **It was 「the opening BEAST card」 until 2026-08-27** — the beast card is deleted and the opening
+	# three are equipment. **The press count is untouched by that**: one card is one press either way.
 	_take_opening_card(game)
 	presses += 1
 
 	t.ok(game.battle != null, "누름 %d번 만에 첫 섬이 열렸다" % presses)
-	t.eq(presses, 2, "그 수가 정확히 둘이다 — 시작하기, 그리고 짐승 카드 한 장")
+	t.eq(presses, 2, "그 수가 정확히 둘이다 — 시작하기, 그리고 여는 카드 한 장")
 	t.ok(presses <= 3, "셋을 넘으면 타이틀이 마찰이다")
 	t.ok(presses >= 1, "그리고 0이면 켜자마자 섬이 나온다는 뜻이다 — 이 라운드가 없앤 바로 그것이다")
 
@@ -1078,11 +1102,15 @@ func _the_plan_constants_have_both_ends(t) -> void:
 	# has a picture to bound.
 	t.ok(Look.GHOST_FAN_PX.x >= 6.0 and Look.GHOST_FAN_PX.y >= 6.0,
 		"유령 부채가 벌어진다 (바닥 6 — 못 미치면 두 유령이 한 덩어리이고 놓은 순서에 그림이 없다)")
+	# ⚠ **The two labels below said 열셋 and they say 아홉 now** (2026-08-27). The expression never
+	# changed — it has always been `roster_start_count() - 1` — but the 열셋 was written when the beast
+	# card added four bodies to the ten and the landing force was fourteen. **The card is deleted, the
+	# force is the opening table alone, and the fan's worst case is nine ghosts behind the first.**
 	t.ok(Look.GHOST_FAN_PX.x <= 14.0 and Look.GHOST_FAN_PX.y <= 14.0,
-		"그리고 14 를 안 넘는다 (천장 — 넘으면 열셋이 4타일에 퍼져 한 상륙으로 안 읽힌다)")
+		"그리고 14 를 안 넘는다 (천장 — 넘으면 아홉이 3타일 넘게 퍼져 한 상륙으로 안 읽힌다)")
 	t.ok(Look.GHOST_FAN_PX.length() * float(Rules.roster_start_count()
 			- 1) > Look.TARGET_RING_R_PX,
-		"자가 점검 — 열셋을 한 칸에 놓으면 부채가 고리 밖까지 나간다 (그래서 순위는 해변마다 센다)")
+		"자가 점검 — 아홉을 한 칸에 놓으면 부채가 고리 밖까지 나간다 (그래서 순위는 해변마다 센다)")
 	t.ok(Look.CHIP_FX_SEC >= 0.1,
 		"누름 반응이 한 프레임보다 길다 (바닥 0.1s — 짧으면 팝이 되고 반응 자체가 안 보인다)")
 	t.ok(Look.CHIP_FX_SEC <= 0.4, "그리고 0.4s 를 안 넘는다 (천장 — 넘으면 다음 누름까지 남는다)")
@@ -1465,19 +1493,24 @@ func _gd_files_under(dir: String) -> Array:
 ## `field_view._fx` directly, which never depended on a hook.
 
 
-## Walks past the OPENING BEAST ROUND. ⚠⚠ **A run opens on a card screen since 티켓 15** (「시작하자
-## 마자 세 개 중에 하나 고르는 거」), so `enter_node` refuses until one of its three beasts has been
+## Walks past the OPENING CARD ROUND. ⚠⚠ **A run opens on a card screen since 티켓 15** (「시작하자
+## 마자 세 개 중에 하나 고르는 거」), so `enter_node` refuses until one of its three cards has been
 ## taken — every fixture below that steps onto the map has to pass through it first. Card 0, always,
 ## so the fixture is the same run every time.
+##
+## ⚠ **This said 「OPENING BEAST ROUND」 and 「one of its three beasts」 until 2026-08-27.** The beast
+## card is deleted whole and the opening three are equipment like every round after them; **what this
+## helper does is unchanged**, because `take_card(0)` never cared which kind card 0 was.
 func _opened(r: Run) -> Run:
 	if r.state() == Run.State.PICK:
 		r.take_card(0)
 	return r
 
 
-## Takes the OPENING BEAST CARD through the real input door. ⚠⚠ **A run opens on a card screen since
-## 티켓 15** (「시작하자마자 세 개 중에 하나 고르는 거」), so the map sits one press further from the
-## title than it used to. Card 0, always, so the fixture is the same run every time.
+## Takes the OPENING CARD through the real input door — **an equipment card since 2026-08-27**, when
+## the beast card was deleted whole; the door and the press are unchanged. ⚠⚠ **A run opens on a card
+## screen since 티켓 15** (「시작하자마자 세 개 중에 하나 고르는 거」), so the map sits one press further
+## from the title than it used to. Card 0, always, so the fixture is the same run every time.
 func _take_opening_card(game: Game) -> void:
 	if game.run != null and game.run.state() == Run.State.PICK:
 		game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
