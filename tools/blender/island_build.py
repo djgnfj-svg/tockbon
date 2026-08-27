@@ -1,6 +1,6 @@
 # Builds the WHOLE island out of pieces in Blender and renders it on real water.
 #
-# ⚠⚠ **Read `.scratch/island-hold/issues/01-what-one-piece-is.md` first.**
+# ⚠⚠ **Read `docs/plan/tickets/01-what-one-piece-is.md` first.**
 #
 # The user, after seeing one piece alone: ***"이렇게 여러개 만들어서 섬을 만들어와야할듯. 그 물도 좀
 # 제대로 된 거 쓰자"***. One piece cannot be judged — what is being judged is whether a grid of them

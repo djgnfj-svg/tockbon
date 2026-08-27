@@ -2,11 +2,11 @@ extends RefCounted
 ## The process shape, forced — **rewritten 2026-08-22 when the process changed underneath it.**
 ##
 ## It used to scan `docs/plans/{2.active,3.done}` for a round log and a "were the open questions sent"
-## line. **That folder is gone**: plans moved to `.scratch/<effort>/` where `wayfinder` keeps a map and its
+## line. **That folder is gone**: plans moved to `docs/plan/` where `wayfinder` keeps a map and its
 ## tickets, and status is a line inside a file instead of the folder the file sits in.
 ##
 ## ⚠ **What a green here means TODAY, stated up front so nobody reads more into it.**
-## The tree half walks `.scratch/` and checks whatever it finds. **With no map written yet it finds
+## The tree half walks `docs/plan/` and checks whatever it finds. **With no map written yet it finds
 ## nothing, and its label says so out loud — read the count in the label, not the colour.** What carries
 ## real weight today is the scanner self-checks at the bottom: they drive the same pure functions the tree
 ## half uses, so a parser that has stopped working goes red with or without a map.
@@ -18,9 +18,9 @@ extends RefCounted
 ## Everything is parsed by pure functions taking TEXT, and the synthetic cases at the bottom drive **those
 ## same functions** — not a second copy written to agree with them.
 
-const SCRATCH := "res://.scratch"
-const MAP_FILE := "map.md"
-const ISSUE_DIR := "issues"
+const SCRATCH := "res://docs/plan"
+const MAP_FILE := "log.md"
+const ISSUE_DIR := "tickets"
 
 const TYPES := ["grilling", "research", "prototype", "task"]
 const STATES := ["open", "claimed", "resolved"]
@@ -158,17 +158,13 @@ func _scanner_self_checks(t) -> void:
 
 
 # -- io ---------------------------------------------------------------------------------------------------
-## An effort is a directory under `.scratch/` that actually holds a map. A directory without one is not a
-## half-built effort to complain about; it is somebody's folder.
+## ⚠⚠ **Rewritten 2026-08-27: planning is ONE folder now, not one folder per effort.** `docs/plan/` holds
+## the log, the roadmap and `tickets/` directly — there is nothing to enumerate. **The old version walked
+## subdirectories and would have found zero here, going green while measuring nothing.**
 func _effort_dirs() -> Array[String]:
 	var out: Array[String] = []
-	var d := DirAccess.open(SCRATCH)
-	if d == null:
-		return out
-	for name: String in d.get_directories():
-		var path := SCRATCH.path_join(name)
-		if FileAccess.file_exists(path.path_join(MAP_FILE)):
-			out.append(path)
+	if FileAccess.file_exists(SCRATCH.path_join(MAP_FILE)):
+		out.append(SCRATCH)
 	return out
 
 

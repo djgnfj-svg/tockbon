@@ -1,6 +1,6 @@
 # Four 2x2 pieces joined into one small island, in the Blender scene.
 #
-# ⚠⚠ **Read `.scratch/island-hold/issues/01-what-one-piece-is.md` first.**
+# ⚠⚠ **Read `docs/plan/tickets/01-what-one-piece-is.md` first.**
 #
 # The user, after judging a single piece from six angles: ***"옆면을 살려야 됐지? 음 이걸 네 개 붙여서
 # 좀 약간 간단한 섬 만들어 줄래?"***

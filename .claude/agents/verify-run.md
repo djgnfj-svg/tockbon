@@ -10,7 +10,7 @@ model: opus
 
 ## Acceptance criteria
 
-The `## Acceptance` section of the claimed ticket — `.scratch/<일>/issues/<NN>-<이름>.md`. Observe what is written there, for real.
+The `## Acceptance` section of the claimed ticket — `docs/plan/tickets/<NN>-<이름>.md`. Observe what is written there, for real.
 
 An empty acceptance section, or one written so it can't be observed, **is itself a failure.** Send it back to spec.
 

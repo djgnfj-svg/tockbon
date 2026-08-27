@@ -11,7 +11,7 @@
 # ⚠ **It does NOT render.** The user is watching the Blender window, so the viewport is the output —
 # the shading mode is set to material preview and the view is framed on the piece.
 #
-# What the piece carries, and why (see `.scratch/island-hold/issues/01-what-one-piece-is.md`):
+# What the piece carries, and why (see `docs/plan/tickets/01-what-one-piece-is.md`):
 #   · **2x2 tiles** — a piece spanning several cells is what breaks the grid, per the Bad North talk
 #   · **One side is a BEACH and the opposite side is a CLIFF**, so both coasts are in one object and
 #     can be compared without moving the camera

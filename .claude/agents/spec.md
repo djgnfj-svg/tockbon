@@ -10,7 +10,7 @@ Turns a ticket into an **implementable plan**. Nothing else.
 
 ## Input
 
-`.scratch/<일>/issues/<NN>-<이름>.md` — an open ticket on the map
+`docs/plan/tickets/<NN>-<이름>.md` — an open ticket on the map
 
 ## What you do
 

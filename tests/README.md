@@ -9,7 +9,7 @@ powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1
 ⚠ **Read `how-nets-lie` before writing a check and before believing a green round.** This file is how the
 runner behaves; that one is the casebook of greens that guaranteed nothing.
 
-⚠⚠ **The count does not live here.** The live map (`.scratch/island-hold/map.md`) is the one place a
+⚠⚠ **The count does not live here.** The live map (`docs/plan/roadmap.md`) is the one place a
 pass/fail number is written down, because a number copied into a second file is stale the next day and
 this line was stale for exactly that reason. **Run the nets, or read the map.**
 ⚠ **The suite is RED and the reds are known** — most of them are nets still holding the old direction's

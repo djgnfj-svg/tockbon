@@ -10,10 +10,11 @@
 | 라이선스 | MIT (`LICENSE-fluent-korean` 에 원문 그대로 있다) |
 | 넣은 방법 | `/plugin` 이 아니라 **파일을 직접 복사했다** — 그래야 저장소를 받는 모든 세션이 같이 갖는다 |
 
-**둘 중 하나를 고른다.** `settings.json` 의 `outputStyle` 이 지금 `fluent-korean` 을 가리킨다.
+**한 장뿐이다.** `settings.json` 의 `outputStyle` 이 `fluent-korean` 을 가리킨다.
 
-- **`fluent-korean`** — 코딩 지침을 유지한다. **이 저장소는 이걸 쓴다**
-- **`fluent-korean-not-coding`** — 코딩 지침을 뺀 것. 코드를 안 건드리는 대화용
+⚠ **짝이던 `fluent-korean-not-coding` 은 2026-08-27 에 지웠다** — 코딩 지침을 뺀 대화용이었고,
+설정이 한 번도 그것을 가리킨 적이 없다. **켜지지 않는 파일은 아무도 안 읽는다.** 필요해지면 위의
+원본 저장소에서 다시 가져온다.
 
 ---
 

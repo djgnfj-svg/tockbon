@@ -49,10 +49,10 @@ page and its builds, or language. **None of those were built, so nothing is lost
 simply stop being December's problem.
 
 **The code runs and the game launches. There is no GDD.** ⚠ **What is being made is read out of
-`.scratch/island-hold/`** — opened 2026-08-26 when the sides swapped, and ⚠⚠ **it is the only planning
-map there is.** The maps that came before it were deleted 2026-08-26 together with the direction they
-belonged to; what was still true in them was carried into `island-hold` and into the docs below.
-**Do not go looking for a second map, and do not cite one.**
+`docs/plan/`** — and ⚠⚠ **it is the only planning map there is.** ⚠ **It lived in `.scratch/` until
+2026-08-27**; the name came from a skill this repo stopped using, so the folder moved and the pieces got
+their real names: **`roadmap.md` is what is being done, `log.md` is why it came out that way, `tickets/`
+is the work.** **Do not go looking for a second map, and do not cite one.**
 
 ⚠⚠ **`main` is not the whole repo.** Two sessions collided on it once and one rebuilt the docs around a
 game folded on another branch. ⇒ **Run `git ls-remote --heads origin` before concluding anything.**
@@ -132,14 +132,13 @@ label says is worse than a red. If you can't do it, say you can't.**
 
 # The docs
 
-**`docs/` is two folders and three loose files; planning lives outside it in `.scratch/`.** **Open a
-folder's README, not the folder.**
+**`docs/` is three folders and three loose files.** **Open a folder's README, not the folder.**
 
 | Path | What it holds |
 |---|---|
 | `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **Nearly empty, and that is a defect** — there is no GDD. When one is written it is **one page** — 넘어가면 아무도 안 읽는다. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
-| `docs/agents/` | **What the imported skills read before they act, and the only configuration in `docs/`.** ⚠ **Not reading matter** — `to-spec` · `to-tickets` · `triage` · `code-review-mp` · `wayfinder` load it |
-| `.scratch/island-hold/` | **Where planning lives, and the only map.** `map.md` is the map; `issues/NN-이름.md` are its tickets. **Status is a `Status:` line inside the file — files never move between folders.** `wayfinder` owns this |
+| `docs/skill-config/` | **What the imported skills read before they act, and the only configuration in `docs/`.** ⚠ **Not reading matter** — only `code-review-mp` and `domain-modeling` still load it |
+| `docs/plan/` | **Where planning lives, and the only map.** ⚠⚠ **`roadmap.md` is what is being done** — the chunks, each with the one line that closes it; **`log.md` is why it came out that way**; **`tickets/NN-이름.md`** are the work. **Status is a `Status:` line inside the file — files never move between folders.** The chain owns this: `compass` → `breakdown` (which sends `survey` + `scout`) → `build-loop` → `wrap-up`, with `roadmap` checking it |
 | `lessons-from-two-dead-games` | **What the two games that died actually measured** |
 | `how-nets-lie` | **Every green measured to be false.** Read it before writing a check and before believing a green round |
 | `planning-principles` | **How to judge a direction.** Survived both resets on purpose — read it first |

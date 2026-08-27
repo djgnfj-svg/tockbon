@@ -1,6 +1,6 @@
 # Builds ONE shore piece in Blender and renders it beside water.
 #
-# ⚠⚠ **Read `.scratch/island-hold/issues/01-what-one-piece-is.md` before changing anything here.**
+# ⚠⚠ **Read `docs/plan/tickets/01-what-one-piece-is.md` before changing anything here.**
 # Six pieces were made and six were rejected, always for the same reason.
 #
 # What this piece obeys, and where each rule came from:

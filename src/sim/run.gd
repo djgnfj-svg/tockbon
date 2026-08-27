@@ -125,7 +125,7 @@ func begin_island() -> Battle:
 ##
 ## ⚠⚠ **A WIN PAYS ITS CARDS AND THEN ENDS THE RUN, AND THE ENDING IS A PLACEHOLDER.** What used to
 ## follow a win was the map: cards, then the next of eight islands. The map is deleted and **what
-## replaces it — waves, and a boss on a clock — is decided but unbuilt** (`.scratch/island-hold/`).
+## replaces it — waves, and a boss on a clock — is decided but unbuilt** (`docs/plan/`).
 ## ⚠ **The cards are still paid** so the card and refit screens stay reachable; sending the run back
 ## into the same island instead would be a loop dressed as a wave, and this repo does not do that.
 ##

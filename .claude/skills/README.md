@@ -1,59 +1,63 @@
-# .claude/skills — 28 skills, and which three are this repo's
+# .claude/skills — 17 skills, and **every one of them fires on its own**
 
-**Twenty-five came from `mattpocock/skills` verbatim** — thirteen on 2026-08-22, then twelve more the same
-day on the user's ***「다가져와서 사용해보자」***. **Three were written here**; three others were written
-here and deleted the same day. **Both halves of that are below.**
+⚠⚠ **Nothing here has to be typed as a slash command any more** (2026-08-27, the user:
+***"직접 쳐야 되는 부분이 너무 귀찮고, 차라리 그걸 내가 말로 했으면 좋겠고"***). **Fourteen locked
+skills were deleted the same day**, along with one that overlapped `scout`. **Re-count instead of trusting
+this total**: `ls -d .claude/skills/*/ | wc -l`.
 
-⚠ **The counts on this page were wrong until 2026-08-27** — it said 26 skills, 12 self-firing and one
-written here, when the real numbers are 28, 14 and three. **Re-count instead of trusting a written total**:
-`ls .claude/skills/*/SKILL.md | wc -l`, and `grep -l "disable-model-invocation: true"` for the locked ones.
+## The chain — read this first
 
-⚠⚠ **Every skill here is KEPT on purpose** (2026-08-27, the user: ***"잠겨 있는 것도 종종 써서"*** ·
-***"인터뷰 계열도 다 남겨"***). An audit proposed cutting sixteen and **the user overruled it**. What was
-cleaned instead was the junk inside them: twelve `agents/openai.yaml` files for another company's tool,
-which nothing in Claude Code reads, were deleted the same day.
+**`compass`** (what now) → **`breakdown`** (one chunk into tickets, sending **`survey`** inside and
+**`scout`** outside first, then settling the shape with the user) → **`build-loop`** (one ticket to code,
+through five agents) → **`wrap-up`** (close the session), with **`roadmap`** checking the whole way and
+handing back to the roadmap file.
 
-**Start with `/ask-matt`** — it is the upstream router that says which skill fits a situation. ⚠ **It does
-not know `wrap-up`**, so read this file first.
+**`docs/plan/README.md` is the files that chain reads and writes.**
 
----
+## Eight written here
 
-## Two ways a skill starts, and it is not visible from the name
+| Skill | What it does |
+|---|---|
+| **`compass`** | Says where the work stands — the week's chunk, then every open ticket ranked |
+| **`breakdown`** | One roadmap chunk into tickets. Six steps, and step three stops for the user |
+| **`survey`** | What already stands at one spot, what died, which net measures it, which green went false here |
+| **`scout`** | How others already did it — three cases with sources, plus one who did the opposite |
+| **`build-loop`** | One ticket, plan → build → verify, each in its own agent |
+| **`plan-into-ticket`** | Writes an `## Implementation plan` INTO the ticket, synthesis only, no interview |
+| **`wrap-up`** | Closes the session — reflects into the docs, runs the nets, commits, **asks whether the user looked** |
+| **`roadmap`** | Checks the roadmap against the commits — drift, gaps, what December still owes |
 
-| | How many | What it means |
-|---|---|---|
-| **Fires on its own** | **14** | The description is a trigger. A wrong description means it never fires — the most common harness failure |
-| **Only when the user types `/name`** | **14** | Carries `disable-model-invocation: true`. **An agent cannot start these**, and asking it to is refused |
+## Nine kept from `mattpocock/skills`
 
-`wayfinder` `implement` `to-spec` `to-tickets` `ask-matt` `grill-me` `grill-with-docs` `handoff`
-`improve-codebase-architecture` `setup-matt-pocock-skills` `teach` `to-questionnaire` `triage` `wait-what`
-are the fourteen. **Everything else fires on its own.**
+**They came in on 2026-08-22** on the user's ***「다가져와서 사용해보자」***. **These nine sit at spots the
+chain does not cover**; the rest assumed a real issue tracker, issues raised by other people, and a team.
 
-## The three this repo wrote
+| Skill | Why it stays |
+|---|---|
+| **`grilling`** | The interview primitive. `CLAUDE.md` runs it at the end of **every** reply |
+| **`tdd`** | The red-green loop, for `build-loop`'s builder |
+| **`code-review-mp`** | ⚠ **The one hole in the chain** — the upstream flow closed `implement` with a review and this repo never wired it in |
+| **`diagnosing-bugs`** | The hard bug: intermittent, or a regression between two known-good states |
+| **`domain-modeling`** | Keeps `CONTEXT.md` a clean glossary |
+| **`codebase-design`** | The deep-module vocabulary `tdd` speaks |
+| **`writing-for-agents`** | How to write a skill. **The five written here were written with it** |
+| **`prototype`** | Throwaway code that answers one design question |
+| **`resolving-merge-conflicts`** | Two sessions have collided on `main` once already |
 
-**Three others were deleted on 2026-08-22** — the user's call, and the reasoning held up: `implement-plan`
-(394 lines) had its verification half already written down in `how-nets-lie`, `audit-harness` reported on a
-harness a person can read, and `how-others-do-it` sat on top of `research`. **What was worth keeping was
-moved before they went** — two measurements into `how-nets-lie`, the five-agent order into
-`.claude/agents/README.md`, and the 「남들은 어떻게 하나」 guard back into `CLAUDE.md` as one line.
+## What was deleted, and what it means to restore one
 
-| Skill | What it does | Why nothing upstream covers it |
-|---|---|---|
-| **`wrap-up`** | Closes the session — reflects what finished into the docs, runs the nets, commits, and **asks whether the user looked** | **`handoff` is not this.** Handoff writes a note for the next agent and puts it OUTSIDE the repo; wrap-up writes INTO the repo, and it is the only place acceptance gets asked for |
-| **`build-loop`** | Runs the build half of the map on ONE ticket — plan into it, build it, verify it | Its triggers are the user's own words (짜줘 · 구현하자 · 만들자), and it is wired to this repo's tickets and verify agents |
-| **`plan-into-ticket`** | Writes an `## Implementation plan` INTO the ticket, synthesis only, no interview | Upstream plans live in their own files; here the plan has to land in the ticket, because `.scratch/island-hold/` is the only map |
+**2026-08-27, in two rounds.** ⚠ **The morning said keep everything** — an audit proposed cutting sixteen
+and the user overruled it. **The evening reversed that** once the chain above stood:
+***"안 쓰는 스킬들은 지워주면 되고"***. **The later word wins.**
 
-## What is wired up, and what is not
+| Gone | What restoring it costs |
+|---|---|
+| `wayfinder` `to-spec` `to-tickets` | **`compass` + `breakdown` + the roadmap file replaced all three.** Restoring means running two planning shapes at once |
+| `triage` `to-questionnaire` | Both assume **other people** — a reporter filing bugs, a colleague to send a questionnaire to |
+| `implement` `improve-codebase-architecture` | `build-loop` owns the build; the architecture sweep never fired once |
+| `grill-me` `grill-with-docs` | Both wrap `grilling`, which is kept and runs on every reply anyway |
+| `ask-matt` `handoff` `teach` `wizard` `setup-matt-pocock-skills` | The router described the upstream flow only; the rest never fired |
+| `research` | **`scout` stands in its place** — same job, this repo's triggers, and the source count written in |
 
-- **`docs/agents/` exists** — `/setup-matt-pocock-skills` ran on 2026-08-22. The tracker is **local
-  markdown**, which is what `.scratch/` already was
-- ⚠ **`ask-matt` says `/code-review`; this repo's copy is `code-review-mp`** — renamed on import because
-  Claude Code ships a `code-review` of its own. **The originals were left unedited on purpose**
-- ⚠ **`ask-matt` routes to none of this repo's own work.** It describes the upstream flow only
-
-## What was deliberately left upstream — eleven
-
-**Seven the author marked `in-progress`** (`claude-handoff` `implement-spec` `loop-me`
-`setup-ts-deep-modules` `writing-beats` `writing-fragments` `writing-shape`) and **four for another stack**
-(`git-guardrails-claude-code` `migrate-to-shoehorn` `scaffold-exercises` `setup-pre-commit`).
-**Say the word and they come too** — the full set is 36.
+⚠ **`docs/skill-config/` outlived its skills.** `issue-tracker.md` is now read by `code-review-mp` alone,
+and `domain.md` by anything exploring the code.

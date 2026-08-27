@@ -6,6 +6,7 @@ description: Run the build half of the map on one ticket — plan into the ticke
 # build-loop — 계획 → 구현 → 검증
 
 **The deciding half is already over.** The ticket holds the decision; this skill turns it into code.
+**`breakdown` wrote the ticket. `wrap-up` closes the session after this.**
 
 ⚠⚠ **You do not write code here, and you do not read `src/` here.** Every step below happens inside an
 agent with **its own context window** — that is the entire reason this skill exists. **The moment a
@@ -73,3 +74,6 @@ spent on nothing.
 not done** · where anyone was unsure.
 
 ⚠ **If you find yourself pasting source into the chat, the context saving has already gone.**
+
+**Then name the next step**: another open ticket on this chunk → `build-loop` again · the chunk's bar now
+true → `breakdown` for the next chunk · the session ending → `wrap-up`.
