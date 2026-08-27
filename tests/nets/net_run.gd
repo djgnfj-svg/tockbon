@@ -76,7 +76,7 @@ func run(t) -> void:
 	_starting_state(t)
 	_hp_carries_by_identity(t)
 	_wipe_loses(t)
-	_timeout_loses(t)
+	_the_clock_ends_nothing(t)
 	_restart_resets(t)
 	# -- 티켓 15: a card can be a BEAST --------------------------------------------------------------
 	_a_beast_card_brings_a_slot_and_bodies(t)
@@ -462,50 +462,44 @@ func _wipe_loses(t) -> void:
 	b.step(0.1)
 	t.eq(b.outcome(), Battle.Outcome.LOST, "병사가 다 죽으면 섬을 진다")
 	t.eq(b.lose_reason(), Battle.Lose.WIPED, "패인은 전멸이다")
-	t.ok(b.enemies_left() > 0, "적이 아직 남아 있다 — 시간 초과와 헷갈릴 여지가 없다")
-	t.ok(b.time_left() > 0.0, "시계도 아직 남아 있다")
+	t.ok(b.enemies_left() > 0, "적이 아직 남아 있다 — 적을 다 죽여서 끝난 게 아니다")
 
 
 ## The clock, through a real `Run`. One soldier is landed and nine stay at the harbour, which is the
-## smallest plan a commit will accept. The step count says the run ended ON the clock rather than
-## early.
+## smallest plan a commit will accept.
 ##
-## ⚠⚠ **THE LIMIT IS SHORTENED HERE AND THAT IS THE FIX FOR THIS ISLAND'S LOSS RULE, NOT A DODGE.**
-## This fixture used island 1's own 60 s and asserted 3600 sub-steps — and it only ever passed because
-## the run could not end when the beachhead died. It can now: the lone soldier meets a bison and is
-## dead at **7.95 s**, and holding nine reserves no longer keeps the island open. **What sat out the
-## other 52 seconds was the defect the user reported**, so a check that needed those 52 seconds was
-## measuring the defect.
+## ⚠⚠ **THIS ROW HAS BEEN INVERTED TWICE AND THE SECOND INVERSION DELETED ITS SUBJECT.** It began as
+## "the clock ends the island". 2026-08-24 turned it into "the clock ends nothing" (the user: 「제한 시간
+## 안에 클리어 조건은 일단 지워」), still reading `Lose.TIMEOUT` and `time_left()` to say so.
+## 2026-08-27 deleted `time_limit`, `time_left()` and `Lose.TIMEOUT` outright, and **a guard cannot
+## watch a symbol that no longer exists.**
 ##
-## ⇒ The limit is cut to 5.0 s, comfortably before that death, so the timer is once again the only
-## thing that can end this island. **The claim that `Islands.time_limit()` is what reaches the
-## battle is not lost with it** — it is pinned on its own line at the top of this file, which is where
-## it belongs; this row is about what the clock DOES, not where its number comes from.
-func _timeout_loses(t) -> void:
+## ⇒ **What is left is the half that was never about the limit**: the clock runs, it runs a long way,
+## and the island is still going. That is what makes "nothing ends by time" observable now — not the
+## absence of an enum value, but an island that outlives any duration a limit would plausibly have had.
+## ⚠ **The 5-second mark is a yardstick, not a rule.** Nothing in `src/` reads it; it is here so the
+## number this row steps past is a number a reader can compare against.
+func _the_clock_ends_nothing(t) -> void:
 	var r := _seeded_open(5)
 	var b := r.begin_island()
 	t.ok(b.send(0, _summonable_on(b)) >= 0 and b.commit(), "한 명만 보내고 시작을 눌렀다 (자가 점검)")
-	t.eq(b.time_limit, Islands.time_limit(), "섬이 준 제한 시간을 확인한다 (자가 점검 — 줄이기 전에)")
-	var limit := 5.0
-	b.time_limit = limit
 	# ⚠ **One sub-step per call, never `step(1.0)`.** `step` consumes whole `Rules.SIM_SUBSTEP_SEC`
 	# sub-steps and carries the leftover, so a 1.0 s call runs **59** of them and not 60 — the residue
 	# after sixty subtractions lands a hair under the sub-step in IEEE double — and the run would need
 	# a 61st call for a reason that is floating point rather than the clock.
+	var yardstick := 5.0
 	var steps := 0
 	while b.outcome() == Battle.Outcome.RUNNING and steps < 8000:
 		b.step(Rules.SIM_SUBSTEP_SEC)
 		steps += 1
 
-	# ⚠⚠ **INVERTED, 2026-08-24** (the user: 「제한 시간 안에 클리어 조건은 일단 지워」). This block used
-	# to prove the clock could end an island. It is kept, pointing the other way, because 「the clock
-	# does not decide」 is a RULE — and a rule nothing measures is a rule that grows back by accident.
-	# The one soldier either dies to the eight defenders (which is the WIPE arm, not the clock) or the
-	# island is still running long past its own limit; both are read below, and neither is a timeout.
-	t.ok(b.outcome() != Battle.Outcome.LOST or b.lose_reason() != Battle.Lose.TIMEOUT,
-		"시간으로 지는 일은 없다")
-	t.ok(b.elapsed >= limit - Rules.EPS, "그런데 시계는 제한 시간을 넘겨 갔다 (%.6f초) — 안 돈 게 아니다" % b.elapsed)
-	t.ok(b.time_left() <= Rules.EPS, "남은 시간은 0에 붙어 있다 (%.12f초)" % b.time_left())
+	# The one soldier either dies to the defenders — which is the WIPE arm and has nothing to do with
+	# a clock — or the island is still running far past any limit it might once have carried.
+	t.ok(b.outcome() != Battle.Outcome.LOST or b.lose_reason() == Battle.Lose.WIPED
+			or b.lose_reason() == Battle.Lose.LANDING_LOST,
+		"지는 길은 전멸과 상륙 병력 소멸뿐이다 — 시간으로 지는 길은 없다")
+	t.ok(b.elapsed >= yardstick - Rules.EPS,
+		"그런데 시계는 %.0f초를 넘겨 갔다 (%.6f초) — 안 돈 게 아니다" % [yardstick, b.elapsed])
 	t.eq(b.enemies_left(), Islands.spawns().size(),
 		"적은 하나도 안 죽었다 — 한 명으로는 못 죽인다")
 

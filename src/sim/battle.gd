@@ -40,11 +40,17 @@ enum Outcome { RUNNING, WON, LOST }
 ##
 ## ⚠ **Appended, never inserted.** These are ordinals a saved run or a pinned literal could hold.
 ##
+## ⚠⚠ **`TIMEOUT` WAS REMOVED 2026-08-27 and that DID renumber the two below it.** The rule against
+## inserting is about ordinals surviving in something outside this file, and December is a demo with
+## no saves — nothing outside the running process holds one. **What did hold them is `net_shell`**,
+## which pinned the enum's size and every member's screen wording, and that pin moved with this line.
+## ⇒ **The day a save file exists, this becomes append-only for real.**
+##
 ## ⚠⚠ **BOTH ARE TRUE AT ONCE when the last body dies with nobody in reserve, and `WIPED` WINS.**
 ## The precedence is stated here and applied in exactly one place (`_phase_clock`), because "every
 ## soldier is dead" is strictly more than "the landing force is gone" — it is the stronger claim and
 ## the more useful one to read. `net_battle` pins both arms of it.
-enum Lose { NONE, TIMEOUT, WIPED, LANDING_LOST }
+enum Lose { NONE, WIPED, LANDING_LOST }
 
 ## Where a soldier is right now, on THIS island. It is per-island state and not part of the roster:
 ## `army` holds who exists and how hurt they are, and that is what carries to the next island.
@@ -100,7 +106,9 @@ const OFFMAP := Vector2(-1.0, -1.0)
 
 var grid: Grid = null
 var army: Army = null
-var time_limit := 0.0
+## ⚠ **`elapsed` STAYED when the time limit went** (2026-08-27). It is not half of a deleted rule: it
+## is how several nets prove the clock actually moved, which is the difference between a fight that ran
+## and a fight that was silently never stepped.
 var elapsed := 0.0
 
 ## One frame's facts, oldest first. Each is a Dictionary whose `kind` is an `Event`:
@@ -238,10 +246,9 @@ var _lose := Lose.NONE
 ##
 ## `spawns` is `islands.gd`'s `spawns_of` output: `[{"type_id": int, "tile": int}]`.
 @warning_ignore("shadowed_variable")
-func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
+func setup(grid: Grid, army: Army, spawns: Array) -> void:
 	self.grid = grid
 	self.army = army
-	self.time_limit = time_limit
 	elapsed = 0.0
 	events = []
 	_outcome = Outcome.RUNNING
@@ -648,10 +655,6 @@ func enemies_left() -> int:
 		if enemy_alive[e] != 0:
 			n += 1
 	return n
-
-
-func time_left() -> float:
-	return maxf(0.0, time_limit - elapsed)
 
 
 ## Docks are gone; every harbour lookup goes through `grid` (`boat-and-landing`, 4.4's call table).
@@ -1270,14 +1273,16 @@ func _phase_clock(dt: float) -> void:
 		_lose = Lose.WIPED if army.living_count() == 0 else Lose.LANDING_LOST
 		return
 	# ⚠⚠ **THE TIME LIMIT NO LONGER DECIDES ANYTHING** (2026-08-24, the user: 「제한 시간 안에 클리어
-	# 조건은 일단 지워」). An island now ends when the enemies are gone or the landing force is, and it
-	# can run as long as it takes.
+	# 조건은 일단 지워」). An island ends when the enemies are gone or the landing force is, and it can
+	# run as long as it takes.
 	#
-	# ⚠ **`time_limit` and `time_left()` are kept and `Lose.TIMEOUT` is kept**, unproducible, because
-	# 「일단」 is in the sentence: the number still comes out of `islands.gd`, the loss screen still has its
-	# wording, and putting the rule back is this branch and nothing else. **Nothing judges by the clock
-	# any more** — the HUD countdown went with it, because a clock counting down to nothing is the exact
-	# shape of code that pretends to work.
+	# ⚠⚠ **AND ON 2026-08-27 THE REST OF IT WENT TOO.** `time_limit`, `time_left()`, `Lose.TIMEOUT`,
+	# `Islands.TIME_LIMIT_SEC` and the loss screen's 「패배 — 시간 초과」 had all been kept unproducible
+	# on the strength of the 「일단」 in that sentence — three days, a fourth argument threaded through
+	# `setup` at every call site, and an enum value the code openly documented as unreachable.
+	# **A rule nothing can produce is not a rule kept warm, it is a rule that lies about existing.**
+	# ⇒ Putting the clock back is a branch here plus a number, and that is cheaper than carrying a
+	# fourth parameter no caller has a real value for.
 
 
 ## ⚠⚠ **THE FIGHT IS OVER WHEN NOBODY IS STILL IN IT, AND A SOLDIER AT THE HARBOUR IS NOT IN IT.**

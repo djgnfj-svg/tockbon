@@ -98,16 +98,14 @@ static func load_into(grid: Grid) -> void:
 	grid.load_rows(rows(), tiers())
 
 
-## ⚠⚠ **NOTHING LOSES BY THE CLOCK** — the user deleted the time-limit loss on 2026-08-24. This number
-## exists because `battle.setup` still takes one; it decides nothing today.
+## ⚠⚠ **THE ISLAND'S TIME LIMIT WAS DELETED 2026-08-27.** The loss it fed died on 2026-08-24 and the
+## number stayed alive for three days on one argument: *`battle.setup` still takes one.* It took one
+## because this existed. **Two dead things holding each other up is not a dependency, it is a loop**,
+## and `setup` lost the parameter in the same commit that deleted this.
 ##
-## ⚠ **A timer that DOES decide is coming and is not this one**: 「제한 시간이 지나면 보스가 온다」.
-const TIME_LIMIT_SEC := 20.0
-
-
-static func time_limit() -> float:
-	return TIME_LIMIT_SEC
-
+## ⚠ **A timer that DOES decide is coming and it is not this one**: 「제한 시간이 지나면 보스가 온다」.
+## That clock belongs to the run, not to one island, and it produces a BOSS rather than a defeat — so
+## it gets a fresh number when it is built, and reviving 20.0 would be reviving the wrong shape.
 
 ## The walking height of level `l`, in world units. **Read from the same file as the mesh**, because
 ## the mesh is authored: the game does not get to pick these, it has to agree with what was built.

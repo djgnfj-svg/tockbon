@@ -64,7 +64,7 @@ func run(t) -> void:
 ## end and has to move.
 func _uncommitted_step_touches_nothing(t) -> void:
 	var army := _army_of(Rules.WOLF, 2)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 7, 5)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 7, 5)])
 	t.ok(b.send(0, _tile_of(6, 4)) >= 0 and b.send(1, _tile_of(6, 6)) >= 0,
 			"두 척을 계획해 뒀다 (자가 점검)")
 
@@ -95,7 +95,7 @@ func _uncommitted_step_touches_nothing(t) -> void:
 
 func _commit_refuses_an_empty_plan(t) -> void:
 	var army := _army_of(Rules.WOLF, 2)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 7, 5)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 7, 5)])
 	t.ok(not b.commit(), "빈 계획으로는 시작이 안 된다")
 	t.ok(not b.committed(), "거절당한 시작은 상태도 안 건드린다")
 	t.ok(b.send(0, _tile_of(6, 4)) >= 0, "한 척을 계획했다 (자가 점검)")
@@ -106,7 +106,7 @@ func _commit_refuses_an_empty_plan(t) -> void:
 
 func _the_plan_is_sealed_by_the_commit(t) -> void:
 	var army := _army_of(Rules.WOLF, 3)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 7, 5)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 7, 5)])
 	var uid := b.send(0, _tile_of(6, 4))
 	t.ok(uid >= 0 and b.send(1, _tile_of(6, 6)) >= 0, "두 척을 계획해 뒀다 (자가 점검)")
 	t.ok(b.commit(), "확정했다 (자가 점검)")
@@ -123,7 +123,7 @@ func _the_plan_is_sealed_by_the_commit(t) -> void:
 
 func _one_drop_is_one_boat(t) -> void:
 	var army := _army_of(Rules.WOLF, 3)
-	var b := _battle_of(_bay(), army, [], 999.0)
+	var b := _battle_of(_bay(), army, [])
 	t.eq(b.boats.size(), 0, "아직 아무것도 안 놓았다 (자가 점검)")
 	var a := b.send(0, _tile_of(6, 4))
 	t.eq(b.boats.size(), 1, "한 번 끌면 배 한 척이 생긴다")
@@ -143,7 +143,7 @@ func _there_is_no_cap(t) -> void:
 	var g := _island_grid(0)
 	var army := _army_of(Rules.WOLF, FULL_ROSTER)
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns(), Islands.time_limit())
+	b.setup(g, army, Islands.spawns())
 	var landing := _isle1_landing()
 	t.ok(g.home_harbour_for(landing) >= 0, "(28,20) 은 어느 항구에서든 보낼 수 있는 칸이다 (자가 점검)")
 
@@ -168,7 +168,7 @@ func _there_is_no_cap(t) -> void:
 
 func _send_refusals(t) -> void:
 	var army := _army_of(Rules.WOLF, 3)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 7, 5)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 7, 5)])
 	var good := _tile_of(6, 4)
 
 	t.eq(b.send(-1, good), -1, "없는 병사 번호(-1)는 거절된다")
@@ -182,7 +182,7 @@ func _send_refusals(t) -> void:
 	# A dead soldier: `setup` puts anyone `army.alive` says is gone straight into DEAD.
 	var dead_army := _army_of(Rules.WOLF, 2)
 	dead_army.kill(0)
-	var db := _battle_of(_bay(), dead_army, [], 999.0)
+	var db := _battle_of(_bay(), dead_army, [])
 	t.eq(db.soldier_state[0], Battle.SoldierState.DEAD, "죽은 병사는 DEAD 로 들어온다 (자가 점검)")
 	t.eq(db.send(0, good), -1, "죽은 병사는 못 보낸다")
 	t.ok(db.send(1, good) >= 0, "옆의 산 병사는 보내진다 — 판이 통째로 막힌 게 아니다")
@@ -207,7 +207,7 @@ func _a_boat_leaves_from_its_own_harbour(t) -> void:
 		"H~~~~~~~~~~~~~~~",
 	]
 	var army := _army_of(Rules.WOLF, 2)
-	var b := _battle_of(rows, army, [_spawn(16, Rules.WOLF, 14, 1)], 999.0)
+	var b := _battle_of(rows, army, [_spawn(16, Rules.WOLF, 14, 1)])
 	var landing := 2 * 16 + 12          # (12,2): the east harbour is the nearest that can see it
 	var hb := b.grid.home_harbour_for(landing)
 	t.ok(hb >= 0, "그 칸을 볼 수 있는 항구가 있다 (자가 점검)")
@@ -229,7 +229,7 @@ func _a_boat_leaves_from_its_own_harbour(t) -> void:
 
 func _recall_puts_the_soldier_back(t) -> void:
 	var army := _army_of(Rules.WOLF, 2)
-	var b := _battle_of(_bay(), army, [], 999.0)
+	var b := _battle_of(_bay(), army, [])
 	var uid := b.send(0, _tile_of(6, 4))
 	t.ok(uid >= 0 and b.send(1, _tile_of(6, 6)) >= 0, "두 척을 놓았다 (자가 점검)")
 
@@ -291,7 +291,7 @@ func _formation_of(t, order: Array, landing: int) -> Dictionary:
 	var g := _island_grid(0)
 	var army := _army_of(Rules.WOLF, 2)
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns(), Islands.time_limit())
+	b.setup(g, army, Islands.spawns())
 	for raw in order:
 		var sid := int(raw)
 		t.ok(b.send(sid, landing) >= 0, "%d번 병사를 상륙지로 보냈다 (자가 점검)" % sid)
@@ -344,7 +344,7 @@ func _thirteen_aimed_at_one_tile_stand_on_thirteen(t) -> void:
 	var g := _island_grid(0)
 	var army := _army_of(Rules.WOLF, FULL_ROSTER)
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns(), Islands.time_limit())
+	b.setup(g, army, Islands.spawns())
 	var landing := _isle1_landing()
 	for i in FULL_ROSTER:
 		t.ok(b.send(i, landing) >= 0, "%d번을 한 칸에 겹쳐 보냈다 (자가 점검)" % i)
@@ -369,7 +369,7 @@ func _the_empty_boat_goes_home_and_vanishes(t) -> void:
 	var army := _army_of(Rules.WOLF, 1)
 	# A live enemy far from the crossing, or `enemies_left() == 0` latches WON on the first sub-step
 	# and every step after it returns before the boat has moved an inch.
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)])
 	var landing := _tile_of(6, 5)
 	var uid := b.send(0, landing)
 	t.ok(uid >= 0 and b.commit(), "한 척을 보내고 확정했다 (자가 점검)")
@@ -564,7 +564,7 @@ func _the_substep_itself_is_pinned(t) -> void:
 
 func _zero_stops_the_clock(t) -> void:
 	var army := _army_of(Rules.WOLF, 1)
-	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 999.0)
+	var b := _battle_of(_bay(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)])
 	t.ok(b.send(0, _tile_of(6, 5)) >= 0 and b.commit(), "보내고 확정했다 (자가 점검)")
 	b.begin_frame()
 	b.step(Rules.SIM_SUBSTEP_SEC)
@@ -694,7 +694,7 @@ func _the_comparison_itself(t) -> void:
 func _skirmish() -> Dictionary:
 	var army := _army_of(Rules.WOLF, 4)
 	var b := _battle_of(_bay(), army,
-			[_spawn(ARENA_W, Rules.WOLF, 8, 5), _spawn(ARENA_W, Rules.WOLF, 9, 4)], 999.0)
+			[_spawn(ARENA_W, Rules.WOLF, 8, 5), _spawn(ARENA_W, Rules.WOLF, 9, 4)])
 	return {"battle": b, "army": army}
 
 
@@ -761,9 +761,9 @@ func _spawn(w: int, type_id: int, x: int, y: int) -> Dictionary:
 	return {"type_id": type_id, "tile": y * w + x}
 
 
-func _battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
+func _battle_of(rows: Array, army: Army, spawns: Array) -> Battle:
 	var g := Grid.new()
 	g.load_rows(rows)
 	var b := Battle.new()
-	b.setup(g, army, spawns, limit)
+	b.setup(g, army, spawns)
 	return b

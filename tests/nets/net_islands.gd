@@ -137,9 +137,6 @@ const EXPECT_UNCOVERED_COAST := [13, 14, 4]
 const EXPECT_DROPPABLE := [84, 76, 82]
 const EXPECT_START_SENDABLE := [84, 76, 82]
 
-## The island's clock. ⚠ **Nothing loses by it** — the user deleted the time-limit loss on 2026-08-24.
-const EXPECT_LIMIT := 20.0
-
 ## Ceiling on tiles crossed in one walk, matching `battle.gd`'s `WALK_TILES_MAX` order of magnitude on
 ## a grid 2.67x the old one's tile count.
 const WALK_STEPS_MAX := 900
@@ -164,7 +161,6 @@ func run(t) -> void:
 	for y in rows.size():
 		t.eq(str(rows[y]).length(), ROW_WIDTH, "%d 번째 줄이 %d 칸이다" % [y, ROW_WIDTH])
 		t.eq(str(tiers[y]).length(), ROW_WIDTH, "층 판 %d 번째 줄도 같다" % y)
-	t.eq(Islands.time_limit(), EXPECT_LIMIT, "섬의 제한 시간은 %.0f초다" % EXPECT_LIMIT)
 
 	var min_region_floor := _min_region_floor()
 	# ⚠ The 27 is a LITERAL on purpose. Writing the formula on both sides would let the roster grow and

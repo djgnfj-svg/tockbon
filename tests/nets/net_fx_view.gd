@@ -90,7 +90,7 @@ func _the_terrain_speaks_the_legend(t) -> void:
 		"~.....~",
 		"~~~~~~~",
 	]
-	var b := _battle_of(rows, _army_of([]), [], 999.0)
+	var b := _battle_of(rows, _army_of([]), [])
 	var fv := _view_of(b, rows)
 	var arrays: Array = (fv._terrain.mesh as ArrayMesh).surface_get_arrays(0)
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -178,11 +178,11 @@ func _a_tier_boundary_is_a_wall(t) -> void:
 		".........",
 		".........",
 	]
-	var flat := _view_of(_battle_of(rows, _army_of([]), [], 999.0), rows)
+	var flat := _view_of(_battle_of(rows, _army_of([]), []), rows)
 	var g := Grid.new()
 	g.load_rows(rows, tiers)
 	var b := Battle.new()
-	b.setup(g, _army_of([]), [], 999.0)
+	b.setup(g, _army_of([]), [])
 	b._committed = true
 	var fv := _view_of(b, rows)
 
@@ -268,7 +268,7 @@ func _the_hills_never_swallow_the_tier(t) -> void:
 	var g := Grid.new()
 	g.load_rows(rows, tiers)
 	var b := Battle.new()
-	b.setup(g, _army_of([]), [], 999.0)
+	b.setup(g, _army_of([]), [])
 	b._committed = true
 	var fv := _view_of(b, rows)
 
@@ -440,7 +440,7 @@ func _every_body_effect_is_sized_off_the_picture(t) -> void:
 	# is measured as geometry in the air buffer.
 	var rows := _open(ARENA_W, ARENA_H)
 	var army := _army_of([Rules.WOLF])
-	var b := _battle_of(rows, army, [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+	var b := _battle_of(rows, army, [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	_ashore(b, 0, Vector2(11.0, 6.0))
 	var fv := _view_of(b, rows)
 	var swung := false
@@ -465,7 +465,7 @@ func _every_body_effect_is_sized_off_the_picture(t) -> void:
 	# buffer is shared, a live fight keeps sparks and tracers in it, and 「the widest thing in the
 	# air buffer」 is not 「the halo」. An enemy alone on an empty arena puts exactly one disc there.
 	var quiet := _battle_of(rows, _army_of([]),
-		[_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	var qv := _view_of(quiet, rows)
 	qv._process(1.0 / 60.0)
 	t.ok(qv._a_v.size() == 0, "싸움이 없으면 공중 버퍼가 비어 있다 (자가 점검)")
@@ -516,7 +516,7 @@ func _every_body_effect_is_sized_off_the_picture(t) -> void:
 ## cannot move is not a frozen picture. Both ends: silent before the threshold, moving after it.
 func _a_body_that_cannot_move_still_does_something(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	var fv := _view_of(b, rows)
 	fv._process(1.0 / 60.0)
 	t.ok(fv._body.has("e0"), "몸 항목이 생겼다 (자가 점검)")
@@ -643,7 +643,7 @@ func _the_refusal_mark(t) -> void:
 ## 120 px cut is ONE piece = **6 vertices**, wearing `COL_TARGET_LINE`'s deliberate 0.12 alpha.
 func _the_intent_line(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.WOLF, 14, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.WOLF, 14, 6)])
 	_ashore(b, 0, Vector2(12.0, 6.0))
 	b.enemy_target[0] = 0
 	var fv := _view_of(b, rows)
@@ -751,7 +751,7 @@ func _the_death_burst_stands_in_the_camera_plane(t) -> void:
 ## **144 vertices**, `COL_HIT_HALO` with the flash's remaining fraction on its alpha.
 func _the_hit_halo(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
 	t.eq(fv._a_v.size(), 0, "맞은 적 없는 프레임에는 헤일로가 없다 (바닥 — 무조건 그리는 잎은 여기서 갈린다)")
@@ -771,7 +771,7 @@ func _the_hit_halo(t) -> void:
 ## SAME body against its own resting frame, so the row is the difference the effect makes.
 func _body_effects_ride_the_pooled_fields(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	var fv := _view_of(b, rows)
 	fv._body["e0"] = _body_entry(b.enemy_pos[0])
 	fv._process(0.0)
@@ -834,7 +834,7 @@ func _the_boat_route_shrinks_with_the_sim(t) -> void:
 	# ⚠ One idle enemy far inland, or there is nothing to win against: a battle with zero enemies
 	# latches WON on its first step and the boat freezes mid-bay — measured, 4000 sub-steps of leg 0.
 	var b := _planning_battle_of(rows, _army_of([Rules.WOLF]),
-		[_spawn(ARENA_W, Rules.WOLF, 20, 9)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 20, 9)])
 	var fv := _view_of(b, rows)
 	# The sendable tile FARTHEST from the harbour, so the route holds interior waypoints and the
 	# crossing lasts long enough for `leg` to advance while the boat is still at sea.
@@ -899,7 +899,7 @@ func _the_boat_route_shrinks_with_the_sim(t) -> void:
 ## ring) proves the zero below is the gate and not a dead plan layer.
 func _a_dry_slot_draws_no_plan(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _planning_battle_of(rows, _army_of([Rules.WOLF]), [], 999.0)
+	var b := _planning_battle_of(rows, _army_of([Rules.WOLF]), [])
 	var fv := _view_of(b, rows)
 	# Aim at open water (the border ring). This arena has no summon band, so the aim is REFUSED
 	# water — which draws the COL_LOSE ring: ceil(TAU·18 / 20) = 6, floored to 8 segments = 48 verts.
@@ -968,7 +968,7 @@ func _every_row_wears_its_own_picture(t) -> void:
 	var spawns := []
 	for ty in Rules.UNITS.size():
 		spawns.append(_spawn(ARENA_W, ty, 2 + ty, 3))
-	var b := _battle_of(rows, _army_of([]), spawns, 999.0)
+	var b := _battle_of(rows, _army_of([]), spawns)
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
 	var seen := {}
@@ -1085,7 +1085,7 @@ func _only_the_wolf_has_frames_and_they_share_one_canvas(t) -> void:
 ## the strip; drop the `% strip.size()` so it clamps.
 func _the_legs_run_on_time_not_on_distance(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	var fv := _view_of(b, rows)
 	var stood: Vector2 = b.enemy_pos[0]
 	fv._process(0.0)
@@ -1142,7 +1142,7 @@ func _the_legs_run_on_time_not_on_distance(t) -> void:
 func _the_bite_rides_the_blow_that_lunges(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
 	var b := _battle_of(rows, _army_of([Rules.WOLF]),
-		[_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	_ashore(b, 0, Vector2(11.0, 6.0))
 	var fv := _view_of(b, rows)
 	var walk := fv._anim_strip(Rules.WOLF, Look.Anim.WALK, true)
@@ -1233,7 +1233,7 @@ func _a_bleeding_body_is_a_different_colour(t) -> void:
 	var b := _battle_of(rows, _army_of([Rules.CROW]), [
 		_spawn(ARENA_W, Rules.WOLF, 6, 5),    # 0 — bitten
 		_spawn(ARENA_W, Rules.WOLF, 18, 9),   # 1 — the control sibling, far away
-	], 999.0)
+	])
 	_ashore(b, 0, Vector2(3, 5))
 	b.begin_frame()
 	b.step(Rules.SIM_SUBSTEP_SEC)
@@ -1346,17 +1346,17 @@ func _spawn(w: int, type_id: int, x: int, y: int) -> Dictionary:
 
 ## Committed directly, `net_fx`'s own idiom: an uncommitted battle is inert to every driver and the
 ## commit gate itself is `net_plan`'s to measure.
-func _battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
-	var b := _planning_battle_of(rows, army, spawns, limit)
+func _battle_of(rows: Array, army: Army, spawns: Array) -> Battle:
+	var b := _planning_battle_of(rows, army, spawns)
 	b._committed = true
 	return b
 
 
-func _planning_battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
+func _planning_battle_of(rows: Array, army: Army, spawns: Array) -> Battle:
 	var g := Grid.new()
 	g.load_rows(rows)
 	var b := Battle.new()
-	b.setup(g, army, spawns, limit)
+	b.setup(g, army, spawns)
 	return b
 
 
@@ -1383,7 +1383,7 @@ func _view_of(b: Battle, rows: Array) -> FieldView:
 ## from a leaf firing unconditionally breaks every equality at once.
 func _quiet_view() -> Dictionary:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [], 999.0)
+	var b := _battle_of(rows, _army_of([]), [])
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
 	return {"fv": fv, "b": b}

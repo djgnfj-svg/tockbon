@@ -834,7 +834,7 @@ func _a_landing_never_puts_a_body_on_the_plateau(t) -> void:
 	var g := Grid.new()
 	Islands.load_into(g)
 	var b := Battle.new()
-	b.setup(g, Army.new(), Islands.spawns(), 999.0)
+	b.setup(g, Army.new(), Islands.spawns())
 	# ⚠⚠ **The tile moved with the island and the choice is not arbitrary.** (16,3) was a shore on the
 	# rectangle and is inland on the drawn coast. (22,2) is picked because it is **the approved landing
 	# nearest the plateau** — it touches the plateau's own corner diagonally, so the ten-tile search
@@ -1149,7 +1149,7 @@ func _battle_on(rows: Array, tiers: Array, species: Array, at: Array, spawns: Ar
 			slot = army.register_species(ty)
 		army.recruit(slot)
 	var b := Battle.new()
-	b.setup(g, army, spawns, 999.0)
+	b.setup(g, army, spawns)
 	b._committed = true
 	for k in at.size():
 		_ashore(b, k, at[k])

@@ -1378,10 +1378,11 @@ func _every_lose_reason_reads_differently(t) -> void:
 	t.eq(Look.COL_BUTTON, Color(0.239, 0.341, 0.459), "COL_BUTTON 이 리터럴 그 색이다")
 
 	var lose_enum: Dictionary = Battle.new().get_script().get_script_constant_map()["Lose"]
-	t.eq(lose_enum.size(), 4, "패인은 넷이다 (NONE · TIMEOUT · WIPED · LANDING_LOST)")
+	# ⚠ **Four became three on 2026-08-27**: `TIMEOUT` and its 「패배 — 시간 초과」 were deleted together,
+	# because nothing had been able to produce that defeat since 2026-08-24.
+	t.eq(lose_enum.size(), 3, "패인은 셋이다 (NONE · WIPED · LANDING_LOST)")
 	var want := {
 		"NONE": PanelView.MSG_LOST,
-		"TIMEOUT": PanelView.MSG_LOST_TIMEOUT,
 		"WIPED": PanelView.MSG_LOST_WIPED,
 		"LANDING_LOST": PanelView.MSG_LOST_LANDING,
 	}

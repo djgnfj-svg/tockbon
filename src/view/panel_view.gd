@@ -35,7 +35,8 @@ extends Node2D
 
 ## Shown on the message band. Titles, not sentences — the panel is read at a glance.
 const MSG_WON := "승리"
-const MSG_LOST_TIMEOUT := "패배 — 시간 초과"
+## ⚠ **`MSG_LOST_TIMEOUT` went with `Lose.TIMEOUT` on 2026-08-27** — 「패배 — 시간 초과」 was wording
+## for a defeat the sim could not produce, sitting on the screen's own list of what it can say.
 const MSG_LOST_WIPED := "패배 — 전멸"
 ## ⚠⚠ **`Battle.Lose.LANDING_LOST` — everyone you SENT is dead, and the ones you kept back can never
 ## be sent.** It is its own line because 「전멸」 was a lie in this case: the player is looking at
@@ -173,8 +174,6 @@ func _message_text() -> String:
 		return MSG_WON
 	if battle == null:
 		return MSG_LOST
-	if battle.lose_reason() == Battle.Lose.TIMEOUT:
-		return MSG_LOST_TIMEOUT
 	if battle.lose_reason() == Battle.Lose.WIPED:
 		return MSG_LOST_WIPED
 	if battle.lose_reason() == Battle.Lose.LANDING_LOST:

@@ -90,7 +90,7 @@ func _setup_opens_at_the_survey_zoom(t) -> void:
 		rows.append("~".repeat(26))
 	g.load_rows(rows)
 	var b := Battle.new()
-	b.setup(g, Army.new(), [], 999.0)
+	b.setup(g, Army.new(), [])
 	small.zoom = Look.ZOOM_MAX
 	small.setup(b, Army.new(), rows)
 	t.ok(absf(small.zoom - 0.87912) < 0.001,
@@ -139,7 +139,7 @@ func _setup_on_the_long_map(t) -> void:
 	t.eq(g.w, 144, "긴 지도가 144칸 폭으로 실렸다 (자가 점검)")
 	t.eq(g.h, 32, "높이는 그대로 32칸이다 (자가 점검)")
 	var b := Battle.new()
-	b.setup(g, army, [], 999.0)
+	b.setup(g, army, [])
 
 	var fv := _fv()
 	fv.setup(b, army, long_rows)
@@ -531,7 +531,7 @@ func _the_engine_agrees_with_the_forward(t) -> void:
 	g.load_rows(rows)
 	var army := Army.new()
 	var b := Battle.new()
-	b.setup(g, army, [], 999.0)
+	b.setup(g, army, [])
 	fv.setup(b, army, rows)
 	await t.pump_frames(1)
 

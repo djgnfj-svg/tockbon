@@ -402,7 +402,7 @@ func _a_grid_with_no_harbours(t) -> void:
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
-	b.setup(g, army, [], 60.0)
+	b.setup(g, army, [])
 	var pressed := int(band[0])
 	var uid := b.summon(0, pressed)
 	t.ok(uid >= 0, "항구가 없는 격자에서도 소환이 된다 (uid %d)" % uid)
@@ -530,7 +530,7 @@ func _the_boat_has_no_harbour(t) -> void:
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns(), Islands.time_limit())
+	b.setup(g, army, Islands.spawns())
 
 	var beach := int(_sendable_union(g)[0])
 	var sent := b.send(0, beach)
@@ -578,7 +578,7 @@ func _most_hurt_first(t) -> void:
 	army.hp[0] = 5.0
 	army.hp[1] = 3.0
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns(), Islands.time_limit())
+	b.setup(g, army, Islands.spawns())
 	t.ok(army.hp[2] > army.hp[0] and army.hp[0] > army.hp[1],
 		"HP 순서와 아이디 순서가 실제로 어긋난다 (자가 점검)")
 
@@ -610,7 +610,7 @@ func _a_pinned_hold_does_not_grow_the_army(t) -> void:
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns(), Islands.time_limit())
+	b.setup(g, army, Islands.spawns())
 
 	var band := _band_tiles(g)
 	var placed := 0
@@ -721,7 +721,7 @@ func _a_summoned_boat_goes_home_to_the_sea(t) -> void:
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns(), Islands.time_limit())
+	b.setup(g, army, Islands.spawns())
 
 	var pressed := int(_band_tiles(g)[0])
 	t.ok(b.summon(0, pressed) >= 0, "바다에서 한 척 띄웠다 (자가 점검)")
@@ -755,7 +755,7 @@ func _a_mixed_plan_unloads_on_two_tiles(t) -> void:
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
-	b.setup(g, army, Islands.spawns(), Islands.time_limit())
+	b.setup(g, army, Islands.spawns())
 
 	# Both aimed at ONE landing, which is the only arrangement that tests the spreading at all.
 	var pressed := int(_band_tiles(g)[0])
@@ -948,7 +948,7 @@ func _fresh(i: int) -> Battle:
 	var army := Army.new()
 	army.add_starting_force()
 	var b := Battle.new()
-	b.setup(grid, army, Islands.spawns(), Islands.time_limit())
+	b.setup(grid, army, Islands.spawns())
 	return b
 
 

@@ -98,7 +98,7 @@ func _a_crows_own_bleed_never_weakens_its_equipment(t) -> void:
 	var crow_army := _army_of([Rules.CROW])
 	_worn(crow_army, ITEM_BLEED, 5, Rules.SWORDSMAN)
 	var cb := _battle_of(_open(ARENA_W, ARENA_H), crow_army,
-		[_spawn(ARENA_W, Rules.WOLF, 12, 5)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 12, 5)])
 	_ashore(cb, 0, Vector2(9, 5))
 	cb.begin_frame()
 	cb.step(TICK_ONE)
@@ -118,7 +118,7 @@ func _a_crows_own_bleed_never_weakens_its_equipment(t) -> void:
 	var wolf_army := _army_of([Rules.WOLF])
 	_worn(wolf_army, ITEM_BLEED, 5, Rules.SWORDSMAN)
 	var wb := _battle_of(_open(ARENA_W, ARENA_H), wolf_army,
-		[_spawn(ARENA_W, Rules.WOLF, 12, 5)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 12, 5)])
 	_ashore(wb, 0, Vector2(11, 5))
 	wb.begin_frame()
 	wb.step(TICK_ONE)
@@ -128,7 +128,7 @@ func _a_crows_own_bleed_never_weakens_its_equipment(t) -> void:
 	# The other direction: with NO equipment the species row is the only source and stands on its own.
 	var bare := _army_of([Rules.CROW])
 	var bb := _battle_of(_open(ARENA_W, ARENA_H), bare,
-		[_spawn(ARENA_W, Rules.WOLF, 12, 5)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 12, 5)])
 	_ashore(bb, 0, Vector2(9, 5))
 	bb.begin_frame()
 	bb.step(TICK_ONE)
@@ -163,7 +163,7 @@ func _a_blocked_shove_does_not_spend_the_charge(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
 	rows[5] = _with_char(str(rows[5]), 14, "#")
 	var army := _army_of([Rules.SWORDSMAN])
-	var b := _battle_of(rows, army, [_spawn(ARENA_W, Rules.WOLF, 13, 5)], 999.0)
+	var b := _battle_of(rows, army, [_spawn(ARENA_W, Rules.WOLF, 13, 5)])
 	_ashore(b, 0, Vector2(12, 5))
 	var start: Vector2 = b.enemy_pos[0]
 	b.begin_frame()
@@ -210,7 +210,7 @@ func _with_char(row: String, at: int, ch: String) -> String:
 func _the_shove_moves_the_goal_and_the_reservation(t) -> void:
 	var army := _army_of([Rules.SWORDSMAN])
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army,
-		[_spawn(ARENA_W, Rules.CROW, 13, 5)], 999.0)
+		[_spawn(ARENA_W, Rules.CROW, 13, 5)])
 	_ashore(b, 0, Vector2(11, 5))
 	var uid := Battle.ENEMY_UID_BASE + 0
 	var start: Vector2 = b.enemy_pos[0]
@@ -268,7 +268,7 @@ func _the_wolves_hunt_as_one(t) -> void:
 		_spawn(ARENA_W, Rules.WOLF, 7, 9),
 		_spawn(ARENA_W, Rules.WOLF, 2, 5),
 		_spawn(ARENA_W, Rules.WOLF, 12, 5),
-	], 999.0)
+	])
 	_ashore(pb, 0, Vector2(5, 5))
 	_ashore(pb, 1, Vector2(9, 5))
 	pb.begin_frame()
@@ -283,7 +283,7 @@ func _the_wolves_hunt_as_one(t) -> void:
 	var ab := _battle_of(_open(ARENA_W, ARENA_H), apart, [
 		_spawn(ARENA_W, Rules.WOLF, 2, 9),
 		_spawn(ARENA_W, Rules.WOLF, 14, 9),
-	], 999.0)
+	])
 	_ashore(ab, 0, Vector2(2, 5))
 	_ashore(ab, 1, Vector2(14, 5))
 	t.ok(ab.soldier_pos[0].distance_to(ab.soldier_pos[1]) > radius,
@@ -299,7 +299,7 @@ func _the_wolves_hunt_as_one(t) -> void:
 		_spawn(ARENA_W, Rules.WOLF, 7, 9),
 		_spawn(ARENA_W, Rules.WOLF, 2, 5),
 		_spawn(ARENA_W, Rules.WOLF, 12, 5),
-	], 999.0)
+	])
 	_ashore(cb, 0, Vector2(5, 5))
 	_ashore(cb, 1, Vector2(9, 5))
 	cb.begin_frame()
@@ -332,7 +332,7 @@ func _the_wolves_hunt_as_one(t) -> void:
 	var mb := _battle_of(_open(ARENA_W, ARENA_H), three, [
 		_spawn(ARENA_W, Rules.LION, 2, 2),
 		_spawn(ARENA_W, Rules.WOLF, 21, 10),
-	], 999.0)
+	])
 	_ashore(mb, 0, Vector2(11, 4))
 	_ashore(mb, 1, Vector2(12, 6))
 	_ashore(mb, 2, Vector2(11, 8))
@@ -348,7 +348,7 @@ func _the_wolves_hunt_as_one(t) -> void:
 	var sp := _battle_of(_open(ARENA_W, ARENA_H), trio, [
 		_spawn(ARENA_W, Rules.WOLF, 2, 2),
 		_spawn(ARENA_W, Rules.WOLF, 21, 10),
-	], 999.0)
+	])
 	_ashore(sp, 0, Vector2(11, 4))
 	_ashore(sp, 1, Vector2(12, 6))
 	_ashore(sp, 2, Vector2(11, 8))
@@ -404,7 +404,7 @@ func _the_wolves_hunt_as_one(t) -> void:
 	var lb := _battle_of(_open(ARENA_W, ARENA_H), lone, [
 		_spawn(ARENA_W, Rules.WOLF, 12, 5),
 		_spawn(ARENA_W, Rules.WOLF, 6, 5),
-	], 999.0)
+	])
 	_ashore(lb, 0, Vector2(3, 5))
 	lb.begin_frame()
 	lb.step(TICK_ONE)
@@ -432,7 +432,7 @@ func _the_crow_bleeds_with_no_equipment(t) -> void:
 	var army := _army_of([Rules.CROW])
 	t.eq(army.loadout.tag_count(Rules.Tag.BLEED), 0, "판에 출혈 딱지가 하나도 없다 (자가 점검)")
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army,
-		[_spawn(ARENA_W, Rules.WOLF, 6, 5)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 6, 5)])
 	_ashore(b, 0, Vector2(3, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -476,7 +476,7 @@ func _the_crow_bleeds_with_no_equipment(t) -> void:
 	# The CONTROL: the bear hits just as hard on the same empty board and leaves nothing behind.
 	var bear := _army_of([Rules.BEAR])
 	var bb := _battle_of(_open(ARENA_W, ARENA_H), bear,
-		[_spawn(ARENA_W, Rules.WOLF, 12, 5)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 12, 5)])
 	_ashore(bb, 0, Vector2(11, 5))
 	bb.begin_frame()
 	bb.step(TICK_ONE)
@@ -503,7 +503,7 @@ func _the_squirrel_pulls_and_the_cow_charges(t) -> void:
 	# -- 다람쥐: the enemy comes TOWARD it, and stays -----------------------------------------------
 	var s_army := _army_of([Rules.SWORDSMAN])
 	var sb := _battle_of(_open(ARENA_W, ARENA_H), s_army,
-		[_spawn(ARENA_W, Rules.WOLF, 13, 5)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 13, 5)])
 	var squirrel_at := Vector2(11, 5)
 	_ashore(sb, 0, squirrel_at)
 	var before: Vector2 = sb.enemy_pos[0]
@@ -535,7 +535,7 @@ func _the_squirrel_pulls_and_the_cow_charges(t) -> void:
 	t.ok(not Rules.shove_once_of(Rules.SWORDSMAN), "다람쥐는 매번이다 — 표가 둘을 가른다 (자가 점검)")
 	var c_army := _army_of([Rules.SWORDSMAN])
 	var cb := _battle_of(_open(ARENA_W, ARENA_H), c_army,
-		[_spawn(ARENA_W, Rules.WOLF, 13, 5)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 13, 5)])
 	var cow_at := Vector2(12, 5)
 	_ashore(cb, 0, cow_at)
 	var c_before: Vector2 = cb.enemy_pos[0]
@@ -574,7 +574,7 @@ func _the_squirrel_pulls_and_the_cow_charges(t) -> void:
 	t.eq(Rules.shove_tiles_of(Rules.WOLF), 0.0, "늑대는 표에 밀치기 줄이 없다")
 	var w_army := _army_of([Rules.WOLF])
 	var wb := _battle_of(_open(ARENA_W, ARENA_H), w_army,
-		[_spawn(ARENA_W, Rules.WOLF, 13, 5)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 13, 5)])
 	_ashore(wb, 0, Vector2(12, 5))
 	var w_before: Vector2 = wb.enemy_pos[0]
 	wb.begin_frame()
@@ -602,7 +602,7 @@ func _the_bear_sweeps(t) -> void:
 		_spawn(ARENA_W, Rules.WOLF, 13, 5),   # 1.0 from the primary
 		_spawn(ARENA_W, Rules.WOLF, 13, 6),   # 1.41421 from the primary
 		_spawn(ARENA_W, Rules.WOLF, 12, 8),   # 3.0 from the primary — outside
-	], 999.0)
+	])
 	_ashore(b, 0, Vector2(11, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -621,7 +621,7 @@ func _the_bear_sweeps(t) -> void:
 	var w := _battle_of(_open(ARENA_W, ARENA_H), lone, [
 		_spawn(ARENA_W, Rules.WOLF, 12, 5),
 		_spawn(ARENA_W, Rules.WOLF, 13, 5),
-	], 999.0)
+	])
 	_ashore(w, 0, Vector2(11, 5))
 	w.begin_frame()
 	w.step(TICK_ONE)
@@ -634,7 +634,7 @@ func _the_bear_sweeps(t) -> void:
 func _setup_barks_on_empty_grid(t) -> void:
 	t.expect_error("battle.setup: 격자가 비어 있다")
 	var dud := Battle.new()
-	dud.setup(Grid.new(), _army_of([Rules.WOLF]), [_spawn(1, Rules.WOLF, 0, 0)], 10.0)
+	dud.setup(Grid.new(), _army_of([Rules.WOLF]), [_spawn(1, Rules.WOLF, 0, 0)])
 	t.eq(dud.soldier_state.size(), 0, "빈 격자로 setup 하면 짖고 병사 열을 세우지 않는다")
 	t.eq(dud.enemy_alive.size(), 0, "빈 격자로 setup 하면 적 열도 세우지 않는다")
 
@@ -648,7 +648,7 @@ func _setup_barks_on_empty_grid(t) -> void:
 ## units walk straight through each other. Only where they ARE catches that.
 func _no_two_units_share_a_tile(t) -> void:
 	var army := _army_of([Rules.WOLF, Rules.WOLF, Rules.WOLF, Rules.WOLF])
-	var b := _battle_of(_corridor(), army, [_spawn(CORR_W, Rules.LION, 9, 4)], 999.0)
+	var b := _battle_of(_corridor(), army, [_spawn(CORR_W, Rules.LION, 9, 4)])
 	_ashore(b, 0, Vector2(2, 3))
 	_ashore(b, 1, Vector2(2, 4))
 	_ashore(b, 2, Vector2(2, 5))
@@ -693,7 +693,7 @@ func _nearest_first(t) -> void:
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
 		_spawn(ARENA_W, Rules.WOLF, 12, 1),   # 4 tiles up
 		_spawn(ARENA_W, Rules.WOLF, 12, 7),   # 2 tiles down
-	], 999.0)
+	])
 	_ashore(b, 0, Vector2(12, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -712,7 +712,7 @@ func _nearest_first(t) -> void:
 	var tied := _battle_of(_open(ARENA_W, ARENA_H), tie_army, [
 		_spawn(ARENA_W, Rules.WOLF, 12, 3),
 		_spawn(ARENA_W, Rules.WOLF, 12, 7),
-	], 999.0)
+	])
 	_ashore(tied, 0, Vector2(12, 5))
 	tied.begin_frame()
 	tied.step(TICK_ONE)
@@ -764,7 +764,7 @@ func _epsilon_edge(t) -> void:
 ## and how far the soldier moved — the two halves `_within` decides between.
 func _reach_probe(gap: float) -> Dictionary:
 	var army := _army_of([Rules.WOLF])
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 12, 5)], 999.0)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 12, 5)])
 	var start := Vector2(12.0 - gap, 5.0)
 	_ashore(b, 0, start)
 	b.begin_frame()
@@ -784,7 +784,7 @@ func _area_splash(t) -> void:
 		_spawn(ARENA_W, Rules.WOLF, 12, 5),   # primary, 4.0 from the soldier
 		_spawn(ARENA_W, Rules.WOLF, 13, 5),   # 1.0 from the primary
 		_spawn(ARENA_W, Rules.WOLF, 13, 6),   # 1.41421 from the primary
-	], 999.0)
+	])
 	_ashore(b, 0, Vector2(8, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -807,7 +807,7 @@ func _area_splash(t) -> void:
 	# measured at are still the ones written below. The position checks after the wait are what hold
 	# that — without them a soldier could drift and the two area values stop being distinguishable.
 	var wide := _army_of([Rules.WOLF, Rules.WOLF, Rules.WOLF])
-	var w := _battle_of(_open(ARENA_W, ARENA_H), wide, [_spawn(ARENA_W, Rules.LION, 12, 6)], 999.0)
+	var w := _battle_of(_open(ARENA_W, ARENA_H), wide, [_spawn(ARENA_W, Rules.LION, 12, 6)])
 	_ashore(w, 0, Vector2(12, 5))   # 1.0 from the lion
 	_ashore(w, 1, Vector2(13, 5))   # 1.0 from soldier 0
 	_ashore(w, 2, Vector2(13, 6))   # 1.41421 from soldier 0
@@ -839,7 +839,7 @@ func _area_splash(t) -> void:
 ## The friendly loses exactly the bison's blow and not a tile more.
 func _no_friendly_fire(t) -> void:
 	var army := _army_of([Rules.CROW, Rules.WOLF])
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 12, 5)], 999.0)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 12, 5)])
 	_ashore(b, 0, Vector2(8, 5))
 	_ashore(b, 1, Vector2(13, 5))
 	b.begin_frame()
@@ -887,7 +887,7 @@ func _stops_when_target_is_in_range(t) -> void:
 func _death_is_permanent(t) -> void:
 	var army := _army_of([Rules.WOLF, Rules.WOLF])
 	army.hp[0] = 1.0
-	var b := _battle_of(_lane(), army, [_spawn(LANE_W, Rules.WOLF, 13, 2)], 999.0)
+	var b := _battle_of(_lane(), army, [_spawn(LANE_W, Rules.WOLF, 13, 2)])
 	_ashore(b, 0, Vector2(12, 2))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -901,7 +901,7 @@ func _death_is_permanent(t) -> void:
 	# a `send` refusal now, and `send` is the only call that can be asked it. It is also `_port()` and
 	# not `_lane()`, because `_lane()` has no harbour and `send` would refuse both soldiers for a
 	# reason that has nothing to do with death — a check that passes for the wrong reason.
-	var next_island := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 18, 9)], 999.0)
+	var next_island := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 18, 9)])
 	var next_landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
 	t.eq(next_island.soldier_state[0], Battle.SoldierState.DEAD, "다음 섬에서도 예비가 아니라 DEAD 로 선다")
 	t.ok(next_island.send(1, next_landing) >= 0, "살아남은 병사는 보낼 수 있다")
@@ -918,7 +918,7 @@ func _death_is_permanent(t) -> void:
 func _phase_order(t) -> void:
 	# boats BEFORE landings: a crossing that completes this frame unloads this frame, not next.
 	var ferry_army := _army_of([Rules.WOLF])
-	var ferry := _planning_battle_of(_port(), ferry_army, [_spawn(ARENA_W, Rules.LION, 20, 9)], 999.0)
+	var ferry := _planning_battle_of(_port(), ferry_army, [_spawn(ARENA_W, Rules.LION, 20, 9)])
 	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
 	t.ok(ferry.send(0, landing) >= 0, "부두 없는 항구에서도 배가 뜬다")
 	t.ok(ferry.commit(), "그리고 시작 버튼이 그 배를 실제로 출발시킨다 (자가 점검)")
@@ -950,7 +950,7 @@ func _phase_order(t) -> void:
 
 	# targeting BEFORE movement: a soldier picks a target and walks on its very first frame.
 	var first_army := _army_of([Rules.CROW])
-	var first := _battle_of(_lane(), first_army, [_spawn(LANE_W, Rules.LION, 18, 2)], 999.0)
+	var first := _battle_of(_lane(), first_army, [_spawn(LANE_W, Rules.LION, 18, 2)])
 	_ashore(first, 0, Vector2(2, 2))
 	first.begin_frame()
 	first.step(0.1)
@@ -966,7 +966,7 @@ func _phase_order(t) -> void:
 	# attacks BEFORE deaths: two units that finish each other off both land the blow.
 	var trade_army := _army_of([Rules.WOLF])
 	trade_army.hp[0] = Rules.damage_of(Rules.WOLF)
-	var trade := _battle_of(_lane(), trade_army, [_spawn(LANE_W, Rules.WOLF, 13, 2)], 999.0)
+	var trade := _battle_of(_lane(), trade_army, [_spawn(LANE_W, Rules.WOLF, 13, 2)])
 	trade.enemy_hp[0] = Rules.damage_of(Rules.WOLF)
 	_ashore(trade, 0, Vector2(12, 2))
 	trade.begin_frame()
@@ -976,7 +976,7 @@ func _phase_order(t) -> void:
 
 	# deaths BEFORE the clock, and WON before either loss: an island cleared on the expiring frame is a win.
 	var wire_army := _army_of([Rules.WOLF])
-	var wire := _battle_of(_lane(), wire_army, [_spawn(LANE_W, Rules.WOLF, 13, 2)], 0.5)
+	var wire := _battle_of(_lane(), wire_army, [_spawn(LANE_W, Rules.WOLF, 13, 2)])
 	wire.enemy_hp[0] = Rules.damage_of(Rules.WOLF)
 	_ashore(wire, 0, Vector2(12, 2))
 	wire.begin_frame()
@@ -986,7 +986,7 @@ func _phase_order(t) -> void:
 
 	# ... and the timeout arm is live, so the win above is not "the clock never fires".
 	var late_army := _army_of([Rules.WOLF])
-	var late := _battle_of(_lane(), late_army, [_spawn(LANE_W, Rules.WOLF, 13, 2)], 0.5)
+	var late := _battle_of(_lane(), late_army, [_spawn(LANE_W, Rules.WOLF, 13, 2)])
 	_ashore(late, 0, Vector2(12, 2))
 	late.begin_frame()
 	late.step(0.5)
@@ -1008,16 +1008,19 @@ func _phase_order(t) -> void:
 ## reserve can never be landed: hold anyone back, lose everyone you sent, and the run is decided and
 ## cannot end. The old test could not fire at all.
 ##
-## ⚠ **The margin is the whole check.** `elapsed <= time_limit` is also true of the behaviour being
-## fixed — that is `how-nets-lie`'s *a ceiling with no floor* exactly — so the limit here is 90 s
-## against a crossing of about 1.2, and the assertion is on the GAP.
+## ⚠ **The margin is the whole check.** `elapsed <= time_limit` was also true of the behaviour being
+## fixed — that is `how-nets-lie`'s *a ceiling with no floor* exactly — so this asserted the GAP to a
+## 90 s limit rather than the elapsed time alone.
+## ⚠⚠ **THE LIMIT WAS DELETED 2026-08-27 AND THE FLOOR IS WHAT SURVIVED IT.** With no clock to run
+## out, the gap has nothing to be a gap FROM; what still says the island ended early is the pair of
+## bounds below — the fight really ran (`elapsed > 0`) and it was over inside two seconds against a
+## crossing of about 1.2. **The ceiling went, the floor stayed**, which is the right half to keep.
 ##
 ## ⚠ **And `living_count() == 2` is the floor under it.** Two soldiers are still alive when the island
 ## is lost. Restore the old condition and that is the line that cannot be satisfied.
 func _reserves_do_not_hold_the_run_open(t) -> void:
-	var limit := 90.0
 	var army := _army_of([Rules.WOLF, Rules.WOLF, Rules.WOLF])
-	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], limit)
+	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)])
 	var landing := _tile_key(_PORT_LANDING, ARENA_W)
 	t.ok(b.send(0, landing) >= 0, "셋 중 한 명만 보냈다 (자가 점검)")
 	t.ok(b.commit(), "그리고 시작을 눌렀다 (자가 점검)")
@@ -1050,10 +1053,9 @@ func _reserves_do_not_hold_the_run_open(t) -> void:
 	t.eq(army.living_count(), 2, "그런데 병사는 아직 둘이 살아 있다 — 항구에 선 예비 병력이다")
 	# The margin. Both ends: the fight really ran, and it ended nowhere near the clock.
 	t.ok(b.elapsed > 0.0, "시계는 실제로 돌았다 (%.4f초)" % b.elapsed)
-	t.ok(b.elapsed < 2.0, "그런데 2초도 안 걸렸다 (%.4f초) — 건너는 데 약 1.2초다" % b.elapsed)
-	t.ok(limit - b.elapsed > 85.0,
-		"제한 시간 90초까지 %.2f초를 남기고 끝났다 — 기다릴 것이 없어졌으면 기다리지 않는다"
-			% (limit - b.elapsed))
+	t.ok(b.elapsed < 2.0,
+		"그런데 2초도 안 걸렸다 (%.4f초) — 건너는 데 약 1.2초다. 기다릴 것이 없어졌으면 기다리지 않는다"
+			% b.elapsed)
 
 
 ## ⚠⚠ **THE COUNTER-CASE, and it is where the fix breaks silently if it is written as ASHORE-only.**
@@ -1062,7 +1064,7 @@ func _reserves_do_not_hold_the_run_open(t) -> void:
 ## before it resolves — a fake failure, and one the player would read as the game giving up on them.
 func _a_soldier_at_sea_does_hold_it_open(t) -> void:
 	var army := _army_of([Rules.WOLF, Rules.WOLF, Rules.WOLF])
-	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 90.0)
+	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)])
 	var landing := _tile_key(_PORT_LANDING, ARENA_W)
 	t.ok(b.send(0, landing) >= 0 and b.send(1, landing) >= 0, "둘을 보냈다 (자가 점검)")
 	t.ok(b.commit(), "2번은 항구에 남긴 채 시작했다 (자가 점검)")
@@ -1110,7 +1112,7 @@ func _a_soldier_at_sea_does_hold_it_open(t) -> void:
 ## does not, and that single difference is the whole of what the screen now says.
 func _wiped_wins_when_both_are_true(t) -> void:
 	var army := _army_of([Rules.WOLF, Rules.WOLF])
-	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 90.0)
+	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)])
 	var landing := _tile_key(_PORT_LANDING, ARENA_W)
 	t.ok(b.send(0, landing) >= 0 and b.send(1, landing) >= 0, "둘 다 보냈다 — 항구에 아무도 안 남는다 (자가 점검)")
 	t.ok(b.commit(), "그리고 시작을 눌렀다 (자가 점검)")
@@ -1135,7 +1137,7 @@ func _wiped_wins_when_both_are_true(t) -> void:
 ## lost on the frame it opens.
 func _the_gate_itself(t) -> void:
 	var army := _army_of([Rules.WOLF, Rules.WOLF])
-	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)], 90.0)
+	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.WOLF, 20, 1)])
 	t.eq(b.soldier_state[0], Battle.SoldierState.RESERVE, "계획 중에는 전원이 RESERVE 다 (자가 점검)")
 	t.eq(b.soldier_state[1], Battle.SoldierState.RESERVE, "둘 다 그렇다 (자가 점검)")
 	t.ok(not b._the_landing_force_is_gone(),
@@ -1180,7 +1182,7 @@ func _in_transit_is_hit_but_cannot_hit(t) -> void:
 	var b := _planning_battle_of(_port(), army, [
 		_spawn(ARENA_W, Rules.CROW, 3, 2),    # ~3.0 tiles from the boat 0.3s into a 1.33s crossing
 		_spawn(ARENA_W, Rules.WOLF, 7, 4),   # sees BOTH the boat and the ashore soldier below
-	], 999.0)
+	])
 	var ashore_target := Vector2(7, 9)   # 5.0 tiles from the bison, inside its detect 6 and the
 	                                      # ranged soldier's own 5.5-tile reach of the bison — it stops
 	_ashore(b, 1, ashore_target)
@@ -1226,7 +1228,7 @@ func _worn(a: Army, item: int, n: int, beast_type: int) -> void:
 func _bled_bison_battle(bleed_items: int) -> Battle:
 	var army := _army_of([Rules.WOLF])
 	_worn(army, ITEM_BLEED, bleed_items, Rules.BEAR)
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 12, 5)], 999.0)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 12, 5)])
 	_ashore(b, 0, Vector2(11, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -1315,7 +1317,7 @@ func _status_rides_the_splash(t) -> void:
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
 		_spawn(ARENA_W, Rules.WOLF, 12, 5),   # primary, 1.0 from the soldier
 		_spawn(ARENA_W, Rules.WOLF, 13, 5),   # orthogonal sibling — inside the 1.5 splash
-	], 999.0)
+	])
 	_ashore(b, 0, Vector2(11, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -1337,7 +1339,7 @@ func _status_rides_the_splash(t) -> void:
 func _slow_probe(slow_items: int) -> float:
 	var army := _army_of([Rules.CROW])
 	_worn(army, ITEM_SLOW, slow_items, Rules.SWORDSMAN)
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 9, 5)], 999.0)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 9, 5)])
 	_ashore(b, 0, Vector2(4, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -1372,7 +1374,7 @@ func _slow_expires_back_to_full_speed(t) -> void:
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
 		_spawn(ARENA_W, Rules.WOLF, 12, 5),   # 0 — the measured one, slowed once then left alone
 		_spawn(ARENA_W, Rules.WOLF, 6, 9),    # 1 — soldier 1's pinned target, 4.0 from him
-	], 999.0)
+	])
 	_ashore(b, 0, Vector2(9, 5))   # the shooter: 3.0 from bison 0 — its nearest, inside 5.5
 	_ashore(b, 1, Vector2(6, 5))   # the bait: bison 1 at 4.0 is his nearest and inside his reach
 	b.begin_frame()
@@ -1417,7 +1419,7 @@ func _slow_expires_back_to_full_speed(t) -> void:
 func _slow_refreshes_and_never_stacks(t) -> void:
 	var army := _army_of([Rules.CROW])
 	_worn(army, ITEM_SLOW, 2, Rules.SWORDSMAN)
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 9, 5)], 999.0)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 9, 5)])
 	_ashore(b, 0, Vector2(4, 5))
 	# through sub-step 69 — the second blow lands at ~61 and refreshes.
 	for _f in 69:
@@ -1447,7 +1449,7 @@ func _enemy_blows_carry_no_status(t) -> void:
 	var army := _army_of([Rules.WOLF])
 	_worn(army, ITEM_BLEED, 3, Rules.BEAR)
 	_worn(army, ITEM_SLOW, 2, Rules.SWORDSMAN)
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 12, 5)], 999.0)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 12, 5)])
 	_ashore(b, 0, Vector2(11, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -1468,7 +1470,7 @@ func _enemy_blows_carry_no_status(t) -> void:
 	var w := _battle_of(_open(ARENA_W, ARENA_H), walk_army, [
 		_spawn(ARENA_W, Rules.CROW, 8, 5),     # 0 — adjacent, trades a blow, then dies
 		_spawn(ARENA_W, Rules.WOLF, 16, 5),   # 1 — the far target the soldier walks to afterwards
-	], 999.0)
+	])
 	_ashore(w, 0, Vector2(7, 5))
 	w.begin_frame()
 	w.step(TICK_ONE)
@@ -1495,7 +1497,7 @@ func _enemy_blows_carry_no_status(t) -> void:
 ## One melee soldier `offset` tiles from one bison, stepped once. Returns the bison's HP.
 func _melee_probe(offset: Vector2, dt: float) -> float:
 	var army := _army_of([Rules.WOLF])
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 12, 5)], 999.0)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 12, 5)])
 	_ashore(b, 0, Vector2(12, 5) + offset)
 	b.begin_frame()
 	b.step(dt)
@@ -1505,7 +1507,7 @@ func _melee_probe(offset: Vector2, dt: float) -> float:
 ## A ranged soldier walking the lane at the lion from 16 tiles out. Returns where it ended up.
 func _lane_approach(dt: float, frames: int) -> Dictionary:
 	var army := _army_of([Rules.CROW])
-	var b := _battle_of(_lane(), army, [_spawn(LANE_W, Rules.LION, 18, 2)], 999.0)
+	var b := _battle_of(_lane(), army, [_spawn(LANE_W, Rules.LION, 18, 2)])
 	_ashore(b, 0, Vector2(2, 2))
 	for _f in frames:
 		b.begin_frame()
@@ -1521,7 +1523,7 @@ func _lane_approach(dt: float, frames: int) -> Dictionary:
 ## One melee soldier 4.0 tiles down the lane from the lion, stepped once by `dt`. Returns the lion's HP.
 func _lane_march(dt: float) -> float:
 	var army := _army_of([Rules.WOLF])
-	var b := _battle_of(_lane(), army, [_spawn(LANE_W, Rules.LION, 18, 2)], 999.0)
+	var b := _battle_of(_lane(), army, [_spawn(LANE_W, Rules.LION, 18, 2)])
 	_ashore(b, 0, Vector2(14, 2))
 	b.begin_frame()
 	b.step(dt)
@@ -1615,17 +1617,17 @@ func _spawn(w: int, type_id: int, x: int, y: int) -> Dictionary:
 ## than sailing them. This file owns the combat rules, so it starts from an island already under way,
 ## the same way `_ashore` below starts from a soldier who has already landed.
 ## **A fixture that has to author a plan uses `_planning_battle_of` and calls the real `commit()`.**
-func _battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
-	var b := _planning_battle_of(rows, army, spawns, limit)
+func _battle_of(rows: Array, army: Army, spawns: Array) -> Battle:
+	var b := _planning_battle_of(rows, army, spawns)
 	b._committed = true
 	return b
 
 
 ## The same island, left in the planning state, so a check can drive `send` and `commit` for real.
-func _planning_battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
+func _planning_battle_of(rows: Array, army: Army, spawns: Array) -> Battle:
 	var b := Battle.new()
 	# load_rows first, always: setup writes a reservation per enemy and load_rows clears the table.
-	b.setup(_grid_of(rows), army, spawns, limit)
+	b.setup(_grid_of(rows), army, spawns)
 	return b
 
 

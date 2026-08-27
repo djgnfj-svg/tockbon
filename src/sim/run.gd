@@ -117,7 +117,7 @@ func begin_island() -> Battle:
 	var grid := Grid.new()
 	Islands.load_into(grid)
 	var battle := Battle.new()
-	battle.setup(grid, army, Islands.spawns(), Islands.time_limit())
+	battle.setup(grid, army, Islands.spawns())
 	return battle
 
 
