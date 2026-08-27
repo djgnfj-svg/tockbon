@@ -77,6 +77,41 @@ static func builds() -> Array:
 	return _load().get("builds", []) as Array
 
 
+## **The tile the company already lives on** — the first building's low corner — or -1 when the island
+## has no building at all.
+static func home_tile() -> int:
+	var b := builds()
+	if b.is_empty():
+		return -1
+	var first := b[0] as Dictionary
+	var stride := int(_load().get("w", 0))
+	if stride <= 0:
+		return -1
+	return int(first.get("y", 0)) * stride + int(first.get("x", 0))
+
+
+## **A tile just OUTSIDE the first building's footprint** — the doorstep — or -1 when there is no
+## building. ⚠⚠ **Nothing marks a building's tiles impassable**, so anything placed on `home_tile`
+## stands inside the house and cannot be seen; this is the wish a caller that wants somewhere to STAND
+## should hand to a free-tile search.
+## ⚠ `stride` comes from the caller's grid rather than the file, so a board and a grid that disagree
+## fail here rather than silently naming a different tile.
+static func beside_home_tile(stride: int) -> int:
+	var b := builds()
+	if b.is_empty() or stride <= 0:
+		return -1
+	var first := b[0] as Dictionary
+	var span := Builds.footprint_of(str(first.get("kind", "")))
+	var x := int(first.get("x", 0))
+	var y := int(first.get("y", 0)) + maxi(span.y, 1)
+	var rows_in := rows()
+	if y >= rows_in.size():
+		y = int(first.get("y", 0)) - 1
+	if y < 0:
+		return -1
+	return y * stride + x
+
+
 ## **What is scattered on the ground** — trees, rocks, bushes — as
 ## `{"kind", "x", "y", "ox", "oy", "yaw", "scale"}`.
 ##

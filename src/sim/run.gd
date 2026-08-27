@@ -118,7 +118,36 @@ func begin_island() -> Battle:
 	Islands.load_into(grid)
 	var battle := Battle.new()
 	battle.setup(grid, army, Islands.spawns(), Islands.time_limit())
+	_stand_the_watch(battle)
 	return battle
+
+
+## **One body is already on the island when it opens, standing by the keep.**
+##
+## ⚠⚠ **This is the swap, made concrete.** While the player was the side that ARRIVED, an empty island
+## was correct and every body reached it by boat. The sides turned over 2026-08-26 — the company holds
+## this island and the beasts are what lands on it — and an island that opens with nobody on it says
+## the opposite of that on the one screen the player actually looks at.
+##
+## ⚠ **ONE, and not the whole roster** (2026-08-27, the user: ***"칸단위 부대는 따로 없음 아직"***).
+## Squads do not exist yet, so ten bodies would be ten bodies walking as one lump — the picture that
+## makes「부대가 없다」look like a bug rather than a decision. **Raising this number is one line, on the
+## day squads arrive.**
+##
+## ⚠ **BESIDE the keep and not ON it.** `Builds` gives every kind a footprint but nothing marks those
+## tiles impassable, so a body placed on the keep's own tile stands INSIDE the house and the island
+## opens looking empty — measured 2026-08-27, and it read exactly like「아무도 안 세워졌다」.
+## ⚠ Silent when there is nowhere to stand: `place_ashore` answers -1 and the island opens empty, which
+## is the honest picture of a board with no free land next to its keep.
+func _stand_the_watch(battle: Battle) -> void:
+	var home := Islands.beside_home_tile(battle.grid.w)
+	if home < 0:
+		return
+	for i in army.type_id.size():
+		if army.alive[i] == 0:
+			continue
+		battle.place_ashore(i, home)
+		return
 
 
 ## Closes the island. **Both outcomes are terminal.**

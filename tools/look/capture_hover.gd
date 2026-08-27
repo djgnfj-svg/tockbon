@@ -117,29 +117,34 @@ func _run() -> void:
 	quit()
 
 
+## ⚠⚠ **THE SCREEN POINT IS RE-RESOLVED AT SHOT TIME, EVERY TIME.** An earlier version pressed the
+## point a sweep had recorded minutes of frames earlier and then PRINTED the tile the sweep had
+## recorded — so when the two disagreed the frame carried a label about a tile it was not showing, and
+## a plate that was landing correctly read as a plate on the open sea. **That is the trap this folder's
+## fourth rule is about**, one layer up: the instrument, not the subject.
 func _plate(name: String, tile: int, seen: Dictionary) -> void:
 	if tile < 0:
 		print("capture_hover: %s — 그런 칸이 화면에 없다" % name)
 		return
-	# The camera may have moved (zoom), so ask the shell where that tile is NOW.
-	var at: Vector2 = seen[tile]
-	var hit: int = _game._tile_at(at)
-	if hit != tile:
-		at = _find_on_screen(tile)
-		if at.x < 0.0:
-			print("capture_hover: %s — 줌 뒤에 칸 %d 이 화면 밖" % [name, tile])
-			return
+	var at: Vector2 = _find_on_screen(tile)
+	if at.x < 0.0:
+		print("capture_hover: %s — 칸 %d 이 지금 화면에 없다" % [name, tile])
+		return
 	_motion(at)
 	await _settle(16)
+	# What the SHELL says now, not what a sweep said earlier. If these disagree the frame is unreadable.
+	var now: int = _game._tile_at(at)
 	var fv := _game.field_view
 	var plate: MeshInstance3D = fv.get("_hover")
 	var cam: Camera3D = fv.get("_cam")
-	var on_screen := cam.unproject_position(plate.global_position) if cam != null and plate != null else Vector2(-1, -1)
-	print("capture_hover: %s — 칸 %d, 커서 %s, 판 보임=%s, 판 위치 %s, 판 화면 %s" % [
-		name, tile, str(at), str(plate.visible), str(plate.position), str(on_screen)])
+	var back: Vector2 = cam.unproject_position(plate.global_position)
+	print("capture_hover: %s — 겨눈 칸 %d, 셸이 답한 칸 %d, 커서 %s, 판 화면 %s, 어긋남 %.1f px" % [
+		name, tile, now, str(at), str(back), at.distance_to(back)])
 	await _shot(name)
 
 
+## Sweeps the screen for a point the SHELL resolves to `tile`, right now. Asking the shell's own
+## converter is what makes the press land where the frame's label says it did.
 func _find_on_screen(tile: int) -> Vector2:
 	var y := 24
 	while y < 700:
