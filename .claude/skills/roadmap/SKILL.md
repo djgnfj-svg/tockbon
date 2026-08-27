@@ -38,5 +38,15 @@ each names the file or commit it came from.
 
 **Where a section is empty, say it is empty.** A clean section is a measurement.
 
+## ⚠⚠ Then call `press` — **the report is not the end**
+
+**A drift report tells the user what is wrong with the map. It does not help them fill it.**
+⚠⚠ **They are new to making games and cannot ask for the fork they have never seen** — so after the
+three sections, **call `press`**, which sends `research` outside and `lookup` inside and comes back
+with the two to five decisions this stretch of the way forces.
+
+⚠ **Skip it when the user has already said what they want.** `press` puts unseen forks on the table;
+it does not re-ask a settled one.
+
 ⚠⚠ **The map is not edited here.** Fixing what this skill finds is the user's call, taken after they read
 it — the repair is a later round, and often a ticket.

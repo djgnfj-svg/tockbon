@@ -3,8 +3,8 @@
 **Rewritten 2026-08-22 저녁** when the magic-circle game was dropped and the island game came back as a
 **wolf** game — and **rewritten again 2026-08-26, when the sides swapped**: the wolf was the player's
 body and is now the enemy's. ⚠⚠ **The swap block below governs every table in this file.** Where an
-older sentence survives it is because it is still true, not because nobody looked at it. `tdd` and
-`domain-modeling` both read this file for the vocabulary that test names and interfaces are built from.
+older sentence survives it is because it is still true, not because nobody looked at it. **This file is where test names and interfaces
+take their vocabulary from**, and `domain-modeling` reads it.
 
 ⚠ **The user speaks Korean and the code speaks English.** Both columns are load-bearing: **an answer that
 uses only the English word is not an answer to the user**, and a symbol named in Korean is not a symbol.
@@ -155,7 +155,7 @@ uses only the English word is not an answer to the user**, and a symbol named in
 
 ## Where the seams are
 
-`tdd` will not write a test at an unagreed seam. **These are the agreed ones**, and they come from the
+⚠⚠ **No check is written at an unagreed seam.** **These are the agreed ones**, and they come from the
 folder rule in `CLAUDE.md`:
 
 - **`src/sim/`** — constructible with `.new()`, never touches the tree. **The main seam.** A net drives the

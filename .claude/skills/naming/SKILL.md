@@ -10,9 +10,9 @@ next session, and this repo has already paid for that: `판` meant both the mat 
 mark under the cursor for a whole round, and the round could not be steered because neither the user
 nor the assistant could say which one they meant.
 
-⚠⚠ **`CONTEXT.md` is the ONLY glossary.** Do not start a second one. `tdd` and `domain-modeling` both
-read it for the vocabulary that test names and interfaces are built from — a name that lives anywhere
-else is a name those skills cannot see.
+⚠⚠ **`CONTEXT.md` is the ONLY glossary.** Do not start a second one. It is where the agreed test seams
+live and where `domain-modeling` reads the vocabulary that interfaces are built from — **a name that
+lives anywhere else is a name nothing can see.**
 
 ## When this is the right skill
 

@@ -26,5 +26,5 @@ Read the file at the referenced path. The user will normally pass the path or th
 
 ## ⚠ The wayfinding section was deleted 2026-08-27
 
-`/wayfinder` is gone, and `compass` + `breakdown` + `docs/plan/roadmap.md` stand in its place.
+`/wayfinder` is gone, and `compass` + `press` + `docs/plan/roadmap.md` stand in its place.
 **`docs/plan/README.md` is the source of truth for how a ticket is shaped and how status moves.**

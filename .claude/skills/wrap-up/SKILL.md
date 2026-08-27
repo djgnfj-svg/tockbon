@@ -77,8 +77,8 @@ named, a piece of work they asked for, a judgement they passed on something they
 - **The answer is code** → `Type: task`. **The answer is what to build** → `Type: grilling`, and the
   user answers it in conversation. ⚠⚠ **A question the user must answer never becomes a `task`**
 - **A judgement they passed** → **their own words, verbatim, into the ticket it belongs to**
-- ⚠ **The full procedure — the bar, the two look-ups, the shape — lives in `breakdown`.** Use it when
-  a whole chunk needs splitting; what is here covers the loose pieces one session produces
+- ⚠⚠ **You are writing down answers, not inventing work.** Where a chunk still has open forks, that is
+  `press`'s round with the user — and it happens before this step, not inside it
 
 ### 4. Clear the loose images
 

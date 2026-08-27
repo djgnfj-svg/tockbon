@@ -94,13 +94,14 @@ label says is worse than a red. If you can't do it, say you can't.**
 
 # The docs
 
-**`docs/` is three folders and three loose files.** **Open a folder's README, not the folder.**
+**`docs/` is four folders and three loose files.** **Open a folder's README, not the folder.**
 
 | Path | What it holds |
 |---|---|
 | `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **Nearly empty, and that is a defect** — there is no GDD. When one is written it is **one page**. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
 | `docs/skill-config/` | **What imported skills read before they act, and the only configuration in `docs/`.** ⚠ **Not reading matter** — **`code-review-mp` is the only skill that loads it**, and it reads one file |
-| `docs/plan/` | **The only map.** **`roadmap.md` is what is being done** — the chunks, each with the one line that closes it; **`log.md` is why it came out that way**; **`tickets/NN-name.md`** are the work. **Status is a `Status:` line inside the file — files never move between folders.** The chain: `compass` → `breakdown` (which sends `survey` + `scout`) → `build-loop` → `wrap-up`, with `roadmap` checking it |
+| `docs/plan/` | **The only map.** **`roadmap.md` is what is being done** — **one dated row per week, each carrying a status mark**, plus the chunk table; **`log.md` is why it came out that way, and every quotation lives there**; **`tickets/NN-name.md`** are the work. **Status is a `Status:` line inside the file — files never move between folders.** The chain: `compass` → `press` (which sends `lookup` + `research`) → `build-loop` → `wrap-up`, with `roadmap` checking it. ⚠⚠ **Only `wrap-up` writes to these files, and only after the conversation is finished** |
+| `docs/reference/` | **The screenshots the user sent that a decision was made from.** Named `YYYY-MM-DD-what-it-shows.png`. ⚠ **`wrap-up` moves them here and deletes the rest, and the user says which is which** |
 | `lessons-from-two-dead-games` | **What the two games that died actually measured** |
 | `how-nets-lie` | **Every green measured to be false.** Read it before writing a check and before believing a green round |
 | `planning-principles` | **How to judge a direction.** Survived both resets on purpose — read it first |
@@ -128,6 +129,6 @@ whole game headless in seconds.
 pixels, what survived measured **input → state**. ⇒ **Prefer the shape that survives; reach for pixels
 only when the pixels are the subject.**
 
-⚠ **`CONTEXT.md` is the glossary and the three agreed test seams** — `tdd` will not write a test at a
-seam that is not named there. ⚠ **Parts of its vocabulary predate the swap** and still read as though the
+⚠ **`CONTEXT.md` is the glossary and the three agreed test seams** — **no check is written at a seam
+that is not named there.** ⚠ **Parts of its vocabulary predate the swap** and still read as though the
 beast were the player. **Where a word in it disagrees with `src/`, the code is what is true.**

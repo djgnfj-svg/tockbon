@@ -6,7 +6,7 @@ description: Run the build half of the map on one ticket — plan into the ticke
 # build-loop — plan → build → verify
 
 **The deciding half is already over.** The ticket holds the decision; this skill turns it into code.
-**`breakdown` wrote the ticket. `wrap-up` closes the session after this.**
+**`wrap-up` wrote the ticket, and closes the session after this.**
 
 ⚠⚠ **You do not write code here, and you do not read `src/` here.** Every step below happens inside an
 agent with **its own context window** — that is the entire reason this skill exists. **The moment a
@@ -37,15 +37,15 @@ needs them to actually have seen it.
 ## 3. Build — the `builder` agent
 
 ⚠⚠ **Nets first or nets after, and it is decided by which folder is being touched** (2026-08-24,
-the user): **work that touches `sim` writes the check first** — tell builder to call the Skill tool with
-`tdd`. **Work on the screen writes it after**, the way builder already does.
+the user): **work that touches `sim` writes the check first** — tell builder to write the net before the code.
+**Work on the screen writes it after**, the way builder already does.
 
 **The reason is measured, not preferred.** Moving the field into 3D put 1033 drawing-bound checks at risk
 and **about 480 did not survive.** What lived measured **input → state**; what died **asserted pixels.**
 ⇒ **A check written first against the screen is a check written to die at the next big change.**
 
-⚠ **`tdd` will not write a test at a seam that is not agreed**, and the agreed three live in the
-glossary. If the work needs a new seam, that is the user's call — stop and ask.
+⚠⚠ **No check is written at a seam that is not agreed**, and the agreed three live in the glossary.
+If the work needs a new seam, that is the user's call — stop and ask.
 
 Spawn `builder`. It writes what the plan says, runs the nets, reports red/green, and **stops**. It does
 not declare anything done.
@@ -76,4 +76,4 @@ not done** · where anyone was unsure.
 ⚠ **If you find yourself pasting source into the chat, the context saving has already gone.**
 
 **Then name the next step**: another open ticket on this chunk → `build-loop` again · the chunk's bar now
-true → `breakdown` for the next chunk · the session ending → `wrap-up`.
+true → `press` to settle the next chunk with the user · the session ending → `wrap-up`.
