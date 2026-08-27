@@ -578,43 +578,21 @@ static func tag_stat_bonus_at(r: int, count: int) -> float:
 	return add
 
 
-## --- The species that MOVE what they hit -------------------------------------------------------
-## One row per species whose blow shoves its target: the `UNITS` row, **how many tiles, signed
-## POSITIVE TOWARD the attacker**, and whether it happens only once per body per island.
+## --- THE SHOVE TABLE: DELETED 2026-08-27 ----------------------------------------------------------
+## `SPECIES_SHOVE`, `shove_tiles_of` and `shove_once_of` are gone, and so is every line in `battle.gd`
+## that read them. **The table had been `[]` since 2026-08-26**: its two rows were 다람쥐's pull and
+## 소's charge, and both species left `UNITS` with the side swap, so the lookup answered 0.0 on every
+## blow struck in the game.
 ##
-## ⚠⚠ **Two species, one mechanism, and the only difference is a sign.** 다람쥐 pulls what it bites
-## in; 소 drives it away. Written as one signed column rather than as two rules, because two rules
-## for one motion is the second copy that diverges.
+## ⚠⚠ **IT WAS KEPT ONE DAY LONGER ON 「the mechanic is wired and one row brings it back」, AND THAT IS
+## THE CLAIM THIS DELETION REJECTS.** An empty table meant no check could enter the shove at all — the
+## three rows in `net_battle` that named it were asserting that nothing moved, which is also what a
+## broken shove does. **Wiring nothing can reach is not wiring that is ready.**
 ##
-## ⚠ **The 「once」 column belongs to 소 and is what makes it a CHARGE rather than a shove.** `Battle`
-## is new every island, so 「per island」 costs no reset code — it comes free with the object.
-##
-## ⚠ **First values, not measured ones.**
-## ⚠⚠ **EMPTY since 2026-08-26.** Its two rows were 다람쥐 and 소, and both left the unit table with the
-## side swap. **The table stays** because the mechanic is wired and one row brings it back.
-const SPECIES_SHOVE := []
-
-const _SHOVE_COL_TYPE := 0
-const _SHOVE_COL_TILES := 1
-const _SHOVE_COL_ONCE := 2
-
-
-## Tiles species `type_id` shoves what it hits, positive toward itself. **0.0 for a species with no
-## row**, which is what makes the whole feature a table lookup with no branch behind it.
-static func shove_tiles_of(type_id: int) -> float:
-	for r in SPECIES_SHOVE.size():
-		if int((SPECIES_SHOVE[r] as Array)[_SHOVE_COL_TYPE]) == type_id:
-			return float((SPECIES_SHOVE[r] as Array)[_SHOVE_COL_TILES])
-	return 0.0
-
-
-## Whether species `type_id` shoves only on its FIRST blow of an island.
-static func shove_once_of(type_id: int) -> bool:
-	for r in SPECIES_SHOVE.size():
-		if int((SPECIES_SHOVE[r] as Array)[_SHOVE_COL_TYPE]) == type_id:
-			return bool((SPECIES_SHOVE[r] as Array)[_SHOVE_COL_ONCE])
-	return false
-
+## ⚠ **What the shove KNEW is recorded in `battle.gd` where the code stood**, not here: a body never
+## changes tier by being pushed (티켓 19, the user's own decision), four things have to move together,
+## and a once-per-island charge is spent by the move rather than by the attempt. **Read that block
+## before building anything that moves a body without it walking.**
 
 ## --- The species that hunt as one -------------------------------------------------------------
 ## One row per species that picks its target from the centre of mass of its own kind nearby, itself

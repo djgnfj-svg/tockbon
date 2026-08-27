@@ -170,10 +170,6 @@ var soldier_target := PackedInt32Array()  # enemy index, or -1
 var _soldier_cd := PackedFloat32Array()
 var _soldier_goal: Array = []
 var _soldier_stale := PackedByteArray()
-## 1 once this body has spent its once-per-island shove (`Rules.shove_once_of`). **Per island**, which
-## is free: `setup` rebuilds it and a `Battle` is new every island.
-var _charged := PackedByteArray()
-
 # --- boats -----------------------------------------------------------------------------------------
 ## **The plan AND the fleet, in one array.** There is no second structure: `send` appends here with
 ## `t == 0.0`, and free undo is one `remove_at` that cannot leave a duplicate behind.
@@ -331,8 +327,6 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 	_soldier_stale.resize(roster)
 	# resize on a fresh array zero-fills, so nobody has charged yet. **Per island for free**: a
 	# `Battle` is new every island, so 「몸당 섬당 한 번」 needs no reset anywhere else.
-	_charged = PackedByteArray()
-	_charged.resize(roster)
 	soldier_pos = []
 	_soldier_goal = []
 	for i in roster:
@@ -1011,7 +1005,6 @@ func _hit_enemies(from_id: int, primary: int, damage: float, area: float) -> voi
 	# 다람쥐 pulls what it bites in, 소 drives it away — one signed number in `Rules.SPECIES_SHOVE`.
 	# Same place and same victims as the statuses above, for the same reason: what a blow does to what
 	# it hit belongs on one line, not two.
-	_shove_victims(from_id, primary, splash)
 	events.append({
 		"kind": Event.ATTACK,
 		"from": from_id,
@@ -1047,89 +1040,36 @@ func _hit_soldiers(from_id: int, primary: int, damage: float, area: float) -> vo
 	})
 
 
-## Moves everyone this blow hit, if the attacker's species is in `Rules.SPECIES_SHOVE`. Nothing at
-## all for a species with no row — the table lookup answers 0.0 and this returns before touching
-## anything.
-func _shove_victims(from_id: int, primary: int, splash: PackedInt32Array) -> void:
-	if from_id < 0 or from_id >= army.type_id.size():
-		return
-	var st := int(army.type_id[from_id])
-	var tiles := Rules.shove_tiles_of(st)
-	if absf(tiles) <= Rules.EPS:
-		return
-	var once := Rules.shove_once_of(st)
-	if once and _charged[from_id] != 0:
-		return
-	# ⚠⚠ **THE FLAG IS SET BY THE MOVE AND NOT BY THE ATTEMPT.** Setting it first spent 소's whole
-	# island on a target with its back to a wall — `_shove` refuses to put a body on a blocked tile,
-	# so the charge was consumed by a blow that moved nobody and every later blow was refused for a
-	# charge that never happened. **A once-per-island rule has to be spent by the thing it names.**
-	var moved := _shove(from_id, primary, tiles)
-	for v in splash:
-		moved = _shove(from_id, int(v), tiles) or moved
-	if once and moved:
-		_charged[from_id] = 1
-
-
-## Moves enemy `e` up to `tiles` along the line to soldier `from_id` — **positive is TOWARD the
-## attacker** — and stops at the last tile on the way that a body may actually stand on.
+## --- THE SHOVE AND THE CHARGE: DELETED 2026-08-27 --------------------------------------------------
+## `_shove_victims`, `_shove` and the `_charged` column are gone with `Rules.SPECIES_SHOVE`. The table
+## had been `[]` since 2026-08-26: its two rows were 다람쥐's pull and 소's charge, and both species
+## left `UNITS` with the side swap. **`shove_tiles_of` therefore returned 0.0 on every blow**, so every
+## attack in the game ran the guard and then returned, one lookup per hit, forever.
 ##
-## ⚠⚠ **FOUR THINGS HAVE TO MOVE TOGETHER AND THREE OF THEM ARE INVISIBLE.** Writing `enemy_pos`
-## alone reads as a shove for exactly one sub-step and then undoes itself:
-##  · `_phase_movement`'s standing branch glides the body back toward `_enemy_goal`
-##  · `_walk` re-picks that same stale goal on the branch that walks
-##  · `grid.reserved` still holds the tile the body LEFT, so two bodies end up holding one tile and a
-##    doorway is half as wide with nothing on screen to explain it
-## ⇒ `enemy_pos`, `_enemy_goal` and `_settle` all move here, and `_enemy_stale` is cleared because
-## this call IS the settle.
+## ⚠⚠ **THREE THINGS IT KNEW ARE WORTH MORE THAN THE CODE, AND THE FIRST IS A USER DECISION.**
 ##
-## ⚠ **It walks tile by tile rather than jumping to the endpoint.** A jump can land past a wall, past
-## a body, or on top of the attacker; stopping at the last legal tile is what makes 「지나쳐 넘어가지
+## 1. **A body never changes tier by being pushed** (티켓 19, the user: 「높은 데서 밀리면 안 떨어져.
+##    안 떨어지는 걸로」). Before that was written in, 소's charge shoved enemies UP onto a plateau and
+##    다람쥐's pull dragged them DOWN off one — the decision inverted, by the same omission that once
+##    put landed bodies on top of a wall: placement that never consulted the tier. **A shove is not a
+##    step and may not use a stair either**, because a body flung a tier up a staircase is the falling
+##    rule wearing a different hat. ⇒ **Anything that moves a body without it walking inherits this.**
+##
+## 2. **Four things move together and three of them are invisible.** Writing `enemy_pos` alone reads as
+##    a shove for exactly one sub-step and then undoes itself: `_phase_movement`'s standing branch
+##    glides the body back toward `_enemy_goal`, `_walk` re-picks that same stale goal, and
+##    `grid.reserved` still holds the tile the body LEFT — so two bodies hold one tile and a doorway is
+##    half as wide with nothing on screen to explain it. ⇒ `enemy_pos`, `_enemy_goal`, `_settle` and
+##    `_enemy_stale` all had to move in one place.
+##
+## 3. **A once-per-island charge is spent by the MOVE, never by the attempt.** Setting the flag first
+##    spent 소's whole island on a target with its back to a wall: the shove refused to place a body on
+##    a blocked tile, the charge was consumed by a blow that moved nobody, and every later blow was
+##    refused for a charge that never happened.
+##
+## ⚠ **It walked tile by tile rather than jumping to the endpoint** — a jump can land past a wall, past
+## a body, or on top of the attacker, and stopping at the last legal tile is what made 「지나쳐 넘어가지
 ## 않는다」 a property of the search instead of a rule somebody has to remember.
-## **Returns whether anything actually moved**, which is what `_shove_victims` spends 소's
-## once-per-island charge on.
-func _shove(from_id: int, e: int, tiles: float) -> bool:
-	if e < 0 or e >= enemy_alive.size() or enemy_alive[e] == 0:
-		return false
-	var here: Vector2 = enemy_pos[e]
-	var away: Vector2 = here - soldier_pos[from_id]
-	if away.length() <= Rules.EPS:
-		return false
-	var dir := -away.normalized() if tiles > 0.0 else away.normalized()
-	var uid := ENEMY_UID_BASE + e
-	var best := here
-	var want := absf(tiles)
-	var steps := int(ceil(want))
-	# ⚠⚠ **BODIES NEVER CHANGE TIER BY BEING PUSHED** (티켓 19, the user: 「높은 데서 밀리면 안 떨어져.
-	# 안 떨어지는 걸로」). Before this, 소's charge shoved enemies UP onto a plateau and 다람쥐's pull
-	# dragged them DOWN off one — the decision inverted, by the same omission that put landed bodies on
-	# top of the wall: placement that never consulted the tier.
-	# ⚠ **The body's OWN level, not `can_step`.** A shove is not a step: it may not use a stair either,
-	# because a body flung a tier up a staircase is the falling rule wearing a different hat.
-	var stand_level := grid.level_of(_tile_of(here))
-	for k in range(1, steps + 1):
-		var reach := minf(float(k), want)
-		var tile := _tile_of(here + dir * reach)
-		if tile < 0:
-			break
-		var candidate := _point_of_tile(tile)
-		if candidate.distance_to(best) <= Rules.EPS:
-			continue
-		if grid.passable[tile] == 0:
-			break
-		if grid.level_of(tile) != stand_level:
-			break
-		var holder := int(grid.reserved[tile])
-		if holder >= 0 and holder != uid:
-			break
-		best = candidate
-	if best.distance_to(here) <= Rules.EPS:
-		return false
-	enemy_pos[e] = best
-	_enemy_goal[e] = best
-	_settle(uid, best)
-	_enemy_stale[e] = 0
-	return true
 
 
 func _status_at(s: int, e: int) -> int:

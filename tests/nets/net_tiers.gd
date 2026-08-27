@@ -150,7 +150,14 @@ func run(t) -> void:
 	_melee_reaches_a_diagonal_one_level_up(t)
 	_an_enemy_posted_high_holds_its_tier(t)
 	_a_pack_aims_from_where_its_bodies_stand(t)
-	_a_shove_never_changes_a_bodys_tier(t)
+	# ⚠⚠ **「밀려도 층이 안 바뀐다」 IS A LIVE USER DECISION WHOSE MECHANISM WAS DELETED 2026-08-27.**
+	# 티켓 19, the user's own words: ***"높은 데서 밀리면 안 떨어져. 안 떨어지는 걸로."*** This row
+	# measured it, and measured each direction against its own FLAT control on the same board — because
+	# 「the enemy did not move」 is equally true of a shove that is simply broken, and this file has a
+	# written case of exactly that shape passing.
+	# ⇒ **`Rules.SPECIES_SHOVE` emptied on 2026-08-26 and was deleted on 2026-08-27**, so there is no
+	# longer anything in the game that moves a body without it walking. **The decision outlives the
+	# code**: the day one is built, this row and its flat controls come back before it ships.
 	_a_landing_never_puts_a_body_on_the_plateau(t)
 	_the_first_island_carries_a_real_plateau(t)
 	_every_landing_reaches_every_enemy_on_the_first_island(t)
@@ -782,54 +789,6 @@ func _a_pack_aims_from_where_its_bodies_stand(t) -> void:
 	t.eq(int(b.soldier_target[0]), 0, "낮은 층의 늑대는 낮은 층의 적을 고른다")
 	t.eq(int(b.soldier_target[1]), 0, "옆의 늑대도 마찬가지다")
 	t.eq(int(b.soldier_target[2]), 1, "그런데 고원 위의 늑대는 고원 위의 적을 고른다 — 같은 조준점, 다른 답")
-
-
-## 티켓 19's answer: ***"높은 데서 밀리면 안 떨어져. 안 떨어지는 걸로."*** **Both shoving species were
-## doing the exact opposite** — 소's charge pushed enemies UP onto a plateau and 다람쥐's pull dragged
-## them DOWN off one, because the tile search behind both never asked what tier anything was on.
-##
-## ⚠ **Each direction is measured against its own FLAT control on the same board.** "The enemy did not
-## move" is equally true of a shove that is simply broken, and this file has a written case of exactly
-## that shape passing.
-func _a_shove_never_changes_a_bodys_tier(t) -> void:
-	# -- 다람쥐 pulls TOWARD itself: from the low ground it would drag a plateau body down --------------
-	var pull := _shove_board([Rules.SWORDSMAN], [Vector2(4, 3)], Vector2(6, 3), CLIMB_TIERS)
-	var pull_flat := _shove_board([Rules.SWORDSMAN], [Vector2(4, 3)], Vector2(6, 3), [])
-	t.eq(pull.grid.level_at(6, 3), 2, "끌려갈 적이 고원 위에 선다 (자가 점검)")
-	t.ok(pull._within(pull.soldier_pos[0], pull.enemy_pos[0], pull._soldier_reach(0)),
-		"다람쥐는 벽 너머의 그 적을 실제로 때릴 수 있다 (자가 점검 — 못 때리면 아래가 공허하다)")
-	pull_flat._shove_victims(0, 0, PackedInt32Array())
-	t.ok(pull_flat.enemy_pos[0].distance_to(Vector2(6, 3)) > Rules.EPS,
-		"평지 대조군 — 다람쥐의 끌기는 실제로 몸을 옮긴다 (%s)" % str(pull_flat.enemy_pos[0]))
-	pull._shove_victims(0, 0, PackedInt32Array())
-	t.eq(pull.grid.level_at(int(round(pull.enemy_pos[0].x)), int(round(pull.enemy_pos[0].y))), 2,
-		"그런데 층이 있으면 고원 위의 적은 끌려 내려오지 않는다 (%s)" % str(pull.enemy_pos[0]))
-
-	# -- 소 charges AWAY: from the low ground it would drive a body up onto the plateau ----------------
-	var push := _shove_board([Rules.SWORDSMAN], [Vector2(4, 3)], Vector2(5, 3), CLIMB_TIERS)
-	var push_flat := _shove_board([Rules.SWORDSMAN], [Vector2(4, 3)], Vector2(5, 3), [])
-	t.eq(push.grid.level_at(5, 3), 0, "들이받힐 적은 낮은 층에 서고 (자가 점검)")
-	t.eq(push.grid.level_at(6, 3), 2, "그 등 뒤가 고원이다 (자가 점검)")
-	push_flat._shove_victims(0, 0, PackedInt32Array())
-	t.ok(push_flat.enemy_pos[0].distance_to(Vector2(5, 3)) > Rules.EPS,
-		"평지 대조군 — 소의 돌진은 실제로 몸을 밀어낸다 (%s)" % str(push_flat.enemy_pos[0]))
-	push._shove_victims(0, 0, PackedInt32Array())
-	t.eq(push.grid.level_at(int(round(push.enemy_pos[0].x)), int(round(push.enemy_pos[0].y))), 0,
-		"그런데 층이 있으면 벽 위로 안 밀려 올라간다 (%s)" % str(push.enemy_pos[0]))
-	# ⚠ The once-per-island charge is spent by the MOVE, never by the attempt — so a charge the wall
-	# refused is a charge 소 still has. That rule already existed; this is the row that keeps the tier
-	# refusal from quietly eating it.
-	t.eq(int(push._charged[0]), 0,
-		"그리고 벽에 막힌 돌진은 소의 한 번뿐인 돌진을 안 쓴다 — 안 움직였으면 안 쓴 것이다")
-
-
-## ⚠⚠ **MEASURED ON THE REAL FIRST ISLAND, from an approved landing the player will actually aim at.**
-## The search that picks where landing bodies stand tested passability and nothing else, so a beach
-## whose own tiles were taken walked up the wall and handed back a tile ON THE PLATEAU. A body put
-## there can never come down and no enemy can ever reach it — **and because the walking step reads a
-## body's tier off the tile it stands on, the placement hole hardens into a movement fact.**
-##
-## The domain is asserted first: a search that returned nothing would satisfy "none of them is high".
 func _a_landing_never_puts_a_body_on_the_plateau(t) -> void:
 	var g := Grid.new()
 	Islands.load_into(g)
@@ -1178,17 +1137,6 @@ func _pinned_damage(attacker: Vector2, victim: Vector2) -> float:
 		b._enemy_goal[0] = victim
 		b.army.hp[0] = 9999.0
 	return hp0 - float(b.enemy_hp[0])
-
-
-## One shoving species ashore at `at`, one shieldbearer at `enemy`, on the climb board with the tier
-## board `tiers` — pass `[]` for the flat control.
-func _shove_board(species: Array, at: Array, enemy: Vector2, tiers: Array) -> Battle:
-	return _battle_on(CLIMB_ROWS, tiers, species, at,
-		[{"type_id": Rules.WOLF, "tile": int(enemy.y) * CLIMB_W + int(enemy.x)}])
-
-
-## Ashore the way a landing leaves a body — state, position, goal AND the tile reservation. State
-## alone teleports the body back to its stale goal on the first move (`net_fx`'s measured trap).
 func _ashore(b: Battle, i: int, p: Vector2) -> void:
 	b.soldier_state[i] = Battle.SoldierState.ASHORE
 	b.soldier_pos[i] = p

@@ -65,12 +65,22 @@ func run(t) -> void:
 	_enemy_blows_carry_no_status(t)
 	# -- 티켓 15: the five passives ------------------------------------------------------------------
 	_the_bear_sweeps(t)
-	_the_squirrel_pulls_and_the_cow_charges(t)
 	_the_crow_bleeds_with_no_equipment(t)
 	_the_wolves_hunt_as_one(t)
 	_a_crows_own_bleed_never_weakens_its_equipment(t)
-	_a_blocked_shove_does_not_spend_the_charge(t)
-	_the_shove_moves_the_goal_and_the_reservation(t)
+	# ⚠⚠ **THREE SHOVE ROWS WERE DELETED HERE 2026-08-27, AND THEY HAD ALREADY STOPPED MEASURING.**
+	# 「다람쥐 끌어당김 · 소 돌진」, 「막힌 밀치기는 충전을 안 태운다」 and 「밀치기가 목표와 예약을 함께
+	# 옮긴다」 went with `Rules.SPECIES_SHOVE`. The table emptied on 2026-08-26 when 다람쥐 and 소 left
+	# `UNITS`, and the three had been rewritten to pass `Rules.SWORDSMAN` where those two stood — so
+	# they asked a swordsman for a shove distance, got 0.0, and asserted it was positive. **Red for a
+	# reason that had nothing to do with the behaviour they were named after.**
+	#
+	# What they held: the sign convention (positive pulls the victim TOWARD the attacker, negative
+	# pushes it away), the 「once per island」 column that told a charge from a pull, that a blocked
+	# shove must not spend the charge, and that `enemy_pos` alone undoes itself within one sub-step
+	# unless `_enemy_goal` and `grid.reserved` move with it.
+	# ⇒ **The full reasoning is in `battle.gd` where `_shove` stood**, including the user's 티켓 19
+	# decision that a body never changes tier by being pushed.
 
 
 # -- 티켓 15 fix: two sources, one blow, the STRONGER stands -------------------------------------------
@@ -150,95 +160,8 @@ func _bleed_row() -> int:
 		if Rules.tag_status_status_of(r) == Rules.Status.BLEED:
 			return r
 	return -1
-
-
-# -- 티켓 15 fix: a charge is spent by the MOVE, not by the attempt ------------------------------------
-## ⚠⚠ **MEASURED: 소 burnt its whole island on a target that never moved.** The flag was set before
-## `_shove` ran, and `_shove` correctly refuses to put a body on a blocked tile — so an enemy with its
-## back to a wall ate the charge and every later blow was refused for a charge nobody ever got.
-##
-## ⚠ Mutation: set `_charged` before the shove again.
-func _a_blocked_shove_does_not_spend_the_charge(t) -> void:
-	# A hole one tile behind the enemy, so the push has nowhere to go.
-	var rows := _open(ARENA_W, ARENA_H)
-	rows[5] = _with_char(str(rows[5]), 14, "#")
-	var army := _army_of([Rules.SWORDSMAN])
-	var b := _battle_of(rows, army, [_spawn(ARENA_W, Rules.WOLF, 13, 5)])
-	_ashore(b, 0, Vector2(12, 5))
-	var start: Vector2 = b.enemy_pos[0]
-	b.begin_frame()
-	b.step(TICK_ONE)
-	t.ok(b.enemy_hp[0] < Rules.hp_of(Rules.WOLF), "소가 실제로 때렸다 (자가 점검)")
-	t.eq(b.enemy_pos[0], start, "벽에 등을 댄 적은 안 밀린다 (자가 점검)")
-
-	# ⚠ **Neither body moves on its own here** — both are inside their own reach, so the enemy would
-	# stand against that wall for the whole island. It is moved to open ground by hand, which is the
-	# only thing that lets the NEXT blow ask for the charge at all.
-	var open_at := Vector2(11, 5)
-	b.enemy_pos[0] = open_at
-	b._enemy_goal[0] = open_at
-	b._settle(Battle.ENEMY_UID_BASE + 0, open_at)
-
-	# A shove is a JUMP — a whole tile inside one sub-step — and a walk can never exceed
-	# `speed * SIM_SUBSTEP_SEC`, so the two are separable.
-	var walk_cap := Rules.speed_of(Rules.WOLF) * Rules.SIM_SUBSTEP_SEC + 0.01
-	var jumped := false
-	for _k in 400:
-		var was: Vector2 = b.enemy_pos[0]
-		b.begin_frame()
-		b.step(TICK_ONE)
-		if was.distance_to(b.enemy_pos[0]) > walk_cap:
-			jumped = true
-			break
-	t.ok(jumped, "막힌 타격이 지나간 뒤에도 돌진이 남아 있다 — 안 일어난 밀치기가 충전을 안 태운다")
-
-
-## `row` with one character replaced. The island rows are strings, so a fixture wall is one splice.
 func _with_char(row: String, at: int, ch: String) -> String:
 	return row.substr(0, at) + ch + row.substr(at + 1)
-
-
-# -- 티켓 15 fix: the shove's other two writes, each measured on its own -------------------------------
-## ⚠⚠ **THE FOUR-THINGS-MOVE-TOGETHER CLAIM WAS MEASURED FOR ONE OF THE FOUR.** In the squirrel
-## fixture the enemy had already WALKED, so `_walk` had moved `_enemy_goal` onto exactly the tile the
-## pull lands on — deleting the goal write and deleting `_settle` both stayed green. This fixture
-## makes the two diverge: the enemy STANDS (it is a 궁수 and the squirrel is inside its reach), so its
-## goal is still its spawn tile and its reservation is still the tile it is standing on.
-##
-## ⚠ Mutation: drop `_enemy_goal[e] = best` (the body glides back); drop `_settle` (the OLD tile stays
-## held, so one body holds two tiles and a doorway is half as wide — the plan's own named risk).
-func _the_shove_moves_the_goal_and_the_reservation(t) -> void:
-	var army := _army_of([Rules.SWORDSMAN])
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army,
-		[_spawn(ARENA_W, Rules.CROW, 13, 5)])
-	_ashore(b, 0, Vector2(11, 5))
-	var uid := Battle.ENEMY_UID_BASE + 0
-	var start: Vector2 = b.enemy_pos[0]
-	var start_tile := int(round(start.y)) * b.grid.w + int(round(start.x))
-	t.eq(int(b.grid.reserved[start_tile]), uid, "적이 제 칸을 쥐고 있다 (자가 점검)")
-	t.eq(Vector2(b._enemy_goal[0]), start, "그리고 목표도 그 칸이다 — 아직 한 걸음도 안 걸었다 (자가 점검)")
-
-	b.begin_frame()
-	b.step(TICK_ONE)
-	var after: Vector2 = b.enemy_pos[0]
-	t.ok(after.distance_to(start) > 0.5, "다람쥐가 끌었다 (자가 점검)")
-
-	# (1) the GOAL moved with the body — otherwise the standing branch glides it straight back.
-	t.eq(Vector2(b._enemy_goal[0]), after, "목표가 끌려간 자리로 같이 옮겨졌다")
-	# (2) the RESERVATION moved with it — the old tile is free and the new one is held.
-	var new_tile := int(round(after.y)) * b.grid.w + int(round(after.x))
-	t.ok(new_tile != start_tile, "옮긴 칸이 원래 칸과 다르다 (자가 점검)")
-	t.ok(int(b.grid.reserved[start_tile]) != uid,
-		"떠난 칸을 더는 안 쥐고 있다 — 안 놓으면 몸 하나가 두 칸을 쥐고 문이 반쯤 막힌다")
-	t.eq(int(b.grid.reserved[new_tile]), uid, "그리고 새 칸을 쥔다")
-	# (3) and it stays: the archer is in reach, so it STANDS — a stale goal would show up here.
-	for _k in 20:
-		b.begin_frame()
-		b.step(TICK_ONE)
-	t.ok(b.enemy_pos[0].distance_to(start) > 0.5,
-		"서 있는 적도 원래 자리로 안 미끄러져 돌아간다 — 「서 있는」 가지가 목표를 다시 집는다")
-
-
 # -- 티켓 15: 늑대 — 무리사냥 -------------------------------------------------------------------------
 ## **A wolf picks its target from the centre of mass of the wolves NEAR IT, itself included.**
 ##
@@ -484,106 +407,6 @@ func _the_crow_bleeds_with_no_equipment(t) -> void:
 	t.eq(bb.status_left(Rules.Status.BLEED, 0), 0.0,
 		"그런데 곰이 때린 적에게는 출혈이 안 걸린다 — 무는 것은 이 종이지 아무 타격이나가 아니다")
 	t.ok(Rules.species_status_of(Rules.BEAR).is_empty(), "표에 곰 줄이 없다")
-
-
-# -- 티켓 15: 다람쥐 — 끌어당김 · 소 — 돌진 ----------------------------------------------------------
-## ⚠⚠ **THE TRAP THIS ROW EXISTS FOR IS NOT THE MOVE, IT IS THE MOVE COMING UNDONE.** Writing
-## `enemy_pos` alone puts the body back where it was on the very next sub-step: `_phase_movement`'s
-## standing branch glides it toward `_enemy_goal`, `_walk` re-picks that same goal, and
-## `grid.reserved` still holds the OLD tile. **A check that reads final state after one sub-step
-## cannot see any of that** — so this one runs ten more sub-steps and reads the position again.
-##
-## ⚠ Mutation: drop the `_enemy_goal` write (the body walks back); drop the `_settle` (two bodies end
-## up holding one tile, and a doorway is half as wide with nothing on screen to say so).
-func _the_squirrel_pulls_and_the_cow_charges(t) -> void:
-	var pull_tiles := Rules.shove_tiles_of(Rules.SWORDSMAN)
-	t.ok(pull_tiles > 0.0, "다람쥐의 밀치기 값이 양수다 — 때린 쪽으로 당긴다 (리터럴 부호)")
-	t.eq(pull_tiles, 1.0, "그 거리가 1칸이다 (리터럴 — 첫 값이고 잰 값이 아니다)")
-
-	# -- 다람쥐: the enemy comes TOWARD it, and stays -----------------------------------------------
-	var s_army := _army_of([Rules.SWORDSMAN])
-	var sb := _battle_of(_open(ARENA_W, ARENA_H), s_army,
-		[_spawn(ARENA_W, Rules.WOLF, 13, 5)])
-	var squirrel_at := Vector2(11, 5)
-	_ashore(sb, 0, squirrel_at)
-	var before: Vector2 = sb.enemy_pos[0]
-	sb.begin_frame()
-	sb.step(TICK_ONE)
-	var after: Vector2 = sb.enemy_pos[0]
-	t.ok(sb.enemy_hp[0] < Rules.hp_of(Rules.WOLF), "다람쥐가 실제로 때렸다 (자가 점검)")
-	# The DIRECTION, as the sign of a dot product — never as a coordinate, which would pin the fixture
-	# rather than the rule.
-	t.ok((after - before).dot(squirrel_at - before) > 0.0, "맞은 적이 다람쥐 쪽으로 움직였다")
-	t.ok(absf(before.distance_to(after) - pull_tiles) < 0.01,
-		"그리고 표의 값만큼 움직였다 (%.2f칸)" % before.distance_to(after))
-	# ⚠⚠ **The whole point of the row.** Ten more sub-steps with nobody else touching it.
-	for _k in 10:
-		sb.begin_frame()
-		sb.step(TICK_ONE)
-	t.ok(sb.enemy_pos[0].distance_to(before) >= pull_tiles - 0.01,
-		"서브스텝을 열 번 더 돌려도 원래 자리로 안 되돌아간다 — 끌었다가 한 프레임 반짝하고 마는 것이 아니다")
-	# And it never lands where a body cannot stand, nor past the puller.
-	t.ok(sb.grid.is_passable(int(round(sb.enemy_pos[0].x)), int(round(sb.enemy_pos[0].y))),
-		"끌려간 자리가 걸을 수 있는 칸이다")
-	t.ok(sb.enemy_pos[0].x > squirrel_at.x,
-		"그리고 다람쥐를 지나쳐 넘어가지 않는다 — 여전히 그 오른쪽이다")
-
-	# -- 소: the enemy goes the OTHER way, and only on the first blow --------------------------------
-	var charge_tiles := Rules.shove_tiles_of(Rules.SWORDSMAN)
-	t.ok(charge_tiles < 0.0, "소의 밀치기 값은 음수다 — 반대쪽으로 민다 (리터럴 부호)")
-	t.ok(Rules.shove_once_of(Rules.SWORDSMAN), "그리고 몸당 섬당 한 번뿐이라고 표가 말한다")
-	t.ok(not Rules.shove_once_of(Rules.SWORDSMAN), "다람쥐는 매번이다 — 표가 둘을 가른다 (자가 점검)")
-	var c_army := _army_of([Rules.SWORDSMAN])
-	var cb := _battle_of(_open(ARENA_W, ARENA_H), c_army,
-		[_spawn(ARENA_W, Rules.WOLF, 13, 5)])
-	var cow_at := Vector2(12, 5)
-	_ashore(cb, 0, cow_at)
-	var c_before: Vector2 = cb.enemy_pos[0]
-	cb.begin_frame()
-	cb.step(TICK_ONE)
-	var c_after: Vector2 = cb.enemy_pos[0]
-	t.ok(cb.enemy_hp[0] < Rules.hp_of(Rules.WOLF), "소가 실제로 때렸다 (자가 점검)")
-	t.ok((c_after - c_before).dot(cow_at - c_before) < 0.0, "맞은 적이 소의 반대쪽으로 갔다")
-	# ⚠⚠ **The second blow is measured as the LARGEST SINGLE SUB-STEP DISPLACEMENT after the first
-	# one, not as a position.** Both bodies keep walking once the charge has opened the gap, so a
-	# position comparison would be reading the walk. **A shove is a JUMP** — a whole tile inside one
-	# sub-step — and a walk can never exceed `speed * SIM_SUBSTEP_SEC`, so the two are separable.
-	var walk_cap := Rules.speed_of(Rules.WOLF) * Rules.SIM_SUBSTEP_SEC + 0.01
-	t.ok(c_before.distance_to(c_after) > walk_cap,
-		"첫 타격의 이동은 걷기로 설명이 안 된다 (%.3f > %.3f) — 자가 점검이자 아래 줄의 바닥"
-			% [c_before.distance_to(c_after), walk_cap])
-	var hp_seen := cb.enemy_hp[0]
-	var biggest := 0.0
-	var hits := 0
-	for _k in 400:
-		var was: Vector2 = cb.enemy_pos[0]
-		cb.begin_frame()
-		cb.step(TICK_ONE)
-		biggest = maxf(biggest, was.distance_to(cb.enemy_pos[0]))
-		if cb.enemy_hp[0] < hp_seen:
-			hits += 1
-			hp_seen = cb.enemy_hp[0]
-			if hits >= 2:
-				break
-	t.ok(hits >= 2, "두 번째·세 번째 타격이 실제로 들어갔다 (자가 점검)")
-	t.ok(biggest <= walk_cap,
-		"그 뒤로는 한 서브스텝에 걷는 거리 이상 안 움직인다 — 「첫 충돌」의 반쪽이다 (%.3f <= %.3f)"
-			% [biggest, walk_cap])
-
-	# -- 늑대: the control. Some blow does NOT move anything -----------------------------------------
-	t.eq(Rules.shove_tiles_of(Rules.WOLF), 0.0, "늑대는 표에 밀치기 줄이 없다")
-	var w_army := _army_of([Rules.WOLF])
-	var wb := _battle_of(_open(ARENA_W, ARENA_H), w_army,
-		[_spawn(ARENA_W, Rules.WOLF, 13, 5)])
-	_ashore(wb, 0, Vector2(12, 5))
-	var w_before: Vector2 = wb.enemy_pos[0]
-	wb.begin_frame()
-	wb.step(TICK_ONE)
-	t.ok(wb.enemy_hp[0] < Rules.hp_of(Rules.WOLF), "늑대도 실제로 때렸다 (자가 점검)")
-	t.eq(wb.enemy_pos[0], w_before,
-		"그런데 적은 한 칸도 안 움직였다 — 미는 것은 이 종이지 아무 타격이나가 아니다")
-
-
 # -- 티켓 15: 곰 — 휘두르기 ---------------------------------------------------------------------------
 ## **The bear's whole passive is one number in `UNITS`' `area` column** — `_phase_attacks` already
 ## hands `Rules.area_of(st)` to `_hit_enemies`, and `_hit_enemies` already walks a radius. `battle.gd`
