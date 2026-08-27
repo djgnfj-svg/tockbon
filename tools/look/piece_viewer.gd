@@ -141,7 +141,9 @@ func _initialize() -> void:
 func _load_pieces(path: String) -> bool:
 	var packed := ResourceLoader.load(path) as PackedScene
 	if packed == null:
-		push_error("piece_viewer: %s 를 못 읽었다. `python tools/blender/send.py tools/blender/pieces.py` 로 먼저 구워라" % path)
+		# ⚠ `pieces.py` was deleted 2026-08-27 and there is no way to re-bake this file. The viewer's
+		# live use is `-- --glb res://assets/terrain/island.glb`.
+		push_error("piece_viewer: %s 를 못 읽었다. pieces.glb 는 다시 구울 수 없다 — `-- --glb res://assets/terrain/island.glb` 로 섬을 봐라" % path)
 		return false
 	var baked := packed.instantiate()
 	for child in baked.get_children():

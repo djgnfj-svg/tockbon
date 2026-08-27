@@ -9,8 +9,9 @@
 | `probe_refit_hits.gd` | no | on the refit screen the slot strip and the board's cells share pixels; which one does a press reach? |
 
 ⚠⚠ **`piece_viewer.gd` is the answer to 「블록 하나하나를 내가 보고 싶어」** (2026-08-27, the user). It
-exists because `tools/blender/one_piece.py` shows a piece under BLENDER's light, and ticket 01 records
-that a value which reads correctly there goes wrong in the game. **Its sun, ambient, camera and outline
+exists because a piece shown under BLENDER's light lies: ticket 01 records over and over that a value
+which reads correctly there goes wrong in the game. (`one_piece.py`, the Blender-side viewer it was
+written against, was deleted 2026-08-27.) **Its sun, ambient, camera and outline
 pass are copied from `field_view.gd` line for line** — retuning any of them makes it lie.
 
 ⚠⚠ **Everything this file used to describe is gone.** `capture.gd`, `capture_bodies.gd`, `capture_map.gd`,
