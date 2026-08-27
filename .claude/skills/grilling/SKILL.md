@@ -3,8 +3,9 @@ name: grilling
 description: Grill the user relentlessly about a plan, decision, or idea. Use ONLY when the user is choosing a direction or brainstorming, or uses a 'grill' trigger phrase — never as the tail of an ordinary reply.
 ---
 
-⚠⚠ **This skill is the ONLY place questions are asked in rounds** (2026-08-27, the user:
-*"질문이 많아 이거 스킬로 빼자 브레인 스토밍할때만 하면 될꺼같은데 너무 자주 하네 글을 읽기가 싫어짐"*).
+⚠⚠ **This skill is the ONLY place questions are asked in rounds** (2026-08-27, the user: *"There are too
+many questions. Let us pull this out into a skill. It only needs to happen when brainstorming, but it
+happens far too often. It is making me not want to read."*).
 **An ordinary reply answers and stops.** ⇒ **Do not invoke this because a reply felt short.** It is for
 **a direction being chosen or an idea being brainstormed**, and for nothing else.
 
@@ -12,8 +13,10 @@ Interview the user relentlessly until you reach a shared understanding. Map this
 
 Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Then wait for the user's answers before the next round.
 
-⚠⚠ **The shape of each question is the user's, given 2026-08-24** (*"질문 추천 왜 / 질문 : / 추천 : /
-왜: / 이렇게가 맞는데.."*). **A horizontal rule, then numbered blocks of three labelled lines:**
+⚠⚠ **The shape of each question is the user's, given 2026-08-24** — they wrote the three labels out and
+said that was the right shape. **A horizontal rule, then numbered blocks of three labelled lines.**
+⚠ **The labels stay Korean**: they are printed to the user, who reads Korean, so translating them would
+break the very thing they name.
 
 ```
 ---
@@ -29,7 +32,7 @@ Work the tree in **rounds**. The **frontier** is every decision whose prerequisi
 - **One line each.** The reasoning that does not fit belongs in the body above, not in these lines
 - ⚠ **Only ask what has a recommendation and a reason.** A confirmation check is not a question
 - ⚠ **Do not bury the recommendation in prose above and leave a bare question at the bottom.** The user:
-  *"질문이 너무 길어서 그래서 정확하게 뭘 말하는 건지 잘 모르겠네"*
+  *"The questions are so long that I cannot tell what is actually being asked."*
 - ⚠ **A frontier of one is a round of one.** Never pad a round to look like grilling
 - ⚠⚠ **No emoji.** The template above used them; **this repo's no-emoji rule wins**
 
