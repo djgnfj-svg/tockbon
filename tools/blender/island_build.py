@@ -81,17 +81,23 @@ OUTW = {"s": (0.0, -1.0), "e": (1.0, 0.0), "n": (0.0, 1.0), "w": (-1.0, 0.0)}
 # --- the board -------------------------------------------------------------------------------------
 # `.` land, `~` sea. **The outline turns on 2x2 pieces**, which is ticket 01 rule 1: a coast that can
 # only turn on even tiles reads as shape rather than as squares.
+# WARNING **NINETEEN LAND PIECES, DOWN FROM SIXTY-FOUR** (2026-08-27, the user, holding a Bad North
+# screenshot beside ours: the mat that lights up is one PIECE, and sixty-four of them is not a board a
+# person can read). Counted off the reference: about twelve mats on the low ground and six or seven on
+# the raised part -- twenty for a whole island. **The island was enlarged to 13x10 the day before, when
+# the command unit was still the TILE**; the piece became the unit the next day and that number came
+# with it unexamined.
+#
+# WARNING **The interior 2x2 is where the plateau goes and it is the whole reason this outline is not
+# thinner.** A raised piece must have low ground on all eight sides -- see `HIGH` below -- so shaving
+# another ring off this board leaves nowhere to raise.
 PIECES = [
-    "~~~~~~~~~~~~~",
-    "~~~~.....~~~~",
-    "~~~.........~",
-    "~~..........~",
-    "~...........~",
-    "~...........~",
-    "~~.........~~",
-    "~~~.......~~~",
-    "~~~~..~~~~~~~",
-    "~~~~~~~~~~~~~",
+    "~~~~~~~~",
+    "~~....~~",
+    "~......~",
+    "~.....~~",
+    "~~....~~",
+    "~~~~~~~~",
 ]
 PW, PH = len(PIECES[0]), len(PIECES)
 TW, TH = PW * 2, PH * 2
@@ -100,11 +106,14 @@ TW, TH = PW * 2, PH * 2
 # even tiles anyway so that every raised block is a whole piece. **The plateau never reaches the coast**:
 # a rim of low ground all the way round is what lets the raised part be seen AS raised.
 _hi = [["." for _ in range(TW)] for _ in range(TH)]
-for _y in range(8, 14):
-    for _x in range(10, 18):
+# WARNING **FOUR PIECES, DOWN FROM TWELVE.** Shrunk with the board rather than left at its old size:
+# the plateau used to be a fifth of the island and at the new size it would have been most of it,
+# leaving the low ground with nowhere to stand.
+for _y in range(4, 8):
+    for _x in range(6, 10):
         _hi[_y][_x] = "2"
-for _y in range(10, 12):      # the stair: one notch, cut into the plateau's west face
-    for _x in range(10, 12):
+for _y in range(6, 8):        # the stair: one notch, cut into the plateau's west face
+    for _x in range(6, 8):
         _hi[_y][_x] = "1"
 HIGH = ["".join(r) for r in _hi]
 

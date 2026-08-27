@@ -167,6 +167,15 @@ var status_mag := PackedFloat32Array()
 var soldier_state := PackedInt32Array()
 var soldier_pos: Array = []               # Vector2, tile units
 var soldier_target := PackedInt32Array()  # enemy index, or -1
+## **Where the PLAYER sent this body, as a tile index, or -1 for「nowhere」.**
+##
+## ⚠⚠ **This is the first destination in the file that is not an enemy.** Until 2026-08-27 an allied
+## body only ever walked at `enemy_pos[soldier_target[i]]`, so「go and stand there」could not be said
+## at all. It is a SEPARATE column from `soldier_target` on purpose: an order and a target are two
+## different sentences, and folding them into one index would make「walk to the stair」and「the stair
+## is an enemy」the same value.
+## ⚠ **Cleared on arrival**, so a body that reached where it was sent goes back to reading the fight.
+var soldier_order := PackedInt32Array()   # tile index the player ordered, or -1
 var _soldier_cd := PackedFloat32Array()
 var _soldier_goal: Array = []
 var _soldier_stale := PackedByteArray()
@@ -327,6 +336,8 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 	soldier_state.resize(roster)
 	soldier_target = PackedInt32Array()
 	soldier_target.resize(roster)
+	soldier_order = PackedInt32Array()
+	soldier_order.resize(roster)
 	_soldier_cd = PackedFloat32Array()
 	_soldier_cd.resize(roster)
 	_soldier_stale = PackedByteArray()
@@ -345,6 +356,7 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 		# would sail again.
 		soldier_state[i] = SoldierState.RESERVE if army.alive[i] != 0 else SoldierState.DEAD
 		soldier_target[i] = -1
+		soldier_order[i] = -1
 		_soldier_cd[i] = 0.0
 		_soldier_stale[i] = 0
 		soldier_pos.append(OFFMAP)
@@ -591,8 +603,6 @@ func step(dt: float) -> void:
 	# Per-CALL facts, answered once. See the header for why the running test is NOT one of them.
 	if grid == null or army == null:
 		return
-	if not _committed:
-		return
 	if dt <= 0.0:
 		return
 	_substep_acc += dt
@@ -600,10 +610,24 @@ func step(dt: float) -> void:
 		if _outcome != Outcome.RUNNING:
 			break
 		_substep_acc -= Rules.SIM_SUBSTEP_SEC
+		# ⚠⚠ **ONE PHASE RUNS BEFORE THE COMMIT AND IT IS THE ONLY ONE.** `step` used to return here
+		# outright, and the reason it did is written on `_the_landing_force_is_gone`: every soldier is
+		# RESERVE while the player is still planning, so letting the CLOCK run would lose the island
+		# before anything was placed. **That reason is about the clock, the landings and the fight —
+		# none of which this branch touches.** A body walking where it was told is what the player
+		# does before a fight, not during one, and it cannot decide the island: no targeting, no
+		# attacks, no boats, no deaths, no verdict.
+		# ⚠ `substeps` is NOT counted here. It measures the fight, and a fight that has not started
+		# has run no sub-steps of it.
+		if not _committed:
+			_age_fields(Rules.SIM_SUBSTEP_SEC)
+			_phase_orders(Rules.SIM_SUBSTEP_SEC)
+			continue
 		substeps += 1
 		_phase_boats(Rules.SIM_SUBSTEP_SEC)
 		_phase_landings()
 		_phase_targeting()
+		_phase_orders(Rules.SIM_SUBSTEP_SEC)
 		_phase_movement(Rules.SIM_SUBSTEP_SEC)
 		_phase_attacks(Rules.SIM_SUBSTEP_SEC)
 		# After attacks, before deaths: an enemy bled to 0 this sub-step passes the SAME sub-step's
@@ -611,6 +635,75 @@ func step(dt: float) -> void:
 		_phase_status(Rules.SIM_SUBSTEP_SEC)
 		_phase_deaths()
 		_phase_clock(Rules.SIM_SUBSTEP_SEC)
+
+
+## **Stands one body on the island with no boat and no crossing.** Returns the tile it took, or -1.
+##
+## ⚠⚠ **Every path onto the island used to run through a boat** — `send` and `summon` both, and
+## `_try_unload` was the ONE writer of `ASHORE` in `src/`. That was right while the player was the
+## side that arrives by sea; the sides were swapped 2026-08-26 and **the company already lives here**,
+## so a body that starts on its own island must not have to sail to it.
+##
+## ⚠ **The four writes are one unit and the nets already say so** (`net_battle`'s `_ashore` fixture,
+## whose header states all four are required): state, position, GOAL, and the reservation. Leaving the
+## goal at `OFFMAP` makes the body drift back toward (-1,-1) at walking speed — measured in
+## `tools/probe/tier_stair_reach.gd`, whose comment records exactly that.
+##
+## ⚠ `near_tile` is a WISH, not a demand: the body takes the nearest free walkable tile at that tile's
+## own level, through the same search a landing uses, so a keep standing on the wish still lands
+## somebody beside it.
+func place_ashore(soldier_id: int, near_tile: int) -> int:
+	if grid == null or army == null:
+		return -1
+	if soldier_id < 0 or soldier_id >= soldier_state.size():
+		return -1
+	if int(soldier_state[soldier_id]) != SoldierState.RESERVE:
+		return -1
+	var spots := _free_tiles_from(near_tile, 1)
+	if spots.is_empty():
+		return -1
+	var tile := int(spots[0])
+	var here := _point_of_tile(tile)
+	soldier_state[soldier_id] = SoldierState.ASHORE
+	soldier_pos[soldier_id] = here
+	_soldier_goal[soldier_id] = here
+	_soldier_stale[soldier_id] = 0
+	var claimed := grid.reserved
+	claimed[tile] = soldier_id
+	grid.reserved = claimed
+	events.append({"kind": Event.LAND, "id": soldier_id})
+	return tile
+
+
+## **The player tells one body to go and stand on a tile.** Returns false and changes nothing if the
+## body cannot be ordered or the tile cannot be stood on.
+##
+## ⚠ **It does not check that a route exists.** `flow_field` answers `UNREACHABLE` for a tile no walk
+## can reach, and `_walk` then simply fails to find a better neighbour and the body stays put — which
+## is the same thing that already happens at a blocked neck. **A reachability test here would be a
+## second copy of the walking rule**, and the two would drift.
+## ⚠ **Not gated on the commit.** The commit is what starts the FIGHT; a body walking where it was
+## told is what the player does before one — see `step`.
+func order_walk(soldier_id: int, tile: int) -> bool:
+	if grid == null:
+		return false
+	if soldier_id < 0 or soldier_id >= soldier_state.size():
+		return false
+	if int(soldier_state[soldier_id]) != SoldierState.ASHORE:
+		return false
+	if tile < 0 or tile >= grid.passable.size() or grid.passable[tile] == 0:
+		return false
+	soldier_order[soldier_id] = tile
+	return true
+
+
+## Every body the player has sent somewhere, as `[soldier_id, ...]`. For the picture and for a net.
+func ordered_ids() -> Array:
+	var out := []
+	for i in soldier_order.size():
+		if int(soldier_order[i]) >= 0:
+			out.append(i)
+	return out
 
 
 func outcome() -> int:
@@ -828,6 +921,44 @@ func _phase_targeting() -> void:
 		enemy_target[e] = _nearest_soldier(enemy_pos[e], Rules.detect_of(enemy_type[e]), false)
 
 
+## **Every body the player sent somewhere walks there.** Runs before `_phase_movement`, and before the
+## commit it is the only phase that runs at all.
+##
+## ⚠⚠ **An order OUTRANKS the fight while it stands.** A body told to go to the stair walks to the
+## stair past an enemy it could have hit — that is what「내가 보낸 자리로 간다」means, and a body that
+## re-decided on the way would make the order a suggestion.
+## ⚠ **The order is cleared the moment the body is standing on the tile**, so it goes straight back to
+## reading the fight; it is NOT held as a post.
+##
+## ⚠⚠ **AND IT IS CLEARED WHEN THE BODY STOPS MAKING PROGRESS.** `flow_field` answers `UNREACHABLE`
+## for a tile no walk can reach, and `_walk` then finds no better neighbour and returns the position it
+## was handed. Without this line the order would stand forever and the body would never fight again —
+## a body permanently disarmed by a click on the wrong side of a cliff, with every check about
+## ordering still green.
+func _phase_orders(dt: float) -> void:
+	for i in soldier_order.size():
+		var dest_tile := int(soldier_order[i])
+		if dest_tile < 0:
+			continue
+		if int(soldier_state[i]) != SoldierState.ASHORE:
+			soldier_order[i] = -1
+			continue
+		var dest := _point_of_tile(dest_tile)
+		var was: Vector2 = soldier_pos[i]
+		if was.distance_to(dest) <= Rules.EPS:
+			soldier_order[i] = -1
+			if _soldier_stale[i] != 0:
+				_settle(i, dest)
+				_soldier_stale[i] = 0
+			continue
+		soldier_pos[i] = _walk(i, was, _soldier_goal, i, army.speed_of(i) * dt,
+				_field_for(dest_tile), dest, 0.0)
+		_soldier_stale[i] = 1
+		# Stuck: it did not move AND it is not part-way across a tile it still has to finish.
+		if soldier_pos[i].distance_to(was) <= Rules.EPS 				and was.distance_to(_soldier_goal[i]) <= Rules.EPS:
+			soldier_order[i] = -1
+
+
 ## Everyone walks toward their target and **stops the instant it is in reach**. Without that one
 ## rule a range-4 soldier walks all the way into melee and the ranged type stops existing; the plan
 ## measured it moving island 3's damage taken by 30%.
@@ -836,6 +967,10 @@ func _phase_movement(dt: float) -> void:
 
 	for i in soldier_state.size():
 		if soldier_state[i] != SoldierState.ASHORE:
+			continue
+		# ⚠ **`_phase_orders` already moved this one.** Falling through would walk it twice in one
+		# sub-step — at double speed, and toward two different places.
+		if int(soldier_order[i]) >= 0:
 			continue
 		var goal: Vector2 = _soldier_goal[i]
 		var speed := army.speed_of(i)

@@ -114,10 +114,13 @@ var _terrain: MeshInstance3D = null
 var _sea: MeshInstance3D = null
 var _ring: MeshInstance3D = null
 var _sun: DirectionalLight3D = null
-## The plate on the tile under the cursor. Built once, moved and hidden — see `set_hover_tile`.
+## **The mark on the MAT under the cursor.** Its mesh is rebuilt when the cursor crosses into
+## another mat -- see `set_hover_tile`.
 var _hover: MeshInstance3D = null
-var _hover_tile := -1
-## The wash over every walkable tile. **One mesh for the whole board**, rebuilt when the board changes.
+## Which MAT the cursor is on, not which tile. -1 for none.
+var _hover_cell := -1
+## Which mat each tile belongs to, kept from the last `_rebuild_wash`. The hover mark reads it.
+var _wash_cell := PackedInt32Array()
 var _wash: MeshInstance3D = null
 var _sprites: Array[Sprite3D] = []
 var _hulls: Array[MeshInstance3D] = []
@@ -203,24 +206,21 @@ func _build_world() -> void:
 	_decal = _fx_layer()
 	_air = _fx_layer()
 
-	# ⚠⚠ **ONE QUAD, BUILT ONCE, MOVED.** Rebuilding a mesh every time the mouse crosses a tile line is
-	# a new `ArrayMesh` sixty times a second for a picture that never changes shape. It is hidden until
-	# the shell says which tile, and `_hover_tile` short-circuits a move to the tile it is already on.
+	# ⚠⚠ **THE MARK IS A MAT, NOT A QUAD.** It used to be one plane the size of one tile, moved
+	# about; the user asked for the 2x2 piece to be the unit that lights up, and a square of that size
+	# hangs over the shore on every coastal piece. **It is cut from the mat's own mask instead**, so it
+	# is exactly the shape of the thing it lights up, and its mesh is rebuilt only when the cursor
+	# crosses into another mat.
 	_hover = MeshInstance3D.new()
-	var plate := PlaneMesh.new()
-	plate.size = Vector2(Look.TILE_PX, Look.TILE_PX) / Look.TILE_PX
-	_hover.mesh = plate
 	var plate_mat := StandardMaterial3D.new()
-	# ⚠⚠ **THE TEXTURE CARRIES THE COLOUR, SO THIS IS WHITE.** A tint here multiplies the ring as well
-	# as the fill and the ring is the half that has to stay dark.
 	plate_mat.albedo_color = Color(1.0, 1.0, 1.0, 1.0)
-	plate_mat.albedo_texture = _make_hover_tex()
-	# ⚠ **Unshaded.** A lit plate goes grey on the shadow side of the island and stops reading as a
-	# cursor — it is a mark, not a surface, the same argument the outline pass makes for its ink.
+	# ⚠ **Unshaded.** A lit mark goes grey on the shadow side of the island and stops reading as a
+	# cursor -- it is a mark, not a surface, the same argument the outline pass makes for its ink.
 	plate_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	plate_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	# ⚠ **It must not throw a shadow.** A floating quad casting a hard square onto the ground under it
-	# is the giveaway that it is hovering rather than lying on the tile.
+	plate_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# ⚠ **It must not throw a shadow.** A floating quad casting a hard square onto the ground under
+	# it is the giveaway that it is hovering rather than lying on the tile.
 	_hover.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_hover.material_override = plate_mat
 	_hover.visible = false
@@ -237,6 +237,7 @@ func _build_world() -> void:
 	_wash.material_override = wash_mat
 	_wash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_world.add_child(_wash)
+
 
 	_sun = DirectionalLight3D.new()
 	_sun.rotation_degrees = Vector3(Look.SUN_PITCH_DEG, Look.SUN_YAW_DEG, 0.0)
@@ -311,32 +312,6 @@ func _make_body_tex() -> Texture2D:
 	return ImageTexture.create_from_image(img)
 
 
-## The plate's picture: a dark ring around a near-white translucent fill.
-##
-## ⚠⚠ **The user's reference is Bad North's ground mark** (2026-08-27, `image.png`): a soft translucent
-## white wash with ROUNDED corners that lies on the ground, with a slightly brighter rim. A hard dark
-## border was tried first and rejected — it reads as a square drawn OVER the island rather than as light
-## falling ON it. ⚠ The round corners are the half that carries that reading; the rim only stops the
-## wash from dissolving into pale sand.
-func _make_hover_tex() -> Texture2D:
-	var n := Look.HOVER_TEX_PX
-	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
-	img.fill(Look.COL_HOVER_PLATE)
-	var half := float(n) * 0.5
-	var corner := float(n) * Look.HOVER_CORNER_FRAC
-	var rim := float(n) * Look.HOVER_RIM_FRAC
-	for y in n:
-		for x in n:
-			var p := Vector2(float(x) + 0.5 - half, float(y) + 0.5 - half)
-			# Distance to a rounded square, the same box-minus-corner form `_make_body_tex` uses.
-			var q := Vector2(absf(p.x), absf(p.y)) - Vector2(half - corner, half - corner)
-			var d := Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() + minf(maxf(q.x, q.y), 0.0) - corner
-			if d > 0.0:
-				img.set_pixel(x, y, Color(1.0, 1.0, 1.0, 0.0))
-			elif d > -rim:
-				img.set_pixel(x, y, Look.COL_HOVER_RIM)
-	return ImageTexture.create_from_image(img)
-
 
 ## **The wash over every walkable tile, cut from the walkable SHAPE and not from the tile grid.**
 ##
@@ -358,79 +333,166 @@ func _rebuild_wash() -> void:
 	var mw := grid.w * res
 	var mh := grid.h * res
 
-	# **How far each pixel is from the edge of its own floor.** ⚠⚠ **One distance field PER LEVEL, and
-	# that is what pulls the wash back off the cliffs.** Measured flat, a plateau tile and the ground
-	# beside it are both walkable, so the drop between them is invisible to the mask and the wash hangs
-	# over it — the user's 「삐져나가는 문제」. A level's own field ends where that level ends.
-	var d_edge := PackedFloat32Array()
-	d_edge.resize(mw * mh)
-	var levels := {}
-	for t in grid.w * grid.h:
-		if grid.passable[t] == 1:
-			levels[grid.level_of(t)] = true
-	var mask := PackedByteArray()
-	mask.resize(mw * mh)
-	for lv in levels.keys():
-		for py in mh:
-			var ty := py / res
-			for px in mw:
-				var tx := px / res
-				var t := ty * grid.w + tx
-				mask[py * mw + px] = 1 if grid.passable[t] == 1 and grid.level_of(t) == int(lv) else 0
-		var d_lv := _dist_to_zero(mask, mw, mh)
-		for i in mw * mh:
-			if mask[i] == 1:
-				d_edge[i] = d_lv[i]
+	var cell := _wash_cells(grid)
+	_wash_cell = cell
+	_hover_cell = -1
+	if _hover != null:
+		_hover.visible = false
+
+	# **The two boundaries, marked at mask resolution.** A pixel is on a boundary when the tile across
+	# one of its sides is classified differently from its own, which puts the mark exactly on the tile
+	# line and nowhere else.
+	#
+	# ⚠⚠ **WALKED PER TILE AND NOT PER PIXEL.** A mask pixel's neighbours are in another tile only on
+	# its own border, so the whole classification is a handful of comparisons per TILE -- 520 of them
+	# instead of 133k. The per-pixel version was measured unusable (2026-08-27).
+	#
+	# ⚠⚠ **THE LAND EDGE IS TESTED EIGHT WAYS AND THE FOUR DIAGONALS ARE THE POINT.** A tile whose
+	# DIAGONAL neighbour is water sits on an OUTSIDE corner of the shore, and that is where the bake
+	# rounds hardest -- the corner the mat kept hanging off. Four ways alone leave those unmarked.
+	#
+	# ⚠ **A change of LEVEL counts as a land edge**, which is what pulls the mat back off the cliffs:
+	# a plateau tile and the ground beside it are both walkable, so measured flat the drop between them
+	# is invisible to the mask and the mat hangs over it.
+	var land0 := PackedByteArray()
+	var seam0 := PackedByteArray()
+	land0.resize(mw * mh)
+	seam0.resize(mw * mh)
+	for i in mw * mh:
+		land0[i] = 1
+		seam0[i] = 1
+	for ty in grid.h:
+		for tx in grid.w:
+			var t := ty * grid.w + tx
+			var x0 := tx * res
+			var y0 := ty * res
+			if grid.passable[t] != 1:
+				for yy in range(y0, y0 + res):
+					var row := yy * mw
+					for xx in range(x0, x0 + res):
+						land0[row + xx] = 0
+						seam0[row + xx] = 0
+				continue
+			var lv := grid.level_of(t)
+			var c := int(cell[t])
+			for side in 4:
+				var nx := tx + (1 if side == 0 else (-1 if side == 1 else 0))
+				var ny := ty + (1 if side == 2 else (-1 if side == 3 else 0))
+				var is_land_edge := true
+				var is_seam := false
+				if nx >= 0 and ny >= 0 and nx < grid.w and ny < grid.h:
+					var nt := ny * grid.w + nx
+					if grid.passable[nt] == 1 and grid.level_of(nt) == lv:
+						is_land_edge = false
+						is_seam = int(cell[nt]) != c
+				if not is_land_edge and not is_seam:
+					continue
+				var ax := x0 if side != 0 else x0 + res - 1
+				var ay := y0 if side != 2 else y0 + res - 1
+				for k in res:
+					var mx := ax if side < 2 else x0 + k
+					var my := y0 + k if side < 2 else ay
+					var mi := my * mw + mx
+					if is_land_edge:
+						land0[mi] = 0
+					else:
+						seam0[mi] = 0
+			for corner in 4:
+				var dx := 1 if corner < 2 else -1
+				var dy := 1 if corner % 2 == 0 else -1
+				var nx2 := tx + dx
+				var ny2 := ty + dy
+				var bad := true
+				if nx2 >= 0 and ny2 >= 0 and nx2 < grid.w and ny2 < grid.h:
+					var nt2 := ny2 * grid.w + nx2
+					bad = grid.passable[nt2] != 1 or grid.level_of(nt2) != lv
+				if not bad:
+					continue
+				land0[(y0 + (res - 1 if dy > 0 else 0)) * mw + x0 + (res - 1 if dx > 0 else 0)] = 0
+	var d_land := _dist_to_zero(land0, mw, mh)
+	var d_seam := _dist_to_zero(seam0, mw, mh)
 
 	# Opening: erode by (inset + round), then take everything within `round` of what survived.
 	var r_in := (Look.WASH_INSET_TILES + Look.WASH_ROUND_TILES) * float(res)
 	var r_out := Look.WASH_ROUND_TILES * float(res)
 	var r_gap := (Look.WASH_BLOCK_GAP_TILES + Look.WASH_ROUND_TILES) * float(res)
-	# ⚠⚠ **EVERY BLOCK IS ITS OWN SHAPE, which is what「노드마다」asked for** (2026-08-27, the user,
-	# against Bad North's ground: separate rounded patches with the ground showing between them, not one
-	# wash over the whole island). ⚠ **A block and not a tile** — the user's next word on the per-tile
-	# version was 「너무 많으」, and `Look.WASH_BLOCK_TILES` says why 2 is the right number: the island is
-	# assembled from 2x2 pieces, so the piece is the unit the eye already reads.
-	# A block's own border counts as an edge, and the LAND edge still counts too — which is what cuts a
-	# coastal patch off at the sea instead of letting it hang over the water.
-	var bres := res * Look.WASH_BLOCK_TILES
-	var half_b := float(bres) * 0.5
+	# ⚠⚠ **EVERY MAT SITS AT ITS PIECE'S CENTRE, AND THIS IS WHAT PUTS IT THERE** (2026-08-27, the
+	# user: 「4개를 합쳤을때 가운데에 새롭게 만드는건지」). The mat is what is LEFT after the ground is
+	# cut, not a shape laid on the middle — so an edge that bites on ONE side pushes what is left off
+	# centre, which is exactly what the coastal pieces were doing.
+	#
+	# **The fix is to erode all four sides by the WORST side's amount.** For each piece, find how far the
+	# land edge intrudes into the mat it would otherwise have, and take that off every side. A coastal
+	# mat comes out smaller than an inland one and both come out centred.
+	var need := PackedFloat32Array()
+	need.resize(grid.w * grid.h)
+	for i in mw * mh:
+		if d_seam[i] < r_gap:
+			continue
+		var t := (i / mw / res) * grid.w + ((i % mw) / res)
+		if int(cell[t]) < 0:
+			continue
+		var short: float = r_in - d_land[i]
+		if short > need[int(cell[t])]:
+			need[int(cell[t])] = short
+
 	var core := PackedByteArray()
 	core.resize(mw * mh)
 	var any := false
-	for py in mh:
-		var fy: float = half_b - absf(float(py % bres) + 0.5 - half_b)
-		for px in mw:
-			var i := py * mw + px
-			var fx: float = half_b - absf(float(px % bres) + 0.5 - half_b)
-			# ⚠ **The two edges are held apart and eroded by DIFFERENT amounts.** A block seam is a
-			# gap between pieces; a floor's edge is a fall. Erode both by the same number and either
-			# the seam swallows the piece or the wash walks off the cliff.
-			var deep: bool = d_edge[i] >= r_in and minf(fx, fy) >= r_gap
-			# ⚠ **Inverted on purpose**: `_dist_to_zero` measures to the nearest 0, so the core has to
-			# be the 0s of the array handed to the second pass.
-			core[i] = 0 if deep else 1
-			if deep:
-				any = true
+	for i in mw * mh:
+		# ⚠ **The two boundaries are held apart and eroded by DIFFERENT amounts.** A seam is a gap
+		# between two mats on the same flat ground; a land edge is a fall. Erode both by the same
+		# number and either the seam swallows the mat or the mat walks off the cliff.
+		# ⚠ **Inverted on purpose**: `_dist_to_zero` measures to the nearest 0, so the core has to be
+		# the 0s of the array handed to the second pass.
+		var t := (i / mw / res) * grid.w + ((i % mw) / res)
+		var c := int(cell[t])
+		var deep: bool = c >= 0 and d_seam[i] >= r_gap + maxf(need[c], 0.0)
+		core[i] = 0 if deep else 1
+		if deep:
+			any = true
+
 	if not any:
 		return
 	var d_core := _dist_to_zero(core, mw, mh)
 
-	var img := Image.create(mw, mh, false, Image.FORMAT_RGBA8)
+	# ⚠⚠ **ONE BUFFER HANDED OVER WHOLE, NOT `set_pixel` PER PIXEL.** `set_pixel` on a board this
+	# size is most of what made the island slow to open. `resize` zero-fills, so a pixel the mat does
+	# not cover is already fully transparent and costs nothing to skip.
 	var rim := Look.WASH_RIM_TILES * float(res)
-	var clear := Color(1.0, 1.0, 1.0, 0.0)
-	for py in mh:
-		for px in mw:
-			var d: float = d_core[py * mw + px]
-			# One mask pixel of feather, so the edge is not a staircase at any zoom.
-			var a := clampf(r_out - d + 0.5, 0.0, 1.0)
-			if a <= 0.0:
-				img.set_pixel(px, py, clear)
-				continue
-			var col := Look.COL_WASH_RIM if d > r_out - rim else Look.COL_WASH
-			img.set_pixel(px, py, Color(col.r, col.g, col.b, col.a * a))
+	var buf := PackedByteArray()
+	var lit := PackedByteArray()
+	buf.resize(mw * mh * 4)
+	lit.resize(mw * mh * 4)
+	for i in mw * mh:
+		var d: float = d_core[i]
+		# One mask pixel of feather, so the edge is not a staircase at any zoom.
+		var a := clampf(r_out - d + 0.5, 0.0, 1.0)
+		if a <= 0.0:
+			continue
+		var on_rim: bool = d > r_out - rim
+		var col: Color = Look.COL_WASH_RIM if on_rim else Look.COL_WASH
+		# ⚠⚠ **THE HOVER MARK WEARS THE SAME MASK, BRIGHTER.** A square of its own hangs over the
+		# shore on every coastal piece; sharing the mask is what makes the mark exactly the shape of
+		# the mat it lights up, feathered edge and all.
+		var hot: Color = Look.COL_HOVER_RIM if on_rim else Look.COL_HOVER_PLATE
+		var o := i * 4
+		buf[o] = int(col.r * 255.0)
+		buf[o + 1] = int(col.g * 255.0)
+		buf[o + 2] = int(col.b * 255.0)
+		buf[o + 3] = int(col.a * a * 255.0)
+		lit[o] = int(hot.r * 255.0)
+		lit[o + 1] = int(hot.g * 255.0)
+		lit[o + 2] = int(hot.b * 255.0)
+		lit[o + 3] = int(hot.a * a * 255.0)
 	var mat: StandardMaterial3D = _wash.material_override
-	mat.albedo_texture = ImageTexture.create_from_image(img)
+	mat.albedo_texture = ImageTexture.create_from_image(
+			Image.create_from_data(mw, mh, false, Image.FORMAT_RGBA8, buf))
+	if _hover != null:
+		var hmat: StandardMaterial3D = _hover.material_override
+		hmat.albedo_texture = ImageTexture.create_from_image(
+				Image.create_from_data(mw, mh, false, Image.FORMAT_RGBA8, lit))
+
 
 	# One quad per walkable tile, at that tile's own drawn surface. **The quad follows the ground and
 	# the SHAPE follows the mask** — a stair tile is sloped, so its four corners are sampled separately.
@@ -441,21 +503,7 @@ func _rebuild_wash() -> void:
 		for tx in grid.w:
 			if grid.passable[ty * grid.w + tx] != 1:
 				continue
-			var c := Vector2(float(tx), float(ty))
-			# ⚠ 0.49 and not 0.5: `surface_h` rounds to a tile, and half a tile out lands on the
-			# neighbour — which on a stair is the next step up and reads as a torn quad.
-			var p00 := Vector3(c.x - 0.5, _stand_h(c + Vector2(-0.49, -0.49)) + lift, c.y - 0.5)
-			var p10 := Vector3(c.x + 0.5, _stand_h(c + Vector2(0.49, -0.49)) + lift, c.y - 0.5)
-			var p11 := Vector3(c.x + 0.5, _stand_h(c + Vector2(0.49, 0.49)) + lift, c.y + 0.5)
-			var p01 := Vector3(c.x - 0.5, _stand_h(c + Vector2(-0.49, 0.49)) + lift, c.y + 0.5)
-			var u0 := float(tx) / float(grid.w)
-			var u1 := float(tx + 1) / float(grid.w)
-			var v0 := float(ty) / float(grid.h)
-			var v1 := float(ty + 1) / float(grid.h)
-			verts.append_array([p00, p10, p11, p00, p11, p01])
-			uvs.append_array([
-				Vector2(u0, v0), Vector2(u1, v0), Vector2(u1, v1),
-				Vector2(u0, v0), Vector2(u1, v1), Vector2(u0, v1)])
+			_append_ground_quad(verts, uvs, grid, tx, ty, lift)
 	if verts.is_empty():
 		return
 	var arrays := []
@@ -465,6 +513,55 @@ func _rebuild_wash() -> void:
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	_wash.mesh = mesh
+
+
+## **One tile's quad on the drawn ground**, appended to `verts`/`uvs`. The mat and the hover mark are
+## the same shape in the same place at different heights, so they build their geometry the same way --
+## written twice, the two would drift and the mark would stop covering what it lights.
+##
+## ⚠ 0.49 and not 0.5: `surface_h` rounds to a tile, and half a tile out lands on the neighbour --
+## which on a stair is the next step up and reads as a torn quad.
+func _append_ground_quad(verts: PackedVector3Array, uvs: PackedVector2Array, grid: Grid,
+		tx: int, ty: int, lift: float) -> void:
+	var c := Vector2(float(tx), float(ty))
+	var p00 := Vector3(c.x - 0.5, _stand_h(c + Vector2(-0.49, -0.49)) + lift, c.y - 0.5)
+	var p10 := Vector3(c.x + 0.5, _stand_h(c + Vector2(0.49, -0.49)) + lift, c.y - 0.5)
+	var p11 := Vector3(c.x + 0.5, _stand_h(c + Vector2(0.49, 0.49)) + lift, c.y + 0.5)
+	var p01 := Vector3(c.x - 0.5, _stand_h(c + Vector2(-0.49, 0.49)) + lift, c.y + 0.5)
+	var u0 := float(tx) / float(grid.w)
+	var u1 := float(tx + 1) / float(grid.w)
+	var v0 := float(ty) / float(grid.h)
+	var v1 := float(ty + 1) / float(grid.h)
+	verts.append_array([p00, p10, p11, p00, p11, p01])
+	uvs.append_array([
+		Vector2(u0, v0), Vector2(u1, v0), Vector2(u1, v1),
+		Vector2(u0, v0), Vector2(u1, v1), Vector2(u0, v1)])
+
+
+## **Which mat each tile belongs to** -- the index of its 2x2 piece, or -1 where nothing walks.
+##
+## ⚠⚠ **2x2 BECAUSE THE ISLAND IS BUILT THAT WAY** -- `tools/blender/island_build.py` lays the whole
+## island down as 2x2 pieces and a raised block is always a whole piece, so the piece is the unit the
+## eye already reads. Two other units were on screen and rejected: one mat per TILE
+## (「너무 많으」) and mats grown freely from seeds (「맘대로 되어있는」).
+func _wash_cells(grid: Grid) -> PackedInt32Array:
+	var n := grid.w * grid.h
+	var cell := PackedInt32Array()
+	cell.resize(n)
+	var span := Look.WASH_BLOCK_TILES
+	var across := (grid.w + span - 1) / span
+	for ty in grid.h:
+		for tx in grid.w:
+			var t := ty * grid.w + tx
+			# ⚠⚠ **A STAIR CARRIES NO MAT** (2026-08-27, the user: 「계단에는 칸을 안만들어야하는데」).
+			# **No shape has to be authored per tile to say so** — the board already knows: an ODD notch
+			# IS a stair (`Grid.is_stair_level`), which is the same fact that makes the stair the only
+			# way up. A mat says「여기 서라」 and a stair is something a body passes THROUGH.
+			# ⚠ It stays walkable. Only the light stops there.
+			var no_mat: bool = grid.passable[t] != 1 or Grid.is_stair_level(grid.level_of(t))
+			cell[t] = -1 if no_mat else (ty / span) * across + (tx / span)
+	return cell
+
 
 
 ## Distance, in mask pixels, from every cell to the nearest cell holding 0. **Two-pass chamfer**, which
@@ -1446,30 +1543,46 @@ enum FxKind { SHOT, SPARK, BURST, AREA, LAND, REFUSE }
 ## and on the release. `slot == -1` clears the whole aim. **0 draw calls** — the same shape the
 ## deleted `set_drag` had, and for the same reason: one call site for three events means the two fields cannot
 ## disagree.
-## **Puts the plate on tile `t`, or hides it when `t` is -1.** The shell calls this on every mouse move.
+## **Lights up the MAT the cursor is on.** The shell still hands a TILE -- which mat that belongs to
+## is looked up here, so nothing outside this file has to know how the ground is divided.
 ##
-## ⚠⚠ **The plate sits at the tile CENTRE's own surface height**, which is `Grid.surface_h` and not the
-## tile's rule height — on a stair those differ by up to half a storey and a plate at the rule height
-## would sink into the treads. **`_stand_h` is the same call a body's feet make**, so the plate lands
-## exactly where a body standing there would.
-##
-## ⚠ **A flat quad, and a stair tile is NOT flat.** The plate pokes through the treads on the stair and
-## through a coastal tile whose corners the bake moved. **Both are known and neither is fixed here** —
-## the plate is a cursor, and matching the ground under it exactly means reading corner positions the
-## game does not have. Say so rather than pretending it is right everywhere.
+## ⚠⚠ **The unit is the 2x2 piece and that is the user's call** (2026-08-27: 「이번에 긐 4칸짜리를 기준으로 마우스 올리면 동작하게 해줘」).
+## ⚠ **Short-circuits on the MAT and not the tile**, so crossing a tile line inside one mat rebuilds
+## nothing -- which is what makes a per-mat mesh affordable at all.
+## ⚠ **Lifted higher than the mat it covers** (`HOVER_PLATE_LIFT_TILES` against `WASH_LIFT_TILES`):
+## the two are the same shape in the same place, and the mark has to win.
 func set_hover_tile(t: int) -> void:
-	if t == _hover_tile:
+	var c := -1
+	if t >= 0 and t < _wash_cell.size():
+		c = int(_wash_cell[t])
+	if c == _hover_cell:
 		return
-	_hover_tile = t
-	if t < 0 or battle == null or battle.grid == null or _hover == null:
-		if _hover != null:
-			_hover.visible = false
+	_hover_cell = c
+	if _hover == null:
 		return
-	var tx := t % battle.grid.w
-	var ty := t / battle.grid.w
-	var centre := Vector2(float(tx), float(ty))
-	_hover.position = Vector3(centre.x, _stand_h(centre) + Look.HOVER_PLATE_LIFT_TILES, centre.y)
+	if c < 0 or battle == null or battle.grid == null:
+		_hover.visible = false
+		return
+	var grid: Grid = battle.grid
+	var verts := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	for ty in grid.h:
+		for tx in grid.w:
+			if int(_wash_cell[ty * grid.w + tx]) != c:
+				continue
+			_append_ground_quad(verts, uvs, grid, tx, ty, Look.HOVER_PLATE_LIFT_TILES)
+	if verts.is_empty():
+		_hover.visible = false
+		return
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_hover.mesh = mesh
 	_hover.visible = true
+
 
 
 func set_summon_aim(slot: int, tile: int) -> void:

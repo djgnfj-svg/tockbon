@@ -598,6 +598,15 @@ func _on_left_press(at: Vector2) -> void:
 			if _armed_slot >= 0:
 				_begin_summon(at)
 				return
+		# ⚠⚠ **THE WALK ORDER, AND IT SITS OUTSIDE THE `not committed()` BLOCK ON PURPOSE.** Everything
+		# above is the PLAN — it stops answering the moment the fight starts. Commanding a body is the
+		# opposite: it is the whole of the hand during a fight (「손이 논다고 했는데 배드노스 보니까 손이
+		# 놀면 안될듯」, 2026-08-25), so it has to answer on both sides of the commit.
+		# ⚠ **Below the summon and above the pan.** Below the summon because an armed slot consumes
+		# every press; above the pan because the pan is the fall-through that means「the press hit
+		# nothing」, and a press that ordered somebody hit something.
+		if _order_walk_at(at):
+			return
 	_panning = true
 
 
@@ -792,6 +801,36 @@ func _ring_hit_at(at: Vector2) -> int:
 			return int(boat["uid"])
 		i -= 1
 	return -1
+
+
+## **Sends the body under the player's command to the tile that was pressed.** True when somebody was
+## actually ordered, which is what tells the caller the press was consumed.
+##
+## ⚠⚠ **It orders the body NEAREST THE PRESS and not「the first one ashore」.** With one body the two
+## are the same sentence and the difference cannot be seen; with two it is the difference between
+## commanding what you are looking at and commanding whatever happens to sit lowest in the roster.
+## **The whole cost of getting it right today is this loop**, and getting it wrong would read as a
+## random body answering the click.
+## ⚠ **This is not a squad.** Squads do not exist (2026-08-27, the user: 「칸단위 부대는 따로 없음
+## 아직」) — when they do, this is the function that grows a selection instead of a nearest-body rule.
+func _order_walk_at(at: Vector2) -> bool:
+	if battle == null:
+		return false
+	var tile := _tile_at(at)
+	if tile < 0:
+		return false
+	var here := Vector2(float(tile % battle.grid.w), float(tile / battle.grid.w))
+	var who := -1
+	var best := INF
+	for raw_id in battle.ashore_ids():
+		var i := int(raw_id)
+		var d: float = (battle.soldier_pos[i] as Vector2).distance_to(here)
+		if d < best:
+			best = d
+			who = i
+	if who < 0:
+		return false
+	return battle.order_walk(who, tile)
 
 
 ## A screen press converted to the tile it landed on, or -1 off the grid — the one function every
