@@ -86,44 +86,27 @@ files drifts.
 - **A reply covering more than one subject is a list**
 - **The user is new to making games. Their agreement is the absence of anything to disagree with**
 
-## ⚠ **Every reply ends with a grilling round**
+## ⚠⚠ **A reply does NOT end with questions**
 
-**Grilling is how this repo asks** (2026-08-24, the user: *"그릴링 쓰자"*). ⚠⚠ **This replaces
-「exactly one question」**, which the user set 2026-08-22 (*"하나 씩 하나 씩 해줘 하나 씩"*) and
-reversed here. **This paragraph is the record of that reversal, and it is now the only one.**
+⚠⚠ **Reversed 2026-08-27 by the user**: ***"질문이 많아 이거 스킬로 빼자 브레인 스토밍할때만 하면
+될꺼같은데 너무 자주 하네 글을 읽기가 싫어짐"***. **Every reply used to end with a grilling round.
+It does not any more.** ⇒ **Answer the thing, and stop.**
 
-**Hold the open decisions as a tree.** The **frontier** is every decision whose prerequisites are already
-settled — the questions askable **now**, without guessing at an answer you have not heard yet.
-**Ask the whole frontier in one round, then wait.**
+- **Ask only when the work genuinely cannot go on without the answer**, and then ask **one** question,
+  in plain prose, at the end. **A question you can settle by reading the repo is not a question**
+- ⚠ **Never close a live conversation with 「시작할까요?」** — that rule predates this one and survives it
+- ⚠ **Do not compensate by moving the questions into the body.** Fewer words on screen is the point
 
-- ⚠ **A question whose answer depends on another question still open in this round belongs to a LATER
-  round.** That is the one thing that keeps a round from being a wall
-- ⚠⚠ **Finding facts is your job, never the user's.** A frontier question needing a fact from the repo,
-  the code, or the web — **go get it.** Dispatch a subagent and **do not block**: only the questions
-  downstream of it wait. Ask the rest of the frontier now
-- **The decisions are the user's.** Put each one to them and wait
-- **Done when the frontier is empty** — every branch visited, nothing silently assumed
-- ⚠ **A frontier of one is a round of one.** Never pad a round to look like grilling
+**Grilling is a skill now and nothing else** — `grilling`, invoked when the user is **choosing a
+direction or brainstorming**, or asks for it by name. ⚠ **The question shape (`질문 · 추천 · 왜`) moved
+into that skill**, and it is still the user's shape.
 
-⚠⚠ **The shape of each question is the user's, given 2026-08-24** (*"질문 추천 왜 / 질문 : /
-추천 : / 왜: / 이렇게가 맞는데.."*). **A horizontal rule, then numbered blocks of three labelled lines:**
+⚠ **What this does NOT change**: **finding facts is still your job, never the user's**, and **a
+recommendation is still labelled — what you recommend, then why.**
 
-```
----
-**질문 1** : <one line>
-**추천** : <one line>
-**왜** : <one line>
-
-**질문 2** : <one line>
-**추천** : <one line>
-**왜** : <one line>
-```
-
-- **One line each.** The reasoning that does not fit belongs in the body above, not in these lines
-- ⚠ **Only ask what has a recommendation and a reason.** A confirmation check is not a question
-- ⚠ **Do not bury the recommendation in prose above and leave a bare question at the bottom** — that is
-  what this replaces. The user: *"질문이 너무 길어서 그래서 정확하게 뭘 말하는 건지 잘 모르겠네"*
-- ⚠ **No emoji, still.** The imported grilling template uses them; **this repo's no-emoji rule wins**
+⚠ **The two dead forms of this same line, so neither gets re-derived**: 2026-08-22 set 「exactly one
+question」 (*"하나 씩 하나 씩 해줘 하나 씩"*); 2026-08-24 replaced it with a grilling round on every
+reply (*"그릴링 쓰자"*).
 
 # Nothing pretends to work
 
