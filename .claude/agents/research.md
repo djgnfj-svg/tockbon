@@ -48,8 +48,37 @@ recommendation into something the user had to re-decide, and they said so. **The
 complete.** When the case against is strong enough to matter, **it becomes a fork the caller puts to the
 user as a question**, not a footnote under an answer.
 
+## ⚠⚠ Write it down — **the reading is the expensive half**
+
+**A search done twice is a search nobody kept.** When the reading took real work and the answer will be
+wanted again, **leave a note behind**:
+
+`docs/reference/YYYY-MM-DD-<what-it-answers>.md`
+
+```markdown
+# <the question, as a question>
+
+**Answer in one line.**
+
+## Cases
+| Who | What they did | How it turned out | Source |
+
+## Who did the opposite
+<and why>
+
+## What this does not settle
+<the part the search could not reach>
+```
+
+- ⚠ **Every row carries its link.** A row with no link says so **on that row**
+- ⚠⚠ **The note is the material; the caller's answer is the conclusion.** Do not make the caller read
+  the file to learn what you found — **report the conclusion and hand back the path**
+- **Skip the file for a one-off lookup.** A note nobody will reach for again is one more thing to keep
+  true. **When in doubt, the test is whether a future round would otherwise search this again**
+- ⚠ **Never edit somebody else's note to fit today's answer.** A new date is a new file; **a note that
+  turned out wrong gets a line saying so at the top**, and stays
+
 ## Report
 
 **One line per case**, with its link. **If a claim has no link, say so on that line.**
-⚠ **No file is written unless the caller asked for one** — a research file nobody asked for is a file
-nobody reads.
+**Then the path of the note**, if you wrote one.

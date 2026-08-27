@@ -43,5 +43,11 @@ and how Sea of Thieves builds its water.
 
 ## Where it lands
 
-**Into the ticket that asked for it**, under the ticket heading `## 남들은 어떻게 하나` (the tickets are Korean, so the heading is). **No ticket in play → the findings
+⚠⚠ **Two places, and they hold different things.** **The conclusion** goes into the ticket that asked
+for it, under `## 남들은 어떻게 하나` (the tickets are Korean, so the heading is). **The material — every
+case, every link — stays in the note `research` left at `docs/reference/`**, and the ticket names its path.
+⚠ **Keeping the whole table in the ticket is what makes tickets unreadable**; keeping nothing is what makes
+the next round search it all again.
+
+**No ticket in play → the findings
 come back in conversation and nowhere else** — a research file nobody asked for is a file nobody reads.
