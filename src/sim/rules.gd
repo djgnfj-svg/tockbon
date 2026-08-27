@@ -108,7 +108,7 @@ const NO_DETECT := -1.0
 ## ⚠⚠ **LOWERED 2.0 -> 1.0 (2026-08-27), and it was a LIE being corrected, not a balance change.**
 ## The mesh has always been the source of the board: `island_build.py` writes `level_h` into
 ## `island.json` and it is **0.5 — half a tile per notch**, which the user restated as 「한 층이 한 칸,
-## 계단은 반 칸」. This constant said one notch was a whole tile, so **the sim measured every height at
+## 계단은 반 칸」 — ⚠ **the user's own words, unchanged; the 2026-08-27 swap makes those 칸 today's 조각.** This constant said one notch was a whole tile, so **the sim measured every height at
 ## exactly twice what the ground the player looks at actually stands.** A body on the plateau computed
 ## 2.0 tiles up while the drawn plateau stood 1.0 up.
 ## ⚠ **`REACH_BONUS` survives the change and gets a WIDER margin, which is why nothing is retuned.**

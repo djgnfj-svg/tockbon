@@ -266,7 +266,7 @@ const HULL_H_TILES := 0.22
 ## stops reading as a wall you cannot climb, and a hole stays a hole.
 const HILL_AMP_TILES := 2.60
 
-## **The rung the swell is snapped to, in tiles** (2026-08-25). ⚠⚠ **The whole of 「한 칸이 보인다」
+## **The rung the swell is snapped to, in tiles** (2026-08-25). ⚠⚠ **The whole of 「한 칸이 보인다」 (the user's own words, unchanged; the 2026-08-27 swap makes that 칸 today's 조각)
 ## lives in this number together with the flat tile top.** A tile top is flat now, so without a ladder
 ## every one of the island's tiles would stand at its own height and the ground would be a staircase —
 ## the board the user rejected on 2026-08-24. At 0.5 an amplitude of 2.60 has **six rungs**, a swell
@@ -534,7 +534,7 @@ const COL_SEA_WALL := Color(0.396, 0.341, 0.286)
 
 ## --- the tile rim -----------------------------------------------------------------------------------
 ## ⚠⚠ **A TILE IS DRAWN AS AN INNER FACE PLUS A DARKER BORDER, AND THAT BORDER IS THE WHOLE OF
-## 「한 칸이 안 보인다」.** Bad North's look talk states the rule this comes from: *borders, not
+## 「한 칸이 안 보인다」 (the user's own words, unchanged; that 칸 is today's 조각).** Bad North's look talk states the rule this comes from: *borders, not
 ## textures* — a repeating grass texture only says "grass" over and over, and everything interesting
 ## happens where two areas meet. On a flat-topped tile the place two areas meet is the tile edge.
 ##
