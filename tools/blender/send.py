@@ -29,16 +29,30 @@ def send(code: str) -> dict:
     s = socket.socket()
     s.settimeout(TIMEOUT_SEC)
     s.connect((HOST, PORT))
-    # ⚠ The NULL byte is the whole protocol. Without it the server never starts reading.
-    s.sendall((json.dumps({"type": "execute", "code": code, "strict_json": False}) + "\0").encode("utf-8"))
+    # ⚠⚠ **THE COMMUNITY PROTOCOL — bare JSON, no terminator** (moved here 2026-08-27). The official
+    # extension wanted `{"type":"execute","code":...}` plus a NULL byte; this add-on wants
+    # `{"type":"execute_code","params":{"code":...}}` and nothing after it, and answers with
+    # `{"status":..., "result":{"result": "<the stdout>"}}`.
+    s.sendall(json.dumps({"type": "execute_code", "params": {"code": code}}).encode("utf-8"))
     buf = b""
-    while b"\0" not in buf:
+    while True:
         chunk = s.recv(65536)
         if not chunk:
             break
         buf += chunk
+        # ⚠ **The reply has no terminator, so completeness is tested by parsing it.** Waiting for the
+        # socket to close instead works too but costs the whole read timeout on every single call.
+        try:
+            json.loads(buf.decode("utf-8"))
+            break
+        except ValueError:
+            continue
     s.close()
-    return json.loads(buf.split(b"\0")[0].decode("utf-8"))
+    out = json.loads(buf.decode("utf-8"))
+    # Flattened to the two keys every caller already reads, so `main` and `bake_island.ps1` are untouched.
+    inner = out.get("result", {})
+    text = inner.get("result", inner.get("stdout", "")) if isinstance(inner, dict) else str(inner)
+    return {"status": out.get("status", "ok"), "stdout": text, "message": out.get("message", "")}
 
 
 def main() -> int:
@@ -51,7 +65,9 @@ def main() -> int:
     out = send(code)
     if out.get("stdout"):
         sys.stdout.write(out["stdout"])
-    if out.get("status") != "ok":
+    # ⚠ **`success` and not `ok`** — the community add-on's word for it. Both are accepted so a swap
+    # back does not silently turn every good run into a failure.
+    if out.get("status") not in ("ok", "success"):
         sys.stderr.write(json.dumps(out, ensure_ascii=False, indent=2) + "\n")
         return 1
     return 0

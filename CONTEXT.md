@@ -136,8 +136,12 @@ uses only the English word is not an answer to the user**, and a symbol named in
 | 한국어 | Code | What it is |
 |---|---|---|
 | 그물 | **net** | 시험 하나. **라벨이 말하는 것보다 적게 재는 초록은 빨강보다 나쁘다** |
-| 지도 | **map** | 한 갈래의 **계획** — `.scratch/<일>/map.md`, `wayfinder`가 갖는다. ⚠ **게임 안의 노드 지도와 다른 것이다.** 그쪽은 삭제됐고, 이 낱말만 남았다 |
-| 티켓 | **ticket** | 질문 하나. 그 답이 **곧** 설계다 |
+| 로드맵 | **roadmap** | **12 월 데모까지의 계획** — `docs/plan/roadmap.md` 한 장. 덩어리마다 「무엇이 되면 끝인가」 한 줄 |
+| 결정 로그 | **log** | **왜 그렇게 됐나** — `docs/plan/log.md`. 결정과 뒤집힘이 사용자의 말 그대로 남는다 |
+| 티켓 | **ticket** | 질문 하나 또는 작업 하나 — `docs/plan/tickets/`. 상태는 파일 안의 `Status:` 줄이고, 파일은 폴더를 안 옮겨 다닌다 |
+
+⚠ **「지도」라는 낱말은 죽었다.** 게임 안의 노드 지도도, `.scratch/` 에 있던 계획 지도도 둘 다 삭제됐다.
+계획을 가리킬 때는 **로드맵**이라고 부른다.
 
 ---
 

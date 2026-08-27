@@ -213,24 +213,39 @@ func _join_comments(text: String) -> Array[String]:
 ## and never as CODE. The probe is what `CLAUDE.md` names as the instrument for turning 「애매하다」 into a
 ## number, and three acceptance rows of the plan are scored by it.
 ##
-## ⇒ **Every `.gd` under `tools/` is LOADED here.** A parse error makes `load()` return null AND barks on
-## stderr, so it reddens twice over. ⚠ **Loading is not running**: both files `extend SceneTree` and are
-## never instantiated, so nothing here opens a window or plays a run.
+## ⇒ **Every `.gd` under `tools/` is LOADED here.** ⚠ **Loading is not running**: these files
+## `extend SceneTree` and are never instantiated, so nothing here opens a window or plays a run.
 ##
-## ⚠ **Loading is not enough on its own** — a file emptied to `extends SceneTree` parses perfectly. So the
-## probe's shape is pinned too: the two functions that make it a plan-then-watch probe rather than a
-## summon-and-launch one have to still be in it. **Naming them here is what catches an API deletion that
-## leaves a stub behind.**
+## ⚠⚠ **`load() == null` WAS THE CHECK AND IT CAUGHT NOTHING — MEASURED, NOT ARGUED** (2026-08-27).
+## This header claimed 「A parse error makes `load()` return null」 and `tests/README.md` said the
+## opposite; **the README was right.** A file with a dangling `+`, and a second one calling a class
+## that does not exist, were both planted under `tools/` and loaded on 4.7.1:
+##
+##   `ResourceLoader.load(broken) == null` -> **false** (a `GDScript` object comes back either way)
+##   `(load(broken) as GDScript).can_instantiate()` -> **false**
+##
+## So this green said "every tool script parses" while only proving **the files exist**. ⇒ **The check
+## is `can_instantiate()` now**, and it was watched going red on both planted files before they were
+## removed. **The engine still barks 「Failed to load script ... Parse error」 on stderr**, which the
+## runner's silence check catches separately — that half of the old header was true.
+##
+## ⚠ **Loading is still not enough on its own** — a file emptied to `extends SceneTree` compiles
+## perfectly. There used to be a second half here that pinned the probe's shape by naming its two
+## functions, so an API deletion leaving a stub behind would redden. **That probe was deleted with the
+## map (2026-08-26) and the naming went with it**; nothing in this net pins a shape today.
 func _tools_still_parse(t) -> void:
 	var tool_files: Array[String] = []
 	_walk("res://tools", tool_files)
 	t.ok(tool_files.size() >= 2, "tools/ 아래 .gd 를 찾았다 (%d개, 최소 2)" % tool_files.size())
 	var unloadable: Array[String] = []
 	for f: String in tool_files:
-		if ResourceLoader.load(f) == null:
+		var script := ResourceLoader.load(f) as GDScript
+		# ⚠⚠ **`== null` IS NOT THE PARSE TEST.** The loader returns the GDScript whether or not its
+		# source compiled; `can_instantiate()` is the one that goes false on a compile failure.
+		if script == null or not script.can_instantiate():
 			unloadable.append(f)
 	t.eq(unloadable.size(), 0,
-		"tools/ 의 .gd 가 전부 파싱된다 — 아무 넷도 안 부르는 파일이라 여기서만 잡힌다 %s" % str(unloadable))
+		"tools/ 의 .gd 가 전부 컴파일된다 — 아무 넷도 안 부르는 파일이라 여기서만 잡힌다 %s" % str(unloadable))
 	# ⚠⚠ **세 줄이 여기서 삭제됐다** (2026-08-26): 회차를 자동으로 돌리던 프로브가 지도와 함께 지워졌고,
 	# 그 셋이 재던 것은 **「전투 중에 손이 움직이지 않는다」**였다. 그 규칙 자체를 사용자가 2026-08-25 에
 	# 뒤집었으므로(티켓 25) 검사를 되살릴 자리가 없다.

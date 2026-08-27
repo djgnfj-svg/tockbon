@@ -74,9 +74,12 @@ These survive **even after you confirm every mutation goes red**:
 - **A spy on a hook sees the HOOK, never the native call inside it.** Measured on plan 3: with the whole
   argument chain closed — a literal pinned at `_paint_body`'s call site and read back off the spy —
   **emptying `_paint_dot`'s and `_paint_outline`'s bodies left the round green.** There are no pixels to
-  read back headless, so the last inch has to be pinned **structurally**: `net_draw_leaf` now counts
-  `draw_*` calls **per function** in `field_view.gd` (each leaf exactly 1, `_paint_cell` 7) and carries
-  four cases that fail the *scanner*. ⇒ **Argument capture proves a value was computed and handed on. It
+  read back headless, so the last inch has to be pinned **structurally**: `net_draw_leaf` counts
+  `draw_*` calls **per function**, and carries four cases that fail the *scanner*. ⚠⚠ **The example
+  that stood here — 「in `field_view.gd` (each leaf exactly 1, `_paint_cell` 7)」 — died with the flat
+  2D board and was removed 2026-08-27.** `_paint_cell` has never existed in that file, and the net's
+  `field_view.gd` table is now **every entry 0**, which is the whole of what it claims about a view
+  that draws a 3D world. The counting still runs, against `refit_view.gd`. ⇒ **Argument capture proves a value was computed and handed on. It
   never proves the value was used.** Chase it to a leaf, then pin the leaf by counting
 - **The plan's own fix gets applied to one value and not to its siblings.** Plan 3 predicted in writing
   that five internal slots could change nothing on screen and stay green; the builder closed **corner**

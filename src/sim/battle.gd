@@ -1428,9 +1428,21 @@ func _enemy_reach(e: int) -> float:
 ## is farther away, so the pack goes for what it can actually reach and the flow field walks the rest
 ## to the stair.
 ##
-## ⚠ **A tier is two tiles, so the neighbour across a boundary is sqrt(1 + 4) = 2.236** — outside a
-## melee reach of 1.5 and inside an archer's 4.5. **This is not the 숫자 보너스 the user refused**: no
-## range and no damage changed, the space they are measured in did.
+## ⚠⚠ **A TIER IS ONE TILE** (`Rules.TIER_RISE_TILES`, lowered from 2.0 on 2026-08-27), so the
+## neighbour across a boundary is sqrt(1 + 1) = **1.414**, and the diagonal one is sqrt(2 + 1) =
+## **1.732**. A melee reach is `range_of` + `Rules.REACH_BONUS` = 0.0 + 1.75 for every beast in the
+## table, so **BOTH OF THOSE ARE INSIDE MELEE REACH: a beast standing under the cliff bites a body
+## on the plateau.** This comment used to say 2.236 and "outside a melee reach of 1.5", and both
+## halves died with the 2.0 tier.
+##
+## ⚠⚠ **THAT IS A LIVE DESIGN QUESTION AND NOT A BUG THIS COMMENT MAY QUIETLY DECIDE.** The user's
+## line for the second storey is 「2층은 안전한 땅이고 그 안전을 값으로 산다」, and that line is NOT
+## true of this code today. Whoever changes it changes what a plateau is worth. **Do not retune
+## `REACH_BONUS` to fix it** — the reach is shared by every body and every weapon; a tier-aware
+## refusal belongs in `_within`, where the height is already known.
+##
+## **This is still not the 숫자 보너스 the user refused**: no range and no damage changed, the space
+## they are measured in did.
 ##
 ## ⚠ **The equal-height branch returns `distance_to` unchanged rather than a square root of a sum with
 ## a zero in it.** Every board in the game was flat until this ticket and most still are; taking the
@@ -1464,9 +1476,17 @@ func _within(a: Vector2, b: Vector2, reach: float) -> bool:
 ## centre of mass of its nearby own kind (itself included) for a species with a `Rules.SPECIES_PACK`
 ## row.
 ##
-## ⚠⚠ **This one function is the whole of 무리사냥.** Same point, same pick, so the pack bites one
-## enemy; `_phase_movement` then walks each of them at that enemy, so the pack ARRIVES as one body.
-## Nothing else in this file knows a pack exists.
+## ⚠⚠ **This one function is the whole of 무리사냥, AND IT HAS NOT RUN SINCE THE SIDE SWAP** (2026-08-26).
+## Same point, same pick, so the pack bites one enemy; `_phase_movement` then walks each of them at
+## that enemy, so the pack ARRIVES as one body. Nothing else in this file knows a pack exists.
+##
+## ⚠⚠ **WHY IT IS DEAD, AND WHY IT IS KEPT.** `soldier_*` is the PLAYER's side, and `Army.register_species`
+## refuses any `type_id` whose `Rules.side_of` is not `PLAYER`. The only player row is SWORDSMAN, which
+## has no `Rules.SPECIES_PACK` entry, so `radius <= 0.0` returns on the first line **every single time**
+## and the huddle below never runs. The one row in that table is WOLF, and the wolf is an enemy now.
+## ⇒ **The enemy side has no pack behaviour at all**, and the table is waiting for the day it gets one.
+## **Do not read the loop below as live behaviour, and do not delete it to chase a green** — it is the
+## worked answer to "how does a pack aim", and rewriting it later costs more than keeping it.
 ##
 ## ⚠ **Ashore only, and its own species only.** A body still on a boat has no place on the ground to
 ## average, and averaging across species would make a wolf's aim depend on where the crows are.
@@ -1484,7 +1504,8 @@ func _seek_point_of(i: int) -> Vector2:
 		if int(army.type_id[k]) != st:
 			continue
 		# ⚠⚠ **THIS COMMENT USED TO SAY A PACKMATE A TIER UP "DROPS OUT AT 2.236" AND THAT WAS
-		# ARITHMETIC NOBODY DID.** A wolf's pack radius is 6.0; 2.236 is nowhere near it, so the
+		# ARITHMETIC NOBODY DID.** (The figure is 1.414 now that a tier is one tile, which only makes
+		# the point stronger.) A wolf's pack radius is 6.0; neither number is near it, so the
 		# packmate stays in the huddle and always did. The height belongs in this test because the
 		# radius is a distance and every distance in this file is measured the same way — **not because
 		# it excludes anybody at the sizes this game actually uses.**

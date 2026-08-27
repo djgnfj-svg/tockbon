@@ -89,8 +89,9 @@ func card_at(point: Vector2) -> int:
 	return -1
 
 
-## ⚠ **Asked of the SIM and not of a local `cards_taken` read**, the same shape `map_view.is_node_pressable`
-## already carries: whether a card may be taken is `Run.take_card`'s call to make, and this file must
+## ⚠ **Asked of the SIM and not of a local `cards_taken` read** (the shape `map_view.is_node_pressable`
+## used to carry — **that view is deleted**, and the rule outlived the example): whether a card may be
+## taken is `Run.take_card`'s call to make, and this file must
 ## never offer a press the sim would refuse. `take_card` changes nothing on a refusal, so calling it
 ## here to test would consume a card just to ask about it — this asks without acting instead.
 func is_card_pressable(k: int) -> bool:

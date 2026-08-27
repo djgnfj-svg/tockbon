@@ -1,7 +1,7 @@
 extends SceneTree
 ## The game screenshots the two screens this round added: the reward pick and the refit board.
-## **verify-look without the bridge**, the sibling of `capture_map.gd` and written against the same
-## three measured rules its header states.
+## **verify-look without the bridge**, written against the three measured rules in this folder's
+## README. ⚠ `capture_map.gd` was named here and it is deleted — the rules live on that page now.
 ##
 ## ```
 ## .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_refit.gd -- <output-dir>
@@ -37,7 +37,7 @@ func _initialize() -> void:
 func _run() -> void:
 	_game = Game.new()
 	root.add_child(_game)
-	# The sim freezes; each view ages on its own clock. See `capture_map.gd`'s header.
+	# The sim freezes; each view ages on its own clock. The rule is in this folder's README.
 	_game.set_process(false)
 	await process_frame
 
@@ -45,16 +45,16 @@ func _run() -> void:
 	await _settle(24)
 	await _shot("00_title")
 
-	# --- a won fight, which is what pays the six cards --------------------------------------------
+	# --- a won fight, which is what pays the three cards (`Rules.CARDS_PER_WIN`) -------------------
 	_game._start_run()
 	_game.run.seed_cards(20260821)
 	_game.run.finish_island(true)
 	_game._show_state()
 	print("capture_refit: state after a win = %d (PICK is %d)" % [_game.run.state(), Run.State.PICK])
 	await _settle(72)
-	await _shot("10_pick_six_cards")
+	await _shot("10_pick_three_cards")
 
-	# hover the middle card of the top row
+	# hover the middle card — there is one row of three
 	_motion(Look.card_rect_px(1).get_center())
 	await _settle(18)
 	await _shot("11_pick_hover_card1")
@@ -64,11 +64,14 @@ func _run() -> void:
 	await _settle(24)
 	await _shot("12_pick_one_taken")
 
-	# take the second — the sim leaves PICK on this press
-	_click(Look.card_rect_px(4).get_center())
-	print("capture_refit: state after two picks = %d (REFIT is %d)" % [_game.run.state(), Run.State.REFIT])
+	# ⚠⚠ **ONE PRESS IS THE WHOLE PICK.** A second `_click` stood here on `Look.card_rect_px(4)` until
+	# 2026-08-27 and it pressed EMPTY SCREEN: the fourth card has not existed since the count went six
+	# -> three, and the rect it resolves to lands between the refit slot strip and the 완료 button. The
+	# run has already been in REFIT since the press above, so the shot below was a duplicate wearing a
+	# name about an event that never happened.
+	print("capture_refit: state after one pick = %d (REFIT is %d)" % [_game.run.state(), Run.State.REFIT])
 	await _settle(24)
-	await _shot("13_after_second_pick")
+	await _shot("13_refit_after_one_pick")
 
 	# --- the refit screen, step one: the slot strip -----------------------------------------------
 	await _settle(24)
@@ -120,7 +123,7 @@ func _run() -> void:
 	await _settle(24)
 	await _shot("36_refit_slot2_board")
 
-	print("capture_refit: 열두 장, %s" % _dir)
+	print("capture_refit: 열네 장, %s" % _dir)
 	quit()
 
 

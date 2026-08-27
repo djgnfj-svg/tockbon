@@ -1,7 +1,16 @@
 class_name Look
 extends RefCounted
 
-## Every presentation constant in the game, and nothing outside this file has one.
+## Every presentation constant in the game, with **two named exceptions and no others**.
+##
+## ⚠ **The exceptions**: (1) **on-screen 낱말** stay next to the screen that prints them —
+## `title_view.SLOT_LABELS`, `reward_view`'s labels, and `rules.ITEM_COL_LABELS` for the refit
+## dashboard; each of those files says so where the constant lives. (2) **geometry a single view
+## draws with and nothing else can read** — `field_view.CORNER_SEGMENTS` and
+## `field_view.TERRAIN_PICK_STEPS`.
+## ⚠⚠ **THIS LINE READ 「nothing outside this file has one」 UNTIL 2026-08-27 and that was false.**
+## An absolute the code does not keep is worse than a rule with two doors in it: the next person
+## adding a constant reads the absolute, sees the counter-examples, and concludes the rule is dead.
 ##
 ## Scattering these was measured once: a power doubled and nothing changed on screen, because the
 ## numbers that would have shown it lived in six places and only one of them moved.
@@ -624,6 +633,23 @@ const COL_ROUTE := Color(0.851, 0.780, 0.600, 0.55)
 ## boundary drawn ON the sea, and a tinted sea was exactly what it replaced. It has to read against
 ## `COL_WATER` at `ZOOM_MIN` and against nothing else, because it never crosses land.
 const COL_SUMMON_RING := Color(0.706, 0.902, 1.0, 0.85)
+
+## **The plate that sits on the tile under the cursor.**
+##
+## ⚠⚠ **Bad North draws ONE thing when you command a squad and this is it** (정찰 2026-08-27): the tile
+## under the cursor is covered by a near-white plate with a dark line under its lower edge, so it reads
+## as lifted a little off the ground. **No route, no arrow, no facing, no formation** — the whole of the
+## command picture is one tile, raised and brightened. The user asked for exactly that and nothing else:
+## 「호버만 돼도 돼... 그것만 있기만 하면 돼」.
+##
+## ⚠ **Near-white and not a hue.** A coloured wash is the summon band this repo already deleted once for
+## painting meaning onto ground; white reads as *the cursor is here* rather than as *this ground is
+## special*, and it works over sand, turf and stone alike.
+const COL_HOVER_PLATE := Color(0.955, 0.960, 0.940, 0.62)
+## How far the plate floats above the ground it covers, in tiles. ⚠ **Small enough to read as ON the
+## tile, big enough to beat z-fighting** — at 0 the plate and the ground fight and the tile flickers as
+## the camera turns. `BODY_LIFT_PX / TILE_PX` is the same trick the bodies use.
+const HOVER_PLATE_LIFT_TILES := 0.035
 ## How thick that ring is, in tiles. Under about 0.2 it disappears at `ZOOM_MIN`; over about 0.8 it
 ## stops being a line and starts being a band, which is the picture it exists to replace.
 const SUMMON_RING_W_TILES := 0.45
@@ -1400,7 +1426,9 @@ const COL_RARITY := [
 ]
 
 
-## Card `k`'s (0..5) RESTING rectangle, in viewport px. 3 across, 2 down.
+## Card `k`'s (0..2) RESTING rectangle, in viewport px. **One row of three** — `Rules.CARDS_PER_WIN`.
+## ⚠ **This said "(0..5) ... 3 across, 2 down" until 2026-08-27.** The second row died when the count
+## went six -> three (2026-08-24); the `k / 3` below has simply been returning row 0 ever since.
 static func card_rect_px(k: int) -> Rect2:
 	var col := k % 3
 	var row := k / 3
@@ -2095,13 +2123,14 @@ const HOLD_OUTCOME_SEC := 0.80
 ## `ZOOM_MIN` 0.45 the visible world is 2844.4 px wide against a 1920 px map, so it starts at
 ## x = (1920 - 2844.4) / 2 = **-462.2 px** — **11.6 tiles** of bare ground on each side, against a
 ## margin of 5. `net_camera::_painted_area_covers_the_viewport` is the row that catches it.
-## The terrain loop runs this many tiles wider on every side and paints the outside with COL_WATER
-## DIRECTLY — `terrain_colour_of_char` takes a legend character and there is no legend outside the
-## grid, so inventing one would put the island legend in two places.
-## ⚠ **Cost, measured rather than assumed**: the loop goes from 58 x 42 = 2436 tiles to 72 x 56 =
-## 4032, and `_paint_tile` is 2 draw calls, so 4872 -> 8064 immediate-mode calls a frame. This repo's
-## "300 Node2Ds cost 0.065 ms" measurement is about NODES and may NOT be cited for this. If the frame
-## time moved, the alternative is one filled rect behind the grid instead of a per-tile loop.
+## The water runs this many tiles wider than the board on every side.
+## ⚠⚠ **THE PER-FRAME TERRAIN LOOP THIS NUMBER USED TO PAD IS GONE.** Everything from here down was
+## written for a flat 2D board that repainted every tile every frame; the island is one mesh built
+## once per island now. **The draw-call budget that stood here (「`_paint_tile` is 2 draw calls, so
+## 4872 -> 8064 immediate-mode calls a frame」) was removed 2026-08-27: `_paint_tile` has not existed
+## in this view since the field went 3D**, and the note two lines below the constant already said so.
+## **The measurements below are kept because they are how the SIZE was chosen**, and the size still
+## has to cover the screen at `ZOOM_MIN`.
 ## ⚠⚠ **RAISED 12 -> 16 when the board was laid back** (2026-08-24, the user: 「밖에 물을 더 그리고
 ## 좀 더 넓어도 돼 어차피 확대할 수 있어가지고」). **12 was the minimum that covered the screen on a
 ## FLAT board**, and it stopped covering the moment a row went from 40 px to `TILE_H_PX` 30.64:

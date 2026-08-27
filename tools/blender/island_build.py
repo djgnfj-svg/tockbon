@@ -79,6 +79,34 @@ PIECES = [
 # enforces, and it keeps the raised ground reading as a piece of the island rather than as a patch.
 # ⚠ **The plateau never reaches the coast.** A rim of low ground all the way round is what lets the
 # raised part be seen AS raised.
+#
+# ⚠⚠ **THE STAIR IS ONE 2x2 BLOCK, CUT INTO THE PLATEAU** (2026-08-27, the user: 「계단이라는 블록이
+# 있어야할듯」 · 「하나의 블럭에 개단이 포한이 왜 안되어있냐고」). It is **two tiles wide across the
+# climb and two tiles long along it**, and `stair_block` below builds the whole of it in ONE call —
+# not a shape smeared across the per-tile loop. **That single call is the seam a hand-carved file
+# replaces later**, which is the reason it is one function and not four faces per tile.
+# ⚠ **The width costs nothing in rules.** A run still spans exactly one storey, and every tile of one
+# step carries the same height, so `Grid.surface_h` reads the same index it always did.
+#
+# ⚠⚠ **A BLOCK STANDING OUTSIDE THE PLATEAU IS THE THING THAT FAILED, AND CUTTING IT IN IS WHAT FIXED
+# IT.** The first 2x2 stair stood against the plateau's west edge with open ground on three sides, and
+# **a body could climb onto it from fourteen places on all four sides** — counted, not guessed. The
+# user: 「어디서든지 저 계단으로 점프할 수 있다라는 게 좀 불만이거든」, and 「저기 오는데 막 저기
+# 어디서든지 올라올 수 있으면 재미가 없을 거 같아? 그래서 계단을 만드는 거로」.
+#
+# **Cut into the plateau, the block's other three faces are the storey above**, which is two notches
+# from the ground and therefore unclimbable. **The mouth is the one face left**, and the count of ways
+# on is what it is because of that and not because of a rule.
+#
+# ⚠⚠ **IT IS TWO TILES LONG, WHICH IS ABOUT THE ANGLE AND NOTHING ELSE** (2026-08-27, the user:
+# 「계단 조금 더 늘리고」). A storey is one tile tall, so a one-tile stair climbs at **45°** — steeper
+# than a real staircase, which is 30 to 37. **Two tiles of run against one tile of rise is 26.6°**, and
+# each tread then measures 0.33 deep by 0.17 high. ⚠ **Lengthening the run does NOT make the stair
+# climb further** — the run still spans exactly one storey and each tile carries its share.
+# ⚠ **This needs no rule change at all**: `MAX_CLIMB_LEVELS` is untouched and the geometry does the
+# refusing. The measured table lives in 티켓 06.
+# ⚠ **The stair breaks 「the plateau turns on even tiles」 on purpose.** That choice is about the coast
+# reading as shape rather than as squares; the stair is inland and has nothing to do with the outline.
 HIGH = [
     "....................",
     "....................",
@@ -88,8 +116,8 @@ HIGH = [
     "....................",
     "........222222......",
     "........222222......",
-    "......11222222......",
-    "......11222222......",
+    "........112222......",
+    "........112222......",
     "........222222......",
     "........222222......",
     "....................",
@@ -250,6 +278,16 @@ EDGE_TOPS = set()   # ⚠⚠ **Every ground vertex that stands on a level bounda
                     # redraws the grid (티켓 01, the material row); colour that lands on a shared corner
                     # cannot, because both tiles use the same corner.
 
+STAIR_TOPS = set()  # ⚠⚠ **Every vertex of a stair's treads and risers** (2026-08-27). Filled while the
+                    # stair is built, read by `_paint` to give the whole stair the CLIFF's stone.
+                    # **A stair is a way cut through rock, so it is made of rock** — and until this
+                    # existed the treads came out the same colour as the ground in front of them, which
+                    # is what「계단이 땅과 같은 색이라 안 읽힌다」meant. Bad North solves the same problem
+                    # the same way: 「the places where you can navigate between the different levels」
+                    # get a different surface, not a marker laid on top.
+                    # ⚠ **The risers were already stone** — they are steep, and `_paint` reads steepness.
+                    # **It is the flat treads that needed telling.**
+
 COAST = []          # the real coastline, in SIM tile coordinates. ⚠⚠ **Filled by `build_island` and
                     # exported.** The sea draws its wash from this, and it has to be the line the mesh
                     # actually ends on — the tile grid stopped being that line the moment coastal
@@ -275,6 +313,7 @@ def build_island(bm, lv):
     wid = len(lv[0])
     COAST.clear()
     EDGE_TOPS.clear()
+    STAIR_TOPS.clear()
     # ⚠⚠ **Y IS FLIPPED HERE, ON PURPOSE.** glTF's Y-up conversion turns Blender's +Y into Godot's -Z,
     # so an island built at y = 0..12 lands at z = -12..0 in the game and every body walks on water.
     # Flipping the row order here is the one place to fix it; doing it with a negative scale in Godot
@@ -381,23 +420,219 @@ def build_island(bm, lv):
                 EDGE_TOPS.add(v)
         return cache[key]
 
+    def stair_runs():
+        """Every connected group of stair tiles as a BLOCK: its uphill axis, how long, how wide.
+
+        ⚠⚠ **A STAIR IS A GROUP, NOT A TILE, AND ASKING A TILE ALONE FAILS.** The first version asked
+        each stair tile for one neighbour up and one down. Cut into the plateau, a stair has the storey
+        above on THREE sides; strung two tiles long, the middle tile has no higher neighbour at all.
+        **The group is the thing with a mouth and a head**, which is also what the user asked for:
+        「계단이라는 블록을 하나 만들어서 연결할 수 있도록 할까 저렇게 칸으로 만들지 말고」.
+
+        ⚠ **The direction is read off the geometry and nothing is authored** — the board stays a plain
+        `1`. Dwarf Fortress does the same with its ramps.
+
+        Returns `({(x, y): (axis, index, length)}, [block, ...])`. The map is what the tile loop reads —
+        which tiles skip their flat top, and which side raises no wall — and the block list is what
+        `stair_block` builds from. A group with no mouth, no head, or a shape that is not a filled
+        RECTANGLE gets left out of both, and its tiles fall back to a flat top rather than being drawn
+        as a staircase to nowhere.
+
+        ⚠⚠ **THE SHAPE TEST IS 「A RECTANGLE」 AND IT USED TO BE 「A SINGLE FILE」** (2026-08-27). The
+        first version demanded the along-run indices be exactly `0..n-1`, which a 2-wide block cannot
+        satisfy — it gives `0,0,1,1` — so the user's 「계단이라는 블록」 was thrown away as malformed
+        and the tiles silently came back as flat plateau. **What actually has to hold is that every
+        step of the climb is the same width**, because that is what lets one tread span the block.
+        """
+        out, blocks = {}, []
+        done = set()
+        for y in range(hgt):
+            for x in range(wid):
+                l = lv[y][x]
+                if l < 0 or l % 2 == 0 or (x, y) in done:
+                    continue
+                group, stack, mark = [], [(x, y)], {(x, y)}
+                while stack:
+                    p = stack.pop()
+                    group.append(p)
+                    for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0)):
+                        q = (p[0] + dx, p[1] + dy)
+                        if q in mark:
+                            continue
+                        if 0 <= q[0] < wid and 0 <= q[1] < hgt and lv[q[1]][q[0]] == l:
+                            mark.add(q)
+                            stack.append(q)
+                done |= mark
+                mouth = head = None
+                for p in group:
+                    for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0)):
+                        nx, ny = p[0] + dx, p[1] + dy
+                        nl = lv[ny][nx] if 0 <= nx < wid and 0 <= ny < hgt else -1
+                        if nl == l - 1:
+                            mouth = (p, (dx, dy))
+                        elif nl == l + 1:
+                            head = (p, (dx, dy))
+                if mouth is None or head is None:
+                    continue
+                ax = (-mouth[1][0], -mouth[1][1])
+                # ⚠ **The cross axis, 90 degrees counter-clockwise from the climb.** Taking it this way
+                # round and not the other is what keeps every face of the block wound outward whatever
+                # direction the stair faces: the tread's normal comes out `+z` for all four axes,
+                # because `ax × perp` is `(0, 0, ax·ax)` and that is always positive.
+                perp = (-ax[1], ax[0])
+                m = mouth[0]
+                cells = {}
+                for p in group:
+                    i = (p[0] - m[0]) * ax[0] + (p[1] - m[1]) * ax[1]
+                    j = (p[0] - m[0]) * perp[0] + (p[1] - m[1]) * perp[1]
+                    cells[p] = (i, j)
+                jmin = min(j for _i, j in cells.values())
+                cells = {p: (i, j - jmin) for p, (i, j) in cells.items()}
+                run_n = max(i for i, _j in cells.values()) + 1
+                wide = max(j for _i, j in cells.values()) + 1
+                # ⚠ **A block has to be a FILLED rectangle**, or one step of the climb is wider than the
+                # one under it and a tread would hang over nothing. Refuse rather than draw it wrong.
+                # This also rejects a negative index, which is a group whose mouth is not at its foot.
+                if set(cells.values()) != set((i, j) for i in range(run_n) for j in range(wide)):
+                    continue
+                for p, (i, _j) in cells.items():
+                    out[p] = (ax, i, run_n)
+                foot = next(p for p, ij in cells.items() if ij == (0, 0))
+                blocks.append({
+                    "ax": ax,
+                    "perp": perp,
+                    # The grid corner the block starts from: the foot tile's centre, backed off half a
+                    # tile along both axes. Always lands on an integer corner, so the mouth row can come
+                    # out of the shared vertex cache and weld to the ground in front.
+                    "corner": (int(foot[0] + 0.5 - 0.5 * ax[0] - 0.5 * perp[0]),
+                               int(foot[1] + 0.5 - 0.5 * ax[1] - 0.5 * perp[1])),
+                    "length": run_n,
+                    "width": wide,
+                    "level": l,
+                })
+        return out, blocks
+
+    RUNS, BLOCKS = stair_runs()
+
+    ## ⚠⚠ **TREADS PER TILE, AND THE RATIO IS THE WHOLE POINT.** The stair the user rejected climbed one
+    ## notch across TWO tiles — 1 in 4, about 14°, a wheelchair ramp that read as a terraced floor. A run
+    ## spans exactly one storey however long it is, so the ANGLE is set by the run's length in tiles:
+    ## one tile is 45°, **two tiles is 26.6°**, which is inside the 30-to-37 a real staircase uses.
+    ## At three treads per tile over two tiles each tread is 0.33 deep and 0.17 high — about 2 to 1,
+    ## against the 1.5 to 1 of a building stair.
+    STAIR_TREADS = 3
+
+    def stair_block(blk):
+        """⚠⚠ **THE WHOLE STAIR, BUILT BY ONE CALL. THE USER ASKED FOR THIS THREE TIMES**
+        (2026-08-27: 「계단이라는 블록이 있어야할듯」 · 「그 블록에 계단만 붙어있는 형식이잖아?」 ·
+        「하나의 블럭에 개단이 포한이 왜 안되어있냐고」).
+
+        It used to be `stair_top(x, y, ...)`, called once per tile from inside the tile loop, so「the
+        stair」was not a thing anywhere in the file — it was a shape smeared across a loop, and a
+        2-wide one grew a wall down its own middle because each tile skirted its own two sides.
+        **This takes the block and returns the block.** ⚠ **That is also the seam a hand-carved file
+        replaces**: the day the stair comes out of a `.glb` instead of out of arithmetic, this is the
+        one function that changes and nothing around it moves.
+
+        ⚠⚠ **The stair spans the WHOLE storey, floor below to floor above** — it is not a shelf at the
+        halfway notch. The lowest tread meets the ground at the mouth and the topmost riser arrives
+        exactly at the plateau's height on the far edge, so the stair never leads onto a ledge.
+
+        ⚠⚠ **TREAD THEN RISER, AND THE FIRST VERSION GOT THIS WRONG.** Emitting one quad per step from
+        the previous corner to the next drew SLOPED PANELS — a ramp in segments, which from above is
+        exactly the terraced-floor look this whole change exists to kill. **A stair is a flat tread and
+        then a vertical riser**, and the flat/vertical split is also what `_paint` reads to make the
+        treads turf and the risers stone.
+        """
+        ax, perp = blk["ax"], blk["perp"]
+        run_n, wide, l = blk["length"], blk["width"], blk["level"]
+        ox, oy = blk["corner"]
+        floor, ceil_ = top_of(l - 1), top_of(l + 1)
+
+        def at(j, f, z):
+            """A fresh vertex `f` tiles up the climb and `j` tile-columns across it."""
+            return bm.verts.new((ox + ax[0] * f + perp[0] * j,
+                                 oy + ax[1] * f + perp[1] * j, z))
+
+        # ⚠ **The mouth row comes from the shared cache**, so the foot of the stair is welded to the
+        # ground tiles in front of it and no crack opens across the doorway. There is one vertex per
+        # tile-column boundary and NOT just two at the ends: the ground already has a corner at every
+        # one of them, and spanning past one would leave a T-junction across the doorway.
+        # ⚠ **The mouth row is NOT stained.** Those are the ground tiles' own shared corners, so
+        # colouring them would drag the stone out across the ground in front of the stair.
+        prev = [vert(ox + perp[0] * j, oy + perp[1] * j, l - 1) for j in range(wide + 1)]
+
+        # ⚠⚠ **THE CLIMB IS COUNTED OVER THE WHOLE BLOCK, NOT PER TILE.** Same treads in the same
+        # places as the per-tile version put them — `STAIR_TREADS` of them for every tile of run — but
+        # counted once, so there is no seam vertex in the middle of the flight to come out the wrong
+        # colour, which is a bug the per-tile version had to carry a special case for.
+        steps = STAIR_TREADS * run_n
+        prev_f, z = 0.0, floor
+        for k in range(steps):
+            f = float(k + 1) * run_n / steps        # tiles travelled along the run
+            nz = floor + (ceil_ - floor) * float(k + 1) / steps
+            # the tread: flat, at the height walked in on
+            tread = [at(j, f, z) for j in range(wide + 1)]
+            # the riser: vertical, at the far edge of that tread
+            rise = [at(j, f, nz) for j in range(wide + 1)]
+            STAIR_TOPS.update(tread)
+            STAIR_TOPS.update(rise)
+            for j in range(wide):
+                # ⚠⚠ **WINDING, AND IT DECIDES WHETHER THE TREAD EXISTS ON SCREEN.** A tread wound the
+                # other way is a face whose normal points at the ground, and where back faces are culled
+                # it simply is not drawn — the stair looked like an empty notch for a whole round. It
+                # also decides the COLOUR: `_paint` calls a face steep when its normal's z is low, so a
+                # tread facing down would come out stone instead of turf. `perp` is picked in
+                # `stair_runs` so that this order gives `+z` for all four directions a stair can face.
+                bm.faces.new((prev[j], tread[j], tread[j + 1], prev[j + 1]))
+                bm.faces.new((tread[j], tread[j + 1], rise[j + 1], rise[j]))
+            # ⚠⚠ **THE SKIRTS ARE ON THE TWO OUTER EDGES AND NOWHERE ELSE.** The per-tile version put
+            # one down each side of every tile, which on a 2-wide block is a WALL STANDING DOWN THE
+            # MIDDLE OF THE STAIRCASE. Only `j == 0` and `j == wide` are the outside of the block.
+            # ⚠ **Quads and not one profile n-gon**: the n-gon version failed inside a `try/except
+            # pass`, which is this repo's named worst case — a face that silently is not there.
+            s00 = at(0, prev_f, floor)
+            s01 = at(0, f, floor)
+            bm.faces.new((s00, s01, tread[0], prev[0]))
+            s10 = at(wide, prev_f, floor)
+            s11 = at(wide, f, floor)
+            bm.faces.new((prev[wide], tread[wide], s11, s10))
+            prev_f, z = f, nz
+            prev = rise
+
+    for blk in BLOCKS:
+        stair_block(blk)
+
     for y in range(hgt):
         for x in range(wid):
             l = lv[y][x]
             if l < 0:
                 continue
-            # ⚠ The four corners come from the CORNER, so neighbours on the same level share them and
-            # the surface has no seam. Nothing is drawn between two land tiles of one level.
-            a = vert(x, y, l)
-            b = vert(x + 1, y, l)
-            c = vert(x + 1, y + 1, l)
-            d = vert(x, y + 1, l)
-            bm.faces.new((a, b, c, d))
+            # ⚠ **`st_ax` and NOT `ax`.** The shore branch below already binds `ax, ay = corner_xy(...)`
+            # as a float pair, and naming this one `ax` made it a float by the time the mouth test read
+            # it — the same shadowing trap `BULGE`'s comment records further up this file.
+            run = RUNS.get((x, y))
+            st_ax = run[0] if run is not None else None
+            # ⚠ **A stair tile has no top of its own** — `stair_block` above already drew the treads
+            # over the whole block, and a flat quad here would lie across them.
+            if run is None:
+                # ⚠ The four corners come from the CORNER, so neighbours on the same level share them
+                # and the surface has no seam. Nothing is drawn between two land tiles of one level.
+                a = vert(x, y, l)
+                b = vert(x + 1, y, l)
+                c = vert(x + 1, y + 1, l)
+                d = vert(x, y + 1, l)
+                bm.faces.new((a, b, c, d))
 
             for s, (dx, dy) in enumerate(((0, -1), (1, 0), (0, 1), (-1, 0))):
                 nx, ny = x + dx, y + dy
                 nl = lv[ny][nx] if 0 <= nx < wid and 0 <= ny < hgt else -1
                 if nl >= l:
+                    continue
+                # ⚠⚠ **A STAIR RAISES NO WALL AT ITS MOUTH.** The treads already carry down to the floor
+                # below on that side; walling it too would put a face across the doorway and the stair
+                # would lead into a box.
+                if st_ax is not None and (dx, dy) == (-st_ax[0], -st_ax[1]):
                     continue
                 p0, p1 = (
                     ((x, y), (x + 1, y)),
@@ -406,7 +641,12 @@ def build_island(bm, lv):
                     ((x, y + 1), (x, y)),
                 )[s]
                 if nl >= 0:
-                    _cliff(bm, vert, p0, p1, l, nl, corner)
+                    # ⚠⚠ **A WALL BESIDE A STAIR DROPS TO THE FLOOR, NOT TO THE STAIR'S NOTCH.** The
+                    # stair spans a whole storey, so its treads near the mouth sit at the floor below;
+                    # a wall that stopped at the stair's own level would leave the notch open along its
+                    # sides and you would see straight under the plateau.
+                    floor_nl = nl - 1 if nl % 2 == 1 else nl
+                    _cliff(bm, vert, p0, p1, l, floor_nl, corner)
                 else:
                     _shore(bm, p0, p1, (dx, dy), l, corner, corner_xy)
                     # ⚠ **Back to the sim's row order.** The mesh was built on reversed rows so glTF
@@ -515,6 +755,12 @@ def _paint(bm):
                 foot = min(depth / (LEVEL_H * 1.05), 1.0)
                 k = 1.0 - WALL_AO * foot - WALL_LIP_DARK * lip
                 c = tuple(ROCK[i] * k for i in range(3))
+            elif lp.vert in STAIR_TOPS:
+                # ⚠⚠ **A TREAD IS STONE, WHATEVER ITS HEIGHT.** It is flat, so the steep test above says
+                # turf, and turf is exactly what made the stair read as a lifted piece of the ground.
+                # The tone is the wall's mid-face value — not its lip and not its foot — so the stair
+                # sits in the same material family as the cliff it is cut through.
+                c = tuple(ROCK[i] * (1.0 - WALL_AO * 0.35) for i in range(3))
             else:
                 z = lp.vert.co.z
                 # ⚠⚠ **The turf is the PLATEAU's, and the stair is not the plateau** (2026-08-26).

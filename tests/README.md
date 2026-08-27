@@ -9,12 +9,14 @@ powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1
 ⚠ **Read `how-nets-lie` before writing a check and before believing a green round.** This file is how the
 runner behaves; that one is the casebook of greens that guaranteed nothing.
 
-⚠⚠ **The count does not live here.** The live map (`docs/plan/roadmap.md`) is the one place a
+⚠⚠ **The count does not live here.** The decision log (`docs/plan/log.md`) is the one place a
 pass/fail number is written down, because a number copied into a second file is stale the next day and
-this line was stale for exactly that reason. **Run the nets, or read the map.**
+this line was stale for exactly that reason. **Run the nets, or read the log.** ⚠ It pointed at
+`roadmap.md` until 2026-08-27 and that file has never carried a number — the roadmap is what is being
+built, the log is what was measured.
 ⚠ **The suite is RED and the reds are known** — most of them are nets still holding the old direction's
 words, and the map parks the re-measure until the island, the character and the movement are built,
-because the tiles and the bodies move again before then.
+because the tiles and the bodies move again before then. (The roadmap parks it; the log records it.)
 The old game reached 25 nets / 3541 checks / 4.6s — ⚠ **a scale marker, not a target.** Those nets drove a
 game deleted for not being fun.
 

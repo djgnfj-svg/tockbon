@@ -1,8 +1,12 @@
 class_name HudView
 extends Node2D
 
-## The heads-up layer: the clock, how many enemies are left, and **the start button**. Three things,
-## and that is the whole of it.
+## The heads-up layer: how many enemies are left, **the start button**, and **the summon slot boxes**
+## (box, digit and bar, one per slot). Three things, and that is the whole of it.
+##
+## ⚠ **The clock used to be the first of the three and it is not drawn any more** — the countdown went
+## with the rule it counted to (2026-08-24), and the slot boxes took its place in the count. This
+## header still listed the clock until 2026-08-27.
 ##
 ## It READS `battle` and writes nothing back — src/view/ is a reader by contract, and a view that
 ## nudges the sim makes "the screen changed but the sim did not" indistinguishable from its inverse.

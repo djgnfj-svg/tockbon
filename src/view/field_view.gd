@@ -114,6 +114,9 @@ var _terrain: MeshInstance3D = null
 var _sea: MeshInstance3D = null
 var _ring: MeshInstance3D = null
 var _sun: DirectionalLight3D = null
+## The plate on the tile under the cursor. Built once, moved and hidden — see `set_hover_tile`.
+var _hover: MeshInstance3D = null
+var _hover_tile := -1
 var _sprites: Array[Sprite3D] = []
 var _hulls: Array[MeshInstance3D] = []
 var _sprites_used := 0
@@ -197,6 +200,26 @@ func _build_world() -> void:
 	# geometry inside them and not the nodes.
 	_decal = _fx_layer()
 	_air = _fx_layer()
+
+	# ⚠⚠ **ONE QUAD, BUILT ONCE, MOVED.** Rebuilding a mesh every time the mouse crosses a tile line is
+	# a new `ArrayMesh` sixty times a second for a picture that never changes shape. It is hidden until
+	# the shell says which tile, and `_hover_tile` short-circuits a move to the tile it is already on.
+	_hover = MeshInstance3D.new()
+	var plate := PlaneMesh.new()
+	plate.size = Vector2(Look.TILE_PX, Look.TILE_PX) / Look.TILE_PX
+	_hover.mesh = plate
+	var plate_mat := StandardMaterial3D.new()
+	plate_mat.albedo_color = Look.COL_HOVER_PLATE
+	# ⚠ **Unshaded.** A lit plate goes grey on the shadow side of the island and stops reading as a
+	# cursor — it is a mark, not a surface, the same argument the outline pass makes for its ink.
+	plate_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	plate_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# ⚠ **It must not throw a shadow.** A floating quad casting a hard square onto the ground under it
+	# is the giveaway that it is hovering rather than lying on the tile.
+	_hover.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_hover.material_override = plate_mat
+	_hover.visible = false
+	_world.add_child(_hover)
 
 	_sun = DirectionalLight3D.new()
 	_sun.rotation_degrees = Vector3(Look.SUN_PITCH_DEG, Look.SUN_YAW_DEG, 0.0)
@@ -589,6 +612,15 @@ func _tile_h(tx: int, ty: int) -> float:
 	return _ground_h(tx, ty)
 
 
+## The world height a body's feet rest at, for a point in TILE units. **Flat ground answers exactly
+## what `_ground_h` would**; a stair answers the sloping surface the Blender bake drew.
+## ⚠ **Presentation only.** Nothing here feeds a decision — the sim measures reach off `height_at`.
+func _stand_h(p: Vector2) -> float:
+	if battle == null or battle.grid == null:
+		return 0.0
+	return battle.grid.surface_h(p)
+
+
 ## The island, as ONE MESH MADE IN BLENDER.
 ##
 ## ⚠⚠ **Nothing here generates terrain any more, and that is the point.** 569 lines of noise, stepped
@@ -930,8 +962,13 @@ func _put_body(centre_px: Vector2, radius: float, colour: Color, squash: Vector2
 	var sy := sx * squash.y / maxf(squash.x, 0.001)
 	s.scale = Vector3(sx, sy, 1.0)
 	var tall := float(pic.get_height()) * sy / Look.TILE_PX
-	var tile := Vector2i(int(floor(centre_px.x / Look.TILE_PX)), int(floor(centre_px.y / Look.TILE_PX)))
-	var foot := _ground_h(tile.x, tile.y) + Look.BODY_LIFT_PX / Look.TILE_PX
+	# ⚠⚠ **`_stand_h` AND NOT `_ground_h`, SO A BODY WALKS UP THE STAIR INSTEAD OF POPPING UP IT.**
+	# `_ground_h` is one number per tile, which is right for the RULES and wrong for the feet: a stair
+	# run climbs a whole storey across its tiles, so a body standing on one would float half a storey
+	# at the mouth and sink half a storey at the head. **The sim's own height is untouched** — see
+	# `Grid.surface_h`, which exists next to `height_at` precisely so the drawn ground and the measured
+	# ground can differ without either pretending to be the other.
+	var foot := _stand_h(centre_px / Look.TILE_PX) + Look.BODY_LIFT_PX / Look.TILE_PX
 	s.position = Vector3(centre_px.x / Look.TILE_PX, foot + tall * 0.5, centre_px.y / Look.TILE_PX)
 	# ⚠⚠ **The TOP is returned and it is not `radius * 2`.** A wolf is 55 x 40 and a caveman 36 x 40:
 	# sized by WIDTH off the same radius, the man stands half again as tall as the animal, which is
@@ -1187,6 +1224,32 @@ enum FxKind { SHOT, SPARK, BURST, AREA, LAND, REFUSE }
 ## and on the release. `slot == -1` clears the whole aim. **0 draw calls** — the same shape the
 ## deleted `set_drag` had, and for the same reason: one call site for three events means the two fields cannot
 ## disagree.
+## **Puts the plate on tile `t`, or hides it when `t` is -1.** The shell calls this on every mouse move.
+##
+## ⚠⚠ **The plate sits at the tile CENTRE's own surface height**, which is `Grid.surface_h` and not the
+## tile's rule height — on a stair those differ by up to half a storey and a plate at the rule height
+## would sink into the treads. **`_stand_h` is the same call a body's feet make**, so the plate lands
+## exactly where a body standing there would.
+##
+## ⚠ **A flat quad, and a stair tile is NOT flat.** The plate pokes through the treads on the stair and
+## through a coastal tile whose corners the bake moved. **Both are known and neither is fixed here** —
+## the plate is a cursor, and matching the ground under it exactly means reading corner positions the
+## game does not have. Say so rather than pretending it is right everywhere.
+func set_hover_tile(t: int) -> void:
+	if t == _hover_tile:
+		return
+	_hover_tile = t
+	if t < 0 or battle == null or battle.grid == null or _hover == null:
+		if _hover != null:
+			_hover.visible = false
+		return
+	var tx := t % battle.grid.w
+	var ty := t / battle.grid.w
+	var centre := Vector2(float(tx), float(ty))
+	_hover.position = Vector3(centre.x, _stand_h(centre) + Look.HOVER_PLATE_LIFT_TILES, centre.y)
+	_hover.visible = true
+
+
 func set_summon_aim(slot: int, tile: int) -> void:
 	_summon_slot = slot
 	_summon_aim = tile

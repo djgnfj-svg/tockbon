@@ -1,7 +1,15 @@
 # .claude/agents — the five, and the order they are called in
 
-**Six definitions live here.** Five of them are one team, and the sixth (`net-tuner`) is called on its own
-when a round gets slow. ⚠ **The skill that used to drive this team was deleted on 2026-08-22** as 394 lines
+**Seven definitions live here.** Five of them are one team; `net-tuner` is called on its own when a round
+gets slow, and **`sculpt` owns the 3D**.
+
+⚠⚠ **`sculpt` exists because the 3D ate the conversation** (2026-08-27, the user: 「앞으로 3d 만드는거
+에이전트로 빼자 컨텍스트를 너무 먹는거 같은데」). Baking a mesh is a loop of change · bake · look · miss ·
+change again, and every turn of it lands a render and a tool dump in the main window. **Send it out and
+take back the picture and the numbers.**
+⚠ **It carries five traps that each cost a round** — the MCP client that hangs, the Godot import cache
+that serves yesterday's island in silence, face winding deciding whether a face exists, swallowed
+geometry errors, and a shadowed variable name. **Read it before doing any Blender work yourself.** ⚠ **The skill that used to drive this team was deleted on 2026-08-22** as 394 lines
 whose verification half was already in `how-nets-lie`. **This page is what was worth keeping.**
 
 ✅ **A driver came back on 2026-08-24: the `build-loop` skill**, and it is deliberately thin — it reads

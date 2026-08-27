@@ -137,7 +137,7 @@ label says is worse than a red. If you can't do it, say you can't.**
 | Path | What it holds |
 |---|---|
 | `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **Nearly empty, and that is a defect** — there is no GDD. When one is written it is **one page** — 넘어가면 아무도 안 읽는다. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
-| `docs/skill-config/` | **What the imported skills read before they act, and the only configuration in `docs/`.** ⚠ **Not reading matter** — only `code-review-mp` and `domain-modeling` still load it |
+| `docs/skill-config/` | **What the imported skills read before they act, and the only configuration in `docs/`.** ⚠ **Not reading matter** — **`code-review-mp` is the only skill left that loads it**, and it reads one file. ⚠ `domain-modeling` was named here until 2026-08-27 and it never referenced this folder |
 | `docs/plan/` | **Where planning lives, and the only map.** ⚠⚠ **`roadmap.md` is what is being done** — the chunks, each with the one line that closes it; **`log.md` is why it came out that way**; **`tickets/NN-이름.md`** are the work. **Status is a `Status:` line inside the file — files never move between folders.** The chain owns this: `compass` → `breakdown` (which sends `survey` + `scout`) → `build-loop` → `wrap-up`, with `roadmap` checking it |
 | `lessons-from-two-dead-games` | **What the two games that died actually measured** |
 | `how-nets-lie` | **Every green measured to be false.** Read it before writing a check and before believing a green round |

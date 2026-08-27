@@ -6,9 +6,14 @@ extends RefCounted
 ##
 ## ⚠⚠ **THE BOARD HANGS ON THE TYPE, NOT ON THE SUMMON SLOT** (티켓 11, the user: 「전체에서 세는걸로하자
 ## 그래야 버리는 것도 주워서 안쓰는 자기 몬스터에게도 넣을 수 있게」). Keyed by slot, only the two
-## summoned species could take equipment and every other card was a dead draw; keyed by type, all five
-## boards exist and the whole-horde tag count below has something to count. Slot and type are 1:1 on
-## the summoned pair, so every caller that passed a slot id keeps working unchanged.
+## summoned species could take equipment and every other card was a dead draw; keyed by type, a board
+## exists per player row and the whole-horde tag count below has something to count. Slot and type are
+## 1:1 on the summoned pair, so every caller that passed a slot id keeps working unchanged.
+##
+## ⚠⚠ **THERE IS ONE BOARD, NOT FIVE, SINCE THE SIDE SWAP** (2026-08-26). `board.resize()` below asks
+## `Rules.player_type_count()`, the player table is SWORDSMAN alone, and `Rules.ITEM_CELLS` is 6 —
+## so this is **one board of six cells**, not five boards of thirty. The argument above is why the
+## board hangs on the type and it still holds; the count in it was stale and is corrected here.
 ##
 ## ⚠⚠ **THE CELLS HAVE NO NAMES** (2026-08-24, the user: 「이게 세포 게임에 남아있던 것들이네. 갈아엎어」).
 ## This file used to hold a cell per BODY PART — head, chest, belly, arm, hand, leg — with a species
@@ -110,9 +115,15 @@ func stat_of(beast_type: int, col: int) -> float:
 ## Fits the held card at `held_index` into the first empty cell on `beast_type`'s board. False and
 ## **changes nothing** on a bad type, a bad index, or a full board.
 ##
-## ⚠ **All five species accept — a summon slot is not asked for.** 「버리는 것도 주워서 안쓰는 자기
-## 몬스터에게도 넣을 수 있게」: a board with no slot behind it still feeds the whole-horde tag count,
-## so no card is a dead draw.
+## ⚠⚠ **ONE SPECIES ACCEPTS, AND IT IS THE SWORDSMAN.** The guard below is `>= Rules.player_type_count()`,
+## and since the side swap (2026-08-26) the player table is one row long, so **`fit(1, ...)` through
+## `fit(4, ...)` return false in silence** — those ids are the wolf, bear, crow and lion, and they are
+## the enemy now. This line said "all five species accept" until 2026-08-27 and that had been false
+## since the swap.
+##
+## ⚠ **A summon slot is still not asked for**, and that half is unchanged: 「버리는 것도 주워서 안쓰는
+## 자기 몬스터에게도 넣을 수 있게」. The reason it no longer buys anything is that there is only one
+## board left to feed, not that the rule was dropped.
 ##
 ## ⚠ **A full board REFUSES rather than swapping.** With named cells the card named its own target and a
 ## swap was the only sensible answer; with unnamed cells a swap would have to choose a victim, and a

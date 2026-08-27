@@ -19,7 +19,20 @@ class_name Islands
 ##   `~` water · `H` harbour (water a boat may sail from) · `.` land · `#` inland hole ·
 ##   `^` coastal cliff · `/` ramp · `W` `B` `C` `L` land with a wolf / bear / crow / lion on it
 ##
-## Tier board: `.` low · `/` stair · `1` high.
+## ⚠⚠ **TIER BOARD — THE CHARACTER IS A NOTCH, NOT A STOREY, AND WRITING THE PLATEAU AS `1` BREAKS
+## THE ISLAND IN SILENCE.** `grid.gd` reads these through `TIER_CHARS` / `TIER_LEVELS`:
+##   `.` and `0` → level 0 (ground) · `1` → level 1 (**the stair**) · `2` → level 2 (**the plateau**)
+##   `3` → level 3 (a stair to a third storey) · `4` → level 4 (a third storey) · and so on.
+##   `/` is the OLD spelling of level 1 and still parses; the baked board no longer contains one.
+##
+## **One notch is half a tile. A storey is two notches. A stair is one notch** (2026-08-26, the user).
+## So the storeys are the EVEN levels and the stairs are the ODD ones, and `Rules.MAX_CLIMB_LEVELS`
+## is 1: a body crosses one notch and no more.
+##
+## ⚠⚠ **THIS IS WHAT "THE STAIR IS THE ONLY WAY UP" RESTS ON.** Write the plateau as `1` and it
+## becomes one notch above the ground, a body walks up it anywhere along the cliff, no error is
+## raised, no net goes red, and the second storey quietly stops being a place you have to earn.
+## **This legend said `1` was the high ground until 2026-08-27 and it was wrong the whole time.**
 
 const BOARD_PATH := "res://assets/terrain/island.json"
 

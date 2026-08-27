@@ -363,9 +363,9 @@ static func roster_start_count() -> int:
 ## distinct reachable landings · crossing min/median/max seconds at `BOAT_SPEED` 4.0:
 ##
 ##   shipped `<= 2`   190/174/186 · 82/75/80 · **0.25 / 0.60 / 0.71**  (spread 0.46 s)
-##   `>= 3`           534/516/540 · 45/40/43 · **0.85 / 2.47 / 5.96**  (spread 5.11 s)
+##   `>= 3`  <- this  534/516/540 · 45/40/43 · **0.85 / 2.47 / 5.96**  (spread 5.11 s)
 ##   `>= 4`           470/460/478 · 42/38/40 · **1.10 / 2.47 / 5.96**  (spread 4.86 s)
-##   `>= 6`  <- this  360/360/366 · 34/35/34 · **1.60 / 2.83 / 5.96**  (spread 4.36 s)
+##   `>= 6`           360/360/366 · 34/35/34 · **1.60 / 2.83 / 5.96**  (spread 4.36 s)
 ##   `>= 8`           256/256/256 · 32/33/27 · **2.10 / 3.18 / 5.96**  (spread 3.86 s)
 ##   `>= 10`          152/152/152 · 30/31/25 · **2.60 / 3.54 / 5.96**  (spread 3.36 s)
 ##   `>= 12`          **48/48/48 · 2/2/2** — see the cliff below
@@ -380,9 +380,15 @@ static func roster_start_count() -> int:
 ## **10 is the last usable value**; 8 is the last comfortable one.
 ##
 ## 4 was adopted first and **6 came from the user after playing it**: *"그냥 섬 이랑 더 거리를 더줘"*.
-## The price is stated rather than argued down: **6–8 more coast tiles stop being individually
+## The price was stated rather than argued down: **6–8 more coast tiles stop being individually
 ## addressable** (42/38/40 -> 34/35/34 of 84/76/82), the minimum crossing rises 1.10 -> 1.60 s, and the
 ## spread NARROWS 4.86 -> 4.36 s.
+##
+## ⚠⚠ **AND THEN IT WENT 6 -> 3, AND THIS COMMENT KEPT SAYING 6 UNTIL 2026-08-27.** The constant below
+## is 3; commit `4d665f8` lowered it when the island shrank to 16x12 and never touched these lines.
+## **The `<- this` marker now points at the row the code actually runs.** ⚠ **Nobody has re-swept since
+## the island became 20x16 and Blender became the source of the board**, so the three columns above are
+## measurements of islands that no longer exist. **Re-sweep before arguing this number again.**
 ## ⚠ **It still restores the term `sea-summon` §5.2 measured and §5.3 flattened**: the drag's crossing
 ## spread was 4.50–4.75 s, and 4.36 s is within that band.
 ##
@@ -623,6 +629,13 @@ static func shove_once_of(type_id: int) -> bool:
 ## toward one point — and where you land is the decision this whole game is about.
 ##
 ## ⚠ **First value, not a measured one.**
+##
+## ⚠⚠ **NOTHING READS THIS TABLE ANY MORE, AND THAT IS THE SIDE SWAP** (2026-08-26). `_seek_point_of`
+## in `battle.gd` is its only reader and it runs over the PLAYER's bodies; the player table is
+## SWORDSMAN alone and the one row here is WOLF, which is an enemy now. **So the pack path returns on
+## its first line every time and the huddle never runs.** The enemy side has no pack behaviour at all.
+## ⇒ **This is a table waiting for a rule, not a rule that is running.** Do not cite 무리사냥 as a
+## thing the game currently does.
 const SPECIES_PACK := [
 	[WOLF, 6.0],
 ]

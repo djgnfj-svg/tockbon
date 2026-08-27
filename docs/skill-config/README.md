@@ -10,7 +10,7 @@ person reads.
 | File | Who reads it |
 |---|---|
 | `issue-tracker.md` | `code-review-mp` — **where a ticket physically goes.** ⚠ The other four readers were deleted 2026-08-27 |
-| `domain.md` | `domain-modeling` and anything exploring the code — points at `CONTEXT.md` |
+| `domain.md` | ⚠⚠ **NOBODY.** It was written for `domain-modeling`, and that skill does not name this folder or this file anywhere — checked 2026-08-27. It points at `CONTEXT.md`, which is where the vocabulary actually lives |
 
 ⚠ **`triage-labels.md` was deleted on 2026-08-27.** It mapped five triage roles — maintainer, reporter,
 ready-for-human — onto label strings, and **no ticket in this repo ever carried one.** A game built by one

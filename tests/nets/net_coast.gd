@@ -140,7 +140,7 @@ func _the_descent_home_never_squeezes(t) -> void:
 	# under this line is what says so.
 	t.eq(route.size(), 6, "항로가 6점이다 — 지름길을 안 타고 서쪽 팔을 그대로 되짚는다 %s" % str(route))
 	t.eq(_squeeze_steps(g, route).size(), 0,
-		"그리고 그 7점 중 땅 모서리 사이를 지나는 걸음이 없다 %s" % str(_squeeze_steps(g, route)))
+		"그리고 그 6점 중 땅 모서리 사이를 지나는 걸음이 없다 %s" % str(_squeeze_steps(g, route)))
 	t.eq(route[0], Vector2(1.0, 1.0), "0번은 항구다")
 	t.eq(route[route.size() - 1], Vector2(4.0, 1.0), "마지막은 상륙 칸이다")
 

@@ -116,6 +116,12 @@ var water := PackedByteArray()         # w*h, 1 = water (includes a harbour)
 ## repo has already paid for a name whose sense changed under it (티켓 15: four checks became shells
 ## when 소 and 까마귀 moved sides).
 var level := PackedByteArray()
+## The stair runs of this board, `tile -> [axis, index, length]`. ⚠ **Derived from `level` and cached,
+## never loaded**: it is a restatement of the board, so a second source for it could disagree with the
+## first. Built on the first ask rather than during `load_rows`, because most boards are flat and most
+## nets never ask. See `_build_runs`.
+var _runs := {}
+var _runs_built := 0
 var harbour_tiles := PackedInt32Array()   # row-major order — this defines harbour index
 ## One BFS field per harbour over WATER tiles, hop count from that harbour, `UNREACHABLE` where a
 ## boat cannot get. Indexed the same way `sendable` is. **This is the whole of the landing rule** —
@@ -207,6 +213,8 @@ func load_rows(rows: Array, tiers: Array = []) -> void:
 
 	# Built once per load rather than per tile: the string is assembled from a table, and 1536 tiles
 	# rebuilding it would be a walk of `SPAWN_ROWS` per tile for an answer that cannot change.
+	_runs = {}
+	_runs_built = 0
 	var land := land_chars()
 	for y in h:
 		var row := String(rows[y])
@@ -298,6 +306,153 @@ func level_of(t: int) -> int:
 ## reads as a stutter is something only an eye can answer.
 func height_at(p: Vector2) -> float:
 	return float(level_at(int(round(p.x)), int(round(p.y)))) * Rules.TIER_STEP_TILES
+
+
+## **Where a body's FEET actually rest, in tiles** — the same surface the Blender bake draws, including
+## the slope up a stair.
+##
+## ⚠⚠ **THIS IS NOT `height_at` AND THE DIFFERENCE IS DELIBERATE.** `height_at` is the RULE height: one
+## number per tile, what reach and target choice measure in, and it must stay per-tile or two machines
+## running the same island could disagree. **This one is the DRAWN height**, and it slides across a
+## stair because the mesh does. ⇒ **Only `src/view/` may call this**; nothing that decides an outcome
+## may, or the rounding that keeps the sim reproducible would be quietly undone.
+##
+## ⚠ **A stair run spans exactly one storey however long it is**, so tile `i` of `n` carries the slice
+## from `i/n` to `(i+1)/n` of the climb — the identical arithmetic `island_build.py` uses for the
+## treads. **The treads themselves are not modelled here**: a body walking a real staircase steps up
+## the line the treads average to, and drawing it on the nose would make the body bob.
+func surface_h(p: Vector2) -> float:
+	var tx := int(round(p.x))
+	var ty := int(round(p.y))
+	var t := tx + ty * w
+	if tx < 0 or ty < 0 or tx >= w or ty >= h:
+		return 0.0
+	var run: Array = stair_run_of(t)
+	if run.is_empty():
+		return float(level_of(t)) * Rules.TIER_STEP_TILES
+	var ax: Vector2i = run[0]
+	var i := int(run[1])
+	var n := int(run[2])
+	var floor_h := float(level_of(t) - 1) * Rules.TIER_STEP_TILES
+	var storey := 2.0 * Rules.TIER_STEP_TILES
+	# How far across this tile the body has walked, along the run: 0 at the downhill edge, 1 at the top.
+	var f := (p.x - float(tx)) * float(ax.x) + (p.y - float(ty)) * float(ax.y) + 0.5
+	f = clampf(f, 0.0, 1.0)
+	return floor_h + storey * (float(i) + f) / float(n)
+
+
+## The stair run a tile belongs to, as `[axis, index, length]`, or an empty array when the tile is not
+## part of one. **Built once per board and cached**, because it is a fact about the board.
+func stair_run_of(t: int) -> Array:
+	if _runs_built == 0:
+		_build_runs()
+	return _runs.get(t, [])
+
+
+## ⚠⚠ **A STAIR IS A GROUP OF TILES, NOT ONE TILE.** Cut into a plateau, a stair has the storey above
+## it on three sides; strung two tiles long, the middle tile has no higher neighbour at all. So the
+## MOUTH — the one tile of the group touching the storey below — is what gives the run its direction.
+##
+## ⚠ **Nothing about this is authored.** The board still says only `1`; the direction falls out of
+## which side the ground is on. Dwarf Fortress reads its ramps the same way.
+##
+## ⚠ **A group that is not a filled RECTANGLE is dropped**, so a mis-drawn board makes the stair fall
+## back to flat rather than producing a staircase that climbs through itself.
+## ⚠⚠ **A BLOCK MAY BE MORE THAN ONE TILE WIDE, AND THE INDEX IS STILL ALONG THE CLIMB ONLY**
+## (2026-08-27, the user: 「계단이라는 블록이 있어야할듯」). Two tiles side by side at the same step
+## carry the same index and therefore the same height, which is what makes a wide stair one
+## staircase rather than two beside each other. **`surface_h` needed no change for it.**
+## ⚠⚠ **This mirrors `stair_runs()` in `tools/blender/island_build.py` and the two must agree** — one
+## draws the surface and one says where the feet go. If you change the shape of a run in one, change it
+## in the other in the same edit.
+func _build_runs() -> void:
+	_runs_built = 1
+	_runs = {}
+	var seen := {}
+	for y in h:
+		for x in w:
+			var t := y * w + x
+			var l := level_of(t)
+			if l <= 0 or l % 2 == 0 or seen.has(t):
+				continue
+			var group: Array = []
+			var stack: Array = [Vector2i(x, y)]
+			var mark := {t: true}
+			while stack.size() > 0:
+				var pt: Vector2i = stack.pop_back()
+				group.append(pt)
+				for d: Vector2i in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+					var q: Vector2i = pt + d
+					if q.x < 0 or q.y < 0 or q.x >= w or q.y >= h:
+						continue
+					var qt := q.y * w + q.x
+					if mark.has(qt) or level_of(qt) != l:
+						continue
+					mark[qt] = true
+					stack.append(q)
+			for k in mark.keys():
+				seen[k] = true
+			var mouth := Vector2i(-99, -99)
+			var mouth_dir := Vector2i.ZERO
+			var has_head := false
+			for pt: Vector2i in group:
+				for d: Vector2i in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+					var q: Vector2i = pt + d
+					if q.x < 0 or q.y < 0 or q.x >= w or q.y >= h:
+						continue
+					var nl := level_of(q.y * w + q.x)
+					if nl == l - 1:
+						mouth = pt
+						mouth_dir = d
+					elif nl == l + 1:
+						has_head = true
+			if mouth_dir == Vector2i.ZERO or not has_head:
+				continue
+			var ax := Vector2i(-mouth_dir.x, -mouth_dir.y)
+			## The cross axis, 90 degrees from the climb — the same one `island_build.py` picks.
+			var perp := Vector2i(-ax.y, ax.x)
+			## Each tile's place in the block: `x` along the climb, `y` across it.
+			var cells := {}
+			var jmin := 1 << 30
+			var imax := -(1 << 30)
+			for pt: Vector2i in group:
+				var d: Vector2i = pt - mouth
+				var i := d.x * ax.x + d.y * ax.y
+				var j := d.x * perp.x + d.y * perp.y
+				cells[pt.y * w + pt.x] = Vector2i(i, j)
+				if j < jmin:
+					jmin = j
+				if i > imax:
+					imax = i
+			var run_n := imax + 1
+			var jmax := -(1 << 30)
+			for tile in cells.keys():
+				var c: Vector2i = cells[tile]
+				c.y -= jmin
+				cells[tile] = c
+				if c.y > jmax:
+					jmax = c.y
+			var wide := jmax + 1
+			# ⚠⚠ **A BLOCK HAS TO BE A FILLED RECTANGLE, AND THIS USED TO DEMAND A SINGLE FILE.** The old
+			# test wanted the along-run indices to be exactly `0..n-1`, which a 2-wide stair cannot give —
+			# it gives `0,0,1,1` — so the user's 「계단이라는 블록」 was dropped as malformed and every
+			# body's feet fell back to the flat plateau height with nothing said. **What actually has to
+			# hold is that every step of the climb is the same width.** A negative index is refused by the
+			# same test, since the rectangle it is compared against starts at zero.
+			var ok := run_n > 0 and wide > 0 and cells.size() == run_n * wide
+			if ok:
+				var want := {}
+				for i in run_n:
+					for j in wide:
+						want[Vector2i(i, j)] = true
+				for c in cells.values():
+					if not want.has(c):
+						ok = false
+						break
+			if not ok:
+				continue
+			for tile in cells.keys():
+				_runs[tile] = [ax, int((cells[tile] as Vector2i).x), run_n]
 
 
 ## **Whether a body standing on `from_tile` may walk into `to_tile` — the stair rule, and the only

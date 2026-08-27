@@ -149,13 +149,16 @@ func _open_island() -> void:
 ## Closes the island that just finished and walks the run forward.
 ##
 ## ⚠ **It no longer re-opens unconditionally, and the comment that said it should is gone with the
-## behaviour it described.** A won island now lands the run back in `MAP` (`take_count_reward` and the
-## chest both end there), so re-opening would ask `begin_island` for a fight the run is not in, get a
-## null, and leave the island just won drawing underneath the map. A boss still ends in `WON`/`LOST`,
-## and `_open_island` handles that exactly as it did — by leaving the last island drawable behind the
-## panel.
-## ⚠ **A `BEAK` node used to stop in `REWARD` here.** Both the node kind and the state are deleted
-## (2026-08-25) — every fight node now ends in `MAP`, `PICK` or `REFIT`.
+## behaviour it described.** A won island lands the run in `PICK`, and the card taken there sends it
+## on to `REFIT`, so re-opening would ask `begin_island` for a fight the run is not in, get a null, and
+## leave the island just won drawing underneath. A boss still ends in `WON`/`LOST`, and `_open_island`
+## handles that exactly as it did — by leaving the last island drawable behind the panel.
+##
+## ⚠⚠ **THIS COMMENT SAID `MAP` AND `take_count_reward` UNTIL 2026-08-27 AND NEITHER EXISTS.** The map
+## screen, its state and its rewards were deleted with the seven islands (2026-08-26); `Run.State` is
+## `BATTLE · PICK · REFIT · WON · LOST` and `take_count_reward` is not a symbol in this repo.
+## ⚠ **A `BEAK` node used to stop in `REWARD` here.** Both the node kind and that state are deleted
+## (2026-08-25) — a finished island now ends in `PICK`, `REFIT`, `WON` or `LOST`.
 func _close_island() -> void:
 	run.finish_island(battle.outcome() == Battle.Outcome.WON)
 	_show_state()
@@ -356,6 +359,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		# becoming true mid-drag is what `_on_left_press` alone cannot catch.
 		if panel_view.panel_active():
 			return
+		# ⚠⚠ **THE HOVER PLATE, AND IT IS ASKED ON EVERY MOTION.** `_tile_at` answers -1 off the island,
+		# which is exactly the value that hides the plate, so there is no second test for "is the mouse
+		# on the ground". **It is set here and not inside the summon branch below** — the plate says
+		# where the cursor is, which is true whether or not a slot is armed.
+		field_view.set_hover_tile(_tile_at(motion.position))
 		# ⚠ **One of the three PLAN BRANCHES the commit gate lives on** (`plan-then-watch`, section 7).
 		# The gate is on the branch and not on the handler: the pan below has to keep working after the
 		# commit, and gating the whole handler would be the inert screen that makes the post-commit
@@ -415,9 +423,10 @@ func _quit_the_game() -> void:
 
 ## The reward screen's whole input table: one hover and one press.
 ##
-## ⚠ **Whether a card may be taken is asked of the SIM**, exactly as the map asks `run.map.is_reachable`
-## — `reward_view.is_card_pressable` calls the same predicate `run.take_card` refuses on, so the
-## picture can never offer a card the sim then refuses.
+## ⚠ **Whether a card may be taken is asked of the SIM**: `reward_view.is_card_pressable` calls the
+## same predicate `run.take_card` refuses on, so the picture can never offer a card the sim then
+## refuses. **The comparison here used to be `run.map.is_reachable`, and the map is deleted** —
+## the rule outlived its example.
 func _pick_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		reward_view.set_hover((event as InputEventMouseMotion).position)
@@ -495,8 +504,11 @@ func _start_run() -> void:
 	_show_state()
 
 
-## Six cards are up. The shape of `_enter_map_screen`: the island stops being drawable and the panel
-## goes with it, so a card press can never land on an invisible roster underneath.
+## The three cards go up (`Rules.CARDS_PER_WIN`). The island stops being drawable and the panel goes
+## with it, so a card press can never land on an invisible roster underneath.
+##
+## ⚠ **This said "six cards" and named `_enter_map_screen` until 2026-08-27.** Six was the count
+## before 2026-08-24 and `_enter_map_screen` was deleted with the map.
 func _enter_pick_screen() -> void:
 	battle = null
 	field_view.setup(null, null, [])

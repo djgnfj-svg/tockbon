@@ -1,11 +1,17 @@
 # tools/look — the game screenshots itself
 
-**This is verify-look without the bridge.** Two scripts live in this folder and **both of them run**:
+**This is verify-look without the bridge.** Three scripts live in this folder and **all three run**:
 
 | Script | Reads pixels? | The one question it answers |
 |---|---|---|
-| `capture_refit.gd` | yes | what the reward pick and the refit board actually look like — twelve frames |
+| `piece_viewer.gd` | on `S` and `--shot` | **what does one baked block look like under the GAME's light?** Driven by hand: a window, one piece at a time, turn it, tilt it, outline on and off |
+| `capture_refit.gd` | yes | what the reward pick and the refit board actually look like — fourteen frames |
 | `probe_refit_hits.gd` | no | on the refit screen the slot strip and the board's cells share pixels; which one does a press reach? |
+
+⚠⚠ **`piece_viewer.gd` is the answer to 「블록 하나하나를 내가 보고 싶어」** (2026-08-27, the user). It
+exists because `tools/blender/one_piece.py` shows a piece under BLENDER's light, and ticket 01 records
+that a value which reads correctly there goes wrong in the game. **Its sun, ambient, camera and outline
+pass are copied from `field_view.gd` line for line** — retuning any of them makes it lie.
 
 ⚠⚠ **Everything this file used to describe is gone.** `capture.gd`, `capture_bodies.gd`, `capture_map.gd`,
 `capture_landing.gd` and `probe_run.gd` drove the two dead games and were deleted with them, and their
@@ -17,15 +23,23 @@ archived in place.** What they measured that still binds is the four rules below
 header states", and `probe_refit_hits.gd`'s header cites `probe_run.gd`'s argument for headless.
 **Both of those files are deleted — the rules they name are the ones on this page.**
 
-## Running the two
+## Running the three
 
 ```
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/piece_viewer.gd
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/piece_viewer.gd -- --shot
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/piece_viewer.gd -- --glb res://assets/terrain/island.glb
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_refit.gd -- <output-dir>
 .\Godot_v4.7.1-stable_win64.exe --headless --path . --script res://tools/look/probe_refit_hits.gd
 ```
 
-Twelve PNGs from the first, in about ten seconds, and it quits on its own. The second prints rows and
-reads no pixels at all.
+**The viewer's hand**: `← →` the piece · `Tab` one / all ten · **left-drag pan** · `H` re-centre ·
+right-drag or `Q E` turn · `R F` tilt · wheel zoom · `O` outline · `G` sea · `S` save · `Esc` quit.
+**Flags**: `--glb <path>` · `--at X,Z` · `--zoom N` · `--shot` (every mesh) · `--shot1` (this aim). **Not `--headless`** — there is nothing to
+look at. Shots land in `tools/shot/out/pieces/`, which sits behind a `.gdignore`.
+
+Fourteen PNGs from `capture_refit.gd`, in about ten seconds, and it quits on its own.
+`probe_refit_hits.gd` prints rows and reads no pixels at all.
 
 ## The three rules a capture script here obeys
 
