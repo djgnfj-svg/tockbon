@@ -53,7 +53,13 @@ see them** — `ls image*.png image*.jpg` is the only way this step finds them.
 powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1
 ```
 
-**Never commit red.** If it fails, stop and take it to the user. **Do not fix the net to make it pass.**
+**Never commit a red you caused.** If it fails, stop and take it to the user. **Do not fix the net to
+make it pass.**
+
+⚠⚠ **A red that was already there is reported, not a blocker.** **Measure it at the start of the
+session too** — when the counts come back identical and this session touched none of those files, it is
+**pre-existing**, and holding the commit hostage to it only loses the session's work. **Say the numbers
+out loud either way**; never call it green.
 
 ## 6. Commit — **and stop here**
 

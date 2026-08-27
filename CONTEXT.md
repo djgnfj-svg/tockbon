@@ -144,7 +144,7 @@ uses only the English word is not an answer to the user**, and a symbol named in
 | 한국어 | Code | What it is |
 |---|---|---|
 | 그물 | **net** | 시험 하나. **라벨이 말하는 것보다 적게 재는 초록은 빨강보다 나쁘다** |
-| 로드맵 | **roadmap** | **12 월 데모까지의 계획** — `docs/plan/roadmap.md` 한 장. 덩어리마다 「무엇이 되면 끝인가」 한 줄 |
+| 로드맵 | **roadmap** | **12 월 데모까지의 계획** — `docs/plan/roadmap.md` 한 장. **주마다 날짜와 할 일과 상태 표시**, 덩어리마다 「끝나는 조건」 한 줄 |
 | 결정 로그 | **log** | **왜 그렇게 됐나** — `docs/plan/log.md`. 결정과 뒤집힘이 사용자의 말 그대로 남는다 |
 | 티켓 | **ticket** | 질문 하나 또는 작업 하나 — `docs/plan/tickets/`. 상태는 파일 안의 `Status:` 줄이고, 파일은 폴더를 안 옮겨 다닌다 |
 
