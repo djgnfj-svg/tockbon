@@ -61,7 +61,7 @@ func _attack_event_shape(t) -> void:
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
 		_spawn(ARENA_W, Rules.WOLF, 20, 9),   # idle: 8.9 tiles from the fight, outside detect 6
 		_spawn(ARENA_W, Rules.WOLF, 13, 5),   # the one that swings
-	], 999.0)
+	])
 	_ashore(b, 0, Vector2(3, 9))               # idle: 10.8 tiles away, outside its own 5.5 reach
 	_ashore(b, 1, Vector2(12, 5))
 	b.begin_frame()
@@ -98,7 +98,7 @@ func _attack_event_shape(t) -> void:
 	# thing telling item 1 (tracer) from item 2 (lunge), so the view has to be able to reach it.
 	var shooter := _army_of([Rules.CROW])
 	var r := _battle_of(_open(ARENA_W, ARENA_H), shooter,
-			[_spawn(ARENA_W, Rules.WOLF, 12, 5)], 999.0)
+			[_spawn(ARENA_W, Rules.WOLF, 12, 5)])
 	_ashore(r, 0, Vector2(8, 5))
 	r.begin_frame()
 	r.step(TICK_ONE)
@@ -120,7 +120,7 @@ func _splash_carries_only_real_victims(t) -> void:
 		_spawn(ARENA_W, Rules.WOLF, 12, 5),   # primary, 4.0 from the soldier
 		_spawn(ARENA_W, Rules.WOLF, 13, 5),   # 1.0 from the primary — inside area 1.0
 		_spawn(ARENA_W, Rules.WOLF, 13, 6),   # 1.41421 from the primary — outside it
-	], 999.0)
+	])
 	_ashore(b, 0, Vector2(8, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -146,7 +146,7 @@ func _splash_carries_only_real_victims(t) -> void:
 	var c := _battle_of(_open(ARENA_W, ARENA_H), again, [
 		_spawn(ARENA_W, Rules.WOLF, 12, 5),
 		_spawn(ARENA_W, Rules.WOLF, 13, 5),
-	], 999.0)
+	])
 	_ashore(c, 0, Vector2(8, 5))
 	c.enemy_alive[1] = 0
 	c.enemy_hp[1] = 0.0
@@ -171,7 +171,7 @@ func _death_events_come_after_the_attacks_that_caused_them(t) -> void:
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
 		_spawn(ARENA_W, Rules.WOLF, 13, 5),
 		_spawn(ARENA_W, Rules.WOLF, 20, 9),
-	], 999.0)
+	])
 	b.enemy_hp[0] = Rules.damage_of(Rules.WOLF)
 	_ashore(b, 0, Vector2(12, 5))
 	b.begin_frame()
@@ -215,10 +215,14 @@ func _death_events_come_after_the_attacks_that_caused_them(t) -> void:
 ## the spot this soldier actually stands on) never enters the event at all.
 func _land_events(t) -> void:
 	var army := _army_of([Rules.WOLF, Rules.WOLF])
-	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.LION, 20, 9)], 999.0)
-	var landing := int(_PORT_LANDING.y) * ARENA_W + int(_PORT_LANDING.x)
-	t.ok(b.send(0, landing) >= 0, "병사 하나를 배에 실었다")
-	t.ok(b.send(1, landing) >= 0, "병사 둘을 배에 실었다 — 한 명에 한 척이다")
+	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.LION, 20, 9)])
+	# ⚠ **Two separate presses, never `a and b`.** A short-circuit would let a refused second summon
+	# hide behind the first, and this row's whole subject is that TWO bodies land.
+	var sea := _summonable_water_on(b)
+	t.ok(sea >= 0, "띠 안에 소환할 물 칸이 있다 (자가 점검 — 없으면 아래가 전부 공허하다)")
+	t.ok(b.summon(0, sea) >= 0, "병사 하나를 배에 실었다")
+	t.ok(b.summon(0, sea) >= 0, "병사 둘을 배에 실었다 — 한 명에 한 척이다")
+	t.eq(b.boats.size(), 2, "배가 정확히 두 척이다 — 둘째 소환이 거부되지 않았다")
 	t.ok(b.commit(), "시작을 눌러 두 척을 다 띄웠다")
 
 	var lands := []
@@ -250,7 +254,7 @@ func _land_events(t) -> void:
 
 func _begin_frame_clears(t) -> void:
 	var army := _army_of([Rules.WOLF])
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 13, 5)], 999.0)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.WOLF, 13, 5)])
 	_ashore(b, 0, Vector2(12, 5))
 	b.begin_frame()
 	b.step(TICK_ONE)
@@ -301,7 +305,7 @@ func _lion_declares_before_it_lands(t) -> void:
 	# would walk over and the fixture would measure a blow at whatever moment it arrived. With no path
 	# `step_toward` hands back the tile it is on and the soldier stands, so the frame it enters reach
 	# is a frame this file chooses.
-	var b := _battle_of(_split(), army, [_spawn(ARENA_W, Rules.LION, 13, 5)], 999.0)
+	var b := _battle_of(_split(), army, [_spawn(ARENA_W, Rules.LION, 13, 5)])
 	# Out of the lion's detect 2 to start with, so its cooldown drains to 0 and SITS there.
 	_ashore(b, 0, Vector2(6, 5))
 	for _f in 20:
@@ -369,7 +373,7 @@ func _lion_declares_before_it_lands(t) -> void:
 	# lion's silence above could just as well be "the enemy never attacked at all".
 	var bison_army := _army_of([Rules.WOLF])
 	var bb := _battle_of(_open(ARENA_W, ARENA_H), bison_army,
-			[_spawn(ARENA_W, Rules.WOLF, 13, 5)], 999.0)
+			[_spawn(ARENA_W, Rules.WOLF, 13, 5)])
 	_ashore(bb, 0, Vector2(12, 5))
 	bb.begin_frame()
 	bb.step(TICK_ONE)
@@ -435,7 +439,7 @@ func _events_do_not_move_the_sim(t) -> void:
 	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [
 		_spawn(ARENA_W, Rules.WOLF, 13, 5),
 		_spawn(ARENA_W, Rules.LION, 13, 7),
-	], 999.0)
+	])
 	_ashore(b, 0, Vector2(12, 5))
 	_ashore(b, 1, Vector2(12, 7))
 	var before_s := b.soldier_pos.duplicate()
@@ -476,7 +480,7 @@ func _declared() -> Dictionary:
 	# "it was kept". The spare stands outside the lion's detect 2 and every step here is still, so it
 	# never joins the fight.
 	var army := _army_of([Rules.WOLF, Rules.WOLF])
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.LION, 13, 5)], 999.0)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, [_spawn(ARENA_W, Rules.LION, 13, 5)])
 	_ashore(b, 0, Vector2(12, 5))
 	_ashore(b, 1, Vector2(6, 8))
 	b.begin_frame()
@@ -497,7 +501,7 @@ func _melee(frames: int, clear_each_frame: bool) -> Dictionary:
 	var spawns := []
 	for k in 6:
 		spawns.append(_spawn(ARENA_W, Rules.WOLF, 15 + k % 3, 4 + k / 3))
-	var b := _battle_of(_open(ARENA_W, ARENA_H), army, spawns, 9999.0)
+	var b := _battle_of(_open(ARENA_W, ARENA_H), army, spawns)
 	for i in 13:
 		_ashore(b, i, Vector2(4 + i % 5, 3 + i / 5))
 
@@ -539,15 +543,30 @@ func _split() -> Array:
 
 
 ## A bay: rows 3-7 are water for the first six columns, land from column 6 on, one harbour at (2,5).
-## `_PORT_LANDING` (6,5) is the coast the harbour can see, straight across open water.
-const _PORT_LANDING := Vector2(6, 5)
-
+##
+## ⚠⚠ **`_PORT_LANDING` (6,5) WAS DELETED 2026-08-27 WITH THE HARBOUR.** It named the coast tile the
+## harbour could see straight across open water, and it was the argument `Battle.send` took. **A summon
+## takes the other kind of tile**: WATER inside the band, never a beach. ⇒ Neither end of a crossing is
+## a fixture constant any more — the origin is found on the grid by `_summonable_water_on`, and the
+## beach is whatever `summon_landing_of` picks. **The `H` in the board below is kept** so this bay stays
+## the same shape it was measured on; nothing derives anything from it now.
 func _port() -> Array:
 	var rows := _open(ARENA_W, ARENA_H)
 	for y in range(3, 8):
 		rows[y] = "~~~~~~" + ".".repeat(ARENA_W - 7) + "~"
 	rows[5] = "~~H~~~" + ".".repeat(ARENA_W - 7) + "~"
 	return rows
+
+
+## The first tile inside the summon band. ⚠ **The name says WATER on purpose** — `send` took a BEACH and
+## `summon` takes water, and handing one verb the other's tile is a silent `-1`. That confusion cost a
+## red round once; the name is what stops it costing a second.
+func _summonable_water_on(b: Battle) -> int:
+	var g := b.grid
+	for tile in g.w * g.h:
+		if g.can_summon_at(tile):
+			return tile
+	return -1
 
 
 func _grid_of(rows: Array) -> Grid:
@@ -583,17 +602,17 @@ func _spawn(w: int, type_id: int, x: int, y: int) -> Dictionary:
 ## the zero-check rule would not catch it, because the file still runs plenty of checks. The commit
 ## gate itself is `net_plan`'s to measure.
 ## **A fixture that has to author a plan uses `_planning_battle_of` and calls the real `commit()`.**
-func _battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
-	var b := _planning_battle_of(rows, army, spawns, limit)
+func _battle_of(rows: Array, army: Army, spawns: Array) -> Battle:
+	var b := _planning_battle_of(rows, army, spawns)
 	b._committed = true
 	return b
 
 
 ## The same island, left in the planning state, so a check can drive `send` and `commit` for real.
-func _planning_battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
+func _planning_battle_of(rows: Array, army: Army, spawns: Array) -> Battle:
 	var b := Battle.new()
 	# load_rows first, always: setup writes a reservation per enemy and load_rows clears the table.
-	b.setup(_grid_of(rows), army, spawns, limit)
+	b.setup(_grid_of(rows), army, spawns)
 	return b
 
 

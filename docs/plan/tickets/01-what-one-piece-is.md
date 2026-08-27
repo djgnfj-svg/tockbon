@@ -190,9 +190,21 @@ Status: open
 | 무엇 | 어떻게 보나 | 언제 |
 |---|---|---|
 | **물주름이 토막으로 끊기는 정도** | ⚠ **모바일에서는 안 보인다.** 모니터에서 섬에 붙어 바다를 볼 것. 후보는 `tools/shot/out/water/water_*.png` | 2026-08-26 |
-| **건물 다섯** (본채·집·망루·창고·돌담) | 지금 섬에 서 있는 것은 본채 하나뿐. 나머지 넷은 `assets/buildings/buildings_look.png` 에 나란히 렌더돼 있다 | 2026-08-26 |
+| **건물 다섯** (본채·집·망루·창고·돌담) | 지금 섬에 서 있는 것은 본채 하나뿐. 나머지 넷은 `tools/shot/out/pieces/buildings_look.png` 에 나란히 렌더돼 있다 | 2026-08-26 |
 | **조형물 다섯**(침엽수·활엽수·바위·돌·덤불)과 배치 | 섬을 열면 바로 보인다 | 2026-08-26 |
 | ~~**2 층과 계단**~~ | ✅ **판정 났다 (2026-08-26 밤)** — ***"전반적으로는 볼만한데"*** | |
+
+⚠ **`buildings_look.png` MOVED 2026-08-27 — it used to be cited as `assets/buildings/buildings_look.png`.**
+It is a reference render of the five buildings side by side, waiting for the user's eye; **no code has
+ever loaded it** (grepped: only its own `.import` sidecar and this one line named it). Sitting under
+`assets/` it was imported by the engine and shipped inside the Windows and the Web build — 627 KB of
+picture in a game that never draws it. It now lives beside the other pictures a ticket cites by path,
+under `tools/shot/out/`, which carries a `.gdignore` so the engine does not import it and is covered by
+`tools/*` in **both** export presets' `exclude_filter`, so it no longer ships. Its `.import` sidecar was
+deleted in the same breath, because outside `assets/` there is nothing left to import.
+⇒ **The rule this is an instance of: a picture a ticket points at is not an asset. Only what the game
+LOADS belongs under `assets/`.** `buildings.glb` and `buildings.json` stay — `field_view` and
+`sim/builds` load those two by path.
 
 **⚠⚠ 화면에 올렸는데 사용자가 못 본 것 — 2026-08-26 밤** (***"게임화면지금못봄"***)
 
@@ -233,8 +245,13 @@ Status: open
 **「블렌더에서 맞는 값이 게임에서 죽는다」**이므로, 판정은 게임의 빛 아래에서 나야 한다.
 **저 넷 중 하나라도 여기서 다시 만지면 이 창은 거짓말을 하게 된다.**
 
-⚠ **`-- --shot` 은 열 칸을 각도 둘로 찍고 끝난다** — 앞 두 라운드가 사용자가 모바일이라 판정 자체를
-못 받았기 때문에 붙였다. **창을 대신하지는 않는다.** 돌려 봐야 아는 것이 코너다.
+⚠ **`-- --shot1` 은 지금 겨눈 각도를 세 번 돌려 찍고 끝난다** — 앞 두 라운드가 사용자가 모바일이라
+판정 자체를 못 받았기 때문에 붙였다. **창을 대신하지는 않는다.** 돌려 봐야 아는 것이 코너다.
+⚠⚠ **열 칸을 각도 둘로 찍던 `-- --shot` 은 2026-08-27 에 지웠다.** `pieces.glb` 를 볼 때는 말이
+됐지만, 지금 대상인 `island.glb` 는 메시가 **정확히 하나**라서 같은 칸을 두 번 찍고 「한 줄로 세웠다」고
+말하고 있었다. **그 모드가 담고 있던 측정 둘은 뷰어 안에 옮겨 적었다**: 둘째 장에서 바다를 끄는 이유
+(해안 벽이 y −0.62 부터 +0.02 까지라 불투명한 바다를 켜면 위 0.05 만 보이고, 그 모드를 처음 돌렸을 때
+나온 사진이 흰 줄 하나였다), 그리고 애초에 각도가 둘인 이유.
 
 ⚠ **`-- --glb res://assets/terrain/island.glb` 를 붙이면 실제 섬을 같은 창으로 본다.**
 

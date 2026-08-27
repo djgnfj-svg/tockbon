@@ -266,52 +266,21 @@ const HULL_H_TILES := 0.22
 ## stops reading as a wall you cannot climb, and a hole stays a hole.
 const HILL_AMP_TILES := 2.60
 
-## **The rung the swell is snapped to, in tiles** (2026-08-25). ⚠⚠ **The whole of 「한 칸이 보인다」 (the user's own words, unchanged; the 2026-08-27 swap makes that 칸 today's 조각)
-## lives in this number together with the flat tile top.** A tile top is flat now, so without a ladder
-## every one of the island's tiles would stand at its own height and the ground would be a staircase —
-## the board the user rejected on 2026-08-24. At 0.5 an amplitude of 2.60 has **six rungs**, a swell
-## cell is `HILL_CELL_TILES` = 11 tiles wide, so a rung is about two tiles of flat ground before the
-## next step. ⚠ **Raise it and the island turns into terraces; lower it and the grid dissolves again.**
-const HILL_STEP_TILES := 0.5
-## How wide one swell is, in tiles. Under about 6 the land reads as noise rather than as terrain; over
-## about 20 an island 48 wide holds one bump and might as well be flat.
-const HILL_CELL_TILES := 11.0
-## A second, finer swell at a fraction of the first, so a hillside is not a single clean dome.
-const HILL_DETAIL_RATIO := 0.35
-## Fixed, so two runs of the same island are the same island. **Not `randi()`** — a landscape nobody
-## can reproduce is a landscape nobody can measure.
-const HILL_SEED := 1743
-## ⚠⚠ **The tone the high ground drifts toward, and it is not decoration.** The game is READ from 40
-## degrees at `ZOOM_MIN`, and from up there a hill's shading is a few pixels of gradient — the shape is
-## in the geometry and the eye cannot find it. Tinting by height is what makes a rise legible from the
-## chair the game is actually played in. **Lighter and slightly warmer**, the way distance and altitude
-## both wash colour out.
-const COL_LAND_HIGH := Color(0.404, 0.514, 0.278)
-
-## The tone land takes where it meets the sea. **A coast is not the same green as an inland field** and
-## the eye knows it before it knows anything else about a picture of an island — bleached, sandier, and
-## it is what turns a green slab into a piece of land with a shore.
-## ⚠ It says nothing about walking: the legend still decides that, and this is only the tile's colour.
-## ⚠ **RAISED 2026-08-25 from `(0.416, 0.400, 0.290)`** — a dark khaki, which is what the shore blend
-## was mixing into a green that has itself just been brightened: the two met in the middle and the
-## coast came out as *paler grass*, not as sand. Sand is the lightest thing on the island.
-const COL_SHORE := Color(0.643, 0.588, 0.427)
-## How far the shore tone reaches into the tile that touches water. Under about 0.3 nothing reads; at
-## 1.0 the coast row stops being green at all and the island grows a painted outline.
-## ⚠⚠ **CUT FROM 0.62 to 0.30 (2026-08-25).** 0.62 was measured on the 48 x 32 grids, where the shore
-## ring is a thin band around a wide inland field. **This island is 26 x 20 with a bay in it and 68 of
-## its 165 land tiles are coast** — at 0.62 that is two fifths of the island painted sand, and the
-## green never gets a chance to be the island's colour.
-const SHORE_BLEND := 0.85
-
-## How much of the swell the ring of tiles just BEHIND the shore gets. The shore itself gets none —
-## see `field_view._shore_fade`, and 「배가 도착해야 될 곳에 층이 생겼다」 for why.
-const HILL_SHORE_FADE_MID := 0.45
-
-## How much of the land's swell a cliff gets. **Not zero** — a ridge of flat-topped cliff blocks all at
-## exactly one height is the blockiest thing left on the island once the land is rolling. **Not one** —
-## a cliff has to stay a wall and a wall that undulates as much as a meadow stops reading as one.
-const HILL_CLIFF_RATIO := 0.35
+## ⚠⚠ **THE SWELL'S OWN DIALS WENT WITH THE BAKE, 2026-08-27.** Eight constants stood under
+## `HILL_AMP_TILES` and shaped the rolling ground the GDScript mesh builder generated: the rung the
+## swell snapped to, one swell's width, the finer second swell, the fixed seed, the tone high ground
+## drifted toward, the sand the coast took, how far that sand reached inland, how much swell the ring
+## behind the shore got and how much a cliff got. **Every one of them was read only by the builder that
+## left with the move to `island.glb`**, so each occurred exactly once, at its own declaration.
+##
+## ⚠ **`HILL_AMP_TILES` STAYED and it is not sentiment.** `terrain_height_ceiling()` adds it to the
+## tallest legend height to find where the view ray starts its walk down, so it is load-bearing for
+## every press on the ground — and `net_fx_view` reads it to bound how far the baked top surface may
+## vary. The amplitude is a fact about the mesh; the dials were instructions for making one.
+##
+## ⚠⚠ **The shape they made is now the BAKE's promise, not this file's.** A rung about two tiles wide,
+## the coast reading as sand rather than as pale grass, a cliff that undulates less than a meadow: none
+## of that is measured anywhere any more. `tools/blender/island_build.py` either honours it or does not.
 
 ## ⚠⚠ **How wide the open sea is, in tiles, and it exists because the board turns.** The terrain mesh
 ## runs `WATER_MARGIN_TILES` past the grid, which was enough while the view was a screen-aligned
@@ -324,10 +293,6 @@ const SEA_SPAN_TILES := 400.0
 ## hatched stripe — seen in the capture that added it. Low enough that the step where the two meet is
 ## under a pixel at `ZOOM_MAX`, high enough that no card gets the comparison wrong.
 const SEA_DROP_TILES := 0.03
-
-## How far a skirt hangs below the tile it belongs to when its neighbour is lower. It only has to
-## reach the neighbour; the extra keeps a seam from opening where two slopes meet at an angle.
-const TERRAIN_SKIRT_PAD := 0.05
 
 ## How far one key press turns the board. **The board turning is the hand moving during a fight**, and
 ## that is 티켓 07's whole question — this is the knob that lets it be answered by trying it.
@@ -525,48 +490,18 @@ const COL_HOLE := Color(0.055, 0.067, 0.078)
 const COL_CLIFF := Color(0.243, 0.235, 0.251)
 const COL_RAMP := Color(0.361, 0.310, 0.235)
 
-## **What the wall down to the sea is made of.** ⚠⚠ **A sea wall is not grass and it was drawing as
-## grass** — every skirt took its own tile's colour one shade down, which is right for a one-tile step
-## between two fields and wrong for three tiles of coast: the island came out as a green slab with a
-## green edge, and a slab has no material. Rock, warmer and lighter than `COL_CLIFF` so the impassable
-## cliff letter stays the darkest thing on the island and this does not start claiming to be one.
-const COL_SEA_WALL := Color(0.396, 0.341, 0.286)
-
-## --- the tile rim -----------------------------------------------------------------------------------
-## ⚠⚠ **A TILE IS DRAWN AS AN INNER FACE PLUS A DARKER BORDER, AND THAT BORDER IS THE WHOLE OF
-## 「한 칸이 안 보인다」 (the user's own words, unchanged; that 칸 is today's 조각).** Bad North's look talk states the rule this comes from: *borders, not
-## textures* — a repeating grass texture only says "grass" over and over, and everything interesting
-## happens where two areas meet. On a flat-topped tile the place two areas meet is the tile edge.
+## --- the tile rim, and the sea wall's colour: BOTH DELETED 2026-08-27 -------------------------------
+## ⚠⚠ **THE MESH IS BAKED IN BLENDER NOW AND IT ARRIVES WITH ITS OWN BEVEL AND ITS OWN COLOURS.**
+## Six constants stood here — the rim's width, its three per-edge darkenings, the sea wall's rock
+## colour and how far that colour sank at the wall's foot. Every one of them was read by the code that
+## built the ground mesh in GDScript, and that code left with the move to `island.glb`. What was left
+## was six numbers each occurring exactly once, at its own declaration.
 ##
-## ⚠ **The grow-outline was tried first and thrown away** (2026-08-25). Drawing the mesh a second time
-## inside-out and grown along its normals is what Bad North itself does — but that works because its
-## tiles are modelled with smooth normals. **This terrain is flat tops and hard walls, so every
-## triangle carries its own normal and `grow` pushes the faces apart instead of outward.** Measured:
-## at four times the intended thickness the screen was unchanged.
-##
-## How wide the border is, as a fraction of one tile, taken off each side.
-const TILE_RIM_TILES := 0.085
-## How much darker the border is than the face it edges. ⚠ **A fraction of the tile's OWN colour, not
-## a fixed colour** — a sand tile's border has to be dark sand and a grass tile's dark grass, or the
-## border becomes a third material and starts claiming to be something.
-##
-## ⚠⚠ **THREE VALUES, ONE PER KIND OF EDGE, AND IT WAS ONE VALUE FOR ALL OF THEM.** One value puts
-## the same line on all four sides of all 165 tiles and the island reads as a chessboard — which is
-## the exact failure the Bad North talk warns about (a repeating pattern that says the same thing over
-## and over carries no information). What carries information is WHICH edges are different:
-##  · `FLAT` — the neighbour is at the same height. Barely there: enough to count tiles by, not
-##    enough to draw the eye. Broad plains stay broad.
-##  · `STEP` — the neighbour is higher or lower. **This is where a body can and cannot walk**, so it
-##    is the edge the player is actually reading, and it gets the strong line.
-##  · `EDGE` — the neighbour is sea. The coastline, which the same talk singles out as the one thing
-##    worth drawing about water.
-const TILE_RIM_DARKEN_FLAT := 0.10
-const TILE_RIM_DARKEN_STEP := 0.34
-const TILE_RIM_DARKEN_EDGE := 0.30
-## How far down the sea wall's colour goes as it sinks — the bottom of a coast is in the water's shade.
-## ⚠ Applied at the wall's FOOT only; the top edge keeps `COL_SEA_WALL`, so the wall has a gradient
-## instead of being one flat rectangle, which is the other half of why the old edge read as paper.
-const SEA_WALL_FOOT_DARKEN := 0.28
+## ⚠ **The REASONING they carried is not deleted, because it is not about these numbers.** Bad North's
+## rule is *borders, not textures*, and which edges differ is what carries the information: same-height
+## neighbour barely there, a step strong because that is where a body can and cannot walk, the sea edge
+## strongest of all. **That rule now has to be honoured by the bake**, and `tools/blender/island_build.py`
+## is where it is either obeyed or quietly dropped.
 
 ## The one tile of a tier boundary a body may climb (티켓 19). **Its own colour and NOT `COL_RAMP`
 ## reused**, for a measuring reason as much as a visual one: `net_fx_view` picks terrain vertices out
@@ -698,9 +633,8 @@ const HOVER_CORNER_FRAC := 0.26
 ## How thick that ring is, in tiles. Under about 0.2 it disappears at `ZOOM_MIN`; over about 0.8 it
 ## stops being a line and starts being a band, which is the picture it exists to replace.
 const SUMMON_RING_W_TILES := 0.45
-## How finely the circle is sampled. Not a design value — it only decides whether the ring is visibly
-## a polygon.
-const SUMMON_RING_SEGMENTS := 96
+## ⚠ **`SUMMON_RING_SEGMENTS` was deleted 2026-08-27** — it sampled a circle that stopped being built
+## when the band ring lost its mesh, and it occurred exactly once, at its own declaration.
 
 ## **The sea, as two tones a shader moves between.** `COL_WATER` is the trough; this is the crest.
 ## ⚠ Close together on purpose: the sea is the background this whole game is read against, and water
@@ -962,39 +896,58 @@ const BODY_DOT_RADIUS_PX := 3.0
 ## in the slot, which agreed with the plan only while one slot existed.
 const BEAST_WOLF_R := "res://assets/beast/wolf_r.png"
 const BEAST_WOLF_L := "res://assets/beast/wolf_l.png"
-## ⚠⚠ **All five species, drawn in the SOLDIERS' style** (2026-08-24). The wolf that stood here before
-## was a realistic pixel animal and the enemy became a faceless low-poly toy, so the two sides read as
-## two games; this replaces the wolf rather than adding beside it. **All five are wired now** — see
-## `BEAST_TEX` below, which is what 티켓 15 gave the other three rows to stand on.
-const BEAST_SQUIRREL_R := "res://assets/beast/squirrel_r.png"
-const BEAST_SQUIRREL_L := "res://assets/beast/squirrel_l.png"
+## ⚠⚠ **The beasts, drawn in the SOLDIERS' style** (2026-08-24). The wolf that stood here before was a
+## realistic pixel animal and the enemy became a faceless low-poly toy, so the two sides read as two
+## games; this replaces the wolf rather than adding beside it.
+##
+## ⚠⚠ **THE SQUIRREL AND THE COW LEFT AND THEIR PICTURES WENT WITH THEM** (2026-08-27). Neither is a
+## row of `UNITS` any more, so neither could reach `BEAST_TEX`, and the four constants that named
+## their files were read by nothing at all. **`BEAST_BULL_R` is the one that stayed**, and it stayed
+## for a reason that has nothing to do with a body: `ITEM_ART` row 16 draws 우두머리의 뿔 with it.
+## ⇒ **It is a card picture now.** Putting the cow back on the field needs a left-facing file again.
 const BEAST_BULL_R := "res://assets/beast/bull_r.png"
-const BEAST_BULL_L := "res://assets/beast/bull_l.png"
 const BEAST_BEAR_R := "res://assets/beast/bear_r.png"
 const BEAST_BEAR_L := "res://assets/beast/bear_l.png"
 const BEAST_CROW_R := "res://assets/beast/crow_r.png"
 const BEAST_CROW_L := "res://assets/beast/crow_l.png"
 
-## The enemy. **Two pictures, the same shape as the wolf's two** — no walk, no throw, no death frame.
+## **The spearman, the shield soldier and the archer — CARD PICTURES, and nothing else.** They were
+## the enemy once, back when the humans were what you played against.
 ##
-## ⚠⚠ **ONE BODY, REUSED** (2026-08-24, the user: 「병사 하나를 만들어서 걔네들이 창을 던지는 걸로 …
-## 창 던지기 뭐 활쏘기, 뭐 방패병 이런 애들인데, 그 캐릭터 하나를 일단 돌려 쓰는 걸로」). The spear is
-## the first weapon; the bow and the shield are the same body with the hands changed, which is what
-## makes a human enemy cheap where five beasts would be five drawings.
+## ⚠⚠ **ONE PICTURE EACH, NOT TWO, SINCE 2026-08-27 — and this is the difference between them and
+## every other body constant in this file.** `HUMAN_SPEAR_L`, `HUMAN_BOW_L` and `HUMAN_SHIELD_L` stood
+## here and were deleted with their three `.png` files and their three `.import` sidecars. **A body on
+## the island needs a left-facing file** — `BEAST_TEX` is a right column and a left column, and
+## `beast_tex_path` picks between them by `facing_right` — so a half with only a right file cannot be
+## put on the field at all. **`ITEM_ART` needs only the right one**, because a card never faces left:
+## rows 10, 11 and 14 draw 뺏은 창끝, 방패 조각 and 사냥꾼의 눈 with exactly these three constants.
+## ⇒ **Do not delete the `_R` half.** It is the last thing holding three of the eighteen card pictures.
 ##
-## ⚠ **It is a big head on a stubby body and NOT a realistic man** (the user: 「좀 너무 리얼해 몬스터
-## 들이 … 게임처럼 보여야 되지 않을까 대가리가 큰 형태」). The realistic caveman that stood here first
-## could not be read at all on the island — at the size a body is drawn, proportion is the only thing
-## that survives, and a big head is the cheapest proportion that survives it.
+## ⚠⚠ **WHY THE LEFT HALVES DIED, AND IT IS A DECISION, NOT A CLEANUP.** The 2026-08-26 side swap made
+## the humans the player and the beasts the enemy, which left these three as bodies for enemy roles
+## that no longer exist. The user closed the remaining door 2026-08-27: **a second player weapon is
+## not being built**, so nothing was ever going to walk these pictures onto the island again.
+##
+## ⚠ **What the deleted half carried, kept here because it outlives the files**: they were two files
+## and not one plus a flip, for the reason `BEAST_WOLF_*` still states — flipping inside `_draw` costs
+## a `draw_set_transform`, and `net_draw_leaf` counts every `draw_*` call site, so a mirrored copy on
+## disk keeps the leaf at exactly one call. **A second player body now costs new ART, not a new table
+## row** — that is the whole price of this deletion, and it is the sentence that used to be wrong.
+##
+## ⚠ **ONE BODY, REUSED** (2026-08-24, the user, translated: "make one soldier and have them throw
+## spears … spear-throwing, archery, shield soldiers and so on — reuse that one character for now").
+## The spear was the first weapon; the bow and the shield are **the same body with the hands changed**,
+## generated from the spearman's OWN seed with one clause of the prompt swapped. That is why the three
+## still read as one army on the cards rather than as three drawings that happen to be red, and it is
+## why a human enemy was cheap where five beasts would have been five drawings.
+##
+## ⚠ **It is a big head on a stubby body and NOT a realistic man** (the user, translated: "the
+## monsters are a bit too real … shouldn't it look like a game, a big-headed shape"). The realistic
+## caveman that stood here first could not be read at all on the island — at the size a body is drawn,
+## proportion is the only thing that survives, and a big head is the cheapest proportion that does.
 const HUMAN_SPEAR_R := "res://assets/human/spear_r.png"
-const HUMAN_SPEAR_L := "res://assets/human/spear_l.png"
-## ⚠⚠ **The same body with the hands changed, and that is the whole argument for a human enemy.**
-## Bow and shield were generated from the spearman's OWN seed with one clause of the prompt swapped,
-## so the three stand together as one army rather than as three drawings that happen to be red.
 const HUMAN_BOW_R := "res://assets/human/bow_r.png"
-const HUMAN_BOW_L := "res://assets/human/bow_l.png"
 const HUMAN_SHIELD_R := "res://assets/human/shield_r.png"
-const HUMAN_SHIELD_L := "res://assets/human/shield_l.png"
 ## ⚠⚠ **THE PLAYER, since 2026-08-26.** The same body again with a sword in its hands — drawn back
 ## when the humans were the enemy, which is exactly why the swap cost no art at all.
 const HUMAN_SWORD_R := "res://assets/human/sword_r.png"
@@ -1045,8 +998,14 @@ const BEAST_FRAME_SEC := 0.12
 ## second list — "these ones have frames" — is the shape that has to be hand-synced with this one, and
 ## the day they disagree the wrong animal walks.
 ## ⚠⚠ **FIVE ROWS SINCE THE SIDES SWAPPED** (2026-08-26): the swordsman the player is, and the four
-## beasts he fights. The spear, bow and shield pictures are still constants above and still on disk —
-## **the player's second weapon is a row here, not a drawing.**
+## beasts he fights.
+## ⚠⚠ **"The player's second weapon is a row here, not a drawing" STOOD ON THIS LINE AND IT IS NOW
+## FALSE** (2026-08-27). It was true while the spear, bow and shield each had a right file AND a left
+## file sitting unused on disk: a sixth row could have been written with two existing paths and a body
+## would have walked. **The three `_L` files were deleted** — the user settled 2026-08-27 that a second
+## player weapon is not being built — and a row needs BOTH columns, so those three constants can only
+## be card art now. ⇒ **A second player body costs a new DRAWING, not a new row**, and the estimate
+## anyone makes off this table has to include that.
 const BEAST_TEX := [
 	[HUMAN_SWORD_R, HUMAN_SWORD_L, NO_ANIM_FRAMES],
 	[BEAST_WOLF_R, BEAST_WOLF_L, WOLF_ANIM_FRAMES],
@@ -1523,27 +1482,23 @@ const ITEM_ART := [
 ]
 
 
-## The picture on a card of either kind. ⚠ **A beast card wears the beast's own field picture** — the
-## one the body will actually be, so the card and the island cannot show two different animals.
-## `""` for a card with no picture, which the art leaf is simply not called for.
+## The picture on a card. `""` for a card with no picture, which the art leaf is simply not called for.
+## ⚠ **The beast arm was deleted 2026-08-27** with the beast card — it returned the species' own field
+## picture, so a card and the island could never show two different animals.
 static func card_art_path(kind: int, value: int) -> String:
-	if kind == Rules.CardKind.SPECIES:
-		return beast_tex_path(value, true)
 	if value < 0 or value >= ITEM_ART.size():
 		return ""
 	return str(ITEM_ART[value])
 
 
 ## Every distinct path a card could ever wear, so a screen can load them once instead of per frame.
-## ⚠ **Walked over both tables rather than listed**, or a new card face is a picture nobody loads.
+## ⚠ **Walked over the table rather than listed**, or a new card face is a picture nobody loads.
+## ⚠ **It walked TWO tables until 2026-08-27** — the second was the beast cards' own species pictures,
+## and it went with them. A second card kind puts its loop back here and nowhere else.
 static func card_art_paths() -> PackedStringArray:
 	var out := PackedStringArray()
 	for i in ITEM_ART.size():
 		var p := card_art_path(Rules.CardKind.ITEM, i)
-		if p != "" and not out.has(p):
-			out.append(p)
-	for r in Rules.species_card_count():
-		var p := card_art_path(Rules.CardKind.SPECIES, Rules.species_card_type_of(r))
 		if p != "" and not out.has(p):
 			out.append(p)
 	return out
@@ -2272,11 +2227,11 @@ const FX_RING_SEGMENTS := 24
 ## radius through `_body_anchor` — a crow and a lion do not hang their marks at the same height.
 const FX_AIR_LIFT_PX := 14.0
 
-## How many frames a screen is given to settle before an instrument photographs it. **20 frames is a
-## third of a second**, past every intro this project has — the card screen's fade is the longest.
-## ⚠ It is a capture number and nothing in `src/` reads it; it lives here because `look.gd` is where a
-## presentation number lives, and a capture that disagrees with the screen is worse than no capture.
-const FX_SETTLE_FRAMES := 20
+## ⚠⚠ **`FX_SETTLE_FRAMES` WAS DELETED 2026-08-27, AND ITS OWN HEADER PREDICTED IT.** It said "nothing
+## in `src/` reads it" and justified living here anyway, so that a capture and the screen could not
+## disagree. **No capture ever read it either** — it occurred exactly once in the whole repo, at its
+## own declaration, while every shooter hard-coded its own settle count. A number kept so two things
+## agree, that neither of them reads, is a number that guarantees nothing.
 
 ## Per-effect strength, indexed by the item numbers 1..12 — read it through `fx_gain_of`, never
 ## directly. Every effect multiplies its own amplitude by its own slot, and 0.0 turns that effect off
@@ -2374,50 +2329,17 @@ static func hp_bar_colour(filled: bool) -> Color:
 	return COL_HP_FULL if filled else COL_HP_EMPTY
 
 
-## Keyed by the island legend character in islands.gd, because the grid keeps passability as a
-## byte and cannot tell water from a hole — both are impassable and they must not look alike.
-## `B` `C` `L` are all passable land and fall through to `COL_LAND`.
+## ⚠⚠ **THE TWO LEGEND LOOKUPS WERE DELETED 2026-08-27** — `terrain_colour_of_char` turned an island
+## letter into a fill colour and `terrain_height_of_char` turned the same letter into a height. Both
+## answered for a ground that GDScript painted tile by tile, and **the letter grid stopped painting
+## anything the day the mesh moved to `island.glb`**: the colours arrive baked into the vertices and
+## the heights arrive as geometry. Neither function had a caller anywhere in the repo.
 ##
-## ⚠ `H` (harbour) is water, functionally, so it gets the water tone here — the harbour MARKER is a
-## separate outline drawn on top, the same way the old dock outline worked. `^` (cliff) is exactly as
-## impassable as `#` (3.2 of `boat-and-landing`) but P10 (stage 5) gives it its OWN fill —
-## `field_view._draw()` adds a face line along its seaward edge on top of this, which is what turns
-## "coloured like a hole" into "reads as height" with no elevation axis at all. `/` (ramp) is
-## passable land, the one doorway through a cliff wall, and gets its own tint for the same reason.
-static func terrain_colour_of_char(c: String) -> Color:
-	match c:
-		"~":
-			return COL_WATER
-		"H":
-			return COL_WATER
-		"#":
-			return COL_HOLE
-		"^":
-			return COL_CLIFF
-		"/":
-			return COL_RAMP
-		_:
-			return COL_LAND
-
-
-## The height column of the same legend `terrain_colour_of_char` reads, and it is kept beside it on
-## purpose: a character that gains a colour and not a height would stand at land height and look like
-## a bug in the sim rather than a hole in this table.
-static func terrain_height_of_char(c: String) -> float:
-	match c:
-		"~":
-			return TERRAIN_H_WATER
-		"H":
-			return TERRAIN_H_WATER
-		"#":
-			return TERRAIN_H_HOLE
-		"^":
-			return TERRAIN_H_CLIFF
-		"/":
-			return TERRAIN_H_RAMP
-		_:
-			return TERRAIN_H_LAND
-
+## ⚠ **`TERRAIN_H_*` and `COL_LAND`/`COL_HOLE`/`COL_CLIFF`/`COL_RAMP`/`COL_WATER`/`COL_STAIR` all
+## STAYED, and none of them out of habit.** The five heights are what `terrain_height_ceiling()` below
+## takes its maximum over, so deleting them blinds every press on the ground. The colours are how
+## `net_fx_view` picks a cliff, a hole, a ramp and the stair OUT of the baked mesh — it counts vertices
+## by colour, which is the only check that measures what the bake actually produced.
 
 ## The highest the landscape can ever stand, in tiles: the tallest character in the table above plus
 ## the whole swell that character may carry.

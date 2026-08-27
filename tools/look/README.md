@@ -4,7 +4,7 @@
 
 | Script | Reads pixels? | The one question it answers |
 |---|---|---|
-| `piece_viewer.gd` | on `S` and `--shot` | **what does one baked block look like under the GAME's light?** Driven by hand: a window, one piece at a time, turn it, tilt it, outline on and off |
+| `piece_viewer.gd` | on `S` and `--shot1` | **what does one baked block look like under the GAME's light?** Driven by hand: a window, one piece at a time, turn it, tilt it, outline on and off |
 | `capture_refit.gd` | yes | what the reward pick and the refit board actually look like — fourteen frames |
 | `probe_refit_hits.gd` | no | on the refit screen the slot strip and the board's cells share pixels; which one does a press reach? |
 
@@ -28,7 +28,6 @@ header states", and `probe_refit_hits.gd`'s header cites `probe_run.gd`'s argume
 
 ```
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/piece_viewer.gd
-.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/piece_viewer.gd -- --shot
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/piece_viewer.gd -- --glb res://assets/terrain/island.glb
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_refit.gd -- <output-dir>
 .\Godot_v4.7.1-stable_win64.exe --headless --path . --script res://tools/look/probe_refit_hits.gd
@@ -36,8 +35,12 @@ header states", and `probe_refit_hits.gd`'s header cites `probe_run.gd`'s argume
 
 **The viewer's hand**: `← →` the piece · `Tab` one / all ten · **left-drag pan** · `H` re-centre ·
 right-drag or `Q E` turn · `R F` tilt · wheel zoom · `O` outline · `G` sea · `S` save · `Esc` quit.
-**Flags**: `--glb <path>` · `--at X,Z` · `--zoom N` · `--shot` (every mesh) · `--shot1` (this aim). **Not `--headless`** — there is nothing to
-look at. Shots land in `tools/shot/out/pieces/`, which sits behind a `.gdignore`.
+**Flags**: `--glb <path>` · `--at X,Z` · `--zoom N` · `--shot1` (this aim, three yaws, then quit). **Not
+`--headless`** — there is nothing to look at.
+⚠ **`--shot` was deleted 2026-08-27.** It walked EVERY mesh in the loaded glb and shot each one twice,
+which made sense against `pieces.glb` and its ten blocks; the live target `island.glb` holds exactly one
+mesh, so the mode had degenerated to photographing one piece twice and calling it a row. **What it knew
+is recorded in the viewer itself** — why the second shot turns the sea off, and why two angles exist. Shots land in `tools/shot/out/pieces/`, which sits behind a `.gdignore`.
 
 Fourteen PNGs from `capture_refit.gd`, in about ten seconds, and it quits on its own.
 `probe_refit_hits.gd` prints rows and reads no pixels at all.

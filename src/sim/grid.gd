@@ -122,49 +122,78 @@ var level := PackedByteArray()
 ## nets never ask. See `_build_runs`.
 var _runs := {}
 var _runs_built := 0
-var harbour_tiles := PackedInt32Array()   # row-major order — this defines harbour index
-## One BFS field per harbour over WATER tiles, hop count from that harbour, `UNREACHABLE` where a
-## boat cannot get. Indexed the same way `sendable` is. **This is the whole of the landing rule** —
-## a tile is sendable iff some 8-neighbour of it is water this field reached — and it is also where
-## `water_route` reads the polyline a boat actually sails.
+## Every tile whose board character is `HARBOUR_CHAR`, in row-major order — the append order in
+## `load_rows` IS the harbour index, so an index is stable and reproducible across runs.
 ##
-## ⚠ **`landable` is DELETED and not kept beside this.** It was `passable AND some ORTHO neighbour is
-## water`, and the denylist opens the 8-way coast instead, so keeping it would be a second and
-## narrower answer to the same question sitting one line away from the real one.
-var water_fields: Array = []           # Array of PackedInt32Array, one per harbour
-## `sendable[hb][t]` = 1 iff a boat at harbour `hb` may be sent to tile `t` — passable AND some 8-way
-## neighbour of `t` is water that `water_fields[hb]` reached. Filled ONCE per harbour inside
-## `load_rows`; `can_land_at` only ever reads it back. See 3.5: computed live it would be 1536 tiles
-## x 3 harbours a FRAME, and a BFS is more expensive than the line test it replaced, not less.
-var sendable: Array = []               # Array of PackedByteArray, one per harbour
-## The harbour whose nearest reachable coast tile is farthest away, ties to the lowest tile index (which
-## is also the lowest harbour index, since `harbour_tiles` is row-major). -1 on an empty grid.
-var start_harbour: int = -1
-## Every water BFS ever built, one per harbour per `load_rows`. **A net asserts this does not move
-## across pumped frames or across sixty `can_land_at` / `home_harbour_for` / `water_route` calls** —
-## the field is a load-time cost, not a per-frame one, and that is the whole reason it is cached.
-## ⚠ It replaces `line_tests`, which counted the deleted straight-line sampler's calls and was the
-## same guarantee about the cheaper thing.
-##
-## ⚠⚠ **`summon_field_builds` below is its SIBLING and not the same counter, deliberately.** This one
-## means *one per harbour per `load_rows`* and `net_coast` asserts it equals `harbour_tiles.size()`
-## exactly. Folding the summon BFS in here would force that expected value up, which is `sea-summon`'s
-## own named trap — *do not raise its expected value to make a red go away*. Two facts, two counters.
-var water_field_builds: int = 0
+## ⚠⚠ **NOTHING IN `src/` READS THIS ANY MORE and it is kept ON PURPOSE.** The whole harbour system
+## that consumed it — the per-harbour water fields, the landing denylist, the routing and the start
+## harbour — died with the drag that fed it (see the block below). What still reads it is the picture
+## of what the BOARD SAYS: `net_islands`, `net_summon` and `net_tiers` each walk it to assert facts
+## about the shipped rows (how many `H` characters an island has, and where). **It is the only record
+## in the sim of where a harbour character sits**, so deleting it would delete the board's own text,
+## not just the dead rule that used to read it.
+var harbour_tiles := PackedInt32Array()
 
-## The summon field, filled ONCE in `load_rows`. **A summon has no harbour**, so neither of these can
-## be indexed by one: `water_fields` is per harbour and there is nothing to look a summoned boat up
-## under. See `sea-summon`.
+## ⚠⚠ **THE WHOLE HARBOUR SYSTEM IS DELETED FROM HERE AND THIS BLOCK IS ITS RECORD.** What stood here
+## was `water_fields`, `sendable`, `start_harbour` and `water_field_builds`, and what killed all four
+## was one thing: **the player used to DRAG a soldier onto a boat that departed from a harbour, and
+## that drag was deleted.** `Battle.send` has had zero callers in `src/` ever since, so every table
+## below it became a fact nobody asked. **Boats still exist — they are SUMMONED now** (`sea-summon`),
+## and the summon field beneath this comment is the whole of what replaced these four.
+##
+## **What each one was, and the knowledge that outlives it:**
+##
+##  · `water_fields: Array` — one BFS over WATER tiles per harbour, hop count from that harbour,
+##    `UNREACHABLE` where a hull could not get. **`summon_hops` is the same shape done once instead of
+##    once per harbour**, which is exactly the saving the swap bought: a summon has no harbour, so
+##    there is nothing to index a field under.
+##
+##  · `sendable: Array` of `PackedByteArray`, one per harbour — `sendable[hb][t] == 1` iff a boat at
+##    `hb` could be sent to `t`. ⚠⚠ **It was a DENYLIST and that was the user's own line**: *"상륙
+##    못하는 데가 있는 거지 상륙 가능한 데가 있는 게 아니야"*. The rule was *passable AND some 8-WAY
+##    neighbour is water this harbour's field reached*, so what was left refused was only cliff
+##    (impassable) and inland (no water neighbour at all). ⚠ **8-way and not 4-way, and the number is
+##    the argument**: the ortho coast of island 0 is 82 tiles and the 8-way coast is 84 — two corner
+##    beaches — and the user's 「어디든지」 is what put them in. **The predecessor `landable` (passable
+##    AND some ORTHO neighbour is water) died for the same reason and must not come back.**
+##    ⚠ **The coastal band the summon field seeds from is that same set**: measured 84 / 76 / 82 on
+##    the three shipped islands, which is `sendable[hb]` for every harbour. So nothing was lost.
+##
+##  · `start_harbour: int` — the harbour whose NEAREST reachable coast tile was FARTHEST away (ties to
+##    the lowest tile index, which row-major fill makes the lowest harbour index), -1 on an empty grid.
+##    It picked where the player's army began. **Nothing chooses a starting harbour now**; the summon
+##    band is a ring about the middle of the grid (`summon_centre`) and the player presses inside it.
+##
+##  · `water_field_builds: int` — every water BFS ever built, one per harbour per `load_rows`. It was
+##    an instrument, and the guarantee it carried is ALIVE in its sibling: **`summon_field_builds`
+##    below means the same thing about the one field that is left.** ⚠ It in turn replaced `line_tests`,
+##    which counted the deleted straight-line sampler's calls and was the same guarantee about the
+##    cheaper thing. ⚠⚠ **The trap it named is still live** — *do not fold a second BFS into a counter
+##    to make a red go away, and do not raise a counter's expected value either.* Two facts, two
+##    counters.
+##
+## ⚠⚠ **THE COST THAT FORCED THE CACHING IS UNCHANGED AND STILL APPLIES TO `summon_hops`.** These
+## tables were filled ONCE inside `load_rows` and only ever read back, because computed live the ask
+## was 1536 tiles x 3 harbours **a FRAME** — a BFS is more expensive than the line test it replaced,
+## not less (plan 3.5). `field_view` asks `can_summon_at` once per visible tile per frame today, so a
+## per-press BFS there would be the identical wall.
+
+## The summon field, filled ONCE in `load_rows`. **A summon has no harbour** — there is nothing to look
+## a summoned boat up under, which is why neither of these is indexed by one. See `sea-summon`.
 ##
 ## `summon_hops[t]` — hops of WATER travel from the coast, `UNREACHABLE` on land and on water no boat
-## can reach the shore from. The seed layer is 1, never 0: there is no origin tile here the way a
-## harbour is `water_route`'s 0.
-## `summon_landing[t]` — the LAND tile a boat born at `t` sails to, or -1. Ties go to the lowest tile
-## index, the same tie-break `_entry_water_tile` and `home_harbour_for` already use.
+## can reach the shore from. ⚠ **The seed layer is 1, never 0**: there is no origin tile here the way
+## the deleted `water_route` had its harbour at 0. Every descent in this file tests `<= 1` for that
+## reason, and reading it as a 0-seeded field walks one hop too far.
+## `summon_landing[t]` — the LAND tile a boat born at `t` sails to, or -1. **Ties go to the LOWEST tile
+## index** — the same tie-break the deleted `_entry_water_tile` and `home_harbour_for` used, and it is
+## the whole of the determinism: flip the comparison and every landing on every island moves.
 var summon_hops := PackedInt32Array()
 var summon_landing := PackedInt32Array()
 
-## One per `load_rows`, and its own counter for the reason written on `water_field_builds` above.
+## One per `load_rows`. ⚠ **It had a SIBLING, `water_field_builds`, and the deletion block above holds
+## what that one meant and the trap the two shared** — *two facts, two counters; never fold a second
+## BFS into one counter to make a red go away.*
 ## A net asserts it is 1 after a load and still 1 after sixty `can_summon_at` / `summon_landing_of` /
 ## `summon_route` calls — `field_view` asks the first of those once per visible tile per FRAME while
 ## aiming, so a per-press BFS here would be the wall.
@@ -208,7 +237,10 @@ func load_rows(rows: Array, tiers: Array = []) -> void:
 	reserved.fill(-1)
 	harbour_tiles = PackedInt32Array()
 	_held = {}
-	water_field_builds = 0
+	# `water_field_builds = 0` stood here beside its sibling and died with the harbour tables. See the
+	# deletion block on `harbour_tiles`: **whatever is added here must be reset here**, because a `Grid`
+	# is reused across islands and a counter carried over from the previous island is a number that
+	# looks like a measurement and is not one.
 	summon_field_builds = 0
 
 	# Built once per load rather than per tile: the string is assembled from a table, and 1536 tiles
@@ -234,34 +266,16 @@ func load_rows(rows: Array, tiers: Array = []) -> void:
 			if c == HARBOUR_CHAR:
 				harbour_tiles.append(t)
 
-	# ⚠⚠ **The summon field goes HERE, above the harbour loop, and the position is structural.** Built
-	# before `water_fields` and `sendable` exist, `_summon_field` *cannot* read either of them — and
-	# reading `sendable` is exactly how the harbour rule a summon does not have would come back in
-	# through the back door. See its own header.
+	# ⚠⚠ **The summon field is the ONLY water field this island builds, and its position used to be
+	# structural.** A per-harbour loop ran BELOW it — one `_water_field` BFS per harbour, then a
+	# `sendable` denylist byte per tile, then `_derive_start_harbour` — and `_summon_field` was put
+	# ABOVE it deliberately so that it *could not* read either table: reading `sendable` was exactly how
+	# the harbour rule a summon does not have would have come back in through the back door.
+	# ⚠ **That loop is deleted with the rest of the harbour system** (see the block on `harbour_tiles`),
+	# so the guard is now vacuous — there is nothing left below to read. **The rule it enforced is
+	# not**: whatever water field is added here later, `_summon_field` must stay independent of it, or
+	# a summoned boat starts obeying a harbour again. Its own header repeats this.
 	_summon_field()
-
-	# ⚠ **Both tables are filled here and NOWHERE else, once per island.** The comment on
-	# `can_land_at` records the cost that forces it; a BFS per harbour is ~1536 operations, and
-	# recomputing one per tile per frame would be 1536 x 3 BFS passes a frame.
-	water_fields = []
-	sendable = []
-	for hb in harbour_tiles.size():
-		var field := _water_field(int(harbour_tiles[hb]))
-		var arr := PackedByteArray()
-		arr.resize(n)
-		for t in n:
-			# The landing tile itself must be LAND — a boat unloads soldiers onto it — and it must
-			# touch, on any of eight sides, water this harbour's boat can actually reach. Those two
-			# conditions are the whole denylist: what is left refused is cliff (impassable) and
-			# inland (no water neighbour).
-			if passable[t] == 0:
-				continue
-			if _entry_water_tile(field, t) >= 0:
-				arr[t] = 1
-		water_fields.append(field)
-		sendable.append(arr)
-
-	start_harbour = _derive_start_harbour()
 
 
 ## The level a tier character stands for, or 0 for a character the legend does not list.
@@ -503,77 +517,40 @@ func tile_index(tx: int, ty: int) -> int:
 	return ty * w + tx
 
 
-## Whether a boat sitting at harbour `harbour_idx` may be sent to tile `t`. **Reads the cached
-## `sendable` table filled once in `load_rows` — never runs a BFS here.** That split is what makes
-## `water_field_builds` flat across a pumped frame; recomputed per call at 1536 tiles a frame it would
-## be a real wall (3.5 of the plan), and worse than the straight-line test it replaced rather than
-## better.
-func can_land_at(harbour_idx: int, t: int) -> bool:
-	if harbour_idx < 0 or harbour_idx >= sendable.size():
-		return false
-	var arr: PackedByteArray = sendable[harbour_idx]
-	if t < 0 or t >= arr.size():
-		return false
-	return arr[t] != 0
-
-
-## Breadth-first from a harbour over WATER tiles, 8-way, cost in hops. **A deliberate mirror of
-## `flow_field` and not a call to it**: same queue, same `UNREACHABLE` sentinel, same fixed
-## `NEIGHBOURS` order — `water[nt] == 0: continue` in place of `passable[nt] == 0: continue`.
-## Sharing one function through a flag would put the two traversals one typo apart, and a boat that
-## walked the LAND field would sail over the island with every check about reachability still green.
+## ⚠⚠ **`can_land_at` AND `_water_field` STOOD HERE AND BOTH ARE DELETED WITH THE HARBOUR SYSTEM.**
+## Their tables are recorded in full on `harbour_tiles` above; what belongs *here* is the two things
+## they knew that the surviving water code still depends on.
 ##
-## ⚠ **There is a SECOND difference now and it is not symmetric**: `_water_step_open` refuses a
-## diagonal squeezed between two land corners. `flow_field` has no such guard — see that function's
-## own note. An earlier version of this paragraph said the water byte was "the entire difference",
-## which was true when it was written and is not any more.
+##  · **`can_land_at(harbour_idx, t)` never ran a BFS — it read the cached `sendable` byte and nothing
+##    else**, which is what kept the build counter flat across a pumped frame. Recomputed per call at
+##    1536 tiles a frame it would have been a real wall (plan 3.5), and *worse* than the straight-line
+##    test it replaced rather than better. ⚠ **`can_summon_at` inherits that discipline exactly** — it
+##    is a read of `summon_hops`, never a walk, and `field_view` calls it once per visible tile per
+##    frame. **Do not put a traversal behind a predicate in this file.**
 ##
-## The seed is planted at the harbour tile whatever its own contents, exactly as `flow_field` does,
-## and for the same reason: an all-unreachable field produces an island with no landings at all and
-## nothing logged.
-func _water_field(seed_tile: int) -> PackedInt32Array:
-	water_field_builds += 1
-	var n := w * h
-	var field := PackedInt32Array()
-	field.resize(n)
-	field.fill(UNREACHABLE)
-	if seed_tile < 0 or seed_tile >= n:
-		return field
-	field[seed_tile] = 0
-	var queue := PackedInt32Array()
-	queue.append(seed_tile)
-	var head := 0
-	while head < queue.size():
-		var t := queue[head]
-		head += 1
-		var tx := t % w
-		var ty := t / w
-		var next_cost := field[t] + 1
-		for k in NEIGHBOURS.size():
-			var nx := tx + int(NEIGHBOURS[k][0])
-			var ny := ty + int(NEIGHBOURS[k][1])
-			if nx < 0 or ny < 0 or nx >= w or ny >= h:
-				continue
-			var nt := ny * w + nx
-			if water[nt] == 0:
-				continue
-			if not _water_step_open(tx, ty, nx, ny):
-				continue
-			if field[nt] <= next_cost:
-				continue
-			field[nt] = next_cost
-			queue.append(nt)
-	return field
+##  · **`_water_field(seed_tile)` was a DELIBERATE MIRROR of `flow_field` and not a call to it**: same
+##    queue, same `UNREACHABLE` sentinel, same fixed `NEIGHBOURS` order, with `water[nt] == 0: continue`
+##    in place of `passable[nt] == 0: continue`. ⚠⚠ **Sharing one function through a flag would put the
+##    two traversals one typo apart, and a boat that walked the LAND field would sail over the island
+##    with every check about reachability still green.** `_summon_field` below is the same mirror for
+##    the same reason and must stay one. ⚠ **The mirror is NOT symmetric**: the water half honours
+##    `_water_step_open` and `flow_field` has no such guard — see both of their notes.
+##  · Its seed was planted on the harbour tile *whatever that tile's own contents*, exactly as
+##    `flow_field` still plants its target: an all-unreachable field produces an island with no
+##    landings at all and **nothing logged**, which is the failure shape this repo keeps paying for.
 
 
 ## Whether a boat may take the 8-way step `(fx, fy) -> (tx, ty)`. An ORTHOGONAL step always may; a
 ## DIAGONAL one needs at least one of its two SHOULDER tiles — `(tx, fy)` and `(fx, ty)` — to be water.
 ##
-## ⚠⚠ **Without this a hull slips between two land corners that touch.** Both `_water_field` and
-## `water_route` walked `NEIGHBOURS` on the water byte alone, so water at (4,2) and water at (3,3) were
-## one step apart with land on BOTH (4,3) and (3,2) — the boat crosses a seam that has no water in it.
-## Reproduced on a fixture; **measured 0 occurrences on the three shipped grids**, so it was latent
-## rather than visible, and a longer map is exactly where a seam like that turns up.
+## ⚠⚠ **Without this a hull slips between two land corners that touch.** The water traversals walked
+## `NEIGHBOURS` on the water byte alone, so water at (4,2) and water at (3,3) were one step apart with
+## land on BOTH (4,3) and (3,2) — the boat crosses a seam that has no water in it. Reproduced on a
+## fixture; **measured 0 occurrences on the three shipped grids**, so it was latent rather than
+## visible, and a longer map is exactly where a seam like that turns up.
+## ⚠ **It was found on the deleted harbour traversals (`_water_field`, `water_route`) and it is NOT
+## about them** — `_summon_field` and `summon_route` walk water the same way and call this for the same
+## reason. **Every 8-way water step in this file goes through here, and a new one must too.**
 ##
 ## ⚠ **`net_boat`'s water check cannot see this and never could.** It rounds the hull to a tile every
 ## sub-step, and along a squeeze that rounded tile is always one of the two water endpoints — a ceiling
@@ -589,135 +566,73 @@ func _water_field(seed_tile: int) -> PackedInt32Array:
 ## Both shoulders are inside the grid by construction: each shares one coordinate with the start and
 ## one with the end, and both of those are range-checked by the caller before this is asked.
 ##
-## ⚠ **The BEACHING hop is deliberately not asked.** `_entry_water_tile` picks the water tile a boat
-## stops on and `water_route` appends the LANDING after it; that last segment is water -> land by
-## definition, and refusing it diagonally would refuse a corner beach for a reason that has nothing to
-## do with a hull passing through anything.
+## ⚠⚠ **The BEACHING hop is deliberately not asked, and this survived the harbour deletion because it
+## is still true of `summon_route`.** A route's last segment is water -> LAND by definition — the
+## descent ends on a water tile and the caller appends the landing after it — so refusing that hop
+## diagonally would refuse a corner beach for a reason that has nothing to do with a hull passing
+## through anything. (The deleted `_entry_water_tile` picked that last water tile for a harbour route;
+## `summon_landing` carries the same fact for a summoned one.)
 func _water_step_open(fx: int, fy: int, tx: int, ty: int) -> bool:
 	if fx == tx or fy == ty:
 		return true
 	return water[fy * w + tx] != 0 or water[ty * w + fx] != 0
 
 
-## The water tile a boat aimed at `t` actually stops on: the 8-neighbour of `t` that is water AND
-## that `field` reached, cheapest first. **-1 when none, and -1 is the refusal** — an inland tile has
-## no water neighbour at all, and a coast tile on a lake this harbour cannot reach has one the field
-## never touched.
+## ⚠⚠ **`_entry_water_tile` AND `water_route` STOOD HERE AND BOTH DIED WITH THE HARBOUR.** `summon_route`
+## below is their replacement in full, and these are the facts they carried that it still obeys:
 ##
-## Ties go to the earliest `NEIGHBOURS` entry (the comparison is a strict `<`), so two runs from
-## identical rows pick the same approach and `water_route` is reproducible.
+##  · **`_entry_water_tile(field, t)`** picked the water tile a boat aimed at `t` actually stopped on —
+##    the 8-neighbour of `t` that was water AND that the harbour's field had reached, cheapest first,
+##    **-1 when none, and -1 WAS the refusal**. ⚠ **8-way and not 4-way**, which is the user's
+##    「어디든지」: on island 0 that is exactly the two corner beaches between the ortho coast (82) and
+##    the 8-way coast (84). `_summon_field`'s seed loop is the same 8-way reach written the other way
+##    round — for each WATER tile, its passable 8-neighbours — and it must stay 8-way for this reason.
+##    ⚠ Its tie-break was the LOWEST cost, strict `<`, so two runs on identical rows picked the same
+##    approach; `summon_landing`'s lowest-tile-index tie-break is that same determinism rule.
 ##
-## ⚠ **8-way and not 4-way.** A tile touching water only at a CORNER is landable now — that is the
-## user's 「어디든지」, and on island 0 it is exactly the two tiles between the ortho coast (82) and
-## the 8-way coast (84).
-func _entry_water_tile(field: PackedInt32Array, t: int) -> int:
-	var n := w * h
-	if n == 0 or t < 0 or t >= n or field.size() != n:
-		return -1
-	var tx := t % w
-	var ty := t / w
-	var best := -1
-	var best_cost := 0
-	for k in NEIGHBOURS.size():
-		var nx := tx + int(NEIGHBOURS[k][0])
-		var ny := ty + int(NEIGHBOURS[k][1])
-		if nx < 0 or ny < 0 or nx >= w or ny >= h:
-			continue
-		var nt := ny * w + nx
-		if water[nt] == 0:
-			continue
-		if field[nt] == UNREACHABLE:
-			continue
-		if best == -1 or field[nt] < best_cost:
-			best = nt
-			best_cost = field[nt]
-	return best
-
-
-## **The route a boat sails**, harbour first and landing last, in TILE units with tile centres on
-## integers — never pixels. Empty when the landing is refused, which is the same test `Battle.send`
-## refuses on, so a caller can price a crossing without asking twice.
-##
-## It walks DOWN `water_fields[harbour_idx]` from the landing's entry tile, one strictly-lower 8-way
-## water neighbour at a time, the way `step_toward` walks `flow_field` — then reverses, so index 0 is
-## the harbour. The landing tile itself is appended as the last hop: it is LAND, so it is not in the
-## field and cannot come out of the descent.
-##
-## ⚠ **The descent terminates because BFS cost drops by exactly 1 every step**, but the loop is
-## guarded at `w * h` anyway. A hung sim prints no verdict at all, and that is the failure shape that
-## silently disarmed a whole net in this repo once.
-func water_route(harbour_idx: int, landing: int) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	if not can_land_at(harbour_idx, landing):
-		return out
-	var field: PackedInt32Array = water_fields[harbour_idx]
-	var cur := _entry_water_tile(field, landing)
-	if cur < 0:
-		return out
-	var guard := 0
-	var limit := w * h
-	while true:
-		out.append(tile_point(cur))
-		if field[cur] == 0:
-			break
-		guard += 1
-		if guard > limit:
-			break
-		var cx := cur % w
-		var cy := cur / w
-		var step := -1
-		var step_cost := field[cur]
-		for k in NEIGHBOURS.size():
-			var nx := cx + int(NEIGHBOURS[k][0])
-			var ny := cy + int(NEIGHBOURS[k][1])
-			if nx < 0 or ny < 0 or nx >= w or ny >= h:
-				continue
-			var nt := ny * w + nx
-			if water[nt] == 0:
-				continue
-			if not _water_step_open(cx, cy, nx, ny):
-				continue
-			# Strictly lower, so the walk cannot sit between two equal-cost tiles forever. The same
-			# `<` (and not `<=`) that `step_toward` carries, and for the same reason.
-			if field[nt] >= step_cost:
-				continue
-			step = nt
-			step_cost = field[nt]
-		if step < 0:
-			break
-		cur = step
-	out.reverse()
-	out = _smooth_water_path(out)
-	out.append(tile_point(landing))
-	return out
+##  · **`water_route(harbour_idx, landing)`** walked DOWN a harbour's hop field from the landing's entry
+##    tile, one **strictly-lower** 8-way water neighbour at a time, then REVERSED so index 0 was the
+##    harbour, then smoothed, then appended the landing. ⚠ `summon_route` is not reversed — it descends
+##    from where the player pressed, which is already index 0 — and that is the one structural
+##    difference between them.
+##  · ⚠⚠ **The `<` and not `<=` is load-bearing and `summon_route` still carries it**: a walk that
+##    accepts an equal-cost neighbour can sit between two of them forever. `step_toward` carries it too.
+##  · ⚠⚠ **The descent terminates because BFS cost drops by exactly 1 a step, and it was guarded at
+##    `w * h` ANYWAY.** Keep that guard in every descent added here: **a hung sim prints no verdict at
+##    all**, and that is the failure shape that silently disarmed a whole net in this repo once.
+##  · The LANDING was appended AFTER the smoother and was never inside the array it saw — it is LAND,
+##    and a smoother that could see it would pull a straight line across the beach. `summon_route`
+##    repeats the rule and `_smooth_water_path`'s own header states it.
 
 
 ## **The summonable band, and where a boat born in it sails to.** ONE multi-source BFS over water,
 ## built once per `load_rows`. `sea-summon` is the design.
 ##
-## ⚠⚠ **The structural sentence: `water_route` picks the DESTINATION and derives the origin from a
-## harbour; this picks the ORIGIN and derives the destination.** There is no harbour anywhere in it.
+## ⚠⚠ **The structural sentence, and it is now the only water field left: the deleted `water_route`
+## picked the DESTINATION and derived the origin from a harbour; this picks the ORIGIN and derives the
+## destination.** There is no harbour anywhere in it, and there is no longer one anywhere else either.
 ##
 ## **The seed layer.** A `coastal` tile is *passable AND touching water on any of eight sides*, and a
 ## seed is a water tile 8-adjacent to one. Written the other way round — for each WATER tile, its
 ## passable 8-neighbours — the two definitions are the same set exactly, because the water tile doing
 ## the asking IS the water neighbour that makes its passable neighbour coastal. That is why no
-## `coastal` array is built and why nothing here ever reads `sendable`: **on all three shipped islands
-## `coastal` is 84 / 76 / 82, which is `sendable[hb]` for every harbour**, so asking would buy nothing
-## and would reintroduce the harbour.
+## `coastal` array is built here. ⚠⚠ **It is also the measurement that made the harbour deletion free:
+## on all three shipped islands `coastal` is 84 / 76 / 82, which was `sendable[hb]` for EVERY harbour**
+## — the harbour tables were computing a set this seed loop already produces, per harbour, every load.
 ##
 ## **The tie-break is the whole of the determinism.** A seed's landing is the LOWEST-INDEXED coastal
 ## neighbour, and within each BFS level the frontier is walked in ascending `(landing, tile)` order so
 ## a tile claimed at level k+1 takes the MINIMUM landing carried by any adjacent level-k tile. That is
 ## the min over all shortest paths, by induction on k — not "whatever the queue happened to do", which
-## changes silently the day `NEIGHBOURS` is reordered. Same tie-break `_entry_water_tile` and
-## `home_harbour_for` already use.
+## changes silently the day `NEIGHBOURS` is reordered. **It is the same tie-break the deleted
+## `_entry_water_tile` and `home_harbour_for` used**, and it is now the only place it is written.
 ##
-## ⚠ **`_water_step_open` is honoured exactly as `_water_field` honours it** — a boat may not squeeze a
-## diagonal between two land corners — so the band cannot cross a seam a hull cannot.
-## ⚠ **The beaching hop is deliberately not asked**, the same as `_entry_water_tile`: the seed-to-
-## landing step is water -> land by definition, and refusing it diagonally would refuse a corner beach
-## for a reason that has nothing to do with a hull passing through anything.
+## ⚠ **`_water_step_open` is honoured here** — a boat may not squeeze a diagonal between two land
+## corners — so the band cannot cross a seam a hull cannot. The deleted `_water_field` honoured it the
+## same way, and `net_coast`'s squeeze fixture is what catches a traversal that stops.
+## ⚠ **The beaching hop is deliberately not asked**: the seed-to-landing step is water -> land by
+## definition, and refusing it diagonally would refuse a corner beach for a reason that has nothing to
+## do with a hull passing through anything.
 func _summon_field() -> void:
 	summon_field_builds += 1
 	var n := w * h
@@ -862,8 +777,9 @@ func summon_landing_of(t: int) -> int:
 ## units. Empty when the press is refused, which is the same test `Battle.summon` refuses on, so the
 ## drawn line and the boat's own path are one call.
 ##
-## ⚠ **It is NOT reversed and `water_route` is.** That one descends from the landing to the harbour and
-## has to turn round; this one descends from where the player pressed, which is already index 0.
+## ⚠ **It is NOT reversed, and the deleted `water_route` was.** That one descended from the landing to
+## the harbour and had to turn round; this one descends from where the player pressed, which is already
+## index 0. **Do not add a `reverse()` here by analogy with a route that no longer exists.**
 ##
 ## ⚠⚠ **The descent is restricted to neighbours carrying the SAME landing, and that is not defensive
 ## padding.** Without it the walk drifts onto a tile whose lex-min landing is a different beach, and
@@ -908,7 +824,7 @@ func summon_route(from_tile: int) -> PackedVector2Array:
 			if int(summon_landing[nt]) != want:
 				continue
 			# Strictly lower, so the walk cannot sit between two equal-cost tiles forever — the same
-			# `<` (and not `<=`) `water_route` and `step_toward` both carry.
+			# `<` (and not `<=`) `step_toward` carries, and the deleted `water_route` carried too.
 			if summon_hops[nt] >= step_cost:
 				continue
 			step = nt
@@ -922,10 +838,12 @@ func summon_route(from_tile: int) -> PackedVector2Array:
 
 
 ## ⚠⚠ **A BFS FIELD GIVES A GRID PATH, NOT A ROUTE, AND THE DIFFERENCE IS WHAT A PLAYER SEES.**
-## `water_route` descends a HOP-COUNT field where a diagonal step and an orthogonal step both cost 1,
+## `summon_route` descends a HOP-COUNT field where a diagonal step and an orthogonal step both cost 1,
 ## so among the many equal-hop paths the fixed `NEIGHBOURS` tie-break picks one that hugs corners.
-## Measured before this pass existed: island 1's bay mouth (24,17) is vertically open from the start
-## harbour (24,31) — nothing at all in between — and the route was a 15-point **V**, seven tiles
+## ⚠ **The measurement below was taken on the deleted `water_route` and it is kept because the defect is
+## a property of any hop-count descent, this one included** — it is not evidence about a harbour.
+## Measured before this pass existed: island 1's bay mouth (24,17) is vertically open from the then
+## start harbour (24,31) — nothing at all in between — and the route was a 15-point **V**, seven tiles
 ## down-left to (17,24) and seven back up-right, **19.80 tiles against a 14.00 straight line**, with
 ## the hull halfway across heading AWAY from its target. On screen that is not a longer sail, it is
 ## **a boat that does not know the way**, and it is the first route anybody would draw. The headland
@@ -937,9 +855,10 @@ func summon_route(from_tile: int) -> PackedVector2Array:
 ## ⚠⚠ **`_straight_is_all_water` IS the predicate `speed-off-open-landing` deleted, and it is back for
 ## a DIFFERENT JOB.** As a sendability test it refused 39–42% of each island's own coastline and that
 ## is exactly what the user threw out (*"상륙 못하는 데가 있는 거지 상륙 가능한 데가 있는 게 아니야"*).
-## **Nothing here asks it whether a tile may be landed on.** `sendable` is still the water BFS and
-## nothing else; if a future reader sees a straight-line test in this file and "restores" it to
-## `load_rows`, the denylist dies a second time.
+## **Nothing here asks it whether a tile may be landed on**, and nothing may. ⚠⚠ **The trap outlives the
+## denylist that named it**: where a boat may go is a WATER BFS (`summon_hops`) and nothing else, so if
+## a future reader sees a straight-line test in this file and "restores" it to `load_rows` as a
+## reachability rule, 39–42% of every island's coastline goes dark again for the second time.
 ##
 ## ⚠ **The LANDING is not in `pts` and must not be.** The caller appends it after this returns: it is
 ## LAND, so a smoother that could see it would be free to pull a straight line across the beach.
@@ -948,8 +867,9 @@ func summon_route(from_tile: int) -> PackedVector2Array:
 ##
 ## ⚠ **Greedy and not a true funnel, deliberately.** Each index is visited once and each visit costs
 ## one line test, so this is O(n) tests rather than the O(n^2) a re-anchoring string-pull would be —
-## and `field_view` calls `water_route` EVERY FRAME while a drag is in flight. A funnel would shave a
-## few tiles off a bend; it would not change what the bay looks like, which is the whole finding.
+## and a route is rebuilt EVERY FRAME while an aim is in flight (`field_view` did it for the deleted
+## drag, and does it for `summon_route` now). A funnel would shave a few tiles off a bend; it would not
+## change what the bay looks like, which is the whole finding.
 ## ⚠ Cost, since the tests get longer as the anchor holds: a 30-tile route on the shipped islands is
 ## roughly 1,900 samples. **On the 144-column map an open route is ~40,000**, which is the one place
 ## this pass is a real per-frame cost and it is written down rather than guessed at.
@@ -1013,61 +933,30 @@ func _straight_is_all_water(a: Vector2, b: Vector2) -> bool:
 	return true
 
 
-## The harbour with the SHORTEST WATER ROUTE to `landing`, among the harbours that can reach it at
-## all (`can_land_at(h, landing)`), ties to the lowest index. **The set is never empty when `landing`
-## was ever sendable at all** — the boat sailed from one such harbour, so at worst it stays put.
-## Returns -1 only when NO harbour can reach the tile, which is exactly the refusal `Battle.send`
-## answers to.
+## ⚠⚠ **`home_harbour_for` AND `_derive_start_harbour` STOOD HERE AND BOTH ARE DELETED.** They were the
+## last two readers of the harbour tables recorded on `harbour_tiles`, and they died the moment nothing
+## in `src/` called `Battle.send` any more. **Two measured findings outlive them and must not be
+## re-learned the hard way:**
 ##
-## ⚠ **It was straight-line distance and it is not any more.** Straight-line ranking picks a harbour
-## on the far side of a headland — near as the crow flies, a long sail — and a beachhead behind that
-## headland strands itself (measured under the old rule: 2 of 46 beachheads on island 3).
+##  · **`home_harbour_for(landing)`** answered *which harbour a boat sails from and returns to*: the
+##    one with the SHORTEST WATER ROUTE among those that could reach the landing, ties to the lowest
+##    index. ⚠⚠ **It was STRAIGHT-LINE distance first and that was WRONG BY MEASUREMENT.** Straight-line
+##    ranking picks a harbour on the far side of a headland — near as the crow flies, a long sail — and
+##    a beachhead behind that headland strands itself: **2 of 46 beachheads on island 3**. Anything that
+##    ever ranks two water origins again must rank them by ROUTE, not by `distance_to`.
+##  · ⚠⚠ **Its metric was HOP COUNT and not sailed length, deliberately**, mirroring `flow_field`, which
+##    is also hop count. A diagonal hop costs 1 and sqrt(2) tiles of water, so the fewest-hops origin is
+##    occasionally not the shortest actual sail; the error is bounded by 41% on an all-diagonal route
+##    and every route on these islands is mixed. **The trap is live for `summon_hops`, which is the same
+##    kind of field: do not "fix" it with weighted edges while leaving `flow_field` unweighted**, or the
+##    two halves of the sim disagree about what "near" means on the same grid. Exact needs Dijkstra with
+##    two edge weights, which was judged a bigger change than the rule is worth.
 ##
-## ⚠⚠ **The metric is HOP COUNT and not sailed length, and that is a deliberate coarseness.** It
-## mirrors `flow_field`, which is also hop count; a diagonal hop costs 1 here and sqrt(2) tiles on the
-## water, so the fewest-hops harbour is occasionally not the shortest actual sail. Making it exact
-## needs a Dijkstra with two edge weights, which is a bigger change than this rule is worth — the
-## error is bounded by 41% on a route that is all diagonal, and every harbour on these islands is
-## reached by a mixed route. **Do not "fix" it by weighting one and leaving `flow_field` unweighted**;
-## the two would then disagree about what "near" means on the same grid.
-func home_harbour_for(landing: int) -> int:
-	var best := -1
-	var best_hops := 0
-	for hb in harbour_tiles.size():
-		if not can_land_at(hb, landing):
-			continue
-		var field: PackedInt32Array = water_fields[hb]
-		var entry := _entry_water_tile(field, landing)
-		if entry < 0:
-			continue
-		var hops := int(field[entry])
-		if best == -1 or hops < best_hops:
-			best = hb
-			best_hops = hops
-	return best
-
-
-## The harbour whose nearest reachable coast tile is farthest away, ties to the lowest tile index (which
-## `harbour_tiles`' row-major fill makes the same as the lowest harbour index). Called once from
-## `load_rows`, after `sendable` is filled.
-func _derive_start_harbour() -> int:
-	var best := -1
-	var best_d := -1.0
-	for hb in harbour_tiles.size():
-		var nearest := -1.0
-		var arr: PackedByteArray = sendable[hb]
-		for t in arr.size():
-			if arr[t] == 0:
-				continue
-			var d: float = tile_point(int(harbour_tiles[hb])).distance_to(tile_point(t))
-			if nearest < 0.0 or d < nearest - Rules.EPS:
-				nearest = d
-		if nearest < 0.0:
-			nearest = 0.0
-		if best == -1 or nearest > best_d + Rules.EPS:
-			best = hb
-			best_d = nearest
-	return best
+##  · **`_derive_start_harbour()`** ran once at the end of `load_rows` and chose where the player's army
+##    began: the harbour whose NEAREST reachable coast tile was FARTHEST away — deliberately the most
+##    exposed one — ties to the lowest tile index, which row-major fill makes the lowest harbour index.
+##    **Nothing picks a starting point on the island now**; the summon band is a ring about
+##    `summon_centre` and the player presses inside it.
 
 
 ## Breadth-first from `target_tile` over passable tiles, 8-way. Cost is hop count; unreachable tiles

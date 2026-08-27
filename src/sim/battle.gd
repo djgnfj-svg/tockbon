@@ -40,11 +40,17 @@ enum Outcome { RUNNING, WON, LOST }
 ##
 ## ⚠ **Appended, never inserted.** These are ordinals a saved run or a pinned literal could hold.
 ##
+## ⚠⚠ **`TIMEOUT` WAS REMOVED 2026-08-27 and that DID renumber the two below it.** The rule against
+## inserting is about ordinals surviving in something outside this file, and December is a demo with
+## no saves — nothing outside the running process holds one. **What did hold them is `net_shell`**,
+## which pinned the enum's size and every member's screen wording, and that pin moved with this line.
+## ⇒ **The day a save file exists, this becomes append-only for real.**
+##
 ## ⚠⚠ **BOTH ARE TRUE AT ONCE when the last body dies with nobody in reserve, and `WIPED` WINS.**
 ## The precedence is stated here and applied in exactly one place (`_phase_clock`), because "every
 ## soldier is dead" is strictly more than "the landing force is gone" — it is the stronger claim and
 ## the more useful one to read. `net_battle` pins both arms of it.
-enum Lose { NONE, TIMEOUT, WIPED, LANDING_LOST }
+enum Lose { NONE, WIPED, LANDING_LOST }
 
 ## Where a soldier is right now, on THIS island. It is per-island state and not part of the roster:
 ## `army` holds who exists and how hurt they are, and that is what carries to the next island.
@@ -100,7 +106,9 @@ const OFFMAP := Vector2(-1.0, -1.0)
 
 var grid: Grid = null
 var army: Army = null
-var time_limit := 0.0
+## ⚠ **`elapsed` STAYED when the time limit went** (2026-08-27). It is not half of a deleted rule: it
+## is how several nets prove the clock actually moved, which is the difference between a fight that ran
+## and a fight that was silently never stepped.
 var elapsed := 0.0
 
 ## One frame's facts, oldest first. Each is a Dictionary whose `kind` is an `Event`:
@@ -162,15 +170,13 @@ var soldier_target := PackedInt32Array()  # enemy index, or -1
 var _soldier_cd := PackedFloat32Array()
 var _soldier_goal: Array = []
 var _soldier_stale := PackedByteArray()
-## 1 once this body has spent its once-per-island shove (`Rules.shove_once_of`). **Per island**, which
-## is free: `setup` rebuilds it and a `Battle` is new every island.
-var _charged := PackedByteArray()
-
 # --- boats -----------------------------------------------------------------------------------------
-## **The plan AND the fleet, in one array.** There is no second structure: `send` appends here with
+## **The plan AND the fleet, in one array.** There is no second structure: `summon` appends here with
 ## `t == 0.0`, and free undo is one `remove_at` that cannot leave a duplicate behind.
+## ⚠ **`send` appended here too and it is DELETED** — it was the drag-a-body-onto-a-boat half, and it
+## had no caller in `src/` once the drag went. **`summon` is the only writer now.**
 ##
-## ⚠ **The drop CREATES the boat; the commit is what makes it move.** Every boat is still at
+## ⚠ **The press CREATES the boat; the commit is what makes it move.** Every boat is still at
 ## `t == 0.0` when `commit()` lands, so they all depart on the same frame, and there is no
 ## departure-time field. **That is a CHOICE and it is not settled** — 미정 16 in `plan-then-watch`
 ## asks whether 「끌어서 탁 놓으면은 그때부터 출발하는 거지」 means ① the drop is that boat's own commit
@@ -180,17 +186,21 @@ var _charged := PackedByteArray()
 ## reading the user's sentence as already implemented is how the repo starts lying about a decision
 ## nobody made.
 ##
-## Each entry is `{uid, phase, speed, path, cum, leg, dist, t, pos, soldiers, target, home}`.
+## Each entry is `{uid, phase, speed, path, cum, leg, dist, t, pos, soldiers, target}`.
 ## `phase` is `Phase.OUTBOUND` (one soldier aboard, sailing to `target`) or `Phase.RETURNING` (empty,
-## sailing to harbour `home`). Waiting-to-unload is OUTBOUND with `t` past arrival — there is no
-## separate waiting state.
+## sailing its own outbound path backwards). Waiting-to-unload is OUTBOUND with `t` past arrival —
+## there is no separate waiting state.
+## ⚠ **`home` was listed here and never existed.** It named the harbour a boat returned to; neither
+## `send` (deleted) nor `summon` ever wrote the key, so the list was one word longer than the
+## dictionary. A RETURNING boat reverses `path` and needs no such field — see `_phase_landings`.
 ##
 ## ⚠⚠ **`from` and `to` are DELETED and a boat is a POLYLINE now** (`speed-off-open-landing`, 2.3).
 ## Landing became a denylist, which means a boat sails a WATER ROUTE around a headland instead of a
 ## straight line, so two endpoints can no longer describe a crossing:
 ##
-##  · `path` — `PackedVector2Array` in TILE units, harbour at index 0 and the landing last, straight
-##    out of `grid.water_route`. Never rebuilt from geometry anywhere else in this file
+##  · `path` — `PackedVector2Array` in TILE units, the boat's origin at index 0 and the landing last,
+##    straight out of `grid.summon_route`. Never rebuilt from geometry anywhere else in this file.
+##    ⚠ Index 0 was the HARBOUR under the deleted `grid.water_route`; it is the pressed water tile now
 ##  · `cum` — `PackedFloat32Array`, prefix arc length along `path`, `cum[0] == 0.0`. `pos` is found by
 ##    walking it, which is what makes the boat follow the water rather than cut the corner
 ##  · `leg` — which segment the hull is on. **Stored by the SIM and read by the view**, so the drawn
@@ -198,7 +208,7 @@ var _charged := PackedByteArray()
 ##    array. `t` is monotone, so advancing it is O(1) amortised and exact
 ##  · `dist` — the path's TOTAL length, floored at `Rules.EPS`. Still what `_arrived` tests
 ##
-## **The append order IS the drop order**, and `_phase_landings` reads it: two boats aimed at one tile
+## **The append order IS the press order**, and `_phase_landings` reads it: two boats aimed at one tile
 ## arrive on the same sub-step, and whoever unloads first stands on the target tile.
 var boats: Array = []
 
@@ -238,10 +248,9 @@ var _lose := Lose.NONE
 ##
 ## `spawns` is `islands.gd`'s `spawns_of` output: `[{"type_id": int, "tile": int}]`.
 @warning_ignore("shadowed_variable")
-func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
+func setup(grid: Grid, army: Army, spawns: Array) -> void:
 	self.grid = grid
 	self.army = army
-	self.time_limit = time_limit
 	elapsed = 0.0
 	events = []
 	_outcome = Outcome.RUNNING
@@ -324,15 +333,16 @@ func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
 	_soldier_stale.resize(roster)
 	# resize on a fresh array zero-fills, so nobody has charged yet. **Per island for free**: a
 	# `Battle` is new every island, so 「몸당 섬당 한 번」 needs no reset anywhere else.
-	_charged = PackedByteArray()
-	_charged.resize(roster)
 	soldier_pos = []
 	_soldier_goal = []
 	for i in roster:
-		# A soldier who died on an earlier island is DEAD here, never RESERVE. Leaving them in
-		# RESERVE would make a corpse draggable at the harbour and sendable to a beach — `send`
-		# refuses anything that is not RESERVE, and this line is what gives that test something
-		# to refuse.
+		# ⚠⚠ **A soldier who died on an earlier island is DEAD here, never RESERVE, and THIS IS NOW THE
+		# ONLY LINE THAT ENFORCES IT.** It used to be half of a pair: `send` refused anything that was
+		# not RESERVE, and this line was what gave that refusal a corpse to refuse — leaving them in
+		# RESERVE would have made a dead body draggable at the harbour and sendable to a beach.
+		# **`send` and the harbour are deleted; this line is not.** `summon` spends bodies through
+		# `army.living_ids_of_type` and filters on RESERVE the same way, so a corpse left RESERVE here
+		# would sail again.
 		soldier_state[i] = SoldierState.RESERVE if army.alive[i] != 0 else SoldierState.DEAD
 		soldier_target[i] = -1
 		_soldier_cd[i] = 0.0
@@ -343,63 +353,33 @@ func setup(grid: Grid, army: Army, spawns: Array, time_limit: float) -> void:
 
 # --- the plan ------------------------------------------------------------------------------------
 
-## Puts soldier `soldier_id` on a boat aimed at `tile`, and returns that boat's **uid**, or **-1** on
-## refusal with **nothing at all changed**. One drag, one boat, one soldier — there is no fleet, no
-## capacity and no queue to join, so the caller names both halves and this call has no choice of its
-## own to make.
+## ⚠⚠ **`send(soldier_id, tile)` STOOD HERE AND IT IS DELETED — THE HARBOUR WENT WITH IT.** It put one
+## soldier on one boat aimed at `tile` and returned that boat's uid, or -1 with nothing at all changed.
+## **What killed it: the player used to DRAG a body onto a boat that departed from a harbour, and that
+## drag was deleted.** From that moment this function had zero callers in `src/`, and every harbour
+## table in `grid.gd` it was the last consumer of went with it — see the deletion block on
+## `Grid.harbour_tiles`. `summon()` below is the replacement, whole: **the player presses on the water
+## inside a band and a boat is BORN there**, so there is no harbour to depart from and no soldier named
+## by the caller — a slot spends a body of its own.
 ##
-## ⚠ **The return is an int and uid 0 is the FIRST boat of every island**, so `if battle.send(...)`
-## is a bug that refuses the common case. Every caller compares `>= 0`.
+## **The knowledge it carried that outlives it:**
 ##
-## Refused when: already committed · no grid or army · `soldier_id` out of range · that soldier is not
-## RESERVE (dead, already sent, or already ashore) · **no harbour can see `tile`**.
-##
-## ⚠ **`grid.home_harbour_for` is the one predicate for both the refusal and the departure point**, and
-## the shell's refusal mark is drawn off THIS call's own -1, so the screen can never deny a tile this
-## call allows. It returns the harbour with the shortest WATER ROUTE among those that can reach the
-## landing, so a boat departs from and returns to the same harbour by construction.
-##
-## ⚠ **A route of fewer than two points is a refusal too**, and it is a separate line rather than an
-## assumption: `home_harbour_for` and `water_route` agree by construction today (both refuse on
-## `can_land_at`), and the day one of them grows a case the other has not, a one-point path would
-## divide by a zero-length crossing instead of barking.
-func send(soldier_id: int, tile: int) -> int:
-	if _committed:
-		return -1
-	if grid == null or army == null:
-		return -1
-	if soldier_id < 0 or soldier_id >= soldier_state.size():
-		return -1
-	if soldier_state[soldier_id] != SoldierState.RESERVE:
-		return -1
-	var hb := grid.home_harbour_for(tile)
-	if hb < 0:
-		return -1
-
-	var path := grid.water_route(hb, tile)
-	if path.size() < 2:
-		return -1
-	var cum := _arc_lengths(path)
-	var uid := _next_boat_uid
-	_next_boat_uid += 1
-	soldier_state[soldier_id] = SoldierState.TRANSIT
-	soldier_pos[soldier_id] = path[0]
-	boats.append({
-		"uid": uid,
-		"phase": Phase.OUTBOUND,
-		"speed": Rules.BOAT_SPEED,
-		"path": path,
-		"cum": cum,
-		"leg": 0,
-		"dist": maxf(cum[cum.size() - 1], Rules.EPS),
-		"t": 0.0,
-		# `pos` is set here and not only by the first `_phase_boats` call: before the commit `step`
-		# never runs at all, so the whole planning screen would have nothing to draw the boat at.
-		"pos": path[0],
-		"soldiers": [soldier_id],
-		"target": tile,
-	})
-	return uid
+##  · ⚠⚠ **THE RETURN IS AN INT AND UID 0 IS THE FIRST BOAT OF EVERY ISLAND**, so `if battle.summon(...)`
+##    is a bug that refuses the common case exactly as `if battle.send(...)` was. **Every caller
+##    compares `>= 0`.** `summon` repeats this on its own header because it is the one that is live.
+##  · ⚠ **ONE predicate decided both the refusal and the route, deliberately** — here `grid.home_harbour_for`,
+##    in `summon` it is `grid.can_summon_at`. The shell's refusal mark is drawn off the call's OWN -1,
+##    which is what makes it impossible for the screen to deny a tile the sim allows.
+##  · ⚠ **A route of fewer than two points was a SEPARATE refusal line and not an assumption**, and
+##    `summon` still carries that line. The two predicates agree by construction today; the day one of
+##    them grows a case the other has not, a one-point path divides by a zero-length crossing instead of
+##    barking.
+##  · ⚠ **It refused anything that was not `RESERVE`** — dead, already sent, or already ashore — which
+##    is why `setup` puts a soldier who died on an earlier island straight into `DEAD` rather than
+##    `RESERVE`. **That line in `setup` still says so**, and it is now the only place that rule is
+##    written; do not "simplify" it because the function that used to refuse a corpse is gone.
+##  · ⚠ It refused while `_committed`, and `summon` refuses on the same flag. **Planning is before the
+##    start button and nothing may be added after it.**
 
 
 ## The bodies slot `slot` may still put on a boat: living, of that slot's type, and still RESERVE.
@@ -650,19 +630,13 @@ func enemies_left() -> int:
 	return n
 
 
-func time_left() -> float:
-	return maxf(0.0, time_limit - elapsed)
-
-
-## Docks are gone; every harbour lookup goes through `grid` (`boat-and-landing`, 4.4's call table).
-func harbour_count() -> int:
-	return 0 if grid == null else grid.harbour_tiles.size()
-
-
-func harbour_tile(h: int) -> int:
-	if grid == null or h < 0 or h >= grid.harbour_tiles.size():
-		return -1
-	return int(grid.harbour_tiles[h])
+## ⚠ **`harbour_count()` and `harbour_tile(h)` STOOD HERE AND ARE DELETED.** They were pure pass-throughs
+## to `grid.harbour_tiles` — the last trace of the deleted `dock_tiles`, kept so that "every harbour
+## lookup goes through `grid`" (`boat-and-landing`, 4.4's call table) rather than through a second
+## table on `Battle`. **Nothing in `src/` ever called either**, and with `send` gone nothing ever will.
+## ⚠ **`grid.harbour_tiles` itself SURVIVES** and is where a harbour lookup would go if one ever came
+## back — its own header says who still reads it and why. **Do not re-add a forwarder on `Battle`**: the
+## rule these two obeyed was that a fact about the board lives on the board, in one place.
 
 
 ## Soldiers standing on the island right now. The view draws these and nothing else on the ground.
@@ -750,12 +724,16 @@ func _phase_boats(dt: float) -> void:
 ## only on success does it turn RETURNING and **sail its own outbound path BACKWARDS**.
 ##
 ## ⚠⚠ **The return leg REVERSES `path` in place and never recomputes it** (`speed-off-open-landing`,
-## 2.3). `home` was decided by `send` off the same `home_harbour_for(target)` call the refusal test
-## used, and `path` came out of that same harbour, so asking `water_route` again here would be one
-## fact computed in two places — and the two would be free to disagree the day the route's tie-break
-## moves. `dist` and `home` are therefore NOT recomputed either: a reversed polyline has exactly the
+## 2.3). The outbound `path` already IS the crossing, so asking the grid for a route a second time here
+## would be one fact computed in two places — and the two would be free to disagree the day the route's
+## tie-break moves. `dist` is therefore NOT recomputed either: a reversed polyline has exactly the
 ## length of the polyline. `cum` IS rebuilt, because a prefix sum is not symmetric under reversal
 ## unless every segment is; `leg` and `t` go back to 0 together.
+## ⚠ **This paragraph used to name a `home` key too, decided by the deleted `send` off the same
+## `home_harbour_for(target)` call its refusal used.** There is no harbour to go home to now: a boat
+## reverses onto the water tile it was summoned at. **`home` is not in the dictionary and was not
+## deleted by this pass — `send` never wrote it**, so the old wording was already describing a key that
+## did not exist. Do not restore it from this comment.
 ##
 ## **RETURNING** leaves `boats` on arrival and the boat ceases to exist: 「배는 왕복」 ends there,
 ## with nothing to reload and nothing to re-launch.
@@ -830,9 +808,12 @@ func _phase_targeting() -> void:
 		if held >= 0 and enemy_alive[held] != 0 \
 				and _within(soldier_pos[i], enemy_pos[held], _soldier_reach(i)):
 			continue
-		# ⚠ The pack decides WHERE it looks from; the body decides HOW HIGH it looks from. Reading the
-		# height off the seek point instead had wolves on the ground aiming from a plateau.
-		soldier_target[i] = _nearest_enemy(_seek_point_of(i), grid.height_at(soldier_pos[i]))
+		# ⚠ **A body looks from where it STANDS, and that used to be a decision rather than a default.**
+		# `_nearest_enemy(_seek_point_of(i), grid.height_at(soldier_pos[i]))` stood here: the pack handed
+		# it a centre of mass to look from, and the height had to be passed alongside because that centre
+		# is not a place anybody stands. **Both halves died with 무리사냥 on 2026-08-27** — see the
+		# deletion block where `_seek_point_of` was, and the one on `_dist` for the height.
+		soldier_target[i] = _nearest_enemy(soldier_pos[i])
 
 	for e in enemy_alive.size():
 		if enemy_alive[e] == 0:
@@ -1004,11 +985,11 @@ func _hit_enemies(from_id: int, primary: int, damage: float, area: float) -> voi
 				splash.append(e)
 	# Every lit status tier rides every allied blow, onto everyone the blow actually hit. Only HERE —
 	# `_hit_soldiers` has no twin, so an enemy blow can never leave a status on a soldier.
-	_apply_statuses(from_id, primary, splash)
-	# 다람쥐 pulls what it bites in, 소 drives it away — one signed number in `Rules.SPECIES_SHOVE`.
-	# Same place and same victims as the statuses above, for the same reason: what a blow does to what
-	# it hit belongs on one line, not two.
-	_shove_victims(from_id, primary, splash)
+	_apply_statuses(primary, splash)
+	# ⚠ **A `_shove(...)` call stood on the next line and went with `Rules.SPECIES_SHOVE`** (see the
+	# deletion block further down). The rule it left behind is the one the statuses above still obey:
+	# **what a blow does to what it hit belongs on ONE line, with the same victims** — the primary and
+	# the splash list, resolved once, never walked a second time per effect.
 	events.append({
 		"kind": Event.ATTACK,
 		"from": from_id,
@@ -1044,89 +1025,36 @@ func _hit_soldiers(from_id: int, primary: int, damage: float, area: float) -> vo
 	})
 
 
-## Moves everyone this blow hit, if the attacker's species is in `Rules.SPECIES_SHOVE`. Nothing at
-## all for a species with no row — the table lookup answers 0.0 and this returns before touching
-## anything.
-func _shove_victims(from_id: int, primary: int, splash: PackedInt32Array) -> void:
-	if from_id < 0 or from_id >= army.type_id.size():
-		return
-	var st := int(army.type_id[from_id])
-	var tiles := Rules.shove_tiles_of(st)
-	if absf(tiles) <= Rules.EPS:
-		return
-	var once := Rules.shove_once_of(st)
-	if once and _charged[from_id] != 0:
-		return
-	# ⚠⚠ **THE FLAG IS SET BY THE MOVE AND NOT BY THE ATTEMPT.** Setting it first spent 소's whole
-	# island on a target with its back to a wall — `_shove` refuses to put a body on a blocked tile,
-	# so the charge was consumed by a blow that moved nobody and every later blow was refused for a
-	# charge that never happened. **A once-per-island rule has to be spent by the thing it names.**
-	var moved := _shove(from_id, primary, tiles)
-	for v in splash:
-		moved = _shove(from_id, int(v), tiles) or moved
-	if once and moved:
-		_charged[from_id] = 1
-
-
-## Moves enemy `e` up to `tiles` along the line to soldier `from_id` — **positive is TOWARD the
-## attacker** — and stops at the last tile on the way that a body may actually stand on.
+## --- THE SHOVE AND THE CHARGE: DELETED 2026-08-27 --------------------------------------------------
+## `_shove_victims`, `_shove` and the `_charged` column are gone with `Rules.SPECIES_SHOVE`. The table
+## had been `[]` since 2026-08-26: its two rows were 다람쥐's pull and 소's charge, and both species
+## left `UNITS` with the side swap. **`shove_tiles_of` therefore returned 0.0 on every blow**, so every
+## attack in the game ran the guard and then returned, one lookup per hit, forever.
 ##
-## ⚠⚠ **FOUR THINGS HAVE TO MOVE TOGETHER AND THREE OF THEM ARE INVISIBLE.** Writing `enemy_pos`
-## alone reads as a shove for exactly one sub-step and then undoes itself:
-##  · `_phase_movement`'s standing branch glides the body back toward `_enemy_goal`
-##  · `_walk` re-picks that same stale goal on the branch that walks
-##  · `grid.reserved` still holds the tile the body LEFT, so two bodies end up holding one tile and a
-##    doorway is half as wide with nothing on screen to explain it
-## ⇒ `enemy_pos`, `_enemy_goal` and `_settle` all move here, and `_enemy_stale` is cleared because
-## this call IS the settle.
+## ⚠⚠ **THREE THINGS IT KNEW ARE WORTH MORE THAN THE CODE, AND THE FIRST IS A USER DECISION.**
 ##
-## ⚠ **It walks tile by tile rather than jumping to the endpoint.** A jump can land past a wall, past
-## a body, or on top of the attacker; stopping at the last legal tile is what makes 「지나쳐 넘어가지
+## 1. **A body never changes tier by being pushed** (티켓 19, the user: 「높은 데서 밀리면 안 떨어져.
+##    안 떨어지는 걸로」). Before that was written in, 소's charge shoved enemies UP onto a plateau and
+##    다람쥐's pull dragged them DOWN off one — the decision inverted, by the same omission that once
+##    put landed bodies on top of a wall: placement that never consulted the tier. **A shove is not a
+##    step and may not use a stair either**, because a body flung a tier up a staircase is the falling
+##    rule wearing a different hat. ⇒ **Anything that moves a body without it walking inherits this.**
+##
+## 2. **Four things move together and three of them are invisible.** Writing `enemy_pos` alone reads as
+##    a shove for exactly one sub-step and then undoes itself: `_phase_movement`'s standing branch
+##    glides the body back toward `_enemy_goal`, `_walk` re-picks that same stale goal, and
+##    `grid.reserved` still holds the tile the body LEFT — so two bodies hold one tile and a doorway is
+##    half as wide with nothing on screen to explain it. ⇒ `enemy_pos`, `_enemy_goal`, `_settle` and
+##    `_enemy_stale` all had to move in one place.
+##
+## 3. **A once-per-island charge is spent by the MOVE, never by the attempt.** Setting the flag first
+##    spent 소's whole island on a target with its back to a wall: the shove refused to place a body on
+##    a blocked tile, the charge was consumed by a blow that moved nobody, and every later blow was
+##    refused for a charge that never happened.
+##
+## ⚠ **It walked tile by tile rather than jumping to the endpoint** — a jump can land past a wall, past
+## a body, or on top of the attacker, and stopping at the last legal tile is what made 「지나쳐 넘어가지
 ## 않는다」 a property of the search instead of a rule somebody has to remember.
-## **Returns whether anything actually moved**, which is what `_shove_victims` spends 소's
-## once-per-island charge on.
-func _shove(from_id: int, e: int, tiles: float) -> bool:
-	if e < 0 or e >= enemy_alive.size() or enemy_alive[e] == 0:
-		return false
-	var here: Vector2 = enemy_pos[e]
-	var away: Vector2 = here - soldier_pos[from_id]
-	if away.length() <= Rules.EPS:
-		return false
-	var dir := -away.normalized() if tiles > 0.0 else away.normalized()
-	var uid := ENEMY_UID_BASE + e
-	var best := here
-	var want := absf(tiles)
-	var steps := int(ceil(want))
-	# ⚠⚠ **BODIES NEVER CHANGE TIER BY BEING PUSHED** (티켓 19, the user: 「높은 데서 밀리면 안 떨어져.
-	# 안 떨어지는 걸로」). Before this, 소's charge shoved enemies UP onto a plateau and 다람쥐's pull
-	# dragged them DOWN off one — the decision inverted, by the same omission that put landed bodies on
-	# top of the wall: placement that never consulted the tier.
-	# ⚠ **The body's OWN level, not `can_step`.** A shove is not a step: it may not use a stair either,
-	# because a body flung a tier up a staircase is the falling rule wearing a different hat.
-	var stand_level := grid.level_of(_tile_of(here))
-	for k in range(1, steps + 1):
-		var reach := minf(float(k), want)
-		var tile := _tile_of(here + dir * reach)
-		if tile < 0:
-			break
-		var candidate := _point_of_tile(tile)
-		if candidate.distance_to(best) <= Rules.EPS:
-			continue
-		if grid.passable[tile] == 0:
-			break
-		if grid.level_of(tile) != stand_level:
-			break
-		var holder := int(grid.reserved[tile])
-		if holder >= 0 and holder != uid:
-			break
-		best = candidate
-	if best.distance_to(here) <= Rules.EPS:
-		return false
-	enemy_pos[e] = best
-	_enemy_goal[e] = best
-	_settle(uid, best)
-	_enemy_stale[e] = 0
-	return true
 
 
 func _status_at(s: int, e: int) -> int:
@@ -1159,12 +1087,26 @@ func status_mag_of(s: int, e: int) -> float:
 ## here.
 ##
 ## ⚠⚠ **EVERY SOURCE FOR THIS BLOW IS RESOLVED BEFORE ANYTHING IS WRITTEN, AND THE STRONGEST WINS.**
-## A blow has two sources of a status now — the equipment tag tiers and the attacker's own species —
-## and they can name the SAME status. Writing them one after the other let whichever came last stand,
+## A blow HAD two sources of a status — the equipment tag tiers and the attacker's own species — and
+## they could name the SAME status. Writing them one after the other let whichever came last stand,
 ## which measured as a 까마귀 wearing a full bleed set biting for 0.5 a second where a 늑대 wearing the
 ## same set bit for 1.5: **the crow was PENALISED by its own passive**, and by equipment fitted
 ## anywhere on the board, since `tag_count` sums the whole horde.
-func _apply_statuses(from_id: int, primary: int, splash: PackedInt32Array) -> void:
+##
+## ⚠⚠ **THE SPECIES ARM IS DELETED (2026-08-27) AND THE RESOLUTION IS KEPT.** It read
+## `Rules.species_status_of(army.type_id[from_id])` — the PLAYER's roster — against a table holding one
+## CROW row, and the crow has been an enemy since 2026-08-26, so **it answered `{}` on every blow struck
+## in the game.** What is left is one source, so `best` now takes one write per `TAG_STATUS_TIERS` row
+## and `stronger_status_tier` fires only its empty-argument arms. ⇒ **The fold is NOT dead weight and
+## must not be flattened into a plain assignment**: it is the shape that makes 「a second source is a
+## row, not a rewrite」 true, and flattening it re-opens exactly the defect above. The measured story is
+## in `rules.gd` where `SPECIES_STATUS` stood, **including the check it silently disarmed.**
+##
+## ⚠ **The attacker's id went with that arm.** The signature was `(from_id, primary, splash)` and
+## `from_id` existed ONLY to ask which species was biting; **what a blow leaves now depends on the
+## BOARD and not on who swung**, so the caller no longer passes it. A source that cares who the attacker
+## is puts the argument back — and goes through `stronger_status_tier` when it does.
+func _apply_statuses(primary: int, splash: PackedInt32Array) -> void:
 	var best := {}
 	for r in Rules.tag_status_row_count():
 		var tier := Rules.tag_status_tier_at(r, army.loadout.tag_count(Rules.tag_status_tag_of(r)))
@@ -1172,15 +1114,6 @@ func _apply_statuses(from_id: int, primary: int, splash: PackedInt32Array) -> vo
 			continue
 		var s := Rules.tag_status_status_of(r)
 		best[s] = Rules.stronger_status_tier(s, best.get(s, {}), tier)
-	# ⚠ **The attacker's SPECIES is a second SOURCE and not a second mechanism** (티켓 15): 까마귀
-	# bites bleed into whatever it hits with no equipment at all. Same `_put_status`, same overwrite
-	# rule, same generic `_phase_status` walk — a species row and a tag tier are indistinguishable by
-	# the time they reach the clock.
-	if from_id >= 0 and from_id < army.type_id.size():
-		var own := Rules.species_status_of(int(army.type_id[from_id]))
-		if not own.is_empty():
-			var os := int(own["status"])
-			best[os] = Rules.stronger_status_tier(os, best.get(os, {}), own)
 	for raw in best:
 		var st := int(raw)
 		var win: Dictionary = best[st]
@@ -1270,14 +1203,16 @@ func _phase_clock(dt: float) -> void:
 		_lose = Lose.WIPED if army.living_count() == 0 else Lose.LANDING_LOST
 		return
 	# ⚠⚠ **THE TIME LIMIT NO LONGER DECIDES ANYTHING** (2026-08-24, the user: 「제한 시간 안에 클리어
-	# 조건은 일단 지워」). An island now ends when the enemies are gone or the landing force is, and it
-	# can run as long as it takes.
+	# 조건은 일단 지워」). An island ends when the enemies are gone or the landing force is, and it can
+	# run as long as it takes.
 	#
-	# ⚠ **`time_limit` and `time_left()` are kept and `Lose.TIMEOUT` is kept**, unproducible, because
-	# 「일단」 is in the sentence: the number still comes out of `islands.gd`, the loss screen still has its
-	# wording, and putting the rule back is this branch and nothing else. **Nothing judges by the clock
-	# any more** — the HUD countdown went with it, because a clock counting down to nothing is the exact
-	# shape of code that pretends to work.
+	# ⚠⚠ **AND ON 2026-08-27 THE REST OF IT WENT TOO.** `time_limit`, `time_left()`, `Lose.TIMEOUT`,
+	# `Islands.TIME_LIMIT_SEC` and the loss screen's 「패배 — 시간 초과」 had all been kept unproducible
+	# on the strength of the 「일단」 in that sentence — three days, a fourth argument threaded through
+	# `setup` at every call site, and an enum value the code openly documented as unreachable.
+	# **A rule nothing can produce is not a rule kept warm, it is a rule that lies about existing.**
+	# ⇒ Putting the clock back is a branch here plus a number, and that is cheaper than carrying a
+	# fourth parameter no caller has a real value for.
 
 
 ## ⚠⚠ **THE FIGHT IS OVER WHEN NOBODY IS STILL IN IT, AND A SOLDIER AT THE HARBOUR IS NOT IN IT.**
@@ -1448,15 +1383,20 @@ func _enemy_reach(e: int) -> float:
 ## a zero in it.** Every board in the game was flat until this ticket and most still are; taking the
 ## same expression as before on those boards is what makes "no existing literal moves" a property of
 ## the code instead of a hope about floating point.
+##
+## ⚠⚠ **`_dist_from_height(a, a_h, b)` STOOD BESIDE THIS AND IS FOLDED BACK IN, 2026-08-27.** It was
+## this same measurement with `a`'s height SUPPLIED instead of looked up, and it existed for exactly one
+## caller: **the pack's seek point was a mean of several bodies' positions, and the ground under a mean
+## is not the ground anybody is standing on.** With 무리사냥 deleted every `a` this file measures from is
+## a place a body is actually standing, so the height is read off `a` here and the split has no second
+## side left.
+## ⚠ **The trap it was built to close is still real and is why this paragraph is here**: three wolves on
+## the flat with one packmate on a plateau averaged onto a plateau tile, so all four measured from **one
+## tier up**, preferred the enemy above, and walked into the wall. ⇒ **Anything that ever measures from
+## a point NOBODY STANDS ON — a mean, a formation anchor, a cursor — must carry its own height rather
+## than let this function round one off the ground.**
 func _dist(a: Vector2, b: Vector2) -> float:
-	return _dist_from_height(a, grid.height_at(a), b)
-
-
-## The same measurement with `a`'s height supplied rather than looked up. **One caller needs it**:
-## the pack's seek point is a mean of positions and the ground under that mean is not the ground
-## anybody is standing on. See `_nearest_enemy`.
-func _dist_from_height(a: Vector2, a_h: float, b: Vector2) -> float:
-	var dh := a_h - grid.height_at(b)
+	var dh := grid.height_at(a) - grid.height_at(b)
 	if absf(dh) <= Rules.EPS:
 		return a.distance_to(b)
 	return sqrt(a.distance_squared_to(b) + dh * dh)
@@ -1472,64 +1412,63 @@ func _within(a: Vector2, b: Vector2, reach: float) -> bool:
 	return _dist(a, b) <= reach + Rules.EPS
 
 
-## Where soldier `i` LOOKS FROM when it picks a target — its own tile for most species, and the
-## centre of mass of its nearby own kind (itself included) for a species with a `Rules.SPECIES_PACK`
-## row.
+## --- 무리사냥: `_seek_point_of` DELETED 2026-08-27 -------------------------------------------------
+## It answered **where soldier `i` LOOKS FROM when it picks a target** — its own tile for most species,
+## and the centre of mass of its nearby own kind (itself included) for a species with a
+## `Rules.SPECIES_PACK` row. It is gone with that table, with `Rules.pack_radius_of`, with its one call
+## site in `_phase_targeting`, and with `tools/probe/pack_spread.gd`.
 ##
-## ⚠⚠ **This one function is the whole of 무리사냥, AND IT HAS NOT RUN SINCE THE SIDE SWAP** (2026-08-26).
-## Same point, same pick, so the pack bites one enemy; `_phase_movement` then walks each of them at
-## that enemy, so the pack ARRIVES as one body. Nothing else in this file knows a pack exists.
+## ⚠⚠ **WHY IT WAS DEAD.** `soldier_*` is the PLAYER's side and `Army.register_species` refuses any row
+## whose `Rules.side_of` is not PLAYER. The only player row is SWORDSMAN and it had no pack row; the one
+## row in the table was WOLF, **an enemy since the side swap of 2026-08-26**. ⇒ `radius <= 0.0` returned
+## on the first line every single time and the huddle below it never ran for a whole day. **The enemy
+## side has no pack behaviour at all**, so nothing on the board was doing this.
 ##
-## ⚠⚠ **WHY IT IS DEAD, AND WHY IT IS KEPT.** `soldier_*` is the PLAYER's side, and `Army.register_species`
-## refuses any `type_id` whose `Rules.side_of` is not `PLAYER`. The only player row is SWORDSMAN, which
-## has no `Rules.SPECIES_PACK` entry, so `radius <= 0.0` returns on the first line **every single time**
-## and the huddle below never runs. The one row in that table is WOLF, and the wolf is an enemy now.
-## ⇒ **The enemy side has no pack behaviour at all**, and the table is waiting for the day it gets one.
-## **Do not read the loop below as live behaviour, and do not delete it to chase a green** — it is the
-## worked answer to "how does a pack aim", and rewriting it later costs more than keeping it.
+## ⚠⚠ **IT WAS KEPT ONE DAY LONGER ON 「it is the worked answer to *how does a pack aim*, and rewriting
+## it later costs more than keeping it」 — AND THAT IS THE CLAIM THIS DELETION REJECTS.** The worked
+## answer is four lines of averaging; what actually cost the ticket is the REASONING, and the reasoning
+## is written down here where it cannot rot against the code:
 ##
-## ⚠ **Ashore only, and its own species only.** A body still on a boat has no place on the ground to
-## average, and averaging across species would make a wolf's aim depend on where the crows are.
-func _seek_point_of(i: int) -> Vector2:
-	var st := int(army.type_id[i])
-	var radius := Rules.pack_radius_of(st)
-	if radius <= 0.0:
-		return soldier_pos[i]
-	var here: Vector2 = soldier_pos[i]
-	var sum := here
-	var n := 1
-	for k in soldier_state.size():
-		if k == i or soldier_state[k] != SoldierState.ASHORE:
-			continue
-		if int(army.type_id[k]) != st:
-			continue
-		# ⚠⚠ **THIS COMMENT USED TO SAY A PACKMATE A TIER UP "DROPS OUT AT 2.236" AND THAT WAS
-		# ARITHMETIC NOBODY DID.** (The figure is 1.414 now that a tier is one tile, which only makes
-		# the point stronger.) A wolf's pack radius is 6.0; neither number is near it, so the
-		# packmate stays in the huddle and always did. The height belongs in this test because the
-		# radius is a distance and every distance in this file is measured the same way — **not because
-		# it excludes anybody at the sizes this game actually uses.**
-		if _dist(here, soldier_pos[k]) > radius + Rules.EPS:
-			continue
-		sum += soldier_pos[k]
-		n += 1
-	return sum / float(n)
+##  1. ⚠⚠ **ONE POINT BOUGHT BOTH HALVES.** Picking from a shared point makes the pack bite the same
+##     enemy, and `_phase_movement` then walks each of them at THAT enemy — so the pack ARRIVES as one
+##     body. **There was no formation code and there must not be one**: a second rule for the shape is a
+##     second thing to keep in step with the first.
+##  2. ⚠ **Ashore only, and its own species only.** A body still on a boat has no place on the ground to
+##     average, and averaging across species makes a wolf's aim depend on where the crows are.
+##  3. ⚠⚠ **THE MEAN IS NOT A PLACE ANYBODY STANDS**, which is why `_nearest_enemy` took a height beside
+##     it. Read the height off the mean instead and three wolves on the flat with one packmate on a
+##     plateau all aim from a tier up. **That trap is recorded on `_dist` and on `_nearest_enemy`**, and
+##     it outlives the pack: it belongs to anything that ever measures from a mean.
+##  4. ⚠⚠ **AND A TRAP SOMEBODY ALREADY FELL INTO, IN THIS FUNCTION'S OWN COMMENT.** It claimed a
+##     packmate one tier up 「drops out at 2.236」 — **arithmetic nobody did.** The figure was 2.236 only
+##     while a tier was two tiles and is 1.414 now, and the wolf's radius was **6.0**: neither number is
+##     anywhere near it, so the packmate stayed in the huddle and always had. ⇒ **A number in a comment
+##     that nobody has divided is a number that is wrong**, and this one survived two rounds of review.
+##
+## ⚠⚠ **AND THE RULE DID NOT DO WHAT ITS NAME SAYS — measured, not suspected.** It was a TARGETING rule
+## with no authority over formation: pack-on and pack-off produced the SAME spread to two decimals. The
+## numbers, the reverted cohesion throttle, and the finding that **the group is already together** live
+## in `rules.gd` where `SPECIES_PACK` stood. **Read that block before building 「합쳐지게 해줘」 again.**
 
 
-## Nearest living enemy to `from`, measured from the height `from_h`.
+## Nearest living enemy to `from`. **`from` is the asking body's own position**, so the height comes
+## off it through `_dist` like every other measurement in this file.
 ##
-## ⚠⚠ **THE HEIGHT IS PASSED IN AND NOT LOOKED UP, BECAUSE `from` IS NOT ALWAYS A PLACE ANYONE
-## STANDS.** The pack's seek point is the MEAN of several bodies' positions, and `_dist` would read its
-## height off whatever tile that mean happens to round onto — so three wolves on the ground with one
-## packmate on a plateau were aiming from **two tiles up**, preferring the enemy above, and walking
-## into the wall. The asking body's own tile is the only height that means anything here.
-func _nearest_enemy(from: Vector2, from_h: float) -> int:
+## ⚠⚠ **IT TOOK A SECOND ARGUMENT — `from_h` — UNTIL 2026-08-27, AND THE REASON IS WORTH KEEPING.**
+## 무리사냥 handed this function the pack's seek point, which is the MEAN of several bodies' positions,
+## and `_dist` reads a height off whatever tile a point rounds onto: **three wolves on the flat with one
+## packmate on a plateau were aiming from one tier up, preferring the enemy above, and walking into the
+## wall.** So the asking body's own height was passed in beside the mean. **With the pack deleted every
+## `from` is a place a body stands and the pair collapses to one** — but the trap is not gone, it is
+## unreachable: ⇒ **the day anything asks this from a point NOBODY STANDS ON, the height comes back as a
+## parameter and does not get rounded off the ground.** See the deletion block on `_dist`.
+func _nearest_enemy(from: Vector2) -> int:
 	var best := -1
 	var best_d := 0.0
 	for e in enemy_alive.size():
 		if enemy_alive[e] == 0:
 			continue
-		var d: float = _dist_from_height(from, from_h, enemy_pos[e])
+		var d: float = _dist(from, enemy_pos[e])
 		if best == -1 or d < best_d - Rules.EPS:
 			best = e
 			best_d = d

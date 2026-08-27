@@ -70,8 +70,9 @@ staircase.** Change one, change the other in the same edit, and say so in the re
    ```
    .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/piece_viewer.gd -- --glb res://assets/terrain/island.glb --at X,Z --zoom N --shot1
    ```
-   `--at` is in tiles from the mesh's own middle · `--shot1` saves three yaws and quits · `--shot` walks
-   every mesh instead · shots land in `tools/shot/out/pieces/` behind a `.gdignore`.
+   `--at` is in tiles from the mesh's own middle · `--shot1` saves three yaws and quits · shots land in
+   `tools/shot/out/pieces/` behind a `.gdignore`. ⚠ **`--shot`, which walked every mesh instead, was
+   deleted 2026-08-27** — `island.glb` holds one mesh, so it shot the same piece twice.
    ⚠ **Aim before you zoom.** Render the whole thing wide first and find the subject; a close-up of the
    wrong tile has been mistaken for a failed bake.
 5. **Measure, do not assume.** Face counts, tile counts, heights sampled across a slope. A render is

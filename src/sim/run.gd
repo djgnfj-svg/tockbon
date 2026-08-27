@@ -16,9 +16,14 @@ extends RefCounted
 ## roster this object already holds instead of making one. Building a fresh `Army` there instead would
 ## heal every soldier **while a check that only counts soldiers stayed green**.
 ##
-## Every value that changes what happens lives in `rules.gd`, and the island's own facts — its grid,
-## its spawns, its clock — live in `islands.gd`. Nothing here holds a second copy of either; a number
+## Every value that changes what happens lives in `rules.gd`, and the island's own facts — its grid
+## and its spawns — live in `islands.gd`. Nothing here holds a second copy of either; a number
 ## counted in two places diverges.
+## ⚠ **「its clock」 stood in that list until 2026-08-27 and there is no island clock any more.**
+## `Islands.TIME_LIMIT_SEC` was deleted with `Lose.TIMEOUT` and `battle.setup`'s fourth parameter —
+## three dead things holding each other up. **A run-long timer that brings a boss is decided and
+## unbuilt** (see `finish_island`), and it belongs to THIS file rather than to one island, so nothing
+## should go looking for it in `islands.gd` when it is built.
 
 
 ## Where the run is. `BATTLE` means the island is open and `begin_island` will build its fight;
@@ -60,11 +65,6 @@ var cards_taken := PackedByteArray()
 ## (`_draw_cards`), one seed verb.
 var _rng := RandomNumberGenerator.new()
 
-## Whether the round currently on the table was dealt beasts-only. **Read by `seed_cards` alone**, so
-## a re-deal produces the same KIND of round the player is looking at rather than an ordinary one.
-var _round_is_beasts_only := false
-
-
 func _init() -> void:
 	_reset()
 
@@ -86,9 +86,12 @@ func _reset() -> void:
 	cards_taken = PackedByteArray()
 	_rng.randomize()
 	# ⚠⚠ **A RUN OPENS ON A CARD SCREEN** (2026-08-25, the user: 「시작하자마자 세 개 중에 하나 고르는
-	# 거 그거 하고 가자」). Three cards, **beasts only** — equipment here would make the one species a
-	# run holds stronger instead of splitting the horde.
-	_draw_cards(true)
+	# 거 그거 하고 가자」). Three cards.
+	# ⚠ **They were 「beasts only」 until 2026-08-27** — equipment here would have made the one species a
+	# run holds stronger instead of splitting the horde. That argument died with the beast card itself:
+	# the player is one swordsman and there is no horde to split, so the opening round is equipment
+	# like every round after it.
+	_draw_cards()
 	_state = State.PICK
 
 
@@ -103,7 +106,7 @@ func _reset() -> void:
 func seed_cards(s: int) -> void:
 	_rng.seed = s
 	if _state == State.PICK and _cards_taken_count() == 0:
-		_draw_cards(_round_is_beasts_only)
+		_draw_cards()
 
 
 ## Builds the island's fight and hands it back. Returns `null` unless the island is actually open, so
@@ -117,7 +120,7 @@ func begin_island() -> Battle:
 	var grid := Grid.new()
 	Islands.load_into(grid)
 	var battle := Battle.new()
-	battle.setup(grid, army, Islands.spawns(), Islands.time_limit())
+	battle.setup(grid, army, Islands.spawns())
 	return battle
 
 
@@ -152,28 +155,21 @@ func finish_island(won: bool) -> void:
 ##  · **Per card and never "exactly one of the three"** — a fixed share IS a reservation, and the user
 ##    cut the reservation on 2026-08-25. Some rounds hold no beast; some hold three
 ##
-## `beasts_only` is 시작 라운드's door: the opening round pays beasts and nothing else.
-func _draw_cards(beasts_only: bool = false) -> void:
-	_round_is_beasts_only = beasts_only
+## ⚠⚠ **THE BEAST ARM WAS DELETED 2026-08-27.** Every card is equipment. The arm it replaced rolled a
+## KIND first and then drew a species without replacement, and 시작 라운드 had a `beasts_only` door
+## into it — all of it unreachable since 2026-08-26, because `Rules.SPECIES_CARDS` was empty and an
+## empty pool fell through to equipment on every card anyway.
+##
+## ⚠ **The no-duplicates rule went with it and it was NOT decoration**: drawn with replacement, 64% of
+## opening rounds held a duplicate and 6% were three of one animal, which is a three-card screen
+## offering one choice. **If a card ever draws from a pool again, that measurement is the thing to
+## rebuild first** — items do not need it because an item may honestly repeat.
+func _draw_cards() -> void:
 	cards = PackedInt32Array()
 	cards.resize(Rules.CARDS_PER_WIN)
 	card_kind = PackedInt32Array()
 	card_kind.resize(Rules.CARDS_PER_WIN)
-	var pool := _species_pool()
 	for k in Rules.CARDS_PER_WIN:
-		# ⚠ **An empty pool falls back to an item, whatever was asked for.** A beast card naming a
-		# species the run already holds is a card that cannot be picked — a dead face on the screen.
-		if pool.size() > 0 and (beasts_only or _rng.randf() < Rules.SPECIES_CARD_WEIGHT):
-			card_kind[k] = Rules.CardKind.SPECIES
-			# ⚠⚠ **WITHOUT REPLACEMENT — no species may stand twice in one round.** Drawn with it,
-			# 64% of opening rounds held a duplicate and 6% were three of one animal, which is a
-			# three-card screen offering one choice. **There is exactly enough slack**: four
-			# candidates for three cards on the opening round. A pool that runs out mid-round falls
-			# through to equipment on the lines below, which is what it already did when empty.
-			var at := _rng.randi_range(0, pool.size() - 1)
-			cards[k] = int(pool[at])
-			pool.remove_at(at)
-			continue
 		card_kind[k] = Rules.CardKind.ITEM
 		# **Rarity first, item second.** Rolling straight over the item list would make legendaries
 		# rarer every time a common one was added — the drop table would move when the CONTENT moved.
@@ -182,19 +178,6 @@ func _draw_cards(beasts_only: bool = false) -> void:
 		cards[k] = int(items[_rng.randi_range(0, items.size() - 1)]) if items.size() > 0 else 0
 	cards_taken = PackedByteArray()
 	cards_taken.resize(Rules.CARDS_PER_WIN)
-
-
-## The beast rows this run could still take: on the player's side, not already in a slot, and only
-## while there is a slot left to put one in. **Empty is the ceiling** — every card is then an item.
-func _species_pool() -> PackedInt32Array:
-	var out := PackedInt32Array()
-	if army == null or army.slot_count() >= Rules.SUMMON_SLOT_MAX:
-		return out
-	for r in Rules.species_card_count():
-		var ty := Rules.species_card_type_of(r)
-		if army.slot_of_type(ty) < 0:
-			out.append(ty)
-	return out
 
 
 ## Takes card `k`. Refused (and nothing changes) unless the run is in `PICK`, `k` is in range, that
@@ -213,33 +196,18 @@ func take_card(k: int) -> bool:
 	if taken >= Rules.CARD_PICKS:
 		return false
 	cards_taken[k] = 1
-	if int(card_kind[k]) == Rules.CardKind.SPECIES:
-		_take_species_card(int(cards[k]))
-	else:
-		army.loadout.take_card(int(cards[k]))
+	army.loadout.take_card(int(cards[k]))
 	if taken + 1 >= Rules.CARD_PICKS:
 		# ⚠⚠ **The fork is 「is there anything in the pile」 and NOT 「what kind was that card」.**
-		# Branching on the kind makes two paths out of this screen, and two paths diverge — a beast
-		# card taken while an earlier item is still unfitted would strand that item.
+		# Branching on the kind makes two paths out of this screen, and two paths diverge — a card
+		# that paid no item, taken while an earlier item is still unfitted, would strand that item.
+		# ⚠ **Still written this way with one kind of card**, because the pile is the real question:
+		# it is empty exactly when there is nothing to lay onto a board.
 		if army.loadout.held.is_empty():
 			_advance()
 		else:
 			_state = State.REFIT
 	return true
-
-
-## A beast card: the species takes the next free slot and **arrives with bodies**.
-##
-## ⚠⚠ **The bodies are not optional.** Registering alone adds a button that refuses when pressed —
-## the user's own `Reward.COUNT` failure (a thing that exists and is not on screen) built backwards.
-## ⚠ A refused registration (full, already held, enemy side) recruits nobody: `register_species` is
-## the one place that decides, and this reads its answer instead of re-deciding.
-func _take_species_card(type_id: int) -> void:
-	var slot := army.register_species(type_id)
-	if slot < 0:
-		return
-	for _i in Rules.SPECIES_CARD_BODIES:
-		army.recruit(slot)
 
 
 func _cards_taken_count() -> int:

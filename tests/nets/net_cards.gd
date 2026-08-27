@@ -78,9 +78,13 @@ func run(t) -> void:
 ## Wins island 0, at a fixed seed unless `seed` is < 0, and hands back the `Run` sitting in `PICK`.
 func _won_run(seed: int = 1) -> Run:
 	var r := Run.new()
-	# ⚠ **Seed FIRST, then walk past the opening round.** `seed_cards` re-deals an untouched round, so
-	# seeding after the opening pick would leave WHICH species the run registered random — and the
-	# post-win draw's beast pool, and therefore its cards, would move run to run.
+	# ⚠ **Seed FIRST, then walk past the opening round.** `seed_cards` re-deals an untouched round and
+	# only while nothing has been taken from it — so seeding after the opening pick would be refused
+	# outright, and the three cards this fixture hands back would move run to run.
+	# ⚠⚠ **The reason used to be the BEAST CARD, and that half is deleted** (2026-08-27): the opening
+	# round was species cards, taking one registered a species, and the post-win draw's beast pool —
+	# and therefore its cards — hung off which one. There is no pool and no species card any more; the
+	# ordering still stands, on `seed_cards`'s own 「아무것도 안 고른 라운드만」 guard alone.
 	if seed >= 0:
 		r.seed_cards(seed)
 	_opened(r)
@@ -101,29 +105,34 @@ func _the_three_cards(t) -> void:
 		if b != 0:
 			taken += 1
 	t.eq(taken, 0, "아직 아무것도 안 골랐다")
-	# ⚠ **A card is one of two kinds since 티켓 15**, so the range a value has to be inside is the
-	# range of ITS OWN table — and the name is asked through `card_name_of`, which is the one place
-	# that knows there are two.
+	# ⚠⚠ **THE TWO-TABLE FORK DIED WITH THE BEAST CARD** (2026-08-27). A card was one of two kinds
+	# since 티켓 15, so the range a value had to be inside was the range of ITS OWN table — a `UNITS`
+	# row for a species, an item id for equipment — and the line below picked between them. `CardKind`
+	# has one member now, so **there is one table and every card is an item id**, and a fork with one
+	# arm measures nothing. The kind column is still read and still handed to `card_name_of`: both
+	# survive the deletion carrying a single value, and a net that stopped looking at the column would
+	# stop noticing if something else ever landed in it.
 	for k in Rules.CARDS_PER_WIN:
 		var kind := int(r.card_kind[k])
 		var value := int(r.cards[k])
-		var top := Rules.UNITS.size() if kind == Rules.CardKind.SPECIES else Rules.item_count()
-		t.ok(value >= 0 and value < top, "%d번 카드가 제 표 안이다 (%d)" % [k, value])
+		t.eq(kind, Rules.CardKind.ITEM, "%d번 카드의 종류가 장비다 — 종류는 이제 하나뿐이다" % k)
+		t.ok(value >= 0 and value < Rules.item_count(), "%d번 카드가 장비 표 안이다 (%d)" % [k, value])
 		t.ok(Rules.card_name_of(kind, value) != "", "%d번 카드에 이름이 있다" % k)
 
 
 ## 「한 장을 고르면 정비로 넘어간다」 · 「같은 카드를 두 번 못 고른다」 · 「고른 카드가 더미에 그대로
 ## 들어간다」, in one walk — each reads the state right after the call it claims about.
 func _taking_one(t) -> void:
-	# ⚠ **An ITEM card** — a beast pick pays a slot and bodies instead of the pile, and this row is
-	# about the pile. The beast half is `net_run`'s, driven there on purpose.
+	# ⚠⚠ **THE SEARCH FOR AN ITEM CARD IS DELETED** (2026-08-27). It walked the three cards to find one
+	# that was equipment, because a BEAST pick paid a summon slot and bodies instead of the pile and
+	# this row is about the PILE — the beast half was `net_run`'s, driven there on purpose. With the
+	# beast card gone every card pays the pile, so card 0 is an item and the walk could only ever have
+	# stopped at it. What is left of the old self-check is the kind read: it says out loud that the one
+	# surviving `CardKind` value is what actually lands in the column.
 	var r := _won_run()
-	var pick := -1
-	for k in Rules.CARDS_PER_WIN:
-		if int(r.card_kind[k]) == Rules.CardKind.ITEM:
-			pick = k
-			break
-	t.ok(pick >= 0, "이 씨앗의 세 장에 장비가 하나는 있다 (자가 점검)")
+	var pick := 0
+	t.eq(int(r.card_kind[pick]), Rules.CardKind.ITEM,
+		"첫 카드가 장비다 — 이제 세 장 전부 장비다 (자가 점검)")
 	var want_item := int(r.cards[pick])
 	var pile_before := r.army.loadout.held.size()
 
@@ -171,10 +180,11 @@ func _the_seed(t) -> void:
 	for s in range(100, 500):
 		var r := _won_run(s)
 		for k in Rules.CARDS_PER_WIN:
-			# ⚠ **ITEM cards only.** A beast card's value is a `UNITS` row, and folding the two id
-			# spaces into one dictionary would let a species stand in for the item of the same number.
-			if int(r.card_kind[k]) != Rules.CardKind.ITEM:
-				continue
+			# ⚠⚠ **THE 「ITEM CARDS ONLY」 FILTER IS DELETED** (2026-08-27). It skipped beast cards
+			# because a beast card's value was a `UNITS` row, and folding the two id spaces into one
+			# dictionary would have let a species stand in for the item of the same number. There is
+			# one id space now, so the filter skipped nothing and every card counts — which is what
+			# makes the 「장비 전부 나왔다」 ceiling below able to fail at all.
 			seen_parts[int(r.cards[k])] = true
 			seen_rarity[Rules.item_rarity_of(int(r.cards[k]))] = true
 	t.eq(seen_parts.size(), Rules.item_count(),
@@ -505,10 +515,15 @@ func _the_cards_fade_in_staggered(t) -> void:
 	spy.queue_free()
 
 
-## Walks past the OPENING BEAST ROUND. ⚠⚠ **A run opens on a card screen since 티켓 15** (「시작하자
-## 마자 세 개 중에 하나 고르는 거」), so `enter_node` refuses until one of its three beasts has been
-## taken — every fixture below that steps onto the map has to pass through it first. Card 0, always,
-## so the fixture is the same run every time.
+## Walks past the OPENING CARD ROUND. ⚠⚠ **A run opens on a card screen since 티켓 15** (「시작하자
+## 마자 세 개 중에 하나 고르는 거」), and it stays in `PICK` until one of the three is taken — every
+## fixture below that steps onto the island has to pass through it first. Card 0, always, so the
+## fixture is the same run every time.
+##
+## ⚠ **It was the OPENING BEAST ROUND until 2026-08-27**, and the name is the only thing that changed
+## here: those three cards were species, taking one registered the species the run would hold, and
+## equipment was kept out of the round on purpose. The beast card is deleted, so the opening three are
+## equipment like every round after them — this helper's one call is unchanged.
 func _opened(r: Run) -> Run:
 	if r.state() == Run.State.PICK:
 		r.take_card(0)

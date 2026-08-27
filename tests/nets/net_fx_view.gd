@@ -90,7 +90,7 @@ func _the_terrain_speaks_the_legend(t) -> void:
 		"~.....~",
 		"~~~~~~~",
 	]
-	var b := _battle_of(rows, _army_of([]), [], 999.0)
+	var b := _battle_of(rows, _army_of([]), [])
 	var fv := _view_of(b, rows)
 	var arrays: Array = (fv._terrain.mesh as ArrayMesh).surface_get_arrays(0)
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -178,11 +178,11 @@ func _a_tier_boundary_is_a_wall(t) -> void:
 		".........",
 		".........",
 	]
-	var flat := _view_of(_battle_of(rows, _army_of([]), [], 999.0), rows)
+	var flat := _view_of(_battle_of(rows, _army_of([]), []), rows)
 	var g := Grid.new()
 	g.load_rows(rows, tiers)
 	var b := Battle.new()
-	b.setup(g, _army_of([]), [], 999.0)
+	b.setup(g, _army_of([]), [])
 	b._committed = true
 	var fv := _view_of(b, rows)
 
@@ -268,7 +268,7 @@ func _the_hills_never_swallow_the_tier(t) -> void:
 	var g := Grid.new()
 	g.load_rows(rows, tiers)
 	var b := Battle.new()
-	b.setup(g, _army_of([]), [], 999.0)
+	b.setup(g, _army_of([]), [])
 	b._committed = true
 	var fv := _view_of(b, rows)
 
@@ -440,7 +440,7 @@ func _every_body_effect_is_sized_off_the_picture(t) -> void:
 	# is measured as geometry in the air buffer.
 	var rows := _open(ARENA_W, ARENA_H)
 	var army := _army_of([Rules.WOLF])
-	var b := _battle_of(rows, army, [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+	var b := _battle_of(rows, army, [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	_ashore(b, 0, Vector2(11.0, 6.0))
 	var fv := _view_of(b, rows)
 	var swung := false
@@ -465,7 +465,7 @@ func _every_body_effect_is_sized_off_the_picture(t) -> void:
 	# buffer is shared, a live fight keeps sparks and tracers in it, and 「the widest thing in the
 	# air buffer」 is not 「the halo」. An enemy alone on an empty arena puts exactly one disc there.
 	var quiet := _battle_of(rows, _army_of([]),
-		[_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	var qv := _view_of(quiet, rows)
 	qv._process(1.0 / 60.0)
 	t.ok(qv._a_v.size() == 0, "싸움이 없으면 공중 버퍼가 비어 있다 (자가 점검)")
@@ -516,7 +516,7 @@ func _every_body_effect_is_sized_off_the_picture(t) -> void:
 ## cannot move is not a frozen picture. Both ends: silent before the threshold, moving after it.
 func _a_body_that_cannot_move_still_does_something(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	var fv := _view_of(b, rows)
 	fv._process(1.0 / 60.0)
 	t.ok(fv._body.has("e0"), "몸 항목이 생겼다 (자가 점검)")
@@ -643,7 +643,7 @@ func _the_refusal_mark(t) -> void:
 ## 120 px cut is ONE piece = **6 vertices**, wearing `COL_TARGET_LINE`'s deliberate 0.12 alpha.
 func _the_intent_line(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.WOLF, 14, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.WOLF, 14, 6)])
 	_ashore(b, 0, Vector2(12.0, 6.0))
 	b.enemy_target[0] = 0
 	var fv := _view_of(b, rows)
@@ -751,7 +751,7 @@ func _the_death_burst_stands_in_the_camera_plane(t) -> void:
 ## **144 vertices**, `COL_HIT_HALO` with the flash's remaining fraction on its alpha.
 func _the_hit_halo(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
 	t.eq(fv._a_v.size(), 0, "맞은 적 없는 프레임에는 헤일로가 없다 (바닥 — 무조건 그리는 잎은 여기서 갈린다)")
@@ -771,7 +771,7 @@ func _the_hit_halo(t) -> void:
 ## SAME body against its own resting frame, so the row is the difference the effect makes.
 func _body_effects_ride_the_pooled_fields(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	var fv := _view_of(b, rows)
 	fv._body["e0"] = _body_entry(b.enemy_pos[0])
 	fv._process(0.0)
@@ -829,26 +829,36 @@ func _body_effects_ride_the_pooled_fields(t) -> void:
 ## Ticket 09's own founding shape, closed: the line was computed every frame and drawn by nobody.
 ## `_paint_boat_routes` now feeds it to the floor layer — the SIM's own `leg` decides what is behind
 ## the boat, and the drawn water shrinks as the crossing advances.
+##
+## ⚠⚠ **THE BOAT USED TO BE `send`'s AND IT IS A SUMMON NOW.** This row never had anything to say
+## about harbours — it wanted a body on a long crossing and `send` was the cheapest way to start one.
+## The whole harbour half is deleted, so the crossing starts from a WATER tile inside the summon band
+## instead of from a BEACH, and the fixture under it had to be redrawn with it (see `_reef_bay`).
+## ⚠ **The army is the SWORDSMAN's and no longer a wolf's.** `summon` needs a body in the slot's
+## reserve, `Army.register_species` refuses every `Side.ENEMY` row, and `_army_of([Rules.WOLF])`
+## therefore builds an army with **zero** slots — a fixture that looks like a roster and is not one.
 func _the_boat_route_shrinks_with_the_sim(t) -> void:
-	var rows := _port()
+	var rows := _reef_bay()
 	# ⚠ One idle enemy far inland, or there is nothing to win against: a battle with zero enemies
 	# latches WON on its first step and the boat freezes mid-bay — measured, 4000 sub-steps of leg 0.
-	var b := _planning_battle_of(rows, _army_of([Rules.WOLF]),
-		[_spawn(ARENA_W, Rules.WOLF, 20, 9)], 999.0)
+	var b := _planning_battle_of(rows, _army_of([Rules.SWORDSMAN]),
+		[_spawn(ARENA_W, Rules.WOLF, 20, 9)])
 	var fv := _view_of(b, rows)
-	# The sendable tile FARTHEST from the harbour, so the route holds interior waypoints and the
-	# crossing lasts long enough for `leg` to advance while the boat is still at sea.
-	var target := -1
-	var far := 0.0
-	for tile in b.grid.passable.size():
-		if b.grid.home_harbour_for(tile) < 0:
-			continue
-		var d := absf(float(tile % ARENA_W) - 2.0) + absf(float(tile / ARENA_W) - 5.0)
-		if d > far:
-			far = d
-			target = tile
-	t.ok(target >= 0 and far >= 4.0 and b.send(0, target) >= 0,
-		"항구에서 먼 곳으로 한 척을 보냈다 (자가 점검, 맨해튼 %.0f)" % far)
+	# The band tile whose route is LONGEST, so the line holds interior waypoints and the crossing
+	# lasts long enough for `leg` to advance while the boat is still at sea.
+	var target := _longest_route_water_on(b)
+	t.ok(target >= 0, "소환 띠에서 항로가 가장 긴 물칸을 찾았다 (자가 점검)")
+	# ⚠⚠ **BOTH FLOORS ARE LOAD-BEARING AND THE SECOND ONE IS THE ONE THAT WAS NEARLY MISSED.** A
+	# route's LAST leg is water -> landing by construction, so it is at most 1.42 tiles: on a route of
+	# three points the boat beaches within a tile and a half of its first waypoint and the tail rows
+	# below can never see the line let go of anything. Measured on this fixture: **5 points, 15.44
+	# tiles, 6.95 of them still to sail after the first waypoint.**
+	var plan := b.grid.summon_route(target)
+	var tail := _sail_after_first_waypoint(plan)
+	t.ok(plan.size() >= 4 and tail >= 4.0,
+		"그 항로는 경유점이 둘 이상이고 첫 경유점 뒤로도 %.1f 타일 남는다 (자가 점검, %d점)"
+			% [tail, plan.size()])
+	t.ok(b.summon(0, target) >= 0, "그 물칸으로 한 명을 불러냈다 (자가 점검)")
 
 	# Before the commit the boat is its plan: no aim is armed, so the water carries NO route at all.
 	fv._process(0.0)
@@ -899,7 +909,7 @@ func _the_boat_route_shrinks_with_the_sim(t) -> void:
 ## ring) proves the zero below is the gate and not a dead plan layer.
 func _a_dry_slot_draws_no_plan(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _planning_battle_of(rows, _army_of([Rules.WOLF]), [], 999.0)
+	var b := _planning_battle_of(rows, _army_of([Rules.WOLF]), [])
 	var fv := _view_of(b, rows)
 	# Aim at open water (the border ring). This arena has no summon band, so the aim is REFUSED
 	# water — which draws the COL_LOSE ring: ceil(TAU·18 / 20) = 6, floored to 8 segments = 48 verts.
@@ -968,7 +978,7 @@ func _every_row_wears_its_own_picture(t) -> void:
 	var spawns := []
 	for ty in Rules.UNITS.size():
 		spawns.append(_spawn(ARENA_W, ty, 2 + ty, 3))
-	var b := _battle_of(rows, _army_of([]), spawns, 999.0)
+	var b := _battle_of(rows, _army_of([]), spawns)
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
 	var seen := {}
@@ -1085,7 +1095,7 @@ func _only_the_wolf_has_frames_and_they_share_one_canvas(t) -> void:
 ## the strip; drop the `% strip.size()` so it clamps.
 func _the_legs_run_on_time_not_on_distance(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	var fv := _view_of(b, rows)
 	var stood: Vector2 = b.enemy_pos[0]
 	fv._process(0.0)
@@ -1142,7 +1152,7 @@ func _the_legs_run_on_time_not_on_distance(t) -> void:
 func _the_bite_rides_the_blow_that_lunges(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
 	var b := _battle_of(rows, _army_of([Rules.WOLF]),
-		[_spawn(ARENA_W, Rules.WOLF, 12, 6)], 999.0)
+		[_spawn(ARENA_W, Rules.WOLF, 12, 6)])
 	_ashore(b, 0, Vector2(11.0, 6.0))
 	var fv := _view_of(b, rows)
 	var walk := fv._anim_strip(Rules.WOLF, Look.Anim.WALK, true)
@@ -1224,16 +1234,28 @@ func _the_bite_rides_the_blow_that_lunges(t) -> void:
 ## clock runs. Ceiling: they are byte-identical once it expires, so a tint that never turned off
 ## would redden too.
 ##
-## ⚠ **The bleed is driven through a real crow blow**, never by writing `status_time` — a fixture that
-## sets the value it then reads back measures the view and not the seam between them.
+## ⚠ **The bleed is driven through a real blow**, never by writing `status_time` — a fixture that sets
+## the value it then reads back measures the view and not the seam between them.
+##
+## ⚠⚠ **THE SOURCE MOVED FROM THE SPECIES TO THE EQUIPMENT TAG, 2026-08-27.** It used to need no
+## equipment at all: `Rules.SPECIES_STATUS` gave 까마귀 an innate bleed, and this row read the duration
+## straight off `Rules.species_status_of(Rules.CROW)`. **That table was looked up against the PLAYER's
+## roster and the crow became an ENEMY on 2026-08-26**, so it answered `{}` on every blow and the fixture
+## was measuring a source that no longer fires. `TAG_STATUS_TIERS`' 출혈 row is live, carries the same
+## first-tier numbers (0.5 a second for 2 s), and needs three copies of a bleed item to light — hence
+## `_worn` below. **Nothing about what is drawn changed; only where the bleed comes from.**
 ##
 ## ⚠ Mutation: drop the `Look.bleeding` call in `_paint_bodies`; clamp `bleeding` to return `col`.
 func _a_bleeding_body_is_a_different_colour(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([Rules.CROW]), [
+	var army := _army_of([Rules.CROW])
+	_worn(army, ITEM_BLEED, 3, Rules.SWORDSMAN)
+	var lit := Rules.tag_status_tier_at(_bleed_row(), 3)
+	t.ok(not lit.is_empty(), "출혈 딱지 셋이면 1층이 켜진다 (자가 점검)")
+	var b := _battle_of(rows, army, [
 		_spawn(ARENA_W, Rules.WOLF, 6, 5),    # 0 — bitten
 		_spawn(ARENA_W, Rules.WOLF, 18, 9),   # 1 — the control sibling, far away
-	], 999.0)
+	])
 	_ashore(b, 0, Vector2(3, 5))
 	b.begin_frame()
 	b.step(Rules.SIM_SUBSTEP_SEC)
@@ -1275,7 +1297,7 @@ func _a_bleeding_body_is_a_different_colour(t) -> void:
 	b.enemy_pos[0] = parked
 	b._enemy_goal[0] = parked
 	b._settle(Battle.ENEMY_UID_BASE + 0, parked)
-	var secs: float = float(Rules.species_status_of(Rules.CROW).get("sec", 0.0))
+	var secs: float = float(lit["sec"])
 	for _k in int(ceil(secs / Rules.SIM_SUBSTEP_SEC)) + 4:
 		b.begin_frame()
 		b.step(Rules.SIM_SUBSTEP_SEC)
@@ -1317,14 +1339,105 @@ func _open(w: int, h: int) -> Array:
 	return rows
 
 
-## A bay: rows 3-7 water for the first six columns, land from column 6 on, one harbour at (2,5) —
-## `net_fx`'s port, for the rows that need a real boat.
-func _port() -> Array:
-	var rows := _open(ARENA_W, ARENA_H)
-	for y in range(3, 8):
-		rows[y] = "~~~~~~" + ".".repeat(ARENA_W - 7) + "~"
-	rows[5] = "~~H~~~" + ".".repeat(ARENA_W - 7) + "~"
+## The reef bay's four numbers, named rather than buried in the row builder below.
+const REEF_X := 9
+const REEF_Y0 := 2
+const REEF_Y1 := 9
+const ISLE_X := 14
+
+
+## ⚠⚠ **`_port` STOOD HERE AND THE HARBOUR IT WAS NAMED AFTER IS DELETED.** It drew `net_fx`'s port —
+## rows 3-7 water for the first six columns, land from column 6 on, one `H` at (2,5) — and the one row
+## that used it sent a boat from that harbour to the beach farthest from it. **A boat is SUMMONED now**,
+## from a water tile inside the band, and that bay cannot carry the row: measured on it, the band holds
+## exactly **2** tiles and the longer of their two routes is **3 points over 4.24 tiles**, of which
+## **1.41** remain after the first waypoint. A crossing that short beaches before the drawn line can
+## let go of anything, so the row's whole subject would go unmeasured on a green.
+##
+## **The replacement is a reef bay.** The island is one block on the EAST (x 14..22, y 1..10), the west
+## is open sea, and a `#` reef wall stands at x 9, y 2..9. ⚠ **The reef is the trick and it is a `#`
+## for a reason**: a hole is neither `water` nor `passable`, so `_summon_field` neither seeds a shore
+## on it nor walks through it — it shortens no `summon_hops` and only blocks. A boat from the western
+## sea therefore has to sail AROUND one of its ends, which is what puts interior waypoints in a route
+## that open water would smooth into a single chord.
+##
+## Measured on this board: **110 band tiles**, the longest route **5 points over 15.44 tiles**
+## `[(2,8) (8,2) (9,1) (13,0) (14,1)]`, and the boat is still OUTBOUND on leg 2 after 150 sub-steps.
+func _reef_bay() -> Array:
+	var rows := []
+	for y in ARENA_H:
+		var row := ""
+		for x in ARENA_W:
+			var c := "~"
+			if y >= 1 and y <= ARENA_H - 2 and x >= ISLE_X and x <= ARENA_W - 2:
+				c = "."
+			if x == REEF_X and y >= REEF_Y0 and y <= REEF_Y1:
+				c = "#"
+			row += c
+		rows.append(row)
 	return rows
+
+
+## The summon-band WATER tile whose `summon_route` is the LONGEST, or -1 if the band holds no tile
+## with an interior waypoint at all.
+##
+## ⚠⚠ **THE NAME SAYS WATER BECAUSE THE TWO VERBS TOOK DIFFERENT KINDS OF TILE AND THAT COST A RED
+## ROUND.** The deleted `send` took a BEACH — a passable land tile a boat could unload onto — and the
+## search this replaced ranked beaches by their distance from a harbour. `summon` takes a WATER tile
+## inside the band and answers -1 for anything else, so a fixture that hands it a beach reddens for a
+## reason that has nothing to do with what the row measures.
+##
+## ⚠ **It ranks by SAILED LENGTH and not by distance from anything.** What the row needs is a crossing
+## with water left in it after the first waypoint, and a tile far from a centre can still have a short
+## straight route — that is exactly what the whole `_port` band turned out to be.
+func _longest_route_water_on(b: Battle) -> int:
+	var g := b.grid
+	var best := -1
+	var best_span := 0.0
+	for tile in g.w * g.h:
+		if not g.can_summon_at(tile):
+			continue
+		var route := g.summon_route(tile)
+		if route.size() < 4:
+			continue
+		var span := 0.0
+		for k in range(1, route.size()):
+			span += route[k - 1].distance_to(route[k])
+		if span > best_span:
+			best_span = span
+			best = tile
+	return best
+
+
+## How much water a route still holds AFTER its first waypoint, in tiles. **The floor the crossing row
+## needs**: everything before `path[1]` is sailed on leg 0, so this is all the sea there is left for
+## `leg` to advance through while the boat is still OUTBOUND.
+func _sail_after_first_waypoint(route: PackedVector2Array) -> float:
+	var span := 0.0
+	for k in range(2, route.size()):
+		span += route[k - 1].distance_to(route[k])
+	return span
+
+
+## The bleed item, pinned with what it is for. ⚠ **It is fitted onto a board nobody summons**, so its
+## own stat columns cannot move the arithmetic any other row here is built from — what crosses is the
+## tag count, which `Loadout.tag_count` sums over every board at once.
+const ITEM_BLEED := 7    # 부싯돌 이빨 — 출혈 딱지, 문턱 3 (0.5/초 · 2초)
+
+
+## Fits `n` copies of `item` onto `beast_type`'s board.
+func _worn(a: Army, item: int, n: int, beast_type: int) -> void:
+	for _i in n:
+		a.loadout.take_card(item)
+		a.loadout.fit(beast_type, 0)
+
+
+## The `TAG_STATUS_TIERS` row that carries 출혈, found rather than written as an index.
+func _bleed_row() -> int:
+	for r in Rules.tag_status_row_count():
+		if Rules.tag_status_status_of(r) == Rules.Status.BLEED:
+			return r
+	return -1
 
 
 ## ⚠ The slots are the ARMY's since 티켓 15, so each species is REGISTERED first and the slot it lands
@@ -1346,17 +1459,17 @@ func _spawn(w: int, type_id: int, x: int, y: int) -> Dictionary:
 
 ## Committed directly, `net_fx`'s own idiom: an uncommitted battle is inert to every driver and the
 ## commit gate itself is `net_plan`'s to measure.
-func _battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
-	var b := _planning_battle_of(rows, army, spawns, limit)
+func _battle_of(rows: Array, army: Army, spawns: Array) -> Battle:
+	var b := _planning_battle_of(rows, army, spawns)
 	b._committed = true
 	return b
 
 
-func _planning_battle_of(rows: Array, army: Army, spawns: Array, limit: float) -> Battle:
+func _planning_battle_of(rows: Array, army: Army, spawns: Array) -> Battle:
 	var g := Grid.new()
 	g.load_rows(rows)
 	var b := Battle.new()
-	b.setup(g, army, spawns, limit)
+	b.setup(g, army, spawns)
 	return b
 
 
@@ -1383,7 +1496,7 @@ func _view_of(b: Battle, rows: Array) -> FieldView:
 ## from a leaf firing unconditionally breaks every equality at once.
 func _quiet_view() -> Dictionary:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [], 999.0)
+	var b := _battle_of(rows, _army_of([]), [])
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
 	return {"fv": fv, "b": b}

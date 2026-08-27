@@ -211,7 +211,7 @@ func _slot_reserves_are_filtered_by_slot(t) -> void:
 	var grid := Grid.new()
 	grid.load_rows(Islands.rows())
 	var b := Battle.new()
-	b.setup(grid, a, [], 10.0)
+	b.setup(grid, a, [])
 	var slot0 := b.slot_reserve_ids(0)
 	var slot1 := b.slot_reserve_ids(1)
 	t.eq(slot0, [id0], "슬롯 0의 예비 명단이 근접 타입 전부가 아니라 슬롯 0의 몸만이다")
@@ -280,7 +280,7 @@ func _adjacent_battle(part: int, enemy_type: int) -> Battle:
 	var grid := Grid.new()
 	grid.load_rows(_open_arena())
 	var b := Battle.new()
-	b.setup(grid, a, [{"type_id": enemy_type, "tile": _tile_key(Vector2(10, 5), _ARENA_W)}], 999.0)
+	b.setup(grid, a, [{"type_id": enemy_type, "tile": _tile_key(Vector2(10, 5), _ARENA_W)}])
 	b._committed = true
 	_ashore_at(b, 0, Vector2(9, 5))
 	return b
@@ -299,7 +299,7 @@ func _walk_probe(part: int) -> Battle:
 	var grid := Grid.new()
 	grid.load_rows(_open_arena())
 	var b := Battle.new()
-	b.setup(grid, a, [{"type_id": Rules.WOLF, "tile": _tile_key(Vector2(18, 5), _ARENA_W)}], 999.0)
+	b.setup(grid, a, [{"type_id": Rules.WOLF, "tile": _tile_key(Vector2(18, 5), _ARENA_W)}])
 	b._committed = true
 	_ashore_at(b, 0, _WALK_START)
 	b.begin_frame()
