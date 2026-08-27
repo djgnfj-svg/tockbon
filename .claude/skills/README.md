@@ -16,6 +16,21 @@ conversation — that rule was set on 2026-08-27 after it was broken twice in on
 
 **`docs/plan/README.md` is the files that chain reads and writes.**
 
+## ⚠⚠ How a skill here is written — **short by default, length is earned**
+
+**The failure mode is sprawl**: a document that is simply too long, **even when every line is live and
+unique.** Attention thins across the excess. `wrap-up` hit 129 lines and was cut to 69 on 2026-08-27.
+
+| Rule | Why |
+|---|---|
+| **Steps first, reference under them** | The agent needs to know what to DO before it needs the facts |
+| **What only some runs reach goes in a sibling file** behind a one-line pointer | It costs nothing on the runs that never need it — `wrap-up/ACCEPTANCE.md` is the example |
+| **A war story earns its place only if it changes what you do** | "This cost a round once" is worth a clause, not a paragraph |
+| **One trigger per branch in the description** | Synonyms renaming one branch are one branch written twice |
+
+⚠ **`writing-for-agents` is the full standard**; the four lines above are what this repo keeps getting
+wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on their own, and it stays that way.
+
 ## The user's four
 
 **These are the ones they said they actually use** (2026-08-27).
