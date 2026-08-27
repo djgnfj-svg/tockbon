@@ -115,7 +115,17 @@ static func time_limit() -> float:
 ## mesh was loaded.
 static func ground_h(level: int) -> float:
 	var b := _load()
-	return float(b.get("base_h", 0.0)) + float(level) * float(b.get("level_h", 1.0))
+	return base_h() + float(level) * float(b.get("level_h", 1.0))
+
+
+## **How far the mesh's level-0 top sits above y = 0.** Not a design value — it is whatever the Blender
+## run wrote, and it is here so the picture can stop guessing it.
+##
+## ⚠⚠ **`Grid.surface_h` does NOT include this and must not.** The sim measures heights in tiers off
+## zero, and adding a mesh's offset to a walking rule would make the rule depend on how the art was
+## authored. Anything that puts a THING ON the drawn ground adds this on top — see `field_view._stand_h`.
+static func base_h() -> float:
+	return float(_load().get("base_h", 0.0))
 
 
 ## Every enemy on the island, as `{"type_id": int, "tile": int}` with `tile` a row-major index.

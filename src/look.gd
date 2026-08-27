@@ -645,11 +645,56 @@ const COL_SUMMON_RING := Color(0.706, 0.902, 1.0, 0.85)
 ## ⚠ **Near-white and not a hue.** A coloured wash is the summon band this repo already deleted once for
 ## painting meaning onto ground; white reads as *the cursor is here* rather than as *this ground is
 ## special*, and it works over sand, turf and stone alike.
-const COL_HOVER_PLATE := Color(0.955, 0.960, 0.940, 0.62)
+const COL_HOVER_PLATE := Color(1.0, 1.0, 1.0, 0.42)
 ## How far the plate floats above the ground it covers, in tiles. ⚠ **Small enough to read as ON the
 ## tile, big enough to beat z-fighting** — at 0 the plate and the ground fight and the tile flickers as
 ## the camera turns. `BODY_LIFT_PX / TILE_PX` is the same trick the bodies use.
 const HOVER_PLATE_LIFT_TILES := 0.035
+
+## **The wash that lies on every walkable tile, all the time.** ⚠⚠ **It is not a hover** — the hover is
+## one tile brighter than this. The user asked for it against Bad North (2026-08-27): there the ground
+## you may stand on is lit as one soft shape, so the board is readable before anything is commanded.
+const COL_WASH := Color(1.0, 1.0, 1.0, 0.30)
+## The wash's brighter edge. Same job as `COL_HOVER_RIM` — it stops the wash dissolving into pale sand.
+const COL_WASH_RIM := Color(1.0, 1.0, 1.0, 0.55)
+## How many mask pixels one tile gets. ⚠ **Only decides how clean the rounded edge is**, and it is
+## squared into the build cost — the mask is `w * h` tiles at this resolution and is walked four times.
+const WASH_TEX_PER_TILE_PX := 16
+## How far the wash stops short of the land's edge AND of every cliff, in tiles. ⚠⚠ **This is what keeps
+## it off the sea and off the drop.** The bake bevels a coast piece's top face and a raised piece's rim,
+## so a wash that reaches the tile line hangs in the air over both — measured 2026-08-27, the user:
+## 「삐져나가는 문제가 있네」. ⚠ **A change of LEVEL counts as an edge here**, which is why the plateau's
+## rim pulls back exactly as the shoreline does.
+const WASH_INSET_TILES := 0.35
+## How far the wash stops short of the NEXT BLOCK, in tiles — the gap that makes the pieces read as
+## separate. ⚠ Much smaller than `WASH_INSET_TILES`: this one is a seam, that one is a cliff.
+const WASH_BLOCK_GAP_TILES := 0.12
+## How round the wash's outer corners are, in tiles. ⚠ **This is the whole of「맞춤형」**: contiguous
+## tiles come out as ONE rounded shape rather than as a grid of squares, because the rounding is done
+## on the region and not on the tile.
+const WASH_ROUND_TILES := 0.30
+## How thick the wash's brighter edge is, in tiles.
+const WASH_RIM_TILES := 0.09
+## How far the wash floats over the ground it lies on, in tiles. Same z-fighting argument as the plate,
+## and SMALLER than it — the plate has to win where the two overlap.
+const WASH_LIFT_TILES := 0.018
+## **How many tiles across one wash block is.** ⚠⚠ **2, because the island is BUILT that way** —
+## `tools/blender/island_build.py` lays the whole island down as 2x2 pieces, and a raised block is
+## always a whole piece. A wash per TILE was on screen once and the user's word was 「너무 많으」; the
+## unit the eye already sees is the piece, not the tile.
+## ⚠ The blocks start at tile 0, the same corner the bake starts from — offset them and every patch
+## straddles two pieces.
+const WASH_BLOCK_TILES := 2
+## **The plate's rim, and it is a brighter white rather than an ink line.** ⚠⚠ **A hard dark border was
+## on screen for one round and the user rejected it against Bad North** (2026-08-27): the mark there is
+## a soft translucent wash with rounded corners lying ON the ground, not a drawn square sitting over it.
+const COL_HOVER_RIM := Color(1.0, 1.0, 1.0, 0.82)
+## The plate's baked square, in pixels. Only decides how clean the rounded corner is.
+const HOVER_TEX_PX := 64
+## How thick the rim is, as a fraction of the plate's side.
+const HOVER_RIM_FRAC := 0.09
+## How round the plate's corners are, as a fraction of its side. ⚠ **0 is the square this replaced.**
+const HOVER_CORNER_FRAC := 0.26
 ## How thick that ring is, in tiles. Under about 0.2 it disappears at `ZOOM_MIN`; over about 0.8 it
 ## stops being a line and starts being a band, which is the picture it exists to replace.
 const SUMMON_RING_W_TILES := 0.45

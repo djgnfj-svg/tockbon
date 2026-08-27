@@ -117,6 +117,8 @@ var _sun: DirectionalLight3D = null
 ## The plate on the tile under the cursor. Built once, moved and hidden — see `set_hover_tile`.
 var _hover: MeshInstance3D = null
 var _hover_tile := -1
+## The wash over every walkable tile. **One mesh for the whole board**, rebuilt when the board changes.
+var _wash: MeshInstance3D = null
 var _sprites: Array[Sprite3D] = []
 var _hulls: Array[MeshInstance3D] = []
 var _sprites_used := 0
@@ -209,7 +211,10 @@ func _build_world() -> void:
 	plate.size = Vector2(Look.TILE_PX, Look.TILE_PX) / Look.TILE_PX
 	_hover.mesh = plate
 	var plate_mat := StandardMaterial3D.new()
-	plate_mat.albedo_color = Look.COL_HOVER_PLATE
+	# ⚠⚠ **THE TEXTURE CARRIES THE COLOUR, SO THIS IS WHITE.** A tint here multiplies the ring as well
+	# as the fill and the ring is the half that has to stay dark.
+	plate_mat.albedo_color = Color(1.0, 1.0, 1.0, 1.0)
+	plate_mat.albedo_texture = _make_hover_tex()
 	# ⚠ **Unshaded.** A lit plate goes grey on the shadow side of the island and stops reading as a
 	# cursor — it is a mark, not a surface, the same argument the outline pass makes for its ink.
 	plate_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -220,6 +225,18 @@ func _build_world() -> void:
 	_hover.material_override = plate_mat
 	_hover.visible = false
 	_world.add_child(_hover)
+
+	# ⚠ **Built empty and filled by `_rebuild_wash`**, which needs a grid — `_build_world` runs before
+	# one is loaded on the very first island.
+	_wash = MeshInstance3D.new()
+	var wash_mat := StandardMaterial3D.new()
+	wash_mat.albedo_color = Color(1.0, 1.0, 1.0, 1.0)
+	wash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	wash_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wash_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_wash.material_override = wash_mat
+	_wash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_world.add_child(_wash)
 
 	_sun = DirectionalLight3D.new()
 	_sun.rotation_degrees = Vector3(Look.SUN_PITCH_DEG, Look.SUN_YAW_DEG, 0.0)
@@ -294,6 +311,204 @@ func _make_body_tex() -> Texture2D:
 	return ImageTexture.create_from_image(img)
 
 
+## The plate's picture: a dark ring around a near-white translucent fill.
+##
+## ⚠⚠ **The user's reference is Bad North's ground mark** (2026-08-27, `image.png`): a soft translucent
+## white wash with ROUNDED corners that lies on the ground, with a slightly brighter rim. A hard dark
+## border was tried first and rejected — it reads as a square drawn OVER the island rather than as light
+## falling ON it. ⚠ The round corners are the half that carries that reading; the rim only stops the
+## wash from dissolving into pale sand.
+func _make_hover_tex() -> Texture2D:
+	var n := Look.HOVER_TEX_PX
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	img.fill(Look.COL_HOVER_PLATE)
+	var half := float(n) * 0.5
+	var corner := float(n) * Look.HOVER_CORNER_FRAC
+	var rim := float(n) * Look.HOVER_RIM_FRAC
+	for y in n:
+		for x in n:
+			var p := Vector2(float(x) + 0.5 - half, float(y) + 0.5 - half)
+			# Distance to a rounded square, the same box-minus-corner form `_make_body_tex` uses.
+			var q := Vector2(absf(p.x), absf(p.y)) - Vector2(half - corner, half - corner)
+			var d := Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() + minf(maxf(q.x, q.y), 0.0) - corner
+			if d > 0.0:
+				img.set_pixel(x, y, Color(1.0, 1.0, 1.0, 0.0))
+			elif d > -rim:
+				img.set_pixel(x, y, Look.COL_HOVER_RIM)
+	return ImageTexture.create_from_image(img)
+
+
+## **The wash over every walkable tile, cut from the walkable SHAPE and not from the tile grid.**
+##
+## ⚠⚠ **This is what「맞춤형」means and it is why the shape is computed rather than tiled.** A rounded
+## square drawn per tile gives a grid of squares, and on a coastal tile it hangs over the sea (measured
+## 2026-08-27). The mask below is opened — eroded, then dilated — over the whole walkable region at
+## once, so a run of tiles comes out as ONE shape with rounded outer corners, and the erosion pulls it
+## clear of every edge the Blender bake moved.
+##
+## ⚠ **One mesh, one texture, built when the board loads.** Nothing here runs per frame.
+func _rebuild_wash() -> void:
+	if _wash == null:
+		return
+	_wash.mesh = null
+	if battle == null or battle.grid == null:
+		return
+	var grid: Grid = battle.grid
+	var res := Look.WASH_TEX_PER_TILE_PX
+	var mw := grid.w * res
+	var mh := grid.h * res
+
+	# **How far each pixel is from the edge of its own floor.** ⚠⚠ **One distance field PER LEVEL, and
+	# that is what pulls the wash back off the cliffs.** Measured flat, a plateau tile and the ground
+	# beside it are both walkable, so the drop between them is invisible to the mask and the wash hangs
+	# over it — the user's 「삐져나가는 문제」. A level's own field ends where that level ends.
+	var d_edge := PackedFloat32Array()
+	d_edge.resize(mw * mh)
+	var levels := {}
+	for t in grid.w * grid.h:
+		if grid.passable[t] == 1:
+			levels[grid.level_of(t)] = true
+	var mask := PackedByteArray()
+	mask.resize(mw * mh)
+	for lv in levels.keys():
+		for py in mh:
+			var ty := py / res
+			for px in mw:
+				var tx := px / res
+				var t := ty * grid.w + tx
+				mask[py * mw + px] = 1 if grid.passable[t] == 1 and grid.level_of(t) == int(lv) else 0
+		var d_lv := _dist_to_zero(mask, mw, mh)
+		for i in mw * mh:
+			if mask[i] == 1:
+				d_edge[i] = d_lv[i]
+
+	# Opening: erode by (inset + round), then take everything within `round` of what survived.
+	var r_in := (Look.WASH_INSET_TILES + Look.WASH_ROUND_TILES) * float(res)
+	var r_out := Look.WASH_ROUND_TILES * float(res)
+	var r_gap := (Look.WASH_BLOCK_GAP_TILES + Look.WASH_ROUND_TILES) * float(res)
+	# ⚠⚠ **EVERY BLOCK IS ITS OWN SHAPE, which is what「노드마다」asked for** (2026-08-27, the user,
+	# against Bad North's ground: separate rounded patches with the ground showing between them, not one
+	# wash over the whole island). ⚠ **A block and not a tile** — the user's next word on the per-tile
+	# version was 「너무 많으」, and `Look.WASH_BLOCK_TILES` says why 2 is the right number: the island is
+	# assembled from 2x2 pieces, so the piece is the unit the eye already reads.
+	# A block's own border counts as an edge, and the LAND edge still counts too — which is what cuts a
+	# coastal patch off at the sea instead of letting it hang over the water.
+	var bres := res * Look.WASH_BLOCK_TILES
+	var half_b := float(bres) * 0.5
+	var core := PackedByteArray()
+	core.resize(mw * mh)
+	var any := false
+	for py in mh:
+		var fy: float = half_b - absf(float(py % bres) + 0.5 - half_b)
+		for px in mw:
+			var i := py * mw + px
+			var fx: float = half_b - absf(float(px % bres) + 0.5 - half_b)
+			# ⚠ **The two edges are held apart and eroded by DIFFERENT amounts.** A block seam is a
+			# gap between pieces; a floor's edge is a fall. Erode both by the same number and either
+			# the seam swallows the piece or the wash walks off the cliff.
+			var deep: bool = d_edge[i] >= r_in and minf(fx, fy) >= r_gap
+			# ⚠ **Inverted on purpose**: `_dist_to_zero` measures to the nearest 0, so the core has to
+			# be the 0s of the array handed to the second pass.
+			core[i] = 0 if deep else 1
+			if deep:
+				any = true
+	if not any:
+		return
+	var d_core := _dist_to_zero(core, mw, mh)
+
+	var img := Image.create(mw, mh, false, Image.FORMAT_RGBA8)
+	var rim := Look.WASH_RIM_TILES * float(res)
+	var clear := Color(1.0, 1.0, 1.0, 0.0)
+	for py in mh:
+		for px in mw:
+			var d: float = d_core[py * mw + px]
+			# One mask pixel of feather, so the edge is not a staircase at any zoom.
+			var a := clampf(r_out - d + 0.5, 0.0, 1.0)
+			if a <= 0.0:
+				img.set_pixel(px, py, clear)
+				continue
+			var col := Look.COL_WASH_RIM if d > r_out - rim else Look.COL_WASH
+			img.set_pixel(px, py, Color(col.r, col.g, col.b, col.a * a))
+	var mat: StandardMaterial3D = _wash.material_override
+	mat.albedo_texture = ImageTexture.create_from_image(img)
+
+	# One quad per walkable tile, at that tile's own drawn surface. **The quad follows the ground and
+	# the SHAPE follows the mask** — a stair tile is sloped, so its four corners are sampled separately.
+	var verts := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var lift := Look.WASH_LIFT_TILES
+	for ty in grid.h:
+		for tx in grid.w:
+			if grid.passable[ty * grid.w + tx] != 1:
+				continue
+			var c := Vector2(float(tx), float(ty))
+			# ⚠ 0.49 and not 0.5: `surface_h` rounds to a tile, and half a tile out lands on the
+			# neighbour — which on a stair is the next step up and reads as a torn quad.
+			var p00 := Vector3(c.x - 0.5, _stand_h(c + Vector2(-0.49, -0.49)) + lift, c.y - 0.5)
+			var p10 := Vector3(c.x + 0.5, _stand_h(c + Vector2(0.49, -0.49)) + lift, c.y - 0.5)
+			var p11 := Vector3(c.x + 0.5, _stand_h(c + Vector2(0.49, 0.49)) + lift, c.y + 0.5)
+			var p01 := Vector3(c.x - 0.5, _stand_h(c + Vector2(-0.49, 0.49)) + lift, c.y + 0.5)
+			var u0 := float(tx) / float(grid.w)
+			var u1 := float(tx + 1) / float(grid.w)
+			var v0 := float(ty) / float(grid.h)
+			var v1 := float(ty + 1) / float(grid.h)
+			verts.append_array([p00, p10, p11, p00, p11, p01])
+			uvs.append_array([
+				Vector2(u0, v0), Vector2(u1, v0), Vector2(u1, v1),
+				Vector2(u0, v0), Vector2(u1, v1), Vector2(u0, v1)])
+	if verts.is_empty():
+		return
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_wash.mesh = mesh
+
+
+## Distance, in mask pixels, from every cell to the nearest cell holding 0. **Two-pass chamfer**, which
+## is O(n) and within a few percent of true Euclidean — far closer than the shape needs.
+func _dist_to_zero(cells: PackedByteArray, w: int, h: int) -> PackedFloat32Array:
+	var big := 1.0e9
+	var d := PackedFloat32Array()
+	d.resize(w * h)
+	for i in w * h:
+		d[i] = big if cells[i] != 0 else 0.0
+	var diag := 1.41421356
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			if d[i] == 0.0:
+				continue
+			var m: float = d[i]
+			if x > 0:
+				m = minf(m, d[i - 1] + 1.0)
+			if y > 0:
+				m = minf(m, d[i - w] + 1.0)
+				if x > 0:
+					m = minf(m, d[i - w - 1] + diag)
+				if x < w - 1:
+					m = minf(m, d[i - w + 1] + diag)
+			d[i] = m
+	for y in range(h - 1, -1, -1):
+		for x in range(w - 1, -1, -1):
+			var i := y * w + x
+			if d[i] == 0.0:
+				continue
+			var m: float = d[i]
+			if x < w - 1:
+				m = minf(m, d[i + 1] + 1.0)
+			if y < h - 1:
+				m = minf(m, d[i + w] + 1.0)
+				if x < w - 1:
+					m = minf(m, d[i + w + 1] + diag)
+				if x > 0:
+					m = minf(m, d[i + w - 1] + diag)
+			d[i] = m
+	return d
+
+
 func _make_flat_tex() -> Texture2D:
 	var img := Image.create(1, 1, false, Image.FORMAT_RGBA8)
 	img.fill(Look.COL_BAKE_MARK)
@@ -329,6 +544,7 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	_built_for = ""
 	_build_world()
 	_rebuild_terrain()
+	_rebuild_wash()
 	_place_camera()
 
 
@@ -615,10 +831,16 @@ func _tile_h(tx: int, ty: int) -> float:
 ## The world height a body's feet rest at, for a point in TILE units. **Flat ground answers exactly
 ## what `_ground_h` would**; a stair answers the sloping surface the Blender bake drew.
 ## ⚠ **Presentation only.** Nothing here feeds a decision — the sim measures reach off `height_at`.
+##
+## ⚠⚠ **`Islands.base_h()` IS ADDED HERE AND LEAVING IT OUT BURIES EVERYTHING THAT STANDS.** `surface_h`
+## counts tiers up from zero, which is what a walking rule should do; the MESH's level-0 top is 0.26
+## above zero. Measured 2026-08-27: the hover plate sat 0.26 tiles inside the sand and the user's report
+## was 「그런게 없음」 — it was on screen, underground, on every flat tile. The sentence above about
+## `_ground_h` was written true and had been false ever since the island was authored in Blender.
 func _stand_h(p: Vector2) -> float:
 	if battle == null or battle.grid == null:
 		return 0.0
-	return battle.grid.surface_h(p)
+	return battle.grid.surface_h(p) + Islands.base_h()
 
 
 ## The island, as ONE MESH MADE IN BLENDER.
