@@ -15,9 +15,14 @@ mapping and does not care whether Godot imported the folder.
 | `shoot_field.gd` | the board at a run of camera angles and distances | `out/field/` |
 | `shoot_fx.gd` | one frame per effect, each also cropped in close | `out/fx/` |
 | `shoot_water.gd` | six seas, one island, one camera — the candidates go side by side | `out/water/` |
-| `shoot_big.gd` | one frame at 2560x1440, for looking at edges | `out/misc/` |
-| `probe_shadow.gd` | shadows only, to see what is and is not falling on the ground | `out/misc/` |
-| `what_is_3d.gd` | prints what is actually in the 3D tree — no picture | — |
+
+⚠⚠ **THREE SHOOTERS WERE DELETED 2026-08-27 AND TWO OF THEM COULD NOT REACH THE ISLAND AT ALL.**
+`shoot_big.gd` answered one question about edges at 2560x1440 and the answer is already applied.
+`probe_shadow.gd` and `what_is_3d.gd` both walk the shell from the title, and **neither knows about
+the refit screen**, so both stopped one screen short of the island they were written to photograph —
+`probe_shadow.gd` was additionally hunting a drawn shadow blob that was itself deleted on 2026-08-26.
+⇒ **A shooter that cannot reach the island is not a slow shooter, it is a broken one**, and this repo
+has paid before for treating those as the same thing. `out/misc/` is empty because of it.
 
 Run one the same way each time, with **the engine that lives in this repo**:
 
