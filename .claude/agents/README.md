@@ -1,7 +1,22 @@
-# .claude/agents — the five, and the order they are called in
+# .claude/agents — the build team, and the two that only read
 
-**Seven definitions live here.** Five of them are one team; `net-tuner` is called on its own when a round
-gets slow, and **`sculpt` owns the 3D**.
+**Nine definitions live here.** Five of them are one build team; `net-tuner` is called on its own when a
+round gets slow, **`sculpt` owns the 3D**, and **`lookup` and `research` only find things out.**
+
+## ⚠⚠ The two readers, and why they are two
+
+**Inside and outside are different jobs and they were one blur until 2026-08-27** (the user: *"there
+should be one that checks the documents inside and one that finds the facts outside the repo — how
+others do it"*). **The skills used to say "dispatch a subagent" with no name**, so whoever ran them
+picked whatever was nearest and the two halves got mixed.
+
+| Agent | Reads | Never |
+|---|---|---|
+| **`lookup`** | This repo — `src/`, `docs/`, the nets, `git log` | **Never touches the web** |
+| **`research`** | Outside — primary sources, with links | **Never answers from memory** |
+
+**`survey` sends `lookup`. `scout` sends `research`. `grilling` sends whichever the question needs.**
+⚠ **Neither writes a file, edits anything, or decides.** Their whole output is findings.
 
 ⚠⚠ **`sculpt` exists because the 3D ate the conversation** (2026-08-27, the user: 「앞으로 3d 만드는거
 에이전트로 빼자 컨텍스트를 너무 먹는거 같은데」). Baking a mesh is a loop of change · bake · look · miss ·

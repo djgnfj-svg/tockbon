@@ -20,10 +20,13 @@ build/
 # MCP 설정 — 엔진·Aseprite 실행 경로가 이 PC 절대경로로 박혀 있다.
 .mcp.json
 
-# 임시 스크린샷 등 루트 이미지
-/image.png
-/image.png.import
-image copy.png
+# 임시 스크린샷 등 루트 이미지 — 사용자가 붙여 넣으면 여기 쌓인다.
+# ⚠⚠ 이름을 하나씩 적어 둔 판이 `image copy 2.png` 를 놓쳐서 가지에 559KB 가 커밋됐다 (2026-08-27).
+#    ⇒ 별표로 받는다. 남길 것은 docs/reference/ 로 옮길 때 이름을 바꿀으므로 이 규칙에 안 걸린다.
+/image*.png
+/image*.png.import
+/image*.jpg
+/image*.jpeg
 
 # 에셋 생성 후보 — 한 번에 수십 장씩 나온다. 🔴 **고른 것만** assets/ 로 옮겨 커밋한다.
 tools/pixel/out/

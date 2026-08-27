@@ -5,8 +5,11 @@ description: Report what this repo already holds at one spot — what stands, wh
 
 # survey — what is already here
 
-⚠⚠ **Dispatch it, do not read it here.** Send a subagent, and take back **the findings only.** A 1900-line
-view file opened in this session costs more than everything this skill saves.
+⚠⚠ **Dispatch it, do not read it here.** Send the **`lookup`** agent and take back **the findings only.**
+A 1900-line view file opened in this session costs more than everything this skill saves.
+
+⚠ **`lookup` is the inside half and it never touches the web.** When the question turns out to need a
+fact from outside this repo, that is `scout` and its **`research`** agent — a different agent, on purpose.
 
 ## Why it exists
 
@@ -17,10 +20,10 @@ and nobody read it. **This skill is the read that did not happen.**
 
 | | Where it is found |
 |---|---|
-| **이미 있는 것** | What already stands at this spot — in `src/`, in the tools, in the docs. **Name it, so nobody builds it twice** |
-| **이미 죽은 것** | What was deleted or reversed here. Reviving a dead thing costs a round, and this repo has lost rounds that way |
-| **재고 있는 그물** | Is there a check on this spot, and is it green right now? |
-| **여기서 났던 거짓 초록** | `docs/how-nets-lie.md`, searched for this spot. **A green that measures less than its label is worse than a red** |
+| **What already stands** | What already stands at this spot — in `src/`, in the tools, in the docs. **Name it, so nobody builds it twice** |
+| **What already died** | What was deleted or reversed here. Reviving a dead thing costs a round, and this repo has lost rounds that way |
+| **Which net measures it** | Is there a check on this spot, and is it green right now? |
+| **Which green went false here** | `docs/how-nets-lie.md`, searched for this spot. **A green that measures less than its label is worse than a red** |
 
 **Done when all four are answered** — an empty one is answered by saying it is empty. **An empty section
 is a measurement**, and a missing one is a gap in the survey.
@@ -36,5 +39,5 @@ glossary are older than the day the sides were swapped.
 
 ## Where it lands
 
-**Into the ticket that asked for it**, under `## 지금 어떻게 돼 있나`. **No ticket in play → back in
+**Into the ticket that asked for it**, under the ticket heading `## 지금 어떻게 돼 있나` (the tickets are Korean, so the heading is). **No ticket in play → back in
 conversation only.**

@@ -12,7 +12,7 @@ splitting it spends a round on work that will be thrown away.
 
 ## 1. Take the bar
 
-Read the chunk's row in `docs/plan/roadmap.md`. **Its 「무엇이 되면 끝인가」 line is the bar**, and every
+Read the chunk's row in `docs/plan/roadmap.md`. **Its `끝나는 조건` cell is the bar**, and every
 ticket you write serves it. Read the open tickets in `docs/plan/tickets/` too, so the numbering continues
 and nothing already open is written twice.
 
@@ -23,8 +23,8 @@ findings come back here.
 
 | | Skill | When |
 |---|---|---|
-| **안** | `survey` | **Always.** What already stands here, what already died, which net measures it, which green went false |
-| **바깥** | `scout` | **When the chunk needs a technique the user has not named.** Skipped otherwise — and say that it was skipped |
+| **Inside** | `survey`, which sends the **`lookup`** agent | **Always.** What already stands here, what already died, which net measures it, which green went false |
+| **Outside** | `scout`, which sends the **`research`** agent | **When the chunk needs a technique the user has not named.** Skipped otherwise — and say that it was skipped |
 
 ⚠⚠ **This step is why the tickets come out right.** A chunk split without it produces tickets that rebuild
 what already exists, or that invent a shape nobody has ever shipped.
@@ -47,14 +47,14 @@ than asking again.
 
 | Kind | `Type:` | The answer is | Who answers |
 |---|---|---|---|
-| **결정 티켓** | `grilling` | **무엇을 만들지** | ⚠⚠ **the user, in conversation** |
-| **작업 티켓** | `task` | **코드** | an agent, through `build-loop` |
+| **Decision ticket** | `grilling` | **what to build** | ⚠⚠ **the user, in conversation** |
+| **Task ticket** | `task` | **code** | an agent, through `build-loop` |
 
 ⚠⚠ **A question the user must answer never becomes a `task`.** That is the mistake this skill exists to
 prevent: a decision written as a build order gets guessed at, and the guess reaches the screen before
 anyone notices it was a guess.
 
-**A 결정 티켓 holds what only the user can decide** — where a piece merely needs a fact, step 2 already
+**A decision ticket holds what only the user can decide** — where a piece merely needs a fact, step 2 already
 went and got it.
 
 ## 5. Write the files
@@ -66,10 +66,10 @@ Type: task | grilling
 Status: open
 Blocked by: NN, NN        ← only when it is genuinely blocked
 
-# <한국어 제목>
+# <Korean title>
 
 ## 무엇이 되면 끝인가
-<one line — for a 결정 티켓 this is the question the user answers>
+<one line — for a decision ticket this is the question the user answers>
 
 ## 왜 이 티켓이 있나
 <the roadmap chunk it serves, and what breaks without it>
@@ -81,12 +81,12 @@ Blocked by: NN, NN        ← only when it is genuinely blocked
 <from `scout`, with sources — this section is absent when scout was skipped>
 ```
 
-**Body in 한국어**, slug in English. **Where the user has judged this thing before, quote them verbatim** —
+**Body in Korean**, slug in English. **Where the user has judged this thing before, quote them verbatim** —
 their own words about a game are a measurement, and this repo has had very few of them.
 
-## 6. Fill the roadmap's 티켓 column
+## 6. Fill the roadmap's ticket column
 
-The chunk's row lists its ticket numbers. **A row still saying 없음 after this skill ran means the run did
+The chunk's row lists its ticket numbers. **A row still saying `없음` after this skill ran means the run did
 not finish.**
 
 ## Done
@@ -94,4 +94,4 @@ not finish.**
 **Done when the chunk's bar is true once every ticket you wrote is resolved** — say that out loud against
 the list before stopping, and add whatever is missing.
 
-Then hand back: **결정 티켓 → the user answers it in conversation** · **작업 티켓 → `build-loop`.**
+Then hand back: **a decision ticket → the user answers it in conversation** · **a task ticket → `build-loop`.**

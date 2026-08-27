@@ -5,8 +5,11 @@ description: Find how others already did this — three worked cases with source
 
 # scout — how others already did it
 
-⚠⚠ **Dispatch it, do not read it here.** Send a subagent, and take back **the findings only**. The moment
-a search result lands in this session's window, the context this skill exists to save is gone.
+⚠⚠ **Dispatch it, do not read it here.** Send the **`research`** agent and take back **the findings only**.
+The moment a search result lands in this session's window, the context this skill exists to save is gone.
+
+⚠ **`research` is the outside half and it never answers from memory.** Anything that could be settled by
+reading this repo is `survey` and its **`lookup`** agent — a different agent, on purpose.
 
 ## When it is required, not optional
 
@@ -21,15 +24,15 @@ silent skip never reads as a check that passed.
 
 | | |
 |---|---|
-| **사례 셋 이상** | **누가 · 무엇을 했나 · 실제로 어떻게 됐나 · 출처.** A case with no source is not a case |
-| **반대 사례 하나 이상** | **안 한 곳, 또는 하다가 뺀 곳**, and why |
-| **결론 한 줄** | What the cases together say for the thing at hand |
+| **Three cases or more** | **Who · what they did · how it actually turned out · the source.** A case with no source is not a case |
+| **One opposite case or more** | **Somebody who did not do it, or did it and took it back**, and why |
+| **One line of conclusion** | What the cases together say for the thing at hand |
 
 ⚠⚠ **The user is new to making games, so a claim with no source cannot be argued with.** That is why the
 count is three and not one, and why the opposite case is required.
 
 ⚠ **The opposite case belongs in the FINDINGS, never attached to a recommendation.** The reply rule
-forbids a 「반대 근거」 hanging off a recommendation; it does not forbid the research from being complete.
+forbids a "the case against" clause hanging off a recommendation; it does not forbid the research from being complete.
 When the case against is strong enough to matter, it becomes a fork in a question, not a footnote.
 
 ## Primary sources first
@@ -40,5 +43,5 @@ and how Sea of Thieves builds its water.
 
 ## Where it lands
 
-**Into the ticket that asked for it**, under `## 남들은 어떻게 하나`. **No ticket in play → the findings
+**Into the ticket that asked for it**, under the ticket heading `## 남들은 어떻게 하나` (the tickets are Korean, so the heading is). **No ticket in play → the findings
 come back in conversation and nowhere else** — a research file nobody asked for is a file nobody reads.

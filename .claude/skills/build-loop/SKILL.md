@@ -3,7 +3,7 @@ name: build-loop
 description: Run the build half of the map on one ticket — plan into the ticket, build it, verify it. Use when the user says 짜줘 / 구현하자 / 만들자 / 개발하자 / 이거 만들자, or otherwise asks for a decided ticket to be turned into code.
 ---
 
-# build-loop — 계획 → 구현 → 검증
+# build-loop — plan → build → verify
 
 **The deciding half is already over.** The ticket holds the decision; this skill turns it into code.
 **`breakdown` wrote the ticket. `wrap-up` closes the session after this.**

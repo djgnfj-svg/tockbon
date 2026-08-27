@@ -35,7 +35,7 @@ turns a chunk into tickets, and it is the next step rather than a finding.
 
 ## Answer
 
-**한국어, and this shape:**
+**Korean, and this shape:**
 
 ```
 **이번 주** : <one line, from the map>
