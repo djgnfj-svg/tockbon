@@ -270,6 +270,25 @@ def vertex_mat(name):
     return m
 
 
+def waterline_point(prof):
+    """Where one shore column crosses the water plane, walked from the land downward.
+
+    `prof` is the column top-down as `(x, y, z)`: the land's own outer point, the skirt's knee, the
+    skirt's hem. **This is the point the sea has to measure from** -- not the piece boundary, which is
+    half a tile inside the rock, and not the hem, which sits under the water.
+
+    WARNING **It never returns None and it never guesses.** A shore column that does not reach the
+    water is a hole in the exported coast, and the sea would draw a straight line through it. Nothing
+    in this repo pretends to work, so it raises instead.
+    """
+    for i in range(len(prof) - 1):
+        (x0, y0, z0), (x1, y1, z1) = prof[i], prof[i + 1]
+        if z0 >= SEA_Z >= z1 and z0 > z1:
+            t = (z0 - SEA_Z) / (z0 - z1)
+            return (x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)
+    raise RuntimeError("a shore column never crosses the water at z=%.3f: %r" % (SEA_Z, prof))
+
+
 def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
     """One 2x2 piece.
 
@@ -326,6 +345,9 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
     ccx, ccy = S * 0.5, S * 0.5
     bm = bmesh.new()
     rows, tops, inner, knee, hem = [], [], [], [], []
+    # **The real coastline, taken off the very vertices the shore is built from.** One entry per ring
+    # point: the world XY where that column meets the water, or None where the piece has no shore.
+    wline = []
     for k, (x, y) in enumerate(ring):
         dx, dy = x - ccx, y - ccy
         L = math.hypot(dx, dy) or 1.0
@@ -337,6 +359,7 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
         if sk[k] is None:
             knee.append(None)
             hem.append(None)
+            wline.append(None)
             fx, fy = x, y
             z0 = z_top
         else:
@@ -350,6 +373,11 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
             knee.append(bm.verts.new((x + ox * reach * SKIRT_ROLL, y + oy * reach * SKIRT_ROLL,
                                       z_top - (z_top - zr) * 0.34)))
             hem.append(bm.verts.new((x + ox * reach, y + oy * reach, zr)))
+            # WARNING **Read off `knee[-1]` and `hem[-1]`, not recomputed.** The exported line and the
+            # mesh have to be the same numbers or they drift apart the first time one of them is
+            # tuned, and drift is exactly the defect this export was written to end.
+            px_, py_ = waterline_point([(x, y, z_top), tuple(knee[-1].co), tuple(hem[-1].co)])
+            wline.append((wx + px_, wy + py_))
             fx, fy = x + ox * reach, y + oy * reach
             z0 = RIM_Z
         col = []
@@ -425,7 +453,13 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
     bm.free()
     ob = bpy.data.objects.new(name, me)
     bpy.context.collection.objects.link(ob)
-    return ob
+    # **The shore as segments**, one per ring edge that has a shore at both ends -- which is the same
+    # test the shore FACES are built with a few lines up, so the line and the rock end together. Two
+    # pieces meeting at a corner work that corner out from the same world point and the same hashes, so
+    # their chains join on one shared point and the island's coast comes out closed.
+    wsegs = [[wline[i], wline[(i + 1) % n]]
+             for i in range(n) if wline[i] is not None and wline[(i + 1) % n] is not None]
+    return ob, wsegs
 
 
 TREADS = 6
@@ -641,6 +675,9 @@ def build():
             bpy.data.objects.remove(o, do_unlink=True)
 
     parts, coast = [], []
+    # ⚠ **NOT exported any more.** The piece-boundary rectangle is kept only as the yardstick the
+    # waterline is measured against at the end of this run.
+    grid_coast = []
     for py in range(PH):
         for px in range(PW):
             L = level_of(px, py)
@@ -656,10 +693,10 @@ def build():
                     else:
                         cl += sd
                     x0, y0 = px * 2, py * 2
-                    coast.append({"s": [x0, y0 + 2, x0 + 2, y0 + 2],
-                                  "n": [x0, y0, x0 + 2, y0],
-                                  "w": [x0, y0, x0, y0 + 2],
-                                  "e": [x0 + 2, y0, x0 + 2, y0 + 2]}[sd])
+                    grid_coast.append({"s": [x0, y0 + 2, x0 + 2, y0 + 2],
+                                       "n": [x0, y0, x0 + 2, y0],
+                                       "w": [x0, y0, x0, y0 + 2],
+                                       "e": [x0 + 2, y0, x0 + 2, y0 + 2]}[sd])
                 elif nl < L:
                     cl += sd
                     lowside = sd
@@ -680,8 +717,15 @@ def build():
                     mny = min(mny, w.y)
                 ob.location = (px * S - mnx, wy - mny, 0.0)
             else:
-                ob = block("P_%d_%d" % (px, py), TOP_H + L * LEVEL_H, cs, cl, c_out, px * S, wy)
+                ob, wsegs = block("P_%d_%d" % (px, py), TOP_H + L * LEVEL_H, cs, cl, c_out,
+                                  px * S, wy)
                 ob.location = (px * S, wy, 0.0)
+                # ⚠⚠ **Rounded HERE, not at the dump.** Two pieces reach a shared corner through
+                # different arithmetic and land a few 1e-16 apart; at four decimals -- a tenth of a
+                # millimetre -- they weld and the coast comes out as one closed ring. Round later and
+                # the closure check below is measuring numbers the game never sees.
+                coast += [[round(a[0], 4), round(TH - a[1], 4),
+                           round(b[0], 4), round(TH - b[1], 4)] for (a, b) in wsegs]
             parts.append(ob)
 
     for o in bpy.data.objects:
@@ -728,6 +772,16 @@ def build():
         "h": TH,
         "rows": list(ROWS),
         "tiers": list(TIERS),
+        # WARNING **THE MESH'S REAL WATERLINE, NOT THE TILE GRID** (2026-08-28, the user: 「지금 굴곡에
+        # 안 맞춰져 있는 게 보이고」). This used to be four axis-aligned segments per coastal piece --
+        # the staircase rectangle the board is written on -- while the mesh beside it had cut corners,
+        # a wobble on every one of them and a skirt hung half a tile further out. The sea bakes its
+        # distance map from this array and from nothing else, so the water was drawing a rectangle
+        # round an island that is not one.
+        # ⚠ **Same key, same shape**: a flat `[x0, y0, x1, y1]` in TILE coordinates, order irrelevant,
+        # just more of them and no longer axis-aligned. The only reader is `_bake_land_field`.
+        # ⚠⚠ **Tile Y is not Blender Y.** The mesh is built on reversed rows, so a world point comes
+        # back as `TH - y`; getting this wrong mirrors the coast onto the far side of the island.
         "coast": coast,
         "builds": starting_builds(),
         # WARNING **Empty on purpose** (2026-08-27, the user: 「바위랑 나무는 다 지워주고 집만 남겨」).
@@ -738,8 +792,32 @@ def build():
     }
     with open(OUT_DIR + "/island.json", "w", encoding="utf-8") as fh:
         json.dump(board, fh, ensure_ascii=False, indent=1)
+    # **How far out the waterline actually runs**, measured against the piece boundary the export used
+    # until today, so the sea's `WATER_SHORE_OFFSET_TILES` -- which exists only to make up that gap --
+    # can be set from a number instead of by eye.
+    pts = sorted({(seg[0], seg[1]) for seg in coast} | {(seg[2], seg[3]) for seg in coast})
+    out = []
+    for (qx, qy) in pts:
+        best = 1e9
+        for (ax, ay, bx, by) in grid_coast:
+            ex, ey = bx - ax, by - ay
+            u = max(0.0, min(1.0, ((qx - ax) * ex + (qy - ay) * ey) / (ex * ex + ey * ey)))
+            best = min(best, math.hypot(qx - ax - ex * u, qy - ay - ey * u))
+        out.append(best)
     print("island %dx%d, %d pieces, %d coast segments, verts %d"
           % (TW, TH, len(parts), len(coast), len(isl.data.vertices)))
+    print("waterline: %d points, %.3f..%.3f tiles outside the piece boundary, mean %.3f"
+          % (len(pts), min(out), max(out), sum(out) / len(out)))
+    # ⚠⚠ **The coast has to CLOSE.** Every point is an end of exactly two segments; anywhere it is an
+    # end of one, two pieces worked the same corner out differently and the sea bakes a straight line
+    # across the gap. Measured rather than assumed, because the failure is invisible on the mesh.
+    deg = {}
+    for seg in coast:
+        for q in ((seg[0], seg[1]), (seg[2], seg[3])):
+            deg[q] = deg.get(q, 0) + 1
+    loose = [q for q, d in deg.items() if d != 2]
+    print("coast closes: %s (%d points, %d loose)"
+          % ("yes" if not loose else "NO", len(deg), len(loose)))
 
 
 build()

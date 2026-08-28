@@ -17,7 +17,8 @@ extends RefCounted
 ##
 ## The mutation paired with each row is written beside it. `sea-summon` section 6.1 is the table.
 ##
-## ⚠⚠ **EVERY ISLAND LITERAL IN THIS FILE WAS RE-MEASURED 2026-08-27 AGAINST THE ONE 26 x 20 BOARD.**
+## ⚠⚠ **EVERY ISLAND LITERAL IN THIS FILE WAS RE-MEASURED 2026-08-27 AGAINST THE ONE 26 x 20 BOARD,
+## AND AGAIN 2026-08-28 AGAINST THE 16 x 12 ONE** `island_build.py`'s 2x2-piece rewrite left it at.
 ## The three 48 x 32 islands and the 144 x 32 long map are deleted, and the numbers that stood here
 ## were theirs. **What the old numbers knew, kept because it is the price of a decision and not a bug
 ## to be found again later**:
@@ -42,24 +43,29 @@ extends RefCounted
 ## ⚠⚠ **THE BAND IS A MINIMUM distance from land, not a maximum**, on the user's own sentence after
 ## playing (*"해안선에 배를 배치하는게 아니라 좀 거리를 둬야함 … 배가 가는게 중요하니까"*).
 ##
-## The island's band at `Rules.SUMMON_BAND_MIN_TILES = 3`. ⚠⚠ **Twenty-two tiles, and the number is
-## small because BOTH ends of the band bite on a 26 x 20 board**: the moat is only about six hops wide,
-## so `>= 4` leaves 6 tiles and `>= 5` leaves **none at all**. The ring (`SUMMON_RADIUS_RATIO` 0.46
-## about the middle of the grid) takes the rest. **This is a real thing to watch when the island is
-## next re-shaped** — one more hop of minimum distance empties the band and every press becomes a
-## refusal, with `can_summon_at` still perfectly correct.
-const BAND_TILES := 22
+## The island's band at `Rules.SUMMON_BAND_MIN_TILES = 3`.
+## ⚠⚠ **THIS IS THE RE-SHAPE THIS COMMENT WARNED ABOUT.** Re-measured 2026-08-28 against the live
+## 16 x 12 board (`island_build.py`'s 2x2-piece rewrite, 2026-08-27): the moat is now barely wide
+## enough to clear three hops at all, and the band fell from 22 tiles to **four** — every one of them
+## along the same short stretch of coast, none of it a self-check padding, `can_summon_at` unchanged.
+## **This is worth carrying to the user as a design finding, not only a test repair**: four summonable
+## sea tiles on the whole map is a real narrowing of where a boat may be pressed, and the next island
+## reshape is exactly the moment to decide whether that is intended.
+const BAND_TILES := 4
 
 ## How many LANDINGS the band can reach, against how many coast tiles there are to reach. ⚠ The
 ## second is the coastal set `_summon_field` seeds from — *passable AND touching water on any of eight
 ## sides* — which is what the deleted per-harbour `sendable` table used to answer, tile for tile.
-const LANDINGS_FROM_BAND := 16
-const COASTAL_TILES := 72
+## ⚠⚠ **Re-measured 2026-08-28.** All four band tiles now resolve to four DISTINCT landings — the
+## derivation used to cost the player most of the coastline (16 of 72); today it costs almost none,
+## because there are only four sea tiles left to press in the first place. See `BAND_TILES` above.
+const LANDINGS_FROM_BAND := 4
+const COASTAL_TILES := 36
 
 ## Water a press must be REFUSED on: it has a landing, so it is not open ocean the field never reached,
 ## but it is inside `SUMMON_BAND_MIN_TILES` of the shore or outside the ring. **A self-check for that
 ## arm: at 0 it would be vacuous.**
-const NEAR_WATER := 242
+const NEAR_WATER := 112
 
 
 func run(t) -> void:
@@ -218,7 +224,7 @@ func _no_land_is_summonable(t) -> void:
 			land_hits += 1
 		if g.can_summon_at(tile) and g.water[tile] == 0:
 			dry_hits += 1
-	t.eq(checked, 26 * 20, "섬의 칸을 전부 봤다 (자가 점검 — 0개면 깨끗한 게 아니라 안 돈 것이다)")
+	t.eq(checked, 16 * 12, "섬의 칸을 전부 봤다 (자가 점검 — 0개면 깨끗한 게 아니라 안 돈 것이다)")
 	t.eq(land_hits, 0, "육지 칸은 소환 지점이 아니다")
 	t.eq(dry_hits, 0, "그리고 소환 가능한 칸은 전부 물이다")
 
@@ -260,15 +266,15 @@ func _what_the_derivation_costs(t) -> void:
 		"띠가 닿는 상륙지가 %d 곳이다" % LANDINGS_FROM_BAND)
 	t.eq(_coastal_tiles(g).size(), COASTAL_TILES,
 		"그런데 배가 닿을 수 있는 해안은 %d 칸이다 (자가 점검)" % COASTAL_TILES)
-	# ⚠⚠ **THE COST OF THE DERIVATION IS MOST OF THE COASTLINE, and it is stated as a number rather
-	# than softened.** Under the old band hugging the coast the derivation lost 2 tiles; a band held
-	# out at sea means many sea tiles share one nearest landing, so the player can address 16 of 72.
-	# `sea-summon` §3.3 predicted this and measured the shape of it on the deleted islands (the four
-	# biggest catchments were corner landings, 40 / 40 / 72 / 84 tiles against a MEDIAN catchment of
-	# 8); **the user's decision overrides its verdict, and the price is written here where it can be
-	# re-measured** rather than argued down.
-	t.eq(COASTAL_TILES - LANDINGS_FROM_BAND, 56,
-		"도출이 잃는 것은 56칸이다 — 해안의 78%")
+	# ⚠⚠ **THE COST OF THE DERIVATION USED TO BE MOST OF THE COASTLINE — re-measured 2026-08-28 and it
+	# is not any more.** On the 26 x 20 board the player could address 16 of 72 coast tiles (56 lost,
+	# 78%); on today's 16 x 12 board the band's four tiles resolve to four DISTINCT landings out of 36
+	# coast tiles — the derivation now costs almost nothing, purely because there are only four sea
+	# tiles left to press (see `BAND_TILES`). `sea-summon` §3.3's prediction was measured on the
+	# deleted 48-wide islands and never applied to this shape; **the number below is the current cost,
+	# not a restatement of the old one.**
+	t.eq(COASTAL_TILES - LANDINGS_FROM_BAND, 32,
+		"도출이 잃는 것은 32칸이다 — 해안의 89%, 뜰 수 있는 물이 네 칸뿐이라서다")
 
 
 # -- G5 --------------------------------------------------------------------------------------------
@@ -564,10 +570,15 @@ func _most_hurt_first(t) -> void:
 	t.ok(army.hp[2] > army.hp[0] and army.hp[0] > army.hp[1],
 		"HP 순서와 아이디 순서가 실제로 어긋난다 (자가 점검)")
 
+	# ⚠⚠ **REPAIRED 2026-08-28 — the band shrank to 4 tiles** (16 x 12 board), so `band[k]` for `k` up
+	# to 5 read past the end. Nothing here measures WHICH tile a press lands on — only WHICH soldier
+	# boards — so all six presses now land on the same one band tile, which `summon` never refuses
+	# twice: it reserves and removes the next soldier each call, it does not mark the tile spent.
 	var band := _band_tiles(g)
+	var tile0 := int(band[0])
 	var order: Array = []
 	for k in 6:
-		var uid := b.summon(0, int(band[k]))
+		var uid := b.summon(0, tile0)
 		t.ok(uid >= 0, "%d번째 소환이 됐다" % k)
 		var boat: Dictionary = b.boats[b.boats.size() - 1]
 		order.append(int((boat["soldiers"] as Array)[0]))
@@ -689,8 +700,12 @@ func _seven_refusals(t) -> void:
 	# 7 — the slot is dry.
 	var dry := _fresh()
 	# ⚠ Derived from the opening table, not a literal 6 — slot 0's body count moved to ten (티켓 15).
+	# ⚠⚠ **REPAIRED 2026-08-28 — `band[k]` read past index 3 the moment the band shrank to 4 tiles**
+	# (16 x 12 board). All ten presses now land on `band[0]`; `summon` never refuses a repeat press on
+	# the same tile, only an empty slot does, which is exactly the boundary this arm measures.
+	var tile0 := int(band[0])
 	for k in Rules.start_bodies_of(0):
-		t.ok(dry.summon(0, int(band[k])) >= 0, "마르기 전에는 %d번째도 나간다 (자가 점검)" % k)
+		t.ok(dry.summon(0, tile0) >= 0, "마르기 전에는 %d번째도 나간다 (자가 점검)" % k)
 	t.eq(dry.slot_reserve_ids(0).size(), 0, "슬롯 1 이 실제로 말랐다 (자가 점검)")
 	var before := dry.boats.size()
 	t.eq(dry.summon(0, good), -1, "마른 슬롯은 거절한다")
@@ -746,11 +761,28 @@ func _a_summoned_boat_goes_home_to_the_sea(t) -> void:
 ## ⚠⚠ **IT WAS A DRAG AND A SUMMON AND IT IS TWO SUMMONS NOW** (2026-08-27). `Battle.send` is deleted,
 ## so 「섞인 계획」 has nothing to mix; **what the row actually measures is unchanged** — two boats aimed
 ## at ONE landing, which is the only arrangement that tests the spreading at all — and two band tiles
-## that share a landing are what produce it. ⚠ **They must be found rather than typed**: 22 band tiles
-## resolve to 16 landings here, so a pair exists, but which pair is a fact about the board.
+## that share a landing are what produce it. ⚠ **They used to be found rather than typed**: 22 band
+## tiles resolved to 16 landings on the OLD 26 x 20 island, so a pair existed there.
+##
+## ⚠⚠ **REPAIRED 2026-08-28.** The real island shrank to 16 x 12 and its band is four tiles resolving
+## to four DISTINCT landings (see `BAND_TILES` / `LANDINGS_FROM_BAND`) — there is no longer any pair on
+## the real island, so searching it for one now always fails silently, which is exactly the
+## vanished-check shape `how-nets-lie` keeps a casebook of. **The search itself is kept**
+## (finding the pair rather than typing it is still the right shape) **and is pointed at a fixture
+## generous enough to hold one**: a wide straight coast facing open sea, the same shape the deleted
+## 48-wide islands used when this row was first measured at 16/30 landings. Re-derived outside the
+## engine (Python, the same discipline as every other literal in this file) before this fixture was
+## written: 109 band tiles, 17 distinct landings, 15 of them shared by two or more tiles.
 func _a_mixed_plan_unloads_on_two_tiles(t) -> void:
-	var b := _fresh_with_a_beast()
-	var g := b.grid
+	var rows: Array = []
+	for y in 14:
+		rows.append(".".repeat(20) if y >= 9 else "~".repeat(20))
+	var g := Grid.new()
+	g.load_rows(rows)
+	var army := Army.new()
+	army.add_starting_force()
+	var b := Battle.new()
+	b.setup(g, army, [{"type_id": Rules.WOLF, "tile": g.tile_index(0, 9)}])
 
 	var band := _band_tiles(g)
 	var first := {}
@@ -812,7 +844,9 @@ func _the_run_slots(t) -> void:
 	t.eq(a.slot_count(), Rules.START_SLOTS.size(), "그리고 새 군대의 칸 수는 그 표가 정한다")
 	t.eq(Rules.roster_start_count(), 10,
 		"시작 병력은 열이다 (리터럴) — 작은 섬 넷의 밀도가 전부 이 열에 맞춰져 있다")
-	t.eq(a.slot_type_of(0), Rules.WOLF, "1번 칸은 늑대다")
+	# ⚠⚠ **REPAIRED 2026-08-28 — this said WOLF from before the 2026-08-26 side swap** (`START_SLOTS`
+	# used to open on ten wolves; the opening roster is `[[SWORDSMAN, 10]]` today, per `rules.gd`).
+	t.eq(a.slot_type_of(0), Rules.SWORDSMAN, "1번 칸은 검사다")
 
 	# Lesson 1: **the answer for an empty slot is `SUMMON_UNBOUND` and never 0.** There IS a row 0,
 	# so a `0` here summons the squirrel with every bounds check downstream still passing.
@@ -829,21 +863,46 @@ func _the_run_slots(t) -> void:
 	t.eq(a.slot_count(), before, "그리고 거절이라 칸 수도 그대로다 — 아무것도 안 변했다")
 
 	# Lesson 3: **one species, at most one slot.**
-	t.eq(a.register_species(Rules.WOLF), -1, "이미 등록된 종은 두 번째 칸에 못 들어간다")
+	# ⚠ **REPAIRED 2026-08-28 — this registered WOLF, which was never in a slot to begin with** (slot 0
+	# holds SWORDSMAN, not WOLF — see the fix above), so it was accidentally re-testing Lesson 2 (the
+	# enemy refusal) rather than the "already registered" refusal this row is named for.
+	t.eq(a.register_species(Rules.SWORDSMAN), -1, "이미 등록된 종은 두 번째 칸에 못 들어간다")
 	t.eq(a.slot_count(), before, "그것도 아무것도 안 바꿨다")
 
 	# The floor under those three ceilings: a legal registration DOES land.
-	var got := a.register_species(Rules.BEAR)
-	t.eq(got, before, "안 등록된 아군 종은 다음 빈 칸으로 들어간다 (자가 점검)")
-	t.eq(a.slot_count(), before + 1, "그리고 칸이 하나 늘었다")
-	t.eq(a.slot_type_of(got), Rules.BEAR, "그 칸이 그 종이다")
+	# ⚠⚠ **REPAIRED 2026-08-28 — BEAR is enemy-side today** (`rules.gd`'s `UNITS` puts it on
+	# `Side.ENEMY`), so `register_species(BEAR)` was refused for the same reason Lesson 2 already
+	# covers — it never reached the floor this row is named for. **There is no second player-side row
+	# to register against `a`**: `Rules.UNITS` carries exactly one, SWORDSMAN, already sitting in `a`'s
+	# slot 0. The floor is driven on a fresh, empty Army instead — the first-ever registration into a
+	# blank roster, which is the real shape "a legal registration lands" happens in today.
+	var blank := Army.new()
+	t.eq(blank.slot_count(), 0, "새 군대는 칸이 비어 있다 (자가 점검)")
+	var got := blank.register_species(Rules.SWORDSMAN)
+	t.eq(got, 0, "안 등록된 아군 종은 다음 빈 칸으로 들어간다 (자가 점검)")
+	t.eq(blank.slot_count(), 1, "그리고 칸이 하나 늘었다")
+	t.eq(blank.slot_type_of(got), Rules.SWORDSMAN, "그 칸이 그 종이다")
 
-	# The ceiling on the ceiling: `SUMMON_SLOT_MAX` refuses, and nothing changes when it does.
+	# The ceiling on the ceiling: `SUMMON_SLOT_MAX` refuses once slots are full, and nothing changes
+	# when it does.
+	# ⚠⚠ **REPAIRED 2026-08-28 — looping `register_species` over `player_type_count()` cannot reach
+	# five slots any more.** `Rules.UNITS` carries exactly ONE player-side row (SWORDSMAN); the loop
+	# this replaced registered slot 0, then spent four more iterations re-registering the same species
+	# and being refused by Lesson 3 — `full.slot_count()` stalled at 1 forever, and the row asserting
+	# 5 had gone permanently unreachable the day the human roster collapsed to one type (CONTEXT.md).
+	# **`SUMMON_SLOT_MAX` itself is still real and still five** (`Army.slots` and the raid path can grow
+	# a roster mid-run, per `rules.gd`'s own note); it is driven here directly on `slots`, a public
+	# field a real caller never pokes but a check aimed only at the CEILING clause may, so the
+	# registration attempt below hits `slots.size() >= SUMMON_SLOT_MAX` and nothing upstream of it —
+	# filler entries are deliberately not SWORDSMAN, so Lesson 3's "already registered" refusal cannot
+	# be the one firing instead.
 	var full := Army.new()
-	full.add_starting_force()
-	for ty in Rules.player_type_count():
-		full.register_species(ty)
-	t.eq(full.slot_count(), Rules.SUMMON_SLOT_MAX, "다섯 종을 다 넣으면 칸이 상한만큼 찬다 (자가 점검)")
+	var packed := PackedInt32Array()
+	for _i in Rules.SUMMON_SLOT_MAX:
+		packed.append(Rules.WOLF)
+	full.slots = packed
+	t.eq(full.slot_count(), Rules.SUMMON_SLOT_MAX, "다섯 칸이 차면 칸 수도 상한만큼이다 (자가 점검)")
+	t.eq(full.register_species(Rules.SWORDSMAN), -1, "찬 칸에는 등록 안 된 종도 새로 못 들어간다 — 상한이 문다")
 	t.eq(Rules.SUMMON_SLOT_MAX, 5, "그 상한은 다섯이다 (리터럴)")
 
 
@@ -879,15 +938,17 @@ func _the_unit_table(t) -> void:
 	# Every id constant, paired with the identifier its own row carries. The pair list is a second
 	# copy of nothing — the NAMES are what the table stores — but its LENGTH is, so the length is
 	# pinned against the table: a row added without a pair here reddens this line before anything else.
+	# ⚠⚠ **REPAIRED 2026-08-28.** This table pinned SQUIRREL · COW · SPEARMAN · ARCHER · SHIELDBEARER —
+	# names from before ticket 15's rename and the 2026-08-26 side swap, both of which are long done.
+	# `Rules.UNITS` carries exactly five rows today (see `rules.gd`), and the label a check hands to
+	# `name_of` has to be the row's OWN identifier, never a name the row used to answer to — that is the
+	# exact "이름을 바꾸면 그 이름으로 짜인 검사가 조용히 다른 것을 재기 시작한다" trap
+	# (`how-nets-lie`), except this one at least reddened instead of passing quietly.
 	var named := [
-		[Rules.SWORDSMAN, "SQUIRREL"],
+		[Rules.SWORDSMAN, "SWORDSMAN"],
 		[Rules.WOLF, "WOLF"],
-		[Rules.SWORDSMAN, "COW"],
 		[Rules.BEAR, "BEAR"],
 		[Rules.CROW, "CROW"],
-		[Rules.WOLF, "SPEARMAN"],
-		[Rules.CROW, "ARCHER"],
-		[Rules.WOLF, "SHIELDBEARER"],
 		[Rules.LION, "LION"],
 	]
 	t.eq(named.size(), Rules.UNITS.size(),
@@ -916,21 +977,27 @@ func _the_unit_table(t) -> void:
 	t.eq(Rules.side_of(Rules.player_type_count()), Rules.Side.ENEMY,
 		"그리고 바로 다음 줄이 적이다 — 연속의 끝을 못 박는다")
 
-	# ⚠⚠ **THE FOUR TRANSPLANTED ROWS, PINNED AS LITERALS.** `rules.gd` claims 늑대 · 까마귀 · 궁수 ·
-	# 방패병 carry the numbers their pre-rename rows carried, and **nothing measured that claim** —
-	# 까마귀's damage in particular was pinned in no file at all, so changing it 1.5 -> 2.5 reddened
-	# one HP-total line in `net_run` and nothing else. The literals below are the OLD table's own
-	# values, typed in rather than read back: a check that asks the subject for its expectation is
-	# this repo's named false green.
+	# ⚠⚠ **REPAIRED 2026-08-28 — TWO ROWS, NOT FOUR.** `rules.gd`'s own header claims only 늑대 · 까마귀
+	# carry the numbers their pre-rename rows (`CELL_MELEE` / `CELL_RANGED`) carried; 궁수 · 방패병 ·
+	# 창병 are not a lineage into WOLF/CROW at all — CONTEXT.md is explicit that the four human rows
+	# were DELETED outright and SWORDSMAN's row was freshly interpolated between two of them. The two
+	# extra rows this table used to carry (hp 6.0/range 3.0/area 0.0/speed 6.0 on CROW; hp 20.0/dmg
+	# 3.0/period 2.0/speed 2.5 on a second WOLF) were typed in for that lineage that never existed and
+	# only ever collided with the real rows below — deleted rather than repaired.
 	#
-	# ⚠ **The two that are NOT transplants are deliberately absent** — 다람쥐 · 소 · 곰 · 창병 are first
+	# ⚠ **DETECT moved from `NO_DETECT` to a real radius on both real rows** (rules.gd, 2026-08-26 —
+	# "they gained a detect radius: an enemy has to notice something"), which is the one column this
+	# table's own claim of "unchanged" does not cover; HP · DAMAGE · PERIOD · RANGE · AREA · SPEED are
+	# still the values pinned here, typed in rather than read back — a check that asks the subject for
+	# its expectation is this repo's named false green. 까마귀's damage in particular is pinned in no
+	# other file, so changing it 1.5 -> 2.5 would redden only one HP-total line in `net_run` without this.
+	#
+	# ⚠ **The two that are NOT transplants are deliberately absent** — 곰 · 사자 are first
 	# drafts the user is expected to move, and pinning them would turn a tuning pass into a rewrite.
 	var moved := [
 		# row                   hp    dmg  period range  area  speed  detect
-		[Rules.WOLF,           14.0,  2.0,  1.0,   0.0,  0.0,  4.0,  Rules.NO_DETECT],
-		[Rules.CROW,            8.0,  1.5,  1.0,   4.0,  1.0,  4.0,  Rules.NO_DETECT],
-		[Rules.CROW,          6.0,  1.5,  1.0,   3.0,  0.0,  6.0,  12.0],
-		[Rules.WOLF,   20.0,  3.0,  2.0,   0.0,  0.0,  2.5,  6.0],
+		[Rules.WOLF,           14.0,  2.0,  1.0,   0.0,  0.0,  4.0,   6.0],
+		[Rules.CROW,            8.0,  1.5,  1.0,   4.0,  1.0,  4.0,  12.0],
 	]
 	for raw2 in moved:
 		var row: Array = raw2

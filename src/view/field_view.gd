@@ -174,6 +174,10 @@ func _build_world() -> void:
 	sea_mat.set_shader_parameter("ripple_wind_deg", Look.WATER_RIPPLE_WIND_DEG)
 	sea_mat.set_shader_parameter("ripple_stretch", Look.WATER_RIPPLE_STRETCH)
 	sea_mat.set_shader_parameter("ripple_chop", Look.WATER_RIPPLE_CHOP)
+	sea_mat.set_shader_parameter("ripple_crisp", Look.WATER_RIPPLE_CRISP)
+	sea_mat.set_shader_parameter("ripple_crisp_edge", Look.WATER_RIPPLE_CRISP_EDGE)
+	sea_mat.set_shader_parameter("ripple_crisp_patch", Look.WATER_RIPPLE_CRISP_PATCH)
+	sea_mat.set_shader_parameter("ripple_crisp_patch_scale", Look.WATER_RIPPLE_CRISP_PATCH_SCALE)
 	_sea.material_override = sea_mat
 	# ⚠⚠ **The sea casts nothing, and that is a fix rather than an optimisation.** A flat quad 400
 	# tiles across shadows ITSELF at grazing angles, and the whole sea drew as diagonal stripes — the
@@ -775,6 +779,9 @@ func _rebuild_buildings() -> void:
 		var cy := float(d["y"]) + float(fp.y) * 0.5
 		var t := int(d["y"]) * battle.grid.w + int(d["x"])
 		one.position = Vector3(cx, Islands.ground_h(battle.grid.level_of(t)), cy)
+		# ⚠ Scaled about its own origin, which sits at the footprint's centre on the ground — so a
+		# shrunken building stays on its tile and stays standing on it rather than floating.
+		one.scale = Vector3(Look.BUILD_SCALE, Look.BUILD_SCALE, Look.BUILD_SCALE)
 		_builds.add_child(one)
 	# ⚠⚠ **NOT `_use_vertex_colours` here, and that call was the bug** (2026-08-26, the user: 「건물
 	# 벽면이 이상함」). It exists for the ISLAND, whose mesh carries a colour per vertex. **The buildings
@@ -794,49 +801,158 @@ func _rebuild_buildings() -> void:
 ## Built once per island, on the CPU, at `Look.WATER_FIELD_SUBDIV` texels per tile. ⚠ **One texel per
 ## tile is not enough** — the foam then steps square at tile edges, which is the grid drawn back in
 ## water after the geometry stopped drawing it.
+##
+## ⚠⚠ **THE ISLAND IS GOING TO CHANGE WHILE THE GAME IS RUNNING** (2026-08-28, the user: 「유저가 땅을
+## 추가하거나 섬을 넓힐 수가 있다」). Calling this again rebuilds everything the sea knows about the land,
+## and the cache below is keyed on the land's own bytes so a rebuild after a block is placed cannot be
+## served a stale map. ⚠⚠ **What is NOT yet ready for that is the outline itself**: `Islands.coast()` is
+## a polyline the Blender bake exported for THIS island, so a block placed at runtime moves the rock and
+## not the line. **The bake has to export a rule the game can compose an outline from — per piece side
+## and per corner — rather than one island's finished polyline.** Until it does, added land will have a
+## shore the water cannot see, and that is a known gap and not a surprise.
+## ⚠⚠ **The baked field, kept between builds.** There is ONE island and it is read from a file, so the
+## distance map is the same picture every time a board is built — and a net run builds hundreds. Baking
+## it once took the whole net run from 31 seconds to 42; keeping it takes it back. ⚠ **Keyed on
+## everything the bake depends on**, so a changed constant re-bakes instead of serving a stale map.
+static var _field_cache: ImageTexture = null
+static var _field_key := ""
+
+
 func _hand_the_sea_its_shoreline() -> void:
 	if _sea == null or battle == null:
 		return
 	var g := battle.grid
 	var sub := int(Look.WATER_FIELD_SUBDIV)
 	var span := float(Look.WATER_FIELD_SPAN_TILES)
-	var tw := g.w * sub
-	var th := g.h * sub
+	# ⚠⚠ **A MARGIN OF OPEN WATER ROUND THE GRID, and without it the sea grows straight white lines out
+	# to the horizon** (found 2026-08-28). The field used to cover the island's tile box exactly; the
+	# sampler clamps outside it, so whatever distance the border texel happened to hold was repeated
+	# forever outward. Where the island reached its box — the east arm does — the border said "almost
+	# ashore" and the foam obeyed it all the way off screen. **The margin has to be at least `span`**, so
+	# that every border texel is real open sea and clamping repeats nothing but open sea.
+	var margin := span
+	var tw := int(round((float(g.w) + margin * 2.0) * float(sub)))
+	var th := int(round((float(g.h) + margin * 2.0) * float(sub)))
 
 	# ⚠⚠ **The REAL coastline, not the tile grid.** Coastal corners are cut and pushed when the island
 	# is built, so a field measured to square tiles put a square wash around a coast that is not square
 	# (2026-08-26, the user saw it before the code did). `Islands.coast()` is the line the mesh actually
 	# ends on, exported beside the mesh by the same run that shaped it.
 	var coast := Islands.coast()
+	# ⚠⚠ **THE KEY IS THE LAND ITSELF, NOT ITS SIZE** (2026-08-28, the user: 「유저가 땅을 추가하거나
+	# 섬을 넓힐 수가 있다는 점을 꼭 명심하도록 두고 작업해야 돼 ... 땅이 추가되었을 때 해안선도 바뀌고
+	# 해안 라인도 바뀐다」). The first version of this cache keyed on width, height, resolution and the
+	# **number** of coast segments — every one of which a player adding a block can leave untouched while
+	# moving the shore. **A cache that cannot see the change it is caching is a stale picture served
+	# silently**, which is the exact failure this repo already paid for once with Godot's own import
+	# cache. `water` carries one byte per tile, so hashing it sees any block placed or removed.
+	var key := "%d,%d,%d,%.3f,%d,%d" % [g.w, g.h, sub, span, coast.size(),
+										hash(g.water) ^ hash(coast)]
 
-	var img := Image.create(tw, th, false, Image.FORMAT_L8)
-	if coast.is_empty():
-		img.fill(Color(1.0, 1.0, 1.0))
-	else:
-		for py in th:
-			for px in tw:
-				var at := Vector2((float(px) + 0.5) / float(sub), (float(py) + 0.5) / float(sub))
-				var best := span
-				for seg in coast:
-					var a := Vector2(float(seg[0]), float(seg[1]))
-					var b := Vector2(float(seg[2]), float(seg[3]))
-					var ab := b - a
-					var len2 := ab.length_squared()
-					# The nearest point ON the segment, clamped to its ends — measuring to the infinite
-					# line would foam along the coast's continuation out into open sea.
-					var u := 0.0 if len2 <= 0.0 else clampf((at - a).dot(ab) / len2, 0.0, 1.0)
-					var d := at.distance_to(a + ab * u)
-					if d < best:
-						best = d
-				var v := clampf(best / span, 0.0, 1.0)
-				img.set_pixel(px, py, Color(v, v, v))
+	var tex: ImageTexture = _field_cache if key == _field_key else null
+	if tex == null:
+		tex = _bake_land_field(tw, th, sub, span, margin, coast)
+		_field_cache = tex
+		_field_key = key
 
 	var mat := _sea.material_override as ShaderMaterial
 	if mat == null:
 		return
-	mat.set_shader_parameter("land_field", ImageTexture.create_from_image(img))
-	mat.set_shader_parameter("field_size", Vector2(float(g.w), float(g.h)))
+	mat.set_shader_parameter("land_field", tex)
+	_hand_the_sea_its_numbers(mat, g, margin, span)
+
+
+## **The distance map itself.** Split out so the caller can skip it entirely when the same island is
+## being built again.
+static func _bake_land_field(tw: int, th: int, sub: int, span: float, margin: float,
+							 coast: Array) -> ImageTexture:
+	# ⚠⚠ **Written into a byte buffer, NOT with `set_pixel`.** The field is built at sixteen texels per
+	# tile now — a quarter of a million of them — and `set_pixel` is a call across the engine boundary
+	# for every one. The buffer plus one `create_from_data` is the same picture in a fraction of the
+	# time, and the resolution is what lets the lip follow a cut corner instead of stepping down it.
+	# ⚠⚠ **FLOATS, not bytes, and the byte version was a visible defect** (2026-08-28, the user: 「너무
+	# 딱딱하게」). `FORMAT_L8` over a span of 4 tiles is one level every **0.0157 tiles**; the lip is 0.06
+	# tiles wide, so its soft edge had **four steps in it** and read as a stair rather than as a fade.
+	# ⚠ `PackedFloat32Array.to_byte_array()` is one conversion, not a call per texel.
+	var buf := PackedFloat32Array()
+	buf.resize(tw * th)
+	if coast.is_empty():
+		for i in buf.size():
+			buf[i] = 1.0
+	else:
+		# Unpacked once: reading four floats out of a nested array inside the inner loop is the same
+		# work repeated a quarter of a million times over.
+		var ax := PackedFloat32Array()
+		var ay := PackedFloat32Array()
+		var bx := PackedFloat32Array()
+		var by := PackedFloat32Array()
+		for seg in coast:
+			ax.append(float(seg[0]))
+			ay.append(float(seg[1]))
+			bx.append(float(seg[2]))
+			by.append(float(seg[3]))
+		var n := ax.size()
+		# Per-segment vertical reach, so a row can skip every segment that cannot possibly be its
+		# nearest. ⚠⚠ **This is not a micro-optimisation, it is what pays for the resolution**: at
+		# sixteen texels per tile the field is a quarter of a million texels, and without the filter the
+		# whole net run went from 31 seconds to 53.
+		var ylo := PackedFloat32Array()
+		var yhi := PackedFloat32Array()
+		for i in n:
+			ylo.append(minf(ay[i], by[i]) - span)
+			yhi.append(maxf(ay[i], by[i]) + span)
+		var span2 := span * span
+		var near := PackedInt32Array()
+		for py in th:
+			var wy := (float(py) + 0.5) / float(sub) - margin
+			var row := py * tw
+			near.clear()
+			for i in n:
+				if wy >= ylo[i] and wy <= yhi[i]:
+					near.append(i)
+			if near.is_empty():
+				for px in tw:
+					buf[row + px] = 1.0
+				continue
+			var m := near.size()
+			for px in tw:
+				var wx := (float(px) + 0.5) / float(sub) - margin
+				var best2 := span2
+				for k in m:
+					var i := near[k]
+					var ex := bx[i] - ax[i]
+					var ey := by[i] - ay[i]
+					var len2 := ex * ex + ey * ey
+					var qx := wx - ax[i]
+					var qy := wy - ay[i]
+					# The nearest point ON the segment, clamped to its ends — measuring to the infinite
+					# line would foam along the coast's continuation out into open sea.
+					var u := 0.0 if len2 <= 0.0 else clampf((qx * ex + qy * ey) / len2, 0.0, 1.0)
+					var dx2 := qx - ex * u
+					var dy2 := qy - ey * u
+					var d2 := dx2 * dx2 + dy2 * dy2
+					if d2 < best2:
+						best2 = d2
+				buf[row + px] = clampf(sqrt(best2) / span, 0.0, 1.0)
+	var img := Image.create_from_data(tw, th, false, Image.FORMAT_RF, buf.to_byte_array())
+	return ImageTexture.create_from_image(img)
+
+
+
+## **Every dial the sea reads**, handed over on every build because a constant may have moved
+## even when the island has not.
+static func _hand_the_sea_its_numbers(mat: ShaderMaterial, g, margin: float,
+									  span: float) -> void:
+	var gw := float(g.w)
+	var gh := float(g.h)
+	mat.set_shader_parameter("field_origin", Vector2(-margin, -margin))
+	mat.set_shader_parameter("field_size", Vector2(gw + margin * 2.0,
+												   gh + margin * 2.0))
 	mat.set_shader_parameter("field_span", span)
+	mat.set_shader_parameter("shore_offset", Look.WATER_SHORE_OFFSET_TILES)
+	mat.set_shader_parameter("shore_warp", Look.WATER_SHORE_WARP_TILES)
+	mat.set_shader_parameter("shore_warp_scale", Look.WATER_SHORE_WARP_SCALE)
+	mat.set_shader_parameter("shore_warp_speed", Look.WATER_SHORE_WARP_SPEED)
 	mat.set_shader_parameter("foam", Look.COL_WATER_FOAM)
 	mat.set_shader_parameter("foam_tiles", Look.WATER_FOAM_TILES)
 	mat.set_shader_parameter("foam_speed", Look.WATER_FOAM_SPEED)
@@ -845,9 +961,25 @@ func _hand_the_sea_its_shoreline() -> void:
 	mat.set_shader_parameter("foam_break", Look.WATER_FOAM_BREAK)
 	mat.set_shader_parameter("foam_break_scale", Look.WATER_FOAM_BREAK_SCALE)
 	mat.set_shader_parameter("foam_lip_tiles", Look.WATER_FOAM_LIP_TILES)
+	mat.set_shader_parameter("foam_lip_hard", Look.WATER_FOAM_LIP_HARD)
+	mat.set_shader_parameter("foam_lip_alpha", Look.WATER_FOAM_LIP_ALPHA)
+	mat.set_shader_parameter("foam_alpha", Look.WATER_FOAM_ALPHA)
+	mat.set_shader_parameter("foam_lip_wob", Look.WATER_FOAM_LIP_WOB)
+	mat.set_shader_parameter("foam_lip_wob_scale", Look.WATER_FOAM_LIP_WOB_SCALE)
+	mat.set_shader_parameter("foam_lip_wob_speed", Look.WATER_FOAM_LIP_WOB_SPEED)
+	mat.set_shader_parameter("foam_lip_peel", Look.WATER_FOAM_LIP_PEEL)
+	mat.set_shader_parameter("foam_lip_peel_tiles", Look.WATER_FOAM_LIP_PEEL_TILES)
+	mat.set_shader_parameter("foam_lip_min_tiles", Look.WATER_FOAM_LIP_MIN_TILES)
+	mat.set_shader_parameter("foam_lip_edge_alpha", Look.WATER_FOAM_LIP_EDGE_ALPHA)
+	mat.set_shader_parameter("foam_fade_in", Look.WATER_FOAM_FADE_IN)
+	mat.set_shader_parameter("foam_fade_out", Look.WATER_FOAM_FADE_OUT)
+	mat.set_shader_parameter("foam_gate_scale", Look.WATER_FOAM_GATE_SCALE)
+	mat.set_shader_parameter("foam_gate_floor", Look.WATER_FOAM_GATE_FLOOR)
 	mat.set_shader_parameter("foam_lee", Look.WATER_FOAM_LEE)
 	mat.set_shader_parameter("shallow", Look.COL_WATER_SHALLOW)
 	mat.set_shader_parameter("shallow_tiles", Look.WATER_SHALLOW_TILES)
+	mat.set_shader_parameter("shallow_strength", Look.WATER_SHALLOW_STRENGTH)
+
 
 
 ## **Dresses the island.** ⚠ Everything about where each prop goes was decided when the island was
@@ -1022,7 +1154,7 @@ func _put_body(centre_px: Vector2, radius: float, colour: Color, squash: Vector2
 	s.texture = pic
 	var team := Look.beast_tint(colour) if tex != null else colour
 	s.modulate = Look.bleeding(team, bleed_sec)
-	var wide := radius * Look.BEAST_SPRITE_W_RATIO if tex != null else radius * 2.0
+	var wide := (radius * Look.BEAST_SPRITE_W_RATIO if tex != null else radius * 2.0) 			* Look.BODY_SPRITE_SCALE
 	var sx := wide * squash.x / float(pic.get_width())
 	var sy := sx * squash.y / maxf(squash.x, 0.001)
 	s.scale = Vector3(sx, sy, 1.0)

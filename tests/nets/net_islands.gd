@@ -5,8 +5,15 @@ extends RefCounted
 ##
 ## ⚠⚠ **THE THREE 48 x 32 BOARDS AND THE 144 x 32 ONE ARE DELETED, AND MOST OF THIS FILE WENT WITH
 ## THEM** (2026-08-27, the user: 「애초에 노드 개념이 없어지다 보니까 다 지워주면 돼」). The island is
-## ONE and it is **26 x 20**, baked out of Blender into `assets/terrain/island.json`. Every literal
-## below is measured against THAT file and nothing else.
+## ONE and it is baked out of Blender into `assets/terrain/island.json`. Every literal below is
+## measured against THAT file and nothing else.
+##
+## ⚠⚠ **RE-MEASURED 2026-08-28 — the board shrank from 26 x 20 to 16 x 12** when `island_build.py`
+## was rewritten to the 2x2-piece scheme (nineteen land pieces, down from sixty-four). Every literal
+## below was recomputed straight off the live `assets/terrain/island.json`, in Python, outside the
+## engine — never read back off the `Grid` under test — the same discipline the rest of this file
+## already names. **This is the second time this file's literals have gone stale under an island
+## resize; the resize itself is not a defect.**
 ##
 ## **WHAT WAS DELETED, WHAT IT MEASURED, AND WHAT IT KNEW THAT OUTLIVES IT** — this block is the whole
 ## record and nothing above it is a summary of anything else:
@@ -16,7 +23,8 @@ extends RefCounted
 ##    reachable coast tile is FARTHEST away*, ties to the lowest index). ⚠ **`start_harbour` itself is
 ##    deleted from `grid.gd`** with the drag that read it; **nothing chooses a starting harbour now**,
 ##    a summon is pressed inside a ring about the middle of the grid. The `H` characters survive and
-##    are still measured below — on this board they are the whole border ring, 88 of them.
+##    are still measured below — on this board they are the whole border ring, 52 of them (88 before
+##    the 2026-08-28 resize).
 ##
 ##  · **`EXPECT_SENDABLE` / `_UNION` / `EXPECT_DROPPABLE` / `EXPECT_START_SENDABLE` / `EXPECT_COAST`
 ##    (84 · 76 · 82)** — the per-harbour landing denylist and its union. ⚠⚠ **The user's own line is
@@ -76,37 +84,37 @@ extends RefCounted
 const LEGEND := "~H.#^/WBCL"
 
 ## The board's shape. **Literals, and they are the user's own drawing** — `tools/blender/island_build.py`
-## bakes 26 x 20 and the game reads it back.
-const EXPECT_ROWS := 20
-const EXPECT_COLS := 26
+## bakes 16 x 12 and the game reads it back. ⚠ **Was 26 x 20 before the 2026-08-27 piece rewrite.**
+const EXPECT_ROWS := 12
+const EXPECT_COLS := 16
 
-## ⚠ **The whole border ring is `H`.** 26 + 26 across the top and bottom, 18 + 18 down the two sides =
-## **88**, and that is where the beasts' boats come from — off the edge of the board, not from three
-## docks somebody placed. The count and the ring are asserted separately: 88 characters scattered
+## ⚠ **The whole border ring is `H`.** 16 + 16 across the top and bottom, 10 + 10 down the two sides =
+## **52**, and that is where the beasts' boats come from — off the edge of the board, not from three
+## docks somebody placed. The count and the ring are asserted separately: 52 characters scattered
 ## anywhere in the middle would satisfy the first alone.
-const EXPECT_HARBOUR_CHARS := 88
+const EXPECT_HARBOUR_CHARS := 52
 
 ## Ground and water, counted off the rows. ⚠ **`H` counts as WATER** (`Grid.WATER_CHARS` is `"~H"`),
-## so 176 `~` plus 88 `H` is 264, and 264 + 256 is the whole 520-tile board — which is what makes
+## so 64 `~` plus 52 `H` is 116, and 116 + 76 is the whole 192-tile board — which is what makes
 ## these two a partition rather than two loose numbers.
-const EXPECT_PASSABLE := 256
-const EXPECT_WATER := 264
+const EXPECT_PASSABLE := 76
+const EXPECT_WATER := 116
 
 ## The coast, both ways of counting it. ⚠⚠ **The 4-way answer is kept beside the 8-way one for ONE
 ## job: proving they are different numbers.** A suite that dropped it could not tell an 8-way rule
-## from a 4-way one, and 「어디든지」 is exactly the ten tiles between them.
-const EXPECT_COAST := 72
-const EXPECT_COAST_ORTHO := 62
+## from a 4-way one, and 「어디든지」 is exactly the four tiles between them.
+const EXPECT_COAST := 36
+const EXPECT_COAST_ORTHO := 32
 
 ## The narrowest cut, per the definition the first slice plan pinned under "The islands": the fewest
 ## passable tiles in any column that has one at all.
-const EXPECT_CUT := 4
+const EXPECT_CUT := 2
 
 ## **The island is ONE connected walkable region** — every tile of it. ⚠ **The count is asserted as
 ## well as the count of regions, and neither alone is enough**: 「there is one component」 is satisfied
-## by an island that lost half its ground to a wall, and 「256 tiles」 is satisfied by two islands of
-## 128 with a channel between them.
-const EXPECT_LAND_REGION := 256
+## by an island that lost half its ground to a wall, and 「76 tiles」 is satisfied by two islands of
+## 38 with a channel between them.
+const EXPECT_LAND_REGION := 76
 
 ## Ceiling on tiles crossed in one walk. **Generous on purpose** — the longest crossing on a 520-tile
 ## board is under 40 tiles, so a walk that hits this ceiling is stuck rather than long, which is the
@@ -157,7 +165,7 @@ func run(t) -> void:
 			off_ring.append(int(raw_h))
 	t.eq(off_ring.size(), 0, "항구는 전부 판 가장자리 한 줄이다 — 배는 지도 밖에서 온다 %s" % str(off_ring))
 	t.eq(EXPECT_HARBOUR_CHARS, 2 * EXPECT_COLS + 2 * (EXPECT_ROWS - 2),
-		"그리고 그 88은 가장자리 한 바퀴 그대로다 (26x2 + 18x2 — 자가 점검)")
+		"그리고 그 52는 가장자리 한 바퀴 그대로다 (16x2 + 10x2 — 자가 점검)")
 
 	# -- ground and water ---------------------------------------------------------------------------
 	var passable_n := 0
@@ -282,7 +290,9 @@ func run(t) -> void:
 	# reason, unchanged: a walker with its own BFS measures the walker, not whether the real game's units
 	# can cross this ground. `flow_field` honours `can_step`, so this is also the only row here that
 	# would notice a body that could walk up the plateau without using the stair.
-	var target := grid.tile_index(5, 10)
+	# ⚠ **(5, 10) was the old 26 x 20 board's target and it is water on the 16 x 12 one** — re-picked
+	# 2026-08-28 as (5, 8), level 0, off the plateau, measured against the live `island.json` above.
+	var target := grid.tile_index(5, 8)
 	t.ok(grid.passable[target] != 0, "걸어갈 목표 칸이 실제로 땅이다 (자가 점검)")
 	t.eq(grid.level_of(target), 0, "그리고 0층이다 — 해안과 같은 층이라 계단을 안 거쳐도 된다 (자가 점검)")
 	var reach := Rules.range_of(Rules.SWORDSMAN) + Rules.REACH_BONUS

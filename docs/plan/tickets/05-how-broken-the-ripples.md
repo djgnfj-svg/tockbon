@@ -1,7 +1,21 @@
 Type: grilling
-Status: open
+Status: resolved
 
 # 물 잔주름이 얼마나 끊겨야 하나
+
+✅ **CLOSED 2026-08-28, and the question turned out to be the wrong one.** Seven candidates were rendered
+and **the four that only moved the old dials — chop, scale, strength, stretch — could not be told apart**:
+they are all the same soft haze, because the ripple only ever bent the surface normal and left the light
+to find it. On a board of flat cartoon blocks that reads as an airbrushed smudge at every setting.
+
+⇒ **What the user picked was a different way of drawing it** (「6번이 좋을듯」): the crests go into the
+water's COLOUR as hard pale lines. And in the same breath, 「계속 막 뭐랄까 일관적이면 안 되고 랜덤해야함
+넓게」 — so a wide, slow, drifting patch map rides on top, and some stretches of sea work while others lie
+almost still.
+
+⚠⚠ **There is a ceiling on how wide those patches may be, and it was measured.** At 25 tiles a stretch is
+most of what the camera holds, so the whole screen falls inside one and the sea is uniformly busy or
+uniformly quiet — the evenness the patches exist to break. **Several have to fit in frame.**
 
 ## 무엇이 되면 끝인가
 
