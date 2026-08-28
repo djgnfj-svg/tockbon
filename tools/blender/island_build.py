@@ -35,7 +35,13 @@ S = 2.0             # a piece is 2x2 tiles, and one tile is one metre
 # water at all, so this is one of the numbers that can only be judged in the game.
 # WARNING **A storey is still two notches and a notch is still half a tile.** `LEVEL_H` did not move;
 # 「too high」was about the ground's own lip, not about the storey rule.
-TOP_H = 0.20        # the walking surface. The game reads this out of `island.json` as `base_h`
+# WARNING **0.20 -> 0.14 ON 2026-08-28** (the user: 「좀더 판판하게 만들줄래 섬을 ... 1층을 조각들을」).
+# **The band of rock on show all the way round the island is exactly `TOP_H` minus the water height**,
+# so this number IS how far the island sticks up out of the sea.
+# WARNING **THE FLOOR UNDER THIS IS `src/look.gd`'s `SEA_Y_TILES`, 0.075.** Go below it and the sea
+# closes over the ground bodies walk on. At 0.14 there is 0.065 of a tile left -- about six centimetres
+# of rock -- and **the next step down is the last one this island can take without the water moving too.**
+TOP_H = 0.14        # the walking surface. The game reads this out of `island.json` as `base_h`
 LEVEL_H = 0.5       # WARNING **one notch is HALF A TILE, and this is the definition.** A storey is two
                     # notches, a stair is one, and a body may cross one notch -- which is what makes the
                     # stair the only way up. Ground is level 0, the stair 1, the second storey 2.
@@ -47,6 +53,14 @@ STOREY = LEVEL_H * 2.0
 # could name. **If that constant moves, this one moves with it.**
 SEA_Z = -0.45
 RIM_Z = SEA_Z - 0.05     # the shore ends UNDER the water, so the water laps over it
+# WARNING **WHERE THE GAME'S WATER PLANE ACTUALLY IS, AND IT IS NOT `SEA_Z`** (2026-08-28). `SEA_Z` is
+# how far the skirt reaches DOWN and it also anchors the shore colour ramp; the plane the game DRAWS is
+# `src/look.gd`'s `SEA_Y_TILES`, which was raised to +0.075 on 「물 높이를 좀 더 올려줄래?」. **The exported
+# waterline was still measured at -0.45**, half a tile below where the sea really meets the rock, so the
+# white line the sea drew from it stood a third of a tile out to sea all the way round the island. That
+# was patched in the game with `WATER_SHORE_OFFSET_TILES`; **this is the repair, and the patch is now 0.**
+# WARNING **If `SEA_Y_TILES` moves, THIS moves with it.** Nothing checks that they agree.
+SEA_LINE_Z = 0.075
 
 WALL_DOWN = 1.15    # how far a block's body carries on below its own floor
 WALL_DRAFT = 0.05   # how far the foot sits outside the top edge. WARNING **This is not a beach.**
@@ -63,7 +77,20 @@ INSET = 0.42        # how far in the flat interior starts
 # the shore hangs outward and down from its boundary. Where two coastal pieces meet, both work the
 # skirt's outer point out from the SAME world corner and the SAME land/water pattern, so it is one point
 # and nothing can crack.
-SKIRT = 0.46
+# WARNING **0.46 -> 0.75 ON 2026-08-28** (the user: 「그 해얀선에 닿는 칸의 곡선을 그냥 더 완만하게
+# 해줘볼래?」). The same drop spread over a longer run is a gentler slope; nothing about the heights moved.
+# WARNING **THIS WALKS BACK A LINE THE USER SET THEMSELVES**, and it is said out loud rather than done
+# quietly: `CONTEXT.md` records 「완만한 해변은 사용자가 일부러 버렸다」 under 여울, and the land ending in a
+# vertical wall is what that decision bought. **This is the user asking to try the other way**, so the
+# old line is left standing in the glossary rather than deleted.
+SKIRT = 0.75
+# WARNING **HOW FAR DOWN THE KNEE SITS, AS A FRACTION OF THE WHOLE DROP** (pulled out of the mesh code
+# 2026-08-28, where it was a literal 0.34). **Straight is when it equals `SKIRT_ROLL`**: the knee then
+# lands on the line from the top edge to the hem and the shore is a ramp with no bend in it. Below that
+# the shoulder carries high and the fall steepens near the water, which is the roll.
+# WARNING **0.34 -> 0.50 on the same line as `TOP_H` above** (「해얀선으로 내려가는 곡선도 좀더 줄여주고」)
+# -- most of the way to straight, so there is a slope rather than a curve.
+SKIRT_KNEE = 0.50
 SKIRT_ROLL = 0.55   # where the roll's knee sits along that reach. WARNING **0.40 -> 0.55 on
                     # 2026-08-28**: the knee sat close in and the land turned into the sea with a
                     # visible crease — 「바다랑 닿는 부분이 꺾이잖아」. Further out, the shoulder carries
@@ -83,6 +110,41 @@ CORNER_WOB = 0.035
 SEAM_WOB = 0.03
 COAST_WOB = 0.07    # bigger, because a coastal edge is owned by ONE piece and nothing must agree with it
 CHAM_MIN, CHAM_SPAN = 0.34, 0.06   # a corner cut is never the same twice, and never 45 degrees
+# WARNING **HOW MANY POINTS A CUT CORNER IS DRAWN WITH, AND IT USED TO BE TWO** (2026-08-28, the user,
+# on a photograph of one: 「각져있지 왜이렇게」). Two points is a straight CUT across the corner, so the
+# outline went straight, turned hard, went straight, turned hard again. **The edges were made into arcs
+# an hour earlier and the corners between them were left as angles**, which is where the angularity
+# moved to. These points ride a quadratic Bezier whose control point is the corner itself, so the cut
+# becomes a fillet through the same place the cut was.
+# WARNING **The two ENDS of the arc are exactly where the two cut points were**, and those are what the
+# neighbouring piece works out from the same shared corner. Everything added is interior to this piece.
+CORNER_PTS = 5
+# WARNING **HOW MANY POINTS A COASTAL EDGE IS DRAWN WITH, AND IT USED TO BE ONE** (2026-08-28). One
+# interior point is a KINK -- the edge runs dead straight, turns once in the middle, and runs dead
+# straight again -- so **every stretch of this island's coast was a straight line**, and a foam line
+# traced along a straight line reads as a drawn outline whatever the shader does with it. Four rounds of
+# shader dials were spent on that.
+# WARNING **THIS IS NOT THE WOBBLE THE USER HALVED TWICE.** That was AMPLITUDE, on「윤곽이 굳이 이렇게
+# 꼬불꼬불할 필요는 없을 거 같아」and「굴곡도 완화해줘」, and `COAST_WOB` has NOT been touched. This is
+# RESOLUTION: the same amplitude spread over three points on an arc instead of piled onto one, so the
+# edge curves instead of kinking. **It softens the outline; it does not crinkle it.**
+COAST_PTS = 3
+# WARNING **The offset is `sin(pi*u)`, so it is ZERO at both corners.** The corners are shared with the
+# neighbouring piece and moving them is how every seam opens.
+# WARNING **3.0 PUTS THE EFFECTIVE AMPLITUDE BACK ABOVE WHERE THE USER LEFT IT, AND THAT HAS TO BE SAID
+# OUT LOUD.** `COAST_WOB` was halved twice on 2026-08-28 (0.28 -> 0.14 -> 0.07) on 「윤곽이 굳이 이렇게
+# 꼬불꼬불할 필요는 없을 거 같아」; 0.07 x 3.0 is 0.21, which is three quarters of the value that was
+# called too wiggly. **What changed is the SHAPE, not the size**: at one point per edge that amount was
+# a single kink in the middle of a straight run, and at three points on a `sin` arc the same amount is a
+# curve. ✅ **Measured by eye against 1.0 and against the old kink** (2026-08-28) -- at 1.0 the bow is
+# 3.5% of a two-tile edge and cannot be seen at the game's camera at all.
+COAST_BOW = 2.0
+# How far each point departs from its edge's own arc. WARNING **Small on purpose**: at 1.0 the three
+# points move independently and the arc is a crinkle again, which is the thing that was asked to stop.
+# WARNING **TAKEN TO 0 ON 2026-08-28** (the user: 「곱선을 더 심플하게 가져가도 될듯」). With any
+# jitter each edge is an arc PLUS a wobble on top of it; at 0 the edge is one clean bow and nothing
+# else. **The point of the arc was to stop the edge being a straight line, and that is done at 0.**
+COAST_JITTER = 0.0
                                    # WARNING **The SPAN narrowed 2026-08-28 with the wobble** — the
                                    # variation is what read as crinkle, and the cut itself is not.
 
@@ -271,7 +333,7 @@ def vertex_mat(name):
 
 
 def waterline_point(prof):
-    """Where one shore column crosses the water plane, walked from the land downward.
+    """Where one shore column crosses the GAME'S water plane, walked from the land downward.
 
     `prof` is the column top-down as `(x, y, z)`: the land's own outer point, the skirt's knee, the
     skirt's hem. **This is the point the sea has to measure from** -- not the piece boundary, which is
@@ -283,10 +345,10 @@ def waterline_point(prof):
     """
     for i in range(len(prof) - 1):
         (x0, y0, z0), (x1, y1, z1) = prof[i], prof[i + 1]
-        if z0 >= SEA_Z >= z1 and z0 > z1:
-            t = (z0 - SEA_Z) / (z0 - z1)
+        if z0 >= SEA_LINE_Z >= z1 and z0 > z1:
+            t = (z0 - SEA_LINE_Z) / (z0 - z1)
             return (x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)
-    raise RuntimeError("a shore column never crosses the water at z=%.3f: %r" % (SEA_Z, prof))
+    raise RuntimeError("a shore column never crosses the water at z=%.3f: %r" % (SEA_LINE_Z, prof))
 
 
 def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
@@ -313,12 +375,32 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
             # identical corners is what makes a repeat visible without any clutter to hide it.
             a = CHAM_MIN + (h2(wx + cx, wy + cy, 3.0) * 0.5 + 0.5) * CHAM_SPAN
             b = CHAM_MIN + (h2(wx + cx, wy + cy, 4.0) * 0.5 + 0.5) * CHAM_SPAN
+            ends = []
             for (tx, ty, d, s_own) in ((px, py, a, prev_s), (nx, ny, b, this_s)):
                 dx, dy = tx - cx, ty - cy
                 L = math.hypot(dx, dy)
-                ring.append((kx + dx / L * d, ky + dy / L * d))
+                ends.append(((kx + dx / L * d, ky + dy / L * d),
+                             OUTW[s_own] if s_own in coast_sides else at_corner))
+            (p0, sk0), (p1, sk1) = ends
+            for j in range(CORNER_PTS):
+                u = j / float(CORNER_PTS - 1)
+                m = 1.0 - u
+                # Quadratic Bezier, control point the corner: at u 0 and 1 this IS the old cut point.
+                ring.append((m * m * p0[0] + 2.0 * m * u * kx + u * u * p1[0],
+                             m * m * p0[1] + 2.0 * m * u * ky + u * u * p1[1]))
                 rim.append(this_s in cliff_sides or prev_s in cliff_sides)
-                sk.append(OUTW[s_own] if s_own in coast_sides else at_corner)
+                # The skirt's outward direction turns with the arc. A corner with no shore on either
+                # side has None at both ends and keeps None the whole way round.
+                if sk0 is None and sk1 is None:
+                    sk.append(None)
+                elif sk0 is None:
+                    sk.append(sk1)
+                elif sk1 is None:
+                    sk.append(sk0)
+                else:
+                    vx, vy = sk0[0] * m + sk1[0] * u, sk0[1] * m + sk1[1] * u
+                    vl = math.hypot(vx, vy) or 1.0
+                    sk.append((vx / vl, vy / vl))
         else:
             ring.append((kx, ky))
             rim.append(this_s in cliff_sides or prev_s in cliff_sides)
@@ -329,10 +411,22 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
         ax, ay = ax / aL, ay / aL
         ox, oy = OUTW[this_s]
         if this_s in coast_sides:
-            t = h2(wx + mx, wy + my, 5.0) * COAST_WOB * 0.7
-            o = h2(wx + mx, wy + my, 6.0) * COAST_WOB
-            ring.append((mx + ax * t + ox * o, my + ay * t + oy * o))
-            sk.append((ox, oy))
+            # WARNING **AN ARC, NOT A KINK.** One offset point in the middle of a straight edge is a
+            # triangle: the edge leaves the corner dead straight, turns once, and runs dead straight to
+            # the next corner. `COAST_PTS` points weighted by `sin(pi*u)` is a bow instead. The whole
+            # edge shares ONE sign -- drawn from the edge's own midpoint -- so it leans one way as a
+            # stretch of coast rather than each point wandering off on its own.
+            bow = h2(wx + mx, wy + my, 6.0) * COAST_WOB * COAST_BOW
+            for j in range(1, COAST_PTS + 1):
+                u = j / float(COAST_PTS + 1)
+                ex_, ey_ = cx + (nx - cx) * u, cy + (ny - cy) * u
+                # Zero at both ends, so the shared corners do not move and the seams hold.
+                arc = math.sin(math.pi * u)
+                o = arc * (bow + h2(wx + ex_, wy + ey_, 6.0) * COAST_WOB * COAST_JITTER)
+                t = arc * h2(wx + ex_, wy + ey_, 5.0) * COAST_WOB * 0.35
+                ring.append((ex_ + ax * t + ox * o, ey_ + ay * t + oy * o))
+                sk.append((ox, oy))
+                rim.append(this_s in cliff_sides)
         else:
             # WARNING **A SEAM MOVES IN WORLD AXES, NEVER ALONG ITS OWN EDGE.** Two pieces sharing an
             # edge disagree about which way is「along」and which is「out」, so one hash pushed them
@@ -340,7 +434,7 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
             ring.append((mx + h2(wx + mx, wy + my, 5.0) * SEAM_WOB,
                          my + h2(wx + mx, wy + my, 6.0) * SEAM_WOB))
             sk.append(None)
-        rim.append(this_s in cliff_sides)
+            rim.append(this_s in cliff_sides)
 
     ccx, ccy = S * 0.5, S * 0.5
     bm = bmesh.new()
@@ -371,7 +465,7 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
             zr = RIM_Z + h2(wx + x, wy + y, 7.0) * 0.05
             # the shoulder stays high and the fall steepens near the water: a roll, not a ramp
             knee.append(bm.verts.new((x + ox * reach * SKIRT_ROLL, y + oy * reach * SKIRT_ROLL,
-                                      z_top - (z_top - zr) * 0.34)))
+                                      z_top - (z_top - zr) * SKIRT_KNEE)))
             hem.append(bm.verts.new((x + ox * reach, y + oy * reach, zr)))
             # WARNING **Read off `knee[-1]` and `hem[-1]`, not recomputed.** The exported line and the
             # mesh have to be the same numbers or they drift apart the first time one of them is

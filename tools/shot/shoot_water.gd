@@ -32,15 +32,33 @@ const GAP_FRAMES := 90
 ## ⚠ **Whether the swordsman and the house are taken out of the frame.** They are, whenever the water is
 ## the subject — anything standing in every picture is only something to look at instead of the thing
 ## being judged. **Turn it off for the rounds where THEY are the subject.**
-const STRIP_BODIES := false
+const STRIP_BODIES := true
 
 # Each row is a whole LOOK, not one dial: a sea reads as a sea or does not, and moving one number at a
 # time produces six pictures nobody can tell apart.
 const LOOKS := [
-	# WARNING **The subject is the house and the swordsman this round**, not the water (2026-08-28, the
-	# user: 「집이랑 캐릭터 확 줄여줘」), so `STRIP_BODIES` is off and they are in frame.
-	{"name": "1_now"},
-	{"name": "2_same"},
+	# â â  **THE SUBJECT IS ë¬¼ê°, AND ê±°í IS BEING TAKEN AWAY** (2026-08-28, the user: ãê±°íì´ ë§ì
+	# ì ¸ëë°.. ê·¸ ë´ê° ìíê±´ ì´ë¯¸ì§ìì ê·¸ ë¬¼ê°ì ë¬¼ê°ê° ëë¬´ ìì°ì¤ë¬ì´ê² ê°ì§ê³  ì¶ë¤ëê±°ì ê±°íë ìì²­ì ì´ã).
+	# The previous round read the reference frames as **rings** and built three of them; the user was
+	# pointing at the thing AT the rock the whole time. In those frames the shore carries a **soft pale
+	# band that hugs the land and changes width along it** â not a hairline, not a ring â and out in the
+	# water there is at most ONE faint line, often none.
+	# â  The band is the swash (`foam_lip_*`), which stands at 0.06 of a tile: a sixth of what the frames
+	# show. Every row below widens it and takes the travelling foam down; they differ in how wide, how
+	# much variation, and whether any foam is left at all.
+	{"name": "1_soft_lip", "foam_lip_tiles": 0.20, "foam_lip_alpha": 0.34,
+	 "foam_alpha": 0.15, "foam_bands": 1.0, "foam_tiles": 1.8},
+	{"name": "2_wider_lip", "foam_lip_tiles": 0.30, "foam_lip_alpha": 0.34,
+	 "foam_alpha": 0.15, "foam_bands": 1.0, "foam_tiles": 1.8},
+	{"name": "3_no_foam_at_all", "foam_lip_tiles": 0.24, "foam_lip_alpha": 0.36,
+	 "foam_alpha": 0.0},
+	{"name": "4_one_faint_line", "foam_lip_tiles": 0.24, "foam_lip_alpha": 0.34,
+	 "foam_alpha": 0.18, "foam_bands": 1.0, "foam_tiles": 2.6, "foam_fade_out": 0.85},
+	{"name": "5_more_swing", "foam_lip_tiles": 0.22, "foam_lip_alpha": 0.34,
+	 "foam_lip_wob": 0.80, "foam_lip_peel": 0.45,
+	 "foam_alpha": 0.15, "foam_bands": 1.0, "foam_tiles": 1.8},
+	{"name": "6_widest_faintest", "foam_lip_tiles": 0.38, "foam_lip_alpha": 0.28,
+	 "foam_alpha": 0.10, "foam_bands": 1.0, "foam_tiles": 1.8},
 ]
 
 var _game: Game = null
@@ -78,59 +96,16 @@ func _sea_material() -> ShaderMaterial:
 func _apply(look: Dictionary) -> void:
 	# Every candidate starts from the shipped values, so an omitted key means "unchanged" rather than
 	# "whatever the previous candidate left behind".
+	# ⚠⚠ **CUT FROM FORTY-ODD DIALS TO EIGHTEEN ON 2026-08-28.** The sea this shooter was written
+	# against is gone: the flat-border spike won and the shader now draws a border and nothing else.
+	# **Setting a uniform the shader does not have is silent** — the old list would have run, printed six
+	# happy lines and produced six identical pictures.
 	var mat := _sea_material()
-	mat.set_shader_parameter("trough", Look.COL_WATER)
-	mat.set_shader_parameter("crest", Look.COL_WATER_CREST)
-	mat.set_shader_parameter("wave_scale", Look.WATER_WAVE_SCALE)
-	mat.set_shader_parameter("wave_speed", Look.WATER_WAVE_SPEED)
-	mat.set_shader_parameter("contrast", Look.WATER_CONTRAST)
-	mat.set_shader_parameter("ripple_scale", Look.WATER_RIPPLE_SCALE)
-	mat.set_shader_parameter("ripple_speed", Look.WATER_RIPPLE_SPEED)
-	mat.set_shader_parameter("ripple_strength", Look.WATER_RIPPLE_STRENGTH)
-	mat.set_shader_parameter("foam", Look.COL_WATER_FOAM)
-	mat.set_shader_parameter("foam_tiles", Look.WATER_FOAM_TILES)
-	mat.set_shader_parameter("foam_speed", Look.WATER_FOAM_SPEED)
-	mat.set_shader_parameter("foam_bands", Look.WATER_FOAM_BANDS)
-	mat.set_shader_parameter("foam_sharp", Look.WATER_FOAM_SHARP)
-	mat.set_shader_parameter("foam_break", Look.WATER_FOAM_BREAK)
-	mat.set_shader_parameter("foam_break_scale", Look.WATER_FOAM_BREAK_SCALE)
-	mat.set_shader_parameter("foam_lip_tiles", Look.WATER_FOAM_LIP_TILES)
-	mat.set_shader_parameter("foam_lip_hard", Look.WATER_FOAM_LIP_HARD)
-	mat.set_shader_parameter("foam_lip_alpha", Look.WATER_FOAM_LIP_ALPHA)
-	mat.set_shader_parameter("foam_alpha", Look.WATER_FOAM_ALPHA)
-	mat.set_shader_parameter("foam_lip_wob", Look.WATER_FOAM_LIP_WOB)
-	mat.set_shader_parameter("foam_lip_wob_scale", Look.WATER_FOAM_LIP_WOB_SCALE)
-	mat.set_shader_parameter("foam_lip_wob_speed", Look.WATER_FOAM_LIP_WOB_SPEED)
-	mat.set_shader_parameter("foam_lip_peel", Look.WATER_FOAM_LIP_PEEL)
-	mat.set_shader_parameter("foam_lip_peel_tiles", Look.WATER_FOAM_LIP_PEEL_TILES)
-	mat.set_shader_parameter("foam_lip_min_tiles", Look.WATER_FOAM_LIP_MIN_TILES)
-	mat.set_shader_parameter("foam_lip_edge_alpha", Look.WATER_FOAM_LIP_EDGE_ALPHA)
-	mat.set_shader_parameter("shore_offset", Look.WATER_SHORE_OFFSET_TILES)
-	mat.set_shader_parameter("shore_warp", Look.WATER_SHORE_WARP_TILES)
-	mat.set_shader_parameter("shore_warp_scale", Look.WATER_SHORE_WARP_SCALE)
-	mat.set_shader_parameter("shore_warp_speed", Look.WATER_SHORE_WARP_SPEED)
-	mat.set_shader_parameter("foam_fade_in", Look.WATER_FOAM_FADE_IN)
-	mat.set_shader_parameter("foam_fade_out", Look.WATER_FOAM_FADE_OUT)
-	mat.set_shader_parameter("foam_gate_scale", Look.WATER_FOAM_GATE_SCALE)
-	mat.set_shader_parameter("foam_gate_floor", Look.WATER_FOAM_GATE_FLOOR)
-	mat.set_shader_parameter("foam_lee", Look.WATER_FOAM_LEE)
-	mat.set_shader_parameter("foam_sharp", Look.WATER_FOAM_SHARP)
-	mat.set_shader_parameter("ripple_fade_tiles", Look.WATER_RIPPLE_FADE)
-	mat.set_shader_parameter("ripple_wind_deg", Look.WATER_RIPPLE_WIND_DEG)
-	mat.set_shader_parameter("ripple_stretch", Look.WATER_RIPPLE_STRETCH)
-	mat.set_shader_parameter("ripple_chop", Look.WATER_RIPPLE_CHOP)
-	mat.set_shader_parameter("ripple_crisp", Look.WATER_RIPPLE_CRISP)
-	mat.set_shader_parameter("ripple_crisp_edge", Look.WATER_RIPPLE_CRISP_EDGE)
-	mat.set_shader_parameter("ripple_crisp_patch", Look.WATER_RIPPLE_CRISP_PATCH)
-	mat.set_shader_parameter("ripple_crisp_patch_scale", Look.WATER_RIPPLE_CRISP_PATCH_SCALE)
-	mat.set_shader_parameter("shallow", Look.COL_WATER_SHALLOW)
-	mat.set_shader_parameter("shallow_tiles", Look.WATER_SHALLOW_TILES)
-	mat.set_shader_parameter("shallow_strength", Look.WATER_SHALLOW_STRENGTH)
+	FieldView._hand_the_sea_its_look(mat)
 	for key in look.keys():
 		if key == "name":
 			continue
 		mat.set_shader_parameter(str(key), look[key])
-
 
 ## WARNING **The swordsman and the house come OUT of these pictures** (2026-08-28, the user:
 ## 「캐릭터랑 건물제거 다시잡을꺼임」). Both are placeholders being redone, and a candidate sheet is

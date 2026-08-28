@@ -162,22 +162,7 @@ func _build_world() -> void:
 	# The sea is a shader, not a flat colour and not a bought texture — see `water.gdshader`.
 	var sea_mat := ShaderMaterial.new()
 	sea_mat.shader = load(WATER_SHADER)
-	sea_mat.set_shader_parameter("trough", Look.COL_WATER)
-	sea_mat.set_shader_parameter("crest", Look.COL_WATER_CREST)
-	sea_mat.set_shader_parameter("wave_scale", Look.WATER_WAVE_SCALE)
-	sea_mat.set_shader_parameter("wave_speed", Look.WATER_WAVE_SPEED)
-	sea_mat.set_shader_parameter("contrast", Look.WATER_CONTRAST)
-	sea_mat.set_shader_parameter("ripple_scale", Look.WATER_RIPPLE_SCALE)
-	sea_mat.set_shader_parameter("ripple_speed", Look.WATER_RIPPLE_SPEED)
-	sea_mat.set_shader_parameter("ripple_strength", Look.WATER_RIPPLE_STRENGTH)
-	sea_mat.set_shader_parameter("ripple_fade_tiles", Look.WATER_RIPPLE_FADE)
-	sea_mat.set_shader_parameter("ripple_wind_deg", Look.WATER_RIPPLE_WIND_DEG)
-	sea_mat.set_shader_parameter("ripple_stretch", Look.WATER_RIPPLE_STRETCH)
-	sea_mat.set_shader_parameter("ripple_chop", Look.WATER_RIPPLE_CHOP)
-	sea_mat.set_shader_parameter("ripple_crisp", Look.WATER_RIPPLE_CRISP)
-	sea_mat.set_shader_parameter("ripple_crisp_edge", Look.WATER_RIPPLE_CRISP_EDGE)
-	sea_mat.set_shader_parameter("ripple_crisp_patch", Look.WATER_RIPPLE_CRISP_PATCH)
-	sea_mat.set_shader_parameter("ripple_crisp_patch_scale", Look.WATER_RIPPLE_CRISP_PATCH_SCALE)
+	_hand_the_sea_its_look(sea_mat)
 	_sea.material_override = sea_mat
 	# ⚠⚠ **The sea casts nothing, and that is a fix rather than an optimisation.** A flat quad 400
 	# tiles across shadows ITSELF at grazing angles, and the whole sea drew as diagonal stripes — the
@@ -874,6 +859,18 @@ static func _bake_land_field(tw: int, th: int, sub: int, span: float, margin: fl
 	# 딱딱하게」). `FORMAT_L8` over a span of 4 tiles is one level every **0.0157 tiles**; the lip is 0.06
 	# tiles wide, so its soft edge had **four steps in it** and read as a stair rather than as a fade.
 	# ⚠ `PackedFloat32Array.to_byte_array()` is one conversion, not a call per texel.
+	# ⚠⚠ **SIGNED, AND UNSIGNED WAS THE DEFECT** (2026-08-28, the user: 「왜 저게 흔색 이 거품이 딱
+	# 붙질 못할까」). The bake measures the coastline where the shore crosses **its own** sea height,
+	# and the game's water plane sits half a tile above that — so the line the sea draws itself at is a
+	# third of a tile INSIDE the line it was handed. ⚠ **An unsigned field cannot be shifted.** The dial
+	# that exists for exactly this, `WATER_SHORE_OFFSET_TILES`, subtracts a distance; on an unsigned
+	# field that turns the contour into a BAND — the zero crossing appears twice, once each side of the
+	# baked line, and everything between goes full white. **Measured: it welded the line to the rock and
+	# made it four times as thick**, which is the fat collar and not a shoreline.
+	# ⇒ **Store the sign.** Negative inside the coast ring, positive outside, so moving the contour is
+	# one addition and lands where a real waterline lands: rounded off at a convex corner, exactly as
+	# the shore's own roll is rounded.
+	# ⚠ Encoded as `0.5 + signed / (2 * span)` — 0 is deep inland, 1 is open sea, 0.5 is the baked line.
 	var buf := PackedFloat32Array()
 	buf.resize(tw * th)
 	if coast.is_empty():
@@ -903,6 +900,12 @@ static func _bake_land_field(tw: int, th: int, sub: int, span: float, margin: fl
 			yhi.append(maxf(ay[i], by[i]) + span)
 		var span2 := span * span
 		var near := PackedInt32Array()
+		# ⚠⚠ **The sign comes from a ray count, and it is done PER ROW and not per texel.** Asking
+		# 48 segments about a quarter of a million texels is twelve million tests in GDScript; a
+		# horizontal line crosses the ring at a handful of places, so the crossings are found once for
+		# the row and swept. **The ring is closed** — every endpoint in `island.json` has degree two,
+		# checked — which is what makes an odd crossing count mean「inside」at all.
+		var xs := PackedFloat32Array()
 		for py in th:
 			var wy := (float(py) + 0.5) / float(sub) - margin
 			var row := py * tw
@@ -910,13 +913,32 @@ static func _bake_land_field(tw: int, th: int, sub: int, span: float, margin: fl
 			for i in n:
 				if wy >= ylo[i] and wy <= yhi[i]:
 					near.append(i)
+			xs.clear()
+			for i in n:
+				# Half-open on purpose: a vertex sitting exactly on the row is counted once, not twice.
+				if (ay[i] > wy) != (by[i] > wy):
+					xs.append(ax[i] + (wy - ay[i]) * (bx[i] - ax[i]) / (by[i] - ay[i]))
+			xs.sort()
+			var xn := xs.size()
 			if near.is_empty():
+				# ⚠ **Still asks the sign**, or a row deep enough inland that no segment is within reach
+				# would be written down as open sea. Nothing stands there today; a wider island is one
+				# block away from it.
 				for px in tw:
-					buf[row + px] = 1.0
+					var wxo := (float(px) + 0.5) / float(sub) - margin
+					var co := 0
+					for q in xn:
+						if xs[q] < wxo:
+							co += 1
+					buf[row + px] = 0.0 if (co & 1) == 1 else 1.0
 				continue
 			var m := near.size()
+			var cross := 0
 			for px in tw:
 				var wx := (float(px) + 0.5) / float(sub) - margin
+				while cross < xn and xs[cross] < wx:
+					cross += 1
+				var inside := (cross & 1) == 1
 				var best2 := span2
 				for k in m:
 					var i := near[k]
@@ -933,7 +955,8 @@ static func _bake_land_field(tw: int, th: int, sub: int, span: float, margin: fl
 					var d2 := dx2 * dx2 + dy2 * dy2
 					if d2 < best2:
 						best2 = d2
-				buf[row + px] = clampf(sqrt(best2) / span, 0.0, 1.0)
+				var sd := sqrt(best2)
+				buf[row + px] = clampf(0.5 + (-sd if inside else sd) / (span * 2.0), 0.0, 1.0)
 	var img := Image.create_from_data(tw, th, false, Image.FORMAT_RF, buf.to_byte_array())
 	return ImageTexture.create_from_image(img)
 
@@ -946,41 +969,45 @@ static func _hand_the_sea_its_numbers(mat: ShaderMaterial, g, margin: float,
 	var gw := float(g.w)
 	var gh := float(g.h)
 	mat.set_shader_parameter("field_origin", Vector2(-margin, -margin))
-	mat.set_shader_parameter("field_size", Vector2(gw + margin * 2.0,
-												   gh + margin * 2.0))
+	mat.set_shader_parameter("field_size", Vector2(gw + margin * 2.0, gh + margin * 2.0))
 	mat.set_shader_parameter("field_span", span)
-	mat.set_shader_parameter("shore_offset", Look.WATER_SHORE_OFFSET_TILES)
-	mat.set_shader_parameter("shore_warp", Look.WATER_SHORE_WARP_TILES)
-	mat.set_shader_parameter("shore_warp_scale", Look.WATER_SHORE_WARP_SCALE)
-	mat.set_shader_parameter("shore_warp_speed", Look.WATER_SHORE_WARP_SPEED)
+	_hand_the_sea_its_look(mat)
+
+
+## **Every dial the sea reads, and there are eighteen of them.** ⚠⚠ **There were about forty until
+## 2026-08-28**, when seven shorelines were built side by side in `prototypes/shoreline/` and the one
+## that does the least won. Swell, ripple, drawn crests, travelling foam and the shallows all left with
+## the old shader; **their constants are still in `look.gd`, parked and unread.**
+##
+## ⚠ Split out and called from BOTH places on purpose: the material is built once at startup and the
+## island's own numbers are handed over on every build, and a dial that only one of them set was a dial
+## that changed nothing until the next island opened.
+static func _hand_the_sea_its_look(mat: ShaderMaterial) -> void:
+	mat.set_shader_parameter("sea", Look.COL_WATER)
 	mat.set_shader_parameter("foam", Look.COL_WATER_FOAM)
-	mat.set_shader_parameter("foam_tiles", Look.WATER_FOAM_TILES)
-	mat.set_shader_parameter("foam_speed", Look.WATER_FOAM_SPEED)
-	mat.set_shader_parameter("foam_bands", Look.WATER_FOAM_BANDS)
-	mat.set_shader_parameter("foam_sharp", Look.WATER_FOAM_SHARP)
-	mat.set_shader_parameter("foam_break", Look.WATER_FOAM_BREAK)
-	mat.set_shader_parameter("foam_break_scale", Look.WATER_FOAM_BREAK_SCALE)
-	mat.set_shader_parameter("foam_lip_tiles", Look.WATER_FOAM_LIP_TILES)
-	mat.set_shader_parameter("foam_lip_hard", Look.WATER_FOAM_LIP_HARD)
-	mat.set_shader_parameter("foam_lip_alpha", Look.WATER_FOAM_LIP_ALPHA)
-	mat.set_shader_parameter("foam_alpha", Look.WATER_FOAM_ALPHA)
-	mat.set_shader_parameter("foam_lip_wob", Look.WATER_FOAM_LIP_WOB)
-	mat.set_shader_parameter("foam_lip_wob_scale", Look.WATER_FOAM_LIP_WOB_SCALE)
-	mat.set_shader_parameter("foam_lip_wob_speed", Look.WATER_FOAM_LIP_WOB_SPEED)
-	mat.set_shader_parameter("foam_lip_peel", Look.WATER_FOAM_LIP_PEEL)
-	mat.set_shader_parameter("foam_lip_peel_tiles", Look.WATER_FOAM_LIP_PEEL_TILES)
-	mat.set_shader_parameter("foam_lip_min_tiles", Look.WATER_FOAM_LIP_MIN_TILES)
-	mat.set_shader_parameter("foam_lip_edge_alpha", Look.WATER_FOAM_LIP_EDGE_ALPHA)
-	mat.set_shader_parameter("foam_fade_in", Look.WATER_FOAM_FADE_IN)
-	mat.set_shader_parameter("foam_fade_out", Look.WATER_FOAM_FADE_OUT)
-	mat.set_shader_parameter("foam_gate_scale", Look.WATER_FOAM_GATE_SCALE)
-	mat.set_shader_parameter("foam_gate_floor", Look.WATER_FOAM_GATE_FLOOR)
-	mat.set_shader_parameter("foam_lee", Look.WATER_FOAM_LEE)
-	mat.set_shader_parameter("shallow", Look.COL_WATER_SHALLOW)
-	mat.set_shader_parameter("shallow_tiles", Look.WATER_SHALLOW_TILES)
-	mat.set_shader_parameter("shallow_strength", Look.WATER_SHALLOW_STRENGTH)
-
-
+	mat.set_shader_parameter("shore_offset", Look.WATER_SHORE_OFFSET_TILES)
+	mat.set_shader_parameter("line_tiles", Look.WATER_LINE_TILES)
+	mat.set_shader_parameter("line_hard", Look.WATER_LINE_HARD)
+	mat.set_shader_parameter("line_alpha", Look.WATER_LINE_ALPHA)
+	mat.set_shader_parameter("warp_a", Look.WATER_WARP_A)
+	mat.set_shader_parameter("warp_a_scale", Look.WATER_WARP_A_SCALE)
+	mat.set_shader_parameter("warp_a_speed", Look.WATER_WARP_A_SPEED)
+	mat.set_shader_parameter("warp_b", Look.WATER_WARP_B)
+	mat.set_shader_parameter("warp_b_scale", Look.WATER_WARP_B_SCALE)
+	mat.set_shader_parameter("warp_b_speed", Look.WATER_WARP_B_SPEED)
+	mat.set_shader_parameter("warp_c", Look.WATER_WARP_C)
+	mat.set_shader_parameter("warp_c_scale", Look.WATER_WARP_C_SCALE)
+	mat.set_shader_parameter("warp_c_speed", Look.WATER_WARP_C_SPEED)
+	mat.set_shader_parameter("swing", Look.WATER_SWING)
+	mat.set_shader_parameter("swing_rate", Look.WATER_SWING_RATE)
+	mat.set_shader_parameter("along_scale", Look.WATER_ALONG_SCALE)
+	mat.set_shader_parameter("swing_floor", Look.WATER_SWING_FLOOR)
+	mat.set_shader_parameter("peel", Look.WATER_PEEL)
+	mat.set_shader_parameter("peel_tiles", Look.WATER_PEEL_TILES)
+	mat.set_shader_parameter("peel_gate_scale", Look.WATER_PEEL_GATE_SCALE)
+	mat.set_shader_parameter("calm", Look.WATER_CALM)
+	mat.set_shader_parameter("calm_scale", Look.WATER_CALM_SCALE)
+	mat.set_shader_parameter("calm_speed", Look.WATER_CALM_SPEED)
 
 ## **Dresses the island.** ⚠ Everything about where each prop goes was decided when the island was
 ## built; this reads the list and clones. **Nothing is randomised here** — a scatter that rolled dice at
