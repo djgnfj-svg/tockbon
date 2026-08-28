@@ -125,6 +125,21 @@ const TIER_STEP_TILES := TIER_RISE_TILES * 0.5
 ## and a tier boundary is not.
 const MAX_CLIMB_LEVELS := 1
 
+## ⚠⚠ **HOW MANY TREADS BLENDER CUTS INTO ONE STAIR 칸, AND THE FEET HAVE TO LAND ON THEM**
+## (2026-08-28, the user, watching a body climb: 「계단을 캐릭이 뚫고감 이건 근본적인문제인데」).
+##
+## **The stair was drawn as steps and walked as a ramp.** `tools/blender/island_build.py`'s `stair()`
+## cuts `TREADS = 6` steps with a nosing into the 칸's own mesh, and `Grid.surface_h` returned a
+## straight line from the bottom of the run to the top — so a body walked the *average* of the steps,
+## sinking into every tread and floating over every riser. **Both files carried a comment saying the
+## two must agree; neither said what the other's number was.**
+##
+## ⚠ **The steps win and the ramp loses**, because the picture is what the user chose over several
+## rounds (「큐브형투처럼 블록 블록이 있었으면 좋겠는데」) and because a ramp cannot be drawn as a stair.
+## ⚠ **6 IS DUPLICATED IN `island_build.py` AS `TREADS`** and Blender cannot read this file. That is the
+## same shape `TIER_STEP_TILES` / `level_h` already has, and it is written down rather than assumed.
+const STAIR_TREADS := 6
+
 
 # --- The unit table ------------------------------------------------------------------------------
 ## Columns: name, max_hp, damage, attack_period(s), range(tiles), area(tiles), speed(tiles/s),

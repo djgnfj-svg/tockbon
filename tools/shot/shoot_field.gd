@@ -65,35 +65,28 @@ func _process(_delta: float) -> bool:
 		1:
 			_game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
 		2:
-			_save("2_card")
-		3:
-			# Every card is equipment now — the beast cards left the table with the side swap.
-			_game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
-		4:
-			_save("3_refit")
-		5:
-			_game._unhandled_input(_click(_game.refit_view.done_hit_rect().get_center()))
-		6:
+			# ⚠ **The card and refit steps are DELETED** (2026-08-28) with the screens they walked
+			# through; 시작하기 opens the island outright, so the step numbers close up behind them.
 			_save("4_island")
-		7:
+		3:
 			for _i in 300:
 				_game._process(1.0 / 60.0)
-		8:
+		4:
 			_save("5_island_running")
-		9:
+		5:
 			for _i in 3:
 				_game._unhandled_input(_key(KEY_E))
-		10:
+		6:
 			_save("6_turned")
-		11:
+		7:
 			for _i in 12:
 				_game._unhandled_input(_wheel_up())
-		12:
+		8:
 			_save("7_close")
-		13:
+		9:
 			for _i in 8:
 				_game._unhandled_input(_wheel_up())
-		14:
+		10:
 			_save("8_closer")
 		_:
 			return true

@@ -175,8 +175,13 @@ func _the_plan_is_no_longer_authored_by_a_drag(t) -> void:
 	t.ok(b.has_method("commit"), "시작 버튼도 그대로다 (자가 점검)")
 	t.ok(b.has_method("committed"), "확정 여부를 묻는 것도 그대로다 (자가 점검)")
 	t.ok(not b.committed(), "새 battle 은 아직 확정 전이다")
-	t.ok(not b.commit(), "그리고 빈 계획으로는 여전히 시작이 안 된다")
-	t.ok(not b.committed(), "거절당한 시작은 상태도 안 건드린다")
+	# ⚠⚠ **THIS ROW SAID 「빈 계획으로는 시작이 안 된다」 AND IT IS REVERSED** (2026-08-28). `commit`
+	# refused an empty `boats` while the PLAYER authored the landing; the sides swapped, the beasts
+	# arrive by boat, and `game._open_island` now commits an island that has — correctly — no boat on
+	# it at all. Left as it was, the shell's commit was a no-op and the clock never started.
+	t.ok(b.commit(), "배가 한 척도 없어도 시작이 받아들여진다 — 섬이 열리면 셸이 곧장 이걸 부른다")
+	t.ok(b.committed(), "그리고 상태가 실제로 넘어갔다")
+	t.ok(not b.commit(), "두 번째 시작은 거절된다 — 확정은 한 번뿐이다")
 	t.eq(b.boats.size(), 0, "배 배열은 살아 있고, 비어 있다 (자가 점검)")
 
 	var g := Grid.new()

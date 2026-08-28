@@ -56,32 +56,9 @@ extends RefCounted
 ## has to read off the fight rather than be told.
 
 
-## Takes the round's card and closes the refit board behind it, so a run that has stopped for a pick
-## walks on to its ending. A no-op when the run has not stopped for one, so a caller may call this
-## after every `finish_island(true)` unconditionally.
-##
-## ⚠⚠ **IT WAS `_take_two_and_close_refit` AND THE TWO IS GONE.** `Rules.CARD_PICKS` is **1**; the
-## 「6개중 2택」 the old name and its header described was the node map's card screen, deleted with the
-## map. ⚠ **A helper whose name says two while it takes one is worse than a wrong comment** — it reads
-## as a fixture that exercises the multi-pick path, and there is no multi-pick path.
-##
-## ⚠ **`fit_into_slot0` went with the route walks** (see the file header). It fitted whatever landed
-## into slot 0's own board, in the order taken, so two routes could be compared under IDENTICAL fitting
-## behaviour; with no route to compare, its only caller passed the default and the two `fit(0, 0)`
-## calls it made could never both land — one card is taken, so the second fit had nothing to fit.
-func _take_the_card_and_close_refit(r: Run) -> void:
-	if r.state() != Run.State.PICK:
-		return
-	# ⚠⚠ **THE BEAST FALLBACK IS DELETED WITH THE BEAST CARD** (2026-08-27). This used to scan the
-	# round for the first card whose `card_kind` was `ITEM` and take that one, because a card could be
-	# a BEAST since 티켓 15 and a beast pick brought `Rules.SPECIES_CARD_BODIES` bodies with it —
-	# four bodies landing inside whatever roster count the caller was really measuring, chosen by the
-	# seed rather than by the fixture. **`Rules.CardKind` has one member now**, so the scan could only
-	# ever return 0 and the card taken is written as 0.
-	# ⚠ **What the scan guarded is still worth knowing**: the day a card pays BODIES again, this is
-	# the line that has to come back, or every roster count in this file starts measuring the draw.
-	r.take_card(0)
-	r.close_refit()
+## ⚠⚠ **`_take_the_card_and_close_refit` STOOD HERE AND IS DELETED** (2026-08-28) with the round it
+## walked through. A win goes straight to `WON`.
+
 
 
 func run(t) -> void:
@@ -90,17 +67,12 @@ func run(t) -> void:
 	_wipe_loses(t)
 	_the_clock_ends_nothing(t)
 	_restart_resets(t)
-	# -- the card round --------------------------------------------------------------------------------
-	# ⚠⚠ **티켓 15 「a card can be a BEAST」 IS DELETED** (2026-08-27). Of its six rows, **three died
-	# whole** — `_the_draw_never_offers_a_species_the_run_holds`,
-	# `_beasts_are_rolled_per_card_and_not_reserved` and `_no_species_stands_twice_in_one_round`, each
-	# recorded where it stood — and **three were rewritten to what is left**: the round a run opens on,
-	# where a taken card sends the run, and that no card moves a summon slot or a body. Every deleted
-	# assertion read `Rules.CardKind.SPECIES`, and **`CardKind` has one member now** — a card is an item
-	# and nothing else.
+	# -- the run's own shape ---------------------------------------------------------------------------
+	# ⚠⚠ **THE WHOLE CARD SECTION IS DELETED** (2026-08-28, the user: 「고르는 창도 이제 필요 없는데
+	# 왜있지? 이것도 제거」 · 「둘 다 지우면 돼」). 티켓 15's six rows had already fallen to three when
+	# the beast card went; the three that were left — the round a run opens on, where a taken card
+	# sends the run, and that no card moves a slot or a body — are gone with the round itself.
 	_a_run_opens_on_the_island(t)
-	_an_item_card_moves_no_slot_and_opens_refit(t)
-	_cards_add_no_slot_and_no_body(t)
 
 
 # -- 티켓 15 fix: one round never shows the same animal twice -------------------------------------------
@@ -116,58 +88,13 @@ func run(t) -> void:
 ## `_draw_cards` header says the same thing from the other side.
 
 
-# -- 티켓 15: the whole row, filled --------------------------------------------------------------------
-## ⚠⚠ **THE ROW NO LONGER FILLS, AND THAT IS WHAT THIS MEASURES NOW.** The ticket's acceptance line was
-## 「take four beast cards in a row and the summon row is five boxes, each a DIFFERENT species, each
-## with bodies behind it」 — four picks, four slots, four species, sixteen bodies. **The beast card is
-## deleted**, so nothing a player can press adds a slot or a body, and the 「저마다 다른 종」 half has
-## no mechanism left to be true or false about.
-##
-## ⚠ **What is left is a floor and it is not decoration**: the mutation this row exists for is a card
-## that quietly recruits again. The run would walk the identical screens and the identical pile, every
-## count that only reads the loadout would stay green, and the roster would have grown underneath.
-##
-## ⚠ The rounds are dealt through the same call `_reset` uses, so this walks six picks without hunting
-## for seeds — six being more picks than the old row of five slots could ever have absorbed.
-func _cards_add_no_slot_and_no_body(t) -> void:
-	var r := Run.new()
-	t.eq(r.army.slot_count(), Rules.START_SLOTS.size(), "회차는 개막 칸만 갖고 연다 (자가 점검)")
-	t.eq(Rules.START_SLOTS.size(), 1, "그 칸은 하나다 (리터럴)")
-	var taken := 0
-	for _round in 6:
-		if r.state() != Run.State.PICK:
-			r._draw_cards()
-			r._state = Run.State.PICK
-		var k := _first_card_of(r, Rules.CardKind.ITEM)
-		if k < 0:
-			break
-		if not r.take_card(k):
-			break
-		taken += 1
-	t.eq(taken, 6, "여섯 라운드에서 여섯 장을 집었다 (자가 점검)")
-	t.eq(r.army.slot_count(), Rules.START_SLOTS.size(), "여섯 장을 집어도 소환 칸은 하나 그대로다")
-	t.eq(r.army.living_count(), Rules.roster_start_count(),
-		"명부도 개막 병력 그대로다 — 카드는 몸을 데려오지 않는다")
-	t.eq(r.army.loadout.held.size(), 6, "집은 여섯 장은 전부 장비 더미로 갔다 (자가 점검)")
+## ⚠⚠ **`_cards_add_no_slot_and_no_body` IS DELETED** (2026-08-28) with the cards. Its measurement
+## is worth keeping in words: **a card never added a summon slot and never added a body** — that
+## claim outlived the beast card, and it dies here with the card table itself.
 
-
-# -- 티켓 12: a run opens on the island ---------------------------------------------------------------
-## ⚠⚠ **THE FIRST SCREEN OF A RUN IS THE ISLAND, AND UNTIL 티켓 12 IT WAS A CARD ROUND.** The opening
-## three were dealt inside `_reset` (티켓 15, 2026-08-25). The user took them off the start path on
-## 2026-08-27 — ***"Starting means the game starts, right then."*** · ***"There is not much to decide
-## yet."*** — because the week's only goal is the map and two screens stood in front of it.
-##
-## ⚠⚠ **THE CARDS ARE NOT DELETED AND THIS FIXTURE IS THE THING THAT SAYS SO.** It measures both
-## halves in one place: **nothing is dealt at the opening**, and **a win still deals a full round**.
-## Measuring only the first half is how 「the card round is off the start path」 and 「the card round is
-## gone」 would read identically, and one of those is starting over.
-##
-## ⚠ Mutation: `_reset` dealing a round again; `_reset` leaving `_state` at `PICK`; `finish_island`
-## not dealing.
 func _a_run_opens_on_the_island(t) -> void:
 	var r := Run.new()
-	t.eq(r.state(), Run.State.BATTLE, "새 회차는 카드 화면이 아니라 섬에서 연다")
-	t.eq(r.cards.size(), 0, "그리고 깔린 카드가 한 장도 없다")
+	t.eq(r.state(), Run.State.BATTLE, "새 회차는 섬에서 연다")
 	t.ok(r.begin_island() != null, "그래서 섬이 곧장 열린다 — 지나갈 화면이 없다")
 	t.eq(r.army.slot_count(), 1, "칸 하나로 연다")
 	# ⚠⚠ **늑대가 아니라 검사다** (2026-08-27). `Rules.START_SLOTS` 의 한 줄은 `SWORDSMAN` 이고, 늑대는
@@ -175,99 +102,19 @@ func _a_run_opens_on_the_island(t) -> void:
 	t.eq(r.army.slot_type_of(0), Rules.SWORDSMAN, "그 칸은 검사다")
 	t.eq(r.army.living_count(), 10, "검사 열 명이다 (리터럴 — 섬의 적 밀도가 이 열에 맞춰져 있다)")
 
-	# ⚠⚠ **THE OTHER HALF, AND WITHOUT IT THIS FIXTURE WOULD BE GREEN ON A DELETED CARD TABLE.** The
-	# eighteen items and the rarity draw still run; only the START PATH lost its round.
+	# ⚠⚠ **A WIN ENDS THE RUN, AND IT USED TO DEAL THREE CARDS FIRST** (2026-08-28). The rows that
+	# stood here read the dealt round back — three cards, all equipment, and the same three under the
+	# same seed. **The deal, the seed and the screen are all deleted.**
 	r.finish_island(true)
-	t.eq(r.state(), Run.State.PICK, "섬을 이기면 카드 고르기는 그대로 열린다")
-	t.eq(r.cards.size(), Rules.CARDS_PER_WIN, "세 장이 깔린다 (자가 점검)")
-	var items := 0
-	for k in Rules.CARDS_PER_WIN:
-		if int(r.card_kind[k]) == Rules.CardKind.ITEM:
-			items += 1
-	t.eq(items, Rules.CARDS_PER_WIN, "세 장이 전부 장비다")
-
-	# ⚠ **The seed still has to reach the round, and the order it has to survive changed.** It used to
-	# guard 「a round was dealt before the seed arrived」; the first `_draw_cards` of a run is now the
-	# win's, so what this pins is that the win's round is the same three under the same seed.
-	var a := Run.new()
-	a.seed_cards(4242)
-	a.finish_island(true)
-	var b := Run.new()
-	b.seed_cards(4242)
-	b.finish_island(true)
-	t.eq(a.cards, b.cards, "씨앗을 같이 준 두 회차가 같은 세 장을 낸다")
-	t.eq(a.card_kind, b.card_kind, "종류도 같다")
+	t.eq(r.state(), Run.State.WON, "섬을 이기면 곧장 WON 이다 — 사이에 낀 화면이 없다")
 
 
-# -- 티켓 15: the beast card -------------------------------------------------------------------------
-## ⚠⚠ **THE BEAST HALF IS DELETED 2026-08-27, AND WHAT IT MEASURED CANNOT HAPPEN ANY MORE.** It took
-## a `CardKind.SPECIES` card and read the slot and the four bodies it brought — **THE BODIES WERE THE
-## ROW**: without them a beast card added a button that refuses when you press it, a slot on screen
-## with an empty roster behind it, while every count of slots stayed green. `CardKind.SPECIES`,
-## `Rules.SPECIES_CARD_BODIES` and `Run._take_species_card` are all gone, so there is no card that can
-## pay a body at all — **`_cards_add_no_slot_and_no_body` above is where that claim lives now**, from
-## the other side: six picks, no slot, no body.
-##
-## ⇒ **What survives is the half that was the CONTROL**: an item card moves neither the slots nor the
-## roster, and it DOES open refit. It was written to stand against the beast arm; with one kind of
-## card left it is the whole row, and it still measures the fork out of the pick screen — which is
-## 「is the pile empty」 and not 「what kind was that card」.
-##
-## ⚠ Mutation: make `take_card` recruit; take the fork on the card's KIND instead of on the held pile.
-func _an_item_card_moves_no_slot_and_opens_refit(t) -> void:
-	var r := _run_holding_a(t, Rules.CardKind.ITEM)
-	t.ok(r != null, "장비 카드가 뜬 회차를 찾았다 (자가 점검)")
-	var k := _first_card_of(r, Rules.CardKind.ITEM)
-	var slots_before := r.army.slot_count()
-	var living_before := r.army.living_count()
-	t.ok(r.take_card(k), "장비 카드를 집었다")
-	t.eq(r.army.slot_count(), slots_before, "장비 카드는 칸을 안 늘린다")
-	t.eq(r.army.living_count(), living_before, "몸도 안 늘린다")
-	t.ok(not r.army.loadout.held.is_empty(), "집은 장은 더미에 들어 있다 (자가 점검)")
-	t.eq(r.state(), Run.State.REFIT, "그리고 더미에 든 것이 있으니 정비 화면으로 간다")
+## ⚠⚠ **`_an_item_card_moves_no_slot_and_opens_refit` IS DELETED** (2026-08-28) with the card round
+## and the refit board. It measured that an equipment card recruits nobody and that the fork out of
+## `take_card` reads the HELD PILE rather than the card's kind — **that fork is the shape worth
+## remembering**: branching on the kind makes two paths out of one screen, and a card that paid no
+## item, taken while an earlier item was unfitted, would strand that item.
 
-
-## ⚠⚠ **TWO ROWS ABOUT THE SPECIES POOL DIED HERE 2026-08-27, and this is what they held.**
-##  · `_the_draw_never_offers_a_species_the_run_holds` — **a card naming a species the run already
-##    holds is a dead face, not a random one.** Both ends: the wolf never appeared while it was held,
-##    and once every species was registered no seed could deal a beast at all. It read
-##    `Run._species_pool`'s `slot_of_type` filter, and the pool is deleted
-##  · `_beasts_are_rolled_per_card_and_not_reserved` — **the user's 2026-08-25 decision head on.**
-##    The plan had reserved one of three cards for a beast; the user cut the reservation and left the
-##    weight, so rounds with zero beasts AND rounds with two had to both exist. It read
-##    `Rules.SPECIES_CARD_WEIGHT`, which is deleted
-##
-## ⚠ **Neither claim has a subject any more** — every card in every round is an item, and an item may
-## honestly repeat and is never refused for being held. The 「per card, never a fixed share」 argument
-## survives only as words, in `run.gd`'s `_draw_cards` header.
-
-
-## A run standing on its first card screen whose draw holds at least one card of `kind`, or null.
-## ⚠ Seeded and walked over a bounded range, so the fixture is reproducible rather than lucky.
-## ⚠⚠ **`kind` has exactly one legal value since 2026-08-27** — `CardKind.ITEM`. The argument is kept
-## because the question it asks ("stand a run on a round holding a card of this kind") is the same
-## question, and a caller that hands it a kind no card can be gets null rather than a lucky run.
-func _run_holding_a(t, kind: int) -> Run:
-	for s in 200:
-		var r := Run.new()
-		r.seed_cards(s)
-		_opened(r)
-		r.finish_island(true)
-		if r.state() != Run.State.PICK:
-			continue
-		if _first_card_of(r, kind) >= 0:
-			return r
-	return null
-
-
-func _first_card_of(r: Run, kind: int) -> int:
-	for k in Rules.CARDS_PER_WIN:
-		if int(r.card_kind[k]) == kind:
-			return k
-	return -1
-
-
-# -- where a run begins -----------------------------------------------------------------------------
 
 func _starting_state(t) -> void:
 	var r := Run.new()
@@ -281,19 +128,16 @@ func _starting_state(t) -> void:
 	# 주어를 잃었다. 남긴 것은 그 줄이 실제로 재던 것: **적 편 종은 명부에 한 마리도 없다.**
 	t.eq(r.army.living_ids_of_type(Rules.SWORDSMAN).size(), Rules.start_bodies_of(0), "열 명 전부 검사다")
 	t.eq(r.army.living_ids_of_type(Rules.WOLF).size(), 0, "늑대는 명부에 없다 — 짐승은 이제 적이고 카드로도 안 온다")
-	_opened(r)
 
 
 # -- the one that the plan names a mutation for ------------------------------------------------------
 
 func _hp_carries_by_identity(t) -> void:
-	# ⚠⚠ **SEEDED, and it is kept seeded on purpose.** The reason it had to be seeded is gone with the
-	# beast card — an unseeded fixture used to register a random second species off the opening round,
-	# and a later round of three beast cards then made `_take_the_card_and_close_refit` take one, bringing
-	# four bodies into every roster count below (**measured: this net went red about one run in six on
-	# an unchanged tree**). No card pays a body now, so the draw cannot move these numbers at all —
-	# but a fixture that names its seed is the one that stays readable when it next can.
-	var r := _seeded_open(1)
+	# ⚠⚠ **THIS USED TO BE SEEDED AND THERE IS NOTHING LEFT TO SEED** (2026-08-28). An unseeded fixture
+	# once registered a random second species off the opening round and a later beast card brought four
+	# bodies into every roster count below — **measured: this net went red about one run in six on an
+	# unchanged tree**. The cards are deleted, so a run's roster is the opening table and nothing else.
+	var r := Run.new()
 	var roster := r.army
 
 	# Written through a local and assigned back: a Packed array is copy-on-write and a write into a
@@ -333,7 +177,7 @@ func _hp_carries_by_identity(t) -> void:
 ## ⚠ **The day beasts are drawn onto the board this fixture should be re-read, not deleted**: what it
 ## exists to say is that a wipe is latched by the FIGHT, and that is true whoever placed the beast.
 func _wipe_loses(t) -> void:
-	var r := _seeded_open(5)
+	var r := Run.new()
 	var b := _island_with_one_beast(r.army)
 	t.eq(b.outcome(), Battle.Outcome.RUNNING, "전투는 굴러가는 상태로 시작한다")
 	t.eq(b.enemies_left(), 1, "픽스처가 짐승 한 마리를 세웠다 (자가 점검 — 0마리면 섬이 첫 칸에 이겨 버린다)")
@@ -371,7 +215,7 @@ func _wipe_loses(t) -> void:
 ## swordsman needs six blows at 1.2 s to take 14 HP off a wolf, and a wolf needs nine at 1.0 s to take
 ## 18 off a swordsman — the shorter of the two is already past the yardstick before the crossing.
 func _the_clock_ends_nothing(t) -> void:
-	var r := _seeded_open(5)
+	var r := Run.new()
 	var b := _island_with_one_beast(r.army)
 	t.eq(b.enemies_left(), 1, "픽스처가 짐승 한 마리를 세웠다 (자가 점검)")
 	t.ok(b.summon(0, _summonable_water_on(b)) >= 0 and b.commit(), "한 명만 불러내고 시작을 눌렀다 (자가 점검)")
@@ -408,16 +252,14 @@ func _the_clock_ends_nothing(t) -> void:
 ## to one path and forgotten in the other, which is exactly how a second run would start somewhere the
 ## first did not with nothing to bark about it.
 func _restart_resets(t) -> void:
-	var r := _seeded_open(5)
+	var r := Run.new()
 	var first := r.army
 	var hp := first.hp
 	hp[0] = 1.0
 	first.hp = hp
 	first.kill(1)
 	r.finish_island(true)
-	# 승리도 카드를 냈다 — 고르고 정비를 닫아야 회차가 끝까지 간다.
-	_take_the_card_and_close_refit(r)
-	t.eq(r.state(), Run.State.WON, "재시작 전에는 끝난 상태다")
+	t.eq(r.state(), Run.State.WON, "재시작 전에는 끝난 상태다 — 승리가 곧장 WON 이다")
 
 
 ## ⚠⚠ **Found on the grid in front of it, not typed.** It used to be island 1's own literal tile, and
@@ -459,37 +301,5 @@ func _island_with_one_beast(army: Army) -> Battle:
 	return b
 
 
-## Walks past the OPENING CARD ROUND and onto the island. ⚠⚠ **A run opens on a card screen since
-## 티켓 15** (「시작하자마자 세 개 중에 하나 고르는 거」), so `begin_island` refuses until that round is
-## finished — every fixture below that opens the island has to pass through it first. Card 0, always,
-## so the fixture is the same run every time.
-##
-## ⚠⚠ **THE `close_refit` IS NOT TIDINESS, IT IS THE BEAST CARD'S DELETION LANDING HERE.** The opening
-## card used to be a BEAST: it paid no item, the held pile stayed empty, and `take_card` walked the
-## run straight out of the card screen. **Every card is equipment now**, so taking one leaves the run
-## standing in `REFIT` — and `begin_island` returns `null` there. Without this line every fixture below
-## calls a method on a null `Battle`.
-func _opened(r: Run) -> Run:
-	if r.state() == Run.State.PICK:
-		r.take_card(0)
-	if r.state() == Run.State.REFIT:
-		r.close_refit()
-	return r
-
-
-## A seeded run standing on the island with its opening card taken and its refit closed.
-##
-## ⚠⚠ **THE SPECIES REGISTRATION LOOP IS DELETED 2026-08-27 AND IT WAS NOT DECORATION.** It registered
-## every player species so that no LATER card could be a beast: an unregistered fixture could be dealt
-## three beast cards, `_take_the_card_and_close_refit` would take one, and four bodies would land inside
-## whatever roster count was being asserted. **No card can pay a body any more**, so the loop guards
-## nothing — and it was adding four empty summon slots to every fixture in this file for that reason
-## alone.
-##
-## ⚠ **The seed stays.** It is what makes WHICH item the opening card pays reproducible, and the
-## fixture is only readable if the run it builds is the same run every time.
-func _seeded_open(seed: int) -> Run:
-	var r := Run.new()
-	r.seed_cards(seed)
-	_opened(r)
-	return r
+## ⚠⚠ **`_opened` STOOD HERE AND IS DELETED** (2026-08-28). It walked a fixture past the OPENING
+## CARD ROUND, which 티켓 12 took off the start path and which is now deleted outright.

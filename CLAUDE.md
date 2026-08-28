@@ -106,6 +106,19 @@ direction or brainstorming**, or asks for it by name. **The shape a question is 
 **Code that pretends to work is worse than code that doesn't, and a green that measures less than its
 label says is worse than a red. If you can't do it, say you can't.**
 
+# ⚠⚠ **Anything the player LOOKS at is MADE, never typed** (2026-08-28, the user)
+
+***"UI나 이런것들 코드가 아니라 항상 제대로 만들라고 ... pixellab이나 블랜더 MCP 사용하라고"***
+
+**A HUD, a button, an icon, a panel, a mark on the ground — build it in a tool and load the result.**
+**Blender (the MCP) for anything with a shape in the world; `tools/pixel/` (local ComfyUI) or pixellab
+for anything flat.** ⚠ **`draw_rect` + `draw_string` chrome is not a placeholder, it is the thing that
+ships** — that is exactly how the island wore a grey button and a digit nobody chose until they were
+deleted. **If a screen is worth having, it is worth being designed.**
+
+⚠ **What this does NOT forbid**: a shader, a line the sim needs to prove something, or a throwaway
+probe. **The test is whether the PLAYER is meant to look at it.**
+
 # The docs
 
 **`docs/` is four folders and three loose files.** **Open a folder's README, not the folder.**

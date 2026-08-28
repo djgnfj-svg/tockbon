@@ -58,6 +58,23 @@ const FIXTURE_TIERS := [
 ]
 const FIXTURE_W := 9
 
+## **A board built for ONE question: may a body cut a diagonal past a blocked corner?** Flat on
+## purpose — the height rule already refuses a diagonal across a tier, and mixing the two would leave
+## a row that cannot say which rule refused it.
+##
+## Land is `.`, water is `~`. The two squeezes are hand-placed and the coordinates are named where
+## they are used:
+##  · **both shoulders blocked** — (2,1) to (3,2), with (3,1) and (2,2) both water
+##  · **one shoulder blocked** — (1,2) to (2,1), with (2,2) water and (1,1) land
+const SQUEEZE_ROWS := [
+	"~~~~~~",
+	"~..~.~",
+	"~.~..~",
+	"~....~",
+	"~~~~~~",
+]
+const SQUEEZE_W := 6
+
 ## The same board with the door bricked up — the stair character replaced by low ground. **Not
 ## generated from the one above by string surgery**: a mutation written as a replacement has silently
 ## matched zero times in this repo twice, and a fixture that quietly stayed identical would make the
@@ -127,7 +144,11 @@ const FIRST_ISLAND := 4
 ##    (see `ISLAND_4_ROWS`): stepping the shore back a column per row buys coast tiles by hanging a
 ##    separate wall off every one of them.
 ##  · **6 defenders, 3 up top** — unchanged, and the letters were placed to keep it so.
-const ISLAND_HIGH := 15
+## ⚠ **16 SINCE 2026-08-29, AND IT WAS 15 BECAUSE THE STAIR WAS EATING ONE OF THEM.** The stair used
+## to be cut INTO the plateau's corner, so one of its sixteen tiles carried the odd notch instead of
+## the storey. **The stair now stands outside**, on the middle of the west wall — see
+## `island_build.py` for the three arrangements that were tried and why this is the one that holds.
+const ISLAND_HIGH := 16
 const ISLAND_STAIR := 1
 const ISLAND_LANDINGS := 68
 const ISLAND_ENEMIES := 6
@@ -140,6 +161,12 @@ func run(t) -> void:
 	_an_empty_tier_board_is_flat(t)
 	_a_short_tier_board_is_flat_where_it_ends(t)
 	_the_climb_rule_itself(t)
+	_the_feet_land_on_the_treads(t)
+	_a_corner_stair_picks_one_mouth_and_keeps_it(t)
+	_a_stair_is_entered_at_its_ends_only(t)
+	_a_diagonal_needs_both_shoulders(t)
+	_the_walker_will_not_cut_a_corner(t)
+	_the_real_island_still_has_a_route(t)
 	_the_field_climbs_only_by_the_stair(t)
 	_bricking_up_the_stair_seals_the_plateau(t)
 	_a_walker_refuses_the_wall_and_takes_the_stair(t)
@@ -232,6 +259,289 @@ func _the_climb_rule_itself(t) -> void:
 
 	t.ok(not g.can_step(low, sea), "물은 여전히 못 걷는다 — passable 이 먼저다")
 	t.ok(not g.can_step(low, -1), "격자 밖은 거절이다")
+
+
+## ⚠⚠ **WHERE A BODY'S FEET REST ON A STAIR, AND NOTHING MEASURED IT UNTIL 2026-08-28.** `surface_h`
+## had **no reader in any net at all**, which is how it came to disagree with the mesh it is supposed
+## to trace: it returned a straight RAMP while `island_build.py` cut `Rules.STAIR_TREADS` steps into
+## the 칸. A body walked the average of the steps — into every tread, over every riser — and the user
+## saw it: 「계단을 캐릭이 뚫고감 이건 근본적인문제인데 왜그럴까?」
+##
+## ⚠ **This measures the STEP, not the ramp.** Every height on a stair has to be a whole number of
+## treads above the floor below it; a returned value between two treads is the defect this row exists
+## for, and it is what a mutation back to `(i + f) / n` produces on the first sample.
+##
+## ⚠ **It is a VIEW height and this net drives the SIM** — that is allowed and is the point: the
+## function lives in `Grid` so one arithmetic serves the bake and the picture, and `Grid` is the seam
+## a net may drive with `.new()`.
+## ⚠⚠ **IT USES ITS OWN BOARD AND NOT `FIXTURE_TIERS`, AND THE REASON IS A LIVE DEFECT.**
+## `FIXTURE_TIERS` spells its plateau with `1`, which meant level 2 when the fixture was written and
+## means **level 1** since `TIER_CHARS` was widened on 2026-08-26 — so on that board the plateau and
+## the stair are the SAME level, no run is ever built, and several of this file's own rows have been
+## red ever since. **Re-reading that fixture is its own round** (`TIER_CHARS`'s header says so); a new
+## row must not be built on top of a board that is measuring the wrong island.
+## ⚠ Here `2` is the plateau and `/` is the stair, which is what the legend says today.
+const TREAD_ROWS := [
+	"~~~~~~~~~",
+	"~.......~",
+	"~.......~",
+	"~.......~",
+	"~.......~",
+	"~~~~~~~~~",
+]
+const TREAD_TIERS := [
+	".........",
+	".....222.",
+	".....222.",
+	"..../222.",
+	".....222.",
+	".........",
+]
+
+func _the_feet_land_on_the_treads(t) -> void:
+	var g := Grid.new()
+	g.load_rows(TREAD_ROWS, TREAD_TIERS)
+	var stair := g.tile_index(4, 3)
+	t.eq(g.level_of(stair), 1, "계단 조각을 잡았다 (자가 점검)")
+	t.eq(g.level_of(g.tile_index(5, 3)), 2, "그 옆이 2층이다 (자가 점검 — 눈금표가 오늘 뜻으로 읽혔다)")
+	t.ok(not g.stair_run_of(stair).is_empty(), "그리고 그것이 계단 런에 속한다 (자가 점검)")
+
+	# Flat ground: the drawn height and the rule height are the same number. Without this row every
+	# claim below is equally true of a function that returns garbage everywhere.
+	var flat := Vector2(2.0, 1.0)
+	t.ok(absf(g.surface_h(flat) - g.height_at(flat)) < 0.001,
+		"평지에서는 발 높이가 규칙 높이와 같다 (자가 점검)")
+
+	# ⚠⚠ **THE ROW.** Walk the stair from its downhill edge to its uphill edge and every height must
+	# sit on a tread — a whole number of risers above the floor the run starts from.
+	var run: Array = g.stair_run_of(stair)
+	var floor_h := float(g.level_of(stair) - 1) * Rules.TIER_STEP_TILES
+	var riser := 2.0 * Rules.TIER_STEP_TILES / float(Rules.STAIR_TREADS)
+	var off := 0
+	var seen := {}
+	var last := -1e9
+	var rose := 0
+	for k in 21:
+		var f := float(k) / 20.0 - 0.5
+		var p := Vector2(4.0 + f * float(int(run[0].x)), 3.0 + f * float(int(run[0].y)))
+		var hgt := g.surface_h(p)
+		var steps := (hgt - floor_h) / riser
+		if absf(steps - round(steps)) > 0.001:
+			off += 1
+		seen[int(round(steps))] = true
+		if hgt > last + 0.001:
+			rose += 1
+		last = hgt
+	t.eq(off, 0, "계단 위 스물한 지점의 발 높이가 전부 단 위다 — 단 사이에 뜨거나 잠긴 곳이 없다")
+	# The floor under that zero: a function returning ONE constant would also have 0 off-tread samples.
+	t.ok(seen.size() >= 3, "그 사이에 서로 다른 단이 셋 이상 나왔다 (%d) — 한 높이만 돌려주는 게 아니다"
+		% seen.size())
+	t.ok(rose >= 3, "그리고 올라가면서 높이가 실제로 올랐다 (%d번)" % rose)
+
+	# ⚠ **Neither end escapes the storey the stair joins.** A tread index past the last one lifts the
+	# body a whole riser above the floor it is stepping onto — the `min` in `surface_h` is what stops
+	# it, and this is the row that bites if it goes.
+	var top := floor_h + 2.0 * Rules.TIER_STEP_TILES
+	for k2 in 9:
+		var f2 := float(k2) / 8.0 - 0.5
+		var p2 := Vector2(4.0 + f2 * float(int(run[0].x)), 3.0 + f2 * float(int(run[0].y)))
+		var h2 := g.surface_h(p2)
+		t.ok(h2 > floor_h - 0.001 and h2 < top + 0.001,
+			"계단 위 발 높이가 아래층과 위층 사이에 있다 (%.3f, %.3f~%.3f)" % [h2, floor_h, top])
+
+
+## ⚠⚠ **A CORNER STAIR MEETS THE FLOOR ON TWO SIDES, AND WHICH ONE WINS DECIDES WHICH WAY THE BODY
+## CLIMBS** (2026-08-28, the user: 「계단 이동할때 뚫는거 같은데」). The island's own stair is exactly
+## that shape — floor to the west AND to the south, plateau to the east and north — and the two files
+## that have to agree about it picked differently: `island_build.py` cut the staircase climbing
+## west-to-east, `_build_runs` kept whichever mouth its loops found last and answered south-to-north.
+## **A body then walked ACROSS the treads instead of up them**, which is what 「뚫는다」 looks like.
+##
+## ⚠ **The order itself is arbitrary and the agreement is not.** `Grid.STAIR_MOUTH_ORDER` puts west
+## first; `island_build.py` walks `("w", "e", "n", "s")` and keeps the FIRST hit. This row pins the
+## sim's half — the Blender half is pinned by its own comment and by the picture.
+##
+## ⚠ Mutation: keep the LAST mouth instead of the first, or drop the lowest-tile tie-break, and the
+## axis flips on this board.
+func _a_corner_stair_picks_one_mouth_and_keeps_it(t) -> void:
+	# Floor to the west and to the south, plateau to the east and north — the island's own shape.
+	var rows := ["~~~~~~~", "~.....~", "~.....~", "~.....~", "~.....~", "~~~~~~~"]
+	var tiers := [".......", "...222.", "...222.", "../222.", ".......", "......."]
+	var g := Grid.new()
+	g.load_rows(rows, tiers)
+	var st := g.tile_index(2, 3)
+	t.eq(g.level_of(st), 1, "계단 조각을 잡았다 (자가 점검)")
+	t.eq(g.level_of(g.tile_index(1, 3)), 0, "서쪽이 1층이다 (자가 점검)")
+	t.eq(g.level_of(g.tile_index(2, 4)), 0, "남쪽도 1층이다 — 모서리 계단이다 (자가 점검)")
+	t.eq(g.level_of(g.tile_index(3, 3)), 2, "동쪽이 2층이다 (자가 점검)")
+
+	var run: Array = g.stair_run_of(st)
+	t.ok(not run.is_empty(), "계단 런이 만들어졌다")
+	if run.is_empty():
+		return
+	t.eq(run[0], Vector2i(1, 0),
+		"그리고 오르는 축이 서쪽 입에서 동쪽으로다 — STAIR_MOUTH_ORDER 가 서쪽을 먼저 고른다")
+
+	# ⚠ **The same board, built twice, must answer the same axis.** `_build_runs` walks its group off a
+	# stack; without the lowest-tile tie-break, which tile came last — and therefore which side won —
+	# was not stable between two runs on identical rows.
+	var g2 := Grid.new()
+	g2.load_rows(rows, tiers)
+	t.eq(g2.stair_run_of(st), run, "같은 판을 두 번 읽으면 같은 축이 나온다 — 순회 순서에 안 기댄다")
+
+	# And the feet climb ALONG that axis: west edge low, east edge high.
+	var west := g.surface_h(Vector2(1.5, 3.0))
+	var east := g.surface_h(Vector2(2.5, 3.0))
+	t.ok(east > west + 0.05,
+		"그 축을 따라 발 높이가 실제로 오른다 (%.3f -> %.3f)" % [west, east])
+
+
+## ⚠⚠ **A BODY WALKED UP THE STAIRCASE'S FLANK** (2026-08-28, the user: 「계단 옆면으로 오르는게 살짝
+## 마음에 안드네?」). A stair carries an ODD notch, so it is within `MAX_CLIMB_LEVELS` of the floor on
+## every side — and a body stepping onto it sideways skipped the treads entirely and climbed the wall
+## of the staircase. **The mesh already presents a solid flank there; the rule did not agree with it.**
+##
+## ⚠ **Along the run's axis is the whole test.** Sideways is refused, along is allowed, and a DIAGONAL
+## that keeps an axis component is allowed — its own shoulders are what decide it after that.
+## ⚠ **Stair-to-stair stays free**, so a two-wide staircase is one staircase and two bodies can shuffle
+## across it.
+##
+## ⚠ Mutation: return `true` from `_stair_face_open` and the sideways rows below go green.
+func _a_stair_is_entered_at_its_ends_only(t) -> void:
+	# ⚠ **The corner board, not `TREAD_TIERS`** — this needs floor on BOTH flanks of the stair, which is
+	# where a body was climbing the staircase's wall. `TREAD_TIERS` wraps its stair in plateau.
+	var g := Grid.new()
+	g.load_rows(["~~~~~~~", "~.....~", "~.....~", "~.....~", "~.....~", "~~~~~~~"],
+		[".......", "...222.", "...222.", "../222.", ".......", "......."])
+	# The stair is (2,3); it climbs west-to-east, so (1,3) is its mouth and (3,3) its head.
+	var st := g.tile_index(2, 3)
+	t.eq(g.level_of(st), 1, "계단 조각을 잡았다 (자가 점검)")
+	t.ok(not g.stair_run_of(st).is_empty(), "계단 런이 만들어졌다 (자가 점검)")
+	t.eq(g.stair_run_of(st)[0], Vector2i(1, 0), "이 계단은 서에서 동으로 오른다 (자가 점검)")
+
+	# Along the axis: both ends stay open, or the stair stops being a door at all.
+	t.ok(g.can_step(g.tile_index(1, 3), st), "서쪽 입으로는 들어간다")
+	t.ok(g.can_step(st, g.tile_index(1, 3)), "그리고 도로 나온다")
+	t.ok(g.can_step(st, g.tile_index(3, 3)), "동쪽 머리로 올라간다")
+	t.ok(g.can_step(g.tile_index(3, 3), st), "그리고 내려온다")
+
+	# ⚠ **The row.** Both flanks are floor one notch below — inside the climb rule, and refused anyway
+	# because they are the staircase's sides.
+	t.eq(g.level_of(g.tile_index(2, 2)), 0, "계단 북쪽은 1층이다 (자가 점검)")
+	t.eq(g.level_of(g.tile_index(2, 4)), 0, "계단 남쪽도 1층이다 (자가 점검)")
+	t.ok(not g.can_step(g.tile_index(2, 4), st), "남쪽 옆면으로는 계단에 못 올라탄다")
+	t.ok(not g.can_step(st, g.tile_index(2, 4)), "계단에서 옆으로 내려서지도 못한다")
+	t.ok(not g.can_step(g.tile_index(2, 2), st), "북쪽 옆면으로도 못 들어온다")
+
+	# A wide stair has to stay one staircase: two tiles at the same step, side by side.
+	var wide := Grid.new()
+	wide.load_rows(["~~~~~~~", "~.....~", "~.....~", "~.....~", "~.....~", "~~~~~~~"],
+		[".......", "...222.", "../222.", "../222.", "...222.", "......."])
+	var a := wide.tile_index(2, 2)
+	var b2 := wide.tile_index(2, 3)
+	t.eq(wide.level_of(a), 1, "넓은 계단의 두 조각이 다 계단이다 (자가 점검)")
+	t.eq(wide.level_of(b2), 1, "둘째 조각도 계단이다 (자가 점검)")
+	t.ok(wide.can_step(a, b2), "같은 계단 안에서는 옆으로 움직인다 — 두 몸이 나란히 오른다")
+
+
+## ⚠⚠ **A DIAGONAL NEEDS BOTH SHOULDERS, AND THE LAND HALF DID NOT HAVE THIS RULE UNTIL 2026-08-28**
+## (티켓 19; the user, on the game screen: 「이동할때 그냥 벽을 뚫는 문제도 있는상태」). Two blocked
+## tiles touching corner to corner were one step apart, so a body walked straight through the seam.
+##
+## ⚠⚠ **BOTH shoulders and not 「both blocked」, and that is the decision this row pins.** The ticket
+## asked for the weaker rule — refuse only when BOTH shoulders are blocked — and the stronger one is
+## taken because **a body moves continuously**: `Battle._walk` slides it from tile centre to tile
+## centre, so on a diagonal it is physically over the shoulder tiles on the way. `_straight_is_all_water`
+## one file over requires both shoulders for exactly this reason and says so in its own header.
+## ⇒ **Nothing is cut off by it**: a refused diagonal is still two orthogonal steps, and
+## `_the_real_island_still_has_a_route` is the floor that proves the island did not seal itself.
+##
+## ⚠ **Flat board on purpose.** The height rule already refuses a diagonal across a tier, so a tiered
+## fixture could not say which of the two rules did the refusing.
+##
+## ⚠ Mutation: drop either shoulder test and its own row goes green-to-red on its own.
+func _a_diagonal_needs_both_shoulders(t) -> void:
+	var g := Grid.new()
+	g.load_rows(SQUEEZE_ROWS)
+	var here := g.tile_index(2, 1)
+	var across := g.tile_index(3, 2)
+	# The self-check first: the two ENDS are walkable and the two shoulders are not. Without this the
+	# refusals below are equally true of a board where nothing is walkable at all.
+	t.ok(g.is_passable(2, 1) and g.is_passable(3, 2), "대각선 양 끝이 걸을 수 있는 조각이다 (자가 점검)")
+	t.ok(not g.is_passable(3, 1) and not g.is_passable(2, 2), "그리고 어깨 둘 다 막혀 있다 (자가 점검)")
+	t.ok(not g.can_step(here, across), "양 어깨가 막힌 대각선은 못 지나간다 — 벽 모서리를 안 뚫는다")
+	t.ok(not g.can_step(across, here), "반대 방향으로도 못 지나간다 — 한쪽만 막는 문이 아니다")
+
+	# One shoulder open is still refused, and this is the row the ticket's weaker rule would have left
+	# green. (1,2) -> (2,1): (2,2) is water, (1,1) is land.
+	var low := g.tile_index(1, 2)
+	var up := g.tile_index(2, 1)
+	t.ok(g.is_passable(1, 1) and not g.is_passable(2, 2), "어깨 하나만 막힌 자리를 잡았다 (자가 점검)")
+	t.ok(not g.can_step(low, up), "어깨 하나만 막혀도 대각선은 거절이다 — 몸은 그 어깨 위를 실제로 지난다")
+
+	# The control: a diagonal with BOTH shoulders open still walks. Without it every row above is
+	# equally true of a `can_step` that refuses all eight diagonals.
+	# (3,3) -> (4,2): the shoulders are (4,3) and (3,2), both land. ⚠ **(2,3) -> (3,2) is NOT the
+	# control** and was tried first: its shoulder (2,2) is the very water this fixture is built around,
+	# so it is refused for the right reason and says nothing about diagonals in general.
+	t.ok(g.is_passable(4, 3) and g.is_passable(3, 2), "대조군의 어깨가 둘 다 열려 있다 (자가 점검)")
+	t.ok(g.can_step(g.tile_index(3, 3), g.tile_index(4, 2)),
+		"어깨가 둘 다 열린 대각선은 그대로 걸린다 (대조군 — 대각선을 전부 막은 게 아니다)")
+	# And the orthogonal steps across the very same seam are untouched.
+	t.ok(g.can_step(g.tile_index(3, 2), g.tile_index(4, 2)), "직교 걸음은 그대로다")
+	t.ok(g.can_step(g.tile_index(1, 1), g.tile_index(1, 2)), "세로 직교도 그대로다")
+
+
+## **The rule reaching the WALKER, and not only the predicate.** `flow_field` and `step_toward` both
+## ask `can_step`, so one function carries it to both — but a check on the predicate alone would stay
+## green if either caller grew its own copy of the neighbour walk.
+##
+## ⚠ The field is built from the far side of the squeeze and the body is put on the near side: if the
+## corner were still cuttable the descent would take the diagonal in one step.
+func _the_walker_will_not_cut_a_corner(t) -> void:
+	var g := Grid.new()
+	g.load_rows(SQUEEZE_ROWS)
+	var goal := g.tile_index(4, 1)
+	var field := g.flow_field(goal)
+	var start := g.tile_index(2, 1)
+	t.ok(int(field[start]) != Grid.UNREACHABLE, "막힌 모서리를 돌아가는 길이 있다 (자가 점검)")
+	# ⚠ **The hop count is what says it went AROUND.** The straight-line diagonal distance is 2 steps
+	# ((2,1)->(3,2)->(4,1)); refused, the walk has to drop to (2,3)... and back up, which is longer.
+	t.ok(int(field[start]) > 2, "그리고 그 길이 대각선 지름길보다 길다 (%d 홉) — 모서리를 안 자른다"
+		% int(field[start]))
+	var step := g.step_toward(1, Vector2(2.0, 1.0), field)
+	t.ok(step != Vector2(3.0, 2.0), "걸음도 그 대각선을 안 고른다")
+	t.ok(step != Vector2(2.0, 1.0), "그렇다고 선 채로 멈추지도 않는다 — 갈 데가 있다 (%s)" % str(step))
+
+
+## ⚠⚠ **THE FLOOR UNDER THE WHOLE RULE: the real island did not seal itself.** A stricter step rule
+## can turn a working board into one where a body cannot reach anything, and every row above would
+## still be green. **This walks the actual island** — the one the game loads — and asks that every
+## walkable tile is still reachable from the tile the roster stands on.
+##
+## ⚠ It compares against the SAME field before and after by construction: `flow_field` is the only
+## thing asked, so a rule that cut the island in two shows up as unreachable land.
+func _the_real_island_still_has_a_route(t) -> void:
+	var g := Grid.new()
+	g.load_rows(Islands.rows(), Islands.tiers())
+	var from := -1
+	for tile in g.passable.size():
+		if g.passable[tile] != 0:
+			from = tile
+			break
+	t.ok(from >= 0, "섬에 걸을 수 있는 조각이 있다 (자가 점검)")
+	var field := g.flow_field(from)
+	var walkable := 0
+	var cut_off := 0
+	for tile in g.passable.size():
+		if g.passable[tile] == 0:
+			continue
+		walkable += 1
+		if int(field[tile]) == Grid.UNREACHABLE:
+			cut_off += 1
+	t.ok(walkable > 50, "섬에 걸을 수 있는 조각이 %d 개다 (자가 점검 — 빈 섬을 재고 있지 않다)" % walkable)
+	t.eq(cut_off, 0,
+		"그리고 어깨 규칙을 넣은 뒤에도 못 닿는 땅이 하나도 없다 — 대각선을 막아 섬을 자르지 않았다")
 
 
 # == the field ========================================================================================
@@ -1025,7 +1335,10 @@ func _an_island_number_is_loaded_through_one_door(t) -> void:
 			offenders.append(path)
 	# A sweep over nothing is a green that measured nothing — this repo's settle loop passed at zero
 	# iterations once.
-	t.ok(scanned > 20, "src 와 tools 에서 .gd 를 %d 개 훑었다 (자가 점검)" % scanned)
+	# ⚠ **The floor was 20 and eight files were deleted on 2026-08-28** — the card screen, the refit
+	# board, two of their tools and the three that drove the summon. It is the SELF-CHECK for the walk,
+	# so it only has to be above 「the walk found nothing」.
+	t.ok(scanned > 12, "src 와 tools 에서 .gd 를 %d 개 훑었다 (자가 점검)" % scanned)
 	t.eq(offenders, [],
 		"grid.gd 밖에서는 아무도 load_rows 를 직접 안 부른다 — 섬 번호는 Islands.load_into 로만 실린다 %s"
 			% str(offenders))

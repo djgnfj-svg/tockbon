@@ -69,6 +69,11 @@ uniform float swing_floor;
 // --- 3. THE ONE THAT LETS GO --------------------------------------------------------------------
 // ⚠ Once a cycle, over patches of coast only, a line separates and travels seaward, fading as it goes.
 // **Two lines on screen are the same line at two ages**, which is what backwash looks like.
+// ⚠⚠ **거품 — THE LINE THAT COMES IN — WAS PUT BACK ON 2026-08-29 AND TAKEN STRAIGHT OUT AGAIN.**
+// One band, starting 0.7 tiles out and closing on the rim half a cycle out of phase with `peel`. The
+// user saw it and said 「별로다... 그 거품없애봐」. **The measurement stands: a flat sea with one
+// border is still what this island wants**, which is what seven candidates said on 2026-08-28 and what
+// a second attempt has now confirmed from the other side.
 uniform float peel;
 uniform float peel_tiles;
 uniform float peel_gate_scale;

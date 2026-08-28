@@ -34,12 +34,9 @@ func _run() -> void:
 	_game.set_process(false)
 	await process_frame
 
+	# ⚠ **Three lines stood here walking past the card and refit screens** and both are deleted
+	# (2026-08-28). `_start_run` opens the island outright.
 	_game._start_run()
-	_game.run.seed_cards(20260827)
-	if _game.run.state() == Run.State.PICK:
-		_game.run.take_card(0)
-	if _game.run.state() == Run.State.REFIT:
-		_game.run.close_refit()
 	_game._show_state()
 	if _game.battle == null:
 		push_error("capture_ground: 섬이 안 열렸다")

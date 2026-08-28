@@ -53,6 +53,12 @@ const CORNER_SEGMENTS := 6
 const TERRAIN_PICK_STEPS := 48
 
 const WATER_SHADER := "res://src/view/water.gdshader"
+## ⚠ **The 판's own shader.** It is a second material on a second object inside `island.glb`, not a
+## second copy of the water's — the two answer different questions and share no uniform.
+const PADS_SHADER := "res://src/view/pads.gdshader"
+## The name Blender gives the 판 object inside `island.glb`. ⚠ **Both sides spell it once**: the
+## export names it in `tools/blender/island_build.py` and this is the only place the game reads it.
+const PADS_NODE := "pads"
 
 
 # --- what it reads, and never writes ---------------------------------------------------------------
@@ -112,7 +118,6 @@ var _cam: Camera3D = null
 var _terrain: MeshInstance3D = null
 
 var _sea: MeshInstance3D = null
-var _ring: MeshInstance3D = null
 var _sun: DirectionalLight3D = null
 ## **The mark on the MAT under the cursor.** Its mesh is rebuilt when the cursor crosses into
 ## another mat -- see `set_hover_tile`.
@@ -129,10 +134,12 @@ var _hulls_used := 0
 var _built_for := ""
 
 
-# --- the plan being authored -------------------------------------------------------------------------
+# --- what the sea is doing ----------------------------------------------------------------------
 
-var _summon_slot := -1
-var _summon_aim := -1
+## ⚠⚠ **THE PLAN'S OWN TWO FIELDS STOOD HERE AND ARE DELETED** (2026-08-28): `_summon_slot` and
+## `_summon_aim`, the slot a key had armed and the tile the cursor was over. The gesture they served
+## went with the start button — see `game.gd`'s header. `_wait_clock` is not part of it: it ages the
+## tint on a boat that has arrived and is waiting to unload.
 var _wait_clock := 0.0
 
 
@@ -177,19 +184,6 @@ func _build_world() -> void:
 	# One mesh, one material, one draw call for the whole island — see `_rebuild_terrain`.
 	_terrain = MeshInstance3D.new()
 	_world.add_child(_terrain)
-
-	# The ring: where a boat may be put down. Built once, moved and resized per island.
-	_ring = MeshInstance3D.new()
-	var ring_mat := StandardMaterial3D.new()
-	ring_mat.albedo_color = Look.COL_SUMMON_RING
-	ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	# Unshaded: it is a MARK on the water, not a thing floating on it, and a mark that dims when the
-	# sun goes round is a mark that stops answering the question it was drawn for.
-	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	ring_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_ring.material_override = ring_mat
-	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_world.add_child(_ring)
 
 	# The two effect layers. Built here and never rebuilt, because what changes every frame is the
 	# geometry inside them and not the nodes.
@@ -323,10 +317,6 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	# flight over bodies that no longer exist, and every id in them means a different unit now.
 	_fx = []
 	_body = {}
-	# A slot armed on island 1 must not survive onto island 2, and the tile index it was aiming at
-	# would name a different piece of water there.
-	_summon_slot = -1
-	_summon_aim = -1
 	_wait_clock = 0.0
 	# The survey: an island opens zoomed all the way out, so the WHOLE island is on screen before
 	# anything is planned — `plan-then-watch` 6.3, on the user's 「조금 더 카메라를 뒤로 빼야 될」.
@@ -385,10 +375,6 @@ func _process(delta: float) -> void:
 	_fx_step(delta)
 	_drain_events()
 	_wait_clock += delta
-	# ⚠ **A visibility flip, not a rebuild.** The plan used to be painted into the terrain's own
-	# colours, so committing meant building the whole mesh a second time; it is a ring of its own now.
-	if _ring != null:
-		_ring.visible = _band_on()
 	_place_camera()
 	# ⚠ **The buffers are opened BEFORE the bodies and flushed after everything.** The hit halo and the
 	# ghosts are painted from inside `_paint_bodies` — they are per-body facts and that is the one loop
@@ -685,6 +671,15 @@ const BUILDINGS_SCENE := "res://assets/buildings/buildings.glb"
 const PROPS_SCENE := "res://assets/props/props.glb"
 
 var _island: Node3D = null
+## **The 판 object, found inside the island scene by name**, and the material this file put on it.
+## ⚠⚠ **Null is a real state and it is not an error**: a bake that has not been re-run yet has no
+## `pads` node, and every writer below no-ops rather than crashing. `set_hover_tile` and the reveal
+## key both go through `_tell_the_pads`, which is the one place that null is checked.
+var _pads: MeshInstance3D = null
+var _pads_mat: ShaderMaterial = null
+## Whether the player is holding the reveal key. **Written only by `set_pads_revealed`**, which the
+## shell calls on the key down and the key up.
+var _pads_revealed := false
 var _builds: Node3D = null
 var _props: Node3D = null
 
@@ -718,9 +713,64 @@ func _rebuild_terrain() -> void:
 	# objects standing ON the ground and the rim is what separates them from it.
 	# ⚠ **티켓 01 records the island losing this rim once before and the loss being noticed** — it
 	# stopped reading as 「단단한 물체」 from above. That is the thing to watch for now.
+	_adopt_the_pads()
 	_hand_the_sea_its_shoreline()
 	_rebuild_buildings()
 	_rebuild_props()
+
+
+## **Finds the 판 inside the island scene and gives it its shader.**
+##
+## ⚠⚠ **THE 판 IS A SECOND OBJECT IN THE SAME FILE** (2026-08-28). It spent one day welded into the
+## island's own mesh, where the hover had nothing to raise and nothing to hide — which is exactly why
+## the mark went missing for a round. `tools/blender/island_build.py` exports it beside the island and
+## this is where the game picks it up.
+##
+## ⚠ **A missing `pads` node is not an error.** The island file is baked by hand; a build from before
+## the split simply has no such child, and every writer below checks for null rather than this
+## function inventing a mesh the artist did not author (`CLAUDE.md`: what the player looks at is made,
+## not typed).
+func _adopt_the_pads() -> void:
+	_pads = null
+	_pads_mat = null
+	if _island == null:
+		return
+	var found := _island.find_child(PADS_NODE, true, false)
+	if found == null or not (found is MeshInstance3D):
+		return
+	_pads = found as MeshInstance3D
+	var mat := ShaderMaterial.new()
+	mat.shader = load(PADS_SHADER)
+	mat.set_shader_parameter("all_alpha", Look.PAD_ALL_ALPHA)
+	mat.set_shader_parameter("hover_alpha", Look.PAD_HOVER_ALPHA)
+	mat.set_shader_parameter("all_lighten", Look.PAD_ALL_LIGHTEN)
+	mat.set_shader_parameter("hover_lighten", Look.PAD_HOVER_LIGHTEN)
+	mat.set_shader_parameter("hover_lift", Look.PAD_HOVER_LIFT)
+	_pads.material_override = mat
+	# ⚠ **No shadow.** The 판 is a mark on the ground, and a mark that casts one reads as a slab
+	# floating over it — the same argument the summon ring's own material carried.
+	_pads.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_pads_mat = mat
+	_tell_the_pads()
+
+
+## **The one place the shader is written**, so the hover and the reveal key can never disagree about
+## what is on screen. Called from `set_hover_tile`, from `set_pads_revealed` and once at adoption.
+func _tell_the_pads() -> void:
+	if _pads_mat == null:
+		return
+	_pads_mat.set_shader_parameter("hover_cell", float(_hover_cell))
+	_pads_mat.set_shader_parameter("show_all", 1.0 if _pads_revealed else 0.0)
+
+
+## **Whether the whole board is showing.** The shell drives this off the reveal key being held —
+## down is true, up is false — so the board is visible for exactly as long as the key is.
+##
+## ⚠ **Not a toggle.** A held key cannot leave the board switched on behind a player who forgot, and
+## the user asked for 「특정버튼 눌러야 그 뜨게해줘」 — pressed, not latched.
+func set_pads_revealed(on: bool) -> void:
+	_pads_revealed = on
+	_tell_the_pads()
 
 
 ## **Puts the standing buildings on the ground.** ⚠ **Nothing is placed by eye**: the kind comes from
@@ -1112,12 +1162,6 @@ func _use_vertex_colours(n: Node) -> void:
 		_use_vertex_colours(c)
 
 
-## Whether the summon band is showing. **Survives the terrain's deletion** — it is a fact about the
-## plan, not about the ground, and it was only ever sitting in that section by accident.
-func _band_on() -> bool:
-	return battle != null and not battle.committed()
-
-
 
 # --- the bodies, as billboards ------------------------------------------------------------------------
 
@@ -1132,13 +1176,20 @@ func _sprite() -> Sprite3D:
 	var s := Sprite3D.new()
 	s.pixel_size = Look.SPRITE_PIXEL_SIZE
 	s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	# ⚠ **Both of these, or the animals are cardboard.** DISCARD gives the sprite a real depth value so
-	# a wolf behind a cliff is hidden by it and casts a shaped shadow instead of a rectangle; without
-	# it a billboard is one transparent quad that neither occludes nor is occluded.
+	# ⚠ **DISCARD gives the sprite a real depth value**, so a body behind a cliff is hidden by it
+	# rather than drawing through it. Without it a billboard is one transparent quad that neither
+	# occludes nor is occluded.
 	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	s.shaded = false
-	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	# ⚠⚠ **A BODY CASTS NO REAL SHADOW ANY MORE** (2026-08-28, the user: 「그림자도 단순하게 아래
+	# 동그라미정도해줘」). A billboard's cast shadow is the shadow of a flat card that keeps turning to
+	# face the camera — it swings as the board turns, which is the one thing a shadow must not do.
+	# **`_put_ground_shadow` draws a disc under the body instead**, and that disc is now the only
+	# shadow a body has.
+	# ⚠ **The island, the buildings and the props keep their real shadows** — they are solid and the
+	# sun's own direction reads correctly on them (2026-08-26, the user: 「해 하나가 맞는듯」).
+	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_world.add_child(s)
 	_sprites.append(s)
 	_sprites_used += 1
@@ -1174,8 +1225,30 @@ func _hull_box() -> MeshInstance3D:
 ## BE SEEN.** Tinting a bled colour pulls it 45% back toward white and throws most of the pull away:
 ## measured, the body's HUE did not move at all and only its brightness fell 27%, which reads as
 ## shade rather than as blood. The side's colour is resolved first and the blood goes on top of it.
-func _put_body(centre_px: Vector2, radius: float, colour: Color, squash: Vector2, tex: Texture2D,
-		bleed_sec: float) -> float:
+## ⚠⚠ **`at_tiles` IS THE BODY'S REAL PLACE AND `centre_px` IS WHERE IT IS DRAWN, AND THEY ARE NOT THE
+## SAME POINT** (2026-08-28, the user: 「캐릭터가 좌우하면서 idle때 자꾸 2층을 넘어가네 이건 무슨
+## 버그임?」). `centre_px` carries the lunge, the knock-back and the idle sway on top of the sim's
+## position; the ground under it was being sampled at that swayed point, so **a body standing still on
+## the lip of the plateau swayed across the tile line and its feet dropped a whole storey and came
+## back, over and over.** It was not walking anywhere — the sway alone did it.
+##
+## ⚠⚠ **AND IT IS IN TILES, NOT PIXELS, WHICH IS THE SECOND HALF OF THE SAME BUG** (2026-08-28, the
+## user: 「지금보면 땅속으로 들어감 2층 에서 보셈」). The height was asked as `centre_px / TILE_PX`, and
+## `Look.tile_point_px` puts a tile CENTRE half a tile along both axes — so the sample landed at
+## `pos + 0.5`, and `Grid.surface_h` rounds. **A body standing on the lip of the plateau read the
+## height of the tile NEXT to it**, which on the plateau's edge is the floor a storey down: the body
+## sank into the ground. ⚠ The y axis was worse still — `TILE_H_PX` need not equal `TILE_PX`, so the
+## two axes were off by different amounts.
+## ⇒ **The sim's own tile-unit position goes in, untouched.** The picture is offset afterwards.
+func _put_body(centre_px: Vector2, at_tiles: Vector2, radius: float, colour: Color, squash: Vector2,
+		tex: Texture2D, bleed_sec: float) -> float:
+	# ⚠⚠ **The shadow goes down FIRST and it is the body's only one** (2026-08-28, the user: 「그림자도
+	# 단순하게 아래 동그라미정도해줘」). It is drawn from here rather than from the two callers because
+	# this is the one place a body's centre and its drawn width are both in hand — putting it in the
+	# callers is how the deck soldier lost its HP bar once, one function over.
+	# ⚠ **The shadow goes under the SIM's position, not the swayed one.** A shadow that slides with the
+	# idle sway reads as the body hovering; a body swaying over a still shadow reads as breathing.
+	_put_ground_shadow(Look.tile_point_px(at_tiles), radius)
 	var s := _sprite()
 	var pic: Texture2D = tex if tex != null else _tex_body
 	s.texture = pic
@@ -1192,7 +1265,7 @@ func _put_body(centre_px: Vector2, radius: float, colour: Color, squash: Vector2
 	# at the mouth and sink half a storey at the head. **The sim's own height is untouched** — see
 	# `Grid.surface_h`, which exists next to `height_at` precisely so the drawn ground and the measured
 	# ground can differ without either pretending to be the other.
-	var foot := _stand_h(centre_px / Look.TILE_PX) + Look.BODY_LIFT_PX / Look.TILE_PX
+	var foot := _stand_h(at_tiles) + Look.BODY_LIFT_PX / Look.TILE_PX
 	s.position = Vector3(centre_px.x / Look.TILE_PX, foot + tall * 0.5, centre_px.y / Look.TILE_PX)
 	# ⚠⚠ **The TOP is returned and it is not `radius * 2`.** A wolf is 55 x 40 and a caveman 36 x 40:
 	# sized by WIDTH off the same radius, the man stands half again as tall as the animal, which is
@@ -1201,25 +1274,11 @@ func _put_body(centre_px: Vector2, radius: float, colour: Color, squash: Vector2
 	return foot + tall
 
 
-## The two halves of an HP bar, standing above the body rather than below it — a bar UNDER a
-## billboard is inside the ground the billboard is standing on.
-func _put_hp(centre_px: Vector2, top_y: float, type_id: int, frac: float) -> void:
-	var rects := _hp_rects(centre_px, type_id, frac)
-	var back: Rect2 = rects[0]
-	var fill: Rect2 = rects[1]
-	var y := top_y + Look.HP_BAR_GAP_PX * 2.0 / Look.TILE_PX
-	for k in 2:
-		var r: Rect2 = back if k == 0 else fill
-		if r.size.x <= 0.0:
-			continue
-		var s := _sprite()
-		s.texture = _tex_flat
-		s.modulate = Look.hp_bar_colour(k == 1)
-		s.scale = Vector3(r.size.x, r.size.y, 1.0)
-		# Left edges share an origin so a short fill shrinks from the right, exactly as the flat bar
-		# did — centring the fill would make a wounded body read as two bars.
-		var cx := r.position.x + r.size.x * 0.5
-		s.position = Vector3(cx / Look.TILE_PX, y + float(k) * 0.001, centre_px.y / Look.TILE_PX)
+## ⚠⚠ **`_put_hp` STOOD HERE AND IS DELETED** (2026-08-28, the user: 「체력바 없이」). It drew the two
+## halves of a bar above every body. **The bodies are being redone** — the user, earlier the same day:
+## 「캐릭터랑 건물제거 다시잡을꺼임」 — and a bar over every one of them is chrome nobody chose, of
+## exactly the kind `CLAUDE.md` now says is designed in a tool rather than typed here.
+## ⚠ **The sim is untouched**: `army.hp` and `battle.enemy_hp` are unchanged and still decide who dies.
 
 
 ## Every body, every frame. **This is what pass 6, 7 and 8 of the old `_draw` were**, minus the marks
@@ -1243,11 +1302,10 @@ func _paint_bodies() -> void:
 		var eradius := Look.body_radius_of(et)
 		# ⚠ **The bleed is handed DOWN rather than mixed in here**, so `_put_body` can put it on after
 		# the faction tint — see that function's own header for why the other order is invisible.
-		var etop := _put_body(ecentre, eradius,
+		var etop := _put_body(ecentre, Vector2(battle.enemy_pos[e]), eradius,
 			Look.body_colour_of(true).lerp(Look.COL_FLASH, _flash_of(ekey)),
 			_gait_squash(ekey), _body_tex(ekey, et, _facing_of(e, true).x >= 0.0),
 			battle.status_left(Rules.Status.BLEED, e))
-		_put_hp(ecentre, etop, et, battle.enemy_hp[e] / Rules.hp_of(et))
 		_put_halo(ekey, ecentre, Look.sprite_half_px(et), etop)
 
 	for raw_id in battle.ashore_ids():
@@ -1281,8 +1339,25 @@ func _paint_bodies() -> void:
 		for k in soldiers.size():
 			_put_soldier(int(soldiers[k]), Vector2(boat["pos"]))
 
-	_paint_ghosts()
 	_hide_unused()
+
+
+## **One flat disc on the ground under a body, and it is the whole of a body's shadow.**
+##
+## ⚠⚠ **A billboard's real cast shadow is deleted with this** (`_sprite`). A card that turns to face
+## the camera casts a shadow that swings when the board turns, which is the one thing a shadow must
+## not do — the island, the buildings and the props keep theirs, because they are solid.
+##
+## ⚠ **It goes into the GROUND fx buffer**, so it wears the terrain's own height at every vertex and
+## climbs a slope with the body instead of hovering flat over one. That is the same path the landing
+## ring and the area ring take, and `net_fx_view` already measures that property on them.
+##
+## ⚠ **No offset toward or away from the sun.** The disc laid under props in 2026-08-25 was offset by
+## `(sin(yaw), cos(yaw))` — *toward* the sun, the wrong way — and nobody caught it for as long as it
+## was the only shadow there was. **A disc directly under the body cannot be pointing the wrong way.**
+func _put_ground_shadow(centre_px: Vector2, radius: float) -> void:
+	var r := radius * Look.BODY_SPRITE_SCALE * Look.BODY_SHADOW_RADIUS_RATIO
+	_g_disc(centre_px, r, Look.COL_BODY_SHADOW)
 
 
 ## Item 3 of the twelve, and WITHOUT IT THAT ITEM DOES NOT EXIST — `COL_HIT_HALO`'s own comment says
@@ -1397,7 +1472,8 @@ func _body_tex(key: String, type_id: int, facing_right: bool) -> Texture2D:
 
 
 ## One soldier at a tile position, ashore or on a deck. Both call sites want the same body, the same
-## gait and the same facing, and splitting them was how the deck soldier lost its HP bar once already.
+## gait and the same facing, and splitting them is how one of the two silently loses whatever the
+## other gains — it happened once with the HP bar, which is itself deleted now.
 func _put_soldier(i: int, at: Vector2) -> void:
 	var st := int(army.type_id[i])
 	var skey := "s%d" % i
@@ -1408,10 +1484,9 @@ func _put_soldier(i: int, at: Vector2) -> void:
 	var stex := _body_tex(skey, st, _facing_of(i, false).x >= 0.0)
 	# ⚠ **0.0, and not a lookup**: `battle`'s status arrays are per ENEMY. An allied body never carries
 	# one, and `_hit_soldiers` has no `_apply_statuses` twin — see `battle.gd`.
-	var stop := _put_body(scentre, sradius,
+	var stop := _put_body(scentre, at, sradius,
 		Look.body_colour_of(false).lerp(Look.COL_FLASH, _flash_of(skey)),
 		_gait_squash(skey), stex, 0.0)
-	_put_hp(scentre, stop, st, army.hp[i] / army.max_hp_of(i))
 	_put_halo(skey, scentre, Look.sprite_half_px(st), stop)
 
 
@@ -1442,7 +1517,7 @@ func _hide_unused() -> void:
 ## are a little simulation of their own with its own clock, and moving the picture into 3D did not
 ## touch one line of it. That is why `_fx` is still filling every frame while nothing paints it.
 
-enum FxKind { SHOT, SPARK, BURST, AREA, LAND, REFUSE }
+enum FxKind { SHOT, SPARK, BURST, AREA, LAND }
 
 ## Called by `game.gd` whenever a slot is armed or disarmed, whenever the cursor moves with one armed,
 ## and on the release. `slot == -1` clears the whole aim. **0 draw calls** — the same shape the
@@ -1455,44 +1530,33 @@ enum FxKind { SHOT, SPARK, BURST, AREA, LAND, REFUSE }
 ## ⚠ **Short-circuits on the MAT and not the tile**, so crossing a tile line inside one mat rebuilds
 ## nothing -- which is what makes a per-mat mesh affordable at all.
 ##
-## ⚠⚠⚠ **NOTHING IS DRAWN. THE HOVER HAS NO MARK AT ALL RIGHT NOW** (2026-08-28). It has been three
-## things this day and it is none of them: two quads cut from a mask (deleted when the mats stopped
-## being drawn by this file), then a raise of the mat's own object (deleted when the mats moved from
-## `pads.glb` into the island's one mesh, where there is no per-mat node left to move). **This function
-## records which mat the cursor is on and does not put a single pixel on screen.**
-## ⚠ **It is left standing because the shell calls it every mouse move and the lookup is still right.**
-## Bringing the mark back is 티켓 14.
+## ⚠⚠ **THE MARK IS BACK, AND IT IS THE 판 ITSELF** (2026-08-28, 티켓 14). It was three things in one
+## day and then nothing at all for a round: two quads cut from a mask, then a raise of the mat's own
+## object, then — when the 판 was welded into the island's single mesh — no node left to touch. **The
+## 판 is its own object again** and the shader raises and lightens exactly the 칸 named here.
+## ⚠ **Not a mesh rebuild and not a node hunt: one float.** Crossing a 조각 line inside one 칸 writes
+## the same number again and costs nothing, which is what makes this affordable on every mouse move.
+## ⚠ **-1 travels all the way through.** `game._tile_at` answers -1 off the island, `_wash_cell`
+## answers -1 on water and on a stair, and the shader treats -1 as 「no 칸」 — so there is no second
+## 「is the mouse on the ground」 test anywhere in this path.
+## ⚠⚠ **THE CURSOR IS TRACKED WHETHER OR NOT ANYTHING IS ON SCREEN, and the shader is what gates it**
+## (2026-08-28, the user: 「탭을 눌러서 떳을때만 오버가 되야 의미가 있을듯 한데?」). Skipping this
+## write while the board is hidden would mean the mark appears one mouse-move LATE on the frame the
+## key goes down — the cursor is already somewhere, and the 칸 it is on is already known.
 func set_hover_tile(t: int) -> void:
 	var c := -1
 	if t >= 0 and t < _wash_cell.size():
 		c = int(_wash_cell[t])
+	if c == _hover_cell:
+		return
 	_hover_cell = c
+	_tell_the_pads()
 
 
-func set_summon_aim(slot: int, tile: int) -> void:
-	_summon_slot = slot
-	_summon_aim = tile
-
-## One mark at `at_px` (world px) saying the sim REFUSED this drop. **0 draw calls** — it pushes one
-## entry into the transient drawer and the ground-ring block paints it on the next frame, the same
-## path every other transient takes.
-##
-## ⚠⚠ **The shell calls this off `Battle.send`'s own -1 and off nothing else.** A view that decided
-## for itself whether a tile was refusable would be a second copy of `grid.home_harbour_for`, and two
-## copies of one predicate is exactly what the deleted green wash was trusted NOT to be. Driving it
-## from the sim's answer is how the honesty guarantee survives the wash it used to belong to
-## (`speed-off-open-landing`, 2.5).
-##
-## `delay` is 0.0: the mark has to land on the frame of the press, not one beat after it — Swink's
-## bound on input-to-response is under 100 ms and `REFUSE_MARK_SEC` is the whole of the effect.
-func note_refusal(at_px: Vector2) -> void:
-	_fx.append({
-		"kind": FxKind.REFUSE,
-		"age": 0.0,
-		"delay": 0.0,
-		"life": Look.REFUSE_MARK_SEC,
-		"at": at_px,
-	})
+## ⚠⚠ **`set_summon_aim` AND `note_refusal` STOOD HERE AND BOTH ARE DELETED** (2026-08-28). The
+## first carried the armed slot and the aimed tile in from the shell; the second stamped the mark
+## that said the sim had REFUSED a drop. Both belonged to the summon gesture — see `game.gd`'s
+## header — and `FxKind.REFUSE` went with them.
 
 ## **The grid's own size in tiles, and the one place anything here asks for it.**
 ##
@@ -1553,13 +1617,8 @@ func _beast_rect(centre: Vector2, radius: float, squash: Vector2, tex: Texture2D
 	var h := w * float(tex.get_height()) / float(tex.get_width()) * squash.y
 	return Rect2(centre - Vector2(w, h) * 0.5, Vector2(w, h))
 
-## Back rectangle first, filled rectangle second. The fill shrinks from the right, so the bar's left
-## edge stays put and a body's HP can be compared to its neighbour's at a glance.
-func _hp_rects(centre: Vector2, type_id: int, frac: float) -> Array:
-	var origin := Look.hp_bar_origin_px(centre, type_id)
-	var span := Look.hp_bar_size_px()
-	var f := clampf(frac, 0.0, 1.0)
-	return [Rect2(origin, span), Rect2(origin, Vector2(span.x * f, span.y))]
+## ⚠⚠ **`_hp_rects` STOOD HERE AND IS DELETED** (2026-08-28) with the bar it laid out.
+
 
 ## Which way a body is pointing: toward its current target, and to the right when it has none — a
 ## zero vector normalised is zero, which would collapse a facing mark to a point and aim a lunge
@@ -2203,78 +2262,28 @@ func _fx_point3(p: Vector2) -> Vector3:
 func _paint_fx() -> void:
 	if battle == null or army == null or battle.grid == null:
 		return
-	_paint_plan()
-	_paint_placed_boats()
 	_paint_boat_routes()
 	_paint_intent()
 	_paint_transients()
 
 
-## **The plan's own picture** — item 1 of the twelve and the one the ticket called the most painful to
-## have lost: without it a press puts a boat on the water with nothing having said where it would go.
-##
-## ⚠ **The ring's colour is the SIM'S answer and never the view's guess.** `can_summon_at` is the same
-## predicate `Battle.summon` refuses on, so a green ring cannot promise a drop the sim will reject —
-## the failure the deleted green wash was trusted not to have.
-func _paint_plan() -> void:
-	if battle.committed() or _summon_slot < 0 or _summon_aim < 0:
-		return
-	# ⚠ **A DRY slot (no reserve left) draws NOTHING — no ring, no route** (2026-08-24, the user
-	# closed the fork: 「추천대로」, restoring the old rule). A valid-looking mark on a press the sim
-	# will refuse is the screen promising what `Battle.summon` denies; `_paint_ghosts` has kept this
-	# gate all along, and the shell's per-beat refusal mark is what says 「더 없다」 instead.
-	if battle.slot_reserve_ids(_summon_slot).is_empty():
-		return
-	var grid := battle.grid
-	var ok := grid.can_summon_at(_summon_aim)
-	var at := Look.tile_point_px(grid.tile_point(_summon_aim))
-	if ok:
-		var route := grid.summon_route(_summon_aim)
-		var pts := PackedVector2Array()
-		for k in route.size():
-			pts.append(Look.tile_point_px(route[k]))
-		_g_line(pts, Look.ROUTE_WIDTH_PX, Look.COL_ROUTE)
-	_g_ring(at, Look.TARGET_RING_R_PX, Look.ROUTE_WIDTH_PX,
-		Look.COL_WIN if ok else Look.COL_LOSE)
-
-
-## **Where each boat ALREADY PLACED is going to land**, one ring per boat, while the plan is still
-## open. `_paint_plan` above draws the AIM — the one tile the cursor is over — and it has never drawn
-## the drops already made.
-##
-## ⚠⚠ **The ring is not decoration: it is the UNDO, and it had no picture at all.**
-## `game._ring_hit_at` takes a drop back when a press lands inside `TARGET_RING_R_PX` of that boat's
-## landing tile, and its own header says the radius is *"read the same way `field_view` draws them"* —
-## which was false, because nothing drew them. A control the player cannot see is a control they do
-## not have (2026-08-25, found while answering 「배를 놨으면 그게 바다에 보여야할듯」).
-##
-## ⚠ **`COL_BOAT` and not `COL_WIN`.** The valid-aim ring is `COL_WIN` and it means *"a press here
-## would work"*; this one means *"a boat is already going here"*. Two different sentences may not wear
-## one colour, and the hull's own tan is what ties the ring to the boat it belongs to.
-##
-## ⚠⚠ **The ring and NOT the route, and that is a decision.** A placed boat's whole water route in
-## `COL_ROUTE` would be the aim's own mark worn by something else — `net_slots` reads the aim's route
-## by that colour to prove a dry slot promises nothing — and thirteen placed boats would lay thirteen
-## lines over the sea the plan is authored on. **What a placed boat owes the player is where it IS and
-## where it ENDS**; the hull says the first and this ring says the second. The route comes back the
-## moment it starts sailing, in `_paint_boat_routes`.
-func _paint_placed_boats() -> void:
-	if battle.committed():
-		return
-	for raw_boat in battle.boats:
-		var boat: Dictionary = raw_boat
-		_g_ring(Look.tile_point_px(battle.grid.tile_point(int(boat["target"]))),
-			Look.TARGET_RING_R_PX, Look.ROUTE_WIDTH_PX, Look.COL_BOAT)
+## ⚠⚠ **THREE PAINTERS STOOD HERE AND ALL THREE ARE DELETED** (2026-08-28): `_paint_plan` (the aim
+## ring and its water route), `_paint_placed_boats` (one ring per drop already made, which was the
+## undo's only picture) and `_paint_ghosts` (the bodies a press would land, drawn at the landing).
+## **All three drew the plan the player authored before pressing 시작**, and that gesture is gone —
+## see `game.gd`'s header. `grid.can_summon_at` / `summon_route` / `summon_landing_of` are untouched
+## in `sim`: the beasts' own boats will ask them.
 
 
 ## **The remaining water route under every boat still crossing** — the part it has NOT sailed, read
 ## straight off the sim's own `leg` through `_route_ahead` (whose header owns the argument for why
-## the view never re-walks it). This is the caller `_route_ahead` lost in the 3D move: the line was
-## computed every frame and drawn by nobody, the exact shape ticket 09 exists to close.
+## the view never re-walks it).
 ##
-## Only after the commit — before it a boat is its PLAN and `_paint_plan` owns the water — and only
-## while OUTBOUND: an arrived boat has no water left to claim, and a line drawn from its deck reads
-## as a route it is about to sail again.
+## ⚠ **The commit test is now always true and it is kept anyway.** The island commits itself at open
+## (`game._open_island`), so nothing reaches this function uncommitted — but `Battle` is drivable with
+## `.new()` and a headless net may step boats without ever committing, which is exactly the seam the
+## commit still marks. Only while OUTBOUND: an arrived boat has no water left to claim, and a line
+## drawn from its deck reads as a route it is about to sail again.
 func _paint_boat_routes() -> void:
 	if not battle.committed():
 		return
@@ -2283,40 +2292,6 @@ func _paint_boat_routes() -> void:
 		if int(boat["phase"]) != Battle.Phase.OUTBOUND:
 			continue
 		_g_line(_route_ahead(boat), Look.ROUTE_WIDTH_PX, Look.COL_ROUTE)
-
-
-## The ghosts: **where the bodies this press would send are going to stand.** Painted as real bodies at
-## the LANDING and not at the press, because the press is water and the landing is where they end up.
-##
-## ⚠ These go through `_put_body` and therefore through the same sprite pool as everything alive, so
-## `_hide_unused` covers them and a ghost cannot outlive the aim that made it.
-func _paint_ghosts() -> void:
-	if battle.committed() or _summon_slot < 0 or _summon_aim < 0:
-		return
-	var grid := battle.grid
-	if not grid.can_summon_at(_summon_aim):
-		return
-	var landing := grid.summon_landing_of(_summon_aim)
-	if landing < 0:
-		return
-	var at := Look.tile_point_px(grid.tile_point(landing))
-	var ids: Array = battle.slot_reserve_ids(_summon_slot)
-	var n := ids.size()
-	if n <= 0:
-		return
-	# A fan and not a stack: `GHOST_FAN_PX` is the spacing that keeps two ghosts from reading as one
-	# blob, and the row is centred on the landing so the middle of the fan is the tile itself.
-	var span := float(n - 1) * Look.GHOST_FAN_PX.x
-	for k in n:
-		var i := int(ids[k])
-		var st := int(army.type_id[i])
-		var off := Vector2(float(k) * Look.GHOST_FAN_PX.x - span * 0.5,
-			float(k % 2) * Look.GHOST_FAN_PX.y)
-		# ⚠ **The ghost wears the SPECIES it is a ghost of**, and it used to wear the wolf whatever was
-		# in the slot. With one slot bound to one species the two agreed by accident; with five they do
-		# not, and a plan that draws the wrong animal is the plan lying about what it will land.
-		_put_body(at + off, Look.body_radius_of(st), Look.ghost_tint(), Vector2.ONE,
-			_beast_tex(st, true), 0.0)
 
 
 ## **Who is going for whom**, one thin line per pair. The alpha is 0.12 and up to
@@ -2396,7 +2371,3 @@ func _paint_transients() -> void:
 				var col := Look.COL_LAND_RING
 				col.a *= fade
 				_g_ring(fx["at"], Look.LAND_RING_R_PX, Look.LAND_RING_WIDTH_PX, col)
-			FxKind.REFUSE:
-				var col := Look.COL_LOSE
-				col.a = fade
-				_g_ring(fx["at"], Look.REFUSE_MARK_R_PX, Look.REFUSE_MARK_WIDTH_PX, col)

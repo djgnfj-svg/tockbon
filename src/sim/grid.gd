@@ -85,6 +85,15 @@ const TIER_LEVELS := [0, 1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 static func land_chars() -> String:
 	return BARE_LAND_CHARS + Islands.spawn_chars()
 
+## ⚠⚠ **WHICH SIDE OF A CORNER STAIR IS ITS MOUTH, WHEN MORE THAN ONE FACES THE FLOOR BELOW.**
+## West, then east, then north, then south — and **the order itself is arbitrary; that it is the SAME
+## order in `tools/blender/island_build.py` is not.** The staircase's geometry is cut along the axis
+## this picks, and the feet climb along the axis this picks; a disagreement puts the body walking
+## across the treads instead of up them (2026-08-28, the user: 「계단 이동할때 뚫는거 같은데」).
+## ⚠ **Blender cannot read this file.** The pairing is written down here and there, the same way
+## `Rules.STAIR_TREADS` and `TREADS` are paired.
+const STAIR_MOUTH_ORDER := [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]
+
 ## 8-way, listed in a fixed order so an equal-cost tie always resolves the same way. Plain `const`
 ## Arrays: `const X := PackedInt32Array([...])` is a parse error on 4.7, so every read casts.
 const NEIGHBOURS := [
@@ -332,9 +341,16 @@ func height_at(p: Vector2) -> float:
 ## may, or the rounding that keeps the sim reproducible would be quietly undone.
 ##
 ## ⚠ **A stair run spans exactly one storey however long it is**, so tile `i` of `n` carries the slice
-## from `i/n` to `(i+1)/n` of the climb — the identical arithmetic `island_build.py` uses for the
-## treads. **The treads themselves are not modelled here**: a body walking a real staircase steps up
-## the line the treads average to, and drawing it on the nose would make the body bob.
+## from `i/n` to `(i+1)/n` of the climb — the identical arithmetic `island_build.py` uses.
+##
+## ⚠⚠ **AND THE TREADS ARE MODELLED NOW** (2026-08-28, the user, watching a body climb: 「계단을 캐릭이
+## 뚫고감 이건 근본적인문제인데 왜그럴까?」). This function returned a straight RAMP and the mesh is cut
+## into `Rules.STAIR_TREADS` steps, so a body walked the average of the steps — **sinking into every
+## tread and floating over every riser, the whole way up.** The note that stood here said the treads
+## were left out on purpose, because 「drawing it on the nose would make the body bob」; what it did
+## instead was put the body inside the staircase, which is worse and is what the user saw.
+## ⇒ **The feet land on the tread they are over.** The bob is real and it is one tread of a storey —
+## `1/6` of `TIER_RISE_TILES`, which is 0.167 tiles — and it is a body climbing steps.
 func surface_h(p: Vector2) -> float:
 	var tx := int(round(p.x))
 	var ty := int(round(p.y))
@@ -352,7 +368,16 @@ func surface_h(p: Vector2) -> float:
 	# How far across this tile the body has walked, along the run: 0 at the downhill edge, 1 at the top.
 	var f := (p.x - float(tx)) * float(ax.x) + (p.y - float(ty)) * float(ax.y) + 0.5
 	f = clampf(f, 0.0, 1.0)
-	return floor_h + storey * (float(i) + f) / float(n)
+	# How far up the WHOLE run this point is, 0 at the mouth and 1 at the head.
+	var up := (float(i) + f) / float(n)
+	# ⚠⚠ **Snapped to the tread the point is standing on**, and this is what stops a body walking
+	# through the staircase. `floor` and not `round`: a foot in the middle of a tread rests on THAT
+	# tread's top, never on the one above it, and rounding would put the body half a riser into the air
+	# for the back half of every step.
+	# ⚠ **`min` against the last tread**, because `up == 1.0` at the head would index one past the end
+	# and lift the body a whole extra riser above the floor it is stepping onto.
+	var tread := minf(floor(up * float(Rules.STAIR_TREADS)), float(Rules.STAIR_TREADS - 1))
+	return floor_h + storey * (tread + 1.0) / float(Rules.STAIR_TREADS)
 
 
 ## The stair run a tile belongs to, as `[axis, index, length]`, or an empty array when the tile is not
@@ -406,18 +431,34 @@ func _build_runs() -> void:
 					stack.append(q)
 			for k in mark.keys():
 				seen[k] = true
+			# ⚠⚠ **A CORNER STAIR MEETS THE FLOOR ON TWO SIDES AND ONLY ONE OF THEM CAN BE THE MOUTH**
+			# (2026-08-28, the user: 「계단 이동할때 뚫는거 같은데」). This used to keep the LAST mouth
+			# the loops happened to find — the group is walked off a stack, so which tile came last was
+			# not even stable — and `island_build.py` picked its own by a different rule. **The result
+			# was a staircase drawn climbing west-to-east while the feet climbed south-to-north**: the
+			# body walked across the treads instead of up them, which is exactly「뚫는다」.
+			# ⇒ **The mouth is chosen deterministically and by the same rule in both files**: the
+			# lowest tile index wins, and among its own sides `STAIR_MOUTH_ORDER` decides.
+			# ⚠⚠ **`island_build.py`'s `lowside` mirrors this and the two must move together.** It is
+			# the third pair in this pattern, after `TIER_STEP_TILES`/`level_h` and `STAIR_TREADS`.
 			var mouth := Vector2i(-99, -99)
 			var mouth_dir := Vector2i.ZERO
+			var mouth_tile := 1 << 30
 			var has_head := false
 			for pt: Vector2i in group:
-				for d: Vector2i in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+				var pt_tile := pt.y * w + pt.x
+				for d: Vector2i in STAIR_MOUTH_ORDER:
 					var q: Vector2i = pt + d
 					if q.x < 0 or q.y < 0 or q.x >= w or q.y >= h:
 						continue
 					var nl := level_of(q.y * w + q.x)
 					if nl == l - 1:
-						mouth = pt
-						mouth_dir = d
+						# Lowest tile first; within one tile the first side in the order wins, so a
+						# `continue` after the first hit on this tile is what makes the order matter.
+						if pt_tile < mouth_tile:
+							mouth_tile = pt_tile
+							mouth = pt
+							mouth_dir = d
 					elif nl == l + 1:
 						has_head = true
 			if mouth_dir == Vector2i.ZERO or not has_head:
@@ -488,17 +529,83 @@ func _build_runs() -> void:
 ## climb is a one-way door, and 티켓 19's answer says bodies do not fall.
 ##
 ## ⚠ **It binds on DIAGONALS too**, which is what keeps a tier boundary from being cut at a corner —
-## `flow_field` and `step_toward` walk all eight neighbours through here. That is a stronger guard
-## than `_water_step_open` gives a boat, and it is stated rather than assumed: the note on
-## `_water_step_open` says the LAND half still does not refuse a squeeze between two impassable
-## corners, and that is unchanged. What this refuses is a HEIGHT gap, not a squeeze.
+## `flow_field` and `step_toward` walk all eight neighbours through here.
+##
+## ⚠⚠ **AND SINCE 2026-08-28 IT REFUSES A SQUEEZE AS WELL** (티켓 19; the user, on the game screen:
+## 「이동할때 그냥 벽을 뚫는 문제도 있는상태」). Until then this asked about the DESTINATION alone, so
+## two blocked tiles touching corner to corner were one step apart and a body walked straight through
+## the seam. **`_water_step_open` has carried the boat's half of this rule all along**, and its own
+## header said out loud that the land half did not — that note is now out of date and corrected there.
+##
+## ⚠⚠ **BOTH shoulders are required, which is stricter than the boat's rule and stricter than 티켓 19
+## asked for.** The ticket wanted a refusal only when both shoulders were blocked; a body **moves
+## continuously** — `Battle._walk` slides it from tile centre to tile centre — so on a diagonal it is
+## physically over both shoulder tiles on the way, and one blocked shoulder is one wall corner walked
+## through. `_straight_is_all_water` requires both for exactly this reason and says so.
+## ⇒ **Nothing is cut off by it**: a refused diagonal is still two orthogonal steps, and
+## `net_tiers._the_real_island_still_has_a_route` is the floor that measures the island did not seal.
+##
+## ⚠ **The shoulders are asked with the SAME two questions the destination gets** — walkable, and
+## within `MAX_CLIMB_LEVELS` of the origin. A shoulder that is passable but a storey up is a wall
+## corner too, and letting it through would put the leak back at every plateau corner.
+## ⚠ **No recursion**: a shoulder shares one coordinate with the origin, so it is an ORTHOGONAL
+## neighbour and never re-enters this branch.
 func can_step(from_tile: int, to_tile: int) -> bool:
 	var n := w * h
 	if from_tile < 0 or to_tile < 0 or from_tile >= n or to_tile >= n:
 		return false
 	if passable[to_tile] == 0:
 		return false
-	return absi(level_of(from_tile) - level_of(to_tile)) <= Rules.MAX_CLIMB_LEVELS
+	var from_level := level_of(from_tile)
+	if absi(from_level - level_of(to_tile)) > Rules.MAX_CLIMB_LEVELS:
+		return false
+	var fx := from_tile % w
+	var fy := from_tile / w
+	var tx := to_tile % w
+	var ty := to_tile / w
+	if not _stair_face_open(from_tile, to_tile, tx - fx, ty - fy):
+		return false
+	if fx == tx or fy == ty:
+		return true
+	return _shoulder_open(from_level, fy * w + tx) and _shoulder_open(from_level, ty * w + fx)
+
+
+## ⚠⚠ **A STAIR IS ENTERED AND LEFT AT ITS ENDS, NEVER OVER ITS SIDE** (2026-08-28, the user: 「계단
+## 옆면으로 오르는게 살짝 마음에 안드네?」). A stair carries an odd notch, so `MAX_CLIMB_LEVELS` alone
+## lets a body step onto it from the floor beside it — **walking up the staircase's flank instead of its
+## treads**, which is what was on screen.
+##
+## ⚠ **Along the run's axis, and that is the whole test.** A step whose displacement has no component
+## along the climb is a sideways one; a diagonal keeps its axis component and is allowed, and its own
+## shoulders are checked afterwards by `can_step`.
+##
+## ⚠ **Stair-to-stair is free.** A run may be two tiles wide, and two bodies climbing side by side have
+## to be able to shuffle across it — 2026-08-27, 「계단이라는 블록이 있어야할듯」, and `_build_runs`'s
+## own header says a wide stair is ONE staircase rather than two beside each other.
+##
+## ⚠ **Nothing about this is drawn separately.** The staircase mesh already presents a solid flank to
+## the floor beside it; what was missing was the rule agreeing with the picture.
+func _stair_face_open(from_tile: int, to_tile: int, dx: int, dy: int) -> bool:
+	var from_run: Array = stair_run_of(from_tile)
+	var to_run: Array = stair_run_of(to_tile)
+	if from_run.is_empty() and to_run.is_empty():
+		return true
+	if not from_run.is_empty() and not to_run.is_empty():
+		return true
+	var run: Array = from_run if to_run.is_empty() else to_run
+	var ax: Vector2i = run[0]
+	return dx * ax.x + dy * ax.y != 0
+
+
+## One shoulder of a diagonal: walkable, and within the climb rule of the level the body is leaving.
+##
+## ⚠ **Both shoulders are inside the grid by construction** — each shares one coordinate with the
+## origin and one with the destination, and `can_step` has already range-checked both of those. The
+## same argument `_water_step_open`'s header makes, one rule over.
+func _shoulder_open(from_level: int, shoulder_tile: int) -> bool:
+	if passable[shoulder_tile] == 0:
+		return false
+	return absi(from_level - level_of(shoulder_tile)) <= Rules.MAX_CLIMB_LEVELS
 
 
 func is_passable(tx: int, ty: int) -> bool:
@@ -557,11 +664,13 @@ func tile_index(tx: int, ty: int) -> int:
 ## with no floor, one layer down. What catches it is `net_coast`, on a fixture whose two pools touch
 ## ONLY at a squeeze.
 ##
-## ⚠ **`flow_field` and `step_toward` do NOT carry this rule**, and that is stated rather than assumed:
-## a walking soldier can still cut a land diagonal between two impassable corners today. Fixing that is
-## a movement change with its own measurements (queueing at necks, `_held`'s two-tile swap) and it is
-## not this guard's business — but nobody should read this function as evidence that the land half
-## already obeys it.
+## ⚠⚠ **THE LAND HALF NOW CARRIES ITS OWN VERSION AND THIS NOTE IS THE CORRECTION** (2026-08-28,
+## 티켓 19). It read 「`flow_field` and `step_toward` do NOT carry this rule — a walking soldier can
+## still cut a land diagonal between two impassable corners today」, and the user saw exactly that on
+## screen. **`can_step` refuses a squeeze now**, and both walkers go through it.
+## ⚠ **The two rules are still different and must stay different.** A boat needs ONE water shoulder —
+## the hull rounds the corner through it — and a body needs BOTH, because it slides across both on
+## the way. See `can_step`'s own header for why.
 ##
 ## Both shoulders are inside the grid by construction: each shares one coordinate with the start and
 ## one with the end, and both of those are range-checked by the caller before this is asked.

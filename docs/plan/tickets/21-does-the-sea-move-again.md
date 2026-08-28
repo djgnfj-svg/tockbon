@@ -1,6 +1,17 @@
 Type: grilling
-Status: open
+Status: resolved
 
+
+✅ **CLOSED 2026-08-29, and the answer is NO — the flat sea stands.**
+The user asked for one thing back (「거품 1개는 있어야할듯」): 거품, the white line pushed IN toward the
+rim, which the 2026-08-28 rebuild had left out — the sea kept the shoreline's own breathing and the line
+that travels seaward, so it breathed out and never in. **One band was built and wired**, half a cycle out
+of phase with the outgoing one.
+⇒ **Seen on screen it was rejected the same round**: 「별로다... 그 거품없애봐」. The band, its two
+constants and its wiring came straight back out.
+⚠⚠ **So the 2026-08-28 measurement is now confirmed twice** — once by seven candidates rendered side by
+side, and once by adding the thing back and looking at it. **The parked constants in `look.gd` stay
+parked**; nothing reads them.
 # 바다가 다시 움직여야 하나
 
 ## 무엇을 정해야 하나

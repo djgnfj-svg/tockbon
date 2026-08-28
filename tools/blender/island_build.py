@@ -153,7 +153,17 @@ GRASS_HIGH = (0.655, 0.710, 0.450)
 # WARNING **Lifted for the GAME, not for the render.** A face turned away from the sun keeps almost no
 # brightness, and a value that looks right in Blender comes out near black in the game -- Blender lights
 # with a strong key, the game with one sun and an ambient, and the outline pass darkens the edge on top.
-ROCK = (0.615, 0.570, 0.660)
+# WARNING **THE CLIFF FACE WENT FROM PURPLE TO NEAR-WHITE STONE ON 2026-08-28**, chosen by the user off
+# four candidates rendered through the game's own camera (「B가 좋은데?」). It was (0.615, 0.570, 0.660)
+# — a dark purple that swallowed the stair standing in front of it, which is what 「계단도 잘 안 돼 있고
+# 연결 부분도 이상」 was actually describing: **the stair was there all along and the wall was the same
+# colour as it.**
+# WARNING **This is the outside answer as well.** Bad North ships crisp near-white vertical cliff faces
+# and had to patch its own cross-level readability (1.0.6, Jan 2019: 「Pathways between levels on islands
+# are more visible」) — see the research note under `docs/reference/`.
+# WARNING **The user saw B and NOT C or D**, which moved the foot darker and dropped the top lip. Those
+# two are recorded in the note as rejected-on-sight, not untried.
+ROCK = (0.855, 0.845, 0.870)
 # The tone where the land goes under the water. **Darker and browner than the field, not lighter**: the
 # ground already reads bright yellow under the game's sun and a paler shore blows out to white.
 SHORE = (0.660, 0.600, 0.440)
@@ -196,8 +206,23 @@ _hi = [["." for _ in range(TW)] for _ in range(TH)]
 for _y in range(4, 8):
     for _x in range(6, 10):
         _hi[_y][_x] = "2"
-for _y in range(6, 8):        # the stair: one notch, cut into the plateau's west face
-    for _x in range(6, 8):
+# WARNING **THE STAIR STANDS OUTSIDE THE PLATEAU, ON THE MIDDLE OF ITS WEST WALL** (2026-08-29). Three
+# arrangements were tried on screen and this is the one that holds all three claims at once:
+#
+#  · **cut into the plateau's corner** (until 2026-08-28) — two of its sides were raised, so a body
+#    stepped onto the storey from the first tread without climbing (the user: 「계단 옆면으로 오르는게
+#    살짝 마음에 안드네?」). Closing those sides then left the storey ABOVE the stair unable to use it:
+#    the stair was where it looked and the way down was somewhere else (「계단 방향이랑 내려가는 길이랑
+#    다른듯?」)
+#  · **plateau lowered over the stair** — that fixed both, and cost the storey a whole 칸 (「블럭이 하나
+#    사라졌네?」)
+#  · **the lost 칸 returned on the EAST** — it touched the sea diagonally and sealed the 칸 beyond it
+#    off from the island: `net_tiers` and `net_islands` both went red, six tiles stranded
+#
+# ⇒ **The plateau keeps its four 칸 and the stair moves out.** Its east side is the storey; north,
+# south and west are floor, and nothing raised stands over it.
+for _y in range(6, 8):
+    for _x in range(4, 6):
         _hi[_y][_x] = "1"
 HIGH = ["".join(r) for r in _hi]
 
@@ -359,7 +384,21 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
     rule; applied one storey up it ramped from the plateau straight into the water and the plateau's
     edge came out as a sawtooth.
     """
-    openS = set(coast_sides) | set(cliff_sides)
+    # WARNING **A CORNER IS CUT ONLY WHERE THE SEA CAN FILL IT** (2026-08-28, the user: 「1층과 2층의
+    # 경계에 빈틈이 있는것도 마음에 안들어 ... 빈틈없이 이어지게 해줘」).
+    #
+    # This read `set(coast_sides) | set(cliff_sides)`, so the chamfer ran at CLIFF corners too. **At a
+    # sea corner the cut-away wedge is filled by water and nothing is missing; at a cliff corner there
+    # is nothing to fill it** — the block below has its own corner cut away at the same spot, so the two
+    # pieces pull apart and the sea shows straight through the island. That hole is what 티켓 20's
+    # 「1층과 2층의 경계에서 몸이 사라진다」 was measured on, photographed and colour-sampled.
+    #
+    # WARNING **A cliff corner is now square, and that is the trade.** Rounding it needs both blocks to
+    # compute the SAME curve and emit it together (티켓 18 makes the same point about inward corners);
+    # a square corner that closes is worth more than a round one that leaks.
+    # WARNING **`rim` and the skirt still read `cliff_sides`** — what changed is only whether the corner
+    # is cut, not what the wall below it looks like.
+    openS = set(coast_sides)
     ring, rim, sk = [], [], []
     for i in range(4):
         cx, cy = CORN[i]
@@ -557,6 +596,16 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
 
 
 TREADS = 6
+# WARNING **THE STAIR'S SIDES ARE WALLED** (2026-08-29, the user: 「뭔가 계단 옆으로 그냥 떨어지는거
+# 막아야하고」). The RULE has refused a sideways step onto or off a stair since 2026-08-28
+# (`Grid._stair_face_open`), but at the mouth the staircase is barely a notch above the floor beside
+# it — **the picture read as wide open while the rule said closed**, which is the disagreement this
+# closes from the other end.
+# WARNING **Inside the tread, not outside it.** A rail hung outside the 칸 would overlap the piece next
+# door and cut into whatever stands there.
+STAIR_RAIL_W = 0.13   # how far in from each edge the rail eats, in metres
+STAIR_RAIL_H = 0.20   # how far it stands above the tread it sits on. **A kerb, not a banister** — the
+                      # camera looks down, and anything taller hides the treads it is meant to frame
 
 
 def stair(name):
@@ -583,6 +632,20 @@ def stair(name):
         bm.faces.new((a[k], b[k], b[m], a[m]))
     bm.faces.new(list(reversed(a)))
     bm.faces.new(b)
+
+    # The two rails: the same profile again, raised, on a narrow strip at each edge. **Built from the
+    # tread profile rather than from a straight slope**, so a rail sits on its own step and the flight
+    # still reads as steps from the side.
+    for x0, x1 in ((0.0, STAIR_RAIL_W), (S - STAIR_RAIL_W, S)):
+        top = [(y, z + STAIR_RAIL_H) for (y, z) in prof]
+        ra = [bm.verts.new((x0, y, z)) for (y, z) in top]
+        rb = [bm.verts.new((x1, y, z)) for (y, z) in top]
+        for k in range(len(top)):
+            m = (k + 1) % len(top)
+            bm.faces.new((ra[k], rb[k], rb[m], ra[m]))
+        bm.faces.new(list(reversed(ra)))
+        bm.faces.new(rb)
+
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
     lay = bm.loops.layers.color.new("Col")
     for f in bm.faces:
@@ -711,61 +774,182 @@ def pad_outline(cx, cy, k):
     return out
 
 
-def stamp_the_mats(isl):
-    """**Puts one 판 on every 칸 that carries one**, as a rounded-square lip standing `PAD_H` proud.
+# --- what a 판 says, and the two things it has to say ------------------------------------------------
+# WARNING **A 판 USED TO SAY ONLY 「you may STAND here」 AND THAT IS WHAT WAS AMBIGUOUS** (2026-08-28, the
+# user, on the game screen: 「조각이 이 층 조각이 조금 애매한 거 그 판정이 애매해 ... 걸쳐져 있다 못 가는
+# 부분이 확실히 되는데 그런 게 좀 안 돼 있는데」). A low 판 and a high 판 sat side by side with a wall
+# between them and nothing on screen said so: the gap between two 판 that CONNECT looked exactly like
+# the gap between two that do not.
+# ⇒ **A 판 now carries both**: the pad says 「stand」, and a BRIDGE between two pads says 「go」.
+PAD_BRIDGE_W = 0.34   # the bridge width, in metres. WARNING **Narrower than the pad own side**, or the
+                      # board reads as one poured slab and the 칸 stop being 칸
+# WARNING **`PAD_STAIR_SIDE` AND `PAD_STAIR_LONG` STOOD HERE AND BOTH ARE DELETED** (2026-08-28). They
+# sized a narrow bar drawn on the stair 칸 for one round; the user took it back on sight (「계단에 왜
+# 그게 생겼지? 판이?」) and kept the bridges instead (「경로선이 보이는건 좋은데」). **A stair is passed
+# THROUGH, not stood on**, which is what 2026-08-27's 「계단에는 칸을 안만들어야하는데」 already said.
 
-    WARNING **A stair carries no 판** — it is passed through, not stood on. Odd notches are stairs, and
-    that is the same fact that makes a stair the only way up.
-    WARNING **The 판 is added to the island's own mesh, not left as its own object.** The game reads one
-    terrain file and the 판 is part of the ground, not something laid on it.
-    WARNING **Coloured off the height it sits at**, exactly like every other vertex — so the 판 is the
-    ground's own tone and only the light on its lip separates it.
+
+def climb_open(a_level, b_level):
+    """**Whether a body may cross between two 칸 at these levels** - the rule `Grid.can_step` keeps.
+
+    WARNING **THE NUMBER 1 IS `Rules.MAX_CLIMB_LEVELS` AND IT LIVES IN `rules.gd`.** Blender cannot read
+    that file, so the two agree by this comment and by `net_tiers` measuring the game own half. **If the
+    climb rule ever changes, this is the second place.**
+    WARNING A level below 0 is water or a hole: nothing crosses to it.
     """
-    me = isl.data
+    if a_level < 0 or b_level < 0:
+        return False
+    return abs(a_level - b_level) <= 1
+
+
+def stamp_the_mats(isl):
+    """**Builds the 판 as an object of its OWN** - one pad per walkable 칸, plus a bridge wherever two
+    neighbouring 칸 may actually be crossed between.
+
+    WARNING **A STAIR CARRIES NO PAD** (2026-08-27, the user: 「계단에는 칸을 안만들어야하는데」). It
+    was given one for a single round on 2026-08-28 and taken straight back out. **What says a stair is
+    a door is the BRIDGES running into it** - the sloped strips from the floor below and the storey
+    above - not a pad pretending it is somewhere to stand.
+
+    WARNING **IT USED TO ADD THE 판 STRAIGHT INTO THE ISLAND OWN MESH AND THAT IS REVERSED**
+    (2026-08-28, the user: 「마우스올리면 호버되도록해주고 특정버튼 눌러야 그 뜨게해줘 판이」). Baked into
+    the ground the 판 could be neither hidden nor lit one at a time - the game had no node to touch.
+
+    WARNING **EVERY 판 CARRIES ITS 칸 INDEX IN ITS UV**, as `u = py * PW + px`, `v = 0`. That is the same
+    number `field_view._wash_cells` computes for a tile, so the shader lights exactly the 칸 the cursor
+    is on. **Both sides derive it from PW; a hand-copied width here would light the wrong 칸.**
+    WARNING **A BRIDGE CARRIES BOTH 칸 INDICES** - `u` is the 칸 it was written from, `v` is the
+    neighbour. The shader lights on EITHER, so the way up is visible from the bottom and the way down
+    from the top. A single index would light a bridge from one end only, and which end would be an
+    accident of the loop order.
+
+    WARNING **Vertex colour is the ground own tone, exactly as before.** The shader tints from there
+    rather than inventing a colour, so a lit 판 still reads as the ground it is standing on.
+    """
+    me = bpy.data.meshes.new("pads_mesh")
     bm = bmesh.new()
-    bm.from_mesh(me)
-    lay = bm.loops.layers.color.verify()
-    # WARNING **THE JOIN LEAVES THE ISLAND CARRYING THE FIRST BLOCK'S TRANSFORM**, so a vertex added at
-    # a world coordinate lands wherever that offset puts it. Measured 2026-08-28: the 판 came out in the
+    lay = bm.loops.layers.color.new("Col")
+    uvl = bm.loops.layers.uv.new("UVMap")
+    # WARNING **THE ISLAND CARRIES THE FIRST BLOCK TRANSFORM AFTER THE JOIN**, so a vertex added at a
+    # world coordinate lands wherever that offset puts it. Measured 2026-08-28: the 판 came out in the
     # open sea, a whole block-width off the island, and it looked exactly like a row-order mistake.
-    # ⇒ Every point below is put through the inverse before it is added.
     to_local = isl.matrix_world.inverted()
-    made = 0
+
+    def top_z(level):
+        return TOP_H + level * LEVEL_H + PAD_H
+
+    def paint(faces, z):
+        bmesh.ops.recalc_face_normals(bm, faces=faces)
+        return faces
+
+    def lay_face(ring, z, cell, cell_b=None):
+        """One flat rounded shape with a skirt, at height `z`, keyed to `cell`.
+
+        WARNING **THE UV CARRIES TWO 칸 INDICES, NOT ONE** - `u` and `v`. A pad puts its own index in
+        both; a BRIDGE puts the two 칸 it joins. The shader lights a piece when EITHER matches the 칸
+        under the cursor, so a bridge lights from both ends: standing on the low 칸 you see the way up,
+        standing on the high one you see the way down. **With one index a bridge would only ever light
+        from whichever end the exporter happened to pick.**
+        """
+        top = [bm.verts.new(to_local @ Vector((x, y, z))) for (x, y) in ring]
+        bot = [bm.verts.new(to_local @ Vector((x, y, z - PAD_H))) for (x, y) in ring]
+        mx = sum(x for (x, _) in ring) / len(ring)
+        my = sum(y for (_, y) in ring) / len(ring)
+        ctr = bm.verts.new(to_local @ Vector((mx, my, z)))
+        n = len(ring)
+        faces = []
+        for i in range(n):
+            j = (i + 1) % n
+            faces.append(bm.faces.new((ctr, top[i], top[j])))
+            faces.append(bm.faces.new((top[i], bot[i], bot[j], top[j])))
+        bmesh.ops.recalc_face_normals(bm, faces=faces)
+        for f in faces:
+            for lp in f.loops:
+                wv = isl.matrix_world @ lp.vert.co
+                lp[lay] = (*ground_tone(z, 0.0, tone_noise(wv.x, wv.y)), 1.0)
+                lp[uvl].uv = (float(cell), float(cell if cell_b is None else cell_b))
+
+    def lay_bridge(ax, ay, az, bx, by, bz, cell_a, cell_b):
+        """**A sloped strip between two pad centres** - the whole of 「you may go from here to there」.
+
+        WARNING **It is SLOPED and not stepped**, and that is the point at a stair: the strip visibly
+        climbs, so a 칸 one notch up reads as reachable and a 칸 two notches up has no strip at all.
+        """
+        dx, dy = bx - ax, by - ay
+        L = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / L * PAD_BRIDGE_W * 0.5, dx / L * PAD_BRIDGE_W * 0.5
+        quad = [(ax + nx, ay + ny, az), (bx + nx, by + ny, bz),
+                (bx - nx, by - ny, bz), (ax - nx, ay - ny, az)]
+        top = [bm.verts.new(to_local @ Vector(q)) for q in quad]
+        bot = [bm.verts.new(to_local @ Vector((q[0], q[1], q[2] - PAD_H))) for q in quad]
+        faces = [bm.faces.new(tuple(top))]
+        for i in range(4):
+            j = (i + 1) % 4
+            faces.append(bm.faces.new((top[i], bot[i], bot[j], top[j])))
+        bmesh.ops.recalc_face_normals(bm, faces=faces)
+        for f in faces:
+            for lp in f.loops:
+                wv = isl.matrix_world @ lp.vert.co
+                lp[lay] = (*ground_tone(az, 0.0, tone_noise(wv.x, wv.y)), 1.0)
+                lp[uvl].uv = (float(cell_a), float(cell_b))
+
+    def centre_of(px, py):
+        wy = (PH - 1 - py) * S
+        return px * S + S * 0.5, wy + S * 0.5
+
+    pad_n = 0
+    bridge_n = 0
     for py in range(PH):
         for px in range(PW):
             L = level_of(px, py)
-            if L < 0 or L == 1:
+            if L < 0:
                 continue
-            z = TOP_H + L * LEVEL_H
-            wy = (PH - 1 - py) * S
-            cx, cy = px * S + S * 0.5, wy + S * 0.5
-            k = int((h2(cx, cy, 11.0) * 0.5 + 0.5) * PAD_VARIANTS) % PAD_VARIANTS
-            ring = pad_outline(cx, cy, k)
-            top = [bm.verts.new(to_local @ Vector((x, y, z + PAD_H))) for (x, y) in ring]
-            bot = [bm.verts.new(to_local @ Vector((x, y, z))) for (x, y) in ring]
-            ctr = bm.verts.new(to_local @ Vector((cx, cy, z + PAD_H)))
-            n = len(ring)
-            faces = []
-            for a in range(n):
-                b = (a + 1) % n
-                faces.append(bm.faces.new((ctr, top[a], top[b])))
-                faces.append(bm.faces.new((top[a], bot[a], bot[b], top[b])))
-            bmesh.ops.recalc_face_normals(bm, faces=faces)
-            for f in faces:
-                for lp in f.loops:
-                    w = isl.matrix_world @ lp.vert.co
-                    lp[lay] = (*ground_tone(z, 0.0, tone_noise(w.x, w.y)), 1.0)
-            made += 1
+            cx, cy = centre_of(px, py)
+            cell = py * PW + px
+            # WARNING **A STAIR CARRIES NO PAD, AND IT GOT ONE FOR ONE ROUND** (2026-08-28). It was
+            # given a narrow bar because the only door in and out of the plateau was drawing nothing;
+            # the user took it back the moment it was on screen (「계단에 왜 그게 생겼지? 판이?」) and
+            # kept the other half (「경로선이 보이는건 좋은데」).
+            # WARNING **The BRIDGES are what say the stair is a door**, and they are drawn below
+            # whatever this branch does: two sloped strips run into the stair 칸 from the floor below
+            # and the storey above, so the way up is visible without the stair pretending to be a
+            # place to stand. **That is the original rule restored, not a new one** — 2026-08-27:
+            # 「계단에는 칸을 안만들어야하는데」.
+            if L != 1:
+                k = int((h2(cx, cy, 11.0) * 0.5 + 0.5) * PAD_VARIANTS) % PAD_VARIANTS
+                lay_face(pad_outline(cx, cy, k), top_z(L), cell)
+                pad_n += 1
+
+            # The bridges. WARNING **East and south only**, so each pair is written once - the west and
+            # north neighbours draw their own halves when their turn comes.
+            # WARNING **ORTHOGONAL only.** A diagonal crossing needs both shoulders open
+            # (`Grid.can_step`), and a strip across a corner would promise a step the sim refuses.
+            for (dx, dy) in ((1, 0), (0, 1)):
+                nl = level_of(px + dx, py + dy)
+                if not climb_open(L, nl):
+                    continue
+                nx, ny = centre_of(px + dx, py + dy)
+                lay_bridge(cx, cy, top_z(L), nx, ny, top_z(nl),
+                           cell, (py + dy) * PW + (px + dx))
+                bridge_n += 1
+
     bm.to_mesh(me)
     bm.free()
     me.update()
-    print("판 %d 개를 칸 위에 얹었다 (한 변 %.2f · 모서리 %.2f · 두께 %.2f · 종류 %d)"
-          % (made, PAD_SIDE, PAD_ROUND, PAD_H, PAD_VARIANTS))
+    for pol in me.polygons:
+        pol.use_smooth = False
+    pads_obj = bpy.data.objects.new("pads", me)
+    pads_obj.matrix_world = isl.matrix_world.copy()
+    bpy.context.collection.objects.link(pads_obj)
+    me.materials.append(vertex_mat("island_ground"))
+    print("pads %d, bridges %d (side %.2f, bridge %.2f, lip %.2f)"
+          % (pad_n, bridge_n, PAD_SIDE, PAD_BRIDGE_W, PAD_H))
+    return pads_obj
 
 
 def build():
     for o in list(bpy.data.objects):
-        if o.name == "island" or o.name.startswith("P_"):
+        if o.name in ("island", "pads") or o.name.startswith("P_"):
             bpy.data.objects.remove(o, do_unlink=True)
 
     parts, coast = [], []
@@ -779,7 +963,16 @@ def build():
                 continue
             cs = cl = ""
             lowside = None
-            for sd, (dx, dy) in NB.items():
+            # WARNING **WHICH SIDE OF A STAIR IS ITS MOUTH, AND `Grid.STAIR_MOUTH_ORDER` HAS TO SAY THE
+            # SAME THING** (2026-08-28, the user: 「계단 이동할때 뚫는거 같은데」). A corner stair meets
+            # the floor below on two sides; the staircase is CUT along whichever one wins here, and the
+            # feet climb along whichever one wins there. **They disagreed** — this file kept the last
+            # low side the dict happened to yield, `grid.gd` kept the last one ITS loops found — so the
+            # stair was drawn climbing west-to-east while a body climbed south-to-north, walking across
+            # the treads instead of up them.
+            # WARNING **The order is arbitrary; that it is the SAME order in both files is not.**
+            for sd in ("w", "e", "n", "s"):
+                dx, dy = NB[sd]
                 nl = level_of(px + dx, py + dy)
                 if nl < 0:
                     if L == 0:
@@ -793,7 +986,10 @@ def build():
                                        "e": [x0 + 2, y0, x0 + 2, y0 + 2]}[sd])
                 elif nl < L:
                     cl += sd
-                    lowside = sd
+                    # WARNING **FIRST wins, not last** — the order above is the priority, so an
+                    # assignment here would make the last side beat the first and undo the pairing.
+                    if lowside is None:
+                        lowside = sd
             c_out = [corner_outward(px, py, i) if L == 0 else None for i in range(4)]
             # WARNING **The mesh is built on REVERSED rows.** glTF maps Blender +Y to Godot -Z and the
             # game slides the island back by the board height; building rows in order lands it upside
@@ -850,11 +1046,14 @@ def build():
     b.limit_method, b.angle_limit = "ANGLE", math.radians(24.0)
     isl.hide_set(False)
 
-    stamp_the_mats(isl)
+    pads = stamp_the_mats(isl)
 
     os.makedirs(OUT_DIR, exist_ok=True)
+    # ⚠⚠ **BOTH objects are selected and both go into the one GLB.** The game reads a single terrain
+    # file and finds the 판 inside it by NAME (`pads`) — a second file would be a second thing to keep
+    # in step, and the two have to agree about every height they sit on.
     for o in bpy.data.objects:
-        o.select_set(o is isl)
+        o.select_set(o is isl or o is pads)
     bpy.context.view_layer.objects.active = isl
     bpy.ops.export_scene.gltf(filepath=OUT_DIR + "/island.glb", export_format="GLB",
                               use_selection=True, export_apply=True, export_yup=True)

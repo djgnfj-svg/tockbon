@@ -120,36 +120,21 @@ func _table() -> Dictionary:
 			"tilt_by": 0,
 			"_place_camera": 0,
 			# The landscape: one mesh, built by SurfaceTool — no canvas stroke anywhere in it.
-			"_kind_of": 0,
-			"_joins": 0,
-			"_tier_level": 0,
 			"_idle_offset": 0,
-			"_tiles_join": 0,
-			"_char_at": 0,
-			"_noise_at": 0,
-			"_hash_at": 0,
-			"_tile_key": 0,
 			"_tile_h": 0,
-			"_tile_h_uncached": 0,
-			"_swell_at": 0,
-			"_corner_h": 0,
 			"_ground_h": 0,
-			"_touches_water": 0,
-			"_band_on": 0,
-			"_tile_colour": 0,
 			"_rebuild_terrain": 0,
-			"_rebuild_ring": 0,
-			"_quad": 0,
-			"_skirt": 0,
-			"_terrain_material": 0,
 			# The bodies, as pooled billboards. `_put_*` writes node fields the engine consumes —
 			# that is the 3D leaf, and `net_shell` reads those fields back per enemy.
 			"_sprite": 0,
 			"_hull_box": 0,
 			"_put_body": 0,
-			"_put_hp": 0,
 			"_paint_bodies": 0,
 			"_put_halo": 0,
+			# 티켓 「캐릭터」's first slice: a body's whole shadow, and the HP bar deleted from over it
+			# (2026-08-28, the user: 「체력바 없이 그림자도 단순하게 아래 동그라미정도해줘」).
+			# `_put_hp` and `_hp_rects` left the table with it.
+			"_put_ground_shadow": 0,
 			"_beast_tex": 0,
 			"_load_beast_tex": 0,
 			# The wolf's frame strips. `_body_tex` picks the picture and the other three feed it; not
@@ -162,8 +147,6 @@ func _table() -> Dictionary:
 			"_put_hull": 0,
 			"_hide_unused": 0,
 			# The effect SIMULATION — carried across the move unchanged, still 0 draws each.
-			"set_summon_aim": 0,
-			"note_refusal": 0,
 			"_map_tiles": 0,
 			# Fed to the ground fx buffer by `_paint_boat_routes` — the caller it lost in the 3D
 			# move, re-wired in step 4.
@@ -171,7 +154,6 @@ func _table() -> Dictionary:
 			"_tile_xy": 0,
 			"_hull_rect": 0,
 			"_beast_rect": 0,
-			"_hp_rects": 0,
 			"_facing_of": 0,
 			"_fx_step": 0,
 			"_drain_events": 0,
@@ -206,56 +188,52 @@ func _table() -> Dictionary:
 			"_a_seg3": 0,
 			"_fx_point3": 0,
 			"_paint_fx": 0,
-			"_paint_plan": 0,
 			# Step 4's revival: the caller `_route_ahead` had lost. 0 draws — it feeds the fx buffer.
 			"_paint_boat_routes": 0,
-			# The landing ring of every boat ALREADY placed, so the undo has a picture (2026-08-25).
-			"_paint_placed_boats": 0,
-			"_paint_ghosts": 0,
 			"_paint_intent": 0,
 			"_paint_transients": 0,
+			# ⚠⚠ **FIFTEEN NAMES WERE MISSING FROM THIS TABLE AND SEVENTEEN WERE STALE** (2026-08-28).
+			# The stale ones are the 2D terrain pass — `_tile_colour`, `_quad`, `_skirt`, the noise and
+			# height helpers, `_terrain_material`, `_rebuild_ring` — deleted when the field went 3D and
+			# left in the table for a fortnight. The missing ones are everything that arrived after:
+			# the 판's lookup, the sea's three hand-over calls, the buildings, the props, the outline.
+			# ⚠ **All of them are 0 draws and that is not a shortcut**: `FieldView` is a `Node3D` and
+			# has no canvas at all, so the `draw_*` column is zero for every row here by construction.
+			"_rebuild_wash": 0,
+			"_wash_cells": 0,
+			"_stand_h": 0,
+			"_rebuild_buildings": 0,
+			"_rebuild_props": 0,
+			"_outline": 0,
+			"_use_vertex_colours": 0,
+			"_hand_the_sea_its_shoreline": 0,
+			"_hand_the_sea_its_numbers": 0,
+			"_hand_the_sea_its_look": 0,
+			"_bake_land_field": 0,
+			"set_hover_tile": 0,
+			# 티켓 14's answer: the 판 is its own object inside `island.glb`, this file adopts it and
+			# gives it a shader, and one uniform lights the 칸 the cursor is on.
+			"_adopt_the_pads": 0,
+			"_tell_the_pads": 0,
+			"set_pads_revealed": 0,
 		},
-		# ⚠ **Seven names left this file in one edit and one arrived** (`plan-then-watch`, 6.5).
-		# `key_slot_count` · `key_type_of` · `reserve_count` — the 1/2 key roster, which spawned a body
-		# straight onto a boat. ⚠ **`sea-summon` brings the keyboard back and does NOT bring those
-		# three back**: 1~5 now ARM a slot and the press on the water is what places, so the five new
-		# names below are a different widget rather than the old one restored.
-		# `boat_label` · `note_launch` · `_berth_offset` · `_paint_berth` ·
-		# `_paint_load` — the berths, which were the fleet drawn as a resource meter, and the boat
-		# stopped being a resource. `set_speed` is the arrival. Three renames on top: `note_key` ->
-		# `note_chip`, `_key_offset` -> `_chip_offset`, `_key_colour` -> `_chip_colour`, `_paint_key` ->
-		# `_paint_button`. **20 -> 13 names, 5 -> 3 leaves**, and both halves of the rename have to
-		# land: a name the table holds that the file no longer has is caught by `_scan`'s
+		# ⚠⚠ **NINE NAMES LEFT THIS FILE IN ONE EDIT AND NOTHING ARRIVED** (2026-08-28). The start
+		# button and the five summon slot boxes were deleted whole (the user: 「게임플레이에서 시작
+		# 버튼하고 1은 왜있음? 이거 전 게임의 유산인듯 지워줘」), and item 8's press feedback went
+		# with them because it had no other caller: `note_chip` · `_fx_step` · `_chip_offset` ·
+		# `_chip_colour` · `_chip_tint` · `_paint_button` · `set_armed` · `_slot_colour` ·
+		# `_paint_slot_box` · `_paint_slot_digit` · `_paint_slot_bar`.
+		# ⚠⚠ **AND THE ENEMY COUNT WENT THE SAME DAY** (the user: 「위에 적이 몇명이나 오는지도
+		# 필요없을듯」), taking `_paint_enemies_left` with it — and `_process`, which existed only to
+		# keep that number fresh. ⇒ **13 -> 4 names, 3 -> 0 leaves: this layer draws NOTHING.**
+		# ⚠ The class survives for its two STATIC helpers, which `panel_view` and `refit_view` read.
+		# ⚠ A name the table holds that the file no longer has is caught by `_scan`'s
 		# `표에는 있는데 파일에 없는 함수` direction, whose synthetic case (c2) proves it bites.
 		"hud_view.gd": {
 			"default_font": 0,
 			"type_label": 0,
 			"bind": 0,
-			"_process": 0,
 			"_draw": 0,
-			"note_chip": 0,
-			"_fx_step": 0,
-			"_chip_offset": 0,
-			"_chip_colour": 0,
-			# Item 8's tint, pulled out of `_chip_colour` so the five slot boxes get the flash the
-			# start button has had since it shipped — one shake AND one tint, both shared, which is
-			# the two channels `combat-juice` asked for. Pure.
-			"_chip_tint": 0,
-			# ⚠ `_paint_timer` is DELETED with the countdown it drew (2026-08-24) — nothing loses by
-			# the clock any more, so a number ticking down would be the loudest lie on screen. The
-			# hook went with its call site, not just the call: 18 -> 17 names, 6 -> 5 leaves.
-			# 2 calls. ⚠ **The start button is its ONLY call site now** — the five speed chips were the
-			# other five and they are deleted. It stays a hook rather than being inlined into `_draw`,
-			# because a bare `draw_rect` in `_draw` is precisely what this whole table exists to redden.
-			"_paint_button": 2,
-			"_paint_enemies_left": 1,
-			# `sea-summon`'s five summon slot boxes. `set_armed` and `_slot_colour` are pure; the three
-			# leaves are the box (fill + border), the digit, and the roster bar (rail + fill).
-			"set_armed": 0,
-			"_slot_colour": 0,
-			"_paint_slot_box": 2,
-			"_paint_slot_digit": 1,
-			"_paint_slot_bar": 2,
 		},
 		"panel_view.gd": {
 			"bind": 0,
@@ -342,122 +320,10 @@ func _table() -> Dictionary:
 			# leaf draws one; without it 시작하기 cuts to the map, which reads as a glitch.
 			"_paint_fade": 1,
 		},
-		# `refit-board` stage 4's new screen, re-cut by 티켓 06/12: three cards after a won fight,
-		# take one. It holds no `Run` state of its own beyond the hover/press pair every screen
-		# carries -- `run.cards` (one item id per card) and `run.cards_taken` are read straight off
-		# the sim.
-		"reward_view.gd": {
-			"bind": 0,
-			"card_rect_of": 0,
-			"card_hit_rect_of": 0,
-			"card_at": 0,
-			"is_card_pressable": 0,
-			"set_hover": 0,
-			"note_press": 0,
-			"_hover_of": 0,
-			"_press_of": 0,
-			"_taken_of": 0,
-			"_reveal_alpha_of": 0,
-			"_card_box": 0,
-			"_card_fill": 0,
-			"_fx_step": 0,
-			"_process": 0,
-			"_picks_made": 0,
-			"_draw": 0,
-			# 티켓 12's five pure helpers: the item textures loaded once, the deal-in slide (riding
-			# `_reveal_alpha_of`, applied to the drawn box only), the rarity pulse (a sine on
-			# `_reveal_age` — no second clock), the art square, and the burst geometry handed WHOLE
-			# to its leaf (`_spark_points`'s split; see `_whole_array_leaves` below, which pins it).
-			"_load_card_art": 0,
-			"_deal_offset_of": 0,
-			"_pulse_of": 0,
-			"_art_rect": 0,
-			"_burst_points": 0,
-			# fill + border, the same shape every other pressable box in this repo draws.
-			"_paint_card": 2,
-			# 티켓 12's three leaves. The art is 1 `draw_texture_rect`, SKIPPED at the call site when
-			# the item's `ITEM_ART` row is empty — no picture rather than a wrong one. The frame is 1
-			# stroked `draw_rect` in a layer loop (the glow is the frame layered outward), so one call
-			# SITE serves every rarity and COMMON's 0-layer row means it is not called at all. The
-			# burst is 1 `draw_multiline`, called iff LEGENDARY.
-			"_paint_card_art": 1,
-			"_paint_rarity_frame": 1,
-			"_paint_legendary_burst": 1,
-			"_paint_card_name": 1,
-			"_paint_card_effect": 1,
-			"_paint_taken_mark": 1,
-			"_paint_hint": 1,
-			# The scene wash, `map_view`'s own shape reused rather than a second fade invented for
-			# this screen — see that file's own comment beside its `_paint_fade` entry.
-			"_paint_fade": 1,
-		},
-		# `refit-board` stage 5's new screen: the slot strip, then a 3x2 board, a held pile, a
-		# five-number dashboard and a body preview. `_rounded_square` is 0 draws and NOT a leaf --
-		# the same `_spark_points` shape: the geometry is built here and handed to `_paint_body` as
-		# an argument, and never leaves that one call site.
-		"refit_view.gd": {
-			"bind": 0,
-			"open_slot": 0,
-			"is_board_open": 0,
-			"open_slot_index": 0,
-			"slot_rect_of": 0,
-			"slot_hit_rect_of": 0,
-			"slot_at": 0,
-			"cell_rect_of": 0,
-			"cell_hit_rect_of": 0,
-			"cell_at": 0,
-			"held_rect_of": 0,
-			"held_hit_rect_of": 0,
-			"held_at": 0,
-			"done_rect": 0,
-			"done_hit_rect": 0,
-			"is_done_pressable": 0,
-			"back_rect": 0,
-			"back_hit_rect": 0,
-			"is_back_pressable": 0,
-			"set_hover": 0,
-			"note_slot_press": 0,
-			"note_cell_press": 0,
-			"note_held_press": 0,
-			"note_done_press": 0,
-			"note_fitted": 0,
-			"_hover_of": 0,
-			"_press_of": 0,
-			"_stat_shown": 0,
-			"_cell_fill": 0,
-			"_fx_step": 0,
-			"_process": 0,
-			"_draw": 0,
-			"_draw_board": 0,
-			"_paint_slot_box": 2,
-			"_paint_slot_label": 1,
-			"_paint_cell_box": 2,
-			# Renamed with the equipment re-cut: a cell shows an item's NAME and its EFFECT line now,
-			# not a part and a species. Same two leaves, one call each; re-counted, not assumed.
-			"_paint_cell_name": 1,
-			"_paint_cell_effect": 1,
-			"_paint_held_row": 2,
-			"_paint_held_name": 1,
-			"_paint_held_effect": 1,
-			"_paint_stat_label": 1,
-			"_paint_stat_value": 1,
-			# 티켓 11's aggregate: one line per tag, drawn on both steps, and its pure reader of the
-			# horde-wide count and the tier tables.
-			"_paint_tag_row": 1,
-			"_tag_state_of": 0,
-			# `draw_polyline` + `draw_circle`, the outline-and-dot shape `field_view._paint_body`
-			# already draws -- this screen's own scale, no part drawn on it.
-			"_paint_beast": 1,
-			"_load_beast_tex": 0,
-			"_beast_tex": 0,
-			"_beast_rect": 0,
-			"_paint_button": 2,
-			# The scene wash — this screen had no reveal of its own to piggyback on until now, so
-			# `_reveal_age` was added purely to drive this one call.
-			"_paint_fade": 1,
-			# Step one's hint — the only screen with a pressable strip and no line saying so.
-			"_paint_hint": 1,
-		},
+		# ⚠⚠ **`reward_view.gd` STOOD HERE AND THE FILE IS DELETED** (2026-08-28, the user: 「고르는 창도
+		# 이제 필요 없는데 왜있지? 이것도 제거」). It was the three-card screen.
+		# ⚠⚠ **`refit_view.gd` STOOD HERE AND THE FILE IS DELETED** (2026-08-28) with the card round it
+		# laid cards into — the user: 「둘 다 지우면 돼」.
 	}
 
 
@@ -467,8 +333,12 @@ func run(t) -> void:
 	# "It is not 0" first. A directory walk that found nothing would report a perfectly clean tree and
 	# every assertion below would simply stop running.
 	var view_files := _gd_files(VIEW_DIR)
-	t.eq(view_files.size(), 6, "src/view/ 에 그릴 줄 아는 파일이 여섯이다 %s" % str(view_files))
-	t.eq(table.size(), 7, "표도 파일 일곱을 덮는다")
+	# ⚠ **It was six until 2026-08-28** — `reward_view.gd` and `refit_view.gd` were deleted with the
+	# growth loop.
+	t.eq(view_files.size(), 4, "src/view/ 에 그릴 줄 아는 파일이 넷이다 %s" % str(view_files))
+	# ⚠ **It was seven until 2026-08-28** — `reward_view.gd` and `refit_view.gd` were deleted with the
+	# card round and the refit board.
+	t.eq(table.size(), 5, "표도 파일 다섯을 덮는다")
 
 	# -- 1~3. the per-function table, the closed class, and the leaf arguments ----------------------
 	var total_funcs := 0
@@ -518,7 +388,10 @@ func run(t) -> void:
 				continue
 			shape_checked += 1
 			shape_bad.append_array(_shape_hits(fname, f2["body"], want_shapes[fname]))
-	t.eq(shape_checked, 1, "배열을 받는 잎 하나를 실제로 봤다 (자가 점검 — 0개면 깨끗한 게 아니라 안 돈 것이다)")
+	# ⚠⚠ **ZERO, AND IT WAS ONE** (2026-08-28). See `_whole_array_leaves`: its only row was on the card
+	# screen, which is deleted. **This is the self-check saying 「there is nothing of this shape」**, not
+	# the scan having failed to run — `shape_bad` below is what would speak if there were.
+	t.eq(shape_checked, 0, "배열을 통째로 넘기는 잎이 src/view/ 에 하나도 안 남았다 (자가 점검)")
 	t.eq(shape_bad.size(), 0,
 		"배열을 받는 잎은 그 배열을 통째로 네이티브 호출에 넘긴다 — 안을 색인하지 않는다 %s" % str(shape_bad))
 
@@ -550,7 +423,7 @@ func run(t) -> void:
 		if wides.size() > 0:
 			wide_bad.append("%s %s" % [path.get_file(), str(wides)])
 	t.ok(scanned >= 8, "look.gd 를 뺀 나머지 %d개를 실제로 훑었다" % scanned)
-	t.eq(wide_scanned, 7, "그중 뷰 여섯과 셸 하나, 일곱을 넓힌 목록으로 다시 훑었다 — 셸이 빠지면 hold 초가 game.gd 에 박힌다")
+	t.eq(wide_scanned, 5, "그중 뷰 넷과 셸 하나, 다섯을 넓힌 목록으로 다시 훑었다 — 셸이 빠지면 hold 초가 game.gd 에 박힌다")
 	t.eq(colour_bad.size(), 0, "look.gd 밖에 Color( 도 Color. 도 없다 %s" % str(colour_bad))
 	t.eq(pixel_bad.size(), 0, "look.gd 밖에 픽셀 이름에 박힌 리터럴이 없다 %s" % str(pixel_bad))
 	t.eq(wide_bad.size(), 0, "뷰와 셸에는 시간·비율 이름에 박힌 리터럴도 없다 %s" % str(wide_bad))
@@ -583,6 +456,8 @@ func run(t) -> void:
 ## cliff is a real wall in the terrain mesh), `GRID_LINE_WIDTH_PX` (no grid lines are drawn at all)
 ## and `BEAK_WIDTH_PX` (the beak was never this layer's — the 열둘 list was wrong on that point, per
 ## the ticket). The closure below is what forced the re-derivation, both ways.
+## ⚠ **A fifth left on 2026-08-28**: `REFUSE_MARK_WIDTH_PX`, with the refusal mark and the whole
+## summon gesture behind it. The constant is still in `look.gd` and nothing reads it.
 func _world_widths() -> Dictionary:
 	return {
 		"SHOT_WIDTH_PX": "",
@@ -590,7 +465,6 @@ func _world_widths() -> Dictionary:
 		"AREA_RING_WIDTH_PX": "",
 		"LAND_RING_WIDTH_PX": "",
 		"ROUTE_WIDTH_PX": "",
-		"REFUSE_MARK_WIDTH_PX": "",
 		"TARGET_LINE_WIDTH_PX":
 			"의도선은 알파 0.12 이고 한 번에 최대 14개가 섬 전체를 가로지른다 — 열두 연출 중 유일하게"
 			+ " 가독성에 손해일 수 있는 항목이라 look.gd 가 이미 적어 두었다. 굵히면 그 두 제한이 막으려던"
@@ -616,7 +490,9 @@ func _world_width_table(t) -> void:
 
 	# The closure, and it runs FIRST: a table checked against nothing is a list.
 	var drawn := _look_width_names(_read(VIEW_DIR + "/field_view.gd"))
-	t.eq(drawn.size(), 8, "field_view 가 그리는 데 쓰는 Look.*_WIDTH_PX 이름이 여덟이다 %s" % str(drawn))
+	# ⚠ **It was eight until 2026-08-28.** `REFUSE_MARK_WIDTH_PX` left with the refusal mark, which
+	# went with the summon gesture — the constant still stands in `look.gd` with no reader at all.
+	t.eq(drawn.size(), 7, "field_view 가 그리는 데 쓰는 Look.*_WIDTH_PX 이름이 일곱이다 %s" % str(drawn))
 	var outside: Array[String] = []
 	for name: String in drawn:
 		if not table.has(name):
@@ -651,7 +527,8 @@ func _world_width_table(t) -> void:
 				"%s 는 일부러 바닥 밑이다 (%.2fpx) — 올렸다면 표의 이유가 낡은 것이니 여기서 문다"
 					% [name, on_glass])
 			t.ok(why.length() >= 40, "%s 가 바닥 밑인 이유가 적혀 있다" % name)
-	t.eq(above, 6, "바닥 위가 여섯이다")
+	# ⚠ **It was six until 2026-08-28** — `REFUSE_MARK_WIDTH_PX` left the table with the refusal mark.
+	t.eq(above, 5, "바닥 위가 다섯이다")
 	t.eq(below, 2, "일부러 바닥 밑인 것이 둘이다 — 의도선·파편")
 
 
@@ -817,10 +694,12 @@ func _whole_array_leaves() -> Dictionary:
 		# vertices straight into the fx buffers and the cliff is mesh geometry. The corner-cut this
 		# table caught there is caught at RUNTIME now: `net_slots` demands a vertex beside EVERY
 		# waypoint of the aim's route, which a straightened polyline cannot produce.
-		# 티켓 12's burst — the rays are built in `_burst_points` and must reach `draw_multiline` whole.
-		"reward_view.gd": {
-			"_paint_legendary_burst": ["draw_multiline", "points"],
-		},
+		# ⚠⚠ **THE TABLE IS EMPTY AND THAT IS A LOSS, SAID OUT LOUD** (2026-08-28). Its last row was
+		# `reward_view._paint_legendary_burst` — the rays built in `_burst_points` had to reach
+		# `draw_multiline` WHOLE — and the card screen is deleted. **Nothing in `src/view/` hands an
+		# array to a native call any more**, so the shape check has nothing to bite; the self-check
+		# below is written to `0` rather than deleted, so the day a leaf like that comes back it is
+		# one number to move rather than a check to remember.
 	}
 
 

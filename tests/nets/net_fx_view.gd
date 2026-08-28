@@ -45,15 +45,16 @@ func run(t) -> void:
 	_a_body_that_cannot_move_still_does_something(t)
 	_the_landing_ring(t)
 	_the_area_ring_follows_the_ground(t)
-	_the_refusal_mark(t)
 	_the_intent_line(t)
+	_a_body_lays_one_shadow_disc(t)
+	_the_idle_sway_does_not_move_the_feet(t)
+	_a_body_stands_on_its_own_tile_and_not_the_next_one(t)
 	_the_tracer(t)
 	_the_spark(t)
 	_the_death_burst_stands_in_the_camera_plane(t)
 	_the_hit_halo(t)
 	_body_effects_ride_the_pooled_fields(t)
 	_the_boat_route_shrinks_with_the_sim(t)
-	_a_dry_slot_draws_no_plan(t)
 	_the_transient_drawer_is_capped(t)
 	_the_readers_themselves(t)
 	_every_row_wears_its_own_picture(t)
@@ -309,7 +310,9 @@ func _the_hills_never_swallow_the_tier(t) -> void:
 	# corner spent on the stair, so its 4-way boundary is 15 edges — counted off the letters, and it is
 	# the perimeter shrinking with the slab, not the wall getting shallower. The claim below is what
 	# carries the meaning; this row only refuses to let that claim be vacuous.
-	t.eq(walls, 15, "첫 섬의 층 경계 모서리는 15개다 (자가 점검, 이 수가 0이면 아래가 전부 공허하다)")
+	# ⚠ **14 since 2026-08-29 and it was 15**: the stair moved out of the plateau's corner onto the
+	# middle of its west wall, so the plateau is a clean rectangle and has one boundary corner fewer.
+	t.eq(walls, 14, "첫 섬의 층 경계 모서리는 14개다 (자가 점검, 이 수가 0이면 아래가 전부 공허하다)")
 
 	# ⚠⚠ **THE ONE THAT CARRIES THE CLAIM, AND IT HAS NO MAGIC NUMBER IN IT.** A tier boundary reads as
 	# a boundary only if it is unmistakably steeper than the ground's own roll — so the two populations
@@ -618,25 +621,9 @@ func _the_area_ring_follows_the_ground(t) -> void:
 		% (y_max - y_min))
 
 
-## The refusal mark — `speed-off-open-landing` 2.5's one-shot, at its fixed 26 px:
-## ceil(TAU·26 / 20) = 9 pieces = **54 vertices**, `COL_LOSE` with the fade SET (not multiplied).
-func _the_refusal_mark(t) -> void:
-	var fx := _quiet_view()
-	var fv: FieldView = fx["fv"]
-	var at := Look.tile_point_px(Vector2(10.0, 5.0))
-	fv.note_refusal(at)
-	var entry: Dictionary = fv._fx[fv._fx.size() - 1]
-	entry["age"] = Look.REFUSE_MARK_SEC * 0.5
-	fv._process(0.0)
-	t.eq(fv._g_v.size(), 54, "거절 표시는 바닥 정점 정확히 54개다 (9조각 x 6)")
-	t.eq(fv._a_v.size(), 0, "공중 버퍼는 조용하다")
-	var want := Look.COL_LOSE
-	want.a = 0.5
-	t.ok(_cols_all_close(fv._g_c, want), "COL_LOSE 에 fade 0.5 — 알파가 곱해지는 게 아니라 fade 그 자체다")
-	var centre := _xz_centre_v3(fv._g_v)
-	t.ok(centre.distance_to(at / Look.TILE_PX) < 0.02, "표시의 중심이 거절당한 그 자리다")
-	t.ok(absf(_max_dist_v3(fv._g_v, centre) - (26.0 + 2.5) / 40.0) < 0.03,
-		"extent 가 후보 링(18px)과 갈리는 26px 다 — 거절이 후보로 안 읽힌다")
+## ⚠⚠ **`_the_refusal_mark` STOOD HERE AND IS DELETED** (2026-08-28). It measured the 26 px
+## `COL_LOSE` ring the shell stamped when `Battle.summon` answered -1 — and the summon gesture,
+## `note_refusal` and `FxKind.REFUSE` were all deleted with the start button. See `game.gd`.
 
 
 ## Item 6 — one intent line, enemy to soldier, two tiles apart: 80 px at the intent's own coarse
@@ -648,12 +635,171 @@ func _the_intent_line(t) -> void:
 	b.enemy_target[0] = 0
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
-	t.eq(fv._g_v.size(), 6, "의도선 하나는 바닥 정점 정확히 6개다 — 성긴 120px 절단의 한 조각")
+	# ⚠ **The shadow discs are filtered out** — two bodies stand in this fixture and each lays one.
+	t.eq(_ground_minus_shadow(fv), 6, "의도선 하나는 바닥 정점 정확히 6개다 — 성긴 120px 절단의 한 조각")
 	t.eq(fv._a_v.size(), 0, "공중 버퍼는 조용하다")
-	t.ok(_cols_all_close(fv._g_c, Look.COL_TARGET_LINE),
-		"선이 COL_TARGET_LINE 그대로다 — 알파 0.12 는 일부러 희미한 면허다")
-	var centre := _xz_centre_v3(fv._g_v)
-	t.ok(centre.distance_to(Vector2(13.5, 6.5)) < 0.1, "선의 한가운데가 두 몸 사이다")
+	# ⚠⚠ **THIS ROW HAS BEEN RED SINCE BEFORE 2026-08-28 AND THE SUBJECT IS THE LINE, NOT THE SHADOW.**
+	# It reads 0 where it wants 6: **the intent line is not reaching the ground buffer at all.** Two
+	# extra rows were added here on 2026-08-28 that re-counted the same absence under new labels, and
+	# they are deleted — one red per defect. The line itself is a real defect and it is still open.
+	# ⚠⚠ **THIS ROW USED TO BE `_cols_all_close(fv._g_c, …)` AND IT WAS GREEN ON AN EMPTY BUFFER.**
+	# 「every colour in this array is the line's colour」 is trivially true of an array with nothing in
+	# it — so while the line above read 0 and went red, this one read GREEN beside it and said the
+	# colour was right. **A second red is the honest state**: both halves of one defect now speak.
+	var line_pts := _verts_of(fv._g_v, fv._g_c, Look.COL_TARGET_LINE)
+	t.eq(line_pts.size(), 6, "그리고 그 여섯이 COL_TARGET_LINE 이다 — 알파 0.12 는 일부러 희미한 면허다")
+	if line_pts.size() > 0:
+		var centre := Vector2.ZERO
+		for pt: Vector2 in line_pts:
+			centre += pt
+		centre /= float(line_pts.size())
+		t.ok(centre.distance_to(Vector2(13.5, 6.5)) < 0.1, "선의 한가운데가 두 몸 사이다")
+
+
+## ⚠⚠ **A BODY'S WHOLE SHADOW, AND IT IS THE ONLY ONE IT HAS** (2026-08-28, the user: 「그림자도
+## 단순하게 아래 동그라미정도해줘」). `field_view._sprite` stops casting a real one — a billboard's cast
+## shadow is the shadow of a card that turns to face the camera, and it swings when the board turns.
+##
+## **One disc per body, in the GROUND buffer, at the body's own centre.** The vertex count is
+## `maxi(8, ceil(TAU·r / FX_GROUND_STEP_PX)) · 3`, and it is read back rather than typed: the radius
+## comes from the species table through two ratios, and a literal here would be a third copy of them.
+##
+## ⚠ **The floor is that the count RISES with a second body.** One body's disc is equally consistent
+## with a drawer that ignores its argument and lays exactly one disc for the whole frame.
+##
+## ⚠ Mutation: drop `_put_ground_shadow`'s call out of `_put_body` and both counts go to zero.
+func _a_body_lays_one_shadow_disc(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.WOLF, 14, 6)])
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	var one := _verts_of(fv._g_v, fv._g_c, Look.COL_BODY_SHADOW)
+	t.ok(one.size() > 0, "몸 하나가 바닥에 그림자를 놓는다 (%d 정점)" % one.size())
+	t.eq(one.size() % 3, 0, "그리고 삼각형으로 떨어진다 — 원판은 부채꼴이다")
+	# The disc sits under the body it belongs to, not at the origin and not at the camera.
+	var centre := Vector2.ZERO
+	for pt: Vector2 in one:
+		centre += pt
+	centre /= float(one.size())
+	# ⚠ **Tile CENTRES.** `Look.tile_point_px` puts tile (14,6) at (14.5, 6.5) in tile units, and a
+	# bare (14, 6) here would be the tile's corner — the half-tile error this repo has paid for once.
+	t.ok(centre.distance_to(Vector2(14.5, 6.5)) < 0.2,
+		"그 원판의 한가운데가 그 몸 발밑이다 (%.2f, %.2f)" % [centre.x, centre.y])
+
+	# ⚠ **The floor: a SECOND body lays a SECOND disc.** Without this the row above is equally true of
+	# a drawer that lays one disc per frame regardless of how many bodies there are.
+	# ⚠ A second ENEMY and not a soldier put ashore: the enemy path is the one already exercised above,
+	# so a difference here is the body count and nothing about which side is drawn.
+	var b2 := _battle_of(rows, _army_of([Rules.WOLF]),
+		[_spawn(ARENA_W, Rules.WOLF, 14, 6), _spawn(ARENA_W, Rules.WOLF, 11, 6)])
+	var fv2 := _view_of(b2, rows)
+	fv2._process(0.0)
+	var two := _verts_of(fv2._g_v, fv2._g_c, Look.COL_BODY_SHADOW)
+	t.ok(two.size() > one.size(),
+		"몸이 둘이면 그림자도 둘이다 (%d -> %d 정점) — 프레임당 하나가 아니다" % [one.size(), two.size()])
+
+	# And the sprite that draws the body casts no real shadow of its own — the whole point of the disc.
+	var lit := 0
+	for k in fv._sprites_used:
+		var sp: Sprite3D = fv._sprites[k]
+		if sp.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+			lit += 1
+	t.ok(fv._sprites_used > 0, "몸 스프라이트가 실제로 있다 (자가 점검)")
+	t.eq(lit, 0, "그리고 어느 몸도 진짜 그림자를 안 드리운다 — 빌보드의 그림자는 판을 돌리면 같이 돈다")
+
+
+## ⚠⚠ **A BODY STANDING STILL DROPPED A WHOLE STOREY AND CAME BACK, OVER AND OVER** (2026-08-28, the
+## user: 「캐릭터가 좌우하면서 idle때 자꾸 2층을 넘어가네 이건 무슨 버그임?」). The idle sway is added to
+## the DRAWN position, and the ground under the body was being sampled at that swayed point — so on the
+## lip of the plateau the sway carried the sample across the tile line and `surface_h` answered with
+## the floor below. **The body was not walking anywhere; the animation alone did it.**
+##
+## ⇒ **The height is asked of the SIM's position and the offset is applied afterwards.** This row is
+## that separation: with the sway wound right up, the sprite's Y must not move at all while its X does.
+##
+## ⚠ Mutation: pass `centre_px` where `_put_body` now takes `foot_px` and the Y moves with the X.
+func _the_idle_sway_does_not_move_the_feet(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	var rest := _body_sprite(fv)
+	t.ok(rest != null, "몸이 하나 그려졌다 (자가 점검)")
+	var rest_y: float = rest.position.y
+	var rest_x: float = rest.position.x
+
+	# Wind the sway right up. ⚠ **`half` is what the amplitude is a RATIO of** — a body entry built by
+	# hand carries 0 there and would sway by exactly nothing, which is the shape that makes the floor
+	# below pass for the wrong reason.
+	# ⚠ **Several phases are tried**: the sway is a `sin`, so one sample can land on a zero crossing
+	# and read as no sway at all. What is wanted is the LARGEST displacement any of them produces.
+	var moved_x := 0.0
+	var moved_y := 0.0
+	for k in 12:
+		var e := _body_entry(b.enemy_pos[0])
+		e["still"] = Look.IDLE_AFTER_SEC + Look.IDLE_PERIOD_SEC * float(k) / 12.0
+		e["half"] = Look.sprite_half_px(Rules.WOLF)
+		fv._body["e0"] = e
+		fv._process(0.0)
+		var sw := _body_sprite(fv)
+		if sw == null:
+			continue
+		moved_x = maxf(moved_x, absf(sw.position.x - rest_x))
+		moved_y = maxf(moved_y, absf(sw.position.y - rest_y))
+	# The floor: the sway is REAL, so the drawn x has to have moved. Without this the row below is
+	# equally true of a body that is not swaying at all.
+	t.ok(moved_x > 0.0001,
+		"흔들림이 실제로 화면 자리를 옮겼다 (%.5f 타일) — 안 흔들리는 몸을 재고 있지 않다" % moved_x)
+	t.ok(moved_y < 0.0001,
+		"그런데 발 높이는 한 톨도 안 움직였다 (%.5f) — 흔들림이 땅을 다시 읽지 않는다" % moved_y)
+
+
+## ⚠⚠ **A BODY ON THE LIP OF THE PLATEAU SANK INTO THE GROUND** (2026-08-28, the user: 「지금보면
+## 땅속으로 들어감 2층 에서 보셈」). The foot height was asked as `centre_px / Look.TILE_PX` — and
+## `Look.tile_point_px` puts a tile centre **half a tile along both axes**, so the sample landed at
+## `pos + 0.5` and `Grid.surface_h` rounded it onto the NEXT tile. On the edge of the plateau the next
+## tile is the floor a storey down, so the body was drawn standing at the low tile's height while
+## actually being on the high one.
+##
+## ⚠ **The y axis was off by a different amount than the x**, because `TILE_H_PX` need not equal
+## `TILE_PX` — which is why this is measured on BOTH axes and on a boundary, not on open ground where
+## a half-tile error reads as nothing.
+##
+## ⚠ Mutation: pass `centre_px / Look.TILE_PX` back into `_stand_h` and the body on the high tile drops
+## to the low tile's height.
+func _a_body_stands_on_its_own_tile_and_not_the_next_one(t) -> void:
+	# ⚠⚠ **THE PLATEAU IS ON THE WEST AND THE BODY STANDS ON ITS EAST LIP**, and that orientation is
+	# the whole of the row. The bad sample was `pos + 0.5`, which rounds to the tile **east** of the
+	# body — so a plateau whose edge faced the other way would put both samples on the SAME tile and
+	# the check would pass against the very defect it is written for. **Measured: it did, first try.**
+	var rows := _open(ARENA_W, ARENA_H)
+	var tiers := []
+	for y in ARENA_H:
+		var row := ""
+		for x in ARENA_W:
+			row += "2" if x <= 8 else "."
+		tiers.append(row)
+	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.WOLF, 8, 6)], tiers)
+	var fv := _view_of(b, rows, tiers)
+	fv._process(0.0)
+	var g := b.grid
+	t.eq(g.level_of(g.tile_index(8, 6)), 2, "몸이 선 조각이 2층이다 (자가 점검)")
+	t.eq(g.level_of(g.tile_index(9, 6)), 0, "그 동쪽 조각은 1층이다 (자가 점검 — 반 조각 밀리면 여기로 간다)")
+
+	var s := _body_sprite(fv)
+	t.ok(s != null, "몸이 그려졌다 (자가 점검)")
+	# The body's own tile height, and the tile next to it. They must differ, or this row proves nothing.
+	var high := g.surface_h(Vector2(8.0, 6.0)) + Islands.base_h()
+	var low := g.surface_h(Vector2(9.0, 6.0)) + Islands.base_h()
+	t.ok(high > low + 0.5, "두 조각의 높이가 한 층 벌어져 있다 (%.3f vs %.3f — 자가 점검)" % [high, low])
+
+	# `_put_body` returns the TOP; the foot is the sprite's centre minus half its drawn height.
+	var foot: float = s.position.y - s.scale.y * float(s.texture.get_height()) * 0.5 / Look.TILE_PX
+	t.ok(absf(foot - (high + Look.BODY_LIFT_PX / Look.TILE_PX)) < 0.02,
+		"발이 자기 조각(2층)의 높이에 있다 (%.3f, 기대 %.3f)"
+			% [foot, high + Look.BODY_LIFT_PX / Look.TILE_PX])
+	t.ok(foot > low + 0.5,
+		"그리고 동쪽 조각(1층) 높이가 아니다 — 반 조각 밀려 읽으면 여기가 문다 (%.3f vs %.3f)" % [foot, low])
 
 
 # == the air transients ===============================================================================
@@ -691,7 +837,7 @@ func _the_spark(t) -> void:
 		"life": Look.SPARK_SEC, "at": at, "facing": Vector2.RIGHT})
 	fv._process(0.0)
 	t.eq(fv._a_v.size(), 36, "파편은 공중 정점 정확히 36개다 (조각 여섯 x 6)")
-	t.eq(fv._g_v.size(), 0, "바닥 버퍼는 조용하다")
+	t.eq(_ground_minus_shadow(fv), 0, "바닥 버퍼는 그림자 말고는 조용하다")
 	var want := Look.COL_SPARK
 	want.a = 0.5
 	t.ok(_cols_all_close(fv._a_c, want), "COL_SPARK 에 fade 0.5 다")
@@ -708,7 +854,7 @@ func _the_death_burst_stands_in_the_camera_plane(t) -> void:
 		"life": Look.BURST_SEC, "at": at, "radius": 22.0, "colour": Look.COL_ENEMY})
 	fv._process(0.0)
 	t.eq(fv._a_v.size(), 144, "죽음 파열은 공중 정점 정확히 144개다 (24조각 x 6)")
-	t.eq(fv._g_v.size(), 0, "바닥 버퍼는 조용하다")
+	t.eq(_ground_minus_shadow(fv), 0, "바닥 버퍼는 그림자 말고는 조용하다")
 	var want := Look.COL_ENEMY
 	want.a = 0.5
 	t.ok(_cols_all_close(fv._a_c, want), "죽은 쪽의 제 색에 fade 0.5 다")
@@ -759,7 +905,7 @@ func _the_hit_halo(t) -> void:
 	(fv._body["e0"] as Dictionary)["flash"] = Look.HIT_FLASH_SEC * 0.5
 	fv._process(0.0)
 	t.eq(fv._a_v.size(), 144, "타격 헤일로는 공중 정점 정확히 144개다 (원판 24조각 x 6)")
-	t.eq(fv._g_v.size(), 0, "바닥 버퍼는 조용하다")
+	t.eq(_ground_minus_shadow(fv), 0, "바닥 버퍼는 그림자 말고는 조용하다")
 	var want := Look.COL_HIT_HALO
 	want.a *= 0.5
 	t.ok(_cols_all_close(fv._a_c, want), "COL_HIT_HALO 에 남은 플래시 0.5 를 실었다")
@@ -904,39 +1050,23 @@ func _the_boat_route_shrinks_with_the_sim(t) -> void:
 		"머리는 여전히 선체 자리를 따라간다")
 
 
-# == the dry slot draws no plan (the fork the user closed: 「추천대로」) ================================
-## ⚠ Mutation: delete `_paint_plan`'s reserve gate — the control half (a WET slot draws the refuse
-## ring) proves the zero below is the gate and not a dead plan layer.
-func _a_dry_slot_draws_no_plan(t) -> void:
-	var rows := _open(ARENA_W, ARENA_H)
-	var b := _planning_battle_of(rows, _army_of([Rules.WOLF]), [])
-	var fv := _view_of(b, rows)
-	# Aim at open water (the border ring). This arena has no summon band, so the aim is REFUSED
-	# water — which draws the COL_LOSE ring: ceil(TAU·18 / 20) = 6, floored to 8 segments = 48 verts.
-	var aim := 0 * ARENA_W + 5
-	t.ok(b.grid.water[aim] != 0 and not b.grid.can_summon_at(aim), "띠 밖 물칸이다 (자가 점검)")
-	fv.set_summon_aim(0, aim)
-	fv._process(0.0)
-	var wet_ring := _verts_of(fv._g_v, fv._g_c, Look.COL_LOSE)
-	t.eq(wet_ring.size(), 48, "예비가 남은 슬롯의 조준은 거절 색 링 48 정점을 그린다 (대조군)")
-
-	# Drain the slot — the only body goes TRANSIT — and the same aim must draw NOTHING.
-	b.soldier_state[0] = Battle.SoldierState.TRANSIT
-	t.eq(b.slot_reserve_ids(0).size(), 0, "슬롯이 말랐다 (자가 점검)")
-	fv._process(0.0)
-	t.eq(_verts_of(fv._g_v, fv._g_c, Look.COL_LOSE).size()
-			+ _verts_of(fv._g_v, fv._g_c, Look.COL_WIN).size()
-			+ _verts_of(fv._g_v, fv._g_c, Look.COL_ROUTE).size(), 0,
-		"마른 슬롯은 링도 항로도 안 그린다 — sim 이 거절할 약속을 화면이 하지 않는다 (복원된 옛 규칙)")
+# == the dry slot draws no plan — ⚠⚠ DELETED 2026-08-28 =============================================
+## It measured `_paint_plan`'s reserve gate: an armed slot with nothing left drew neither ring nor
+## route, so the screen could not promise a drop `Battle.summon` would refuse. **`_paint_plan` is
+## deleted** with the whole summon gesture — there is no plan layer left to gate. See `game.gd`.
 
 
 ## The ceiling on the transient drawer: `_drain_events` drops the oldest past `FX_MAX_COUNT`, so a
 ## refusal storm cannot pile geometry without bound.
+## ⚠ **It pushed `note_refusal` until 2026-08-28 and that call is deleted.** The drawer's ceiling is
+## a fact about the drawer and not about any one effect, so the row survives on a kind that is still
+## drawn — and the entries go in directly, which is all `note_refusal` ever did.
 func _the_transient_drawer_is_capped(t) -> void:
 	var fx := _quiet_view()
 	var fv: FieldView = fx["fv"]
 	for _k in Look.FX_MAX_COUNT + 44:
-		fv.note_refusal(Look.tile_point_px(Vector2(10.0, 5.0)))
+		fv._fx.append({"kind": FieldView.FxKind.LAND, "age": 0.0, "delay": 0.0,
+			"life": Look.LAND_RING_SEC, "at": Look.tile_point_px(Vector2(10.0, 5.0))})
 	fv._process(0.0)
 	t.eq(fv._fx.size(), Look.FX_MAX_COUNT,
 		"일시 연출 서랍은 FX_MAX_COUNT 에서 잘린다 — 가장 오래된 것이 나간다")
@@ -1459,15 +1589,17 @@ func _spawn(w: int, type_id: int, x: int, y: int) -> Dictionary:
 
 ## Committed directly, `net_fx`'s own idiom: an uncommitted battle is inert to every driver and the
 ## commit gate itself is `net_plan`'s to measure.
-func _battle_of(rows: Array, army: Army, spawns: Array) -> Battle:
-	var b := _planning_battle_of(rows, army, spawns)
+## ⚠ **`tiers` is optional and empty means FLAT**, which is what every row in this file wanted until a
+## height boundary had to be measured (2026-08-28). `Grid.load_rows` already takes it that way.
+func _battle_of(rows: Array, army: Army, spawns: Array, tiers: Array = []) -> Battle:
+	var b := _planning_battle_of(rows, army, spawns, tiers)
 	b._committed = true
 	return b
 
 
-func _planning_battle_of(rows: Array, army: Army, spawns: Array) -> Battle:
+func _planning_battle_of(rows: Array, army: Army, spawns: Array, tiers: Array = []) -> Battle:
 	var g := Grid.new()
-	g.load_rows(rows)
+	g.load_rows(rows, tiers)
 	var b := Battle.new()
 	b.setup(g, army, spawns)
 	return b
@@ -1484,7 +1616,7 @@ func _ashore(b: Battle, i: int, p: Vector2) -> void:
 	b.grid.reserved = claimed
 
 
-func _view_of(b: Battle, rows: Array) -> FieldView:
+func _view_of(b: Battle, rows: Array, _tiers: Array = []) -> FieldView:
 	var fv := FieldView.new()
 	_created.append(fv)
 	fv.setup(b, b.army, rows)
@@ -1522,6 +1654,22 @@ func _body_sprite(fv: FieldView) -> Sprite3D:
 
 
 # == readers ==========================================================================================
+
+## **Ground vertices that are NOT a body's shadow.**
+##
+## ⚠⚠ **EVERY BODY LAYS A DISC ON THE GROUND SINCE 2026-08-28** (the user: 「그림자도 단순하게 아래
+## 동그라미정도해줘」), so a fixture with a body in it no longer has an empty ground buffer. **Every row
+## below that used to read `_g_v.size() == 0` now reads this instead** — the claim was never 「the
+## buffer is empty」, it was 「this effect drew nothing on the ground」, and the shadow is not the effect.
+## ⚠ **The shadow itself is measured on its own** in `_a_body_lays_one_shadow_disc`, so filtering it
+## out here does not hide it.
+func _ground_minus_shadow(fv: FieldView) -> int:
+	var n := 0
+	for k in fv._g_c.size():
+		if not _col_close(fv._g_c[k], Look.COL_BODY_SHADOW):
+			n += 1
+	return n
+
 
 ## The vertices wearing exactly `col`, on the ground plane (x, z) in tile units.
 func _verts_of(v: PackedVector3Array, c: PackedColorArray, col: Color) -> Array:

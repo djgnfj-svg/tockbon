@@ -1,6 +1,15 @@
 Type: task
-Status: open
+Status: resolved
 
+
+✅ **CLOSED 2026-08-28.** `Grid.can_step` refuses a diagonal unless **both shoulders** are steppable
+from the origin. ⚠⚠ **Stricter than this ticket asked for** — it wanted a refusal only when both were
+blocked — because a body slides from tile centre to tile centre and is physically over both shoulders on
+the way; one blocked shoulder is one wall corner walked through. `_straight_is_all_water` requires both
+for the same reason.
+⚠ **The 「two places」 this ticket feared was not true**: `flow_field` and `step_toward` both ask
+`can_step`, so one edit reached both.
+⚠ **The island did not seal itself** — `net_tiers` walks every walkable tile and none is cut off.
 # 몸이 대각선으로 벽 모서리를 지나간다
 
 ## 무엇이 되면 끝인가

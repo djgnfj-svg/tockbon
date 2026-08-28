@@ -53,9 +53,10 @@ func _process(_delta: float) -> bool:
 			0:
 				_game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
 			1:
-				_game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
+				pass
 			2:
-				_game._unhandled_input(_click(_game.refit_view.done_hit_rect().get_center()))
+				# ⚠ **The card and refit presses are DELETED** (2026-08-28) with the screens.
+				pass
 			3:
 				# ⚠ **Twelve and not twenty.** `shoot_field.gd`'s 7_close is twelve wheel steps in; going
 				# further fills the frame with land and leaves no coast to judge.

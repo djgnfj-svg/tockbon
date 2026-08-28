@@ -244,6 +244,28 @@ const BODY_TEX_DOT_PX := 5
 const COL_BAKE_MARK := Color(1.0, 1.0, 1.0)
 const COL_BAKE_CLEAR := Color(1.0, 1.0, 1.0, 0.0)
 
+## ⚠⚠ **THE 판, AND WHEN ANY OF IT IS ON SCREEN** (2026-08-28, the user: 「마우스올리면 호버되도록
+## 해주고 특정버튼 눌러야 그 뜨게해줘 판이」). Blender exports the 판 as its own object inside
+## `island.glb`; `src/view/pads.gdshader` reads every one of these five and nothing else decides it.
+##
+## ⚠ **At rest the board draws NOTHING** — every 판 is fully transparent until the reveal key goes
+## down. **A resting alpha above zero would put the grid back on the ground permanently**, the exact
+## thing 「위에 노드만 살짝 얹은 느낌이어서 너무 별로」 named.
+## ⚠⚠ **AND THE HOVER IS INSIDE THAT GATE** (2026-08-28, the user: 「탭을 눌러서 떳을때만 오버가 되야
+## 의미가 있을듯 한데?」). It was outside it for one round: the hovered 칸 rose alone out of blank
+## ground with nothing around it to say what it was one of. **A hover means 「this one, of these」**,
+## so it shows only while 「these」 are on screen.
+##
+## ⚠ **The hovered 칸 answers on TWO channels — it rises AND it lightens.** One channel alone was
+## what the deleted two-quad mark did, and it read as a sticker rather than as ground.
+## ⚠ **The lift is in WORLD units** (one unit is one tile), and it is deliberately small: the 판 is a
+## 0.02 lip, so 0.06 is three times its own thickness and still under a tenth of a 조각.
+const PAD_ALL_ALPHA := 0.35             # >= 0.15 (under it the reveal reads as nothing); <= 0.60
+const PAD_HOVER_ALPHA := 0.85           # > PAD_ALL_ALPHA, or the hovered 칸 loses to the reveal
+const PAD_ALL_LIGHTEN := 0.25           # how far the revealed 판 is pulled toward white
+const PAD_HOVER_LIGHTEN := 0.55         # > PAD_ALL_LIGHTEN, same reason as the alphas
+const PAD_HOVER_LIFT := 0.06            # world units. **3x the 판's own 0.02 thickness**
+
 ## How big one texel of a `Sprite3D` is in world units. **The inverse of `TILE_PX` and written as that
 ## division**, because it is the same fact as "one world unit is one tile" at the top of this section —
 ## a picture sized in canvas px lands at the size this file already says it is.
@@ -1081,6 +1103,14 @@ const WATER_SWING_FLOOR := 0.18
 ## does it at all. ⚠ Over patches only, or the island wears two concentric rings.
 const WATER_PEEL := 0.55
 const WATER_PEEL_TILES := 0.42
+
+## ⚠⚠ **`WATER_ROLL` / `WATER_ROLL_TILES` STOOD HERE FOR ONE ROUND** (2026-08-29). They were 거품 —
+## the white line pushed IN toward the rim, which the sea had been missing since the 2026-08-28 rebuild
+## left it only the shoreline's breathing and the line that travels seaward. **The user asked for it,
+## saw it, and took it back**: 「별로다... 그 거품없애봐」.
+## ⇒ **The flat sea with one border stands**, now confirmed twice — once by seven candidates rendered
+## side by side, and once by adding the thing back and looking at it.
+
 const WATER_PEEL_GATE_SCALE := 0.85
 
 ## **4. How much of the coast is quiet**, how wide a quiet stretch is in inverted tiles, and how slowly
@@ -1431,7 +1461,8 @@ const BEAST_SPRITE_W_RATIO := 3.5
 ## ⚠ **What moved with it**: `BURST_START_MUL` is derived from this and halves with it (that derivation
 ## is 2026-08-24's fix for a death burst nobody could see, and `net_fx_view` pins it); the HP bar hangs
 ## off the sprite's own returned TOP rather than off a radius, so it follows by construction; the sim
-## body radius, the halo and `hp_bar_origin_px` read `BODY_RADIUS_RATIO` and do not move at all.
+## body radius and the halo read `BODY_RADIUS_RATIO` and do not move at all. (`hp_bar_origin_px` was
+## the third reader and is deleted, 2026-08-28.)
 ## ⚠ **`BURST_WIDTH_PX` did NOT move and it is the one that got tight** — see its own note.
 ##
 ## ⚠⚠ **RAISED AGAIN, 4.0 -> 6.0** (2026-08-24, the user: 「멀리서 봤을때 너무작네」 — 4.0 was already
@@ -1453,9 +1484,26 @@ const BEAST_SPRITE_W_RATIO := 3.5
 ## pick all went with it, so there is nothing left for a field mark to mark.)
 
 ## A thin bar under the body. GAP is from the bottom of the body to the top of the bar.
-const HP_BAR_W_PX := 24.0
-const HP_BAR_H_PX := 3.0
-const HP_BAR_GAP_PX := 4.0
+## ⚠⚠ **THE HP BAR IS DELETED AND ITS THREE CONSTANTS WITH IT** (2026-08-28, the user: 「체력바 없이」)
+## — `HP_BAR_W_PX`, `HP_BAR_H_PX`, `HP_BAR_GAP_PX`, and `hp_bar_origin_px` / `hp_bar_size_px` /
+## `hp_bar_colour` further down. **The sim still tracks HP** and still decides who dies; nothing on
+## screen says so, and the screen that will is designed rather than typed (`CLAUDE.md`).
+
+## ⚠⚠ **A BODY'S SHADOW IS ONE DISC ON THE GROUND** (2026-08-28, the user: 「그림자도 단순하게 아래
+## 동그라미정도해줘」). A billboard's real cast shadow is the shadow of a flat card that turns to face
+## the camera — it swings as the board turns, which is the one thing a shadow must not do — so
+## `field_view._sprite` stops casting one and this disc is what a body has instead.
+##
+## ⚠⚠ **THE ISLAND, THE BUILDINGS AND THE PROPS KEEP THEIR REAL SHADOWS**, and that is the line this
+## does not cross. A disc was laid under every prop and building on 2026-08-25 and DELETED the next day
+## because it stood beside a real shadow pointing the other way (the user: 「해 기준으로 그림자가 있어야
+## 하는데 이게 좀 안 그런거 같음」 · 「해 하나가 맞는듯」). **A body now has exactly one shadow — this
+## one — so that objection does not apply**, and the rule it produced still holds everywhere else.
+##
+## ⚠ **Radius is a MULTIPLE of the body's drawn half-width**, not a constant: five species draw at five
+## sizes and one number would fit the smallest or the largest, never both.
+const BODY_SHADOW_RADIUS_RATIO := 0.62   # >= 0.4 (under it the disc reads as a dot); <= 1.0
+const COL_BODY_SHADOW := Color(0.05, 0.06, 0.10, 0.30)  # alpha <= 0.45, over which it reads as a hole
 
 ## The hull. **Every hull is the same size now**, because `plan-then-watch`'s 결정 14R deleted the
 ## capacity column: one drag makes one boat and it carries the one soldier that was dragged onto it.
@@ -2661,12 +2709,9 @@ static func bleeding(col: Color, left: float) -> Color:
 	return col.lerp(COL_BLEED, clampf(left / BLEED_TINT_SEC, 0.0, 1.0) * BLEED_TINT_MAX)
 
 
-## ⚠ **`sendable_tint()` is deleted with the two constants it combined.** It washed every sendable
-## tile in `COL_SENDABLE` at `DROP_TINT_ALPHA`; `speed-off-open-landing`'s question C replaced that
-## whole picture with a mark on what is BLOCKED. `ghost_tint()` below is the surviving example of the
-## tone-plus-ratio split this used to be the other half of.
-static func hp_bar_colour(filled: bool) -> Color:
-	return COL_HP_FULL if filled else COL_HP_EMPTY
+## ⚠⚠ **`hp_bar_colour` STOOD HERE AND IS DELETED** (2026-08-28) with the bar it coloured, and
+## `hp_bar_origin_px` / `hp_bar_size_px` further down with it. See `BODY_SHADOW_RADIUS_RATIO` above
+## for what a body carries now.
 
 
 ## ⚠⚠ **THE TWO LEGEND LOOKUPS WERE DELETED 2026-08-27** — `terrain_colour_of_char` turned an island
@@ -2713,16 +2758,6 @@ static func tile_centre_px(tx: int, ty: int) -> Vector2:
 static func tile_rect_px(tx: int, ty: int) -> Rect2:
 	return Rect2(Vector2(tx * TILE_PX, ty * TILE_H_PX), Vector2(TILE_PX, TILE_H_PX))
 
-
-## Top-left of the HP bar for a body whose centre is at `centre_px`. The bar hangs below the body,
-## so it moves with the unit type's radius rather than sitting at a fixed offset.
-static func hp_bar_origin_px(centre_px: Vector2, type_id: int) -> Vector2:
-	var below := centre_px.y + body_radius_of(type_id) + HP_BAR_GAP_PX
-	return Vector2(centre_px.x - HP_BAR_W_PX * 0.5, below)
-
-
-static func hp_bar_size_px() -> Vector2:
-	return Vector2(HP_BAR_W_PX, HP_BAR_H_PX)
 
 
 ## The start button's RESTING rectangle, in viewport px. The refuse shake is applied on top of this

@@ -159,41 +159,9 @@ class PanelSpy extends PanelView:
 			"at": at, "fsize": fsize, "col": col})
 
 
-## ⚠⚠ Item 4's own spy — `net_cards`' `RewardSpy` shape copied rather than re-invented. Swapped in for
-## `game.reward_view` right before a second win reaches `PICK`, so what this file can measure is not
-## only `run.state()` (which the SIM writes on its own and no shell function can move) but whether the
-## SCREEN was actually rebound fresh: `bind()` zeroes `_reveal_age` and clears `_taken_age`, and neither
-## moves unless `reward_view.bind(run)` itself runs.
-class RewardSpy extends RewardView:
-	var draws := 0
-	var cards := []
-	var marks := []
-	var hints := []
-	var fades := []
-
-	func _draw() -> void:
-		cards.clear()
-		marks.clear()
-		hints.clear()
-		fades.clear()
-		super()
-		draws += 1
-
-	func _paint_card(rect: Rect2, bg: Color, edge_width: float) -> void:
-		cards.append({"rect": rect, "bg": bg, "width": edge_width})
-
-	# ⚠ `_paint_card_part` / `_paint_card_species` overrides are gone with the hooks — the card build
-	# renamed them (`_paint_card_name` / `_paint_card_effect`) and no row here ever read the capture,
-	# so the spy stops pretending to. `net_cards` owns the deep card rows.
-
-	func _paint_taken_mark(centre: Vector2, radius: float, col: Color) -> void:
-		marks.append({"centre": centre, "radius": radius, "col": col})
-
-	func _paint_hint(face: Font, at: Vector2, text: String, fsize: int, col: Color) -> void:
-		hints.append({"face": face, "at": at, "text": text, "fsize": fsize, "col": col})
-
-	func _paint_fade(rect: Rect2, col: Color) -> void:
-		fades.append({"rect": rect, "col": col})
+## ⚠⚠ **`RewardSpy` STOOD HERE AND IS DELETED** (2026-08-28) with the card screen it watched. What
+## it measured was whether the SCREEN was genuinely rebound on a second win — `bind()` zeroing
+## `_reveal_age` and clearing `_taken_age` — and there is no second screen to rebind.
 
 
 func run(t) -> void:
@@ -212,19 +180,18 @@ func run(t) -> void:
 	await t.pump_frames(2)
 
 	# -- _ready built the children, in code --------------------------------------------------------
-	t.eq(game.get_child_count(), 6, "_ready 가 자식 여섯을 만들었다 — 지도 뷰가 삭제됐다")
-	t.ok(game.field_view != null and game.hud_view != null
-		and game.reward_view != null and game.refit_view != null and game.title_view != null
-		and game.panel_view != null, "여섯 뷰가 전부 생겼다")
+	# ⚠⚠ **IT WAS SIX AND IT IS FOUR** (2026-08-28, the user: 「고르는 창도 이제 필요 없는데 왜있지?
+	# 이것도 제거」 · 「둘 다 지우면 돼」). The card screen and the refit board were deleted with the
+	# whole growth loop; the map view went before them (2026-08-26).
+	t.eq(game.get_child_count(), 4, "_ready 가 자식 넷을 만들었다 — 카드 화면과 정비 화면이 삭제됐다")
+	t.ok(game.field_view != null and game.hud_view != null and game.title_view != null
+		and game.panel_view != null, "네 뷰가 전부 생겼다")
 	t.ok(game.get_child(0) == game.field_view and game.get_child(1) == game.hud_view
-		and game.get_child(2) == game.reward_view
-		and game.get_child(3) == game.refit_view and game.get_child(4) == game.title_view
-		and game.get_child(5) == game.panel_view,
-		"자식 순서가 field -> hud -> reward -> refit -> title -> panel 이다 (Node2D 형제의 그리기 순서가 곧 이 순서다)")
-	# Named by hand, because `get_class()` on all seven is "Node2D" and seven identical labels do not
+		and game.get_child(2) == game.title_view and game.get_child(3) == game.panel_view,
+		"자식 순서가 field -> hud -> title -> panel 이다 (Node2D 형제의 그리기 순서가 곧 이 순서다)")
+	# Named by hand, because `get_class()` on all four is "Node2D" and four identical labels do not
 	# say which one went missing — a failure log that cannot narrow the cause is half a failure log.
 	var built := {"field_view": game.field_view, "hud_view": game.hud_view,
-		"reward_view": game.reward_view, "refit_view": game.refit_view,
 		"title_view": game.title_view, "panel_view": game.panel_view}
 	for label: String in built:
 		var v: Node2D = built[label]
@@ -268,13 +235,13 @@ func run(t) -> void:
 	# becomes unpressable, because with no run there is no way to make one.
 	# ⚠⚠ 「시작하기는 곧장 섬을 연다」 (티켓 12, 2026-08-27, the user: ***"Starting means the game starts,
 	# right then."***) — floor: `state() == BATTLE`; ceiling: `battle != null`. **It opened the three
-	# cards until this ticket and the map before that**, and the cards themselves are untouched: the
-	# ticket took the round off the START PATH, not out of the game.
+	# cards until that ticket and the map before that**, and on 2026-08-28 the cards were deleted
+	# outright (the user: 「둘 다 지우면 돼」) — so there is nothing left between the press and the island
+	# at either end of the run.
 	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
 	t.ok(game.run != null, "시작하기를 누르면 런이 생긴다")
 	t.eq(game.run.state(), Run.State.BATTLE, "그리고 곧장 섬이 열린다 — 사이에 카드도 정비도 없다")
 	t.ok(game.battle != null, "섬이 실제로 서 있다")
-	t.eq(game.run.cards.size(), 0, "카드는 한 장도 안 깔렸다")
 	# ⚠⚠ **The SCREEN, not only the state.** The title used to come down inside `_enter_pick_screen`,
 	# a screen the start path no longer walks through — left there, the island would open UNDER a drawn
 	# title and a state check alone would have been green with nothing readable on the glass.
@@ -298,13 +265,9 @@ func run(t) -> void:
 	t.ok(not game._panning, "지도를 누르기 전에는 카메라를 안 끌고 있다 (자가 점검)")
 
 	# -- swap in the spies and re-open the island --------------------------------------------------
-	# ⚠⚠ `reward_view` is swapped in HERE too, before island 0's own win ever reaches `PICK` — not
-	# later, right before item 4's own check. A spy created fresh right there would start every field
-	# at its own neutral default and could never tell "rebound" from "never bound in the first place".
-	# Swapped in this early, it is the SAME spy that gets genuinely dirtied by island 0's own two-card
-	# pick (real `_taken_age` entries, a real climbing `_reveal_age`) — which is what makes "did the
-	# SECOND pick screen actually rebind" a question with a real answer instead of a coin flip.
-	for v: Node2D in [game.field_view, game.hud_view, game.panel_view, game.reward_view]:
+	# ⚠ **`reward_view` used to be swapped in here too**, early, so item 4 could tell 「rebound」 from
+	# 「never bound」 on the second card screen. Both the screen and that row are deleted (2026-08-28).
+	for v: Node2D in [game.field_view, game.hud_view, game.panel_view]:
 		game.remove_child(v)
 		v.queue_free()
 	# ⚠ The field is a FRESH REAL `FieldView`, not a spy — there are no hooks left to spy on, and a
@@ -312,16 +275,13 @@ func run(t) -> void:
 	var fs := FieldView.new()
 	var hs := HudSpy.new()
 	var ps := PanelSpy.new()
-	var rs := RewardSpy.new()
 	game.field_view = fs
 	game.hud_view = hs
 	game.panel_view = ps
-	game.reward_view = rs
 	game.add_child(fs)
 	game.add_child(hs)
 	game.add_child(ps)
-	game.add_child(rs)
-	t.ok(fs.battle == null and hs.battle == null and ps.run == null and rs.run == null,
+	t.ok(fs.battle == null and hs.battle == null and ps.run == null,
 		"바꿔 끼운 스파이는 아직 아무것도 모른다 — 배선은 _open_island 가 한다")
 	game._open_island()
 	t.ok(fs.battle == game.battle and fs.army == game.run.army,
@@ -469,20 +429,24 @@ func run(t) -> void:
 		if absf(s.scale.x - want_sx) > 0.001:
 			body_bad += 1
 	t.eq(body_bad, 0, "몸마다 자리·색·크기가 sim 의 그 적에게서 나왔다")
-	t.eq(_flat_sprites(fs).size(), 2 * live_enemies.size(),
-		"몸마다 HP 막대 두 장(레일 + 채움)이 붙었다 — 다친 적이 없으니 채움도 전부 살아 있다")
-	var bar_cols := {}
-	for fsp: Sprite3D in _flat_sprites(fs):
-		bar_cols[fsp.modulate] = true
-	t.ok(bar_cols.has(Look.hp_bar_colour(true)) and bar_cols.has(Look.hp_bar_colour(false)),
-		"막대가 채움색과 빈색 두 벌을 다 입었다 — 한 벌뿐이면 레일이나 채움이 죽은 것이다")
-	# Nothing has been hit, nothing has died and no soldier is ashore, so BOTH effect buffers are
-	# silent — surface 3's floor under every "it drew one" a later row makes. The surface counts are
-	# read beside the buffers: an empty buffer must arrive at an EMPTY committed mesh too.
+	# ⚠⚠ **THE HP BAR ROWS ARE DELETED** (2026-08-28, the user: 「체력바 없이」). They read the two flat
+	# sprites per body — rail and fill — and their two colours. **`_put_hp`, `_hp_rects` and
+	# `Look.hp_bar_*` are all gone**; the sim still tracks HP and nothing on screen says so.
+	t.eq(_flat_sprites(fs).size(), 0, "몸 위에 막대가 한 장도 안 붙는다 — 체력바가 삭제됐다")
+	# ⚠⚠ **THE GROUND BUFFER IS NO LONGER SILENT AND THAT IS THE SHADOW** (2026-08-28, the user:
+	# 「그림자도 단순하게 아래 동그라미정도해줘」). Every body lays one disc down, so the floor here is a
+	# COUNT rather than a zero: nothing has been hit and nothing has died, so the only ground geometry
+	# in the frame is one disc per body. The AIR buffer is still silent, and that half is unchanged.
 	t.eq(fs._a_v.size(), 0, "아무 일도 안 일어난 프레임에는 공중 연출 정점이 하나도 없다")
-	t.eq(fs._g_v.size(), 0, "바닥 연출 정점도 없다 — 조준도 의도선도 아직 없다")
-	t.eq(fs._decal.mesh.get_surface_count(), 0, "그리고 바닥 연출 메시도 비어 있다")
-	t.eq(fs._air.mesh.get_surface_count(), 0, "공중 연출 메시도 비어 있다")
+	t.ok(fs._g_v.size() > 0, "바닥에는 정점이 있다 — 몸마다 그림자 원 하나 (%d 정점)" % fs._g_v.size())
+	var shadow_verts := 0
+	for c: Color in fs._g_c:
+		if c == Look.COL_BODY_SHADOW:
+			shadow_verts += 1
+	t.eq(shadow_verts, fs._g_c.size(),
+		"그리고 그 정점이 전부 그림자 색이다 — 조준도 의도선도 없는 프레임이다")
+	t.ok(fs._decal.mesh.get_surface_count() > 0, "바닥 연출 메시가 실제로 커밋됐다 — 버퍼만 찬 게 아니다")
+	t.eq(fs._air.mesh.get_surface_count(), 0, "공중 연출 메시는 비어 있다")
 
 	# ⚠ **The `_seq` layer-order rows are DELETED, subject and all.** Between 3D objects the depth
 	# buffer decides what covers what — there is no traversal order left to measure, and re-inventing
@@ -879,23 +843,10 @@ func run(t) -> void:
 	t.eq(fs.cam_px, Vector2(300.0, 300.0),
 		"손을 뗀 뒤의 움직임은 카메라를 안 끈다 — pan_by 가 불렸다면 클램프가 자리를 옮겼을 것이다")
 
-	# ⚠⚠ Item 4's own fixture — `rs` is `game.reward_view` and its clock (`_fx_step`) runs every real
-	# frame regardless of screen, so a few pumped frames HERE, while `run.cards_taken` still carries
-	# 0번's own two picks (nothing clears it until the NEXT `_draw_cards()`), grow real `_taken_age`
-	# entries. Without this the staleness row far below would be proving nothing — a check that never
-	# gets dirtied cannot tell "rebound" from "never bound at all".
-	await t.pump_frames(3)
-	t.ok(not rs._taken_age.is_empty(), "0번 칸에서 고른 카드가 화면에 실제로 자국을 남겼다 (자가 점검)")
-
-	rs.queue_redraw()
-	await t.pump_frames(1)
-	t.ok(rs._reveal_age < Look.SCENE_FADE_SEC * 0.5,
-		"카드 화면이 실제로 다시 묶였다 — 나이가 0에 가깝다 (%.3f), 지난 카드 화면의 나이가 그대로 남지 않았다"
-			% rs._reveal_age)
-	t.ok(rs._taken_age.is_empty(),
-		"묶인 화면에 가져간 표 자국이 하나도 없다 — 0번 칸에서 골랐던 장의 흔적이 새 카드 위에 안 남는다")
-	t.eq(rs.cards.size(), Rules.CARDS_PER_WIN, "카드 세 장이 실제로 다시 그려졌다")
-	t.eq(rs.marks.size(), 0, "그리고 어느 카드에도 가져간 표가 없다")
+	# ⚠⚠ **ITEM 4'S WHOLE FIXTURE AND ITS FOUR ROWS ARE DELETED** (2026-08-28) with the card screen.
+	# They measured that a SECOND win rebound the screen fresh — `_reveal_age` back near zero, no
+	# `_taken_age` marks left from the first round, three cards drawn again. **There is no card screen
+	# and a win goes straight to `WON`.**
 
 	# -- the lose panel and the restart button ------------------------------------------------------
 	var old_army := game.run.army
@@ -984,40 +935,9 @@ func _win_the_open_island(t, game: Game, label: String) -> void:
 	game._process(Look.HOLD_OUTCOME_SEC)
 
 
-## Every win now stops for the card pick before the map — **three cards drawn, ONE taken** (티켓 06)
-## — then 완료 closes the board. Walked through the real input door (`game._unhandled_input`), never
-## by poking `Run`, for the same reason `_win_the_open_island` above drives the hold through
-## `_process` rather than calling `finish_island` directly.
-##
-## ⚠⚠ **This is where §8.4's two new `net_shell` rows about the card screen actually get exercised**:
-## a card screen draws no island underneath it (`battle == null` **and** `field_view.battle == null`,
-## the same lever `_enter_map_screen` pulls) and a click on a card does not start a camera pan (the
-## `PICK` branch has to sit ABOVE the `battle != null` fallback that ends in `_panning = true` —
-## mutation: move it below).
-## The sim-only twin of the walk above, for fixtures that drive `Run` directly rather than through the
-## shell. A no-op on any state that is not `PICK` — the boss pays no cards, and a `REWARD` win has not
-## reached `PICK` yet — so a caller may call this after every `finish_island(true)` unconditionally.
-func _take_one_and_close_refit(r: Run) -> void:
-	if r.state() != Run.State.PICK:
-		return
-	# ⚠ **An ITEM card — and it is the only kind there is since 2026-08-27.** The fork used to matter
-	# because a beast pick brought bodies with it and every roster count downstream would then have been
-	# measuring those instead of the reward arithmetic it claims to measure. **`CardKind.SPECIES` is
-	# deleted**, so the search can no longer fail — it is kept rather than replaced by `take_card(0)`
-	# because it reads the kind the sim actually wrote instead of assuming what it wrote.
-	var pick := 0
-	for k in Rules.CARDS_PER_WIN:
-		if int(r.card_kind[k]) == Rules.CardKind.ITEM:
-			pick = k
-			break
-	r.take_card(pick)
-	r.close_refit()
-
-
-## ⚠⚠ **`panel_active()` is an ALLOWLIST and adding `MAP` to it "for symmetry" is the mutation this
-## measures.** Its header records that the denylist form (`state() != BATTLE`) broke five ways on one
-## added state; what the map round owes it is not an edit but this table — **both directions**, or an
-## allowlist that always returned false would pass the first three rows on its own.
+## ⚠⚠ **`_take_one_and_close_refit` STOOD HERE AND IS DELETED** (2026-08-28) with the card round it
+## drove. It took one item card and closed the refit board so a fixture could reach `WON`; a win
+## goes straight there now.
 func _panel_active_answers_all_five_screens(t) -> void:
 	var game := QuitGame.new()
 	t.root.add_child(game)
@@ -1028,9 +948,11 @@ func _panel_active_answers_all_five_screens(t) -> void:
 	pv.bind(null, null)
 	t.ok(not pv.panel_active(), "타이틀에서는 패널이 안 뜬다 (run == null)")
 
-	var won := _opened(Run.new())
+	# ⚠ **A win goes straight to `WON` now** (2026-08-28) — it used to stop for a card round and a
+	# refit board on the way, and both are deleted.
+	var won := Run.new()
+	won.begin_island()
 	won.finish_island(true)
-	_take_one_and_close_refit(won)
 	t.eq(won.state(), Run.State.WON, "섬을 지켜내면 WON 이다 (자가 점검)")
 	pv.bind(won, null)
 	t.ok(pv.panel_active(), "이긴 화면에서도 패널이 뜬다")
@@ -1414,7 +1336,7 @@ func _the_speed_ladder_is_gone(t) -> void:
 ## `Battle`'s own constant map, so a fifth reason added tomorrow either gets its own line in
 ## `_message_text` or reddens this — it cannot arrive and fall through to the bare 「패배」 unnoticed.
 func _every_lose_reason_reads_differently(t) -> void:
-	var r := _opened(Run.new())
+	var r := Run.new()
 	var b := r.begin_island()
 	r.finish_island(false)
 	t.eq(r.state(), Run.State.LOST, "진 런을 하나 만들었다 (자가 점검)")
@@ -1516,24 +1438,3 @@ func _gd_files_under(dir: String) -> Array:
 ## `field_view._fx` directly, which never depended on a hook.
 
 
-## Walks past the OPENING CARD ROUND. ⚠⚠ **A run opens on a card screen since 티켓 15** (「시작하자
-## 마자 세 개 중에 하나 고르는 거」), so `enter_node` refuses until one of its three cards has been
-## taken — every fixture below that steps onto the map has to pass through it first. Card 0, always,
-## so the fixture is the same run every time.
-##
-## ⚠ **This said 「OPENING BEAST ROUND」 and 「one of its three beasts」 until 2026-08-27.** The beast
-## card is deleted whole and the opening three are equipment like every round after them; **what this
-## helper does is unchanged**, because `take_card(0)` never cared which kind card 0 was.
-func _opened(r: Run) -> Run:
-	if r.state() == Run.State.PICK:
-		r.take_card(0)
-	return r
-
-
-## Takes the OPENING CARD through the real input door — **an equipment card since 2026-08-27**, when
-## the beast card was deleted whole; the door and the press are unchanged. ⚠⚠ **A run opens on a card
-## screen since 티켓 15** (「시작하자마자 세 개 중에 하나 고르는 거」), so the map sits one press further
-## from the title than it used to. Card 0, always, so the fixture is the same run every time.
-func _take_opening_card(game: Game) -> void:
-	if game.run != null and game.run.state() == Run.State.PICK:
-		game._unhandled_input(_click(Look.card_rect_px(0).get_center()))

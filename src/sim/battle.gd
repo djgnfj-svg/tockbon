@@ -561,16 +561,22 @@ func recall(uid: int) -> bool:
 	return false
 
 
-## Closes the plan and lets the clock run. **False and nothing changes** when already committed, or
-## when `boats` is empty — a start press that would land nobody is a refusal with a shake, not a fight
-## nobody can win.
+## Lets the clock run. **False and nothing changes** when already committed.
 ##
-## It launches nothing: every boat was built by `send` and is already sitting at `t == 0.0`, so the
-## commit adds no motion of its own. That is the whole point — the plan and the fleet are one array.
+## It launches nothing: a boat already sitting at `t == 0.0` is not moved by this call. What it does
+## is open the gate `step` keeps in front of the landings, the targeting, the attacks and the verdict.
+##
+## ⚠⚠ **IT REFUSED AN EMPTY `boats` UNTIL 2026-08-28 AND THAT TEST IS DELETED.** The rule was 「a start
+## press that would land nobody is a refusal, not a fight nobody can win」 — and it was true while the
+## PLAYER authored the landing out of boats. **The sides swapped**: the player defends, the beasts
+## arrive by boat, and `game._open_island` commits the island the moment it opens, when there is not
+## and should not be a single boat on the water. Left standing, the test made that call a no-op and
+## the island's clock never started — the gate would have been shut for the whole run with nothing
+## saying so.
+## ⚠ **The empty-plan refusal is not recoverable by putting the line back**: what would have to come
+## back with it is a plan for the player to author, and there is none.
 func commit() -> bool:
 	if _committed:
-		return false
-	if boats.is_empty():
 		return false
 	_committed = true
 	return true
