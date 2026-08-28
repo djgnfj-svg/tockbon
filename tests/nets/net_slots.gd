@@ -58,8 +58,9 @@ func run(t) -> void:
 	# ⚠⚠ **THE SHELL OPENS ON THE TITLE AND THIS FILE WALKED STRAIGHT PAST IT** (fixed 2026-08-27).
 	# **Every row below opens with `game._open_island()`**, which reads `run.begin_island()` — and
 	# `Game._ready()` sets `run = null` and opens no island for itself, so the very first row died on a
-	# null `run` before it measured one thing. **The fix drives the shell and pokes no field**: 시작하기,
-	# the opening card, 완료 — all through `_unhandled_input`, the same three presses `net_refit` walks.
+	# null `run` before it measured one thing. **The fix drives the shell and pokes no field**: 시작하기
+	# and nothing else, through `_unhandled_input` — 티켓 12 took the card and 완료 presses off the
+	# start path, so the walk that was three presses is one.
 	# ⚠ Once the run is standing on its island, `begin_island()` hands back a FRESH `Battle` on every
 	# call, so each row's own `_open_island()` is still the real reset it always was.
 	_walk_from_the_title_to_the_island(t, game)
@@ -1153,28 +1154,24 @@ func _wheel(at: Vector2, up: bool) -> InputEventMouseButton:
 
 
 ## Walks the shell from the TITLE down onto its first island, through the real input door and nothing
-## else: 시작하기 · the opening card · 완료. Card 0 always, so the fixture is the same run every round.
+## else. **One press: 시작하기.**
 ##
-## ⚠⚠ **THIS REPLACES `_take_opening_card`, WHICH PRESSED THE CARD AND STOPPED.** One press reached the
-## island only while the opening round was a BEAST round — a beast paid no held card, `Run.take_card`
-## forked on the empty pile, and the run walked straight on. **The beast arm of the card table is
-## deleted**, so card 0 is equipment, the pile is not empty, and the press lands the shell on the REFIT
-## screen; a one-press walk strands its caller there. (It was also dead code here: nothing called it.)
+## ⚠⚠ **IT WAS THREE PRESSES — 시작하기 · the opening card · 완료 — AND 티켓 12 DELETED TWO OF THEM**
+## (2026-08-27, the user: ***"Starting means the game starts, right then."***). A run opens on the
+## island now; there is no `PICK` and no `REFIT` between the title and the board, so pressing where
+## the card used to be would land on the island itself.
 ##
 ## ⚠ **Nothing is poked.** Assigning `game.run` or reaching for `_start_run()` would leave every row
 ## below measuring the poke instead of the wiring — and the wiring is the whole reason `Game` builds
 ## its six children inside `_ready()`.
-## ⚠ 완료 is asked of the VIEW for its own rectangle rather than read out of `Look` with a hand-written
-## `board_open` flag: **the button moves when a board is open**, and a guessed flag aims at the
-## position the button is not in.
+## ⚠ **The title's own visibility is asserted here on purpose.** It used to be taken down inside
+## `_enter_pick_screen`, which the shell no longer walks through; left there, the island would open
+## underneath a title nobody could see past, and every row below would still be green.
 func _walk_from_the_title_to_the_island(t, game: Game) -> void:
 	t.ok(game.run == null and game.battle == null,
 		"켜자마자는 타이틀이다 — 판도 전투도 아직 없다 (자가 점검)")
 	game._unhandled_input(_click(Look.title_slot_hit_rect_px(TitleView.SLOT_START).get_center()))
-	t.eq(game.run.state(), Run.State.PICK, "시작하기를 누르자 여는 카드 판이 떴다 (자가 점검)")
-	game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
-	t.eq(game.run.state(), Run.State.REFIT, "여는 카드를 고르자 정비 화면이 열렸다 (자가 점검)")
-	game._unhandled_input(_click(game.refit_view.done_hit_rect().get_center()))
-	t.eq(game.run.state(), Run.State.BATTLE, "완료를 누르자 첫 섬으로 내려갔다 (자가 점검)")
+	t.eq(game.run.state(), Run.State.BATTLE, "시작하기를 누르자 곧장 섬이 열렸다 — 사이에 아무 화면도 없다")
+	t.ok(not game.title_view.visible, "그리고 타이틀이 내려갔다 — 섬 위에 안 덮여 있다")
 	t.ok(game.battle != null and game.battle.grid != null,
 		"그래서 아래 모든 줄이 밟고 설 전투와 판이 생겼다 (자가 점검)")

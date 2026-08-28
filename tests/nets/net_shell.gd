@@ -266,32 +266,19 @@ func run(t) -> void:
 	# ⚠⚠ 「`run == null` 일 때 `_unhandled_input` 이 시작하기 클릭을 받는다」 — **THE mutation this net
 	# exists for**: put `if run == null: return` back at the top of `_unhandled_input` and 시작하기
 	# becomes unpressable, because with no run there is no way to make one.
-	# ⚠⚠ 「시작하기는 지도가 아니라 카드 세 장을 연다」 (티켓 15) — floor: `state() == PICK`; ceiling:
-	# `battle == null`. ⚠ **It was the BEAST round until 2026-08-27** and it is an equipment round now:
-	# the beast card is deleted whole and `CardKind` has exactly one member left.
+	# ⚠⚠ 「시작하기는 곧장 섬을 연다」 (티켓 12, 2026-08-27, the user: ***"Starting means the game starts,
+	# right then."***) — floor: `state() == BATTLE`; ceiling: `battle != null`. **It opened the three
+	# cards until this ticket and the map before that**, and the cards themselves are untouched: the
+	# ticket took the round off the START PATH, not out of the game.
 	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
 	t.ok(game.run != null, "시작하기를 누르면 런이 생긴다")
-	t.eq(game.run.state(), Run.State.PICK, "그리고 카드 세 장이 열린다")
-	t.ok(game.battle == null, "섬은 아직 없다")
-	# ⚠⚠ **The SCREEN, not only the state.** The title used to come down on the map screen alone, so a
-	# run opening on a pick left it drawn ON TOP of the three cards — a state check would have been
-	# green with nothing readable on the glass.
-	t.ok(not game.title_view.visible, "그리고 타이틀이 카드 위에 안 남는다")
-	t.ok(game.reward_view.run == game.run, "카드 화면이 그 런을 물었다")
-	# ⚠⚠ **THIS ROW COUNTED `Rules.CardKind.SPECIES` AND THAT MEMBER IS DELETED** (2026-08-27). What it
-	# measured was 「the opening round is beasts only」 — and that claim had already stopped being
-	# measurable on 2026-08-26, when the sides swapped and `SPECIES_CARDS` went to `[]`: with an empty
-	# pool `_draw_cards` could not write the kind at all, so the row was counting its own emptiness.
-	# ⚠ **Rewritten rather than deleted, because the kind COLUMN is still real.** `card_kind` still
-	# carries one value per drawn card, and that `_draw_cards` fills it for every one of the three is
-	# the floor under every `card_kind` read further down this file.
-	var opening_items := 0
-	for k in Rules.CARDS_PER_WIN:
-		if int(game.run.card_kind[k]) == Rules.CardKind.ITEM:
-			opening_items += 1
-	t.eq(opening_items, Rules.CARDS_PER_WIN, "세 장이 전부 장비 카드다 — 카드 종류는 이제 하나뿐이다")
-	_take_opening_card(game)
-	t.eq(game.run.state(), Run.State.BATTLE, "한 장을 집으면 그때 섬이 열린다 — 지도는 없다")
+	t.eq(game.run.state(), Run.State.BATTLE, "그리고 곧장 섬이 열린다 — 사이에 카드도 정비도 없다")
+	t.ok(game.battle != null, "섬이 실제로 서 있다")
+	t.eq(game.run.cards.size(), 0, "카드는 한 장도 안 깔렸다")
+	# ⚠⚠ **The SCREEN, not only the state.** The title used to come down inside `_enter_pick_screen`,
+	# a screen the start path no longer walks through — left there, the island would open UNDER a drawn
+	# title and a state check alone would have been green with nothing readable on the glass.
+	t.ok(not game.title_view.visible, "그리고 타이틀이 섬 위에 안 남는다")
 	# ⚠⚠ **THE 「REGISTER EVERY REMAINING SPECIES」 FIXTURE IS DELETED** (2026-08-27). It filled every
 	# summon slot up front so that no LATER card in this whole walk could be a beast, because a beast
 	# pick would both skip the refit screen the walks below assert and add `SPECIES_CARD_BODIES` bodies
@@ -937,7 +924,7 @@ func run(t) -> void:
 	game.queue_free()
 
 	_panel_active_answers_all_five_screens(t)
-	await _two_presses_reach_the_first_island(t)
+	await _one_press_reaches_the_first_island(t)
 	_the_plan_constants_have_both_ends(t)
 	_the_readers_themselves(t)
 	_the_speed_ladder_is_gone(t)
@@ -1053,10 +1040,15 @@ func _panel_active_answers_all_five_screens(t) -> void:
 
 
 ## **The acceptance row 「타이틀은 마찰이 아니다」, as a count.** From launch to the island the design
-## says two presses — 시작하기, then the opening card — and **more than three is a failure.** Counted by
-## driving a fresh shell and incrementing on every event actually handed to `_unhandled_input`, so a
-## screen that grew a confirmation step reddens here rather than in somebody's memory of it.
-func _two_presses_reach_the_first_island(t) -> void:
+## says **one press — 시작하기 — and more than one is a failure** (티켓 12). Counted by driving a fresh
+## shell and incrementing on every event actually handed to `_unhandled_input`, so a screen that grows
+## a confirmation step reddens here rather than in somebody's memory of it.
+##
+## ⚠⚠ **THE COUNT HAS FALLEN THREE TIMES AND THE CEILING FELL WITH IT.** Three presses while the map
+## node was the last step (deleted 2026-08-26), two while the opening card round was (taken off the
+## start path 2026-08-27), one now. ⚠ **The ceiling is the whole point of the row**: leaving it at
+## three would let both deleted screens be put back with this fixture still green.
+func _one_press_reaches_the_first_island(t) -> void:
 	var game := QuitGame.new()
 	t.root.add_child(game)
 	await t.pump_frames(2)
@@ -1067,17 +1059,10 @@ func _two_presses_reach_the_first_island(t) -> void:
 	var presses := 0
 	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
 	presses += 1
-	# ⚠⚠ **TWO AGAIN** (2026-08-26): the map node was the third press and the map is deleted, so the
-	# opening card is now the last thing between the title and the island.
-	# ⚠ **It was 「the opening BEAST card」 until 2026-08-27** — the beast card is deleted and the opening
-	# three are equipment. **The press count is untouched by that**: one card is one press either way.
-	_take_opening_card(game)
-	presses += 1
 
 	t.ok(game.battle != null, "누름 %d번 만에 첫 섬이 열렸다" % presses)
-	t.eq(presses, 2, "그 수가 정확히 둘이다 — 시작하기, 그리고 여는 카드 한 장")
-	t.ok(presses <= 3, "셋을 넘으면 타이틀이 마찰이다")
-	t.ok(presses >= 1, "그리고 0이면 켜자마자 섬이 나온다는 뜻이다 — 이 라운드가 없앤 바로 그것이다")
+	t.eq(presses, 1, "그 수가 정확히 하나다 — 시작하기, 그것뿐이다")
+	t.ok(presses >= 1, "그리고 0이면 켜자마자 섬이 나온다는 뜻이다 — 타이틀 자체가 없어진 것이다")
 
 	t.root.remove_child(game)
 	game.queue_free()

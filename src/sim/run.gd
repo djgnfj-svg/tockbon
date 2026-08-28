@@ -85,21 +85,24 @@ func _reset() -> void:
 	card_kind = PackedInt32Array()
 	cards_taken = PackedByteArray()
 	_rng.randomize()
-	# ⚠⚠ **A RUN OPENS ON A CARD SCREEN** (2026-08-25, the user: 「시작하자마자 세 개 중에 하나 고르는
-	# 거 그거 하고 가자」). Three cards.
-	# ⚠ **They were 「beasts only」 until 2026-08-27** — equipment here would have made the one species a
-	# run holds stronger instead of splitting the horde. That argument died with the beast card itself:
-	# the player is one swordsman and there is no horde to split, so the opening round is equipment
-	# like every round after it.
-	_draw_cards()
-	_state = State.PICK
+	# ⚠⚠ **A RUN OPENS ON THE ISLAND, AND IT USED TO OPEN ON A CARD SCREEN** (티켓 12,
+	# 2026-08-27, the user: ***"Starting means the game starts, right then."*** · ***"There is not
+	# much to decide yet."***). The opening three were dealt here on 2026-08-25 and are gone; `_state`
+	# stays `BATTLE`, which the line above already set.
+	# ⚠ **THE CARDS ARE NOT DELETED AND MUST NOT BE.** `finish_island` still deals them on a win,
+	# and the eighteen items, the rarity draw and the refit board all still run — the ticket took the
+	# card round off the START PATH only, because deleting the growth axis is starting over.
+	# ⚠ **Nothing is stranded by leaving them undealt.** `cards` stays empty, and `_advance`'s first
+	# arm reads `cards.size() > 0`, so an empty round falls through to the island rather than into a
+	# `PICK` nobody can leave.
 
 
 ## For nets and the probe: makes `_draw_cards()` reproducible.
 ##
-## ⚠⚠ **AND IT RE-DEALS AN UNTOUCHED ROUND.** The opening three are drawn inside `_reset`, which runs
-## before any caller can hand a seed in — so without this the first screen of the whole game is the
-## one screen nothing can ever pin, and 「무작위라 못 잰다」 would be true of it forever.
+## ⚠⚠ **IT ALSO RE-DEALS AN UNTOUCHED ROUND, AND SINCE 티켓 12 THERE IS NO ROUND TO
+## RE-DEAL AT THE OPENING.** A run now opens on the island, so the first `_draw_cards` of a run happens
+## inside `finish_island` — after any caller has had every chance to hand a seed in. **The re-deal is
+## kept because it still guards the other order**: a seed handed in while a won island's round is up.
 ##
 ## ⚠ **Only while nothing has been taken from that round.** A seed handed in mid-pick must never
 ## replace cards somebody is looking at.

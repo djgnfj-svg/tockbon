@@ -401,12 +401,12 @@ func _reach_refit(t, seed: int) -> Game:
 	# ⚠⚠ **THE FIX DRIVES THE SHELL AND POKES NOTHING.** Assigning `game.run` from a net (or calling
 	# `_open_island()` behind the input door) would leave every check below measuring the poke instead
 	# of the wiring — and the wiring is the whole reason `Game` builds its six children inside `_ready()`
-	# rather than parking them in `game.tscn`. The walk is: 시작하기 · the opening card · 완료.
+	# rather than parking them in `game.tscn`. **The walk is one press: 시작하기** (티켓 12; it was
+	# 시작하기 · the opening card · 완료 until 2026-08-27).
 	t.ok(game.run == null and game.battle == null,
 		"켜자마자는 타이틀이다 — 판도 전투도 아직 없다 (자가 점검)")
 	game._unhandled_input(_click(Look.title_slot_hit_rect_px(TitleView.SLOT_START).get_center()))
 	t.ok(game.run != null, "시작하기를 누르자 판이 생겼다 (자가 점검)")
-	t.eq(game.run.state(), Run.State.PICK, "그리고 여는 카드 판이 떴다 (자가 점검)")
 
 	# ⚠⚠ **`seed` IS ACTUALLY SPENT HERE, AND UNTIL THIS ROUND IT NEVER WAS.** Every call site named
 	# one and nothing read it: `Run._reset`'s own `_rng.randomize()` drove every draw, so which held
@@ -415,13 +415,13 @@ func _reach_refit(t, seed: int) -> Game:
 	# every round. A parameter that documents a determinism the file does not have is the shape
 	# 「Nothing pretends to work」 names, and it could not be spent before this round because there was
 	# no `Run` to hand it to until the title was pressed.
-	# ⚠ **It lands BEFORE the opening card is taken**, because `Run.seed_cards` refuses to re-deal a
-	# round somebody has already picked from. One seed fixes BOTH card rounds — the win's own
-	# `_draw_cards` comes off the same stream.
+	# ⚠ **Since 티켓 12 there is no opening round for it to land before**, and the seed is spent all the
+	# same: it is the stream the win's own `_draw_cards` comes off, which is the round every fixture
+	# below actually picks from.
 	game.run.seed_cards(seed)
 
 	_open_through_the_shell(t, game)
-	t.ok(game.battle != null, "여는 카드와 완료를 지나 첫 섬이 열렸다 (자가 점검)")
+	t.ok(game.battle != null, "시작하기 한 번에 첫 섬이 열렸다 (자가 점검)")
 
 	# ⚠⚠ **RE-AIMED FROM `send` ONTO `summon` (2026-08-27).** This scan read `home_harbour_for` over
 	# `grid.passable` to find a BEACH a drag could unload onto, then called `Battle.send`. **The drag,
@@ -1087,18 +1087,18 @@ func _press(at: Vector2) -> InputEventMouseButton:
 	return ev
 
 
-## Walks past the OPENING CARD ROUND and leaves the run standing on its island. ⚠ **A run opens on a
-## card screen** (「시작하자마자 세 개 중에 하나 고르는 거」), so every fixture below that wants a fight,
-## a win, or a SECOND card round has to pass through it first. Card 0, always, so the fixture is the
-## same run every time.
+## Leaves the run standing on its island, whatever screen it is on. **Since 티켓 12 a run already
+## opens there and both arms below are no-ops on a fresh `Run`** — they are kept because every caller
+## that wins an island comes back through here into a SECOND card round, and that round is real.
+## Card 0, always, so the fixture is the same run every time.
 ##
-## ⚠⚠ **IT TAKES TWO STEPS NOW, AND THE SECOND STEP IS THE BEAST CARD'S ESTATE (2026-08-27).** This was
-## one `take_card(0)` and nothing else, because the opening round was a BEAST round: a beast paid a
-## summon slot and bodies rather than the held pile, an empty pile is what `take_card` forks on, and the
-## run went straight on to the island. **The beast arm of the card table is deleted**, so card 0 is
-## equipment, the pile is no longer empty, and the run now stops on the refit screen — `close_refit()`
-## is what carries it the last step. ⚠ Without it every caller is handed a run already sitting in
-## `REFIT`, and 「REFIT 상태가 아니면 슬롯 띠조차 안 그려진다」 measures the opposite of what it says.
+## ⚠⚠ **THE SECOND STEP IS THE BEAST CARD'S ESTATE (2026-08-27).** This was one `take_card(0)` and
+## nothing else, because a card round used to be a BEAST round: a beast paid a summon slot and bodies
+## rather than the held pile, an empty pile is what `take_card` forks on, and the run went straight on
+## to the island. **The beast arm of the card table is deleted**, so card 0 is equipment, the pile is
+## no longer empty, and the run stops on the refit screen — `close_refit()` carries it the last step.
+## ⚠ Without it a caller is handed a run sitting in `REFIT`, and 「REFIT 상태가 아니면 슬롯 띠조차 안
+## 그려진다」 measures the opposite of what it says.
 func _opened(r: Run) -> Run:
 	if r.state() == Run.State.PICK:
 		r.take_card(0)
@@ -1107,27 +1107,18 @@ func _opened(r: Run) -> Run:
 	return r
 
 
-## Walks a `Game` past the OPENING CARD ROUND through the real input door and leaves it standing on its
-## first island — the `Game`-side twin of `_opened`, taking the **same two steps**: press card 0, then
-## press 완료. Card 0 always, so the fixture is the same run every time.
+## Confirms a `Game` is standing on its first island straight off the title press, and takes no press
+## of its own.
 ##
-## ⚠⚠ **`_take_opening_card(game)` STOOD HERE, WAS DELETED 2026-08-27, AND THIS IS IT BACK IN ITS
-## TWO-STEP FORM.** The version that was deleted pressed the card and stopped, which was correct while
-## the opening round was a BEAST round: a beast paid a summon slot and bodies rather than the held pile,
-## an empty pile is what `Run.take_card` forks on, and the run walked straight on to the island.
-## **The beast arm of the card table is deleted**, so card 0 is equipment, the pile is not empty, and
-## the press lands the shell on the REFIT screen — a one-press helper strands its caller there. That is
-## exactly what its own deletion note predicted: 「if a fixture ever needs the shell-side walk, it has to
-## press the card AND 완료」. The other reason it was deleted — **no fixture called it** — ended the same
-## week: `_reach_refit` starts at the title now, because the shell stopped opening an island for itself.
+## ⚠⚠ **IT PRESSED THE OPENING CARD AND 완료 UNTIL 티켓 12, AND BOTH PRESSES ARE GONE** (2026-08-27,
+## the user: ***"Starting means the game starts, right then."***). A run opens on the island, so there
+## is no `PICK` and no `REFIT` between 시작하기 and the board. **The helper is kept rather than inlined
+## as one `t.ok`** because it is the one place that says out loud what the start path costs — the day
+## a screen is put back in front of the island, this is the function that grows the presses again.
 ##
-## ⚠ **완료 is asked of the VIEW for its own rect** (`done_hit_rect()`) rather than read out of
-## `Look.refit_done_rect_px(open)` with a hand-written `open` flag. **The button moves when a board is
-## open**, `RefitView.bind` has just reset `_open_slot` to -1, and a fixture that guessed the flag would
-## aim at the position the button is not in the moment somebody opens a board before calling this.
+## ⚠ **The title's visibility is asserted here.** It came down inside `_enter_pick_screen`, a screen
+## the start path no longer walks through; left there, the island would open under a drawn title and
+## every row downstream would still be green.
 func _open_through_the_shell(t, game: Game) -> void:
-	t.eq(game.run.state(), Run.State.PICK, "여는 카드 판에 서 있다 (자가 점검)")
-	game._unhandled_input(_click(Look.card_rect_px(0).get_center()))
-	t.eq(game.run.state(), Run.State.REFIT, "여는 카드를 고르자 정비 화면이 열렸다 (자가 점검)")
-	game._unhandled_input(_click(game.refit_view.done_hit_rect().get_center()))
-	t.eq(game.run.state(), Run.State.BATTLE, "완료를 누르자 첫 섬으로 내려갔다 (자가 점검)")
+	t.eq(game.run.state(), Run.State.BATTLE, "시작하기 한 번으로 섬에 서 있다 — 사이에 아무 화면도 없다")
+	t.ok(not game.title_view.visible, "그리고 타이틀이 내려갔다 — 섬 위에 안 덮여 있다")

@@ -500,7 +500,14 @@ func _refit_input(event: InputEvent) -> void:
 ## path and not the other.
 func _start_run() -> void:
 	run = Run.new()
-	# ⚠ **`_show_state()` and not a hard-wired screen** — a run opens on its card round.
+	# ⚠⚠ **THE TITLE GOES DOWN HERE, AND UNTIL 티켓 12 IT WENT DOWN INSIDE `_enter_pick_screen`.**
+	# That was safe only while every run opened on the card round. A run opens on the ISLAND now, and
+	# `_open_island` never touched this flag — so left where it was, **the title sat drawn on top of
+	# the one screen this week is about.** The press is what ends the title, not whichever screen the
+	# press happens to lead to, and this is the line the press owns.
+	title_view.visible = false
+	# ⚠ **`_show_state()` and not a hard-wired screen** — the run decides, and the run opens on the
+	# island (티켓 12). Hard-wiring `_open_island()` here would put the screen choice in two places.
 	_show_state()
 
 
@@ -516,10 +523,9 @@ func _enter_pick_screen() -> void:
 	hud_view.bind(null)
 	panel_view.bind(run, null)
 	reward_view.bind(run)
-	# ⚠⚠ **AND THE TITLE GOES DOWN HERE TOO** (티켓 15). It used to be enough for `_enter_map_screen`
-	# to do it, because the map was always the first screen a run opened on; a run opens on its beast
-	# card round now, and without this line the title sits ON TOP of the three cards.
-	title_view.visible = false
+	# ⚠ **The title is NOT taken down here any more** (티켓 12). It moved to `_start_run`, which is the
+	# only way onto any of these screens — and this screen stopped being the first one a run opens on,
+	# so a line here would have covered the card round and left the island uncovered.
 
 
 ## The two taken cards are ready to be laid into a board.

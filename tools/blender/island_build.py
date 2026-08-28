@@ -16,6 +16,7 @@
 # WARNING **or through `bake_island.ps1`, which is the only way that makes the GAME see the result.**
 # Godot serves its own converted copy and a `--script` run does not re-convert a changed source.
 import bmesh
+from mathutils import Vector
 import bpy
 import json
 import math
@@ -24,7 +25,17 @@ import os
 OUT_DIR = r"C:/Users/djgnf/Desktop/godot_games/tockbon/assets/terrain"
 
 S = 2.0             # a piece is 2x2 tiles, and one tile is one metre
-TOP_H = 0.26        # the walking surface. The game reads this out of `island.json` as `base_h`
+# WARNING **LOWERED 0.26 -> 0.15 -> 0.08 ON 2026-08-28** (the user, on the Blender window: 「일 층이 높이가
+# 너무 높아. 일 층 높이 낮춰줘」). **This number IS the ground floor's height** — the game's water plane
+# sits at 0 and the grass sits here, so the band of rock on show all the way round the island is
+# exactly `TOP_H`. At 0.26 it was half a notch of bare wall under every blade of grass; 0.15 was
+# still a step, and the user asked for the block itself to come down again: 「그 칸 자체를 좀 내려줘」.
+# WARNING **`SEA_Z` is NOT this number and moving it does nothing here** — it was tried first and it is
+# only how far the skirt reaches DOWN, all of it under the water plane and invisible. Blender draws no
+# water at all, so this is one of the numbers that can only be judged in the game.
+# WARNING **A storey is still two notches and a notch is still half a tile.** `LEVEL_H` did not move;
+# 「too high」was about the ground's own lip, not about the storey rule.
+TOP_H = 0.20        # the walking surface. The game reads this out of `island.json` as `base_h`
 LEVEL_H = 0.5       # WARNING **one notch is HALF A TILE, and this is the definition.** A storey is two
                     # notches, a stair is one, and a body may cross one notch -- which is what makes the
                     # stair the only way up. Ground is level 0, the stair 1, the second storey 2.
@@ -53,16 +64,27 @@ INSET = 0.42        # how far in the flat interior starts
 # skirt's outer point out from the SAME world corner and the SAME land/water pattern, so it is one point
 # and nothing can crack.
 SKIRT = 0.46
-SKIRT_ROLL = 0.40   # where the roll's knee sits along that reach
+SKIRT_ROLL = 0.55   # where the roll's knee sits along that reach. WARNING **0.40 -> 0.55 on
+                    # 2026-08-28**: the knee sat close in and the land turned into the sea with a
+                    # visible crease — 「바다랑 닿는 부분이 꺾이잖아」. Further out, the shoulder carries
+                    # longer and the fall reads as a roll rather than a bend.
 
 # WARNING **EVERY PIECE IS DIFFERENT AND THE SEAMS STILL HOLD** (2026-08-27, the user: 「모두가 동일하면
 # 어색함」). The seed is not per PIECE but per WORLD POSITION: a corner shared by four pieces hashes to
 # the same number in all four, so it moves as one point. **A per-piece seed tears every seam** -- it was
 # tried, and the count of welded vertices fell from 3200 to 2004 until the seed was moved to the corner.
-CORNER_WOB = 0.13
-SEAM_WOB = 0.10
-COAST_WOB = 0.26    # bigger, because a coastal edge is owned by ONE piece and nothing must agree with it
-CHAM_MIN, CHAM_SPAN = 0.20, 0.20   # a corner cut is never the same twice, and never 45 degrees
+# WARNING **HALVED, THEN HALVED AGAIN, ON 2026-08-28** (the user, on the island in the Blender window: 「윤곽이 굳이 이렇게
+# 꼬불꼬불할 필요는 없을 거 같아」 and then 「바다랑 닿는 부분이 꺾이잖아. 그 부분을 조금 더 완화
+# 해줄래? 굴곡도 완화해줘」). The wobble exists so no two
+# corners of the coast are alike; at the old values it read as a crinkle rather than a coastline.
+# WARNING **`COAST_WOB` is cited elsewhere as the floor under how far things sit inside the shore.**
+# Anything measured against it moves when this moves.
+CORNER_WOB = 0.035
+SEAM_WOB = 0.03
+COAST_WOB = 0.07    # bigger, because a coastal edge is owned by ONE piece and nothing must agree with it
+CHAM_MIN, CHAM_SPAN = 0.34, 0.06   # a corner cut is never the same twice, and never 45 degrees
+                                   # WARNING **The SPAN narrowed 2026-08-28 with the wobble** — the
+                                   # variation is what read as crinkle, and the cut itself is not.
 
 GRASS = (0.760, 0.735, 0.520)
 GRASS_HIGH = (0.655, 0.710, 0.450)
@@ -185,6 +207,18 @@ def tone_noise(x, y):
             + math.sin(x * 0.11 - y * 0.16 + 2.1) * 0.4)
 
 
+# WARNING **TURNED OFF ON 2026-08-28, AND IT IS WHAT 「칸 색이 좀 이상하네」 WAS LOOKING AT.** It
+# swung every vertex's tone by +-5.5%, sampled per vertex -- and a 칸's top is ONE flat fan, so the
+# swing interpolated across a two-metre face and landed its edges on the 칸 boundaries. On a ground
+# that had just lost its outline and most of its relief, that read as blotchy rectangles, one per 칸.
+# **Measured: zeroed here, the blotches went and nothing else changed.**
+# WARNING **What it was FOR is now done by the 판.** It existed so the island did not read as one flat
+# slab; the mats break the surface up instead, and they do it in a shape somebody chose.
+# WARNING **Not deleted.** Put a number back here and the variation returns — but anything over about
+# 0.02 brings the blotches with it on this size of island.
+TONE_NOISE = 0.0
+
+
 def ground_tone(z, mix=0.0, nz=0.0):
     """WARNING **The tone comes from a vertex's own HEIGHT, never from a face or a tile.** Colouring per
     face put every material boundary exactly on a tile edge and the island came out as a chequerboard --
@@ -198,8 +232,8 @@ def ground_tone(z, mix=0.0, nz=0.0):
         c = [GRASS[i] + (GRASS_HIGH[i] - GRASS[i]) * t for i in range(3)]
     if mix:
         c = [c[i] + (ROCK[i] - c[i]) * mix for i in range(3)]
-    k = 1.0 + nz * 0.055
-    return (c[0] * (k - nz * 0.030), c[1] * k, c[2] * (k - nz * 0.045))
+    k = 1.0 + nz * TONE_NOISE
+    return (c[0] * k, c[1] * k, c[2] * k)
 
 
 def wall_tone(z, nz=0.0):
@@ -307,7 +341,10 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
             z0 = z_top
         else:
             ox, oy = sk[k]
-            reach = SKIRT * (1.0 + h2(wx + x, wy + y, 8.0) * 0.22)
+            # WARNING **The reach's own wobble came down with everything else** (0.22 ->
+            # 0.10, 2026-08-28): a skirt that varied a fifth of its length per corner is a
+            # crinkled hem, and 「굴곡도 완화해줘」 is that hem.
+            reach = SKIRT * (1.0 + h2(wx + x, wy + y, 8.0) * 0.10)
             zr = RIM_Z + h2(wx + x, wy + y, 7.0) * 0.05
             # the shoulder stays high and the fall steepens near the water: a roll, not a ramp
             knee.append(bm.verts.new((x + ox * reach * SKIRT_ROLL, y + oy * reach * SKIRT_ROLL,
@@ -358,8 +395,15 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy):
         if sk[k] is not None:
             shoremix[hem[k]] = 1.0
             shoremix[knee[k]] = 0.90
-            shoremix[tops[k]] = 0.55
-            shoremix[inner[k]] = 0.25
+            # WARNING **THE SHORE TONE STOPS AT THE BLOCK'S OUTER LIP SINCE 2026-08-28.** It used to
+            # carry 0.55 onto that lip and 0.25 all the way to the inner ring, so a 칸 with sea on one
+            # side came out a different colour ACROSS ITS WHOLE TOP from a 칸 with none. The user saw
+            # exactly that: 「바다랑 만나지 않는 칸이 이상하다」 — the inland 칸 read as pale rectangles
+            # against the gold of the coastal ones.
+            # WARNING **`inner` is dropped entirely, not just reduced.** It is a vertex of the flat top
+            # a body stands on; any shore tone there is a tone on the walking surface, and the walking
+            # surface has to be one colour or the 칸 grid draws itself back in paint.
+            shoremix[tops[k]] = 0.22
     lay = bm.loops.layers.color.new("Col")
     for f in bm.faces:
         # WARNING **The shore is GROUND however steep it gets.** With a narrow skirt it tips past the
@@ -503,6 +547,94 @@ def starting_builds():
     return [{"kind": "keep", "x": at[0], "y": at[1]}]
 
 
+# --- the 판, and it is a SHAPE that gets stamped, not a shape cut out of the block ---------------------
+# WARNING **THE 판 STOPPED FOLLOWING THE 칸's OUTLINE ON 2026-08-28** (the user, on the game screen:
+# 「모양이 저렇게 막 스펙타클할 필요 없이... 외곽 라인에 맞춰줄 필요도 없다. 판도 몇 개 정해 가지고
+# 붙이면 될 듯. 레퍼런스 사진처럼 살짝 네모 동그란 느낌으로」). It was an inward offset of the 칸's own
+# wobbled edge, so every 판 was a different jagged polygon and the island read as cracked.
+# **A handful of rounded squares, stamped**, is what the reference actually shows.
+PAD_SIDE = 1.30     # one side of a 판, in metres. A 칸 is 2.0, so this leaves a clear gutter all round
+PAD_ROUND = 0.34    # corner radius. WARNING **0 is a square and half the side is a circle** — 「살짝
+                    # 네모 동그란」 is neither, and this is the number that says how far along
+PAD_ARC = 4         # segments per corner. Four is round enough at play distance and cheap
+PAD_H = 0.02        # how proud the 판 stands. **A lip, not a slab** — 「더 얇게 붙어있어도 될 듯」
+PAD_VARIANTS = 3    # WARNING **Three, and which one a 칸 gets comes from the 칸's own position hash.**
+                    # One shape repeated reads as a printed grid; a shape per 칸 is what was just
+                    # thrown out. Three is enough to break the repeat and few enough to stay a set
+
+
+def pad_outline(cx, cy, k):
+    """**One 판's outline** — a rounded square, centred on `(cx, cy)`, variant `k`.
+
+    WARNING **The variants differ in SIZE and CORNER, never in silhouette.** A variant that changed the
+    shape would be back to 「every 판 is its own polygon」, which is the thing this replaced.
+    """
+    side = PAD_SIDE * (1.0 + (k - 1) * 0.06)
+    r = PAD_ROUND * (1.0 + (k - 1) * 0.18)
+    h = side * 0.5 - r
+    out = []
+    for i, (sx, sy) in enumerate(((1, 1), (-1, 1), (-1, -1), (1, -1))):
+        ax, ay = cx + sx * h, cy + sy * h
+        a0 = math.atan2(sy, 0.0) if sx * sy else 0.0
+        base = {0: 0.0, 1: math.pi * 0.5, 2: math.pi, 3: math.pi * 1.5}[i]
+        for t in range(PAD_ARC + 1):
+            a = base + math.pi * 0.5 * t / PAD_ARC
+            out.append((ax + math.cos(a) * r, ay + math.sin(a) * r))
+    return out
+
+
+def stamp_the_mats(isl):
+    """**Puts one 판 on every 칸 that carries one**, as a rounded-square lip standing `PAD_H` proud.
+
+    WARNING **A stair carries no 판** — it is passed through, not stood on. Odd notches are stairs, and
+    that is the same fact that makes a stair the only way up.
+    WARNING **The 판 is added to the island's own mesh, not left as its own object.** The game reads one
+    terrain file and the 판 is part of the ground, not something laid on it.
+    WARNING **Coloured off the height it sits at**, exactly like every other vertex — so the 판 is the
+    ground's own tone and only the light on its lip separates it.
+    """
+    me = isl.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    lay = bm.loops.layers.color.verify()
+    # WARNING **THE JOIN LEAVES THE ISLAND CARRYING THE FIRST BLOCK'S TRANSFORM**, so a vertex added at
+    # a world coordinate lands wherever that offset puts it. Measured 2026-08-28: the 판 came out in the
+    # open sea, a whole block-width off the island, and it looked exactly like a row-order mistake.
+    # ⇒ Every point below is put through the inverse before it is added.
+    to_local = isl.matrix_world.inverted()
+    made = 0
+    for py in range(PH):
+        for px in range(PW):
+            L = level_of(px, py)
+            if L < 0 or L == 1:
+                continue
+            z = TOP_H + L * LEVEL_H
+            wy = (PH - 1 - py) * S
+            cx, cy = px * S + S * 0.5, wy + S * 0.5
+            k = int((h2(cx, cy, 11.0) * 0.5 + 0.5) * PAD_VARIANTS) % PAD_VARIANTS
+            ring = pad_outline(cx, cy, k)
+            top = [bm.verts.new(to_local @ Vector((x, y, z + PAD_H))) for (x, y) in ring]
+            bot = [bm.verts.new(to_local @ Vector((x, y, z))) for (x, y) in ring]
+            ctr = bm.verts.new(to_local @ Vector((cx, cy, z + PAD_H)))
+            n = len(ring)
+            faces = []
+            for a in range(n):
+                b = (a + 1) % n
+                faces.append(bm.faces.new((ctr, top[a], top[b])))
+                faces.append(bm.faces.new((top[a], bot[a], bot[b], top[b])))
+            bmesh.ops.recalc_face_normals(bm, faces=faces)
+            for f in faces:
+                for lp in f.loops:
+                    w = isl.matrix_world @ lp.vert.co
+                    lp[lay] = (*ground_tone(z, 0.0, tone_noise(w.x, w.y)), 1.0)
+            made += 1
+    bm.to_mesh(me)
+    bm.free()
+    me.update()
+    print("판 %d 개를 칸 위에 얹었다 (한 변 %.2f · 모서리 %.2f · 두께 %.2f · 종류 %d)"
+          % (made, PAD_SIDE, PAD_ROUND, PAD_H, PAD_VARIANTS))
+
+
 def build():
     for o in list(bpy.data.objects):
         if o.name == "island" or o.name.startswith("P_"):
@@ -579,6 +711,8 @@ def build():
     b.width, b.segments = 0.05, 2
     b.limit_method, b.angle_limit = "ANGLE", math.radians(24.0)
     isl.hide_set(False)
+
+    stamp_the_mats(isl)
 
     os.makedirs(OUT_DIR, exist_ok=True)
     for o in bpy.data.objects:

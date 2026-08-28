@@ -293,6 +293,14 @@ const SEA_SPAN_TILES := 400.0
 ## hatched stripe — seen in the capture that added it. Low enough that the step where the two meet is
 ## under a pixel at `ZOOM_MAX`, high enough that no card gets the comparison wrong.
 const SEA_DROP_TILES := 0.03
+## **How high the open sea sits, in tiles.** ⚠⚠ **It was 0 — the plane was left where it was built**
+## (2026-08-28, the user: 「물 높이를 좀 더 올려줄래?」). Raising it swallows more of the shore's roll, so
+## less bare rock stands between the water and the grass, and the island reads as sitting IN the sea
+## rather than on it.
+## ⚠ **The ceiling is the walking surface**, which is `base_h` out of the island file — go past it and
+## the sea closes over the ground bodies stand on. At 0.20 base that leaves real room; on a lower
+## island this is the number that has to come down with it.
+const SEA_Y_TILES := 0.075
 
 ## How far one key press turns the board. **The board turning is the hand moving during a fight**, and
 ## that is 티켓 07's whole question — this is the knob that lets it be answered by trying it.
@@ -569,63 +577,21 @@ const COL_ROUTE := Color(0.851, 0.780, 0.600, 0.55)
 ## `COL_WATER` at `ZOOM_MIN` and against nothing else, because it never crosses land.
 const COL_SUMMON_RING := Color(0.706, 0.902, 1.0, 0.85)
 
-## **The plate that sits on the tile under the cursor.**
-##
-## ⚠⚠ **Bad North draws ONE thing when you command a squad and this is it** (정찰 2026-08-27): the tile
-## under the cursor is covered by a near-white plate with a dark line under its lower edge, so it reads
-## as lifted a little off the ground. **No route, no arrow, no facing, no formation** — the whole of the
-## command picture is one tile, raised and brightened. The user asked for exactly that and nothing else:
-## 「호버만 돼도 돼... 그것만 있기만 하면 돼」.
-##
-## ⚠ **Near-white and not a hue.** A coloured wash is the summon band this repo already deleted once for
-## painting meaning onto ground; white reads as *the cursor is here* rather than as *this ground is
-## special*, and it works over sand, turf and stone alike.
-## **The hover mark's fill.** ⚠⚠ **THE MARK IS ONE MAT, NOT ONE TILE** (2026-08-27, the user:
-## 「이렇게 칸이 많아? 이번에 긐 4칸짜리를 기준으로 마우스 올리면 동작하게 해줘」). It is drawn from the
-## mat's own mask, so it is exactly the shape of what it lights up — a square of its own would hang
-## over the shore on every coastal piece, which is the failure the mat's mask exists to avoid.
-## ⚠ Brighter than `COL_WASH`, or the mark cannot be told from the ground it sits on.
-const COL_HOVER_PLATE := Color(1.0, 1.0, 1.0, 0.62)
-## How far the plate floats above the ground it covers, in tiles. ⚠ **Small enough to read as ON the
-## tile, big enough to beat z-fighting** — at 0 the plate and the ground fight and the tile flickers as
-## the camera turns. `BODY_LIFT_PX / TILE_PX` is the same trick the bodies use.
-const HOVER_PLATE_LIFT_TILES := 0.035
+## ⚠⚠ **THE HOVER MARK'S CONSTANTS ARE DELETED WITH THE MARK (2026-08-28) AND 티켓 14 HOLDS THEM.**
+## `HOVER_PLATE_LIFT_TILES`, `COL_HOVER_PAD_LIT`, `HOVER_RIM_TILES`, `COL_HOVER_PLATE`, `COL_HOVER_RIM`
+## and `COL_HOVER_DROP` all tuned a mark that no longer exists — the mats became terrain and there is
+## no per-mat node to raise. **A constant nothing reads is a value that rots**; the numbers that were
+## on screen and worked are written into the ticket instead.
 
-## **The hover mark's rim.** ⚠ It is the SAME shape as the mat under it, only brighter — see
-## `COL_HOVER_PLATE`.
-const COL_HOVER_RIM := Color(1.0, 1.0, 1.0, 1.0)
 
-## **The mat that lies on the ground, all the time.** ⚠⚠ **It is not a hover** — the hover mark is one
-## tile, brighter, and on top of this. The user asked for it against Bad North (2026-08-27): there the
-## ground you may stand on is lit as one soft shape, so the board is readable before anything is
-## commanded.
-const COL_WASH := Color(1.0, 1.0, 1.0, 0.30)
-## The mat's brighter edge. Same job as `COL_HOVER_RIM` — it stops the mat dissolving into pale sand.
-const COL_WASH_RIM := Color(1.0, 1.0, 1.0, 0.55)
-## How many mask pixels one tile gets. ⚠⚠ **IT WAS 16 AND THAT MADE THE ISLAND SLOW TO OPEN**
-## (2026-08-27, the user: 「게임 뭐 켜지는데 오래걸리네」). The mask is `w * h` tiles at this
-## resolution and is walked five times, so the cost is this number SQUARED. Only the smoothness of a
-## rounded corner is bought with it.
-const WASH_TEX_PER_TILE_PX := 10
-## How far the mat stops short of the ground's edge and of every cliff, in tiles.
-## ⚠⚠ **`COAST_WOB` in `tools/blender/island_build.py` is 0.26** — the bake moves every coastal corner
-## in or out by that much, per corner, and a `BEVEL` modifier rounds the top on top of it. Anything at
-## or under that number puts the mat over the water at some corners and not others, which is what the
-## user saw twice (「태두리를 넘어가는데?」). **If `COAST_WOB` moves, this moves with it.**
-const WASH_INSET_TILES := 0.45
-## How far the mat stops short of the NEXT MAT, in tiles — the gap that makes the pieces read as
-## separate. ⚠ Smaller than `WASH_INSET_TILES`: this one is a seam, that one is a fall.
-const WASH_BLOCK_GAP_TILES := 0.18
-## How round the mat's corners are, in tiles. ⚠ **0 is a square**, which is not what was asked for:
-## 「약간 네모네모 해야할듯한데... 완전 네모 말고」 (2026-08-27, the user).
-const WASH_ROUND_TILES := 0.24
-## How thick the mat's brighter edge is, in tiles.
-const WASH_RIM_TILES := 0.09
-## How far the mat floats over the ground it lies on, in tiles. ⚠⚠ **AS SMALL AS Z-FIGHTING ALLOWS**,
-## because the user asked for it to read as stuck to the ground rather than laid over it
-## (「바닥에 딱 붙어있는거 처럼」, 2026-08-27). Larger and the mat's edge separates from the ground it
-## covers wherever the camera turns.
-const WASH_LIFT_TILES := 0.010
+
+## ⚠⚠ **`COL_WASH` AND `COL_WASH_RIM` ARE DELETED (2026-08-28) AND THE MAT IS STILL THERE.** They
+## coloured a white quad laid over every walkable tile. **The mat is baked into the island now** — the
+## bake paints each piece's own flat interior lighter (`PAD_LIGHTEN` in `island_build.py`), so the mat
+## is the walking surface itself and has no colour of its own to name here. The user's words that
+## killed them: 「위에 노드만 살짝 얹은 느낌이어서 너무 별로」·「너무 흰색이 너무 잘 보여」.
+## ⚠ **What survives below shapes the HOVER's mask**, which is still drawn at runtime.
+
 ## **How many tiles across one mat is.** ⚠⚠ **2, because the island is BUILT that way** —
 ## `tools/blender/island_build.py` lays the whole island down as 2x2 pieces, and a raised block is
 ## always a whole piece. A mat per TILE was on screen once and the user's word was 「너무 많으」; mats
@@ -666,15 +632,22 @@ const WATER_CONTRAST := 2.6
 ## Sea of Thieves solves it with four scrolling noise maps; this is the same idea evaluated instead of
 ## sampled, which costs a little more and owes nothing to an asset store.
 ## How many ripples per tile. Above about 3.5 they fall under a pixel at ZOOM_MIN and turn to noise.
-const WATER_RIPPLE_SCALE := 1.9
+## ⚠⚠ **THE WHOLE RIPPLE SET WAS RETUNED 2026-08-28** (the user: 「물주름도 한번 개편해줘」). Finer,
+## slower, weaker and less chopped: the old set drew a busy crosshatch that competed with the island
+## for the eye, on a screen whose subject is the ground. **Five numbers moved together and they only
+## make sense together** — scale 1.9 -> 2.6, speed 0.14 -> 0.10, strength 4.2 -> 2.6, stretch 0.34 ->
+## 0.24, chop 2.6 -> 1.6.
+## ⚠ **티켓 05 asks how broken the ripples should be and it is the USER's pick, not this file's.** This
+## is a candidate to look at, not the answer to that ticket.
+const WATER_RIPPLE_SCALE := 2.6
 ## How fast the two noise layers drift apart. Slow: a ripple that races reads as rain, not as sea.
-const WATER_RIPPLE_SPEED := 0.14
+const WATER_RIPPLE_SPEED := 0.10
 ## How hard the ripple bends the surface normal. ⚠ **This is the whole dial between "glassy" and
 ## "choppy"** — at 0 the sea is the old flat colour and at 4 it boils.
 ## ✅ **Raised to what the approved screenshots were actually rendered with** (2026-08-26). ⚠ The sheets
 ## the user picked from were shot at this value, not at the 1.6 that was in this file — shipping the
 ## older number would mean the game never looked like the picture that was approved.
-const WATER_RIPPLE_STRENGTH := 4.2
+const WATER_RIPPLE_STRENGTH := 2.6
 ## ⚠ **How far from the camera the ripple fades out, in world units.** Detail finer than a pixel is not
 ## detail, it is fizz — and the far sea is exactly where a repeating pattern gets spotted
 ## (2026-08-26, the user: 「줌을 뒤로 땡겼을 때 바다에 패턴이 보이는 문제가 있음」).
@@ -683,14 +656,14 @@ const WATER_RIPPLE_FADE := 46.0
 ## direction the noise is round, and round noise on water reads as fog or as marble.
 const WATER_RIPPLE_WIND_DEG := 24.0
 ## How far they are drawn out along that wind. 1.0 is round; under about 0.5 they become streaks.
-const WATER_RIPPLE_STRETCH := 0.34
+const WATER_RIPPLE_STRETCH := 0.24
 ## How hard the streaks are chopped into lengths. 0 leaves them running the whole sea; above about 3
 ## they stop being streaks and become speckle.
 ## ⏳ **PROVISIONAL — 3 of 4 candidates, not yet judged on a screen that can show it** (2026-08-26, the
 ## user: 「이건 모바일로는 잘 안 보인다, 어디에다가 기록하고」). Four values were rendered side by side —
 ## 0.0 unbroken · 1.4 dashes · 2.6 shorter · 2.6 with a wider grain — and the difference does not survive
 ## a phone screen. **This is the recommended one, standing in until it is looked at on a monitor.**
-const WATER_RIPPLE_CHOP := 2.6
+const WATER_RIPPLE_CHOP := 1.6
 
 ## --- the wash where the sea meets the land ---------------------------------------------------------
 ## ⚠⚠ **The shoreline is drawn BY THE SEA, and that is the second answer to a question that failed

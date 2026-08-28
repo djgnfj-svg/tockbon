@@ -1,7 +1,13 @@
 Type: task
-Status: open
+Status: resolved
 
 # Pressing 시작하기 opens the ISLAND, and nothing in between
+
+✅ **CLOSED 2026-08-28.** 시작하기 다음 화면이 섬이다. `Run._reset` no longer deals the opening round and
+no longer leaves the run in `PICK`; the title is taken down by `_start_run` instead of by the card
+screen the shell no longer walks through. **The cards, the eighteen items, the rarity draw and the
+refit board are all untouched** — a win still deals a full round. Four nets moved with it, and
+`net_shell` now measures **exactly one press** from launch to the island where it measured two.
 
 ## What closes it
 

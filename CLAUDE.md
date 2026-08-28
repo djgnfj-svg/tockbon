@@ -1,5 +1,19 @@
 # tockbon — **one island, held against the beasts**, and `src/` runs
 
+## ⚠⚠ **THE GLOSSARY IS LOADED BELOW. READ IT BEFORE THE FIRST TOOL CALL.** (2026-08-28, the user)
+
+@CONTEXT.md
+
+***"판이 뭔지 제대로 이해한 거 맞아? ... 시작하면 바로 읽어야지."*** **A round was spent building the
+wrong thing because the word 판 was guessed at instead of read** — and the answer was in `CONTEXT.md`
+the whole time. **The import above puts it in context at every session start**, so there is no round
+where it has not been read.
+
+⚠⚠ **A word you are about to use for a thing on screen is a word to check there FIRST**, not after the
+user says it is wrong. ⚠ **Where a word in it disagrees with `src/`, the code is what is true** — and
+**say so out loud** rather than quietly picking one.
+
+
 ## ⚠⚠ **THIS WEEK IS THE MAP. NOTHING ELSE.** (2026-08-26, the user)
 
 ***"Getting the map right is enough for this week. Focus on that."*** **Every round this week is about
@@ -130,5 +144,7 @@ pixels, what survived measured **input → state**. ⇒ **Prefer the shape that 
 only when the pixels are the subject.**
 
 ⚠ **`CONTEXT.md` is the glossary and the three agreed test seams** — **no check is written at a seam
-that is not named there.** ⚠ **Parts of its vocabulary predate the swap** and still read as though the
-beast were the player. **Where a word in it disagrees with `src/`, the code is what is true.**
+that is not named there.** ⚠ **It is imported at the top of this file, so it is already in context**;
+there is no reading step to skip and no excuse for guessing a word. ⚠ **Parts of its vocabulary predate
+the swap** and still read as though the beast were the player. **Where a word in it disagrees with
+`src/`, the code is what is true.**

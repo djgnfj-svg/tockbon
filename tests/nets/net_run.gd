@@ -98,7 +98,7 @@ func run(t) -> void:
 	# where a taken card sends the run, and that no card moves a summon slot or a body. Every deleted
 	# assertion read `Rules.CardKind.SPECIES`, and **`CardKind` has one member now** — a card is an item
 	# and nothing else.
-	_a_run_opens_on_a_card_round(t)
+	_a_run_opens_on_the_island(t)
 	_an_item_card_moves_no_slot_and_opens_refit(t)
 	_cards_add_no_slot_and_no_body(t)
 
@@ -151,48 +151,52 @@ func _cards_add_no_slot_and_no_body(t) -> void:
 	t.eq(r.army.loadout.held.size(), 6, "집은 여섯 장은 전부 장비 더미로 갔다 (자가 점검)")
 
 
-# -- 티켓 15: the opening round ----------------------------------------------------------------------
-## ⚠⚠ **THE FIRST SCREEN OF THE WHOLE GAME, and it very nearly could not be measured at all.** The
-## opening three are dealt inside `_reset`, which runs before any caller can hand a seed in — so
-## `seed_cards` re-deals an untouched round, and without that line 「무작위라 못 잰다」 would be true
-## of the one screen every player sees first.
+# -- 티켓 12: a run opens on the island ---------------------------------------------------------------
+## ⚠⚠ **THE FIRST SCREEN OF A RUN IS THE ISLAND, AND UNTIL 티켓 12 IT WAS A CARD ROUND.** The opening
+## three were dealt inside `_reset` (티켓 15, 2026-08-25). The user took them off the start path on
+## 2026-08-27 — ***"Starting means the game starts, right then."*** · ***"There is not much to decide
+## yet."*** — because the week's only goal is the map and two screens stood in front of it.
 ##
-## ⚠⚠ **THE ROUND IS EQUIPMENT NOW AND THE TWO ROWS ABOUT ITS SPECIES ARE DELETED** (2026-08-27). It
-## used to be dealt 「beasts only」 — no item was allowed to mix in, and the wolf could not appear
-## because the run already held it — and both of those read `Rules.CardKind.SPECIES`, which no longer
-## exists. **What the screen owes a player is unchanged and still measured here**: it is up, it is
-## three cards, and the same seed deals the same three.
+## ⚠⚠ **THE CARDS ARE NOT DELETED AND THIS FIXTURE IS THE THING THAT SAYS SO.** It measures both
+## halves in one place: **nothing is dealt at the opening**, and **a win still deals a full round**.
+## Measuring only the first half is how 「the card round is off the start path」 and 「the card round is
+## gone」 would read identically, and one of those is starting over.
 ##
-## ⚠ Mutation: `_reset` leaving `_state` at `BATTLE`; `seed_cards` not re-dealing.
-func _a_run_opens_on_a_card_round(t) -> void:
+## ⚠ Mutation: `_reset` dealing a round again; `_reset` leaving `_state` at `PICK`; `finish_island`
+## not dealing.
+func _a_run_opens_on_the_island(t) -> void:
 	var r := Run.new()
-	t.eq(r.state(), Run.State.PICK, "새 회차는 섬이 아니라 카드 화면에서 연다")
-	t.eq(r.army.slot_count(), 1, "그리고 칸 하나로 연다")
+	t.eq(r.state(), Run.State.BATTLE, "새 회차는 카드 화면이 아니라 섬에서 연다")
+	t.eq(r.cards.size(), 0, "그리고 깔린 카드가 한 장도 없다")
+	t.ok(r.begin_island() != null, "그래서 섬이 곧장 열린다 — 지나갈 화면이 없다")
+	t.eq(r.army.slot_count(), 1, "칸 하나로 연다")
 	# ⚠⚠ **늑대가 아니라 검사다** (2026-08-27). `Rules.START_SLOTS` 의 한 줄은 `SWORDSMAN` 이고, 늑대는
-	# 편이 바뀌면서 적 줄로 갔다 — 「짐승을 뽑아 쓰던 회차」의 마지막 흔적이 이 두 줄이었다.
+	# 편이 바뀌면서 적 줄로 갔다.
 	t.eq(r.army.slot_type_of(0), Rules.SWORDSMAN, "그 칸은 검사다")
 	t.eq(r.army.living_count(), 10, "검사 열 명이다 (리터럴 — 섬의 적 밀도가 이 열에 맞춰져 있다)")
 
+	# ⚠⚠ **THE OTHER HALF, AND WITHOUT IT THIS FIXTURE WOULD BE GREEN ON A DELETED CARD TABLE.** The
+	# eighteen items and the rarity draw still run; only the START PATH lost its round.
+	r.finish_island(true)
+	t.eq(r.state(), Run.State.PICK, "섬을 이기면 카드 고르기는 그대로 열린다")
+	t.eq(r.cards.size(), Rules.CARDS_PER_WIN, "세 장이 깔린다 (자가 점검)")
 	var items := 0
 	for k in Rules.CARDS_PER_WIN:
 		if int(r.card_kind[k]) == Rules.CardKind.ITEM:
 			items += 1
-	t.eq(r.cards.size(), Rules.CARDS_PER_WIN, "세 장이 깔려 있다 (자가 점검)")
-	t.eq(items, Rules.CARDS_PER_WIN, "세 장이 전부 장비다 — 개막 라운드도 다른 라운드와 같은 장을 낸다")
+	t.eq(items, Rules.CARDS_PER_WIN, "세 장이 전부 장비다")
 
-	# ⚠ **The seed has to reach a round that was dealt before it arrived**, or this screen is the one
-	# screen nothing can ever pin.
+	# ⚠ **The seed still has to reach the round, and the order it has to survive changed.** It used to
+	# guard 「a round was dealt before the seed arrived」; the first `_draw_cards` of a run is now the
+	# win's, so what this pins is that the win's round is the same three under the same seed.
 	var a := Run.new()
 	a.seed_cards(4242)
+	a.finish_island(true)
 	var b := Run.new()
 	b.seed_cards(4242)
-	t.eq(a.cards, b.cards, "씨앗을 같이 준 두 회차가 같은 세 장으로 연다")
+	b.finish_island(true)
+	t.eq(a.cards, b.cards, "씨앗을 같이 준 두 회차가 같은 세 장을 낸다")
 	t.eq(a.card_kind, b.card_kind, "종류도 같다")
-	var kinds_bad := 0
-	for k in Rules.CARDS_PER_WIN:
-		if int(a.card_kind[k]) != Rules.CardKind.ITEM:
-			kinds_bad += 1
-	t.eq(kinds_bad, 0, "다시 뽑은 세 장도 전부 장비다 — 재추첨이 라운드 종류를 안 바꾼다")
 
 
 # -- 티켓 15: the beast card -------------------------------------------------------------------------
@@ -267,11 +271,10 @@ func _first_card_of(r: Run, kind: int) -> int:
 
 func _starting_state(t) -> void:
 	var r := Run.new()
-	# ⚠⚠ 「런은 카드 세 장에서 시작한다」 (티켓 15) — it used to open on the map, and the card round now
-	# sits in front of it. ⚠ **Those three were BEASTS until 2026-08-27 and are equipment now**; the
-	# round itself did not move, only what is on it. `_a_run_opens_on_a_card_round` drives that round;
-	# this row walks past it and then measures the opening roster, which is what it always measured.
-	t.eq(r.state(), Run.State.PICK, "시작 상태는 카드 고르기다")
+	# ⚠⚠ 「런은 섬에서 시작한다」 (티켓 12, 2026-08-27) — it opened on the map until 2026-08-26, then on a
+	# card round until 티켓 12 took that round off the start path. `_a_run_opens_on_the_island` drives
+	# the screen itself; this row measures the opening roster, which is what it always measured.
+	t.eq(r.state(), Run.State.BATTLE, "시작 상태는 섬이다")
 	t.eq(r.army.living_count(), Rules.roster_start_count(), "시작 병력은 10")
 	# ⚠⚠ **「열 마리 전부 늑대다」 였고 늑대는 이제 적이다.** 개막 표가 세우는 몸은 검사 열이고, 회차가
 	# 짐승을 몸으로 갖는 길은 없어졌다 — 「까마귀는 카드로 온다」 던 아래 줄은 그 카드가 지워지면서 (2026-08-27)
