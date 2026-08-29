@@ -625,8 +625,10 @@ func _the_shake_rides_the_screen_axes(t) -> void:
 		if lconst.has(name):
 			left_over.append(name)
 	t.eq(left_over, [], "Look 에 화면 흔들림 상수가 하나도 안 남았다 %s" % str(left_over))
-	t.ok(lconst.has("REFUSE_SHAKE_PX"),
-		"REFUSE_SHAKE_PX 는 그대로 있다 — HUD 칩의 거절 떨림이지 카메라가 아니다 (자가 점검)")
+	# ⚠ **The self-check named `REFUSE_SHAKE_PX` and that went with the fight** (2026-08-29). It
+	# moved to a constant the camera itself owns, so the row still proves it is reading a real map.
+	t.ok(lconst.has("ZOOM_MIN"),
+		"ZOOM_MIN 은 그대로 있다 (자가 점검 — 상수 표를 실제로 읽고 있다)")
 
 	# And the resting place is one term. Placing twice from the same state lands in the same spot,
 	# which is the guarantee the deleted rows existed to protect.

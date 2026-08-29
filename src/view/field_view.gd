@@ -185,7 +185,6 @@ func _build_world() -> void:
 	# The two effect layers. Built here and never rebuilt, because what changes every frame is the
 	# geometry inside them and not the nodes.
 	_decal = _fx_layer()
-	_air = _fx_layer()
 
 	# ⚠⚠ **THE MARK IS A MAT, NOT A QUAD.** It used to be one plane the size of one tile, moved
 	# about; the user asked for the 2x2 piece to be the unit that lights up, and a square of that size
@@ -369,14 +368,12 @@ func _wash_cells(grid: Grid) -> PackedInt32Array:
 ## multiplier to fold in, and a leaf handed a constant 1.0 is the shape "No fake code" names.
 func _process(delta: float) -> void:
 	_fx_step(delta)
-	_drain_events()
 	_place_camera()
-	# ⚠ **The buffers are opened BEFORE the bodies and flushed after everything.** The hit halo and the
-	# ghosts are painted from inside `_paint_bodies` — they are per-body facts and that is the one loop
-	# that has a body's centre, radius and clock in hand at the same time.
+	# ⚠ **The buffer is opened BEFORE the bodies and flushed after them.** A body's shadow is painted
+	# from inside `_paint_bodies` — it is a per-body fact, and that is the one loop with a body's
+	# centre and radius in hand at the same time.
 	_fx_begin()
 	_paint_bodies()
-	_paint_fx()
 	_fx_flush()
 
 
@@ -1221,7 +1218,7 @@ func _sprite() -> Sprite3D:
 ## two axes were off by different amounts.
 ## ⇒ **The sim's own tile-unit position goes in, untouched.** The picture is offset afterwards.
 func _put_body(centre_px: Vector2, at_tiles: Vector2, radius: float, colour: Color, squash: Vector2,
-		tex: Texture2D) -> float:
+		tex: Texture2D) -> void:
 	# ⚠⚠ **The shadow goes down FIRST and it is the body's only one** (2026-08-28, the user: 「그림자도
 	# 단순하게 아래 동그라미정도해줘」). It is drawn from here rather than from the two callers because
 	# this is the one place a body's centre and its drawn width are both in hand — putting it in the
@@ -1246,11 +1243,11 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, radius: float, colour: Col
 	# ground can differ without either pretending to be the other.
 	var foot := _stand_h(at_tiles) + Look.BODY_LIFT_PX / Look.TILE_PX
 	s.position = Vector3(centre_px.x / Look.TILE_PX, foot + tall * 0.5, centre_px.y / Look.TILE_PX)
-	# ⚠⚠ **The TOP is returned and it is not `radius * 2`.** A wolf is 55 x 40 and a caveman 36 x 40:
-	# sized by WIDTH off the same radius, the man stands half again as tall as the animal, which is
-	# right and is exactly why nothing that hangs above a body may compute its own height from the
-	# radius. The bar did, and it landed across the caveman's face the first time he was on screen.
-	return foot + tall
+	# ⚠⚠ **THE TOP USED TO BE RETURNED HERE and the halo that read it is deleted** (2026-08-29).
+	# **The rule it carried is the part to keep**: a wolf is 55 x 40 and a caveman 36 x 40, so sized by
+	# WIDTH off the same radius the man stands half again as tall as the animal. ⇒ **Nothing that
+	# hangs above a body may compute its own height from the radius.** The HP bar did, and it landed
+	# across the caveman's face the first time he was on screen.
 
 
 ## ⚠⚠ **`_put_hp` STOOD HERE AND IS DELETED** (2026-08-28, the user: 「체력바 없이」). It drew the two
@@ -1268,21 +1265,10 @@ func _paint_bodies() -> void:
 		_hide_unused()
 		return
 
-	# Enemies first, allies after, so an ally on the same tile reads on top of what it is fighting.
-	# ⚠ **In 3D the depth buffer decides that now, not the order** — the order is kept because it costs
-	# nothing and because whoever reads this next should see where the rule went.
-	for e in battle.enemy_alive.size():
-		if battle.enemy_alive[e] == 0:
-			continue
-		var et := int(battle.enemy_type[e])
-		var ekey := "e%d" % e
-		var ecentre := Look.tile_point_px(battle.enemy_pos[e]) + _body_offset_of(ekey)
-		var eradius := Look.body_radius_of(et)
-		var etop := _put_body(ecentre, Vector2(battle.enemy_pos[e]), eradius,
-			Look.body_colour_of(true).lerp(Look.COL_FLASH, _flash_of(ekey)),
-			_gait_squash(ekey), _body_tex(ekey, et, _facing_of(e, true).x >= 0.0))
-		_put_halo(ekey, ecentre, Look.sprite_half_px(et), etop)
-
+	# ⚠⚠ **AN ENEMY LOOP STOOD ABOVE THIS AND IT IS DELETED** (2026-08-29) with the fight. It drew
+	# enemies first and allies after, so an ally on the same 조각 read on top of what it was fighting —
+	# **in 3D the depth buffer decides that, not the order**, and the order was kept only so whoever
+	# read it next could see where the rule went.
 	for raw_id in battle.ashore_ids():
 		var i := int(raw_id)
 		_put_soldier(i, battle.soldier_pos[i])
@@ -1308,23 +1294,8 @@ func _put_ground_shadow(centre_px: Vector2, radius: float) -> void:
 	_g_disc(centre_px, r, Look.COL_BODY_SHADOW)
 
 
-## Item 3 of the twelve, and WITHOUT IT THAT ITEM DOES NOT EXIST — `COL_HIT_HALO`'s own comment says
-## so: a body here is a 2 px outline and a 3 px dot, so tinting it repaints two pixels of border and
-## nothing else. The halo is the area the hit is actually seen on.
-func _put_halo(key: String, centre_px: Vector2, radius: float, top_y: float) -> void:
-	var h := _halo_of(key)
-	if h <= 0.0:
-		return
-	var col := Look.COL_HIT_HALO
-	col.a *= h
-	# ⚠⚠ **`radius` IS THE DRAWN HALF-WIDTH, not the sim radius, and it was the sim radius until
-	# 2026-08-25.** 1.35 x a wolf's 14 px put the halo 18.9 px out — INSIDE a 49 px picture, so the
-	# thing that says 「this one was just hit」 was drawn underneath the body. It is 33.1 px now and
-	# clears the picture on every side. **This is the death burst's own lesson, one effect over.**
-	# Hung at the body's MIDDLE, which is half its own height and not one radius: see `_put_body`.
-	var mid := Vector3(centre_px.x / Look.TILE_PX,
-		(_ground_y_px(centre_px) + top_y) * 0.5, centre_px.y / Look.TILE_PX)
-	_a_disc(mid, radius * Look.HIT_HALO_MUL, col)
+## ⚠ **`_put_halo` stood here and it is deleted** (2026-08-29) with the hit it marked — see the
+## effects block at the foot of this file for what it knew.
 
 
 ## The picture a body wears. **One place**, so the ghost, the soldier on a deck and the body ashore
@@ -1430,10 +1401,7 @@ func _put_soldier(i: int, at: Vector2) -> void:
 	# The wolf faces what it is walking at. `_facing_of` returns RIGHT when there is no target, so an
 	# idle body faces right rather than flipping on a zero vector.
 	var stex := _body_tex(skey, st, _facing_of(i, false).x >= 0.0)
-	var stop := _put_body(scentre, at, sradius,
-		Look.body_colour_of(false).lerp(Look.COL_FLASH, _flash_of(skey)),
-		_gait_squash(skey), stex)
-	_put_halo(skey, scentre, Look.sprite_half_px(st), stop)
+	_put_body(scentre, at, sradius, Look.body_colour_of(false), _gait_squash(skey), stex)
 
 
 ## ⚠ **Hidden, never freed.** A pool that shrinks is a pool that reallocates on the next busy frame,
@@ -1444,12 +1412,11 @@ func _hide_unused() -> void:
 		_sprites[k].visible = false
 
 
-# --- the effect drawers, carried across the move unchanged -------------------------------------------
+# --- the body clocks, carried across the move unchanged ----------------------------------------------
 ## ⚠⚠ **Everything below this line is the file as it was.** The effects were never drawing code: they
 ## are a little simulation of their own with its own clock, and moving the picture into 3D did not
 ## touch one line of it. That is why `_fx` is still filling every frame while nothing paints it.
 
-enum FxKind { SHOT, SPARK, BURST, AREA, LAND }
 
 ## Called by `game.gd` whenever a slot is armed or disarmed, whenever the cursor moves with one armed,
 ## and on the release. `slot == -1` clears the whole aim. **0 draw calls** — the same shape the
@@ -1510,47 +1477,22 @@ func _map_tiles() -> Vector2i:
 ## in two places, and the two drift the first time one of them changes.
 
 
-## Where the wolf goes: a rectangle centred on the body, **as wide as `BEAST_SPRITE_W_RATIO` body
-## radii**, with the height taken from the texture's own aspect so the animal is never stretched.
-##
-## `squash` is the SAME gait vector the rounded square was squashed by, applied to the rectangle's
-## size about its centre. ⚠ **Dropping it here would have made the ally the only thing on the field
-## that stands still while it fights** — 「붙어서 가만히 있으면 재미가 죽는다」 — and no per-function
-## count or argument in `net_draw_leaf` would have changed.
-func _beast_rect(centre: Vector2, radius: float, squash: Vector2, tex: Texture2D) -> Rect2:
-	var w := radius * Look.BEAST_SPRITE_W_RATIO * squash.x
-	var h := w * float(tex.get_height()) / float(tex.get_width()) * squash.y
-	return Rect2(centre - Vector2(w, h) * 0.5, Vector2(w, h))
+## ⚠ **`_beast_rect` stood here and it is deleted** (2026-08-29) — a rectangle for the flat drawer,
+## with no caller since the bodies became billboards.
 
 ## ⚠⚠ **`_hp_rects` STOOD HERE AND IS DELETED** (2026-08-28) with the bar it laid out.
 
 
-## Which way a body is pointing: toward its current target, and to the right when it has none — a
-## zero vector normalised is zero, which would collapse a facing mark to a point and aim a lunge
-## nowhere while every check about them still passed.
+## Which way a body is FACING, as a unit vector. **RIGHT when it has never moved**, because a zero
+## vector normalised is zero, which would collapse a facing mark to a point.
 ##
-## **`is_enemy` is not decoration.** Two of the three types whose range is 0 — the bison and the lion
-## — are enemies, and they are exactly the ones that lunge, so a soldier-only version of this
-## function would aim every enemy lunge to the right.
-func _facing_of(i: int, is_enemy: bool) -> Vector2:
-	var here := Vector2.ZERO
-	var there := Vector2.ZERO
-	if is_enemy:
-		var aim := int(battle.enemy_target[i])
-		if aim < 0 or not battle.is_hittable(aim):
-			return Vector2.RIGHT
-		here = battle.enemy_pos[i]
-		there = battle.soldier_pos[aim]
-	else:
-		var tgt := int(battle.soldier_target[i])
-		if tgt < 0 or tgt >= battle.enemy_alive.size() or battle.enemy_alive[tgt] == 0:
-			return Vector2.RIGHT
-		here = battle.soldier_pos[i]
-		there = battle.enemy_pos[tgt]
-	var away := there - here
-	if away.length() <= Rules.EPS:
-		return Vector2.RIGHT
-	return away.normalized()
+## ⚠⚠ **IT TOOK AN `is_enemy` FLAG AND POINTED AT THE BODY'S TARGET** until 2026-08-29. With the fight
+## deleted there is nothing to point at, so **a body faces the way it last walked** — `_fx_step`
+## already records that as `head`, and it is the same value the gait phases on.
+func _facing_of(i: int, _is_enemy: bool = false) -> Vector2:
+	var b: Dictionary = _body.get("s%d" % i, {})
+	var head: Vector2 = b.get("head", Vector2.RIGHT)
+	return head if head.length_squared() > Rules.EPS else Vector2.RIGHT
 
 ## Ages both drawers by one frame and drops what has finished, then walks every body that can be on
 ## screen so the gait phase advances by DISTANCE rather than by time.
@@ -1559,20 +1501,8 @@ func _facing_of(i: int, is_enemy: bool) -> Vector2:
 ## to create one: a body with no entry this frame is a body that is not on screen this frame, and
 ## flashing a corpse is the one thing item 3 must not do.
 func _fx_step(delta: float) -> void:
-	var live := []
-	for raw_fx in _fx:
-		var fx: Dictionary = raw_fx
-		fx["age"] = float(fx["age"]) + delta
-		if float(fx["age"]) < float(fx["delay"]) + float(fx["life"]):
-			live.append(fx)
-	_fx = live
-
-
 	for key: String in _body:
 		var b: Dictionary = _body[key]
-		b["flash"] = maxf(0.0, float(b["flash"]) - delta)
-		b["knock"] = maxf(0.0, float(b["knock"]) - delta)
-		b["lunge"] = maxf(0.0, float(b["lunge"]) - delta)
 		b["bite"] = maxf(0.0, float(b["bite"]) - delta)
 		# ⚠ **Advanced unconditionally, and NOT inside the `moved` test below.** That test is the gait's
 		# and it is right there; putting the legs under it is the rule 「움직이지 않는 몸은 애니메이션
@@ -1582,17 +1512,12 @@ func _fx_step(delta: float) -> void:
 	if battle == null or army == null:
 		return
 
-	# Every alive enemy and every HITTABLE soldier — a soldier still aboard a boat can be shot by a
-	# coastal crow, and without an entry that hit would have nothing to flash.
+	# ⚠ **An enemy arm stood beside this and it is deleted** (2026-08-29) with the fight.
 	var walkers := []
-	for e in battle.enemy_alive.size():
-		if battle.enemy_alive[e] != 0:
-			walkers.append(["e%d" % e, battle.enemy_pos[e],
-				Look.sprite_half_px(int(battle.enemy_type[e]))])
-	for i in battle.soldier_state.size():
-		if battle.is_hittable(i):
-			walkers.append(["s%d" % i, battle.soldier_pos[i],
-				Look.sprite_half_px(int(army.type_id[i]))])
+	for raw_id in battle.ashore_ids():
+		var i := int(raw_id)
+		walkers.append(["s%d" % i, battle.soldier_pos[i],
+			Look.sprite_half_px(int(army.type_id[i]))])
 
 	for raw_walker in walkers:
 		var walker: Array = raw_walker
@@ -1600,12 +1525,6 @@ func _fx_step(delta: float) -> void:
 		var here: Vector2 = walker[1]
 		if not _body.has(key):
 			_body[key] = {
-				"flash": 0.0,
-				"knock": 0.0,
-				"knock_dir": Vector2.RIGHT,
-				"lunge": 0.0,
-				"lunge_dir": Vector2.RIGHT,
-				"push": 0.0,
 				# Seconds left of a bite, and the strip is read off how far in that is. 0 is "not
 				# biting" and is also what a species with no bite strip is pinned at forever.
 				"bite": 0.0,
@@ -1637,164 +1556,17 @@ func _fx_step(delta: float) -> void:
 			b["head"] = (here - last).normalized()
 		b["last"] = here
 
-## Turns one frame of sim FACTS into effects. Everything geometric is frozen here, on the frame the
-## fact happened, because every one of these outlives the frame that produced it.
-func _drain_events() -> void:
-	if battle == null or army == null:
-		return
-	var born := []
-	for raw_ev in battle.events:
-		var ev: Dictionary = raw_ev
-		var kind := int(ev["kind"])
+## ⚠ **`_drain_events` stood here and it is deleted** (2026-08-29) — see the effects block below.
 
-		if kind == Battle.Event.LAND:
-			if Look.fx_gain_of(7) > 0.0:
-				born.append({
-					"kind": FxKind.LAND,
-					"age": 0.0,
-					"delay": 0.0,
-					"life": Look.LAND_RING_SEC,
-					"at": Look.tile_point_px(battle.soldier_pos[int(ev["id"])]),
-				})
-			continue
-
-		if kind == Battle.Event.DEATH:
-			if Look.fx_gain_of(4) <= 0.0:
-				continue
-			var did := int(ev["id"])
-			var dead_enemy: bool = ev["is_enemy"]
-			var dtype := int(battle.enemy_type[did]) if dead_enemy else int(army.type_id[did])
-			var dpos: Vector2 = battle.enemy_pos[did] if dead_enemy else battle.soldier_pos[did]
-			born.append({
-				"kind": FxKind.BURST,
-				"age": 0.0,
-				"delay": 0.0,
-				"life": Look.BURST_SEC,
-				"at": Look.tile_point_px(dpos),
-				"radius": Look.body_radius_of(dtype),
-				"colour": Look.body_colour_of(dead_enemy),
-			})
-			continue
-
-		if kind != Battle.Event.ATTACK:
-			continue
-
-		var from_id := int(ev["from"])
-		var from_enemy: bool = ev["from_enemy"]
-		var to_id := int(ev["to"])
-		var atk_type := int(battle.enemy_type[from_id]) if from_enemy else int(army.type_id[from_id])
-		var tgt_type := int(army.type_id[to_id]) if from_enemy else int(battle.enemy_type[to_id])
-		var atk_tile: Vector2 = battle.enemy_pos[from_id] if from_enemy \
-			else battle.soldier_pos[from_id]
-		var tgt_tile: Vector2 = battle.soldier_pos[to_id] if from_enemy \
-			else battle.enemy_pos[to_id]
-		var atk_px := Look.tile_point_px(atk_tile)
-		var tgt_px := Look.tile_point_px(tgt_tile)
-		var atk_key := ("e%d" if from_enemy else "s%d") % from_id
-
-		# **The reaction is delayed by exactly the tracer's flight time.** The sim landed the damage
-		# on the firing frame, so without this the target flashes and flinches before the bullet has
-		# left the muzzle — the one thing item 1's own spec calls a lie about time.
-		#
-		# ⚠ **Tracer-vs-lunge reads the ATTACKER'S OWN reach, not the type's base range.** A soldier
-		# is the one side of this that can carry a fitted 머리 part, and `army.range_of(from_id)` is
-		# what combat itself throws that soldier's blow with — `Rules.range_of(atk_type)` alone would
-		# play the melee lunge for a body that just became ranged, pushing it toward a target it
-		# never walked to. Enemies stay type-keyed, same as everywhere else this round.
-		var atk_reach := army.range_of(from_id) if not from_enemy else Rules.range_of(atk_type)
-		var reaction := 0.0
-		if atk_reach > 0.0:
-			reaction = Look.SHOT_SEC
-			if Look.fx_gain_of(1) > 0.0:
-				born.append({
-					"kind": FxKind.SHOT,
-					"age": 0.0,
-					"delay": 0.0,
-					"life": Look.SHOT_SEC,
-					"from": atk_px,
-					"to": tgt_px,
-				})
-		else:
-			var facing := _facing_of(from_id, from_enemy)
-			var r_self := Look.body_radius_of(atk_type)
-			# The push is capped at `gap + LUNGE_BITE_PX` rather than being a flat distance: the grid
-			# guarantees one body per tile, so the gap is 40 px or 56.6 px and a flat push drove the
-			# lion 33.6 px into a body 40 px away and swallowed it whole. With the cap the worst
-			# overlap in any pairing is exactly LUNGE_BITE_PX, by construction.
-			var gap := maxf(0.0,
-				atk_px.distance_to(tgt_px) - r_self - Look.body_radius_of(tgt_type))
-			# ⚠⚠ **`sprite_half_px` and not `r_self`.** The ratio is unchanged; what it multiplies is.
-			# 0.55 of a wolf's SIM radius is 7.7 px of lunge on a 49 px picture — the fraction of the
-			# body it was worth on the flat board, where a body WAS its radius, has more than halved.
-			var push := minf(Look.LUNGE_PUSH_RATIO * Look.sprite_half_px(atk_type),
-				gap + Look.LUNGE_BITE_PX) * Look.fx_gain_of(2)
-			if _body.has(atk_key):
-				var ab: Dictionary = _body[atk_key]
-				ab["lunge"] = Look.LUNGE_SEC
-				ab["lunge_dir"] = facing
-				ab["push"] = push
-				# ⚠⚠ **The mouth and the body start on ONE event and on one line of it.** Started
-				# anywhere else — off a cooldown, off the target's flash — the two would be two
-				# clocks measuring the same blow, and the pair that drifts is the pair that reads
-				# as a wolf snapping at nothing. **0 s for a species with no bite strip**, so this
-				# costs nothing and says nothing for the other eight.
-				ab["bite"] = _anim_sec(atk_type, Look.Anim.BITE)
-			if Look.fx_gain_of(2) > 0.0:
-				# The contact point is frozen at the body edge AS IT WILL BE at the peak of the
-				# lunge, `r_self + push` out — not at `r_self`. The shards are seen half a lunge
-				# later, when the body really is that far forward, so freezing the un-pushed edge
-				# would root them inside the striker.
-				born.append({
-					"kind": FxKind.SPARK,
-					"age": 0.0,
-					"delay": Look.LUNGE_SEC * 0.5,
-					"life": Look.SPARK_SEC,
-					"at": atk_px + facing * (r_self + push),
-					"facing": facing,
-				})
-
-		var area := float(ev["area"])
-		if area > 0.0 and Look.fx_gain_of(5) > 0.0:
-			born.append({
-				"kind": FxKind.AREA,
-				"age": 0.0,
-				"delay": 0.0,
-				"life": Look.AREA_RING_SEC,
-				"at": tgt_px,
-				"radius": area * Look.TILE_PX,
-			})
-
-		var victims := [to_id]
-		for raw_splash in ev["splash"]:
-			victims.append(int(raw_splash))
-		for raw_victim in victims:
-			var v := int(raw_victim)
-			var vkey := ("s%d" if from_enemy else "e%d") % v
-			if not _body.has(vkey):
-				continue
-			var vb: Dictionary = _body[vkey]
-			# Age is RESET, never stacked. A second entry would multiply the halo's alpha until the
-			# body was simply white, and the Dictionary key makes stacking structurally impossible.
-			vb["flash"] = Look.HIT_FLASH_SEC + reaction
-			vb["knock"] = Look.HIT_KNOCK_SEC + reaction
-			vb["knock_px"] = Look.HIT_KNOCK_RATIO * float(vb["half"])
-			var vtile: Vector2 = battle.soldier_pos[v] if from_enemy else battle.enemy_pos[v]
-			var away := Look.tile_point_px(vtile) - atk_px
-			vb["knock_dir"] = Vector2.RIGHT if away.length() <= Rules.EPS else away.normalized()
-
-
-	for raw_new in born:
-		_fx.append(raw_new)
-	# The transient drawer is capped and the OLDEST goes: the per-body drawer is bounded by the
-	# number of bodies instead, which is why this rule cannot reach a flash or a lunge.
-	while _fx.size() > Look.FX_MAX_COUNT:
-		_fx.remove_at(0)
-
-## The one place a body's drawing offset is computed, so the body, the halo and the HP bar
-## are all handed the same number. Split across call sites, one of them is eventually forgotten and
-## the body walks out from under its own health bar with the whole round green.
+## The one place a body's drawing offset is computed, so the body and its shadow are handed the same
+## number. Split across call sites, one of them is eventually forgotten and the body walks out from
+## under its own mark with the whole round green.
+##
+## ⚠⚠ **THE LUNGE AND THE KNOCK-BACK WERE THE OTHER TWO TERMS AND BOTH ARE DELETED** (2026-08-29) with
+## the fight. **The idle sway is not one of them and does not go with them** — 「붙어서 가만히 있으면
+## 재미가 죽는다」 — so what is left is the sway alone.
 func _body_offset_of(key: String) -> Vector2:
-	return _lunge_offset(key) + _knock_offset(key) + _idle_offset(key)
+	return _idle_offset(key)
 
 
 ## What a body does when it CANNOT move. See `Look.IDLE_AFTER_SEC` for why it exists at all.
@@ -1822,49 +1594,6 @@ func _idle_offset(key: String) -> Vector2:
 	var t := still - Look.IDLE_AFTER_SEC
 	return Vector2(sin(TAU * t / Look.IDLE_PERIOD_SEC + phase), 0.0) * amp
 
-## Item 2①. A triangle: exactly 0 at both ends and full push at the halfway point, so no body is ever
-## left sitting displaced when it finishes.
-func _lunge_offset(key: String) -> Vector2:
-	if not _body.has(key):
-		return Vector2.ZERO
-	var b: Dictionary = _body[key]
-	var left := float(b["lunge"])
-	if left <= 0.0:
-		return Vector2.ZERO
-	var dir: Vector2 = b["lunge_dir"]
-	var at := 1.0 - left / Look.LUNGE_SEC
-	return dir * (float(b["push"]) * (1.0 - absf(2.0 * at - 1.0)))
-
-## Item 3③. Full `HIT_KNOCK_PX` on the frame the blow is felt, decaying to 0.
-##
-## The countdown carries the tracer's delay on top of `HIT_KNOCK_SEC` and this only reads while it is
-## back inside that window — the same trick the flash uses, and for the same reason: a body must not
-## flinch away from a bullet that has not arrived.
-func _knock_offset(key: String) -> Vector2:
-	if not _body.has(key):
-		return Vector2.ZERO
-	var b: Dictionary = _body[key]
-	var left := float(b["knock"])
-	if left <= 0.0 or left > Look.HIT_KNOCK_SEC:
-		return Vector2.ZERO
-	var dir: Vector2 = b["knock_dir"]
-	return dir * (float(b.get("knock_px", 0.0)) * Look.fx_gain_of(3)
-		* (left / Look.HIT_KNOCK_SEC))
-
-## Item 3①. How much white is mixed into this body's colour, 0.0 when it is not being hit.
-##
-## It does NOT ramp: `HIT_FLASH_STRENGTH` is held for the whole window and then drops out. Fading it
-## would spend the back half of a 9-frame beat on a tint too weak to see, and the halo underneath is
-## what carries the effect anyway.
-func _flash_of(key: String) -> float:
-	if not _body.has(key):
-		return 0.0
-	var b: Dictionary = _body[key]
-	var left := float(b["flash"])
-	if left <= 0.0 or left > Look.HIT_FLASH_SEC:
-		return 0.0
-	return Look.HIT_FLASH_STRENGTH * Look.fx_gain_of(3)
-
 ## Item 12. `1 - s*sin(phase)` along the heading and `1 + s*sin(phase)` across it, delivered in
 ## SCREEN axes because that is all `_rounded_square` can apply.
 ##
@@ -1879,7 +1608,9 @@ func _gait_squash(key: String) -> Vector2:
 	if not _body.has(key):
 		return Vector2.ONE
 	var b: Dictionary = _body[key]
-	var s := Look.GAIT_SQUASH * Look.fx_gain_of(12) * sin(float(b["gait"]))
+	# ⚠ **`Look.fx_gain_of(12)` was a factor here and the whole gain table is deleted** (2026-08-29)
+	# with the twelve effects. The gait is not one of them — it is how a body WALKS.
+	var s := Look.GAIT_SQUASH * sin(float(b["gait"]))
 	if absf(s) <= 0.0:
 		return Vector2.ONE
 	var head: Vector2 = b["head"]
@@ -1887,63 +1618,56 @@ func _gait_squash(key: String) -> Vector2:
 		return Vector2(1.0 - s, 1.0 + s)
 	return Vector2(1.0 + s, 1.0 - s)
 
-## `(HIT_HALO_MUL - 1) * own radius` deep inside the striker's own halo. The shards are NOT claimed
-## to escape the target's halo — what carries this effect is that they move while everything under
-## them stands still.
-func _spark_points(centre: Vector2, facing: Vector2, progress: float) -> PackedVector2Array:
-	var tangent := Vector2(-facing.y, facing.x)
-	var outer := Look.SPARK_REACH_PX * progress
-	# The shard has LENGTH, so its inner end trails the tip by SPARK_LEN_PX. Every margin in the
-	# spec is computed from this end and never from the tip — built from the tip, half the points
-	# would pass a check they were never inside.
-	var inner := maxf(0.0, outer - Look.SPARK_LEN_PX)
-	var per_side := Look.SPARK_COUNT / 2
-	var spread := deg_to_rad(Look.SPARK_SPREAD_DEG)
-	var out := PackedVector2Array()
-	for k in Look.SPARK_COUNT:
-		var side := 1.0 if k < per_side else -1.0
-		var slot := k % per_side
-		var lean := 0.0
-		if per_side > 1:
-			lean = float(slot) / float(per_side - 1) * 2.0 - 1.0
-		var dir := (tangent * side).rotated(spread * lean)
-		out.append(centre + dir * inner)
-		out.append(centre + dir * outer)
-	return out
+# --- the effects: DELETED 2026-08-29 ---------------------------------------------------------------
+## ⚠⚠ **THE TWELVE COMBAT EFFECTS AND THE WHOLE AIR LAYER ARE GONE** with the fight (2026-08-29):
+## `FxKind` (shot · spark · burst · area · land), `_fx`, `_drain_events`, `_spark_points`, `_paint_fx`,
+## `_paint_intent`, `_paint_transients`, `_put_halo`, `_halo_of`, `_body_anchor`, `_fx_point3` and
+## every `_a_*` drawer with the `_air` node they filled.
+##
+## ⚠ **The GROUND buffer survives and so do its drawers.** A body's shadow goes into it, and a shadow
+## is not an effect: it wears the terrain's own height at every vertex, so it climbs a slope with the
+## body instead of hovering flat over one.
+##
+## ⚠⚠ **WHAT THE EFFECTS KNEW, and what a rebuilt set owes:**
+##
+##  · **Ageing runs BEFORE draining, every frame.** An effect born this frame is then at full
+##    amplitude on the frame it was born — the flinch really does reach its full flinch once, and the
+##    idle sway really does start from rest.
+##  · **Everything geometric is frozen on the frame the fact happened**, because every effect outlives
+##    the frame that produced it. A ring that re-reads a position follows a corpse.
+##  · **The halo is the area a hit is SEEN on**, and it has to clear the picture on every side. At
+##    1.35 × the SIM radius it was drawn 18.9 px out, **INSIDE a 49 px body** — the mark that said
+##    「this one was just hit」 was underneath the thing it marked. It was sized off the DRAWN
+##    half-width in the end.
+##  · **The transient list is capped and the OLDEST goes.** The per-body drawer is bounded by the
+##    number of bodies instead, which is why that rule cannot reach a flash or a lunge.
+##  · **The intent lines are a TEXTURE over the fight, not readable lines** — alpha 0.12, at most
+##    fourteen at once. Raising either number turns the island into a cage.
+##  · **A body must not flinch away from a bullet that has not arrived**: the knock and the flash both
+##    read only inside the window that opens when the tracer lands, never when it is fired.
 
 
-# --- the effects, as geometry ------------------------------------------------------------------------
-## ⚠⚠ **This section is what the 3D move deleted, put back.** `_fx_step` and `_drain_events` above never
-## stopped running — effects were born, aged and died every frame with nothing painting them, and the
-## field went quiet without one check going red. **That is the exact shape "Nothing pretends to work"
-## names**, and it stood for a day.
+# --- the ground layer ------------------------------------------------------------------------------
+## ⚠⚠ **THIS SURVIVED THE FIGHT'S DELETION BECAUSE A BODY'S SHADOW IS DRAWN INTO IT** (2026-08-29).
+## The AIR layer went with the effects — the tracer, the shards, the burst and the halo were all it
+## ever carried, and all four belonged to a blow.
 ##
-## **Two buffers and two draw calls, not a node per effect.** Everything here is rebuilt every frame
-## into one `ImmediateMesh` per layer, because an effect that lives 0.12 s cannot afford a node.
+## **One buffer and one draw call, not a node per mark.** It is rebuilt every frame into a single
+## `ImmediateMesh`, because a mark that lives a tenth of a second cannot afford a node.
 ##
-## **The two layers exist because the board became a landscape, and the split IS the answer to
-## ticket 09's second open question** (bottom marks on ground that is no longer flat):
+## ⚠⚠ **A ground mark is CUT INTO PIECES and each piece laid at the height under it.** That is the
+## whole reason this is not one quad per mark: a 6-tile line drawn as one quad crosses a ramp as a
+## chord and half of it ends up underground.
 ##
-##   `_decal`  — marks that BELONG TO THE GROUND: the aim ring, the route, the landing ring, the area
-##               ring, the refusal mark, the intent lines. Cut into `FX_GROUND_STEP_PX` pieces and each
-##               piece laid at the height of the ground under it, so a ring across a ramp climbs it.
-##   `_air`    — marks that belong to a BODY: the tracer, the shards, the death burst, the hit halo.
-##               Built in the CAMERA'S OWN PLANE, so they read exactly as they did on the flat board
-##               and turning the island does not shear them.
-##
-## ⚠ **Neither layer writes depth** (`DEPTH_DRAW_DISABLED`) but both are TESTED against it: a cliff in
-## front still hides what is behind it, and two overlapping effects do not punch holes in each other.
+## ⚠ **It does not write depth** (`DEPTH_DRAW_DISABLED`) but it IS tested against it: a cliff in front
+## still hides what is behind it, and two overlapping marks do not punch holes in each other.
 
 var _decal: MeshInstance3D = null
-var _air: MeshInstance3D = null
 var _g_v := PackedVector3Array()
 var _g_c := PackedColorArray()
-var _a_v := PackedVector3Array()
-var _a_c := PackedColorArray()
 
 
-## One unshaded, vertex-coloured, alpha-blended surface. Both layers are the same material; what
-## differs is only which buffer the geometry lands in and how it is built.
+## One unshaded, vertex-coloured, alpha-blended surface.
 func _fx_layer() -> MeshInstance3D:
 	var m := MeshInstance3D.new()
 	m.mesh = ImmediateMesh.new()
@@ -1962,35 +1686,26 @@ func _fx_layer() -> MeshInstance3D:
 func _fx_begin() -> void:
 	_g_v.clear()
 	_g_c.clear()
-	_a_v.clear()
-	_a_c.clear()
 
 
-## ⚠ **An `ImmediateMesh` surface with zero vertices is an ERROR, not an empty picture.** A quiet frame
-## — no plan, no fighting — is the common case at the start of an island, so both layers are guarded.
+## ⚠ **An `ImmediateMesh` surface with zero vertices is an ERROR, not an empty picture.** A frame with
+## no body on the island is the common case at the title, so the buffer is guarded.
 func _fx_flush() -> void:
-	_fx_commit(_decal, _g_v, _g_c)
-	_fx_commit(_air, _a_v, _a_c)
-
-
-func _fx_commit(node: MeshInstance3D, verts: PackedVector3Array, cols: PackedColorArray) -> void:
-	if node == null:
+	if _decal == null:
 		return
-	var im: ImmediateMesh = node.mesh
+	var im: ImmediateMesh = _decal.mesh
 	im.clear_surfaces()
-	if verts.is_empty():
+	if _g_v.is_empty():
 		return
 	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	for k in verts.size():
-		im.surface_set_color(cols[k])
-		im.surface_add_vertex(verts[k])
+	for k in _g_v.size():
+		im.surface_set_color(_g_c[k])
+		im.surface_add_vertex(_g_v[k])
 	im.surface_end()
 
 
-# --- the ground layer ---------------------------------------------------------------------------------
-
 ## The height of the ground under a point given in world px. **The one place a ground mark asks where
-## the ground is**, so a ring and a route cannot disagree about the hill they are both crossing.
+## the ground is**, so two marks cannot disagree about the hill they are both crossing.
 func _ground_y_px(p: Vector2) -> float:
 	var tx := int(floor(p.x / Look.TILE_PX))
 	var ty := int(floor(p.y / Look.TILE_PX))
@@ -2003,49 +1718,8 @@ func _g_tri(a: Vector2, b: Vector2, c: Vector2, col: Color) -> void:
 		_g_c.append(col)
 
 
-func _g_quad(a: Vector2, b: Vector2, c: Vector2, d: Vector2, col: Color) -> void:
-	_g_tri(a, b, c, col)
-	_g_tri(a, c, d, col)
-
-
-## One straight mark on the ground, cut into pieces small enough to follow it. **The cutting is the
-## whole of why this is not a single quad**: a 6-tile route drawn as one quad crosses a ramp as a
-## chord and half of it is underground.
-func _g_seg(a: Vector2, b: Vector2, width: float, col: Color, step: float = 0.0) -> void:
-	var span := b - a
-	var len_px := span.length()
-	if len_px <= Rules.EPS:
-		return
-	var n := Vector2(-span.y, span.x) / len_px * (width * 0.5)
-	var cut := step if step > 0.0 else Look.FX_GROUND_STEP_PX
-	var steps := maxi(1, int(ceil(len_px / cut)))
-	for k in steps:
-		var p0 := a.lerp(b, float(k) / float(steps))
-		var p1 := a.lerp(b, float(k + 1) / float(steps))
-		_g_quad(p0 + n, p1 + n, p1 - n, p0 - n, col)
-
-
-func _g_line(points: PackedVector2Array, width: float, col: Color) -> void:
-	for k in range(1, points.size()):
-		_g_seg(points[k - 1], points[k], width, col)
-
-
-## A ring lying on the ground. Every segment is its own quad and every corner samples its own height,
-## so the ring climbs whatever it is drawn across.
-func _g_ring(centre: Vector2, radius: float, width: float, col: Color) -> void:
-	if radius <= Rules.EPS:
-		return
-	var half := width * 0.5
-	var segs := maxi(8, int(ceil(TAU * radius / Look.FX_GROUND_STEP_PX)))
-	for k in segs:
-		var a0 := TAU * float(k) / float(segs)
-		var a1 := TAU * float(k + 1) / float(segs)
-		var d0 := Vector2(cos(a0), sin(a0))
-		var d1 := Vector2(cos(a1), sin(a1))
-		_g_quad(centre + d0 * (radius - half), centre + d1 * (radius - half),
-			centre + d1 * (radius + half), centre + d0 * (radius + half), col)
-
-
+## A disc lying on the ground. Every wedge samples its own height, so it follows whatever it is drawn
+## across instead of hovering flat over one 조각.
 func _g_disc(centre: Vector2, radius: float, col: Color) -> void:
 	if radius <= Rules.EPS:
 		return
@@ -2055,196 +1729,3 @@ func _g_disc(centre: Vector2, radius: float, col: Color) -> void:
 		var a1 := TAU * float(k + 1) / float(segs)
 		_g_tri(centre, centre + Vector2(cos(a0), sin(a0)) * radius,
 			centre + Vector2(cos(a1), sin(a1)) * radius, col)
-
-
-# --- the air layer ------------------------------------------------------------------------------------
-
-## A world point given as an offset in SCREEN px from an anchor. `-off.y` because the flat board's y
-## ran down the screen and every constant in `look.gd` was measured in that frame.
-func _air_at(anchor: Vector3, off: Vector2) -> Vector3:
-	var b := _cam.transform.basis
-	return anchor + b.x * (off.x / Look.TILE_PX) + b.y * (-off.y / Look.TILE_PX)
-
-
-func _a_quad(anchor: Vector3, a: Vector2, b: Vector2, c: Vector2, d: Vector2, col: Color) -> void:
-	for p in [a, b, c, a, c, d]:
-		_a_v.append(_air_at(anchor, p))
-		_a_c.append(col)
-
-
-func _a_seg(anchor: Vector3, a: Vector2, b: Vector2, width: float, col: Color) -> void:
-	var span := b - a
-	var len_px := span.length()
-	if len_px <= Rules.EPS:
-		return
-	var n := Vector2(-span.y, span.x) / len_px * (width * 0.5)
-	_a_quad(anchor, a + n, b + n, b - n, a - n, col)
-
-
-func _a_ring(anchor: Vector3, radius: float, width: float, col: Color) -> void:
-	if radius <= Rules.EPS:
-		return
-	var half := width * 0.5
-	var segs := Look.FX_RING_SEGMENTS
-	for k in segs:
-		var a0 := TAU * float(k) / float(segs)
-		var a1 := TAU * float(k + 1) / float(segs)
-		var d0 := Vector2(cos(a0), sin(a0))
-		var d1 := Vector2(cos(a1), sin(a1))
-		_a_quad(anchor, d0 * (radius - half), d1 * (radius - half),
-			d1 * (radius + half), d0 * (radius + half), col)
-
-
-func _a_disc(anchor: Vector3, radius: float, col: Color) -> void:
-	if radius <= Rules.EPS:
-		return
-	var segs := Look.FX_RING_SEGMENTS
-	for k in segs:
-		var a0 := TAU * float(k) / float(segs)
-		var a1 := TAU * float(k + 1) / float(segs)
-		_a_quad(anchor, Vector2.ZERO, Vector2(cos(a0), sin(a0)) * radius,
-			Vector2(cos(a1), sin(a1)) * radius, Vector2.ZERO, col)
-
-
-## Where a body's own effects hang: over the tile it stands on, a body-radius up. **Not the sprite's
-## centre** — the sprite is 2.4 radii wide and its middle drifts with the picture's aspect, and an
-## effect that moved when the artwork changed would be an effect measured against the wrong thing.
-func _body_anchor(centre_px: Vector2, radius: float) -> Vector3:
-	return Vector3(centre_px.x / Look.TILE_PX,
-		_ground_y_px(centre_px) + (Look.BODY_LIFT_PX + radius) / Look.TILE_PX,
-		centre_px.y / Look.TILE_PX)
-
-
-## How much of a body's hit flash is left, 0..1. `_flash_of` deliberately returns a CONSTANT strength
-## while the flash is live — it is a tint, and a tint that ramps reads as a fade rather than a hit —
-## but the halo is an area and has to go out, so it reads the clock itself.
-func _halo_of(key: String) -> float:
-	if not _body.has(key):
-		return 0.0
-	var b: Dictionary = _body[key]
-	var left := float(b["flash"])
-	if left <= 0.0 or left > Look.HIT_FLASH_SEC:
-		return 0.0
-	return left / Look.HIT_FLASH_SEC
-
-
-## A straight mark between two points that are BOTH in the world, thickened in the camera's plane.
-## The tracer needs this and the camera-plane `_a_seg` cannot serve it: a shooter on a cliff and a
-## target on the beach are 2.4 tiles apart in height, and a line built from screen offsets alone would
-## leave the muzzle it was fired from.
-func _a_seg3(a: Vector3, b: Vector3, width: float, col: Color) -> void:
-	var basis := _cam.transform.basis
-	var d := b - a
-	var du := d.dot(basis.x)
-	var dv := d.dot(basis.y)
-	var l := sqrt(du * du + dv * dv)
-	if l <= Rules.EPS:
-		return
-	var n := (basis.x * (-dv / l) + basis.y * (du / l)) * (width * 0.5 / Look.TILE_PX)
-	for v in [a + n, b + n, b - n, a + n, b - n, a - n]:
-		_a_v.append(v)
-		_a_c.append(col)
-
-
-## A world px point lifted to the height an effect with no body of its own hangs at. See
-## `FX_AIR_LIFT_PX`.
-func _fx_point3(p: Vector2) -> Vector3:
-	return Vector3(p.x / Look.TILE_PX,
-		_ground_y_px(p) + Look.FX_AIR_LIFT_PX / Look.TILE_PX,
-		p.y / Look.TILE_PX)
-
-
-# --- what actually gets painted -------------------------------------------------------------------
-
-## Everything that is not bolted to a body, in the order it has to stack: the plan under the fight,
-## the intent lines under the transients. **One entry point** so a caller cannot paint half of it.
-func _paint_fx() -> void:
-	if battle == null or army == null or battle.grid == null:
-		return
-	_paint_intent()
-	_paint_transients()
-
-
-## ⚠⚠ **EVERY BOAT PAINTER STOOD HERE AND ALL FOUR ARE DELETED.** `_paint_plan` (the aim ring and
-## its water route), `_paint_placed_boats` (one ring per drop, the undo's only picture) and
-## `_paint_ghosts` (the bodies a press would land) went on 2026-08-28 with the gesture that authored
-## them; `_paint_boat_routes` goes now (2026-08-29) with the boats themselves.
-
-
-## **Who is going for whom**, one thin line per pair. The alpha is 0.12 and up to
-## `TARGET_LINE_MAX_COUNT` of them cross the island at once: this effect is a TEXTURE over the fight,
-## not a set of readable lines, and raising either number turns it into a cage.
-func _paint_intent() -> void:
-	var left := Look.TARGET_LINE_MAX_COUNT
-	for i in battle.soldier_target.size():
-		if left <= 0:
-			break
-		var e := int(battle.soldier_target[i])
-		if e < 0 or not battle.is_hittable(i):
-			continue
-		if e >= battle.enemy_alive.size() or battle.enemy_alive[e] == 0:
-			continue
-		_g_seg(Look.tile_point_px(battle.soldier_pos[i]), Look.tile_point_px(battle.enemy_pos[e]),
-			Look.TARGET_LINE_WIDTH_PX, Look.COL_TARGET_LINE, Look.FX_INTENT_STEP_PX)
-		left -= 1
-	for e in battle.enemy_target.size():
-		if left <= 0:
-			break
-		if battle.enemy_alive[e] == 0:
-			continue
-		var i := int(battle.enemy_target[e])
-		if i < 0 or not battle.is_hittable(i):
-			continue
-		_g_seg(Look.tile_point_px(battle.enemy_pos[e]), Look.tile_point_px(battle.soldier_pos[i]),
-			Look.TARGET_LINE_WIDTH_PX, Look.COL_TARGET_LINE, Look.FX_INTENT_STEP_PX)
-		left -= 1
-
-
-## The six transient kinds `_drain_events` makes. **Nothing here decides WHEN anything happens** — the
-## sim froze the geometry on the frame the fact happened and this reads it back at whatever age it has
-## reached, which is why an island re-opening cannot show a stale explosion.
-func _paint_transients() -> void:
-	for raw_fx in _fx:
-		var fx: Dictionary = raw_fx
-		var age := float(fx["age"]) - float(fx["delay"])
-		if age < 0.0:
-			continue
-		var p := clampf(age / maxf(float(fx["life"]), Rules.EPS), 0.0, 1.0)
-		var fade := 1.0 - p
-		match int(fx["kind"]):
-			FxKind.SHOT:
-				# A STUB, not the whole line: drawing muzzle-to-target every frame is a laser, and a
-				# laser says "a beam is standing there" rather than "something crossed".
-				var p0 := _fx_point3(fx["from"])
-				var p1 := _fx_point3(fx["to"])
-				var full := p0.distance_to(p1)
-				var dir := (p1 - p0).normalized() if full > Rules.EPS else Vector3.RIGHT
-				var head := full * p
-				var tail := maxf(0.0, head - Look.SHOT_LEN_PX / Look.TILE_PX)
-				_a_seg3(p0 + dir * tail, p0 + dir * head, Look.SHOT_WIDTH_PX, Look.COL_SHOT)
-			FxKind.SPARK:
-				var anchor := _fx_point3(fx["at"])
-				var pts := _spark_points(Vector2.ZERO, fx["facing"], p)
-				var col := Look.COL_SPARK
-				col.a = fade
-				for k in range(0, pts.size() - 1, 2):
-					_a_seg(anchor, pts[k], pts[k + 1], Look.SPARK_WIDTH_PX, col)
-			FxKind.BURST:
-				# ⚠ The fx carries the SIM radius (the fact frozen at death); the PICTURE starts at
-				# that body's sprite half-width — `BURST_START_MUL`'s own paragraph owns why, and the
-				# anchor keeps the sim radius so the ring hangs at the body's real middle.
-				var r := float(fx["radius"]) * Look.BURST_START_MUL * lerpf(1.0, Look.BURST_GROWTH, p)
-				var col: Color = fx["colour"]
-				col.a = fade
-				_a_ring(_body_anchor(fx["at"], float(fx["radius"])), r, Look.BURST_WIDTH_PX, col)
-			FxKind.AREA:
-				var r := float(fx["radius"]) * lerpf(Look.AREA_RING_START_RATIO, 1.0, p)
-				var col := Look.COL_AREA_RING
-				col.a *= fade
-				_g_ring(fx["at"], r, Look.AREA_RING_WIDTH_PX, col)
-			FxKind.LAND:
-				# ⚠ **Fixed radius, unlike the two above.** `LAND_RING_R_PX` has no growth constant
-				# beside it, and inventing one would be a number nobody measured.
-				var col := Look.COL_LAND_RING
-				col.a *= fade
-				_g_ring(fx["at"], Look.LAND_RING_R_PX, Look.LAND_RING_WIDTH_PX, col)

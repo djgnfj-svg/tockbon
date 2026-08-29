@@ -27,56 +27,20 @@ extends RefCounted
 ## The view multiplies by the tile size and nothing here knows what a pixel is.
 
 
-enum Outcome { RUNNING, WON, LOST }
-
-## Why the island was lost. The loss screen has to say which, because these are different mistakes and
-## a screen that shows the wrong one teaches the wrong lesson.
-##
-## ⚠⚠ **`LANDING_LOST` and `WIPED` are two facts, not one, and the difference is on screen.** WIPED is
-## *every soldier you own is dead*. LANDING_LOST is *everyone you SENT is dead and the ones you kept
-## back can never be sent*, which is the same run-ending position with living soldiers still standing
-## at the harbour. Showing 「전멸」 for the second one puts a sentence on screen that the screen itself
-## disproves — the player is looking at those soldiers — and that is how a screen stops being trusted.
-##
-## ⚠ **Appended, never inserted.** These are ordinals a saved run or a pinned literal could hold.
-##
-## ⚠⚠ **`TIMEOUT` WAS REMOVED 2026-08-27 and that DID renumber the two below it.** The rule against
-## inserting is about ordinals surviving in something outside this file, and December is a demo with
-## no saves — nothing outside the running process holds one. **What did hold them is `net_shell`**,
-## which pinned the enum's size and every member's screen wording, and that pin moved with this line.
-## ⇒ **The day a save file exists, this becomes append-only for real.**
-##
-## ⚠⚠ **BOTH ARE TRUE AT ONCE when the last body dies with nobody in reserve, and `WIPED` WINS.**
-## The precedence is stated here and applied in exactly one place (`_phase_clock`), because "every
-## soldier is dead" is strictly more than "the landing force is gone" — it is the stronger claim and
-## the more useful one to read. `net_battle` pins both arms of it.
-enum Lose { NONE, WIPED, LANDING_LOST }
-
-## Where a soldier is right now, on THIS island. It is per-island state and not part of the roster:
-## `army` holds who exists and how hurt they are, and that is what carries to the next island.
-##
-## RESERVE -> ASHORE is one way. **A soldier that has landed never goes back to RESERVE**, which is
-## what makes "one deployment per soldier per island" structural instead of a rule someone has to
-## remember.
-##
 ## ⚠⚠ **`TRANSIT` STOOD BETWEEN THE TWO AND IT IS DELETED** (2026-08-29) with the boats — a soldier at
 ## sea, hittable and unable to hit back. **An enum member no code path can enter is a slot a future
 ## writer fills by accident**, which is the same reason a `LOADED` state was deleted before it.
 enum SoldierState { RESERVE, ASHORE, DEAD }
 
-## What happened inside one `step()`. **Three kinds and no more** — the view turns each into a
-## picture and decides on its own how long and in what colour, because a duration in this file would
-## be a rule that changes what happens. `combat-juice`, section "How an event crosses from sim to
-## view", is where the shape is pinned.
+## ⚠⚠ **`Event` AND `ENEMY_UID_BASE` STOOD HERE AND BOTH ARE DELETED** (2026-08-29) with the fight.
 ##
-## The kind is an enum and not a string on purpose: `Battle.Event.ATTAK` is a parse error, `"ATTAK"`
-## is a silent miss that draws nothing with every check about it green.
-enum Event { ATTACK, DEATH, LAND }
-
-## Enemy ids share `grid.reserved` with soldier ids, and a soldier's id is its army index starting at
-## 0. Without a disjoint range enemy 0 and soldier 0 would each release the other's tile, and the
-## symptom is a soldier walking through a bison with every check about reservation still green.
-const ENEMY_UID_BASE := 1 << 20
+##  · **`Event` was ATTACK · DEATH · LAND, an enum and never a string** — `Battle.Event.ATTAK` is a
+##    parse error and `"ATTAK"` is a silent miss that draws nothing with every check about it green.
+##    **The view decided how long and in what colour**, because a duration in this file would be a
+##    rule that changes what happens.
+##  · **`ENEMY_UID_BASE` kept enemy ids disjoint from soldier ids** in `grid.reserved`. Without it
+##    enemy 0 and soldier 0 release each other's 조각, and the symptom is one body walking through
+##    another with every reservation check still green.
 
 ## A flow field older than this is thrown away and rebuilt on the next request. The grid is 1536
 ## tiles (`boat-and-landing`'s 48 x 32), so one BFS is ~1536 operations and twenty units at 2 Hz is
@@ -98,59 +62,32 @@ const OFFMAP := Vector2(-1.0, -1.0)
 
 var grid: Grid = null
 var army: Army = null
-## ⚠ **`elapsed` STAYED when the time limit went** (2026-08-27). It is not half of a deleted rule: it
-## is how several nets prove the clock actually moved, which is the difference between a fight that ran
-## and a fight that was silently never stepped.
+## Seconds of simulated time this island has run.
+## ⚠ **It STAYED when the time limit went** (2026-08-27) and again when the fight went (2026-08-29).
+## It is not half of a deleted rule: **it is how a net proves the clock actually moved**, which is the
+## difference between a sim the shell really stepped and one it silently never stepped at all.
 var elapsed := 0.0
 
-## One frame's facts, oldest first. Each is a Dictionary whose `kind` is an `Event`:
-##  · ATTACK — `from` (attacker id) · `from_enemy` (bool) · `to` (primary target) · `dmg` ·
-##    `area` (tiles) · `splash` (PackedInt32Array of the SECONDARY victims that actually took damage)
-##  · DEATH — `id` · `is_enemy`
-##  · LAND — `id` (soldier)
+# --- enemies: DELETED 2026-08-29 -----------------------------------------------------------------
+## ⚠⚠ **ELEVEN PARALLEL COLUMNS STOOD HERE** — type, HP, alive, position, target, windup, windup
+## target, cooldown, goal, stale and home level — **and all of them are gone with the fight.**
+## **Two of them were PUBLIC on purpose and that is the part worth keeping:**
 ##
-## **No position is carried.** `enemy_pos` and `soldier_pos` are never cleared and `army` never drops
-## a row, so the view reads the place off the id and the same value is not written down twice.
+##  · **The telegraph was per-body STATE, not an event.** `enemy_windup` counted down for the whole
+##    length the view had to draw, and an event plus a view-side clock is a second copy of that
+##    countdown. **Two clocks drift.**
+##  · **The declared blow was re-checked against `enemy_windup_at`, not against the current target**,
+##    so the ring the view drew and the damage that landed could never name two different bodies.
 ##
-## **Whoever drives this calls `begin_frame()` first**, every frame — see that function.
-## **There is no cap, deliberately.** A cap would not fix a forgotten `begin_frame()`, it would make
-## it quiet: thousands of ATTACKs truncated at 256 leaves memory fine and nobody feeling anything
-## wrong. A net measures the per-frame ceiling instead.
-var events: Array = []
-
-# --- enemies. Parallel columns, index e is the same enemy in all of them --------------------------
-var enemy_type := PackedInt32Array()
-var enemy_hp := PackedFloat32Array()
-var enemy_alive := PackedByteArray()
-var enemy_pos: Array = []                 # Vector2, tile units
-var enemy_target := PackedInt32Array()    # soldier id, or -1
-## Seconds left before a DECLARED blow lands, 0.0 when nothing is declared. Public because the
-## telegraph is a state the view draws for its whole length, not a one-frame fact: an event plus a
-## view-side clock would be a second copy of this countdown, and two clocks drift.
-var enemy_windup := PackedFloat32Array()
-## The soldier a declared blow is aimed at, -1 when nothing is declared. The blow is re-checked
-## against THIS id and not against `enemy_target`, so the ring the view drew and the damage that
-## lands can never name two different soldiers.
-var enemy_windup_at := PackedInt32Array()
-var _enemy_cd := PackedFloat32Array()
-var _enemy_goal: Array = []               # Vector2, the tile centre this enemy is walking into
-var _enemy_stale := PackedByteArray()     # 1 = may still hold the tile behind it
-## The tier an enemy was posted on, or **-1 for one that is free to go anywhere** (티켓 19).
-##
-## ⚠⚠ **ONLY A DEFENDER THAT STARTED ON HIGH GROUND HOLDS, AND THAT NARROWNESS IS THE WHOLE RULE.**
-## Enemies move by "walk at the nearest soldier" and nothing else, so the ones posted on a plateau
-## walked DOWN their own stair and died on the flat — **measured in play: most WON fights never sent
-## anyone up the stairs at all, because the defenders came to them.** The ticket's answer is that the
-## advantage is positional and the ATTACKER does the walking; a defender that abandons the height
-## inverts it.
-## ⚠ **Giving every enemy a holding behaviour would stop the fight coming to the player at all**, so a
-## defender on the low ground is untouched and still advances.
-var _enemy_home_level := PackedInt32Array()
+## ⚠ **`_enemy_home_level` is the one to read before rebuilding**: only a defender that STARTED high
+## held its storey. Enemies walk at the nearest body and nothing else, so the ones posted on a plateau
+## walked down their own stair and died on the flat — **measured in play: most WON fights never sent
+## anyone up the stairs, because the defenders came down.** ⚠ Giving EVERY enemy a holding behaviour
+## is the failure on the other side: then the fight never comes to the player at all.
 
 # --- soldiers. Indexed by ARMY id, so index i is the same soldier here and in `army` --------------
 var soldier_state := PackedInt32Array()
 var soldier_pos: Array = []               # Vector2, tile units
-var soldier_target := PackedInt32Array()  # enemy index, or -1
 ## **Where the PLAYER sent this body, as a tile index, or -1 for「nowhere」.**
 ##
 ## ⚠⚠ **This is the first destination in the file that is not an enemy.** Until 2026-08-27 an allied
@@ -158,14 +95,11 @@ var soldier_target := PackedInt32Array()  # enemy index, or -1
 ## at all. It is a SEPARATE column from `soldier_target` on purpose: an order and a target are two
 ## different sentences, and folding them into one index would make「walk to the stair」and「the stair
 ## is an enemy」the same value.
-## ⚠ **Cleared on arrival**, so a body that reached where it was sent goes back to reading the fight.
+## ⚠ **Cleared on arrival.** It used to hand the body back to the fight; there is no fight, so it just stands.
 var soldier_order := PackedInt32Array()   # tile index the player ordered, or -1
-var _soldier_cd := PackedFloat32Array()
 var _soldier_goal: Array = []
 var _soldier_stale := PackedByteArray()
 ## False until `commit()`. **`step()` refuses to do anything at all while it is false.**
-var _committed := false
-
 ## Whole sub-steps only: `step` adds `dt` here and consumes `Rules.SIM_SUBSTEP_SEC` at a time, so the
 ## decomposition is additive over ANY sequence of `dt`s and a 6x run lands on the same state as a 1x
 ## run. Consuming a remainder pass instead would hand `_phase_targeting`, `_phase_landings` and
@@ -183,8 +117,6 @@ var substeps := 0
 
 var _fields := {}                         # target tile -> PackedInt32Array
 var _field_age := {}                      # target tile -> seconds since it was built
-var _outcome := Outcome.RUNNING
-var _lose := Lose.NONE
 
 
 ## Builds one island's fight. **`grid.load_rows` must already have run** — this writes tile
@@ -197,15 +129,11 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 	self.grid = grid
 	self.army = army
 	elapsed = 0.0
-	events = []
-	_outcome = Outcome.RUNNING
-	_lose = Lose.NONE
 	_fields = {}
 	_field_age = {}
 	# Every time. A `Battle` is reused across islands, and a leftover `_substep_acc` is a fraction of
-	# the previous island's fight; a leftover `_committed` would start the next island already fought.
-	# `setup` exists to make a reused Battle indistinguishable from a fresh one.
-	_committed = false
+	# the previous island's clock. `setup` exists to make a reused Battle indistinguishable from a
+	# fresh one.
 	_substep_acc = 0.0
 	substeps = 0
 
@@ -216,59 +144,18 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 		push_error("battle.setup: 격자가 비어 있다 — grid.load_rows 를 먼저 불러야 한다")
 		return
 
-	var enemy_count := spawns.size()
-	enemy_type = PackedInt32Array()
-	enemy_type.resize(enemy_count)
-	enemy_hp = PackedFloat32Array()
-	enemy_hp.resize(enemy_count)
-	enemy_alive = PackedByteArray()
-	enemy_alive.resize(enemy_count)
-	enemy_target = PackedInt32Array()
-	enemy_target.resize(enemy_count)
-	enemy_windup = PackedFloat32Array()
-	enemy_windup.resize(enemy_count)
-	enemy_windup_at = PackedInt32Array()
-	enemy_windup_at.resize(enemy_count)
-	_enemy_cd = PackedFloat32Array()
-	_enemy_cd.resize(enemy_count)
-	_enemy_stale = PackedByteArray()
-	_enemy_stale.resize(enemy_count)
-	_enemy_home_level = PackedInt32Array()
-	_enemy_home_level.resize(enemy_count)
-	enemy_pos = []
-	_enemy_goal = []
-	var claimed := grid.reserved
-	for e in enemy_count:
-		var spawn: Dictionary = spawns[e]
-		var tile := int(spawn["tile"])
-		var here := _point_of_tile(tile)
-		enemy_type[e] = int(spawn["type_id"])
-		enemy_hp[e] = Rules.hp_of(enemy_type[e])
-		enemy_alive[e] = 1
-		enemy_target[e] = -1
-		enemy_windup[e] = 0.0
-		enemy_windup_at[e] = -1
-		_enemy_cd[e] = 0.0
-		_enemy_stale[e] = 0
-		# Posted high means posted; posted low means free. Read once, off the spawn tile, so a defender
-		# that is somehow moved later still holds the tier it was placed to hold.
-		var home := grid.level_of(tile)
-		_enemy_home_level[e] = home if home > 0 else -1
-		enemy_pos.append(here)
-		_enemy_goal.append(here)
-		if tile >= 0 and tile < claimed.size():
-			claimed[tile] = ENEMY_UID_BASE + e
-	grid.reserved = claimed
+	# ⚠⚠ **THE SPAWN LOOP STOOD HERE AND IT IS DELETED** (2026-08-29) with the fight. It built every
+	# enemy column off `spawns` and claimed each spawn 조각 in `grid.reserved` under a uid offset by
+	# `ENEMY_UID_BASE`, so an enemy and a soldier could never release each other's 조각.
+	# ⚠ **`spawns` is still a parameter and it is still read for its SIZE by nothing** — the argument
+	# is kept because `Islands.spawns()` and the board's spawn letters are untouched, and the day
+	# bodies come back this is where they land.
 
 	var roster := army.type_id.size()
 	soldier_state = PackedInt32Array()
 	soldier_state.resize(roster)
-	soldier_target = PackedInt32Array()
-	soldier_target.resize(roster)
 	soldier_order = PackedInt32Array()
 	soldier_order.resize(roster)
-	_soldier_cd = PackedFloat32Array()
-	_soldier_cd.resize(roster)
 	_soldier_stale = PackedByteArray()
 	_soldier_stale.resize(roster)
 	# resize on a fresh array zero-fills, so nobody has charged yet. **Per island for free**: a
@@ -276,17 +163,11 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 	soldier_pos = []
 	_soldier_goal = []
 	for i in roster:
-		# ⚠⚠ **A soldier who died on an earlier island is DEAD here, never RESERVE, and THIS IS NOW THE
-		# ONLY LINE THAT ENFORCES IT.** It used to be half of a pair: `send` refused anything that was
-		# not RESERVE, and this line was what gave that refusal a corpse to refuse — leaving them in
-		# RESERVE would have made a dead body draggable at the harbour and sendable to a beach.
-		# **`send` and the harbour are deleted; this line is not.** `summon` spends bodies through
-		# `army.living_ids_of_type` and filters on RESERVE the same way, so a corpse left RESERVE here
-		# would sail again.
+		# ⚠ **A soldier who died on an earlier island is DEAD here, never RESERVE.** Nothing kills a
+		# body any more, so no corpse can reach this line today — the rule is kept because the roster
+		# is what carries across islands and a body left RESERVE would be deployed again.
 		soldier_state[i] = SoldierState.RESERVE if army.alive[i] != 0 else SoldierState.DEAD
-		soldier_target[i] = -1
 		soldier_order[i] = -1
-		_soldier_cd[i] = 0.0
 		_soldier_stale[i] = 0
 		soldier_pos.append(OFFMAP)
 		_soldier_goal.append(OFFMAP)
@@ -380,36 +261,6 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 
 
 ## back with it is a plan for the player to author, and there is none.
-func commit() -> bool:
-	if _committed:
-		return false
-	_committed = true
-	return true
-
-
-func committed() -> bool:
-	return _committed
-
-
-## Throws away last frame's `events`. **Every driver of this class calls it once a frame, before
-## `step`** — the shell, the headless probe and every net that turns frames.
-##
-## It is not done inside `step` and that is not a style choice. `step` returns early when the island
-## is over or `dt` is 0, so clearing at its head means the last frame's events survive from the
-## moment a panel opens and the view replays them forever; clearing at its tail means nobody ever
-## sees them. Both were shipped in the dead game and cost two effects outright.
-func begin_frame() -> void:
-	events.clear()
-
-
-## One frame's worth of simulated time, run as whole `Rules.SIM_SUBSTEP_SEC` sub-steps with the
-## leftover carried in `_substep_acc`. The phase order below is the contract described at the top of
-## this file, and it is the SUB-STEP that is one pass of it, not the call.
-##
-## ⇒ **`step(dt)` and `step(dt/k)` k times land on identical state**, which is what makes the speed
-## ladder a viewing rate instead of a different game. Without it a cooldown reset to the whole period
-## on fire loses `dt/period` of every cycle, and the loss is asymmetric: the bison's 2.0 s period
-## sheds half the fraction the 1.0 s cells do, so speeding up is a quiet buff to the player.
 func step(dt: float) -> void:
 	# Per-CALL facts, answered once. See the header for why the running test is NOT one of them.
 	if grid == null or army == null:
@@ -418,31 +269,22 @@ func step(dt: float) -> void:
 		return
 	_substep_acc += dt
 	while _substep_acc >= Rules.SIM_SUBSTEP_SEC:
-		if _outcome != Outcome.RUNNING:
-			break
 		_substep_acc -= Rules.SIM_SUBSTEP_SEC
-		# ⚠⚠ **ONE PHASE RUNS BEFORE THE COMMIT AND IT IS THE ONLY ONE.** `step` used to return here
-		# outright, and the reason it did is written on `_the_landing_force_is_gone`: every soldier is
-		# RESERVE while the player is still planning, so letting the CLOCK run would lose the island
-		# before anything was placed. **That reason is about the clock, the landings and the fight —
-		# none of which this branch touches.** A body walking where it was told is what the player
-		# does before a fight, not during one, and it cannot decide the island: no targeting, no
-		# attacks, no boats, no deaths, no verdict.
-		# ⚠ `substeps` is NOT counted here. It measures the fight, and a fight that has not started
-		# has run no sub-steps of it.
-		if not _committed:
-			_age_fields(Rules.SIM_SUBSTEP_SEC)
-			_phase_orders(Rules.SIM_SUBSTEP_SEC)
-			continue
 		substeps += 1
-		_phase_targeting()
+		# ⚠⚠ **THE CLOCK MOVED HERE ON 2026-08-29**, out of the deleted `_phase_clock`. It is not
+		# half of a deleted rule: **it is the only thing that can tell a sim the shell really stepped
+		# from one it silently never stepped at all**, and `net_shell` reads it for exactly that.
+		# ⚠ **Advanced by the SUB-STEP and never by `dt`** — the whole point of the decomposition is
+		# that the same simulated second costs the same number of passes whatever `dt` arrives.
+		elapsed += Rules.SIM_SUBSTEP_SEC
+		# ⚠⚠ **SIX PHASES STOOD HERE AND TWO ARE LEFT** (2026-08-29). Targeting, attacks, deaths and
+		# the verdict went with the fight, and the `_committed` gate that used to hold them back went
+		# with them. **The order the survivors keep is still the contract**: orders move a body, then
+		# movement finishes whatever 조각 anyone was mid-way across.
+		# ⚠ **`_phase_orders` runs BEFORE `_phase_movement` and `_phase_movement` skips whoever it
+		# moved** — falling through walks one body twice in a sub-step, at double speed.
 		_phase_orders(Rules.SIM_SUBSTEP_SEC)
 		_phase_movement(Rules.SIM_SUBSTEP_SEC)
-		_phase_attacks(Rules.SIM_SUBSTEP_SEC)
-		# After attacks, before deaths: an enemy bled to 0 this sub-step passes the SAME sub-step's
-		# death latch instead of standing a frame at no HP.
-		_phase_deaths()
-		_phase_clock(Rules.SIM_SUBSTEP_SEC)
 
 
 ## **Stands one body on the island with no boat and no crossing.** Returns the tile it took, or -1.
@@ -479,7 +321,6 @@ func place_ashore(soldier_id: int, near_tile: int) -> int:
 	var claimed := grid.reserved
 	claimed[tile] = soldier_id
 	grid.reserved = claimed
-	events.append({"kind": Event.LAND, "id": soldier_id})
 	return tile
 
 
@@ -514,31 +355,6 @@ func ordered_ids() -> Array:
 	return out
 
 
-func outcome() -> int:
-	return _outcome
-
-
-## NONE while the island is running or won. The loss screen reads this to say WHY.
-func lose_reason() -> int:
-	return _lose
-
-
-func enemies_left() -> int:
-	var n := 0
-	for e in enemy_alive.size():
-		if enemy_alive[e] != 0:
-			n += 1
-	return n
-
-
-## ⚠ **`harbour_count()` and `harbour_tile(h)` STOOD HERE AND ARE DELETED.** They were pure pass-throughs
-## to `grid.harbour_tiles` — the last trace of the deleted `dock_tiles`, kept so that "every harbour
-## lookup goes through `grid`" (`boat-and-landing`, 4.4's call table) rather than through a second
-## table on `Battle`. **Nothing in `src/` ever called either**, and with `send` gone nothing ever will.
-## ⚠ **`grid.harbour_tiles` itself SURVIVES** and is where a harbour lookup would go if one ever came
-## back — its own header says who still reads it and why. **Do not re-add a forwarder on `Battle`**: the
-## rule these two obeyed was that a fact about the board lives on the board, in one place.
-
 
 ## Soldiers standing on the island right now. The view draws these and nothing else on the ground.
 func ashore_ids() -> Array:
@@ -548,16 +364,6 @@ func ashore_ids() -> Array:
 			out.append(i)
 	return out
 
-
-## Soldiers aboard a boat at sea right now — `boat-and-landing` stage 5, P4: these are `is_hittable`
-## hit but cannot hit back**, and is excluded from enemy MOVEMENT targeting — see `_phase_movement`.
-func is_hittable(i: int) -> bool:
-	if i < 0 or i >= soldier_state.size():
-		return false
-	if army.alive[i] == 0:
-		return false
-	var s := soldier_state[i]
-	return s == SoldierState.ASHORE
 
 
 # --- phases --------------------------------------------------------------------------------------
@@ -587,49 +393,6 @@ func is_hittable(i: int) -> bool:
 ##    sub-step: whoever unloaded first took the target tile.
 
 
-func _phase_targeting() -> void:
-	for i in soldier_state.size():
-		if soldier_state[i] != SoldierState.ASHORE:
-			soldier_target[i] = -1
-			continue
-		var held := int(soldier_target[i])
-		if held >= 0 and enemy_alive[held] != 0 \
-				and _within(soldier_pos[i], enemy_pos[held], _soldier_reach(i)):
-			continue
-		# ⚠ **A body looks from where it STANDS, and that used to be a decision rather than a default.**
-		# `_nearest_enemy(_seek_point_of(i), grid.height_at(soldier_pos[i]))` stood here: the pack handed
-		# it a centre of mass to look from, and the height had to be passed alongside because that centre
-		# is not a place anybody stands. **Both halves died with 무리사냥 on 2026-08-27** — see the
-		# deletion block where `_seek_point_of` was, and the one on `_dist` for the height.
-		soldier_target[i] = _nearest_enemy(soldier_pos[i])
-
-	for e in enemy_alive.size():
-		if enemy_alive[e] == 0:
-			enemy_target[e] = -1
-			continue
-		var held := int(enemy_target[e])
-		if held >= 0 and is_hittable(held) \
-				and _within(enemy_pos[e], soldier_pos[held], _enemy_reach(e)):
-			continue
-		# Soldiers on a boat ARE in this scan: without it no crow in the slice ever fires on a
-		# landing, and the coastal crows exist for exactly that.
-		enemy_target[e] = _nearest_soldier(enemy_pos[e], Rules.detect_of(enemy_type[e]), false)
-
-
-## **Every body the player sent somewhere walks there.** Runs before `_phase_movement`, and before the
-## commit it is the only phase that runs at all.
-##
-## ⚠⚠ **An order OUTRANKS the fight while it stands.** A body told to go to the stair walks to the
-## stair past an enemy it could have hit — that is what「내가 보낸 자리로 간다」means, and a body that
-## re-decided on the way would make the order a suggestion.
-## ⚠ **The order is cleared the moment the body is standing on the tile**, so it goes straight back to
-## reading the fight; it is NOT held as a post.
-##
-## ⚠⚠ **AND IT IS CLEARED WHEN THE BODY STOPS MAKING PROGRESS.** `flow_field` answers `UNREACHABLE`
-## for a tile no walk can reach, and `_walk` then finds no better neighbour and returns the position it
-## was handed. Without this line the order would stand forever and the body would never fight again —
-## a body permanently disarmed by a click on the wrong side of a cliff, with every check about
-## ordering still green.
 func _phase_orders(dt: float) -> void:
 	for i in soldier_order.size():
 		var dest_tile := int(soldier_order[i])
@@ -667,191 +430,53 @@ func _phase_movement(dt: float) -> void:
 		# sub-step — at double speed, and toward two different places.
 		if int(soldier_order[i]) >= 0:
 			continue
-		var goal: Vector2 = _soldier_goal[i]
-		var speed := army.speed_of(i)
-		var tgt := int(soldier_target[i])
-		if tgt < 0 or _within(soldier_pos[i], enemy_pos[tgt], _soldier_reach(i)):
-			# Stopping mid-tile would leave the unit holding both tiles for the rest of the island,
-			# which halves a doorway's throughput with nothing on screen to explain it. So a unit
-			# caught between tiles finishes the one it already reserved, and stops next frame.
-			if soldier_pos[i].distance_to(goal) > Rules.EPS:
-				soldier_pos[i] = _glide(soldier_pos[i], goal, speed * dt)
-			elif _soldier_stale[i] != 0:
-				_settle(i, goal)
-				_soldier_stale[i] = 0
-			continue
-		var seek: Vector2 = enemy_pos[tgt]
-		soldier_pos[i] = _walk(i, soldier_pos[i], _soldier_goal, i, speed * dt,
-				_field_for(_tile_of(seek)), seek, _soldier_reach(i))
-		_soldier_stale[i] = 1
-
-	for e in enemy_alive.size():
-		if enemy_alive[e] == 0:
-			continue
-		var uid := ENEMY_UID_BASE + e
-		var goal: Vector2 = _enemy_goal[e]
-		# The ONE read site a live SLOW-kind status has: the enemy's speed, glide and walk alike.
-		# The soldier branch above deliberately has no twin — allied bodies never carry a status.
-		var speed := Rules.speed_of(int(enemy_type[e]))
-		var atk := int(enemy_target[e])
-		var seek_id := -1
-		if atk < 0 or not _within(enemy_pos[e], soldier_pos[atk], _enemy_reach(e)):
-			# The movement scan excludes soldiers still aboard. Chasing one means asking
-			# `flow_field` for a path to a water tile, which comes back unreachable everywhere, and
-			# then EVERY enemy on the island stands still for the rest of the fight with nothing
-			# logged. Shooting one is still allowed — that is what `enemy_target` is for.
-			seek_id = _nearest_soldier(enemy_pos[e], Rules.detect_of(enemy_type[e]), true)
-		if seek_id < 0:
-			# In reach, or nothing detected: stand. No patrol, no return-to-post.
-			if enemy_pos[e].distance_to(goal) > Rules.EPS:
-				enemy_pos[e] = _glide(enemy_pos[e], goal, speed * dt)
-			elif _enemy_stale[e] != 0:
-				_settle(uid, goal)
-				_enemy_stale[e] = 0
-			continue
-		var seek: Vector2 = soldier_pos[seek_id]
-		enemy_pos[e] = _walk(uid, enemy_pos[e], _enemy_goal, e, speed * dt,
-				_field_for(_tile_of(seek)), seek, _enemy_reach(e), int(_enemy_home_level[e]))
-		_enemy_stale[e] = 1
-
-
-## Damage lands here and **nothing dies here**. A unit reduced to 0 HP by an earlier attacker in
-## this same phase still swings, because `alive` is what gates an attack and `alive` only moves in
-## the deaths phase. Otherwise whoever the loop reached first would get a free kill, and a free kill
-## is invisible in final state.
-func _phase_attacks(dt: float) -> void:
-	for i in soldier_state.size():
-		if soldier_state[i] != SoldierState.ASHORE:
-			continue
-		_soldier_cd[i] = maxf(0.0, _soldier_cd[i] - dt)
-		var tgt := int(soldier_target[i])
-		if tgt < 0 or enemy_alive[tgt] == 0:
-			continue
-		if not _within(soldier_pos[i], enemy_pos[tgt], _soldier_reach(i)):
-			continue
-		if _soldier_cd[i] > Rules.EPS:
-			continue
-		# The cooldown is NOT reset when the target changes. Reset on retarget, and a soldier
-		# standing in a crowd fires every frame by killing one enemy and picking the next.
+		# ⚠⚠ **THE CHASE STOOD HERE AND IT IS DELETED** (2026-08-29) with the fight. A body with no
+		# order read `soldier_target`, walked at that enemy's position and stopped inside its reach.
+		# **Nothing walks on its own now** — an unordered body finishes the 조각 it already reserved and
+		# stands.
 		#
-		# ⚠⚠ **`army.period_of(i)` / `army.damage_of(i)`, not `Rules.period_of` / `Rules.damage_of`
-		# keyed on the TYPE.** This is what lets a fitted 팔 or 손 change what THIS soldier does —
-		# two soldiers of one type can now differ. `Rules.area_of(st)` stays: 면적 is not one of the
-		# five columns a part moves, and moving it too would invent a sixth stat with no table
-		# behind it.
-		var st := int(army.type_id[i])
-		_soldier_cd[i] = army.period_of(i)
-		_hit_enemies(i, tgt, army.damage_of(i), Rules.area_of(st))
-
-	for e in enemy_alive.size():
-		if enemy_alive[e] == 0:
-			continue
-		_enemy_cd[e] = maxf(0.0, _enemy_cd[e] - dt)
-		var et := int(enemy_type[e])
-		var wind := _windup_of(et)
-		# While a blow is declared the aim is the LOCKED id, never whatever `enemy_target` holds now.
-		# Re-targeting only happens when the held target dies or leaves reach, so the two agree
-		# everywhere except on the frame a replacement is picked — and there, following `enemy_target`
-		# would land the blow on a soldier the drawn ring was never pointing at.
-		var aim := int(enemy_windup_at[e]) if enemy_windup[e] > 0.0 else int(enemy_target[e])
-		if aim < 0 or not is_hittable(aim) \
-				or not _within(enemy_pos[e], soldier_pos[aim], _enemy_reach(e)):
-			# An interrupted wind-up is thrown away whole and never resumed. Keeping the remainder
-			# would let the next blow be announced for a fraction of its time, and a telegraph that
-			# is sometimes short is worse than none at all — announcing EVERY blow is the whole
-			# reason this exists.
-			enemy_windup[e] = 0.0
-			enemy_windup_at[e] = -1
-			continue
-		if enemy_windup[e] > 0.0:
-			enemy_windup[e] = maxf(0.0, enemy_windup[e] - dt)
-			if enemy_windup[e] > Rules.EPS:
-				continue
-			enemy_windup[e] = 0.0
-			enemy_windup_at[e] = -1
-			_enemy_cd[e] = Rules.period_of(et)
-			_hit_soldiers(e, aim, Rules.damage_of(et), Rules.area_of(et))
-			continue
-		if _enemy_cd[e] > Rules.EPS:
-			continue
-		if wind > 0.0:
-			# Declared, not landed — and **this is the frame the old rule fired on.** The cooldown
-			# drains while there is no target and then sits at 0, so the frame a soldier walks into
-			# reach used to be an instant blow with nothing before it. Declaring here is what makes
-			# the FIRST blow announced like every one after it.
-			#
-			# The cooldown is deliberately NOT started here: the period measures blow to blow, so
-			# starting it at the declaration would make the wind-up free on every blow but the first.
-			enemy_windup[e] = wind
-			enemy_windup_at[e] = aim
-			continue
-		_enemy_cd[e] = Rules.period_of(et)
-		_hit_soldiers(e, aim, Rules.damage_of(et), Rules.area_of(et))
+		# ⚠ **Finishing the reserved 조각 is not tidiness.** Stopping mid-조각 leaves the body holding
+		# BOTH for the rest of the island, which halves a doorway's throughput with nothing on screen to
+		# explain it.
+		var goal: Vector2 = _soldier_goal[i]
+		if soldier_pos[i].distance_to(goal) > Rules.EPS:
+			soldier_pos[i] = _glide(soldier_pos[i], goal, army.speed_of(i) * dt)
+		elif _soldier_stale[i] != 0:
+			_settle(i, goal)
+			_soldier_stale[i] = 0
 
 
-## Seconds this type spends announcing a blow before it lands, 0.0 for the types that just swing.
-## Only the lion has one — see `LION_WINDUP_SEC` in `rules.gd` for why the ranged cell's area does
-## not get one even though it has an area.
-func _windup_of(type_id: int) -> float:
-	return Rules.LION_WINDUP_SEC if type_id == Rules.LION else 0.0
-
-
-## `area > 0` also damages every OTHER ENEMY within `area` of the primary target. Only enemies —
-## there is no friendly fire in this slice, so a soldier's splash can never touch a soldier.
+## --- THE FIGHT: DELETED 2026-08-29 ----------------------------------------------------------------
+## ***"그냥 지워도됨 아직 전투 전혀 없어"*** (the user, 2026-08-29, asked twice)
 ##
-## `from_id` is the attacker and it is here for the event alone: the faction is not passed because
-## this function already knows it — only soldiers hit enemies. Handing the event a faction flag as
-## well would be the same fact written in two places.
-func _hit_enemies(from_id: int, primary: int, damage: float, area: float) -> void:
-	enemy_hp[primary] -= damage
-	var splash := PackedInt32Array()
-	if area > 0.0:
-		var centre: Vector2 = enemy_pos[primary]
-		for e in enemy_alive.size():
-			if e == primary or enemy_alive[e] == 0:
-				continue
-			if _within(enemy_pos[e], centre, area):
-				enemy_hp[e] -= damage
-				splash.append(e)
-	# ⚠ **An `_apply_statuses(primary, splash)` call stood here and a `_shove(...)` on the line under it;
-	# both are deleted (see the status block further down, and `Rules.SPECIES_SHOVE`). The rule they
-	# left behind: **what a blow does to what it hit belongs on ONE line, with the same victims** — the
-	# primary and the splash list, resolved once, never walked a second time per effect.
-	events.append({
-		"kind": Event.ATTACK,
-		"from": from_id,
-		"from_enemy": false,
-		"to": primary,
-		"dmg": damage,
-		"area": area,
-		# Who ACTUALLY took the splash, not who was in the radius: an enemy already dead this frame
-		# is skipped above, and a view that flashed the radius instead would light up corpses.
-		"splash": splash,
-	})
-
-
-func _hit_soldiers(from_id: int, primary: int, damage: float, area: float) -> void:
-	army.hp[primary] -= damage
-	var splash := PackedInt32Array()
-	if area > 0.0:
-		var centre: Vector2 = soldier_pos[primary]
-		for i in soldier_state.size():
-			if i == primary or not is_hittable(i):
-				continue
-			if _within(soldier_pos[i], centre, area):
-				army.hp[i] -= damage
-				splash.append(i)
-	events.append({
-		"kind": Event.ATTACK,
-		"from": from_id,
-		"from_enemy": true,
-		"to": primary,
-		"dmg": damage,
-		"area": area,
-		"splash": splash,
-	})
-
-
+## **`_phase_targeting` · `_phase_attacks` · `_windup_of` · `_hit_enemies` · `_hit_soldiers` ·
+## `_phase_deaths` · `_phase_clock` · `_the_landing_force_is_gone` stood here and all eight are gone**,
+## with every `enemy_*` column, `Outcome`, `Lose`, `events`, `commit` and the verdict.
+##
+## ⚠⚠ **IT HAD NEVER RUN IN THE SHIPPED GAME.** The island file carries no spawn letters, so there was
+## nothing to fight, and every phase above sat behind a `_committed` gate whose only caller — the start
+## button — was deleted 2026-08-28. **What the user saw was a swordsman walking, and nothing else.**
+##
+## ⚠⚠ **WHAT A REBUILT FIGHT OWES, each line a defect that was paid for once:**
+##
+##  · **Damage lands in one phase and death latches in a LATER one.** A body reduced to 0 by an earlier
+##    attacker in the same phase still swings; otherwise whoever the loop reached first gets a free
+##    kill, and a free kill is invisible in final state.
+##  · **Deaths latch in the SAME sub-step as the blow**, never a frame later, or a corpse stands at
+##    zero HP for a frame.
+##  · **A target is kept while it is alive AND in reach**, and re-chosen the moment either fails.
+##  · **The heavy attack is TELEGRAPHED**: the lion declared its blow 0.6 s ahead, and the declaration
+##    was per-body state the view could draw. **A dead attacker's declaration dies with it**, or the
+##    view keeps drawing a telegraph over a corpse for the rest of the island.
+##  · **A blow's victims are resolved ONCE** — the primary and the splash list — and every effect reads
+##    that one list. Walking the radius a second time lights up bodies that were already dead.
+##  · **An enemy posted high HOLDS its storey.** It was read off the spawn 조각 at setup, so a body
+##    somehow moved later still holds the storey it was placed to hold. **Making every body hold its
+##    post is the failure on the other side** — then the fight never comes to the player.
+##  · **WON is checked before either loss**, so an island cleared on the same sub-step the last body
+##    dies is a win.
+##  · ⚠ **The verdict needs something to be about.** A commit with no enemies on the board reads as a
+##    win on the first frame — that is why the gate was kept the whole time the fight was unreachable.
 ## --- THE SHOVE AND THE CHARGE: DELETED 2026-08-27 --------------------------------------------------
 ## `_shove_victims`, `_shove` and the `_charged` column are gone with `Rules.SPECIES_SHOVE`. The table
 ## had been `[]` since 2026-08-26: its two rows were 다람쥐's pull and 소's charge, and both species
@@ -912,100 +537,6 @@ func _hit_soldiers(from_id: int, primary: int, damage: float, area: float) -> vo
 
 ## Everything at or below 0 HP dies, and the row stays. `army.kill` keeps the roster's history so a
 ## soldier's id names the same soldier for the whole run — the plan's "permanent death".
-func _phase_deaths() -> void:
-	for e in enemy_alive.size():
-		if enemy_alive[e] != 0 and enemy_hp[e] <= 0.0:
-			enemy_alive[e] = 0
-			enemy_hp[e] = 0.0
-			enemy_target[e] = -1
-			# A dead attacker's declared blow dies with it, or the view keeps drawing a telegraph
-			# over a corpse for the rest of the island.
-			enemy_windup[e] = 0.0
-			enemy_windup_at[e] = -1
-			grid.release_all(ENEMY_UID_BASE + e)
-			events.append({"kind": Event.DEATH, "id": e, "is_enemy": true})
-	for i in soldier_state.size():
-		if army.alive[i] == 0 or army.hp[i] > 0.0:
-			continue
-		army.kill(i)
-		grid.release_all(i)
-		soldier_state[i] = SoldierState.DEAD
-		soldier_target[i] = -1
-		events.append({"kind": Event.DEATH, "id": i, "is_enemy": false})
-
-
-## The clock, and the verdict. **WON is checked before either loss**, so an island cleared on the
-## frame the timer expires is a win rather than a coin flip on phase order.
-func _phase_clock(dt: float) -> void:
-	elapsed += dt
-	if enemies_left() == 0:
-		_outcome = Outcome.WON
-		_lose = Lose.NONE
-		return
-	if _the_landing_force_is_gone():
-		_outcome = Outcome.LOST
-		# ⚠⚠ **The CONDITION and the REASON are two questions, and `army.living_count() == 0` is the
-		# right answer to the second one only.** It used to be the condition, which is the bug this
-		# round before last fixed: reserves at the harbour kept it from ever firing. As the REASON it
-		# is exactly right — it is what 「전멸」 means — and WIPED wins when both are true, per the
-		# precedence written on the `Lose` enum.
-		_lose = Lose.WIPED if army.living_count() == 0 else Lose.LANDING_LOST
-		return
-	# ⚠⚠ **THE TIME LIMIT NO LONGER DECIDES ANYTHING** (2026-08-24, the user: 「제한 시간 안에 클리어
-	# 조건은 일단 지워」). An island ends when the enemies are gone or the landing force is, and it can
-	# run as long as it takes.
-	#
-	# ⚠⚠ **AND ON 2026-08-27 THE REST OF IT WENT TOO.** `time_limit`, `time_left()`, `Lose.TIMEOUT`,
-	# `Islands.TIME_LIMIT_SEC` and the loss screen's 「패배 — 시간 초과」 had all been kept unproducible
-	# on the strength of the 「일단」 in that sentence — three days, a fourth argument threaded through
-	# `setup` at every call site, and an enum value the code openly documented as unreachable.
-	# **A rule nothing can produce is not a rule kept warm, it is a rule that lies about existing.**
-	# ⇒ Putting the clock back is a branch here plus a number, and that is cheaper than carrying a
-	# fourth parameter no caller has a real value for.
-
-
-## ⚠⚠ **THE FIGHT IS OVER WHEN NOBODY IS STILL IN IT, AND A SOLDIER AT THE HARBOUR IS NOT IN IT.**
-##
-## This was `army.living_count() == 0`, and `living_count` counts every soldier that is not dead —
-## **including the ones still standing in RESERVE at the harbour.** After the commit `send` returns -1
-## for anything, so a reserve soldier **can never be landed**: if everyone you sent dies and you kept
-## anyone back, the run is already decided and the old test could never fire. The player sat watching
-## an empty island until `TIMEOUT`, which is what they reported:
-## ***"실패조건은 시작하기하고 못깨면 이지 제한시간을 계속 기다리고 있길래"***.
-##
-## ⚠ **The `_committed` gate is not defensive padding.** Every soldier is RESERVE during planning, so
-## without it this answers TRUE on the frame an island opens and the island is lost before the player
-## has dropped anything. `step` already returns before `_phase_clock` while uncommitted, so today the
-## gate is unreachable — it is here because the two guards are one idea and reading `_committed`
-## is what keeps them from becoming two.
-##
-## ⚠⚠ **TRANSIT USED TO COUNT HERE AND THE STATE IS DELETED** (2026-08-29). A soldier aboard an
-## outbound boat had not landed and had not lost, and the last crossing on an island where everything
-## ashore had just died was exactly the case a narrower test threw away. **Put it back with the boats.**
-##
-## ⚠⚠ **IT READS BOTH COLUMNS, AND AN EARLIER DRAFT OF THIS COMMENT SAID THEY COULD NOT DISAGREE.**
-## They can. `_phase_deaths` writes `SoldierState.DEAD` in the same block as `army.kill(i)`, but its
-## first line is `if army.alive[i] == 0 ... continue` — so a soldier killed through `army` from
-## OUTSIDE the fight is skipped forever and keeps whatever state it had. Nothing in `src/` does that
-## today; a net does, and it is the shape a session save/load or a between-island effect would take.
-## A rule that answered "still in the fight" for a corpse would hold the run open exactly as the
-## reserve bug did, one column over.
-##
-## `army.living_count()` keeps its own reader on the map screen, where 「how many soldiers do I still
-## have」 really does include reserves — that reading is correct there and wrong here, which is why
-## this is a second function rather than a second caller.
-func _the_landing_force_is_gone() -> bool:
-	if not _committed:
-		return false
-	for i in soldier_state.size():
-		if army.alive[i] == 0:
-			continue
-		var s := int(soldier_state[i])
-		if s == SoldierState.ASHORE:
-			return false
-	return true
-
-
 # --- movement helpers ----------------------------------------------------------------------------
 
 ## Walks up to `step_len` tiles down `field`, tile by tile, stopping the moment it comes within
@@ -1085,64 +616,33 @@ func _glide(pos: Vector2, goal: Vector2, step_len: float) -> Vector2:
 	return pos + (goal - pos) / to_go * step_len
 
 
-# --- targeting helpers ---------------------------------------------------------------------------
-
-## The soldier's own range plus the reach bonus. The bonus is added HERE and never inside
-## `army.range_of`, which returns the species board's range and nothing else.
-func _soldier_reach(i: int) -> float:
-	return army.range_of(i) + Rules.REACH_BONUS
-
-
-func _enemy_reach(e: int) -> float:
-	return Rules.range_of(int(enemy_type[e])) + Rules.REACH_BONUS
-
-
-## **How far apart two bodies are, height included — and the ONLY place this file measures a
-## distance between bodies.** 티켓 19.
+## **How far apart two points are, height included — and the ONLY place this file measures a distance
+## between bodies.** 티켓 19.
 ##
-## Bodies keep 2D positions: height is a property of the TILE, not of the body, so nothing about
-## `soldier_pos`, the boats, the screen or three thousand existing net literals had to move to bring
-## the axis in. The ground's own height is looked up and folded in here.
+## Bodies keep 2D positions: height is a property of the 조각, not of the body, so nothing about
+## `soldier_pos`, the screen or three thousand existing net literals had to move to bring the axis in.
+## The ground's own height is looked up and folded in here.
 ##
-## ⚠⚠ **Everything that asks "how far" goes through this — reach, target choice AND the pack radius.**
-## Making only the reach three-dimensional and leaving target choice planar would give the word
-## "distance" two meanings inside one file, and the wolf would keep picking the enemy over the wall
-## while being unable to touch it. **That it picks its own tier first is the point**: a body up a tier
-## is farther away, so the pack goes for what it can actually reach and the flow field walks the rest
-## to the stair.
+## ⚠⚠ **IT SURVIVED THE FIGHT'S DELETION BECAUSE `_walk` STOPS ON IT** (2026-08-29). Reach, target
+## choice and the pack radius all went through it too and all three are gone; **the arrival test is
+## what is left**, and it is the caller that mattered most.
 ##
-## ⚠⚠ **A TIER IS ONE TILE** (`Rules.TIER_RISE_TILES`, lowered from 2.0 on 2026-08-27), so the
-## neighbour across a boundary is sqrt(1 + 1) = **1.414**, and the diagonal one is sqrt(2 + 1) =
-## **1.732**. A melee reach is `range_of` + `Rules.REACH_BONUS` = 0.0 + 1.75 for every beast in the
-## table, so **BOTH OF THOSE ARE INSIDE MELEE REACH: a beast standing under the cliff bites a body
-## on the plateau.** This comment used to say 2.236 and "outside a melee reach of 1.5", and both
-## halves died with the 2.0 tier.
+## ⚠⚠ **`_walk` USING `distance_to` HERE INSTEAD FROZE THE GAME ONCE.** Everything else that asked
+## 「how far」 moved onto this and the arrival test did not, which left a BAND at every storey boundary:
+## a low 조각 inside a body's PLANAR reach of something standing a storey up. A body told to walk exits
+## on the first iteration, cannot act because the real distance is 2.236, and never moves again —
+## **12 seconds, zero pixels, nothing logged.** ⇒ **The stop test and whatever asks 「am I there」 have
+## to be the same question**, or the gap between them is a body standing still forever.
 ##
-## ⚠⚠ **THAT IS A LIVE DESIGN QUESTION AND NOT A BUG THIS COMMENT MAY QUIETLY DECIDE.** The user's
-## line for the second storey is 「2층은 안전한 땅이고 그 안전을 값으로 산다」, and that line is NOT
-## true of this code today. Whoever changes it changes what a plateau is worth. **Do not retune
-## `REACH_BONUS` to fix it** — the reach is shared by every body and every weapon; a tier-aware
-## refusal belongs in `_within`, where the height is already known.
+## ⚠ **The equal-height branch returns `distance_to` unchanged** rather than a square root of a sum
+## with a zero in it. Most boards are flat, and taking the same expression as before on those boards
+## is what makes 「no existing literal moves」 a property of the code instead of a hope about floats.
 ##
-## **This is still not the 숫자 보너스 the user refused**: no range and no damage changed, the space
-## they are measured in did.
-##
-## ⚠ **The equal-height branch returns `distance_to` unchanged rather than a square root of a sum with
-## a zero in it.** Every board in the game was flat until this ticket and most still are; taking the
-## same expression as before on those boards is what makes "no existing literal moves" a property of
-## the code instead of a hope about floating point.
-##
-## ⚠⚠ **`_dist_from_height(a, a_h, b)` STOOD BESIDE THIS AND IS FOLDED BACK IN, 2026-08-27.** It was
-## this same measurement with `a`'s height SUPPLIED instead of looked up, and it existed for exactly one
-## caller: **the pack's seek point was a mean of several bodies' positions, and the ground under a mean
-## is not the ground anybody is standing on.** With 무리사냥 deleted every `a` this file measures from is
-## a place a body is actually standing, so the height is read off `a` here and the split has no second
-## side left.
-## ⚠ **The trap it was built to close is still real and is why this paragraph is here**: three wolves on
-## the flat with one packmate on a plateau averaged onto a plateau tile, so all four measured from **one
-## tier up**, preferred the enemy above, and walked into the wall. ⇒ **Anything that ever measures from
-## a point NOBODY STANDS ON — a mean, a formation anchor, a cursor — must carry its own height rather
-## than let this function round one off the ground.**
+## ⚠⚠ **ANYTHING THAT EVER MEASURES FROM A POINT NOBODY STANDS ON must carry its own height** — a
+## mean, a formation anchor, a cursor — rather than let this function round one off the ground. It is
+## written down because it was paid for: three wolves on the flat with one packmate on a plateau
+## averaged onto a plateau 조각, so all four measured from **one storey up**, preferred the enemy
+## above, and walked into the wall.
 func _dist(a: Vector2, b: Vector2) -> float:
 	var dh := grid.height_at(a) - grid.height_at(b)
 	if absf(dh) <= Rules.EPS:
@@ -1150,102 +650,26 @@ func _dist(a: Vector2, b: Vector2) -> float:
 	return sqrt(a.distance_squared_to(b) + dh * dh)
 
 
-## `<=` with an epsilon. A diagonal neighbour is exactly 1.41421..., and a bare `<=` on that float
-## boundary decides from frame to frame whether four melee can reach a target or eight can.
+# --- targeting helpers: DELETED 2026-08-29 -------------------------------------------------------
+## ⚠⚠ **`_soldier_reach` · `_enemy_reach` · `_dist` · `_within` · `_nearest_enemy` · `_nearest_soldier`
+## STOOD HERE AND ALL SIX ARE GONE** with the fight. **What they knew, and what a rebuilt fight owes:**
 ##
-## ⚠ **Through `_dist`, so a swing, a shot and a bite all measure the same space.** The bear's splash
-## rides this function and therefore follows for free — `net_tiers` keeps a row on it anyway, because
-## what follows for free also disappears quietly.
-func _within(a: Vector2, b: Vector2, reach: float) -> bool:
-	return _dist(a, b) <= reach + Rules.EPS
-
-
-## --- 무리사냥: `_seek_point_of` DELETED 2026-08-27 -------------------------------------------------
-## It answered **where soldier `i` LOOKS FROM when it picks a target** — its own tile for most species,
-## and the centre of mass of its nearby own kind (itself included) for a species with a
-## `Rules.SPECIES_PACK` row. It is gone with that table, with `Rules.pack_radius_of`, with its one call
-## site in `_phase_targeting`, and with `tools/probe/pack_spread.gd`.
-##
-## ⚠⚠ **WHY IT WAS DEAD.** `soldier_*` is the PLAYER's side and `Army.register_species` refuses any row
-## whose `Rules.side_of` is not PLAYER. The only player row is SWORDSMAN and it had no pack row; the one
-## row in the table was WOLF, **an enemy since the side swap of 2026-08-26**. ⇒ `radius <= 0.0` returned
-## on the first line every single time and the huddle below it never ran for a whole day. **The enemy
-## side has no pack behaviour at all**, so nothing on the board was doing this.
-##
-## ⚠⚠ **IT WAS KEPT ONE DAY LONGER ON 「it is the worked answer to *how does a pack aim*, and rewriting
-## it later costs more than keeping it」 — AND THAT IS THE CLAIM THIS DELETION REJECTS.** The worked
-## answer is four lines of averaging; what actually cost the ticket is the REASONING, and the reasoning
-## is written down here where it cannot rot against the code:
-##
-##  1. ⚠⚠ **ONE POINT BOUGHT BOTH HALVES.** Picking from a shared point makes the pack bite the same
-##     enemy, and `_phase_movement` then walks each of them at THAT enemy — so the pack ARRIVES as one
-##     body. **There was no formation code and there must not be one**: a second rule for the shape is a
-##     second thing to keep in step with the first.
-##  2. ⚠ **Ashore only, and its own species only.** A body still on a boat has no place on the ground to
-##     average, and averaging across species makes a wolf's aim depend on where the crows are.
-##  3. ⚠⚠ **THE MEAN IS NOT A PLACE ANYBODY STANDS**, which is why `_nearest_enemy` took a height beside
-##     it. Read the height off the mean instead and three wolves on the flat with one packmate on a
-##     plateau all aim from a tier up. **That trap is recorded on `_dist` and on `_nearest_enemy`**, and
-##     it outlives the pack: it belongs to anything that ever measures from a mean.
-##  4. ⚠⚠ **AND A TRAP SOMEBODY ALREADY FELL INTO, IN THIS FUNCTION'S OWN COMMENT.** It claimed a
-##     packmate one tier up 「drops out at 2.236」 — **arithmetic nobody did.** The figure was 2.236 only
-##     while a tier was two tiles and is 1.414 now, and the wolf's radius was **6.0**: neither number is
-##     anywhere near it, so the packmate stayed in the huddle and always had. ⇒ **A number in a comment
-##     that nobody has divided is a number that is wrong**, and this one survived two rounds of review.
-##
-## ⚠⚠ **AND THE RULE DID NOT DO WHAT ITS NAME SAYS — measured, not suspected.** It was a TARGETING rule
-## with no authority over formation: pack-on and pack-off produced the SAME spread to two decimals. The
-## numbers, the reverted cohesion throttle, and the finding that **the group is already together** live
-## in `rules.gd` where `SPECIES_PACK` stood. **Read that block before building 「합쳐지게 해줘」 again.**
-
-
-## Nearest living enemy to `from`. **`from` is the asking body's own position**, so the height comes
-## off it through `_dist` like every other measurement in this file.
-##
-## ⚠⚠ **IT TOOK A SECOND ARGUMENT — `from_h` — UNTIL 2026-08-27, AND THE REASON IS WORTH KEEPING.**
-## 무리사냥 handed this function the pack's seek point, which is the MEAN of several bodies' positions,
-## and `_dist` reads a height off whatever tile a point rounds onto: **three wolves on the flat with one
-## packmate on a plateau were aiming from one tier up, preferring the enemy above, and walking into the
-## wall.** So the asking body's own height was passed in beside the mean. **With the pack deleted every
-## `from` is a place a body stands and the pair collapses to one** — but the trap is not gone, it is
-## unreachable: ⇒ **the day anything asks this from a point NOBODY STANDS ON, the height comes back as a
-## parameter and does not get rounded off the ground.** See the deletion block on `_dist`.
-func _nearest_enemy(from: Vector2) -> int:
-	var best := -1
-	var best_d := 0.0
-	for e in enemy_alive.size():
-		if enemy_alive[e] == 0:
-			continue
-		var d: float = _dist(from, enemy_pos[e])
-		if best == -1 or d < best_d - Rules.EPS:
-			best = e
-			best_d = d
-	return best
-
-
-## Nearest soldier within `detect`. `ashore_only` is the movement scan; the attack scan passes false
-## so a boat still in the water can be fired on.
-##
-## Iterating ascending and replacing only on a STRICTLY smaller distance is what makes ties go to
-## the smaller id.
-func _nearest_soldier(from: Vector2, detect: float, ashore_only: bool) -> int:
-	var best := -1
-	var best_d := 0.0
-	for i in soldier_state.size():
-		if ashore_only:
-			if soldier_state[i] != SoldierState.ASHORE:
-				continue
-		elif not is_hittable(i):
-			continue
-		var d: float = _dist(from, soldier_pos[i])
-		if detect >= 0.0 and d > detect + Rules.EPS:
-			continue
-		if best == -1 or d < best_d - Rules.EPS:
-			best = i
-			best_d = d
-	return best
-
-
+##  · **Reach is `range + REACH_BONUS`, and the bonus was 1.75, measured in play.** The window is
+##    「above the stair diagonal, below the flat two-tile orthogonal」. At 1.5 a body on a stair could
+##    reach the plateau beside it ORTHOGONALLY (sqrt(1 + 0.25) = 1.118) and **not diagonally**
+##    (sqrt(2 + 0.25) = 1.5) — measured with the attacker pinned on the stairs: **orthogonal, three
+##    hits and a kill; diagonal, ZERO hits and ZERO damage.** The stair is one 조각 wide, so the horde
+##    behind the body that cannot hit is stuck in the doorway. **26 of 162 fights were lost that way,
+##    and in 24 of them every surviving enemy stood on exactly those diagonal 조각.**
+##  · **Distance is 3D and the height comes from the LEVEL, never from the drawn mesh.** Two bodies a
+##    조각 apart across a storey boundary are `sqrt(1 + 1)` apart, not 1.
+##  · **The comparison carried an epsilon.** A diagonal is exactly sqrt(2); a bare `<=` on that
+##    boundary is a coin flip that changes which bodies can fight from frame to frame.
+##  · **Nearest was Euclidean and ties went to the SMALLER id.** A tie broken by iteration order makes
+##    two runs from identical state diverge with every check about them green.
+##  · **An enemy's movement scan and its shooting scan were different sets.** Chasing something
+##    unreachable asks the flow field for a path that comes back unreachable everywhere, and then
+##    EVERY body stands still for the rest of the island with nothing logged.
 # --- field cache ---------------------------------------------------------------------------------
 
 func _age_fields(dt: float) -> void:

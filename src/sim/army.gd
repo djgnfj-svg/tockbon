@@ -29,7 +29,9 @@ extends RefCounted
 
 ## Columns. Same length, always, and index `i` means the same soldier in all five.
 var type_id := PackedInt32Array()
-var hp := PackedFloat32Array()
+## ⚠⚠ **`hp` STOOD HERE AND IT IS DELETED** (2026-08-29) with the fight. Nothing damaged a body,
+## so every row sat at its birth value for the whole run. ⚠ **`alive` is NOT deleted with it** — it
+## is what makes a body permanent-dead across islands, and `battle.setup` still reads it.
 var alive := PackedByteArray()
 
 ## Which summon slot this body belongs to. Written once, by `recruit`, and never again.
@@ -53,14 +55,11 @@ var slots := PackedInt32Array()
 ## and it outlived every `Battle` so a body could die without its type's parts dying with it. **Both
 ## arguments still hold and neither had anything to hold up**: with the refit screen deleted nothing
 ## ever fitted an item, so the board was empty for the whole of every run and `stat_of` returned the
-## base number every time. The five lookups below now read `Rules` straight.
+## base number every time. The one lookup left reads `Rules` straight.
 
 
-## Appends one soldier of `slot`'s type, born at that type's own current maximum HP, alive.
-## Returns its id — its index, which never changes again.
-##
-## ⚠ The HP is read back off `max_hp_of`, the same function combat reads, so a body is never born on a
-## number nothing else uses.
+## Appends one soldier of `slot`'s type, alive. Returns its id — its index, which never changes again.
+## ⚠ **The HP column went with the fight** (2026-08-29); a body is born alive and stays so.
 func recruit(slot: int) -> int:
 	var t := slot_type_of(slot)
 	# ⚠⚠ **AN UNREGISTERED SLOT RECRUITS NOBODY, and this line is new with the slots becoming run
@@ -73,95 +72,22 @@ func recruit(slot: int) -> int:
 	type_id.append(t)
 	slot_id.append(slot)
 	alive.append(1)
-	hp.append(0.0)
-	hp[id] = max_hp_of(id)
 	return id
 
 
-## Marks a soldier dead. The row stays; only `alive` and `hp` move. **The type's board is untouched** —
-## it belongs to the type, not to the body, so the next body `recruit`ed of that type arrives with the
-## same equipment.
-func kill(i: int) -> void:
-	if alive[i] == 0:
-		return
-	alive[i] = 0
-	# HP is clamped, not left as the attacker wrote it. An overkill leaves a negative remainder in a
-	# column that the probe sums to print "HP pool in and out", and a negative row would make the pool
-	# read low with nothing to point at — the sum is the only place it would ever show.
-	hp[i] = 0.0
-
-
-## Living soldiers of one type, **highest HP first**. This is the boarding order: the plan's rule is
-## "the highest-HP living soldier of that type that is still in reserve".
-func living_ids_of_type(t: int) -> Array:
-	var out: Array = []
-	for i in range(type_id.size()):
-		if alive[i] != 0 and type_id[i] == t:
-			out.append(i)
-	out.sort_custom(_hp_desc)
-	return out
-
-
-## Ties break on the smaller id. `sort_custom` is not guaranteed stable, so without this two soldiers on
-## equal HP would board in whatever order the sort happened to produce — and two runs from identical
-## state would then diverge with every check about them still green.
+## ⚠⚠ **`range_of` · `max_hp_of` · `damage_of` · `period_of` STOOD HERE AND ALL FOUR ARE DELETED**
+## (2026-08-29) with the fight. **`speed_of` is the one left**, because a body still walks.
 ##
-## The tie is exact `==`, not `is_equal_approx`. An approximate tie is not transitive — `a≈b` and `b≈c`
-## with `a≠c` — and a comparator that is not a strict weak ordering makes `sort_custom` free to return
-## anything at all. Damage lands in exact steps here, so exact ties are exactly what occurs.
-func _hp_desc(a: int, b: int) -> bool:
-	if hp[a] == hp[b]:
-		return a < b
-	return hp[a] > hp[b]
-
-
-## Attack range in tiles, off the species row.
-## ⚠⚠ **A PER-SOLDIER BONUS USED TO BE ADDED HERE AND IS GONE** (2026-08-25): the beak reward put +1
-## range on ONE body, and the user deleted the reward — 「부리 보상 없지 끝나면 카드보상으로
-## 통일했잖아」. **Nothing is per-soldier any more**; every number a body fights with comes from its
-## SPECIES board, which is what 티켓 11 decided equipment should be.
-func range_of(i: int) -> float:
-	return Rules.range_of(int(type_id[i]))
-
-
-## The five per-soldier lookups. **Each is one line and it is the species row, nothing else.** ⚠ **Keyed
-## on `type_id`, never `slot_id`**: a body of a species no slot summons still has to read its own row.
-## ⚠ **They are kept as functions rather than inlined at the call sites** — `battle.gd` asks the ARMY
-## what a body of ITS roster fights with, and the day a per-body number comes back it comes back here.
-func max_hp_of(i: int) -> float:
-	return Rules.hp_of(int(type_id[i]))
-
-
-func damage_of(i: int) -> float:
-	return Rules.damage_of(int(type_id[i]))
-
-
-func period_of(i: int) -> float:
-	return Rules.period_of(int(type_id[i]))
+## ⚠ **They were keyed on `type_id`, never on `slot_id`**, and that is the rule to keep: a body of a
+## species no slot summons still has to read its own row.
+##
+## ⚠⚠ **A PER-SOLDIER BONUS USED TO BE ADDED IN `range_of` AND IS GONE** (2026-08-25): the beak reward
+## put +1 range on ONE body, and the user deleted the reward — 「부리 보상 없지 끝나면 카드보상으로
+## 통일했잖아」. **Nothing is per-soldier**; every number a body fights with comes from its species.
 
 
 func speed_of(i: int) -> float:
 	return Rules.speed_of(int(type_id[i]))
-
-
-## Living soldiers of one SLOT, **highest HP first**. Mirrors `living_ids_of_type`'s shape and its
-## comparator for the same reason: `sort_custom` is not stable, so two bodies on equal HP would
-## otherwise board in whatever order the sort happened to produce.
-func living_ids_of_slot(slot: int) -> Array:
-	var out: Array = []
-	for i in range(type_id.size()):
-		if alive[i] != 0 and int(slot_id[i]) == slot:
-			out.append(i)
-	out.sort_custom(_hp_desc)
-	return out
-
-
-func living_count() -> int:
-	var n := 0
-	for i in range(alive.size()):
-		if alive[i] != 0:
-			n += 1
-	return n
 
 
 ## --- the summon slots -----------------------------------------------------------------------------

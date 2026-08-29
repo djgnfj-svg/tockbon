@@ -40,20 +40,15 @@ extends RefCounted
 ## ⚠ **`BATTLE` is FIRST so it is 0**, and a default-constructed int therefore lands on the island
 ## rather than in a state nothing sets. ⚠⚠ **Nothing anywhere may compare a state against a literal
 ## int** — `net_run` pins these by name.
-enum State { BATTLE, WON, LOST }
+## ⚠⚠ **`enum State { BATTLE, WON, LOST }` STOOD HERE AND IT IS DELETED** (2026-08-29). Nothing could
+## leave `BATTLE`: the verdict that moved it went with the fight. **A one-member enum every reader
+## compares against is a branch that always takes the same arm**, and that is the shape this file has
+## twice been caught carrying — `MAP` went with the map, `PICK` and `REFIT` with the card round.
 
 
 ## The roster that survives the run. Never rebuilt outside `_reset`.
 var army: Army = null
 
-var _state := State.BATTLE
-
-## ⚠⚠ **The placeholder that stands where the waves will.** True once the island has been held. It is
-## what makes `_advance` end the run instead of re-opening the island, and it exists because **there is
-## exactly one island**: without it a cleared island would either re-open forever (a loop dressed as a
-## wave) or leave `WON` unreachable (a screen nobody can get to).
-## ⚠ **When waves are built this is what they replace** — a wave counter answers the same question.
-var _island_cleared := false
 
 ## ⚠⚠ **`cards`, `card_kind`, `cards_taken` AND THE RNG STOOD HERE AND ALL FOUR ARE DELETED**
 ## (2026-08-28). They held the three cards a win paid out; the screen that showed them and the board
@@ -75,8 +70,6 @@ func restart() -> void:
 func _reset() -> void:
 	army = Army.new()
 	army.add_starting_force()
-	_state = State.BATTLE
-	_island_cleared = false
 	# ⚠⚠ **A RUN OPENS ON THE ISLAND** (티켓 12, 2026-08-27, the user: ***"Starting means the game
 	# starts, right then."***). It used to open on a card screen; the opening three were dealt here
 	# until 2026-08-25.
@@ -96,8 +89,6 @@ func _reset() -> void:
 ## The `Grid` is new every time. `load_rows` does clear reservations, but a grid built here can never
 ## be one another `Battle` still holds unit ids inside.
 func begin_island() -> Battle:
-	if _state != State.BATTLE:
-		return null
 	var grid := Grid.new()
 	Islands.load_into(grid)
 	var battle := Battle.new()
@@ -134,62 +125,12 @@ func _stand_the_watch(battle: Battle) -> void:
 		return
 
 
-## Closes the island. **Both outcomes are terminal.**
+## ⚠⚠ **`finish_island` · `state` · `_advance` · `_island_cleared` STOOD HERE AND ALL FOUR ARE
+## DELETED** (2026-08-29) with the fight. **A run had three states — BATTLE, WON, LOST — and nothing
+## could reach the last two**: the island file carries no beasts, so there was never a verdict to
+## finish on. `finish_island` said so in its own header and returned a placeholder.
 ##
-## ⚠⚠ **A WIN ENDS THE RUN, AND THE ENDING IS A PLACEHOLDER.** What used to follow a win was the
-## map: cards, then the next of eight islands. The map is deleted and **what replaces it — waves, and
-## a boss on a clock — is decided but unbuilt** (`docs/plan/`).
-## ⚠⚠ **THE CARD ROUND IN BETWEEN IS DELETED TOO** (2026-08-28, the user: 「둘 다 지우면 돼」). A win
-## used to deal three cards so the card and refit screens stayed reachable; both screens are gone, so
-## a win goes straight to `WON`.
-##
-## Ignored unless the island is actually open, so a loss cannot be un-lost and a finished run cannot be
-## reopened.
-func finish_island(won: bool) -> void:
-	if _state != State.BATTLE:
-		return
-	if not won:
-		_state = State.LOST
-		return
-	_island_cleared = true
-	_advance()
-
-
-## ⚠⚠ **`_draw_cards`, `take_card`, `_cards_taken_count` AND `close_refit` STOOD HERE AND ALL FOUR
-## ARE DELETED** (2026-08-28, the user: 「고르는 창도 이제 필요 없는데 왜있지? 이것도 제거」 ·
-## 「둘 다 지우면 돼」). Between them they were the whole growth loop: a win dealt
-## `Rules.CARDS_PER_WIN` items by rarity, the player took `Rules.CARD_PICKS` of them, and the taken
-## pile went onto a board in `army.loadout`.
-##
-## ⚠⚠ **WHAT IS LOST, SAID OUT LOUD.** The rarity roll's own argument — 「rarity first, item second, or
-## legendaries get rarer every time a common one is added」 — is a real measurement and it is written
-## down nowhere else. **`Rules.rarity_at_roll` / `items_of_rarity` / `rarity_weight_total` are
-## untouched in `rules.gd`**, so the table survives; what is gone is the only thing that called them.
-## ⚠ **The no-duplicates rule died earlier and its measurement is recorded there**: drawn with
-## replacement, 64% of opening rounds held a duplicate and 6% were three of one animal.
-##
-## ⚠ **`Army.loadout` is untouched.** `Battle` reads the fitted board to work out what a blow is
-## worth, and a run still starts with whatever `Army` puts there.
-
-
-## `State.BATTLE`, `State.PICK`, `State.REFIT`, `State.WON` or `State.LOST`.
-func state() -> int:
-	return _state
-
-
-## **`WON` if the island has already been held, else the island opens.**
-##
-## ⚠⚠ **A `PICK` ARM STOOD ABOVE THESE TWO AND IS DELETED** (2026-08-28) with the card round. Its own
-## note is worth keeping because the shape recurs: it had to be FIRST, or the cards were dealt, never
-## shown, and every check that only counted soldiers stayed green.
-##
-## ⚠ **Losing is not decided here.** `finish_island` owns that, and `_island_cleared` is the only thing
-## this function reads about the island at all.
-##
-## ⚠ **Two arms and one caller left.** It is kept as a function rather than inlined into
-## `finish_island` because the day waves arrive, this is where 「another wave or the run is over」 goes.
-func _advance() -> void:
-	if _island_cleared:
-		_state = State.WON
-	else:
-		_state = State.BATTLE
+## ⚠ **What the placeholder was covering is still true and still unbuilt**: 「제한 시간이 지나면
+## 보스가 온다」 and the waves that bring the beasts ashore. **A run is one island until one of those
+## exists**, and this is where the run-long clock belongs when it is built — not on `islands.gd`,
+## which knows one island and not a session.

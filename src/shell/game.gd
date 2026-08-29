@@ -59,7 +59,6 @@ var battle: Battle = null
 var field_view: FieldView = null
 var hud_view: HudView = null
 var title_view: TitleView = null
-var panel_view: PanelView = null
 
 ## True while a left-button drag on the FIELD is moving the camera. ⚠ **It used to be mutually
 ## exclusive with `_drag_soldier`** — a press grabbed a soldier XOR began a pan — and the soldier drag
@@ -71,88 +70,56 @@ var panel_view: PanelView = null
 ## look」. It is also the row that stops the post-commit checks from being satisfied by a dead screen.
 var _panning := false
 
-## Seconds the shell is standing still, holding a moment on screen before it walks the run forward.
-## One thing rides it — the verdict pause — and `_release_hold` moves the state on the frame it
-## expires. `combat-juice`, item "승패 전환".
-## ⚠ **Two others rode it and are gone**: the beak stain (2026-08-25) and the map ring's travel walk
-## (2026-08-26).
-##
-## **Declared with an explicit type and not `:= 0.0` on purpose.** `net_draw_leaf`'s literal scan
-## reads `src/shell/` as well, and a bare `_hold_sec := <number>` is exactly the shape it is widened
-## to catch — the shape that would let the 0.8 be hardcoded here instead of read from `look.gd`. The
-## zero is a "nothing is held" sentinel, not a duration, and it is written so the scan can keep
-## biting the duration.
-var _hold_sec: float = 0.0
+## ⚠⚠ **`_hold_sec` STOOD HERE AND IT IS DELETED** (2026-08-29) with the verdict. It held the last
+## frame of a finished island on screen before the next `setup()` emptied the view's effect drawers —
+## **without it the last death ring never got a frame at all.** It also cancelled any gesture in
+## flight, rather than merely suppressing it: suppression leaves the pan flag set, and the very next
+## motion after the hold resumes a gesture that was supposed to be cancelled.
 
 func _ready() -> void:
 	field_view = FieldView.new()
 	hud_view = HudView.new()
 	title_view = TitleView.new()
-	panel_view = PanelView.new()
 	add_child(field_view)
 	add_child(hud_view)
 	add_child(title_view)
-	add_child(panel_view)
 
 	# ⚠ **No `Run` is built here and no island is opened.** The game opens on the title, and the two
-	# lines that used to be here are exactly what 「켜면 섬이 떵하니 나온다」 named. `panel_view.bind`
-	# is not called either: `panel_view.run` stays null and `panel_active()` is false for free.
+	# lines that used to be here are exactly what 「켜면 섬이 떵하니 나온다」 named.
 	run = null
 
 
 ## Opens the island `run` is standing on and re-points all three views at it.
 ##
-## `Run.begin_island()` returns null during a reward pick and once the run is over, and this leaves
-## `battle` alone in that case rather than nulling it — see `battle` above for why the last island has
-## to stay drawable. The views are still re-bound, because the panel reads `run.state()` and has to
-## learn that the island it is sitting on top of is finished.
+## ⚠ **`begin_island()` used to answer null on a screen that was not the island, and this function
+## left the last island drawable in that case.** There are no other screens; it answers a `Battle`
+## every time now, and the null arm is kept as a guard rather than as a state.
 func _open_island() -> void:
 	var opened := run.begin_island()
 	if opened != null:
 		battle = opened
-		# ⚠⚠ **A `battle.commit()` STOOD HERE FOR ONE ROUND AND IT WAS WRONG** (2026-08-28). Deleting
-		# the 시작 button looked like it needed the commit moved here, so the clock would run without
-		# it. **Launched, the island was won before the first frame reached the screen**: the verdict
-		# phase is behind the commit, `Islands.spawns()` is empty, and 「every beast is dead」 is true
-		# of an island that never had one. The card round opened over a map nobody had seen.
-		# ⇒ **The island stays uncommitted, and that is the honest state.** The one phase that runs
-		# before the commit is `_phase_orders` — a body walking where it was told — which is exactly
-		# and only what this game can do today. **The commit comes back the day the beasts' boats do**
-		# (티켓 10), because that is the day there is something for the verdict to be about.
-		# ⚠ `Battle.commit` itself is untouched and still works; nothing in `src/` calls it.
-		# A fresh `Grid` and a fresh `Battle`, but the SAME `Army` — that is how HP and every fitted
-		# item carry. The army handed to the field is `run.army`, the same object `begin_island` just
-		# gave the battle; rebuilding it anywhere would heal the run while a check that only counted
-		# soldiers stayed green.
+		# ⚠⚠ **A `battle.commit()` STOOD HERE FOR ONE ROUND AND IT WAS WRONG** (2026-08-28), and the
+		# commit itself is deleted now (2026-08-29) with the fight. **What it cost is worth keeping:**
+		# launched with the commit here, the island was **won before the first frame reached the
+		# screen** — the verdict sat behind that gate, the island file has no beasts, and 「every beast
+		# is dead」 is true of an island that never had one.
+		# A fresh `Grid` and a fresh `Battle`, but the SAME `Army` — the army handed to the field is
+		# `run.army`, the same object `begin_island` just gave the battle; rebuilding it anywhere would
+		# heal the run while a check that only counted soldiers stayed green.
 		#
 		# The field is handed the island's legend ROWS as well, because `grid.passable` is one byte and
 		# water and a hole are both 0 in it: coloured from passability alone the sea and the pits come
 		# out the same tone and the map reads as one shape.
 		field_view.setup(battle, run.army, Islands.rows())
 		hud_view.bind(battle)
-	panel_view.bind(run, battle)
 
 
-## Closes the island that just finished and walks the run forward.
-##
-## ⚠⚠ **THE THREE STATES THIS COMMENT WALKED THROUGH ARE DOWN TO TWO.** `MAP` went with the map
-## (2026-08-26), `REWARD` before it (2026-08-25), and `PICK` / `REFIT` on 2026-08-28 with the card
-## screen and the refit board. **`Run.State` is `BATTLE · WON · LOST`**, so a finished island either
-## re-opens or ends — and `_open_island` handles the ending exactly as it did, by leaving the last
-## island drawable behind the panel.
-func _close_island() -> void:
-	run.finish_island(battle.outcome() == Battle.Outcome.WON)
-	_show_state()
-
-
-## The one mapping from `run.state()` to a screen.
-##
-## ⚠⚠ **IT HAS ONE ARM LEFT AND IT IS KEPT AS A FUNCTION ANYWAY** (2026-08-28). The `PICK` and
-## `REFIT` arms went with their screens; what remains is that a finished run and a fresh island take
-## the same call, so `_close_island` never decides for itself. **The day waves arrive, this is the
-## one place a new state has to be added** — inlining it would put that decision back in two files.
-func _show_state() -> void:
-	_open_island()
+## ⚠⚠ **`_close_island` AND `_show_state` STOOD HERE AND BOTH ARE DELETED** (2026-08-29) with the
+## verdict. One asked the battle whether the island was won and told the run; the other was the single
+## mapping from a run state to a screen. **There is one screen and no verdict**, so `_start_run` opens
+## the island directly.
+## ⚠ **When waves arrive, the mapping comes back as a function and not as a branch at each call site**
+## — that was the whole reason `_show_state` survived its last two arms being deleted.
 
 
 ## `battle.step(delta)` is called here and **nowhere else**. The three views only ever call
@@ -187,16 +154,7 @@ func _process(delta: float) -> void:
 	# sim and both views run on the bare frame delta — which is what every duration in `look.gd` was
 	# budgeted against in the first place. `set_time_scale` and `set_speed` are gone rather than being
 	# called with a constant 1.0: a leaf handed a constant is the shape 「No fake code」 names.
-	if battle != null:
-		battle.begin_frame()
-	if _hold_sec > 0.0:
-		_hold_sec = maxf(0.0, _hold_sec - delta)
-		if _hold_sec <= 0.0:
-			_release_hold()
-		return
 	if battle == null:
-		return
-	if run.state() != Run.State.BATTLE:
 		return
 	# ⚠ **A BARE delta, and the call keeps taking one.** `speed-off-open-landing`'s 「what does NOT
 	# come out」 pins this: do not inline a constant anywhere, because the seam a multiplier plugs back
@@ -204,19 +162,10 @@ func _process(delta: float) -> void:
 	# sub-steps and carries the leftover, so `step(dt)` and `step(dt/k)` k times still land on
 	# identical state — which is the property the restored multiplier would stand on.
 	battle.step(delta)
-	if battle.outcome() != Battle.Outcome.RUNNING:
-		# This REPLACES the old immediate `_close_island()`. Without the pause the last enemy's death
-		# ring never gets a frame: the verdict and the next island's `setup()` landed inside one frame,
-		# and `setup()` empties the view's effect drawers.
-		_hold_sec = Look.HOLD_OUTCOME_SEC
 
 
-## What the shell does when a hold runs out: close the island that was left standing on screen.
-##
-## ⚠ **Two other branches were deleted from here** — bolting on the beak (2026-08-25) and stepping onto
-## a map node the ring had walked to (2026-08-26). **One hold, one thing to do.**
-func _release_hold() -> void:
-	_close_island()
+## ⚠ **`_release_hold` stood here and it is deleted** with the hold. It closed the island that had
+## been left standing on screen while the last death ring played out.
 
 
 # --- input ----------------------------------------------------------------------------------------
@@ -244,15 +193,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	# path to `run == null` is the restart button inside `_click_panel`, and `_hold_sec` is 0 there.
 	# The next reader will otherwise "fix" this order.
 	#
-	# ⚠ A gesture in flight is CANCELLED here, not merely suppressed: `_panning` is cleared on every
-	# event that arrives while a hold is active, not just left alone. Without this the hold only
-	# blocks the MOTION events that would have kept panning — the flag itself survives the hold, and
-	# once it ends with the mouse button still down, the very next motion resumes the gesture the plan
-	# says must have been cancelled.
-	# ⚠ **The held summon was the second flag cleared here and it is deleted** (2026-08-28).
-	if _hold_sec > 0.0:
-		_panning = false
-		return
 	# ⚠⚠ **The `PICK` and `REFIT` branches sit ABOVE the `battle != null` block.** Below it, a click on
 	# a card or a cell falls through to `_panning = true` — the field is `null` on both these screens,
 	# but `_on_left_press` does not know that until it gets there.
@@ -313,8 +253,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		# The panel is asked here too, and not only on press: a drag begun on the field before the
 		# panel opened must not keep panning (or sending) behind it once it does — `panel_active()`
 		# becoming true mid-drag is what `_on_left_press` alone cannot catch.
-		if panel_view.panel_active():
-			return
 		# ⚠⚠ **THE HOVER PLATE, AND IT IS ASKED ON EVERY MOTION.** `_tile_at` answers -1 off the island,
 		# which is exactly the value that hides the plate, so there is no second test for "is the mouse
 		# on the ground". **It is set here and not inside the summon branch below** — the plate says
@@ -387,14 +325,14 @@ func _start_run() -> void:
 	# the one screen this week is about.** The press is what ends the title, not whichever screen the
 	# press happens to lead to, and this is the line the press owns.
 	title_view.visible = false
-	# ⚠ **`_show_state()` and not a hard-wired screen** — the run decides, and the run opens on the
-	# island (티켓 12). Hard-wiring `_open_island()` here would put the screen choice in two places.
-	_show_state()
+	# ⚠ **It was `_show_state()` until 2026-08-29**, so the run decided which screen a press led to.
+	# **There is one screen**, and the indirection went with the states it chose between.
+	_open_island()
 
 
 ## ⚠⚠ **`_enter_pick_screen` AND `_enter_refit_screen` STOOD HERE AND BOTH ARE DELETED**
 ## (2026-08-28). Each nulled the battle, emptied the field and bound its own screen; with the screens
-## gone the only way off the island is `_open_island`, which `_show_state` now calls unconditionally.
+## gone the only way off the island is `_open_island`, and `_start_run` calls it directly.
 
 
 ## The panel is asked first, and it is asked through `panel_active()` rather than through a state
@@ -421,9 +359,6 @@ func _start_run() -> void:
 ## 배드노스 보니까 손이 놀면 안될듯」, 2026-08-25). It sits above the pan because the pan is the
 ## fall-through that means 「the press hit nothing」, and a press that ordered somebody hit something.
 func _on_left_press(at: Vector2) -> void:
-	if panel_view.panel_active():
-		_click_panel(at)
-		return
 	if battle != null:
 		if _order_walk_at(at):
 			return
@@ -540,32 +475,14 @@ func _tile_at(at: Vector2) -> int:
 ## 뒤로 빼야 될」) and not a defect: there is nothing off screen to pan to. The wheel is what unlocks
 ## the pan, which is also the mitigation for an 18 px tile being a small drop target.
 func _on_wheel(at: Vector2, factor: float) -> void:
-	if panel_view.panel_active():
-		return
 	field_view.zoom_at(at, factor)
 
 
-## Restart, which the panel resolves. `button_hit` is false outside WON/LOST, so this needs no state
-## test on this side.
-## ⚠⚠ **THE REWARD PICK USED TO BE THE OTHER HALF OF THIS FUNCTION** and is deleted (2026-08-25, the
-## user: 「부리 보상 없지 끝나면 카드보상으로 통일했잖아」). With it went the hold this handler took
-## before telling the sim — there is nothing left here that has to be shown before it is applied.
-func _click_panel(at: Vector2) -> void:
-	# `_unhandled_input` already refuses every real press during a hold. This second guard is for the
-	# callers that skip it — a net drives this handler directly, because headless the window is 64x64
-	# and a pushed click lands thousands of pixels off target.
-	if _hold_sec > 0.0:
-		return
-	if panel_view.button_hit(at):
-		# ⚠ **Back to the TITLE, not to a fresh island.** `run == null` IS the title screen, so this is
-		# one line — but `battle` must be nulled in the same breath or the island keeps drawing behind
-		# it.
-		run = null
-		battle = null
-		field_view.setup(null, null, [])
-		hud_view.bind(null)
-		panel_view.bind(null, null)
-		title_view.visible = true
+## ⚠⚠ **`_click_panel` STOOD HERE AND IT IS DELETED** (2026-08-29) with the panel. It was the restart
+## button, and the one path back to the title: **`run == null` IS the title screen**, so it was one
+## line — but `battle` had to be nulled in the same breath or the island kept drawing behind it.
+## ⚠ **Nothing returns to the title now.** That is a hole and it is written down rather than papered
+## over: the title opens a run, and a run has no end.
 
 # ⚠ Handlers that are gone whole, and none of them was replaced by an equivalent:
 #  - `_click_dock` — a fixed dock stopped existing in `boat-and-landing`;

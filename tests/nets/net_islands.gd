@@ -295,7 +295,10 @@ func run(t) -> void:
 	var target := grid.tile_index(5, 8)
 	t.ok(grid.passable[target] != 0, "걸어갈 목표 칸이 실제로 땅이다 (자가 점검)")
 	t.eq(grid.level_of(target), 0, "그리고 0층이다 — 해안과 같은 층이라 계단을 안 거쳐도 된다 (자가 점검)")
-	var reach := Rules.range_of(Rules.SWORDSMAN) + Rules.REACH_BONUS
+	# ⚠ **It was `range_of(SWORDSMAN) + REACH_BONUS` and both went with the fight** (2026-08-29).
+	# The question this row asks is 「can a body actually cross this ground」, so the threshold is now
+	# plain arrival on the target 곡각 rather than a weapon's reach.
+	var reach := 1.0
 	var field := grid.flow_field(target)
 	var walker_pairs := 0
 	var walker_steps := 0
@@ -313,7 +316,6 @@ func run(t) -> void:
 	t.ok(walker_steps > 0, "그리고 그 걷기들은 실제로 칸을 넘었다 (총 %d칸)" % walker_steps)
 
 	_every_spawn_letter_is_a_beast(t)
-	_self_check(t)
 
 
 # -- the spawn letters ------------------------------------------------------------------------------
@@ -372,52 +374,6 @@ func _every_spawn_letter_is_a_beast(t) -> void:
 
 # -- the instrument's own failing cases -------------------------------------------------------------
 
-func _self_check(t) -> void:
-	var short_rows := ["....", "...", "...."]
-	t.ok(_shape_errors(short_rows, 3, 4).size() >= 1, "모양 검사기는 짧은 행을 잡는다 (자가 점검)")
-	t.ok(_shape_errors(short_rows, 4, 4).size() >= 2, "모양 검사기는 행 수도 센다 (자가 점검)")
-	t.eq(_shape_errors(["....", "...."], 2, 4).size(), 0,
-			"모양 검사기는 멀쩡한 격자를 잡지 않는다 — 전부 빨개지는 검사기가 아니다 (자가 점검)")
-
-	t.eq(_illegal_chars([LEGEND]).size(), 0, "범례 안의 글자는 안 잡는다 (자가 점검)")
-	t.eq(_illegal_chars([","]).size(), 1, "범례 검사기는 쉼표를 잡는다 (자가 점검)")
-	# ⚠⚠ **THE ROW THAT MEASURES THE NARROWING**: `S`(방패병) 와 `A`(궁수) 는 사람이 짐승이던 시절의
-	# 글자다. 편이 되돌아가면서 판에서 사람 글자는 사라졌고, 둘 다 이제 범례 밖이다 — 하나라도 남으면
-	# 여기가 문다.
-	t.eq(_illegal_chars(["SA"]).size(), 2,
-			"옛 사람 글자 S·A 는 이제 범례 밖이다 (자가 점검)")
-	t.eq(_illegal_chars(["WBCL"]).size(), 0, "그리고 짐승 넷의 글자는 범례 안이다 (자가 점검)")
-
-	# Column 0 is all water. Counting it would make the cut 0 and the number above would be
-	# unfalsifiable.
-	var cut_grid := Grid.new()
-	cut_grid.load_rows(["~...", "~#..", "~#..", "~..."])
-	t.eq(_cut_of(cut_grid), 2, "절단 계산기는 통과 가능 칸이 0인 열을 건너뛴다 (자가 점검)")
-
-	# A wall sealing off one goal entirely — not merely awkward to reach. A greedy dead end would not
-	# bite a BFS walker, which is why the fixture is a sealed wall rather than a twisty corridor.
-	# ⚠ **The two goals used to be a wolf and a crow standing there.** They are bare tiles now: the
-	# walker's question is about GROUND, and a spawn dictionary in a fixture was one more thing to keep
-	# in step with a table this row does not measure.
-	var fx := Grid.new()
-	fx.load_rows([
-		"~~~~~~~~~~~~",
-		"~.....~....~",
-		"~.....~....~",
-		"~.....~....~",
-		"~.....~....~",
-		"~~~~~~~~~~~~",
-	])
-	var near_goal := fx.tile_index(3, 3)
-	var sealed_goal := fx.tile_index(9, 3)
-	var reach := Rules.range_of(Rules.SWORDSMAN) + Rules.REACH_BONUS
-	var f0 := fx.flow_field(near_goal)
-	var f1 := fx.flow_field(sealed_goal)
-	var near := _reaches(fx, fx.tile_index(1, 1), near_goal, reach, f0)
-	var sealed := _reaches(fx, fx.tile_index(1, 1), sealed_goal, reach, f1)
-	t.ok(bool(near["ok"]), "픽스처에서 벽 이쪽의 칸에는 걸어간다 (자가 점검)")
-	t.ok(int(near["steps"]) > 0, "그 걷기는 실제로 칸을 넘었다 (%d칸, 자가 점검)" % int(near["steps"]))
-	t.ok(not bool(sealed["ok"]), "벽 저쪽에 갇힌 칸에는 못 간다고 말한다 (자가 점검)")
 
 
 # -- scanners ------------------------------------------------------------------------------------

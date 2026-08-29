@@ -48,13 +48,25 @@ enum Side { PLAYER, ENEMY }
 
 
 # --- Reach ---------------------------------------------------------------------------------------
-## A unit may attack when `distance <= range_of(...) + REACH_BONUS`.
-## 1.0 was the first draft and it excluded diagonals, since a diagonal neighbour is 1.41421 away.
-## Three things died silently at 1.0: at most four melee could reach one target, the lion's area
-## attack caught almost nothing (orthogonal neighbours are 1.414 apart from each other), and the
-## orthogonal case landed exactly on the float boundary. See the first slice plan, "range + 1.0
-## excluded diagonals".
-const REACH_BONUS := 1.75
+## ⚠⚠ **`REACH_BONUS` STOOD HERE AND IT IS DELETED** (2026-08-29) with the fight, and **it is the most
+## expensive number this file ever held.** 1.75, and the window it sat in was 「above the stair
+## diagonal, below the flat two-조각 orthogonal」.
+##
+## **At 1.5 a body on a stair reached the plateau beside it orthogonally and NOT diagonally**, measured
+## with the attacker pinned on the stairs: **three hits and a kill one way, ZERO hits and ZERO damage
+## the other.** A stair is one 조각 wide, so everything behind the body that cannot hit is stuck in the
+## doorway. **26 of 162 fights were lost that way**, and in 24 of them every surviving enemy stood on
+## exactly those diagonal 조각.
+##
+## ⚠⚠ **IT WAS NOT A MELEE-ONLY CHANGE AND NO VALUE COULD MAKE IT ONE.** The bonus was added to EVERY
+## species' range, so moving it moved every species' reach. Swept over every pair at every level
+## difference, 1.75 gave exactly two species one new flat-ground distance and nothing else moved.
+## **1.75 was the smallest drift that closed the defect**, and the drift was written down rather than
+## discovered later.
+##
+## ⚠ **Do not retune it to make a plateau safe.** The user's line is 「2층은 안전한 땅이고 그 안전을
+## 값으로 산다」, and the reach is shared by every body and every weapon — **a storey-aware refusal
+## belongs where the height is already known**, not in this number.
 ## ⚠⚠ **RAISED 1.5 -> 1.75** (2026-08-25, 티켓 19). **1.5 covered the flat 8-neighbourhood and nothing
 ## else, and the neighbourhood stopped being flat.** A body on a stair (level 1) reaching an enemy on
 ## the plateau beside it (level 2) is `sqrt(1 + 1)` = **1.414 orthogonally** — inside 1.5 — but
@@ -86,8 +98,10 @@ const REACH_BONUS := 1.75
 ## a coin flip that changes which units can fight from frame to frame.
 const EPS := 1e-4
 
-## detect_of() returns this for a soldier. Soldiers have no detect radius at all — they always
-## advance on the nearest enemy — so a caller that treats a missing radius as 0.0 freezes them.
+## The detect column's answer for a body that has no detection radius at all.
+## ⚠⚠ **-1.0 AND NEVER 0.0.** A caller that reads a missing radius as zero freezes every body that has
+## one. **It outlived `detect_of`** (deleted 2026-08-29 with the fight) because `UNITS` still carries
+## the column, and a table row cannot hold a name that is not declared.
 const NO_DETECT := -1.0
 
 
@@ -201,36 +215,19 @@ const _COL_SIDE := 8
 const _COL_LABEL := 9
 
 
-static func name_of(type_id: int) -> String:
-	return str(UNITS[type_id][_COL_NAME])
-
-
-static func hp_of(type_id: int) -> float:
-	return float(UNITS[type_id][_COL_HP])
-
-
-static func damage_of(type_id: int) -> float:
-	return float(UNITS[type_id][_COL_DAMAGE])
-
-
-static func period_of(type_id: int) -> float:
-	return float(UNITS[type_id][_COL_PERIOD])
-
-
-static func range_of(type_id: int) -> float:
-	return float(UNITS[type_id][_COL_RANGE])
-
-
-static func area_of(type_id: int) -> float:
-	return float(UNITS[type_id][_COL_AREA])
+## ⚠⚠ **`name_of` · `hp_of` · `damage_of` · `period_of` · `range_of` · `area_of` · `detect_of` STOOD
+## HERE AND ALL SEVEN ARE DELETED** (2026-08-29) with the fight. `speed_of`, `side_of` and `label_of`
+## are what is left, because a body still walks, still belongs to a side and is still named on screen.
+##
+## ⚠⚠ **THE COLUMNS THEY READ ARE STILL IN `UNITS` AND THAT IS DELIBERATE.** They are not dead code,
+## they are the only numbers in this repo that came from PLAYING: the wolf's row is the one a whole
+## run was fought on and it carried through two side swaps unchanged, and the swordsman's row is
+## interpolated between the two humans a run was played against. **Deleting an accessor costs one
+## line to restore; deleting a measurement costs another 162 fights.**
 
 
 static func speed_of(type_id: int) -> float:
 	return float(UNITS[type_id][_COL_SPEED])
-
-
-static func detect_of(type_id: int) -> float:
-	return float(UNITS[type_id][_COL_DETECT])
 
 
 static func side_of(type_id: int) -> int:
@@ -260,23 +257,9 @@ static func player_type_count() -> int:
 
 
 # --- The telegraph -------------------------------------------------------------------------------
-## How long the lion holds a declared blow before it lands. The blow is announced first and lands
-## when this runs out, so there is something to draw BEFORE the damage. A ring drawn on the frame the
-## damage already landed is not a telegraph, it is a receipt — `combat-juice`, item 5 of section
-## "The twelve specs", works that out and section 0 records the user choosing to build the real one.
-##
-## **It costs the boss damage, and that was chosen knowingly.** The lion's blow-to-blow period
-## becomes `period_of(LION) + this` = 2.1 s, so its damage per second falls from 2.67 to 1.90 — a 29%
-## cut. The probe's boss sweep found no losable band at all (an army entering island 3 at 5% of its
-## pool still wins), so there is no measured band for this to eat into.
-##
-## Only the lion reads this, and the reason is not the name: the ranged cell also has an area, but it
-## is the PLAYER's blow, and the argument for telegraphing at all is about reading enemy intent.
-##
-## 0.6 is a first value to be re-measured. At 60 fps it is 36 frames; this repo has measured a beat
-## under five frames going entirely unseen, and this one has to be READ rather than felt, because
-## nothing the player can press dodges it.
-const LION_WINDUP_SEC := 0.6
+## ⚠ **`LION_WINDUP_SEC` stood here and it is deleted** (2026-08-29). It was 0.6 — how long the heavy
+## attack DECLARED itself before landing. **The telegraph is the reason a heavy attack is fair**, and
+## the declaration was per-body state the view drew for its whole length rather than a one-frame event.
 
 
 # --- The run -------------------------------------------------------------------------------------
@@ -533,7 +516,6 @@ static func roster_start_count() -> int:
 ##    are on integers, so a tile spans ±0.5 around its centre: sample any coarser and two consecutive
 ##    samples can round to tiles two apart, and a segment gets declared clear over a tile nobody
 ##    looked at. **0.25 is that bound halved.**
-
 
 
 # --- The clock the fight is computed at -----------------------------------------------------------

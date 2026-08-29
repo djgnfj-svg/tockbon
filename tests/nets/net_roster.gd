@@ -12,7 +12,6 @@ extends RefCounted
 
 func run(t) -> void:
 	_the_run_slots(t)
-	_the_unit_table(t)
 
 
 
@@ -110,85 +109,3 @@ func _the_run_slots(t) -> void:
 
 
 
-# -- U1 --------------------------------------------------------------------------------------------
-## **The barking device the unit table has never had.** `rules.gd`'s own header says renumbering
-## `UNITS` renumbers every spawn character and every hotkey binding at once **with nothing to bark
-## about it** — these rows are that bark.
-##
-## ⚠ Mutation: swap two rows of `UNITS`; move an enemy row above a player row.
-func _the_unit_table(t) -> void:
-	# Every id constant, paired with the identifier its own row carries. The pair list is a second
-	# copy of nothing — the NAMES are what the table stores — but its LENGTH is, so the length is
-	# pinned against the table: a row added without a pair here reddens this line before anything else.
-	# ⚠⚠ **REPAIRED 2026-08-28.** This table pinned SQUIRREL · COW · SPEARMAN · ARCHER · SHIELDBEARER —
-	# names from before ticket 15's rename and the 2026-08-26 side swap, both of which are long done.
-	# `Rules.UNITS` carries exactly five rows today (see `rules.gd`), and the label a check hands to
-	# `name_of` has to be the row's OWN identifier, never a name the row used to answer to — that is the
-	# exact "이름을 바꾸면 그 이름으로 짜인 검사가 조용히 다른 것을 재기 시작한다" trap
-	# (`how-nets-lie`), except this one at least reddened instead of passing quietly.
-	var named := [
-		[Rules.SWORDSMAN, "SWORDSMAN"],
-		[Rules.WOLF, "WOLF"],
-		[Rules.BEAR, "BEAR"],
-		[Rules.CROW, "CROW"],
-		[Rules.LION, "LION"],
-	]
-	t.eq(named.size(), Rules.UNITS.size(),
-		"이 검사가 표의 모든 줄을 든다 — 줄이 늘면 여기가 먼저 문다 (자가 점검)")
-	for raw in named:
-		var pair: Array = raw
-		t.eq(Rules.name_of(int(pair[0])), str(pair[1]),
-			"%s 상수가 제 줄을 가리킨다" % str(pair[1]))
-
-	# The side column, and the ordering contract that `Loadout`'s board index stands on.
-	var players := 0
-	var first_enemy := -1
-	for i in Rules.UNITS.size():
-		if Rules.side_of(i) == Rules.Side.PLAYER:
-			players += 1
-			t.ok(first_enemy < 0, "%d 번 아군 줄이 어떤 적 줄보다도 앞에 있다" % i)
-		elif first_enemy < 0:
-			first_enemy = i
-	t.ok(players > 0 and players < Rules.UNITS.size(),
-		"표에 아군 줄도 적 줄도 있다 — 한쪽만이면 아래 줄들이 공허하다 (자가 점검)")
-	# ⚠ **어디에도 숫자로 안 박는다.** 아군 수는 표를 걸어서 나오고, 이 검사도 표를 걸어서 센다.
-	t.eq(Rules.player_type_count(), players, "아군 종 수는 표를 세어서 나온다")
-	for i in Rules.player_type_count():
-		t.eq(Rules.side_of(i), Rules.Side.PLAYER,
-			"아군 줄 번호가 0 부터 연속이다 — %d 번" % i)
-	t.eq(Rules.side_of(Rules.player_type_count()), Rules.Side.ENEMY,
-		"그리고 바로 다음 줄이 적이다 — 연속의 끝을 못 박는다")
-
-	# ⚠⚠ **REPAIRED 2026-08-28 — TWO ROWS, NOT FOUR.** `rules.gd`'s own header claims only 늑대 · 까마귀
-	# carry the numbers their pre-rename rows (`CELL_MELEE` / `CELL_RANGED`) carried; 궁수 · 방패병 ·
-	# 창병 are not a lineage into WOLF/CROW at all — CONTEXT.md is explicit that the four human rows
-	# were DELETED outright and SWORDSMAN's row was freshly interpolated between two of them. The two
-	# extra rows this table used to carry (hp 6.0/range 3.0/area 0.0/speed 6.0 on CROW; hp 20.0/dmg
-	# 3.0/period 2.0/speed 2.5 on a second WOLF) were typed in for that lineage that never existed and
-	# only ever collided with the real rows below — deleted rather than repaired.
-	#
-	# ⚠ **DETECT moved from `NO_DETECT` to a real radius on both real rows** (rules.gd, 2026-08-26 —
-	# "they gained a detect radius: an enemy has to notice something"), which is the one column this
-	# table's own claim of "unchanged" does not cover; HP · DAMAGE · PERIOD · RANGE · AREA · SPEED are
-	# still the values pinned here, typed in rather than read back — a check that asks the subject for
-	# its expectation is this repo's named false green. 까마귀's damage in particular is pinned in no
-	# other file, so changing it 1.5 -> 2.5 would redden only one HP-total line in `net_run` without this.
-	#
-	# ⚠ **The two that are NOT transplants are deliberately absent** — 곰 · 사자 are first
-	# drafts the user is expected to move, and pinning them would turn a tuning pass into a rewrite.
-	var moved := [
-		# row                   hp    dmg  period range  area  speed  detect
-		[Rules.WOLF,           14.0,  2.0,  1.0,   0.0,  0.0,  4.0,   6.0],
-		[Rules.CROW,            8.0,  1.5,  1.0,   4.0,  1.0,  4.0,  12.0],
-	]
-	for raw2 in moved:
-		var row: Array = raw2
-		var ty := int(row[0])
-		var who := Rules.label_of(ty)
-		t.eq(Rules.hp_of(ty), float(row[1]), "%s 의 체력이 옮겨온 값 그대로다" % who)
-		t.eq(Rules.damage_of(ty), float(row[2]), "%s 의 공격력이 옮겨온 값 그대로다" % who)
-		t.eq(Rules.period_of(ty), float(row[3]), "%s 의 공격주기가 옮겨온 값 그대로다" % who)
-		t.eq(Rules.range_of(ty), float(row[4]), "%s 의 사거리가 옮겨온 값 그대로다" % who)
-		t.eq(Rules.area_of(ty), float(row[5]), "%s 의 범위가 옮겨온 값 그대로다" % who)
-		t.eq(Rules.speed_of(ty), float(row[6]), "%s 의 이동속도가 옮겨온 값 그대로다" % who)
-		t.eq(Rules.detect_of(ty), float(row[7]), "%s 의 시야가 옮겨온 값 그대로다" % who)

@@ -117,39 +117,7 @@ class QuitGame extends Game:
 ## a green round after deleting a widget proves nothing about the widget.
 
 
-class PanelSpy extends PanelView:
-	var draws := 0
-	var seq := 0
-	var panels := []
-	var messages := []
-	var entries := []
-	var buttons := []
-
-	func _draw() -> void:
-		panels.clear()
-		messages.clear()
-		entries.clear()
-		buttons.clear()
-		seq = 0
-		super()
-		draws += 1
-
-	func _bump() -> int:
-		seq += 1
-		return seq - 1
-
-	func _paint_panel(rect: Rect2, col: Color) -> void:
-		panels.append({"seq": _bump(), "rect": rect, "col": col})
-
-	func _paint_message(face: Font, rect: Rect2, bg: Color, text: String, at: Vector2, fsize: int,
-			col: Color) -> void:
-		messages.append({"seq": _bump(), "face": face, "rect": rect, "bg": bg, "text": text,
-			"at": at, "fsize": fsize, "col": col})
-
-	func _paint_button(face: Font, rect: Rect2, bg: Color, text: String, at: Vector2, fsize: int,
-			col: Color) -> void:
-		buttons.append({"seq": _bump(), "face": face, "rect": rect, "bg": bg, "text": text,
-			"at": at, "fsize": fsize, "col": col})
+## ⚠ **`PanelSpy` stood here and it is deleted** (2026-08-29) with the verdict panel it spied on.
 
 
 ## ⚠⚠ **`RewardSpy` STOOD HERE AND IS DELETED** (2026-08-28) with the card screen it watched. What
@@ -164,10 +132,10 @@ func run(t) -> void:
 	# Nothing in `game.gd` is `@onready` or `@export`, and this is the assertion that keeps it that
 	# way. A field filled in from outside — or by the engine — before `_ready` means the wiring line
 	# can be deleted and nothing anywhere goes red while the screen stays empty.
-	t.ok(game.field_view == null and game.hud_view == null and game.panel_view == null,
+	t.ok(game.field_view == null and game.hud_view == null and game.title_view == null,
 		"_ready 전에는 뷰 셋이 전부 null 이다 — 미리 채우면 배선 줄을 지워도 초록이다")
 	t.ok(game.run == null and game.battle == null, "_ready 전에는 run 도 battle 도 null 이다")
-	t.eq(game._hold_sec, 0.0, "_ready 전에는 붙들고 있는 것이 없다")
+	# ⚠ **`_hold_sec` was the third field checked here and it went with the verdict** (2026-08-29).
 
 	t.root.add_child(game)
 	await t.pump_frames(2)
@@ -176,16 +144,17 @@ func run(t) -> void:
 	# ⚠⚠ **IT WAS SIX AND IT IS FOUR** (2026-08-28, the user: 「고르는 창도 이제 필요 없는데 왜있지?
 	# 이것도 제거」 · 「둘 다 지우면 돼」). The card screen and the refit board were deleted with the
 	# whole growth loop; the map view went before them (2026-08-26).
-	t.eq(game.get_child_count(), 4, "_ready 가 자식 넷을 만들었다 — 카드 화면과 정비 화면이 삭제됐다")
-	t.ok(game.field_view != null and game.hud_view != null and game.title_view != null
-		and game.panel_view != null, "네 뷰가 전부 생겼다")
+	# ⚠ **IT WAS SIX, THEN FOUR, AND IT IS THREE** — the panel went 2026-08-29 with the verdict.
+	t.eq(game.get_child_count(), 3, "_ready 가 자식 셋을 만들었다 — 승패 판이 삭제됐다")
+	t.ok(game.field_view != null and game.hud_view != null and game.title_view != null,
+		"세 뷰가 전부 생겼다")
 	t.ok(game.get_child(0) == game.field_view and game.get_child(1) == game.hud_view
-		and game.get_child(2) == game.title_view and game.get_child(3) == game.panel_view,
-		"자식 순서가 field -> hud -> title -> panel 이다 (Node2D 형제의 그리기 순서가 곧 이 순서다)")
+		and game.get_child(2) == game.title_view,
+		"자식 순서가 field -> hud -> title 이다 (Node2D 형제의 그리기 순서가 곧 이 순서다)")
 	# Named by hand, because `get_class()` on all four is "Node2D" and four identical labels do not
 	# say which one went missing — a failure log that cannot narrow the cause is half a failure log.
 	var built := {"field_view": game.field_view, "hud_view": game.hud_view,
-		"title_view": game.title_view, "panel_view": game.panel_view}
+		"title_view": game.title_view}
 	for label: String in built:
 		var v: Node2D = built[label]
 		t.ok(v.is_inside_tree(), "%s 가 트리에 붙어 있다" % label)
@@ -233,7 +202,8 @@ func run(t) -> void:
 	# at either end of the run.
 	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
 	t.ok(game.run != null, "시작하기를 누르면 런이 생긴다")
-	t.eq(game.run.state(), Run.State.BATTLE, "그리고 곧장 섬이 열린다 — 사이에 카드도 정비도 없다")
+	# ⚠ **`Run.State` went with the verdict** (2026-08-29). What the row claims — the press lands on
+	# the island with nothing in between — is read off `battle` alone now.
 	t.ok(game.battle != null, "섬이 실제로 서 있다")
 	# ⚠⚠ **The SCREEN, not only the state.** The title used to come down inside `_enter_pick_screen`,
 	# a screen the start path no longer walks through — left there, the island would open UNDER a drawn
@@ -251,7 +221,6 @@ func run(t) -> void:
 		"시작하기도 눌린 그림이 들어갔다 — 두 살아 있는 칸 다 확인한다")
 	t.ok(game.title_view._press_of(TitleView.SLOT_START) > 0.0, "그 칸의 눌림도 0보다 크다")
 	t.ok(not game.title_view.visible, "타이틀은 내려갔다")
-	t.ok(not game.panel_view.panel_active(), "섬에서는 패널이 안 뜬다")
 
 	# 「지도에서 칸을 누르면 섬이 열린다」 — and the ring walks first. `_process(dt)` is called by hand
 	# because a headless frame is 6.9 ms and 0.45 s would be 66 frames of guessing.
@@ -260,44 +229,33 @@ func run(t) -> void:
 	# -- swap in the spies and re-open the island --------------------------------------------------
 	# ⚠ **`reward_view` used to be swapped in here too**, early, so item 4 could tell 「rebound」 from
 	# 「never bound」 on the second card screen. Both the screen and that row are deleted (2026-08-28).
-	for v: Node2D in [game.field_view, game.hud_view, game.panel_view]:
+	for v: Node2D in [game.field_view, game.hud_view]:
 		game.remove_child(v)
 		v.queue_free()
 	# ⚠ The field is a FRESH REAL `FieldView`, not a spy — there are no hooks left to spy on, and a
 	# fresh instance still proves the wiring: its `battle` is null until `_open_island` runs setup.
 	var fs := FieldView.new()
 	var hs := HudSpy.new()
-	var ps := PanelSpy.new()
 	game.field_view = fs
 	game.hud_view = hs
-	game.panel_view = ps
 	game.add_child(fs)
 	game.add_child(hs)
-	game.add_child(ps)
-	t.ok(fs.battle == null and hs.battle == null and ps.run == null,
+	t.ok(fs.battle == null and hs.battle == null,
 		"바꿔 끼운 스파이는 아직 아무것도 모른다 — 배선은 _open_island 가 한다")
 	game._open_island()
 	t.ok(fs.battle == game.battle and fs.army == game.run.army,
 		"_open_island 가 field_view.setup 을 실제로 불렀다")
 	t.ok(hs.battle == game.battle, "_open_island 가 hud_view.bind 를 실제로 불렀다")
-	t.ok(ps.run == game.run, "_open_island 가 panel_view.bind 를 실제로 불렀다")
 
-	# The shell really drives the clock — **and it takes a committed island to prove it now.** An
-	# uncommitted `Battle` is inert to every driver (`plan-then-watch`, 4.3), so a bare
-	# `pump_frames` here would leave `elapsed` at 0 for a reason that has nothing to do with the shell.
-	# Both halves are measured: frozen before the start button, moving after it.
-	await t.pump_frames(3)
-	t.eq(game.battle.elapsed, 0.0,
-		"확정 전에는 셸이 프레임을 돌려도 시계가 정확히 0이다 — 계획하는 동안은 공짜다")
-	# ⚠⚠ **THIS PROBE ASKED FOR A BEACH AND IT ASKS FOR WATER NOW.** It walked `passable` for a tile
-	# `grid.home_harbour_for` answered on and then `Battle.send` a boat there; **the drag, `send` and
-	# the whole harbour system behind them are deleted** (2026-08-27). ⚠ **The SUBJECT was never the
-	# harbour** — it is the shell driving the clock, and a boat on the board is only how a `commit()`
-	# becomes legal at all, so this is re-aimed rather than dropped.
-	# ⚠ **This summoned one body onto a boat and pressed 시작; the boats went 2026-08-29.** The island
-	# is committed directly now — the commit is what the clock is behind, and it is what this row is
-	# actually about.
-	t.ok(game.battle.commit(), "섬을 확정했다 (자가 점검)")
+	# ⚠⚠ **BOTH HALVES USED TO BE MEASURED — the clock frozen before the start button and moving
+	# after it — and the FROZEN half is deleted** (2026-08-29) with the gate that froze it. An island
+	# is open the moment it is built now, so there is no state in which the clock is legitimately
+	# still. **The moving half below is the one that matters**: it is the only thing that separates a
+	# sim the shell really steps from one it silently never steps at all.
+	# ⚠⚠ **THIS PROBE HAS BEEN RE-AIMED THREE TIMES AND THE SUBJECT NEVER MOVED**: it is the shell
+	# driving the clock. It walked `passable` for a beach and sent a boat there; then it summoned
+	# one onto the water and pressed 시작; then it committed the island. **All three gestures are
+	# deleted.** The island is open and the clock runs, so nothing has to be armed at all now.
 	# ⚠ **Enough frames to cross ONE sub-step.** `step` consumes whole `Rules.SIM_SUBSTEP_SEC` chunks
 	# and carries the leftover, so three headless frames can accumulate less than 1/60 s and leave
 	# `elapsed` at exactly 0 for a reason that says nothing about the shell.
@@ -312,23 +270,20 @@ func run(t) -> void:
 	# pool is what "it really ran on the tree" reads as now.
 	t.ok(fs._sprites_used > 0, "field_view 의 _process 가 트리 위에서 진짜 돌았다 (스프라이트 %d장)" % fs._sprites_used)
 	t.ok(hs.draws >= 1, "hud_view 의 _draw 가 진짜 돌았다 (%d프레임)" % hs.draws)
-	t.ok(ps.draws >= 1, "panel_view 의 _draw 가 진짜 돌았다 (%d프레임)" % ps.draws)
 
-	# A FRESH island for everything below: `run.begin_island()` builds a new `Battle` every call, so
-	# re-opening puts the shell back in the planning state the rest of this file measures. The commit
-	# above was a probe, not the state under test.
+	# A FRESH island for everything below: `run.begin_island()` builds a new `Battle` every call.
+	# ⚠ **A `not committed()` row stood under this and it went with the gate** (2026-08-29).
+	var was := game.battle
 	game._open_island()
 	await t.pump_frames(2)
-	t.ok(not game.battle.committed(), "다시 연 섬은 계획 상태다 (자가 점검)")
+	t.ok(game.battle != was, "다시 열면 새 battle 이 온다 (자가 점검)")
 
 	# From here the sim is frozen, so a captured frame and a value read after it are the same instant.
 	game.set_process(false)
 	await t.pump_frames(2)
 	var b: Battle = game.battle
-	# The three views keep processing — only the SHELL stopped — so they drain `battle.events` every
-	# frame from here on. That is only safe because the list is empty: a leftover event would be
-	# re-drained on every pumped frame and the same blow would flash, shake and lunge forever.
-	t.eq(b.events.size(), 0, "얼린 시점에 사건 목록이 비어 있다 — 뷰가 같은 사건을 매 프레임 다시 퍼가고 있지 않다")
+	# ⚠ **An `events` row stood here and the list went with the fight** (2026-08-29). It proved the
+	# views were not re-draining the same event every frame — the shape to rebuild when events come back.
 
 	# -- ⚠⚠ THE 2D TERRAIN PASS IS DELETED, ROWS AND ALL ------------------------------------------
 	# What stood here: the per-tile capture — the 4408-tile culled span against the 5120-tile margin
@@ -383,57 +338,55 @@ func run(t) -> void:
 
 	# -- the bodies, read off SURFACE 2: the pooled nodes the engine draws --------------------------
 	# The comparison still runs from what `battle` holds to what reaches the engine — position,
-	# picture, tint and size are node FIELDS now instead of hook arguments, and the engine consumes
-	# exactly those fields.
-	var live_enemies := []
-	for e in b.enemy_alive.size():
-		if b.enemy_alive[e] != 0:
-			live_enemies.append(e)
-	t.ok(live_enemies.size() > 0, "섬 0에 살아 있는 적이 있다 (%d마리)" % live_enemies.size())
-	t.eq(b.ashore_ids().size(), 0, "아직 상륙한 병사는 없다")
+	# picture, tint and size are node FIELDS, and the engine consumes exactly those fields.
+	#
+	# ⚠⚠ **IT READ THE ENEMIES UNTIL 2026-08-29 AND IT READS THE COMPANY NOW.** The island opened with
+	# beasts standing on it and no body of the player's ashore, so the census was 「one sprite per live
+	# enemy and nothing else」. **The enemies are deleted**; what stands on the island is the watch the
+	# run puts there.
+	var ashore := battle_ashore(b)
+	t.ok(ashore.size() > 0, "섬에 선 몸이 있다 (%d명)" % ashore.size())
 	var bodies := _body_sprites(fs)
-	t.eq(bodies.size(), live_enemies.size(),
-		"몸 스프라이트 수 = 살아 있는 적 수 — 상륙 전에는 적 말고 아무 몸도 없다")
+	t.eq(bodies.size(), ashore.size(),
+		"몸 스프라이트 수 = 섬에 선 몸 수 — 화면에 있는 것과 sim 이 아는 것이 같다")
 	var body_bad := 0
-	for k in live_enemies.size():
-		var e: int = live_enemies[k]
-		var et := int(b.enemy_type[e])
-		var s := _sprite_at_xz(bodies, Look.tile_point_px(b.enemy_pos[e]))
+	for raw_i in ashore:
+		var i: int = raw_i
+		var st := int(b.army.type_id[i])
+		var s := _sprite_at_xz(bodies, Look.tile_point_px(b.soldier_pos[i]))
 		if s == null:
 			body_bad += 1
 			continue
 		# A textured body wears `beast_tint(side colour)`; the bare rounded square wears the colour
 		# raw — the same fork `_put_body` takes, read back off the one modulate the engine applies.
 		var textured := s.texture != fs._tex_body
-		var want_mod := Look.beast_tint(Look.body_colour_of(true)) if textured \
-			else Look.body_colour_of(true)
+		var want_mod := Look.beast_tint(Look.body_colour_of(false)) if textured \
+			else Look.body_colour_of(false)
 		if s.modulate != want_mod:
 			body_bad += 1
 			continue
 		# The size really is the type's own radius through the sprite-width ratio.
-		var want_sx := Look.body_radius_of(et) * Look.BEAST_SPRITE_W_RATIO / float(s.texture.get_width()) \
-			if textured else Look.body_radius_of(et) * 2.0 / float(s.texture.get_width())
+		var want_sx := Look.body_radius_of(st) * Look.BEAST_SPRITE_W_RATIO / float(s.texture.get_width()) \
+			if textured else Look.body_radius_of(st) * 2.0 / float(s.texture.get_width())
 		if absf(s.scale.x - want_sx) > 0.001:
 			body_bad += 1
-	t.eq(body_bad, 0, "몸마다 자리·색·크기가 sim 의 그 적에게서 나왔다")
+	t.eq(body_bad, 0, "몸마다 자리·색·크기가 sim 의 그 몸에게서 나왔다")
 	# ⚠⚠ **THE HP BAR ROWS ARE DELETED** (2026-08-28, the user: 「체력바 없이」). They read the two flat
-	# sprites per body — rail and fill — and their two colours. **`_put_hp`, `_hp_rects` and
-	# `Look.hp_bar_*` are all gone**; the sim still tracks HP and nothing on screen says so.
+	# sprites per body — rail and fill — and their two colours.
 	t.eq(_flat_sprites(fs).size(), 0, "몸 위에 막대가 한 장도 안 붙는다 — 체력바가 삭제됐다")
 	# ⚠⚠ **THE GROUND BUFFER IS NO LONGER SILENT AND THAT IS THE SHADOW** (2026-08-28, the user:
 	# 「그림자도 단순하게 아래 동그라미정도해줘」). Every body lays one disc down, so the floor here is a
-	# COUNT rather than a zero: nothing has been hit and nothing has died, so the only ground geometry
-	# in the frame is one disc per body. The AIR buffer is still silent, and that half is unchanged.
-	t.eq(fs._a_v.size(), 0, "아무 일도 안 일어난 프레임에는 공중 연출 정점이 하나도 없다")
+	# COUNT rather than a zero.
+	# ⚠ **The AIR buffer rows are deleted with the air layer itself** (2026-08-29) — every mark it ever
+	# carried belonged to a blow.
 	t.ok(fs._g_v.size() > 0, "바닥에는 정점이 있다 — 몸마다 그림자 원 하나 (%d 정점)" % fs._g_v.size())
 	var shadow_verts := 0
 	for c: Color in fs._g_c:
 		if c == Look.COL_BODY_SHADOW:
 			shadow_verts += 1
 	t.eq(shadow_verts, fs._g_c.size(),
-		"그리고 그 정점이 전부 그림자 색이다 — 조준도 의도선도 없는 프레임이다")
+		"그리고 그 정점이 전부 그림자 색이다 — 바닥에 다른 그림이 하나도 없다")
 	t.ok(fs._decal.mesh.get_surface_count() > 0, "바닥 연출 메시가 실제로 커밋됐다 — 버퍼만 찬 게 아니다")
-	t.eq(fs._air.mesh.get_surface_count(), 0, "공중 연출 메시는 비어 있다")
 
 	# ⚠ **The `_seq` layer-order rows are DELETED, subject and all.** Between 3D objects the depth
 	# buffer decides what covers what — there is no traversal order left to measure, and re-inventing
@@ -498,90 +451,24 @@ func run(t) -> void:
 	# `_taken_age` marks left from the first round, three cards drawn again. **There is no card screen
 	# and a win goes straight to `WON`.**
 
-	# -- the lose panel and the restart button ------------------------------------------------------
-	var old_army := game.run.army
-	game.run.finish_island(false)
-	t.eq(game.run.state(), Run.State.LOST, "지면 run 이 LOST 로 간다")
-	game._open_island()
-	await t.pump_frames(2)
-	t.ok(game.battle != null, "져도 battle 은 안 지운다 — 패배 화면이 남은 적 수를 계속 읽어야 한다")
-	t.eq(hs.enemies.size(), 1, "패배 화면 밑에서도 남은 적 수가 계속 그려진다")
-	t.eq(ps.messages.size(), 1, "패배 문구를 그렸다")
-	t.eq(str(ps.messages[0]["text"]), PanelView.MSG_LOST, "패배라고 쓰여 있다")
-	t.eq(ps.buttons.size(), 1, "다시 하기 단추를 그렸다")
-	t.eq(ps.buttons[0]["rect"], Look.button_rect_px(), "단추가 look.gd 가 계산한 자리다")
-	t.eq(str(ps.buttons[0]["text"]), PanelView.BUTTON_LABEL, "단추에 다시 하기라고 쓰여 있다")
-	t.eq(ps.buttons[0]["bg"], Look.COL_BUTTON, "다시 하기 단추 색도 COL_BUTTON 이다 — 상수의 두 번째 못")
-	# ⚠ **The row that held this rect apart from `Look.start_rect_px()` is deleted with that rect**
-	# (2026-08-29). The rule it enforced stands: **one rectangle answering to two verbs is how a restart
-	# gets pressed by someone aiming at start**, and `panel_view.button_hit` owns this one alone.
-	var button_rects: Array[Rect2] = []
-	for it: Dictionary in ps.buttons:
-		button_rects.append(it["rect"])
-	_rects_land_on_screen(t, "패배 패널", button_rects)
-
-	t.root.remove_child(game)
-	game.queue_free()
-
-	_panel_active_answers_all_five_screens(t)
-	await _one_press_reaches_the_first_island(t)
-	_the_speed_ladder_is_gone(t)
-	_speed_steps_survives_read_by_nobody(t)
-	_every_lose_reason_reads_differently(t)
+	# -- ⚠⚠ THE LOSE PANEL AND THE RESTART BUTTON: DELETED 2026-08-29 -------------------------------
+	# What stood here: lose the island, read the panel's own paint hook for the message and the button,
+	# hold that rect apart from the start button's, press restart and land back on the title with the
+	# island no longer drawing behind it.
+	#
+	# **All of it went with the verdict.** ⚠ **The hole it leaves is real and is written down rather
+	# than papered over: nothing returns to the title any more.** The title opens a run and a run has
+	# no end — see `game.gd`, where `_click_panel` used to be.
 
 
+## ⚠ **`_win_the_open_island` stood here and it is deleted** (2026-08-29). It committed the island and
+## emptied the enemies so a fixture had a verdict to wait on.
 
 
-## Presses a map node the way a hand does — through `_unhandled_input`, then the ring's walk run out
-## by hand. `game.set_process(false)` is in force by the time this is called, so the hold would never
-## expire on its own; a headless frame is 6.9 ms and `MAP_TRAVEL_SEC` would be 66 frames of guessing
-## even if it did.
-## Wins whatever island is open, through the shell's own frames rather than by poking `Run`.
-##
-## ⚠ **The island has to be COMMITTED first.** An uncommitted `Battle` is inert to every driver
-## (`plan-then-watch`, 4.3) — `step` returns before `_phase_clock`, so an emptied `enemy_alive` would
-## never be latched at all and the hold below would wait forever on a verdict that never comes.
-func _win_the_open_island(t, game: Game, label: String) -> void:
-	# ⚠⚠ **RE-AIMED TWICE, SAME SUBJECT.** It walked `passable` for a tile `home_harbour_for` answered
-	# on and sent a boat there; then it summoned one onto the water inside the band. **Both gestures are
-	# deleted.** What this helper is for has not moved: the island only needs to be COMMITTED so the
-	# hold below has a verdict to wait on.
-	t.ok(game.battle.commit(), "%s 섬을 확정했다 (자가 점검)" % label)
-	game.battle.enemy_alive.fill(0)
-	# ⚠ **Two whole sub-steps, never 0.016.** `step` consumes whole `Rules.SIM_SUBSTEP_SEC` chunks and
-	# carries the leftover, and 0.016 is a hair UNDER 1/60 — on a fresh island with no leftover banked
-	# it runs zero sub-steps, latches nothing, and the hold below waits forever on a verdict that never
-	# comes. Measured: this row read RUNNING with the enemies already emptied.
-	game._process(Rules.SIM_SUBSTEP_SEC * 2.0)
-	t.eq(game.battle.outcome(), Battle.Outcome.WON, "%s 섬을 이겼다" % label)
-	t.eq(game._hold_sec, Look.HOLD_OUTCOME_SEC, "그리고 셸이 마지막 파열 링만큼 붙들었다")
-	game._process(Look.HOLD_OUTCOME_SEC)
-
-
-## ⚠⚠ **`_take_one_and_close_refit` STOOD HERE AND IS DELETED** (2026-08-28) with the card round it
-## drove. It took one item card and closed the refit board so a fixture could reach `WON`; a win
-## goes straight there now.
-func _panel_active_answers_all_five_screens(t) -> void:
-	var game := QuitGame.new()
-	t.root.add_child(game)
-	var pv := game.panel_view
-	t.ok(pv != null, "패널 뷰가 생겼다 (자가 점검)")
-
-	# Title: `run` is null and the first clause answers.
-	pv.bind(null, null)
-	t.ok(not pv.panel_active(), "타이틀에서는 패널이 안 뜬다 (run == null)")
-
-	# ⚠ **A win goes straight to `WON` now** (2026-08-28) — it used to stop for a card round and a
-	# refit board on the way, and both are deleted.
-	var won := Run.new()
-	won.begin_island()
-	won.finish_island(true)
-	t.eq(won.state(), Run.State.WON, "섬을 지켜내면 WON 이다 (자가 점검)")
-	pv.bind(won, null)
-	t.ok(pv.panel_active(), "이긴 화면에서도 패널이 뜬다")
-
-	t.root.remove_child(game)
-	game.queue_free()
+## ⚠⚠ **`_panel_active_answers_all_five_screens` STOOD HERE AND IT IS DELETED** (2026-08-29) with the
+## panel. **The rule it kept is the one to remember**: a gate that can only ever be true is not a gate,
+## it is a deleted branch waiting to be noticed — so it asserted the panel was ABSENT on the screens
+## that are not a verdict, not merely that it was not in the way.
 
 
 ## **The acceptance row 「타이틀은 마찰이 아니다」, as a count.** From launch to the island the design
@@ -611,8 +498,6 @@ func _one_press_reaches_the_first_island(t) -> void:
 
 	t.root.remove_child(game)
 	game.queue_free()
-
-
 
 
 ## -- surface-2 readers: the pooled nodes the engine draws --------------------------------------------
@@ -776,7 +661,6 @@ func _wheel(at: Vector2, up: bool) -> InputEventMouseButton:
 # -- the readers themselves, inverted -----------------------------------------------------------------
 
 
-
 ## ⚠⚠ **배속 조작이 코드에서도 없어졌다.** Every deletion needs a check that the thing is GONE, not
 ## only that what is left still passes: a green round after deleting a widget proves nothing about the
 ## widget, because the checks that drove it were deleted in the same edit.
@@ -841,68 +725,9 @@ func _the_speed_ladder_is_gone(t) -> void:
 	gm.free()
 
 
-## ⚠⚠ **`Rules.SPEED_STEPS` 는 살아 있고, src 안에서 아무도 안 읽는다.** The plan pins BOTH halves:
-## the table is the only thing that has to come back the day the user says 「이제 필요해」, and a
-## constant nobody reads is exactly the thing that rots unnoticed unless somebody says out loud that
-## nobody reads it.
-##
-## The walk strips comments before matching, because `rules.gd`'s own paragraph NAMES these four and
-## every doc comment in `src/` that explains the deletion would otherwise count as a reader.
-## ⚠⚠ **A COUNT THAT GROWS IS NOT A MESSAGE THAT READS.** `panel_view` gained `MSG_LOST_LANDING` and
-## **nothing in this suite would have noticed**: only three of its five message constants were ever
-## named by a net, none of them by count, and `_message_text` was never driven for a loss reason at
-## all. A fourth string could have been added, wired to nothing, and every round stayed green.
-##
-## So this drives `_message_text()` once per `Lose` member and demands the four come out DIFFERENT.
-## Distinctness is the whole claim — 「패배」 four times over is exactly the screen this round exists to
-## stop, and it is what a copy-paste branch produces.
-##
-## ⚠ **The walk is CLOSED against the enum, not against a list written here.** `Lose` is read out of
-## `Battle`'s own constant map, so a fifth reason added tomorrow either gets its own line in
-## `_message_text` or reddens this — it cannot arrive and fall through to the bare 「패배」 unnoticed.
-func _every_lose_reason_reads_differently(t) -> void:
-	var r := Run.new()
-	var b := r.begin_island()
-	r.finish_island(false)
-	t.eq(r.state(), Run.State.LOST, "진 런을 하나 만들었다 (자가 점검)")
-
-	var pv := PanelView.new()
-	pv.bind(r, b)
-	t.ok(pv.is_finished(), "끝난 화면이다 — 패배 문구 가지를 탄다 (자가 점검)")
-	# ⚠ **`Look.COL_BUTTON`'s literal moved here** (2026-08-25) from the deleted reward-panel block:
-	# a panel really is on screen in this test, and the constant otherwise loses its only comparison.
-	# **The literal first, then the reach** — comparing the capture against the constant alone reads it
-	# on both sides and stays green with the constant set to red.
-	t.eq(Look.COL_BUTTON, Color(0.239, 0.341, 0.459), "COL_BUTTON 이 리터럴 그 색이다")
-
-	var lose_enum: Dictionary = Battle.new().get_script().get_script_constant_map()["Lose"]
-	# ⚠ **Four became three on 2026-08-27**: `TIMEOUT` and its 「패배 — 시간 초과」 were deleted together,
-	# because nothing had been able to produce that defeat since 2026-08-24.
-	t.eq(lose_enum.size(), 3, "패인은 셋이다 (NONE · WIPED · LANDING_LOST)")
-	var want := {
-		"NONE": PanelView.MSG_LOST,
-		"WIPED": PanelView.MSG_LOST_WIPED,
-		"LANDING_LOST": PanelView.MSG_LOST_LANDING,
-	}
-	var seen := {}
-	var missing: Array[String] = []
-	for name: String in lose_enum:
-		if not want.has(name):
-			missing.append(name)
-			continue
-		b._lose = int(lose_enum[name])
-		var got := pv._message_text()
-		t.eq(got, str(want[name]), "패인 %s 는 「%s」로 읽힌다" % [name, str(want[name])])
-		seen[got] = true
-	t.eq(missing.size(), 0,
-		"표에 없는 패인이 없다 — 새 패인은 자기 문구를 받거나 여기서 문다 %s" % str(missing))
-	t.eq(seen.size(), 4, "그리고 넷이 서로 다른 문장이다 — 넷 다 「패배」면 이 줄이 문다")
-
-	# The floor under the distinctness: the two that existed before really did differ, so `seen` is
-	# not 4 because the four constants happen to be four copies of one edit.
-	t.ok(PanelView.MSG_LOST_WIPED != PanelView.MSG_LOST_LANDING,
-		"전멸과 상륙 실패는 다른 문장이다 — 이 라운드가 갈라놓은 그 둘이다")
-	pv.free()
+## ⚠⚠ **`_every_lose_reason_reads_differently` STOOD HERE AND IT IS DELETED** (2026-08-29) with the
+## two losses. **WIPED and LANDING_LOST were two facts, not one**, and the screen had to say which:
+## they are different mistakes, and a screen that shows the wrong one teaches the wrong lesson.
 
 
 func _speed_steps_survives_read_by_nobody(t) -> void:
@@ -963,3 +788,10 @@ func _gd_files_under(dir: String) -> Array:
 ## `field_view._fx` directly, which never depended on a hook.
 
 
+## Everybody standing on the island, as army ids. **Off the sim and never off the sprite pool** — the
+## pool is what this file is checking, so reading the census out of it would compare it with itself.
+func battle_ashore(b: Battle) -> Array:
+	var out := []
+	for raw in b.ashore_ids():
+		out.append(int(raw))
+	return out

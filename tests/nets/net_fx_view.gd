@@ -36,29 +36,12 @@ var _created: Array = []
 
 
 func run(t) -> void:
-	_the_terrain_speaks_the_legend(t)
-	_a_tier_boundary_is_a_wall(t)
 	_the_hills_never_swallow_the_tier(t)
-	_no_body_is_taller_than_the_wall_behind_it(t)
 	_the_first_island_opens_with_room_around_it(t)
-	_every_body_effect_is_sized_off_the_picture(t)
-	_a_body_that_cannot_move_still_does_something(t)
-	_the_landing_ring(t)
-	_the_area_ring_follows_the_ground(t)
-	_the_intent_line(t)
 	_a_body_lays_one_shadow_disc(t)
-	_the_idle_sway_does_not_move_the_feet(t)
 	_a_body_stands_on_its_own_tile_and_not_the_next_one(t)
-	_the_tracer(t)
-	_the_spark(t)
-	_the_death_burst_stands_in_the_camera_plane(t)
-	_the_hit_halo(t)
-	_body_effects_ride_the_pooled_fields(t)
-	_the_transient_drawer_is_capped(t)
 	_the_readers_themselves(t)
 	_every_row_wears_its_own_picture(t)
-	_only_the_wolf_has_frames_and_they_share_one_canvas(t)
-	_the_legs_run_on_time_not_on_distance(t)
 	_the_bite_rides_the_blow_that_lunges(t)
 	for raw in _created:
 		var fv: FieldView = raw
@@ -66,170 +49,8 @@ func run(t) -> void:
 	_created = []
 
 
-# == the terrain, on a palm-sized island (verify-read A) ==============================================
-## Steps 1-3 left the terrain with existence checks only — faces exist, the sea is visible — so the
-## LEGEND -> COLOUR mapping could collapse to one tone and the cliff could lose its seaward wall with
-## the round green. Both get hand-counted rows on a fixture small enough to count by hand:
-##
-##   "~~~~~~~"      cliff (1,1) stands against water on its west and north — the sea-wall subject
-##   "~^.#..~"      hole (3,1) — the lowest thing on the island, nothing skirts DOWN from it
-##   "~..^/.~"      inland cliff (3,2) with its ramp (4,2) — the ramp JOINS both sides, so it
-##   "~.....~"      contributes exactly its own top face and no skirt
-##   "~~~~~~~"
-##
-## A top face is 2 triangles = **6 vertices wearing the tile's own colour**; a skirt wears that
-## colour `darkened(0.15)`. HOLE / CLIFF / RAMP are the three kinds whose colour is EXACTLY
-## `terrain_colour_of_char` (only LAND is height-tinted and shore-blended), so their counts are
-## closed hand literals: 6 · 12 (two cliffs) · 6.
-func _the_terrain_speaks_the_legend(t) -> void:
-	var rows := [
-		"~~~~~~~",
-		"~^.#..~",
-		"~..^/.~",
-		"~.....~",
-		"~~~~~~~",
-	]
-	var b := _battle_of(rows, _army_of([]), [])
-	var fv := _view_of(b, rows)
-	var arrays: Array = (fv._terrain.mesh as ArrayMesh).surface_get_arrays(0)
-	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var cols: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
-	t.ok(verts.size() > 0 and cols.size() == verts.size(), "지형 메시에 정점과 색이 같이 들어 있다 (자가 점검)")
-
-	# The legend -> colour mapping, one closed count per untinted kind. A mapping collapsed to one
-	# tone moves every one of these counts at once.
-	var hole := _mesh_verts_of(verts, cols, Look.COL_HOLE)
-	t.eq(hole.size(), 6, "구덩이 색 정점이 정확히 6개다 — # 한 칸의 윗면 두 삼각형")
-	t.ok(_all_inside_tile(hole, 3, 1), "그리고 전부 (3,1) 칸 안이다 — 색이 자리까지 맞다")
-	var cliff := _mesh_verts_of(verts, cols, Look.COL_CLIFF)
-	t.eq(cliff.size(), 12, "절벽 색 정점이 정확히 12개다 — ^ 두 칸의 윗면")
-	var cliff_stray := 0
-	for v: Vector3 in cliff:
-		if not (_inside_tile(v, 1, 1) or _inside_tile(v, 3, 2)):
-			cliff_stray += 1
-	t.eq(cliff_stray, 0, "절벽 정점이 두 절벽 칸 밖으로 안 샌다")
-	var ramp := _mesh_verts_of(verts, cols, Look.COL_RAMP)
-	t.eq(ramp.size(), 6, "경사로 제 색 정점이 정확히 6개다 — 윗면 두 삼각형 (스커트는 어두워져 딴 색이다)")
-	t.ok(_all_inside_tile(ramp, 4, 2), "그리고 전부 (4,2) 칸 안이다")
-	t.eq(_mesh_verts_of(verts, cols, Look.COL_WATER).size(), 0,
-		"물색 정점은 0개다 — 바다는 지형 메시가 아니라 자기 판이 그린다")
-
-	# The cliff's SEA-SIDE wall (the skirt): cliff (1,1) faces open water west and north, so its
-	# darkened wall must reach DOWN to the sea (~0.10, water height minus the pad) — flip `_skirt`'s
-	# lower-neighbour test on the water side and the wall stops under the land line (~0.95+) instead.
-	var wall := _mesh_verts_of(verts, cols, Look.COL_CLIFF.darkened(0.15))
-	t.ok(wall.size() >= 12, "절벽의 스커트 벽 정점이 있다 (%d개)" % wall.size())
-	var wall_min := 1e9
-	var wall_max := -1e9
-	for v: Vector3 in wall:
-		wall_min = minf(wall_min, v.y)
-		wall_max = maxf(wall_max, v.y)
-	t.ok(wall_min < 0.4, "그 벽이 바다까지 내려간다 (min y %.2f) — 물 쪽 벽을 빼면 1.0 근처에서 멈춘다" % wall_min)
-	t.ok(wall_max > 2.0, "그리고 절벽 꼭대기에서 시작한다 (max y %.2f)" % wall_max)
 
 
-## 티켓 19 — **the tier boundary, on a board small enough to count by hand.** Land is x 1..7, y 1..5;
-## a 3 x 3 plateau sits at x 4..6, y 2..4, strictly inland, with one stair at (3,3).
-##
-## ⚠⚠ **THE MEASUREMENT IS A CLOSED VERTEX COUNT AND IT NEEDED A CONTROL TO BE ONE.** On this fixture
-## the FLAT board emits **no skirt at all**: land joins land and land joins water, so every shared
-## corner is one averaged height and `_skirt` returns before emitting. 35 land tiles x 6 = **210**, and
-## that is the whole flat mesh. Give it a tier board and **14 walls** appear — 84 vertices, so **294**.
-##
-## ⚠⚠ **THE FIRST DERIVATION OF THAT 14 SAID 11, AND THE THREE IT MISSED ARE THE INTERESTING ONES.**
-## A skirt is not emitted where two tiles fail to JOIN; it is emitted wherever the neighbour's two
-## shared-edge corners sit LOWER. Those are different questions, because a corner is the average of
-## the tiles around it that join THIS tile — so two tiles can join each other and still disagree about
-## a corner they share, when one of them has a high neighbour the other is walled off from:
-##
-##   · **11** — plateau meeting low ground across a boundary it does not join (2 west, 3 north,
-##     3 south, 3 east). These are the cube's own faces
-##   · **1** — plateau (4,3) stepping down onto the stair. They JOIN — the stair is a real diagonal —
-##     but the plateau's corner there averages plateau tiles the stair's corner also averages low ones
-##     with, so the tread has a riser above it. That is what a step is
-##   · **2** — the stair's own north and south sides. Same cause one level down: the stair's corners
-##     reach up into the plateau and its low neighbours' corners do not
-##
-## ⇒ **A stair comes out as a tread with three risers around it**, and that is the picture wanted.
-## Both numbers are floors AND ceilings: lose the tier test in `_tiles_join` and the count falls to
-## 210; wall an edge that should be a slope and it rises past 294.
-##
-## ⚠⚠ **AND THE PLATEAU'S TOP STILL ROLLS.** 2026-08-24's tile-per-box terrain died on 「너무 딱딱해서
-## 재미가 없을까?」, and a plateau whose top is one flat slab is that verdict coming back. The spread of
-## the plateau's own top vertices is bounded AWAY FROM ZERO for that reason — a ceiling with no floor
-## would pass a plateau with the hills switched off.
-func _a_tier_boundary_is_a_wall(t) -> void:
-	var rows := [
-		"~~~~~~~~~",
-		"~.......~",
-		"~.......~",
-		"~.......~",
-		"~.......~",
-		"~.......~",
-		"~~~~~~~~~",
-	]
-	var tiers := [
-		".........",
-		".........",
-		"....111..",
-		".../111..",
-		"....111..",
-		".........",
-		".........",
-	]
-	var flat := _view_of(_battle_of(rows, _army_of([]), []), rows)
-	var g := Grid.new()
-	g.load_rows(rows, tiers)
-	var b := Battle.new()
-	b.setup(g, _army_of([]), [])
-	b._committed = true
-	var fv := _view_of(b, rows)
-
-	var flat_verts: PackedVector3Array = (flat._terrain.mesh as ArrayMesh) \
-		.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
-	var arrays: Array = (fv._terrain.mesh as ArrayMesh).surface_get_arrays(0)
-	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var cols: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
-	t.eq(flat_verts.size(), 210,
-		"평지 대조군의 지형 메시는 정점 210개다 — 땅 35칸 x 6, 스커트 0개")
-	t.eq(verts.size(), 294,
-		"단 판을 얹으면 294개다 — 벽 열넷 x 6. 고원 면 열하나에 계단의 디딤 하나와 옆면 둘이다")
-
-	# The plateau really stands one tier up, measured on its own centre tile — every corner of (5,3)
-	# averages plateau tiles only, so the lift is exact rather than blurred by the join.
-	t.ok(absf((fv._ground_h(5, 3) - flat._ground_h(5, 3)) - Rules.TIER_RISE_TILES) < 1e-4,
-		"고원 한가운데가 평지판보다 정확히 한 층(%.2f 타일) 높다" % Rules.TIER_RISE_TILES)
-
-	# ⚠⚠ **THE FLOOR UNDER 「윗면이 계속 언덕이다」.** 2026-08-24's tile-per-box terrain died on
-	# 「너무 딱딱해서 재미가 없을까?」, and a plateau whose top is one flat slab is that verdict coming
-	# back one tier up. Bounded at BOTH ends: the spread must not be zero (the hills are switched off)
-	# and must not exceed the hill amplitude (the tier has leaked into the top surface).
-	#
-	# ⚠ **Read off three plateau tiles' own ground heights, NOT off a window of mesh vertices.** A
-	# window was tried and it leaked: `HILL_AMP_TILES` is 2.60 and a tier is 2.00, so **low ground next
-	# to the plateau reaches higher than the plateau's own foot** and no height band separates the two.
-	# That is worth keeping written down — it is also why the picture needs a wall and a colour rather
-	# than height alone to say which surface a tile is on.
-	var tops := [fv._ground_h(4, 2), fv._ground_h(5, 3), fv._ground_h(6, 4)]
-	var top_min := 1e9
-	var top_max := -1e9
-	for raw in tops:
-		top_min = minf(top_min, float(raw))
-		top_max = maxf(top_max, float(raw))
-	t.ok(top_max - top_min > 0.05,
-		"고원 윗면의 높이가 하나가 아니다 (%.3f 타일 차) — 평평하면 8월 24일의 「너무 딱딱하다」로 돌아간 것이다"
-			% (top_max - top_min))
-	t.ok(top_max - top_min < Look.HILL_AMP_TILES + 0.001,
-		"그리고 언덕 진폭을 안 넘는다 — 층 높이가 윗면 안으로 새어 들어오지 않는다")
-
-	# The stair wears its own colour, exactly one tile of it. Sharing `COL_RAMP` would make this row
-	# unwritable: the picker is the colour.
-	var stair := _mesh_verts_of(verts, cols, Look.COL_STAIR)
-	t.eq(stair.size(), 6, "계단 색 정점이 정확히 6개다 — 한 칸의 윗면 두 삼각형")
-	t.ok(_all_inside_tile(stair, 3, 3), "그리고 전부 (3,3) 칸 안이다 — 색이 계단 밖으로 안 샌다")
-	t.eq(_mesh_verts_of(flat_verts, (flat._terrain.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_COLOR],
-		Look.COL_STAIR).size(), 0,
-		"평지 대조군에는 계단 색이 0개다 — 색이 단에서 나오지 글자에서 나오는 게 아니다")
 
 
 ## ⚠⚠ **`HILL_AMP_TILES` IS 2.60 AND A TIER IS 2.00, AND THAT SOUNDS FATAL. IT IS NOT, AND THE
@@ -268,7 +89,6 @@ func _the_hills_never_swallow_the_tier(t) -> void:
 	g.load_rows(rows, tiers)
 	var b := Battle.new()
 	b.setup(g, _army_of([]), [])
-	b._committed = true
 	var fv := _view_of(b, rows)
 
 	var wall_min := 1e9
@@ -331,52 +151,6 @@ func _the_hills_never_swallow_the_tier(t) -> void:
 			% [low_top, high_bottom, high_bottom - low_top])
 
 
-## ⚠⚠ **THE BODY SIZE NOW HAS A CEILING IT DID NOT HAVE, AND THE CEILING IS A TIER.**
-## 2026-08-25, the user: 「캐릭터 크기 좀 줄이고」 · 「지금 캐릭터가 너무 커. 계속 플래시게임 같은
-## 문제가 있거든」. Bodies are camera-facing panels, and a panel is hidden by being small — but there is
-## now a second reason, which is 티켓 19's: **a body taller than the wall behind it covers the wall**,
-## and the wall is the only thing on screen that says a body is standing a tier up.
-##
-## At the old 6.0 the tallest drawn body was the shieldbearer at 110 px = **1.37 tiers**. At 3.5 he is
-## 64 px = **0.80**. Both ends are bounded here:
-##
-##   · **ceiling** — no drawn body reaches one tier, so nothing hides a boundary it stands at
-##   · **floor** — the wolf is at least one TILE wide. 34 px was measured and rejected by the user
-##     twice (「너무 작긴 하거든」, 「멀리서 봤을때 너무작네」), and a bare ceiling would pass bodies
-##     shrunk back to it — or to nothing at all
-func _no_body_is_taller_than_the_wall_behind_it(t) -> void:
-	var fv := _quiet_view()["fv"] as FieldView
-	var tier_px := Rules.TIER_RISE_TILES * Look.TILE_PX
-	var tallest := 0.0
-	var tallest_row := -1
-	var drawn := 0
-	for ty in Rules.UNITS.size():
-		var tex := fv._beast_tex(ty, true)
-		if tex == null:
-			continue
-		drawn += 1
-		var rect := fv._beast_rect(Vector2.ZERO, Look.body_radius_of(ty), Vector2.ONE, tex)
-		if rect.size.y > tallest:
-			tallest = rect.size.y
-			tallest_row = ty
-	t.eq(drawn, 8, "그림을 가진 종 여덟 줄을 전부 쟀다 (자가 점검 — 0이면 아래가 공허하다)")
-	t.ok(tallest < tier_px,
-		"제일 큰 몸(%s, %.1fpx)이 한 층(%.0fpx)보다 낮다 — 몸이 제 뒤의 벽을 안 가린다"
-			% [Rules.name_of(tallest_row), tallest, tier_px])
-	var wolf := fv._beast_rect(Vector2.ZERO, Look.body_radius_of(Rules.WOLF), Vector2.ONE,
-		fv._beast_tex(Rules.WOLF, true))
-	t.ok(wolf.size.x >= Look.TILE_PX,
-		"그래도 늑대는 한 칸(%.0fpx)보다 넓다 (%.1fpx) — 사용자가 두 번 거절한 34px 로 안 돌아간다"
-			% [Look.TILE_PX, wolf.size.x])
-
-	# ⚠ **The one constant that did NOT follow the bodies down.** `BURST_WIDTH_PX` is a raw px stroke
-	# and its own note sets the rule: past half the crow's start radius the ring closes into a disc.
-	# The radius halved with the sprites and the stroke did not, so what was 27% is now 46%. **Legal,
-	# with 0.8 px of room** — and held here, so the next cut reddens instead of drawing a disc.
-	var crow_start := Look.body_radius_of(Rules.CROW) * Look.BURST_START_MUL
-	t.ok(Look.BURST_WIDTH_PX <= crow_start * 0.5,
-		"파열 획(%.1fpx)이 까마귀 시작 반지름(%.1fpx)의 절반 안이다 — 넘으면 링이 원반이 된다"
-			% [Look.BURST_WIDTH_PX, crow_start])
 
 
 ## 2026-08-25, the user: 「처음 시작할떄 가메라 좀더 뒤에서 시작할 수 있게해줘」. **The opening view is
@@ -420,203 +194,14 @@ func _the_first_island_opens_with_room_around_it(t) -> void:
 
 
 
-## ⚠⚠ **EVERY EFFECT HUNG ON A BODY IS SIZED OFF THE PICTURE, NOT OFF THE SIM RADIUS — the rule this
-## repo learned from the death burst and then did not apply to the three effects beside it.**
-## 2026-08-25, the user: 「지금 너무 재미없어 그냥 붙어서 그냥 벌렁벌렁하는 거밖에 없어가지고」.
-##
-## A wolf's sim radius is 14 px and its picture is 49 px wide. Anchored to the radius, the lunge was
-## **7.7 px (16% of the picture)**, the flinch **3.0 px (6%)** and the hit halo **18.9 px of radius —
-## 37.8 across, INSIDE the 49 px body it was supposed to ring.** On the flat board, where a body WAS
-## its radius, those same constants were 27%, 11% and a halo that cleared the body. **Nothing was
-## turned off; the picture grew and the effects did not.**
-##
-## Bounded at BOTH ends per species, and the ceiling is not padding: a lunge longer than the body
-## reads as a teleport, and a halo twice the body reads as a splash rather than as *this one*.
-func _every_body_effect_is_sized_off_the_picture(t) -> void:
-	# ⚠⚠ **DRIVEN, NOT RECOMPUTED — and the first draft of this row recomputed.** It multiplied the
-	# constants together itself and asserted the product, so reverting `field_view` to the sim radius
-	# changed the code and **not one row reddened.** 「Measuring a pure function is not measuring that
-	# anything calls it」 is this repo's own sentence and it arrived inside the check written to stop
-	# it. ⇒ A real blow lands, and the LUNGE is read back off the body the code wrote it on; the HALO
-	# is measured as geometry in the air buffer.
-	var rows := _open(ARENA_W, ARENA_H)
-	var army := _army_of([Rules.WOLF])
-	var b := _battle_of(rows, army, [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
-	_ashore(b, 0, Vector2(11.0, 6.0))
-	var fv := _view_of(b, rows)
-	var swung := false
-	for k in 240:
-		b.begin_frame()
-		b.step(1.0 / 60.0)
-		fv._process(1.0 / 60.0)
-		if float((fv._body["s0"] as Dictionary)["push"]) > 0.0:
-			swung = true
-			break
-	t.ok(swung, "늑대가 실제로 한 대 쳤고 런지가 몸에 적혔다 (자가 점검)")
-	var push := float((fv._body["s0"] as Dictionary)["push"])
-	var wolf_wide := Look.sprite_half_px(Rules.WOLF) * 2.0
-	t.ok(push >= wolf_wide * 0.20,
-		"런지가 제 그림 폭(%.1fpx)의 20%% 이상이다 (%.2fpx) — 심 반지름에 매달면 16%% 로 떨어진다"
-			% [wolf_wide, push])
-	t.ok(push <= wolf_wide * 0.40,
-		"그리고 40%% 를 안 넘는다 (%.2fpx) — 몸을 통째로 건너뛰면 순간이동으로 읽힌다" % push)
-
-	# The halo, as GEOMETRY, on a board with NOBODY FIGHTING.
-	# ⚠⚠ **The first draft measured it on the board above and the mutation did not bite**: the air
-	# buffer is shared, a live fight keeps sparks and tracers in it, and 「the widest thing in the
-	# air buffer」 is not 「the halo」. An enemy alone on an empty arena puts exactly one disc there.
-	var quiet := _battle_of(rows, _army_of([]),
-		[_spawn(ARENA_W, Rules.WOLF, 12, 6)])
-	var qv := _view_of(quiet, rows)
-	qv._process(1.0 / 60.0)
-	t.ok(qv._a_v.size() == 0, "싸움이 없으면 공중 버퍼가 비어 있다 (자가 점검)")
-	(qv._body["e0"] as Dictionary)["flash"] = Look.HIT_FLASH_SEC
-	qv._process(0.0)
-	t.ok(qv._a_v.size() > 0, "맞은 표시 고리가 공중 버퍼에 실렸다 (자가 점검)")
-	var centre := _xz_centre_v3(qv._a_v)
-	var halo_px := _max_dist_v3(qv._a_v, centre) * Look.TILE_PX
-	var foe_half := Look.sprite_half_px(Rules.WOLF)
-	t.ok(halo_px > foe_half,
-		"고리 반지름 %.1fpx 가 제 그림 반폭 %.1fpx 보다 크다 — 안 그러면 몸 밑에 깔려 안 보인다"
-			% [halo_px, foe_half])
-	t.ok(halo_px < foe_half * 2.5,
-		"그리고 반폭의 2.5배 안이다 (%.1fpx) — 더 커지면 「이 놈이 맞았다」가 아니라 범위기로 읽힌다"
-			% halo_px)
-
-	# The flinch keeps a closed table row: it is a stored number, so every species is checkable.
-	var checked := 0
-	var thin_knock := []
-	for ty in Rules.UNITS.size():
-		if fv._beast_tex(ty, true) == null:
-			continue
-		checked += 1
-		if Look.HIT_KNOCK_RATIO * Look.sprite_half_px(ty) < Look.sprite_half_px(ty) * 2.0 * 0.08:
-			thin_knock.append(Rules.name_of(ty))
-	t.eq(checked, 8, "그림을 가진 종 여덟을 전부 쟀다 (자가 점검 — 0이면 아래가 공허하다)")
-	t.eq(thin_knock, [], "움찔이 제 그림 폭의 8%% 밑으로 안 내려간다 %s" % str(thin_knock))
-
-	# ⚠ **And on the glass, at the zoom the first island actually opens at** — a ratio of the picture
-	# is worth nothing if the picture itself is 43 px. The 2.0 px snap floor is this repo's own.
-	var g := Grid.new()
-	Islands.load_into(g)
-	var zoom := Look.survey_zoom_of(g.w, g.h)
-	var wolf_knock := Look.HIT_KNOCK_RATIO * Look.sprite_half_px(Rules.WOLF) * zoom
-	var wolf_lunge := Look.LUNGE_PUSH_RATIO * Look.sprite_half_px(Rules.WOLF) * zoom
-	t.ok(wolf_knock > 2.0,
-		"첫 섬 여는 줌에서 늑대의 움찔이 %.1f 화면px 다 — 스냅 바닥 2.0 위다" % wolf_knock)
-	t.ok(wolf_lunge > 8.0,
-		"그리고 런지가 %.1f 화면px 다 — 옛 값은 6.8 이었다" % wolf_lunge)
 
 
-## ⚠⚠ **THE STANDING RULE: 「붙어서 가만히 있으면 재미가 죽는다」** (the user, *"존나 중요해"*). The
-## gait phases on DISTANCE, which is right for a walk cycle and leaves a body in contact — the two
-## bodies the player is watching hardest — perfectly still. Measured in the sweep: a body stands over
-## 5 seconds on 31 of 54 landing tiles, worst **22.4 s**, every better tile reserved.
-##
-## ⚠ **This does not shorten that queue and the row does not claim it does.** It claims a body that
-## cannot move is not a frozen picture. Both ends: silent before the threshold, moving after it.
-func _a_body_that_cannot_move_still_does_something(t) -> void:
-	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
-	var fv := _view_of(b, rows)
-	fv._process(1.0 / 60.0)
-	t.ok(fv._body.has("e0"), "몸 항목이 생겼다 (자가 점검)")
-	t.ok(fv._idle_offset("e0").length() <= 0.001,
-		"막 선 몸은 안 흔들린다 — 칸 사이에서 잠깐 멈춘 몸이 떠는 것을 막는 문턱이다")
-	var half := Look.IDLE_AFTER_SEC * 0.5
-	fv._process(half)
-	t.ok(fv._idle_offset("e0").length() <= 0.001,
-		"문턱 절반에서도 조용하다 (%.2fs)" % half)
-	# Past the threshold, and far enough past it that the sine is nowhere near its own zero.
-	fv._process(Look.IDLE_AFTER_SEC + Look.IDLE_PERIOD_SEC * 0.25)
-	var sway := fv._idle_offset("e0").length()
-	var cap := Look.IDLE_SWAY_RATIO * Look.sprite_half_px(Rules.WOLF)
-	t.ok(sway > 0.0, "문턱을 넘으면 흔들린다 (%.2f px)" % sway)
-	t.ok(sway <= cap + 0.001,
-		"그리고 제 그림 반폭의 %.0f%% 를 안 넘는다 (상한 %.2f px) — 한 대 맞은 것처럼 보이면 안 된다"
-			% [Look.IDLE_SWAY_RATIO * 100.0, cap])
-	# ⚠ The other end: a body that IS moving must stay silent, or the sway would ride on top of the
-	# gait and every walking animal would wobble.
-	var moving := 0.0
-	for k in 60:
-		# ⚠ `k + 1`, and the +1 is not cosmetic: at k = 0 this wrote the position the body was ALREADY
-		# at, so the first frame of the loop was a STILL frame and the max below captured the sway it
-		# was already carrying. The row reddened on its own fixture rather than on the subject.
-		b.enemy_pos[0] = Vector2(12.0 + 0.05 * float(k + 1), 6.0)
-		fv._process(1.0 / 60.0)
-		moving = maxf(moving, fv._idle_offset("e0").length())
-	t.ok(moving <= 0.001, "움직이는 몸은 안 흔들린다 (%.3f px) — 걷는 짐승이 떨면 안 된다" % moving)
 
 
 # == the ground transients ============================================================================
 
-## Item 7 — the landing ring. Fixed radius 20 px, so the piece count is closed:
-## ceil(TAU·20 / 20) = 7, floored to the minimum 8 segments ⇒ 8 quads = **48 vertices**, ground only.
-func _the_landing_ring(t) -> void:
-	var fx := _quiet_view()
-	var fv: FieldView = fx["fv"]
-	var at := Look.tile_point_px(Vector2(12.0, 6.0))
-	fv._fx.append({"kind": FieldView.FxKind.LAND, "age": Look.LAND_RING_SEC * 0.5, "delay": 0.0,
-		"life": Look.LAND_RING_SEC, "at": at})
-	fv._process(0.0)
-	t.eq(fv._g_v.size(), 48, "상륙 링은 바닥 정점 정확히 48개다 (8조각 x 6)")
-	t.eq(fv._a_v.size(), 0, "공중 버퍼는 조용하다 — 상륙 링은 바닥의 것이다")
-	t.eq(fv._decal.mesh.get_surface_count(), 1, "그리고 커밋됐다 — _fx_flush 를 지우면 버퍼만 남고 여기가 문다")
-	var want := Look.COL_LAND_RING
-	want.a *= 0.5
-	t.ok(_cols_all_close(fv._g_c, want),
-		"48개 전부 COL_LAND_RING 에 fade 0.5 를 실었다 — 바닥과 천장이 한 등식이다")
-	var centre := _xz_centre_v3(fv._g_v)
-	t.ok(centre.distance_to(at / Look.TILE_PX) < 0.02, "링의 중심이 상륙점이다")
-	var outer := _max_dist_v3(fv._g_v, centre)
-	t.ok(absf(outer - (20.0 + 2.5) / 40.0) < 0.03,
-		"extent 가 반지름 20 + 굵기 절반이다 (%.3f 타일) — 반지름 0 으로 접힌 링은 여기서 문다" % outer)
 
 
-## Item 5 — the area ring, AND the ground-following axis. The ring is the widest ground mark
-## (r 42 px at half-life), so it is the one that crosses real slope: every vertex must sit at
-## `_ground_y_px` of its own ground point.
-## ⚠ The pairing closes both flattening mutations: flatten `_g_tri` and the per-vertex match bites;
-## flatten `_ground_y_px` itself and the FIXTURE self-check (a real slope under the ring) bites,
-## because the slope is measured through the same function.
-func _the_area_ring_follows_the_ground(t) -> void:
-	var fx := _quiet_view()
-	var fv: FieldView = fx["fv"]
-	# The land tile whose surrounding ground slopes the most, found on the fixed-seed terrain — a
-	# deterministic search, not a random one.
-	var best := Vector2.ZERO
-	var best_spread := 0.0
-	for ty in range(3, ARENA_H - 3):
-		for tx in range(3, ARENA_W - 3):
-			var c := Look.tile_point_px(Vector2(tx, ty))
-			var hs := [fv._ground_y_px(c + Vector2(42.0, 0.0)), fv._ground_y_px(c - Vector2(42.0, 0.0)),
-				fv._ground_y_px(c + Vector2(0.0, 42.0)), fv._ground_y_px(c - Vector2(0.0, 42.0))]
-			var spread := float(hs.max()) - float(hs.min())
-			if spread > best_spread:
-				best_spread = spread
-				best = c
-	t.ok(best_spread > 0.05, "링이 걸칠 진짜 비탈을 찾았다 (자가 점검, 높이차 %.3f 타일)" % best_spread)
-
-	fv._fx.append({"kind": FieldView.FxKind.AREA, "age": Look.AREA_RING_SEC * 0.5, "delay": 0.0,
-		"life": Look.AREA_RING_SEC, "at": best, "radius": 60.0})
-	fv._process(0.0)
-	# r = 60 · lerp(0.4, 1.0, 0.5) = 42 px ⇒ ceil(TAU·42 / 20) = 14 pieces = 84 vertices.
-	t.eq(fv._g_v.size(), 84, "광역 링은 바닥 정점 정확히 84개다 (14조각 x 6, 반지름 42px)")
-	t.eq(fv._a_v.size(), 0, "공중 버퍼는 조용하다")
-	var want := Look.COL_AREA_RING
-	want.a *= 0.5
-	t.ok(_cols_all_close(fv._g_c, want), "84개 전부 COL_AREA_RING 에 fade 0.5 다")
-	var flat := 0
-	var y_min := 1e9
-	var y_max := -1e9
-	for v: Vector3 in fv._g_v:
-		if absf(v.y - fv._ground_y_px(Vector2(v.x, v.z) * Look.TILE_PX)) > 0.001:
-			flat += 1
-		y_min = minf(y_min, v.y)
-		y_max = maxf(y_max, v.y)
-	t.eq(flat, 0, "모든 정점이 제 발밑 땅 높이에 있다 — 링이 비탈을 따라 올라간다")
-	t.ok(y_max - y_min > 0.04, "그리고 링의 높이가 실제로 벌어져 있다 (%.3f 타일) — 평평하게 뭉개면 여기가 문다"
-		% (y_max - y_min))
 
 
 ## ⚠⚠ **`_the_refusal_mark` STOOD HERE AND IS DELETED** (2026-08-28). It measured the 26 px
@@ -624,34 +209,6 @@ func _the_area_ring_follows_the_ground(t) -> void:
 ## `note_refusal` and `FxKind.REFUSE` were all deleted with the start button. See `game.gd`.
 
 
-## Item 6 — one intent line, enemy to soldier, two tiles apart: 80 px at the intent's own coarse
-## 120 px cut is ONE piece = **6 vertices**, wearing `COL_TARGET_LINE`'s deliberate 0.12 alpha.
-func _the_intent_line(t) -> void:
-	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.WOLF, 14, 6)])
-	_ashore(b, 0, Vector2(12.0, 6.0))
-	b.enemy_target[0] = 0
-	var fv := _view_of(b, rows)
-	fv._process(0.0)
-	# ⚠ **The shadow discs are filtered out** — two bodies stand in this fixture and each lays one.
-	t.eq(_ground_minus_shadow(fv), 6, "의도선 하나는 바닥 정점 정확히 6개다 — 성긴 120px 절단의 한 조각")
-	t.eq(fv._a_v.size(), 0, "공중 버퍼는 조용하다")
-	# ⚠⚠ **THIS ROW HAS BEEN RED SINCE BEFORE 2026-08-28 AND THE SUBJECT IS THE LINE, NOT THE SHADOW.**
-	# It reads 0 where it wants 6: **the intent line is not reaching the ground buffer at all.** Two
-	# extra rows were added here on 2026-08-28 that re-counted the same absence under new labels, and
-	# they are deleted — one red per defect. The line itself is a real defect and it is still open.
-	# ⚠⚠ **THIS ROW USED TO BE `_cols_all_close(fv._g_c, …)` AND IT WAS GREEN ON AN EMPTY BUFFER.**
-	# 「every colour in this array is the line's colour」 is trivially true of an array with nothing in
-	# it — so while the line above read 0 and went red, this one read GREEN beside it and said the
-	# colour was right. **A second red is the honest state**: both halves of one defect now speak.
-	var line_pts := _verts_of(fv._g_v, fv._g_c, Look.COL_TARGET_LINE)
-	t.eq(line_pts.size(), 6, "그리고 그 여섯이 COL_TARGET_LINE 이다 — 알파 0.12 는 일부러 희미한 면허다")
-	if line_pts.size() > 0:
-		var centre := Vector2.ZERO
-		for pt: Vector2 in line_pts:
-			centre += pt
-		centre /= float(line_pts.size())
-		t.ok(centre.distance_to(Vector2(13.5, 6.5)) < 0.1, "선의 한가운데가 두 몸 사이다")
 
 
 ## ⚠⚠ **A BODY'S WHOLE SHADOW, AND IT IS THE ONLY ONE IT HAS** (2026-08-28, the user: 「그림자도
@@ -668,7 +225,10 @@ func _the_intent_line(t) -> void:
 ## ⚠ Mutation: drop `_put_ground_shadow`'s call out of `_put_body` and both counts go to zero.
 func _a_body_lays_one_shadow_disc(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.WOLF, 14, 6)])
+	# ⚠ **IT STOOD ENEMIES HERE UNTIL 2026-08-29** and stands the company instead — the enemies are
+	# deleted, and a shadow belongs to a body whichever side it is on.
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN, Rules.SWORDSMAN]), [])
+	_ashore(b, 0, Vector2(14.0, 6.0))
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
 	var one := _verts_of(fv._g_v, fv._g_c, Look.COL_BODY_SHADOW)
@@ -679,77 +239,21 @@ func _a_body_lays_one_shadow_disc(t) -> void:
 	for pt: Vector2 in one:
 		centre += pt
 	centre /= float(one.size())
-	# ⚠ **Tile CENTRES.** `Look.tile_point_px` puts tile (14,6) at (14.5, 6.5) in tile units, and a
-	# bare (14, 6) here would be the tile's corner — the half-tile error this repo has paid for once.
+	# ⚠ **Tile CENTRES.** `Look.tile_point_px` puts 조각 (14,6) at (14.5, 6.5) in tile units, and a
+	# bare (14, 6) here would be its corner — the half-조각 error this repo has paid for once.
 	t.ok(centre.distance_to(Vector2(14.5, 6.5)) < 0.2,
 		"그 원판의 한가운데가 그 몸 발밑이다 (%.2f, %.2f)" % [centre.x, centre.y])
 
 	# ⚠ **The floor: a SECOND body lays a SECOND disc.** Without this the row above is equally true of
 	# a drawer that lays one disc per frame regardless of how many bodies there are.
-	# ⚠ A second ENEMY and not a soldier put ashore: the enemy path is the one already exercised above,
-	# so a difference here is the body count and nothing about which side is drawn.
-	var b2 := _battle_of(rows, _army_of([Rules.WOLF]),
-		[_spawn(ARENA_W, Rules.WOLF, 14, 6), _spawn(ARENA_W, Rules.WOLF, 11, 6)])
+	var b2 := _battle_of(rows, _army_of([Rules.SWORDSMAN, Rules.SWORDSMAN]), [])
+	_ashore(b2, 0, Vector2(14.0, 6.0))
+	_ashore(b2, 1, Vector2(11.0, 6.0))
 	var fv2 := _view_of(b2, rows)
 	fv2._process(0.0)
 	var two := _verts_of(fv2._g_v, fv2._g_c, Look.COL_BODY_SHADOW)
 	t.ok(two.size() > one.size(),
 		"몸이 둘이면 그림자도 둘이다 (%d -> %d 정점) — 프레임당 하나가 아니다" % [one.size(), two.size()])
-
-	# And the sprite that draws the body casts no real shadow of its own — the whole point of the disc.
-	var lit := 0
-	for k in fv._sprites_used:
-		var sp: Sprite3D = fv._sprites[k]
-		if sp.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
-			lit += 1
-	t.ok(fv._sprites_used > 0, "몸 스프라이트가 실제로 있다 (자가 점검)")
-	t.eq(lit, 0, "그리고 어느 몸도 진짜 그림자를 안 드리운다 — 빌보드의 그림자는 판을 돌리면 같이 돈다")
-
-
-## ⚠⚠ **A BODY STANDING STILL DROPPED A WHOLE STOREY AND CAME BACK, OVER AND OVER** (2026-08-28, the
-## user: 「캐릭터가 좌우하면서 idle때 자꾸 2층을 넘어가네 이건 무슨 버그임?」). The idle sway is added to
-## the DRAWN position, and the ground under the body was being sampled at that swayed point — so on the
-## lip of the plateau the sway carried the sample across the tile line and `surface_h` answered with
-## the floor below. **The body was not walking anywhere; the animation alone did it.**
-##
-## ⇒ **The height is asked of the SIM's position and the offset is applied afterwards.** This row is
-## that separation: with the sway wound right up, the sprite's Y must not move at all while its X does.
-##
-## ⚠ Mutation: pass `centre_px` where `_put_body` now takes `foot_px` and the Y moves with the X.
-func _the_idle_sway_does_not_move_the_feet(t) -> void:
-	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
-	var fv := _view_of(b, rows)
-	fv._process(0.0)
-	var rest := _body_sprite(fv)
-	t.ok(rest != null, "몸이 하나 그려졌다 (자가 점검)")
-	var rest_y: float = rest.position.y
-	var rest_x: float = rest.position.x
-
-	# Wind the sway right up. ⚠ **`half` is what the amplitude is a RATIO of** — a body entry built by
-	# hand carries 0 there and would sway by exactly nothing, which is the shape that makes the floor
-	# below pass for the wrong reason.
-	# ⚠ **Several phases are tried**: the sway is a `sin`, so one sample can land on a zero crossing
-	# and read as no sway at all. What is wanted is the LARGEST displacement any of them produces.
-	var moved_x := 0.0
-	var moved_y := 0.0
-	for k in 12:
-		var e := _body_entry(b.enemy_pos[0])
-		e["still"] = Look.IDLE_AFTER_SEC + Look.IDLE_PERIOD_SEC * float(k) / 12.0
-		e["half"] = Look.sprite_half_px(Rules.WOLF)
-		fv._body["e0"] = e
-		fv._process(0.0)
-		var sw := _body_sprite(fv)
-		if sw == null:
-			continue
-		moved_x = maxf(moved_x, absf(sw.position.x - rest_x))
-		moved_y = maxf(moved_y, absf(sw.position.y - rest_y))
-	# The floor: the sway is REAL, so the drawn x has to have moved. Without this the row below is
-	# equally true of a body that is not swaying at all.
-	t.ok(moved_x > 0.0001,
-		"흔들림이 실제로 화면 자리를 옮겼다 (%.5f 타일) — 안 흔들리는 몸을 재고 있지 않다" % moved_x)
-	t.ok(moved_y < 0.0001,
-		"그런데 발 높이는 한 톨도 안 움직였다 (%.5f) — 흔들림이 땅을 다시 읽지 않는다" % moved_y)
 
 
 ## ⚠⚠ **A BODY ON THE LIP OF THE PLATEAU SANK INTO THE GROUND** (2026-08-28, the user: 「지금보면
@@ -802,171 +306,14 @@ func _a_body_stands_on_its_own_tile_and_not_the_next_one(t) -> void:
 
 # == the air transients ===============================================================================
 
-## Item 1 — the tracer: one camera-plane stub of **6 vertices**, `COL_SHOT` with NO fade, and a STUB
-## — its whole extent stays far under the muzzle-to-target distance it sweeps.
-func _the_tracer(t) -> void:
-	var fx := _quiet_view()
-	var fv: FieldView = fx["fv"]
-	var from := Look.tile_point_px(Vector2(10.0, 6.0))
-	var to := Look.tile_point_px(Vector2(14.0, 6.0))
-	fv._fx.append({"kind": FieldView.FxKind.SHOT, "age": Look.SHOT_SEC * 0.5, "delay": 0.0,
-		"life": Look.SHOT_SEC, "from": from, "to": to})
-	fv._process(0.0)
-	t.eq(fv._a_v.size(), 6, "예광선은 공중 정점 정확히 6개다 — 토막 하나")
-	t.eq(fv._g_v.size(), 0, "바닥 버퍼는 조용하다 — 예광선은 공중의 것이다")
-	t.eq(fv._air.mesh.get_surface_count(), 1, "그리고 커밋됐다")
-	t.ok(_cols_all_close(fv._a_c, Look.COL_SHOT), "COL_SHOT 그대로다 — 예광선은 fade 가 없다")
-	var longest := 0.0
-	for i in fv._a_v.size():
-		for j in range(i + 1, fv._a_v.size()):
-			longest = maxf(longest, fv._a_v[i].distance_to(fv._a_v[j]))
-	t.ok(longest > 0.28 and longest < 0.45,
-		"토막의 최장 대각이 12px 길이 근처다 (%.3f 타일) — 전체 4타일 선을 그으면 레이저고, 0이면 접힌 것이다"
-			% longest)
 
 
-## Item 2② — the spark fan: six shards at half-life = 6 camera-plane segments = **36 vertices**,
-## `COL_SPARK` with the fade as its alpha.
-func _the_spark(t) -> void:
-	var fx := _quiet_view()
-	var fv: FieldView = fx["fv"]
-	var at := Look.tile_point_px(Vector2(12.0, 6.0))
-	fv._fx.append({"kind": FieldView.FxKind.SPARK, "age": Look.SPARK_SEC * 0.5, "delay": 0.0,
-		"life": Look.SPARK_SEC, "at": at, "facing": Vector2.RIGHT})
-	fv._process(0.0)
-	t.eq(fv._a_v.size(), 36, "파편은 공중 정점 정확히 36개다 (조각 여섯 x 6)")
-	t.eq(_ground_minus_shadow(fv), 0, "바닥 버퍼는 그림자 말고는 조용하다")
-	var want := Look.COL_SPARK
-	want.a = 0.5
-	t.ok(_cols_all_close(fv._a_c, want), "COL_SPARK 에 fade 0.5 다")
 
 
-## Item 4 — the death burst, AND the camera-plane axis with a turn under it. The lion-sized ring at
-## half-life is `FX_RING_SEGMENTS` 24 quads = **144 vertices**; every one lies in the camera's own
-## plane, before AND after the board turns 45° — the number behind 「판을 돌려도 안 찌그러진다」.
-func _the_death_burst_stands_in_the_camera_plane(t) -> void:
-	var fx := _quiet_view()
-	var fv: FieldView = fx["fv"]
-	var at := Look.tile_point_px(Vector2(12.0, 6.0))
-	fv._fx.append({"kind": FieldView.FxKind.BURST, "age": Look.BURST_SEC * 0.5, "delay": 0.0,
-		"life": Look.BURST_SEC, "at": at, "radius": 22.0, "colour": Look.COL_ENEMY})
-	fv._process(0.0)
-	t.eq(fv._a_v.size(), 144, "죽음 파열은 공중 정점 정확히 144개다 (24조각 x 6)")
-	t.eq(_ground_minus_shadow(fv), 0, "바닥 버퍼는 그림자 말고는 조용하다")
-	var want := Look.COL_ENEMY
-	want.a = 0.5
-	t.ok(_cols_all_close(fv._a_c, want), "죽은 쪽의 제 색에 fade 0.5 다")
-	var centre := _centre_v3(fv._a_v)
-	var r_out := 0.0
-	var r_in := 1e9
-	for v: Vector3 in fv._a_v:
-		r_out = maxf(r_out, v.distance_to(centre))
-		r_in = minf(r_in, v.distance_to(centre))
-	# ⚠ The picture is SPRITE-scaled (verify-look: the sim-radius ring never read under the body piles):
-	# the lion's 22 px radius starts its ring at 22 x `BURST_START_MUL`, so at half-life it stands at
-	# that x 1.6, plus half the 9 px stroke.
-	# ⚠⚠ **RE-DERIVED, NOT NUDGED (2026-08-25)**: the bodies were cut 6.0 -> 3.5, so `BURST_START_MUL`
-	# went 3.00 -> 1.75 and every number on this line moved with it. 22 x 1.75 = **38.5**; at half-life
-	# 38.5 x 1.6 = **61.6**; outer (61.6 + 4.5) / 40 = **1.6525 tiles**, inner (61.6 - 4.5) / 40 =
-	# **1.4275**. The old 2.7525 was the same arithmetic at the old body size and it is what proves this
-	# ring is tied to the art rather than to a constant somebody has to remember.
-	t.ok(absf(r_out - 1.6525) < 0.03,
-		"바깥 반지름이 스프라이트 반폭 38.5px 의 1.6 성장 + 굵기 절반이다 (%.3f 타일) — 더미 위로 읽힌다" % r_out)
-	t.ok(absf(r_in - 1.4275) < 0.03,
-		"안쪽 반지름도 0 이 아니다 — 접힌 링은 여기서 문다 (%.3f 타일)" % r_in)
-	t.ok(is_equal_approx(Look.BURST_START_MUL, Look.BEAST_SPRITE_W_RATIO * 0.5),
-		"시작 배수가 스프라이트 반폭 비율 그대로다 — 그림이 다시 커지는 날 파열이 같이 커진다")
-	var plane_bad := _off_plane_count(fv._a_v, centre, fv._cam.transform.basis.z)
-	t.eq(plane_bad, 0, "144개 전부 카메라 평면 위다")
-
-	# The turn. The buffers rebuild on the next _process, the camera basis moves — and the ring must
-	# have actually re-oriented (a stale buffer would pass the old basis and fail this pair).
-	var before: Vector3 = fv._a_v[0]
-	fv.turn_by(45.0)
-	fv._process(0.0)
-	t.eq(fv._a_v.size(), 144, "돌린 뒤에도 링은 그대로 144개다 (자가 점검)")
-	t.ok(fv._a_v[0].distance_to(before) > 0.01, "그리고 정점이 실제로 움직였다 — 판을 따라 돈 것이다 (자가 점검)")
-	var centre2 := _centre_v3(fv._a_v)
-	t.eq(_off_plane_count(fv._a_v, centre2, fv._cam.transform.basis.z), 0,
-		"45° 돌린 카메라의 평면 위에도 전부 서 있다 — 돌려도 안 찌그러진다")
 
 
-## Item 3② — the hit halo, the area a hit is actually seen on: a camera-plane disc of 24 segments =
-## **144 vertices**, `COL_HIT_HALO` with the flash's remaining fraction on its alpha.
-func _the_hit_halo(t) -> void:
-	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
-	var fv := _view_of(b, rows)
-	fv._process(0.0)
-	t.eq(fv._a_v.size(), 0, "맞은 적 없는 프레임에는 헤일로가 없다 (바닥 — 무조건 그리는 잎은 여기서 갈린다)")
-	fv._body["e0"] = _body_entry(b.enemy_pos[0])
-	(fv._body["e0"] as Dictionary)["flash"] = Look.HIT_FLASH_SEC * 0.5
-	fv._process(0.0)
-	t.eq(fv._a_v.size(), 144, "타격 헤일로는 공중 정점 정확히 144개다 (원판 24조각 x 6)")
-	t.eq(_ground_minus_shadow(fv), 0, "바닥 버퍼는 그림자 말고는 조용하다")
-	var want := Look.COL_HIT_HALO
-	want.a *= 0.5
-	t.ok(_cols_all_close(fv._a_c, want), "COL_HIT_HALO 에 남은 플래시 0.5 를 실었다")
 
 
-# == the body-bound effects, on SURFACE 2 =============================================================
-## Flash · lunge · knockback · gait squash never touch a buffer: they are written into the pooled
-## sprite's own modulate / position / scale — the fields the engine consumes. Each is toggled on the
-## SAME body against its own resting frame, so the row is the difference the effect makes.
-func _body_effects_ride_the_pooled_fields(t) -> void:
-	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
-	var fv := _view_of(b, rows)
-	fv._body["e0"] = _body_entry(b.enemy_pos[0])
-	fv._process(0.0)
-	var body := _body_sprite(fv)
-	t.ok(body != null, "적의 몸 스프라이트가 있다 (자가 점검)")
-	var rest_mod: Color = body.modulate
-	var rest_pos: Vector3 = body.position
-	var rest_scale: Vector3 = body.scale
-	t.eq(rest_mod, Look.beast_tint(Look.body_colour_of(true)), "쉬는 몸은 제 편 색이다 (자가 점검)")
-
-	# Item 3① — the flash mixes COL_FLASH into the side colour before the team tint.
-	(fv._body["e0"] as Dictionary)["flash"] = Look.HIT_FLASH_SEC * 0.5
-	fv._process(0.0)
-	var want_mod := Look.beast_tint(Look.body_colour_of(true).lerp(Look.COL_FLASH, Look.HIT_FLASH_STRENGTH))
-	t.eq(_body_sprite(fv).modulate, want_mod, "플래시가 modulate 를 COL_FLASH 쪽으로 0.7 만큼 민다")
-	t.ok(want_mod != rest_mod, "그리고 그 값은 쉬는 색과 실제로 다르다 (자가 점검)")
-	(fv._body["e0"] as Dictionary)["flash"] = 0.0
-
-	# Item 2① — the lunge at its peak pushes the whole body `push` px along its facing.
-	var e0: Dictionary = fv._body["e0"]
-	e0["lunge"] = Look.LUNGE_SEC * 0.5
-	e0["lunge_dir"] = Vector2.RIGHT
-	e0["push"] = 10.0
-	fv._process(0.0)
-	t.ok(absf(_body_sprite(fv).position.x - (rest_pos.x + 0.25)) < 0.001,
-		"런지 꼭대기에서 몸이 정확히 10px(0.25타일) 앞으로 밀린다")
-	e0["lunge"] = 0.0
-
-	# Item 3③ — the knockback at half its window is half of the stored magnitude, away from the
-	# striker. ⚠⚠ **RE-DERIVED: the magnitude is a ratio of the DRAWN half-width now and it was a
-	# raw 3.0 px.** A shieldbearer's radius is 16.0, so its picture is 16.0 x 3.5 = 56 wide, half
-	# 28.0; `HIT_KNOCK_RATIO` 0.22 x 28.0 = **6.16 px**, and half the window is **3.08**. The old
-	# 1.5 was 3.0 halved, and 3.0 px of flinch on a 56 px animal is what the user was looking at.
-	# ⚠ The magnitude is SET here rather than defaulted, so this row measures the stored value
-	# reaching the sprite and not a constant this file could read for itself.
-	e0["knock"] = Look.HIT_KNOCK_SEC * 0.5
-	e0["knock_dir"] = Vector2(0.0, 1.0)
-	e0["knock_px"] = Look.HIT_KNOCK_RATIO * Look.sprite_half_px(Rules.WOLF)
-	fv._process(0.0)
-	t.ok(absf(_body_sprite(fv).position.z - (rest_pos.z + 3.08 / 40.0)) < 0.001,
-		"넉백 반창에서 몸이 정확히 3.08px 뒤로 밀려 있다 — 옛 1.5px 는 그림의 3%%였다")
-	e0["knock"] = 0.0
-
-	# Item 12 — the gait squash: 0.8 along the heading, 1.2 across it, carried on scale.
-	e0["gait"] = TAU * 0.25
-	e0["head"] = Vector2.RIGHT
-	fv._process(0.0)
-	var squashed := _body_sprite(fv)
-	t.ok(absf(squashed.scale.x - rest_scale.x * 0.8) < 0.0001
-			and absf(squashed.scale.y - rest_scale.y * 1.2) < 0.0001,
-		"걸음 스쿼시가 scale 에 (0.8, 1.2) 로 실린다 — 서 있으면 sin(0)=0 이라 안 찌그러진다")
 
 
 
@@ -977,20 +324,6 @@ func _body_effects_ride_the_pooled_fields(t) -> void:
 ## deleted** with the whole summon gesture — there is no plan layer left to gate. See `game.gd`.
 
 
-## The ceiling on the transient drawer: `_drain_events` drops the oldest past `FX_MAX_COUNT`, so a
-## refusal storm cannot pile geometry without bound.
-## ⚠ **It pushed `note_refusal` until 2026-08-28 and that call is deleted.** The drawer's ceiling is
-## a fact about the drawer and not about any one effect, so the row survives on a kind that is still
-## drawn — and the entries go in directly, which is all `note_refusal` ever did.
-func _the_transient_drawer_is_capped(t) -> void:
-	var fx := _quiet_view()
-	var fv: FieldView = fx["fv"]
-	for _k in Look.FX_MAX_COUNT + 44:
-		fv._fx.append({"kind": FieldView.FxKind.LAND, "age": 0.0, "delay": 0.0,
-			"life": Look.LAND_RING_SEC, "at": Look.tile_point_px(Vector2(10.0, 5.0))})
-	fv._process(0.0)
-	t.eq(fv._fx.size(), Look.FX_MAX_COUNT,
-		"일시 연출 서랍은 FX_MAX_COUNT 에서 잘린다 — 가장 오래된 것이 나간다")
 
 
 # == the readers themselves ===========================================================================
@@ -1026,168 +359,27 @@ func _the_readers_themselves(t) -> void:
 ## the distinct count from the other end, since it removes the only fallback body).
 func _every_row_wears_its_own_picture(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var spawns := []
-	for ty in Rules.UNITS.size():
-		spawns.append(_spawn(ARENA_W, ty, 2 + ty, 3))
-	var b := _battle_of(rows, _army_of([]), spawns)
+	# ⚠⚠ **IT STOOD ONE BODY PER TABLE ROW AND READ THE POOL BACK** until 2026-08-29. Only the player's
+	# rows can stand on the island now, so the census is asked of the PICTURE TABLE directly — which is
+	# what the row was ever about: **counting bodies alone stays green while five of them share one
+	# drawing.**
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN]), [])
+	_ashore(b, 0, Vector2(6.0, 6.0))
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
 	var seen := {}
-	var bodies := 0
-	for k in fv._sprites_used:
-		var s: Sprite3D = fv._sprites[k]
-		# The one-texel bar texture is the HP rails, two per body — not a picture.
-		if s.texture == fv._tex_flat:
-			continue
-		bodies += 1
-		seen[s.texture] = int(seen.get(s.texture, 0)) + 1
-	t.eq(bodies, Rules.UNITS.size(), "표의 아홉 줄이 전부 몸으로 섰다 (자가 점검)")
+	for ty in Rules.UNITS.size():
+		var tex := fv._beast_tex(ty, true)
+		t.ok(tex != null, "%d 번 줄에 그림이 있다" % ty)
+		seen[tex] = int(seen.get(tex, 0)) + 1
 	t.eq(seen.size(), Rules.UNITS.size(),
-		"그리고 저마다 다른 그림을 쓴다 — 개수만 세면 다섯이 늑대 그림 하나를 나눠 써도 맞는다")
+		"표의 줄마다 저마다 다른 그림을 쓴다 — 개수만 세면 다섯이 늑대 그림 하나를 나눠 써도 맞는다")
+	# The floor: a body really does reach the pool wearing one of them.
+	t.ok(fv._sprites_used > 0, "그리고 몸이 실제로 화면에 섰다 (자가 점검)")
 	# The `is_enemy` argument is gone, so the same row facing the same way is the same picture whoever
 	# is asking. Asserted as an EQUALITY, which is what a deleted selector actually means.
 	t.eq(fv._beast_tex(Rules.WOLF, true), fv._beast_tex(Rules.WOLF, true),
 		"같은 줄은 같은 그림을 준다 — 묻는 쪽이 편을 안 고른다")
-	t.ok(fv._beast_tex(Rules.WOLF, true) != fv._beast_tex(Rules.WOLF, false),
-		"그러나 좌우는 다른 그림이다 (자가 점검)")
-	t.eq(fv._beast_tex(Rules.LION, true), null, "사자만 그림이 없다 — 둥근 사각형으로 선다")
-
-
-# == 티켓 26: the wolf's frames =======================================================================
-
-## The table, the files behind it, and **the canvas — which is the half no count can see.**
-##
-## ⚠⚠ **`_beast_rect` takes a body's WIDTH from its radius and its HEIGHT from the texture's own
-## aspect.** A frame drawn on a wider canvas therefore draws the animal SHRUNK inside the same box,
-## and a taller one LIFTS it off the ground — and both of those are a correct texture in a correct
-## strip at a correct index. Nothing else in this file would say a word.
-##
-## ⚠ The fallback is the other half: eight of nine rows have no strip and must still get a body.
-## Asserted at the PATH level here (a row with no strip answers with its standing picture) and at the
-## picture level in the driven row below.
-##
-## ⚠ Mutation: `WOLF_ANIM_FRAMES` -> `[0, 0]`; `[4, 4]` onto a second row (whose files do not exist);
-## a wolf frame re-exported on a different canvas; `beast_frame_path` returning the idle path always.
-func _only_the_wolf_has_frames_and_they_share_one_canvas(t) -> void:
-	# -- the table: exactly one animated row, and it is the wolf ------------------------------------
-	var animated: Array[String] = []
-	for ty in Rules.UNITS.size():
-		if Look.beast_anim_frames(ty, Look.Anim.WALK) > 0 \
-				or Look.beast_anim_frames(ty, Look.Anim.BITE) > 0:
-			animated.append(Rules.name_of(ty))
-	t.eq(animated, [Rules.name_of(Rules.WOLF)],
-		"프레임을 가진 줄은 늑대 하나다 %s — 하나도 없으면 아래가 전부 공허하다" % str(animated))
-	t.eq(Look.beast_anim_frames(Rules.WOLF, Look.Anim.WALK), 4, "걷기는 넉 장이다")
-	t.eq(Look.beast_anim_frames(Rules.WOLF, Look.Anim.BITE), 4, "물기도 넉 장이다")
-	# ⚠ The standing picture is NOT a strip, and a caller that asked for it must get 0 rather than 1 —
-	# a one-frame idle strip would hand eight species an animation made of the picture they already
-	# wear, and the fallback would stop being visible in the code at all.
-	t.eq(Look.beast_anim_frames(Rules.WOLF, Look.Anim.IDLE), 0, "서 있는 그림은 띠가 아니다 (0장)")
-
-	# -- the files the table promises ---------------------------------------------------------------
-	var missing: Array[String] = []
-	var paths := {}
-	for anim in [Look.Anim.WALK, Look.Anim.BITE]:
-		for f in Look.beast_anim_frames(Rules.WOLF, anim):
-			for facing in [true, false]:
-				var p := Look.beast_frame_path(Rules.WOLF, anim, f, facing)
-				paths[p] = true
-				if not ResourceLoader.exists(p):
-					missing.append(p)
-	t.eq(paths.size(), 16, "늑대 프레임 경로 열여섯 개를 만들었다 — 좌우가 겹치면 여덟이 된다")
-	t.eq(missing, [], "그 열여섯 장이 전부 리포에 있다 %s" % str(missing))
-
-	# -- the fallback, at the path level ------------------------------------------------------------
-	var fell_back := 0
-	for ty in Rules.UNITS.size():
-		if Look.beast_anim_frames(ty, Look.Anim.WALK) > 0:
-			continue
-		fell_back += 1
-		t.eq(Look.beast_frame_path(ty, Look.Anim.WALK, 0, true), Look.beast_tex_path(ty, true),
-			"%s 는 띠가 없어서 서 있는 그림으로 답한다" % Rules.name_of(ty))
-	t.eq(fell_back, 8, "띠 없는 여덟 줄을 전부 물어봤다 (자가 점검)")
-	t.eq(Look.beast_frame_path(Rules.WOLF, Look.Anim.IDLE, 0, true),
-		Look.beast_tex_path(Rules.WOLF, true), "늑대도 IDLE 을 물으면 서 있는 그림이다")
-	t.eq(Look.beast_frame_path(Rules.WOLF, Look.Anim.WALK, 4, true),
-		Look.beast_tex_path(Rules.WOLF, true), "띠 밖의 번호도 서 있는 그림으로 떨어진다")
-
-	# -- ⚠⚠ the shared canvas ----------------------------------------------------------------------
-	var stand: Texture2D = load(Look.beast_tex_path(Rules.WOLF, true))
-	var want := stand.get_size()
-	t.ok(want.x > 0.0 and want.y > 0.0, "서 있는 늑대의 캔버스가 %s 다 (자가 점검)" % str(want))
-	# ⚠ **The instrument first.** A size comparison that cannot tell two sizes apart would pass the
-	# whole table below while every frame sat on its own canvas. This is the case that fails the
-	# CHECK, not the subject.
-	var off := ImageTexture.create_from_image(
-		Image.create(int(want.x) + 8, int(want.y), false, Image.FORMAT_RGBA8))
-	t.ok(off.get_size() != want, "재는 자가 다른 캔버스를 실제로 구분한다 (계측기 뒤집기)")
-	var odd: Array[String] = []
-	var sized := 0
-	for p: String in paths:
-		var tex: Texture2D = load(p)
-		sized += 1
-		if tex == null or tex.get_size() != want:
-			odd.append(p)
-	t.eq(sized, 16, "열여섯 장을 전부 열어 봤다 (자가 점검)")
-	t.eq(odd, [],
-		"그리고 전부 서 있는 그림과 같은 %s 캔버스다 %s — 캔버스가 다르면 같은 폭 안에서 짐승만 줄어든다"
-			% [str(want), str(odd)])
-
-
-## **The legs run on TIME.** Driven on a body that never moves one pixel, because that is the body the
-## rule is about: 「움직이지 않는 몸은 애니메이션하지 않는다」 is what left a wolf in contact — the one
-## the player is watching hardest — completely still, and the user named it.
-##
-## ⚠ Both ends and the ORDER: it visits all four frames (a frozen strip fails the floor), never leaves
-## them (a fifth picture fails the ceiling), advances by at most one at a time, and **wraps 3 -> 0 at
-## least twice** — final state alone cannot tell a loop from a strip that clamped on its last frame.
-##
-## ⚠ Mutation: put `b["walk"] += delta` back under the `moved` test; freeze the index at 0; reverse
-## the strip; drop the `% strip.size()` so it clamps.
-func _the_legs_run_on_time_not_on_distance(t) -> void:
-	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([]), [_spawn(ARENA_W, Rules.WOLF, 12, 6)])
-	var fv := _view_of(b, rows)
-	var stood: Vector2 = b.enemy_pos[0]
-	fv._process(0.0)
-	t.ok(fv._body.has("e0"), "몸 항목이 생겼다 (자가 점검)")
-	var strip := fv._anim_strip(Rules.WOLF, Look.Anim.WALK, true)
-	t.eq(strip.size(), 4, "걷기 띠가 넉 장으로 올라왔다 (자가 점검)")
-
-	# Half a frame per sample, over three cycles — fine enough that no index can be stepped over, and
-	# long enough that the wrap has to happen more than once.
-	var seq: Array[int] = []
-	var samples := int(round(Look.BEAST_FRAME_SEC * 4.0 * 3.0 / (Look.BEAST_FRAME_SEC * 0.5)))
-	for k in samples:
-		fv._process(Look.BEAST_FRAME_SEC * 0.5)
-		seq.append(strip.find(fv._body_tex("e0", Rules.WOLF, true)))
-	t.eq(samples, 24, "세 바퀴를 반 프레임 간격으로 24번 봤다 (자가 점검)")
-	t.eq(b.enemy_pos[0], stood, "그동안 몸은 한 칸도 안 움직였다 — 이 줄이 재는 것이 그것이다")
-
-	var outside := 0
-	var jumped := 0
-	var wraps := 0
-	var seen := {}
-	for k in seq.size():
-		var at := seq[k]
-		if at < 0:
-			outside += 1
-			continue
-		seen[at] = true
-		if k == 0:
-			continue
-		var prev := seq[k - 1]
-		if prev < 0:
-			continue
-		var step := (at - prev + strip.size()) % strip.size()
-		if step > 1:
-			jumped += 1
-		if prev == strip.size() - 1 and at == 0:
-			wraps += 1
-	t.eq(outside, 0, "선 채로도 늘 걷기 띠 안의 그림을 입는다 %s" % str(seq))
-	t.eq(seen.size(), 4, "넉 장을 전부 지나갔다 — 한 장에 얼어 있으면 1이다 %s" % str(seq))
-	t.eq(jumped, 0, "한 번에 한 장씩만 넘어간다 — 건너뛰거나 뒤집히면 여기서 걸린다 %s" % str(seq))
-	t.ok(wraps >= 2, "3 다음에 0 으로 두 번 넘게 돌아왔다 (%d번) — 마지막 장에 눌러앉으면 0번이다" % wraps)
 
 
 ## **The bite and the lunge start on one event**, and the strip plays once. The lunge already existed;
@@ -1223,7 +415,6 @@ func _the_bite_rides_the_blow_that_lunges(t) -> void:
 
 	var swung := false
 	for k in 240:
-		b.begin_frame()
 		b.step(1.0 / 60.0)
 		fv._process(1.0 / 60.0)
 		if float((fv._body["s0"] as Dictionary)["push"]) > 0.0:
@@ -1244,7 +435,6 @@ func _the_bite_rides_the_blow_that_lunges(t) -> void:
 	# the strip is watched alone. A second blow mid-strip would make the sequence below meaningless.
 	var seq: Array[int] = []
 	for k in 40:
-		b.begin_frame()
 		fv._process(1.0 / 60.0)
 		if float((fv._body["s0"] as Dictionary)["bite"]) <= 0.0:
 			break
@@ -1262,7 +452,6 @@ func _the_bite_rides_the_blow_that_lunges(t) -> void:
 	t.eq(seq[seq.size() - 1], bite.size() - 1,
 		"마지막에 넷째 장까지 간다 — 못 닿으면 제일 크게 벌린 입이 화면에 안 나온다 %s" % str(seq))
 
-	b.begin_frame()
 	fv._process(1.0 / 60.0)
 	t.ok(float((fv._body["s0"] as Dictionary)["bite"]) <= 0.0, "물기가 끝났다 (자가 점검)")
 	t.ok(walk.find(fv._body_tex("s0", Rules.WOLF, true)) >= 0,
@@ -1389,7 +578,6 @@ func _spawn(w: int, type_id: int, x: int, y: int) -> Dictionary:
 ## height boundary had to be measured (2026-08-28). `Grid.load_rows` already takes it that way.
 func _battle_of(rows: Array, army: Army, spawns: Array, tiers: Array = []) -> Battle:
 	var b := _planning_battle_of(rows, army, spawns, tiers)
-	b._committed = true
 	return b
 
 

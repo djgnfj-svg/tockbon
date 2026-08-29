@@ -510,28 +510,7 @@ static func survey_zoom_of(w_tiles: int, h_tiles: int) -> float:
 ## specular. **The old value was an albedo that the light roughly doubled**; read straight out it is a
 ## dark slate, which is why it moves here rather than staying put.
 const COL_WATER := Color(0.430, 0.590, 0.660)
-## ⚠⚠ **RAISED 2026-08-25 — it was `(0.203, 0.259, 0.184)` and that is not a green on screen.** The
-## ambient is a cold blue-grey (`COL_AMBIENT`) and a near-grey green under it comes out as **stone with
-## a tint**, which is what made a whole island read as one washed slab. Saturation up and value up: the
-## island has to say *grass* before it says anything else, because grass is what the rock wall and the
-## sea are told apart FROM.
-const COL_LAND := Color(0.235, 0.373, 0.196)
-const COL_HOLE := Color(0.055, 0.067, 0.078)
 
-# Cliff and ramp (`boat-and-landing` stage 5, P10). `^` gets its OWN fill now instead of reusing
-# COL_HOLE — 3.2 still holds (a cliff is exactly as impassable as a hole), only the picture stops
-# saying the two are the same terrain. `COL_CLIFF_FACE` is the seaward-edge line, one tone darker so
-# it reads as a drop rather than a second outline. `/` (ramp) is passable land with its own tint so
-# the one doorway through a cliff wall does not read as ordinary ground.
-## ⚠⚠ **RAISED for the 3D field** (2026-08-24). It was 0.098 — near black — and that was right on a flat
-## canvas where a cliff was a FILL and the eye only had to tell it from land. Standing up as a real wall
-## it is a large lit surface, and near-black reads as **a hole cut in the island** rather than as rock:
-## the first captures of the port show the whole south coast as one black slab. Rock grey, still the
-## darkest thing on the island, still unmistakably not walkable.
-## (`COL_CLIFF_FACE` was deleted 2026-08-24: the seaward-edge line it painted became a real wall in
-## the terrain mesh, told from the top face by its own darkened skirt.)
-const COL_CLIFF := Color(0.243, 0.235, 0.251)
-const COL_RAMP := Color(0.361, 0.310, 0.235)
 
 ## --- the tile rim, and the sea wall's colour: BOTH DELETED 2026-08-27 -------------------------------
 ## ⚠⚠ **THE MESH IS BAKED IN BLENDER NOW AND IT ARRIVES WITH ITS OWN BEVEL AND ITS OWN COLOURS.**
@@ -546,26 +525,12 @@ const COL_RAMP := Color(0.361, 0.310, 0.235)
 ## strongest of all. **That rule now has to be honoured by the bake**, and `tools/blender/island_build.py`
 ## is where it is either obeyed or quietly dropped.
 
-## The one tile of a tier boundary a body may climb (티켓 19). **Its own colour and NOT `COL_RAMP`
-## reused**, for a measuring reason as much as a visual one: `net_fx_view` picks terrain vertices out
-## of the mesh BY COLOUR, so two things sharing a tone are two things no check can tell apart. A ramp
-## is a doorway through a cliff wall and a stair is the way up a tier; they are different rules and
-## they get different tones.
-##
-## ⚠ **Lighter than the ramp and warmer than the land.** It has to be findable at `ZOOM_MIN` from 40
-## degrees — 「계단이 어디인지 찾을 수 있다」 is one of the things the eye is asked for on this ticket,
-## and a stair is one tile on a board of hundreds.
-const COL_STAIR := Color(0.588, 0.502, 0.318)
 
 # Bodies. Friend and foe are told apart by COLOUR; the unit type is told apart by SIZE and by how
 # round its corners are — see BODY_RADIUS_RATIO and BODY_CORNER_RATIO.
 const COL_ALLY := Color(0.451, 0.847, 1.0)
 const COL_ENEMY := Color(1.0, 0.420, 0.361)
 
-# HP. The old game died partly because nothing on screen ever went down; the empty half is drawn
-# so the bar has a length before it is hurt.
-const COL_HP_FULL := Color(0.400, 0.898, 0.451)
-const COL_HP_EMPTY := Color(0.118, 0.141, 0.141, 0.851)
 
 # Boats. One tone for every hull, because after `plan-then-watch`'s 결정 14R nothing distinguishes
 # ⚠⚠ **`COL_BOAT` AND `COL_HULL_WAIT` STOOD HERE AND BOTH ARE DELETED** (2026-08-29) with the hull
@@ -602,7 +567,6 @@ const COL_HP_EMPTY := Color(0.118, 0.141, 0.141, 0.851)
 ## on screen and worked are written into the ticket instead.
 
 
-
 ## ⚠⚠ **`COL_WASH` AND `COL_WASH_RIM` ARE DELETED (2026-08-28) AND THE MAT IS STILL THERE.** They
 ## coloured a white quad laid over every walkable tile. **The mat is baked into the island now** — the
 ## bake paints each piece's own flat interior lighter (`PAD_LIGHTEN` in `island_build.py`), so the mat
@@ -635,10 +599,6 @@ const WASH_BLOCK_TILES := 2
 # `WATER_FIELD_SUBDIV` — the new shader reads the same baked field, so those three did not park.
 # ==============================================================================================
 
-## **The sea, as two tones a shader moves between.** `COL_WATER` is the trough; this is the crest.
-## ⚠ Close together on purpose: the sea is the background this whole game is read against, and water
-## that draws attention is water that competes with the ten bodies fighting on top of it.
-const COL_WATER_CREST := Color(0.330, 0.455, 0.485)
 ## How wide one swell is (in tiles, inverted) and how fast it travels. Slow — a fast sea reads as a
 ## flowing river, and this one is meant to sit still enough to plan on.
 ## ⚠⚠ **Chosen by eye from six candidates rendered side by side** (2026-08-26). The user: 「적당히만
@@ -1098,10 +1058,7 @@ const WATER_CALM_SPEED := 0.035
 
 # HUD and panel.
 const COL_HUD_TEXT := Color(0.918, 0.937, 0.961)
-const COL_PANEL_BG := Color(0.071, 0.090, 0.122, 0.941)
 const COL_BUTTON := Color(0.239, 0.341, 0.459)
-const COL_WIN := Color(0.549, 0.949, 0.600)
-const COL_LOSE := Color(1.0, 0.451, 0.420)
 
 ## `plan-then-watch`'s one surviving new HUD colour. `COL_START` is the one press that ends the
 ## planning phase, so it is deliberately NOT `COL_BUTTON` — the restart button in the panel is
@@ -1130,28 +1087,6 @@ const COL_START := Color(0.302, 0.541, 0.404)
 ## were the last two colours in this file that belonged to a screen rather than to the board.
 const COL_SLOT_OFF := Color(0.420, 0.420, 0.440)
 
-# Combat juice. Every one of them is a colour no existing name can stand in for.
-# Items 8, 9, 4 and the shake margin deliberately REUSE what is already above — COL_WIN / COL_LOSE,
-# COL_BUTTON, COL_ALLY / COL_ENEMY, COL_WATER — because the same value under two names
-# diverges the first time one of them is tuned.
-const COL_FLASH := Color(1.0, 1.0, 1.0)
-const COL_SHOT := Color(1.0, 0.925, 0.667)
-const COL_AREA_RING := Color(1.0, 0.600, 0.350, 0.55)
-const COL_LAND_RING := Color(0.451, 0.847, 1.0, 0.60)
-const COL_TARGET_LINE := Color(1.0, 0.420, 0.361, 0.12)
-
-## The hit spark. ONE colour, tied to neither side: a hit is an event, not a faction, and a contact
-## point is by definition where two factions meet — there is no side whose colour is the right one.
-const COL_SPARK := Color(1.0, 0.855, 0.600)
-
-## The filled halo under a body that was just hit. **This is not COL_FLASH reused, and the difference
-## is the alpha.** COL_FLASH is mixed INTO an opaque body colour; mixing a 0.35-alpha white would
-## quietly turn HIT_FLASH_STRENGTH 0.70 into 0.245. Two concepts, so two constants.
-## The alpha is also load-bearing for the spark: 0.35 white composited over COL_LAND (luma 0.242)
-## gives luma 0.507, and COL_SPARK's luma is 0.867, so the shards read against the halo with a
-## contrast of 0.36 (Rec.709 0.2126R + 0.7152G + 0.0722B). Raise this alpha and the spark — whose
-## entire case for existing is that it is legible on top of this circle — stops being legible.
-const COL_HIT_HALO := Color(1.0, 1.0, 1.0, 0.35)
 
 ## (`COL_BODY_SHADOW` and `SHADOW_R_RATIO` were deleted 2026-08-24: the drawn ellipse they shaped
 ## was the flat board's way of faking contact, and the 3D sun casts the real shadow now.)
@@ -1201,29 +1136,6 @@ const COL_HIT_HALO := Color(1.0, 1.0, 1.0, 0.35)
 ## new number here would change how big a body reads for a reason nobody chose.
 const BODY_RADIUS_RATIO := [0.245, 0.22, 0.31, 0.174, 0.342]
 
-## Corner rounding as a fraction of that body's own radius — this is the "shape" half of telling
-## types apart. The heavy walkers are boxy; the small and the flying are nearly circles.
-## AT THE RADII ABOVE: 7.48, 3.50, 5.40, 5.00, 9.52, 4.20, 9.00, 4.80, 4.40 px.
-const BODY_CORNER_RATIO := [0.85, 0.25, 0.30, 0.25, 0.85, 0.30, 0.90, 0.30, 0.20]
-
-## ⚠⚠ **THESE TWO NOW HAVE NO READER AT ALL** (2026-08-25, 티켓 23). They sized a body drawn as a
-## rounded-square outline plus a centre dot. The island stopped drawing that on 2026-08-24 and the
-## refit screen's preview — the last one — stopped today, so **nothing in `src/` reads either.**
-## ⚠ **Kept rather than deleted**, because `net_draw_leaf`'s pixel sweep is what would catch a new
-## width literal appearing somewhere, and these two are the measured answer it would be compared
-## against. **If they still have no reader when a later ticket sweeps orphans, they should go.**
-## The measurement, kept as the reason for the number:
-## RAISED 2.0 -> 5.0 by the world-width table above. A body WAS its outline — a rounded-square
-## polyline plus a 3 px dot — and the whole fight is WATCHED at `ZOOM_MIN`, where 2.0 reached the glass at
-## **0.90 px**. That is the same finding `COL_HIT_HALO`'s comment already carries one step short of
-## the conclusion ("a body here is a 2 px outline plus a 3 px dot, so a tint has no AREA to paint").
-## Ceiling 5.0, and it is arithmetic rather than taste: the smallest body is the crow at
-## `0.25 * 40 = 10.0 px` radius, and a stroke wider than half that radius closes the shape into a
-## solid blob at zoom 1.0 as well as at `ZOOM_MIN`.
-## ⚠ It is also the hull outline (`_paint_hull`) and the harbour marker (`_paint_dock`), both of which
-## are drawn on rectangles 40 px and wider — neither of them is what bounds this number.
-const BODY_OUTLINE_WIDTH_PX := 5.0
-const BODY_DOT_RADIUS_PX := 3.0
 
 ## The wolf. **The ally ashore is a picture now, not a rounded square** (2026-08-24, the user:
 ## 「지금 아직 세포여서 보기가 힘드네」). Two files and not one plus a flip, because flipping inside
@@ -1234,58 +1146,11 @@ const BODY_DOT_RADIUS_PX := 3.0
 ## in the slot, which agreed with the plan only while one slot existed.
 const BEAST_WOLF_R := "res://assets/beast/wolf_r.png"
 const BEAST_WOLF_L := "res://assets/beast/wolf_l.png"
-## ⚠⚠ **The beasts, drawn in the SOLDIERS' style** (2026-08-24). The wolf that stood here before was a
-## realistic pixel animal and the enemy became a faceless low-poly toy, so the two sides read as two
-## games; this replaces the wolf rather than adding beside it.
-##
-## ⚠⚠ **THE SQUIRREL AND THE COW LEFT AND THEIR PICTURES WENT WITH THEM** (2026-08-27). Neither is a
-## row of `UNITS` any more, so neither could reach `BEAST_TEX`, and the four constants that named
-## their files were read by nothing at all. **`BEAST_BULL_R` is the one that stayed**, and it stayed
-## for a reason that has nothing to do with a body: `ITEM_ART` row 16 draws 우두머리의 뿔 with it.
-## ⇒ **It is a card picture now.** Putting the cow back on the field needs a left-facing file again.
-const BEAST_BULL_R := "res://assets/beast/bull_r.png"
 const BEAST_BEAR_R := "res://assets/beast/bear_r.png"
 const BEAST_BEAR_L := "res://assets/beast/bear_l.png"
 const BEAST_CROW_R := "res://assets/beast/crow_r.png"
 const BEAST_CROW_L := "res://assets/beast/crow_l.png"
 
-## **The spearman, the shield soldier and the archer — CARD PICTURES, and nothing else.** They were
-## the enemy once, back when the humans were what you played against.
-##
-## ⚠⚠ **ONE PICTURE EACH, NOT TWO, SINCE 2026-08-27 — and this is the difference between them and
-## every other body constant in this file.** `HUMAN_SPEAR_L`, `HUMAN_BOW_L` and `HUMAN_SHIELD_L` stood
-## here and were deleted with their three `.png` files and their three `.import` sidecars. **A body on
-## the island needs a left-facing file** — `BEAST_TEX` is a right column and a left column, and
-## `beast_tex_path` picks between them by `facing_right` — so a half with only a right file cannot be
-## put on the field at all. **`ITEM_ART` needs only the right one**, because a card never faces left:
-## rows 10, 11 and 14 draw 뺏은 창끝, 방패 조각 and 사냥꾼의 눈 with exactly these three constants.
-## ⇒ **Do not delete the `_R` half.** It is the last thing holding three of the eighteen card pictures.
-##
-## ⚠⚠ **WHY THE LEFT HALVES DIED, AND IT IS A DECISION, NOT A CLEANUP.** The 2026-08-26 side swap made
-## the humans the player and the beasts the enemy, which left these three as bodies for enemy roles
-## that no longer exist. The user closed the remaining door 2026-08-27: **a second player weapon is
-## not being built**, so nothing was ever going to walk these pictures onto the island again.
-##
-## ⚠ **What the deleted half carried, kept here because it outlives the files**: they were two files
-## and not one plus a flip, for the reason `BEAST_WOLF_*` still states — flipping inside `_draw` costs
-## a `draw_set_transform`, and `net_draw_leaf` counts every `draw_*` call site, so a mirrored copy on
-## disk keeps the leaf at exactly one call. **A second player body now costs new ART, not a new table
-## row** — that is the whole price of this deletion, and it is the sentence that used to be wrong.
-##
-## ⚠ **ONE BODY, REUSED** (2026-08-24, the user, translated: "make one soldier and have them throw
-## spears … spear-throwing, archery, shield soldiers and so on — reuse that one character for now").
-## The spear was the first weapon; the bow and the shield are **the same body with the hands changed**,
-## generated from the spearman's OWN seed with one clause of the prompt swapped. That is why the three
-## still read as one army on the cards rather than as three drawings that happen to be red, and it is
-## why a human enemy was cheap where five beasts would have been five drawings.
-##
-## ⚠ **It is a big head on a stubby body and NOT a realistic man** (the user, translated: "the
-## monsters are a bit too real … shouldn't it look like a game, a big-headed shape"). The realistic
-## caveman that stood here first could not be read at all on the island — at the size a body is drawn,
-## proportion is the only thing that survives, and a big head is the cheapest proportion that does.
-const HUMAN_SPEAR_R := "res://assets/human/spear_r.png"
-const HUMAN_BOW_R := "res://assets/human/bow_r.png"
-const HUMAN_SHIELD_R := "res://assets/human/shield_r.png"
 ## ⚠⚠ **THE PLAYER, since 2026-08-26.** The same body again with a sword in its hands — drawn back
 ## when the humans were the enemy, which is exactly why the swap cost no art at all.
 const HUMAN_SWORD_R := "res://assets/human/sword_r.png"
@@ -1488,26 +1353,6 @@ const COL_BODY_SHADOW := Color(0.05, 0.06, 0.10, 0.30)  # alpha <= 0.45, over wh
 # Panel — reward pick, win, lose, restart
 # ---------------------------------------------------------------------------------------------
 
-## Centred: (1280 - 560) / 2 = 360, (720 - 520) / 2 = 100.
-##
-## ⚠⚠ **THE PANEL NO LONGER HOLDS A ROSTER** (2026-08-25). It was sized to list every body a run can
-## field, because the beak reward asked the player to click one of them; the user deleted that reward
-## — 「부리 보상 없지 끝나면 카드보상으로 통일했잖아」 — so the panel is a band and a button.
-## **The size is deliberately NOT shrunk to fit**: it is the win/lose screen's frame, and re-laying it
-## is a look decision nobody has made. Height check: `456 + 48 = 504 <= 520`.
-const PANEL_ORIGIN_PX := Vector2(360.0, 100.0)
-const PANEL_SIZE_PX := Vector2(560.0, 520.0)
-
-const PANEL_TITLE_OFFSET_PX := Vector2(40.0, 44.0)
-const PANEL_TITLE_FONT_SIZE_PX := 28
-const PANEL_BODY_FONT_SIZE_PX := 18
-
-## The restart / continue button. **The seven roster constants above it are deleted** with the beak
-## reward they laid out (2026-08-25). 456 + 48 = 504 <= 520.
-const BUTTON_OFFSET_PX := Vector2(180.0, 456.0)
-const BUTTON_SIZE_PX := Vector2(200.0, 48.0)
-const BUTTON_TEXT_OFFSET_PX := Vector2(24.0, 32.0)
-
 
 # ---------------------------------------------------------------------------------------------
 # Pressable things — the set BOTH new screens share
@@ -1556,11 +1401,6 @@ const PRESS_DOWN_SEC := 0.10              # >= 0.084 (five frames); <= 0.15
 const PRESS_DOWN_SCALE := 0.96
 const PRESS_DOWN_DIM := 0.15              # >= 0.10; <= 0.30
 
-## The scene change into the map: it arrives out of the background colour instead of cutting.
-## Floor 0.20 — under it the fade reads as the hard cut it exists to remove; ceiling 0.60 or leaving
-## the title feels slow.
-const SCENE_FADE_SEC := 0.35
-
 
 # ---------------------------------------------------------------------------------------------
 # The reward screen and the refit screen — DELETED 2026-08-29
@@ -1601,21 +1441,6 @@ const TITLE_SLOT_FONT_SIZE_PX := 40
 ## `96 + ~200 = 296 <= 360` across, `58 <= 88` down.
 const TITLE_SLOT_TEXT_OFFSET_PX := Vector2(96.0, 58.0)
 
-## --- the reveal beats, shared by every screen that stages things in ------------------------------
-## ⚠⚠ **These were the node map's own beats and the first two are RENAMED**
-## (2026-08-26): the screen they were written for is deleted, and `reward_view` and
-## `refit_view` are what read them now. **A constant named after a screen that no longer exists is the
-## next reader's wrong guess.**
-##
-## ⚠⚠ `REVEAL_STEP_SEC` is deliberately BELOW the five-frame floor and it is not an oversight: it is
-## the offset BETWEEN beats, not a beat. The beat is `REVEAL_FADE_SEC`, and that one is above the
-## floor.
-const REVEAL_FADE_SEC := 0.18             # >= 0.084 (five frames); <= 0.40
-const REVEAL_STEP_SEC := 0.06             # >= 0.03, under which a staggered row appears all at once
-
-## How long a number takes to climb to a new value. ⚠ **A climb, not a fade** — the digits count.
-const NUMBER_CLIMB_SEC := 0.60            # >= 0.30; <= 1.00
-
 
 ## The background: **TILES** drifting behind the menu, drawn by code. **No image file** — see the
 ## decision "the body is a line drawn by code", which forbids a sprite here as much as in the fight.
@@ -1653,156 +1478,6 @@ const TITLE_TILE_B_FREQ := 0.19
 ## phases and can never exceed 1 px, and at 1.0 it is always at least 1 px. Reading as MOTION needs
 ## two steps, so the practical floor is 2.0. Nothing here is specified below it.
 
-## 1 — the tracer. A stub of length SHOT_LEN_PX sweeps muzzle to target; drawing the whole line
-## would make this item 6 instead. Both endpoints are frozen on the firing frame and carried in the
-## fx: a dead target is re-targeted immediately, so re-reading `soldier_target` every frame bends the
-## bullet onto the next enemy instead of the corpse. A fixed LENGTH fixes only half of that — the old
-## game's line ended in empty grass in one direction and buried itself under a body in the other.
-const SHOT_SEC := 0.10                # 4 tiles of range = 160 px crossed in 0.10 s, so 1600 px/s
-const SHOT_LEN_PX := 12.0
-const SHOT_WIDTH_PX := 5.0            # ⚠ RAISED 2.0 -> 5.0 by the world-width table. A tracer that
-                                      # lives 0.10 s has one chance to be seen, and at `ZOOM_MIN` 2.0
-                                      # reached the glass at 0.90 px — the same failure shape as the
-                                      # 0.08 s attacker line the last game shipped and the user never
-                                      # saw once, on the other axis. <= 6, half of SHOT_LEN_PX: a stub
-                                      # as thick as it is long is a dot, not a tracer
-
-## 2① — the lunge. Peaks at LUNGE_SEC * 0.5 and is exactly 0 at both ends, so no body is ever left
-## sitting displaced.
-## ⚠ THIS IS A DRAWING OFFSET AND NEVER `soldier_pos`. Reach tests read positions directly and the
-## grid reserves one body per tile, so writing the lunge into the sim would change who is inside
-## whose reach — the effect would rewrite the rules it exists to decorate.
-## The cap is `gap + LUNGE_BITE_PX` rather than a flat push: the draft's flat 14 px times a per-type
-## multiplier drove the lion 33.6 px into a body 40 px away and swallowed it whole, and two of its
-## five slots belonged to types whose range is not 0 and so could never be read at all.
-const LUNGE_SEC := 0.18               # 11 frames at 60fps. 0.08 was under 5 and invisible last game
-const LUNGE_PUSH_RATIO := 0.55        # of one's OWN radius: melee cell 7.7 · bison 8.8 · lion 12.1 px
-const LUNGE_BITE_PX := 6.0            # the resulting overlap is 6.0 px at worst, by construction
-
-## 2② — the hit spark. Six shards leave the contact point along the TANGENT of the touching faces,
-## fanning to both sides, and they start LUNGE_SEC * 0.5 late.
-## **There is deliberately no delay constant**: that instant is when the lunge peaks and the two
-## bodies actually meet. Fired on the hit frame the shards appear in the empty gap between two bodies
-## that have not moved yet, which reads as a telegraph rather than a collision.
-## ⚠ THE TANGENT IS NOT A PREFERENCE. It is the only axis on which every point moves away from BOTH
-## centres; a fan opened along ±facing lands every one of its ten points back inside the striker's
-## own outline, because the contact point is always `(HIT_HALO_MUL - 1) * own radius` deep inside the
-## striker's own halo. See combat-juice, "where the shards land" and the two inequalities under it.
-## The shards do NOT escape the target's halo and are not claimed to: what carries this effect is
-## that they move (2.5 px per frame) while everything under them stands still.
-const SPARK_SEC := 0.12               # 7.2 frames at 60fps; fx lifetime 0.09 + 0.12 = 0.21 s.
-                                      # ⚠ NOT a free value. Above 0.125 the per-body bound breaks —
-                                      # 8 neighbours * (SPARK_SEC / 1.0 s period) must stay under
-                                      # 1.0, or one body's rim is never clean and the spark stops
-                                      # reading as "it popped". Lengthen SPARK_REACH_PX instead
-const SPARK_COUNT := 6                # three per side of the tangent, so the fan is symmetric
-const SPARK_REACH_PX := 18.0          # 45% of a tile. 18 / 7.2 = 2.5 px per frame, above the floor
-const SPARK_LEN_PX := 5.0             # one shard spans 13 ~ 18 px out on the last frame. ⚠ EVERY
-                                      # margin is computed from the INNER end (13), never the tip
-                                      # (18) — built from the tip, half the points pass untested
-const SPARK_WIDTH_PX := 2.0           # ⚠ **DELIBERATELY BELOW the world-width floor** (0.90 px at
-                                      # `ZOOM_MIN`) and it is the one row that CANNOT be raised on its
-                                      # own: its ceiling is half a shard's own length,
-                                      # `SPARK_LEN_PX / 2 = 2.5`, and that ceiling sits UNDER the
-                                      # floor's 4.45. A shard as wide as it is long is a dot, so
-                                      # raising this needs SPARK_LEN_PX and SPARK_REACH_PX to move
-                                      # with it — that is a re-measure of item 2, not a width fix, and
-                                      # it belongs to whoever scores item 2 by eye.
-                                      # ⚠ SPARK_LEN_PX 5.0 is 2.25 px at `ZOOM_MIN` and is under the
-                                      # same floor; it is NOT in the width table (it is a length, not
-                                      # a stroke) and is flagged here rather than quietly changed.
-                                      # The leaf takes this as an ARGUMENT, which is the only reason a
-                                      # net can bite on it at all
-const SPARK_SPREAD_DEG := 12.0        # HALF-angle off the tangent, so one fan spans 24 degrees.
-                                      # 2 * 22 * sin 12 = 9.2 < 13, which is what makes even the
-                                      # inner end farther from both centres than the contact point
-
-## 3 — the body being hit: white mixed in, a filled halo UNDER it, and a flinch toward the striker.
-## ⚠ WITHOUT THE HALO THIS EFFECT DOES NOT EXIST. A body here is a 2 px outline plus a 3 px dot, so
-## a tint has no AREA to paint — mixing white repaints two pixels of border, and that is precisely
-## what read as "there is no flash" in the last game.
-const HIT_FLASH_SEC := 0.14           # 14% duty against the 1.0 s attack period
-const HIT_FLASH_STRENGTH := 0.70      # 1.0 is not "mix" but "cover", and then who was hit is lost
-const HIT_HALO_MUL := 1.35            # of body radius: 18.9 · 15.1 · 21.6 · 13.5 · 29.7 px
-## ⚠⚠ **A RATIO OF THE DRAWN HALF-WIDTH, and it was a raw 3.0 px until 2026-08-25.** See
-## `Look.sprite_half_px`: 3.0 px was chosen on the flat board where a body WAS its sim radius, and it
-## survived the move to billboards unchanged — 3 px of flinch on a 49 px animal. **0.22 puts a wolf's
-## flinch at 5.4 px**, the same fraction of the picture 3.0 was of the old one, and still above the
-## 2.0 px snap floor at every zoom this game opens at.
-const HIT_KNOCK_RATIO := 0.22
-const HIT_KNOCK_SEC := 0.10
-
-## 4 — the death burst, in that body's own side colour. It is drawn ABOVE everything: on the floor a
-## 10 px burst is buried under a 22 px lion.
-##
-## ⚠⚠ **SCALED TO THE SPRITE, NOT THE SIM RADIUS** (2026-08-24, verify-look): the ring used to start
-## at the sim body radius (10-22 px) while the bodies on screen are 84-96 px billboards and deaths
-## happen inside packed melee — the fx log showed it alive, both buffer rows were green, and **no
-## death ever read on the real screen**. `BURST_START_MUL` is the sprite's own half-width ratio,
-## DERIVED from `BEAST_SPRITE_W_RATIO` rather than copied, so the day the animals grow again the
-## burst grows with them instead of sinking back under the pile (연출은 과할 정도로).
-const BURST_SEC := 0.32
-const BURST_START_MUL := BEAST_SPRITE_W_RATIO * 0.5   # crow starts at 30 px, lion at 66
-const BURST_GROWTH := 2.2             # lion 66 -> 145.2 px, crow 30 -> 66.0 px — past the pile
-const BURST_WIDTH_PX := 9.0           # ⚠ RAISED 5.0 -> 9.0 with the sprite scaling: a 5 px stroke on
-                                      # a 105 px ring over an 84 px sprite pile was a hairline. Snap
-                                      # floor at ZOOM_MIN is 4.5 px; ceiling is half the crow's own
-                                      # start radius, past which the ring closes into a disc.
-                                      # ⚠⚠ **THE CEILING MOVED WHEN THE BODIES SHRANK AND THIS NUMBER
-                                      # DID NOT.** The crow's start radius was 33.6 px at ratio 6.0 and
-                                      # is 19.6 at 3.5, so the ceiling went 16.8 -> 9.8 and 9.0 now
-                                      # sits at 46% of the radius instead of 27%. **Still legal, with
-                                      # 0.8 px of room.** It is left at 9.0 rather than re-derived
-                                      # because deriving it would change today's picture as well, and
-                                      # `net_fx_view` now holds the ceiling so the next cut reddens
-                                      # here instead of quietly drawing a disc.
-
-## 5 — the area ring, grown to the REAL area radius so the screen finally says which attacks splash:
-## the lion's `area` 1.5 tiles = 60 px, and CELL_RANGED's `area` 1.0 = 40 px, which nothing on screen
-## currently communicates at all.
-const AREA_RING_SEC := 0.25
-const AREA_RING_START_RATIO := 0.4    # of the final radius, so 24 px for the lion's 60
-const AREA_RING_WIDTH_PX := 5.0       # ⚠ RAISED 3.0 -> 5.0 by the world-width table, and it has TWO
-                                      # jobs at `ZOOM_MIN`: the lion's telegraph during a watched
-                                      # fight, and the drag candidate ring during planning — an island
-                                      # OPENS at `ZOOM_MIN`, so the ring the player aims a drop with
-                                      # was a 1.35 px hairline every single time. <= 6, a third of
-                                      # TARGET_RING_R_PX 18, over which the candidate ring closes into
-                                      # a disc and stops reading as a ring at all
-
-## 6 — target lines, drawn for ENEMIES ONLY. The one item of the twelve that can be a net loss in
-## readability: Into the Breach draws intent but is turn-based with under ten actors, and neither TFT
-## nor Bad North draws any line at all — Riot explicitly deleted its "cloud of visual effects and
-## particles". Hence two narrowings: one side only, and a hard count above which none are drawn.
-## ⚠ **DELIBERATELY BELOW the world-width floor** (0.45 px at `ZOOM_MIN`), and this line is the one
-## place in this file where being under it is the POINT. `COL_TARGET_LINE` is alpha **0.12** and up to
-## `TARGET_LINE_MAX_COUNT` 14 of these cross the whole island at once; the paragraph above records
-## that this is the one item of the twelve that can be a net LOSS in readability, which is why Riot
-## deleted its own effect cloud. Raise this to 2.25 px and fourteen full-length lines over every body
-## on screen is exactly the clutter both narrowings exist to prevent.
-const TARGET_LINE_WIDTH_PX := 1.0
-const TARGET_LINE_MAX_COUNT := 14     # ⚠ **RAISED 8 -> 14, and it now bites for the first time.**
-                                      # `plan-then-watch` stage 4 put 8 · 12 · 14 enemies on the
-                                      # three islands; at 8 this guard drew ZERO intent lines until
-                                      # 4 and 6 of them were dead on islands 2 and 3 — the OPENING
-                                      # of the fight, which is exactly the phase where the hand
-                                      # cannot move and reading is the whole activity. 14 is the
-                                      # largest island's count, so every fight opens with its lines
-                                      # on. ⚠ **It is a FIRST value and verify-look scores it**: if
-                                      # 14 lines read as noise it comes back down, and `combat-juice`
-                                      # records the measurement. Floor: the largest island's enemy
-                                      # count, or the guard is back to hiding the opening
-
-## 7 — one ring under each soldier as it steps off the boat. The five land on ADJACENT tiles, because
-## the free-tile search is a BFS out of the dock. Radius is pinned to exactly half a tile: 20 * 2 =
-## 40, so two orthogonally adjacent rings touch and never overlap. At 26 px they overlapped by 12.
-const LAND_RING_SEC := 0.40
-const LAND_RING_R_PX := 20.0
-const LAND_RING_WIDTH_PX := 5.0       # ⚠ RAISED 2.0 -> 5.0 by the world-width table. This ring is the
-                                      # only mark that says a soldier is ASHORE, and the arrival is
-                                      # watched at `ZOOM_MIN` where 2.0 was 0.90 px. <= 6, under a
-                                      # third of the 20 px radius so two adjacent rings still read as
-                                      # two rings touching rather than one band
 
 ## ⚠⚠ **`ROUTE_WIDTH_PX` AND `TARGET_RING_R_PX` STOOD HERE AND BOTH ARE DELETED** (2026-08-29) with
 ## the drag overlay and the boats. **The measurement they cost is the world-width table**: a line
@@ -1812,58 +1487,12 @@ const LAND_RING_WIDTH_PX := 5.0       # ⚠ RAISED 2.0 -> 5.0 by the world-width
 ## `REFUSE_MARK_WIDTH_PX` and `CLIFF_FACE_WIDTH_PX` had already been re-measured to**, and this was
 ## the third row of that table that nobody re-measured. ⚠ **Any new world-space line does this sum.**
 
-## **The refusal mark** — `speed-off-open-landing` 2.5, on the user's 「못내림만 표시하면 됨」. One ring
-## at the cursor on the frame the sim REFUSES a drop, fading out. It reuses `COL_LOSE`, which is
-## already the tone the drag candidate ring turns when the tile under the cursor cannot be landed on:
-## one concept (「여긴 못 내린다」), one value.
-##
-## ⚠ **It is driven by `Battle.send`'s own -1 and never by a second copy of the rule.** The green
-## sendable tint used to carry that guarantee — its predicate was `grid.home_harbour_for(t) >= 0`,
-## the exact call `send` refuses on — and deleting the tint deletes the guarantee with it, so the mark
-## inherits it from the SIM's answer rather than from a predicate the view evaluates itself.
-const REFUSE_MARK_SEC := 0.35         # >= 0.25 — under five rendered frames at 60fps (0.084 s) is
-                                      # unseen, and this repo has measured exactly that twice; the
-                                      # floor is raised well above it because the mark is a ONE-SHOT
-                                      # with nothing before or after it to be read against.
-                                      # <= 0.6 or it is still on screen for the next drag
-const REFUSE_MARK_R_PX := 26.0        # >= TARGET_RING_R_PX 18 — at or under it the mark is the same
-                                      # circle as the drag candidate ring and reads as a candidate
-                                      # rather than a refusal; <= 40 (one tile) or it covers the
-                                      # terrain that says WHY the tile was refused
-const REFUSE_MARK_WIDTH_PX := 5.0     # >= 5, and the 5 is ARITHMETIC: this ring is drawn in WORLD
-                                      # space, so at ZOOM_MIN 0.45 it reaches the canvas at 2.25 px —
-                                      # just over this file's 2.0 px snap floor. The same sum is why
-                                      # `CLIFF_FACE_WIDTH_PX` was re-measured from 4.0 to 5.0 when
-                                      # ZOOM_MIN fell; a mark specified at 3.0 would draw at 1.35 px
-                                      # and be a hairline exactly where it has to be read.
-                                      # <= 8 or the stroke swallows the tile it points at
 
 ## ⚠ **`HULL_WAIT_BLINK_SEC` went with the boats** (2026-08-29) — a stalled hull's blink, a full
 ## on/off cycle rather than a half. **A blink under 0.3 s is five frames at 60fps and is not seen.**
 ## (`CLIFF_FACE_WIDTH_PX` was deleted 2026-08-24: the seaward-edge line it sized became a real wall
 ## in the terrain mesh, and its last readers were two net labels bounding a line nothing drew.)
 
-## 8 — press feedback, inside 100 ms because that is Swink's bound on input-to-response in a
-## real-time game. ⚠ The refusal shake rides BOTH the box rect and the glyph position with the same
-## offset: shake only the box and the text walks out of it, shake only the text and the box sits
-## still, which reads as nothing having shaken.
-##
-## ⚠ **Renamed, not re-purposed.** `KEY_FX_SEC` / `KEY_REFUSE_SHAKE_PX` were named for the 1/2 keys
-## `plan-then-watch` deletes; the effect they drive is now the START BUTTON's refusal — pressing
-## start with nothing sent. `BERTH_FX_SEC` is deleted outright with the berths.
-## ⚠ `REFUSE_SHAKE_PX` now has exactly ONE reader (`hud_view._chip_offset`), because `_berth_offset`
-## was the second one and it is gone. Deleting the start-button shake therefore deletes this
-## constant's last reader, which is why the shake is pinned at BOTH ends rather than only above.
-const CHIP_FX_SEC := 0.18
-const REFUSE_SHAKE_PX := 4.0
-
-## 9 and 10 — the holds, and the panel rising out of nothing rather than snapping to full alpha.
-## ⚠ HOLD_OUTCOME_SEC IS A PRECONDITION FOR ITEM 4, not a flourish. Today the shell opens the next
-## island on the frame victory is decided, so the last enemy's burst never plays on island 1 at all.
-## ⚠ **`HOLD_BEAK_SEC` is deleted** (2026-08-25): it timed the picked roster row's stain, and both the
-## row and the reward it served are gone.
-const PANEL_FADE_SEC := 0.25
-const HOLD_OUTCOME_SEC := 0.80
 
 ## 11 — screen shake, amplitude proportional to damage.
 ## ⚠ THERE IS STILL NO `Camera2D` IN THE TREE. `boat-and-landing` added a real pan and zoom, but
@@ -1889,30 +1518,6 @@ const HOLD_OUTCOME_SEC := 0.80
 ## ⚠ **`REFUSE_SHAKE_PX` is a DIFFERENT thing and is untouched** — the HUD chip's refusal wobble, whose
 ## one reader is `hud_view._chip_offset`. It is not the camera.
 
-## ⚠ **RE-MEASURED with `ZOOM_MIN`, and the old value was a real defect at the new one.** At
-## `ZOOM_MIN` 0.45 the visible world is 2844.4 px wide against a 1920 px map, so it starts at
-## x = (1920 - 2844.4) / 2 = **-462.2 px** — **11.6 tiles** of bare ground on each side, against a
-## margin of 5. `net_camera::_painted_area_covers_the_viewport` is the row that catches it.
-## The water runs this many tiles wider than the board on every side.
-## ⚠⚠ **THE PER-FRAME TERRAIN LOOP THIS NUMBER USED TO PAD IS GONE.** Everything from here down was
-## written for a flat 2D board that repainted every tile every frame; the island is one mesh built
-## once per island now. **The draw-call budget that stood here (「`_paint_tile` is 2 draw calls, so
-## 4872 -> 8064 immediate-mode calls a frame」) was removed 2026-08-27: `_paint_tile` has not existed
-## in this view since the field went 3D**, and the note two lines below the constant already said so.
-## **The measurements below are kept because they are how the SIZE was chosen**, and the size still
-## has to cover the screen at `ZOOM_MIN`.
-## ⚠⚠ **RAISED 12 -> 16 when the board was laid back** (2026-08-24, the user: 「밖에 물을 더 그리고
-## 좀 더 넓어도 돼 어차피 확대할 수 있어가지고」). **12 was the minimum that covered the screen on a
-## FLAT board**, and it stopped covering the moment a row went from 40 px to `TILE_H_PX` 30.64:
-## `12 * 40 = 480 px` of cover became `12 * 30.64 = 368 px` against the same 480 that has to be
-## covered. `480 / 30.64 = 15.7`, so **16 rows**, and the same number is used on the wide axis
-## because the alternative is a per-axis margin threaded through `_visible_tile_rect` for a picture
-## nobody would see — the user asked for more water on both sides in the same breath.
-## ⚠ **The old ceiling of 16 was written for an UNCULLED loop and no longer binds.** The loop is
-## intersected with the visible rect, so what is actually drawn is bounded by the screen and not by
-## this number: at `ZOOM_MIN` the visible world is 2844 x 1600 px = 72 x 53 tiles, so the pass grew
-## from 3168 to about 3800 tiles — not from 4032 to 5120.
-const WATER_MARGIN_TILES := 16
 
 ## (`CULL_PAD_TILES` was deleted 2026-08-24: the per-frame terrain loop it padded died with the flat
 ## board — the island is one mesh built once per island now, and there is no cull left to pad.)
@@ -1947,15 +1552,6 @@ const GAIT_SQUASH := 0.20             # max displacement crow 2.0 · ranged 2.2 
                                       # floor; at 0.12 all five bodies were at or under it, which
                                       # would have made this item invisible and therefore pointless
 
-## The ceiling on the TRANSIENT drawer only — shots, sparks, bursts, area rings, landing rings.
-## Anything bolted to a BODY lives in the other drawer, keyed by body, capped at 19 by the number of
-## bodies on screen. That separation is why "drop the oldest" and "one flash per body, age reset
-## rather than stacked" never eat each other.
-## ⚠ THIS IS NOT WHAT KEEPS SPARKS BOUNDED. Live sparks top out at 12 by lifetime arithmetic (0.21 s
-## of life against a 1.0 s minimum melee period, 12 melee attackers at most), which is under 5% of
-## this number. A guard that can never bite must not be described as the guard, or the next person
-## believes it.
-const FX_MAX_COUNT := 256
 
 ## --- what it costs to lay a flat mark on ground that is no longer flat -------------------------------
 ## ⚠⚠ **These two are NEW with the 3D field and they exist because the board stopped being a board.**
@@ -1977,49 +1573,12 @@ const FX_GROUND_LIFT_TILES := 0.02
 ## chord across a ramp instead of following it.
 const FX_GROUND_STEP_PX := 20.0
 
-## ⚠⚠ **The intent lines get a COARSER cut, and it is a budget decision written down.** There can be
-## fourteen of them, each crossing most of an island, and at 20 px a single line is forty quads — the
-## fourteen together were the largest thing the effect layer built every frame. **They are 1 px wide at
-## alpha 0.12 by design** (see `TARGET_LINE_WIDTH_PX`): a hairline that sinks half a tile into a hill
-## is invisible, where a ring that does the same is broken. 120 px is three tiles.
-const FX_INTENT_STEP_PX := 120.0
-
-## How many segments a ring built in the CAMERA'S plane gets. Ground rings size their own segment
-## count off `FX_GROUND_STEP_PX` because they have to follow the ground; an air ring does not, so it
-## takes a flat count. **24 keeps the biggest ring here — the lion's death burst at 48 px — under
-## 13 px of chord**, which is the point where a circle starts reading as a polygon.
-const FX_RING_SEGMENTS := 24
-
-## How high above the ground an effect that has NO body of its own hangs: the tracer's two ends and
-## the shard fan. **14 px is about one body radius**, so a tracer leaves and arrives at the height the
-## bodies actually stand at rather than skimming their feet.
-## ⚠ Effects that DO belong to a body (the halo, the death burst) ignore this and use that body's own
-## radius through `_body_anchor` — a crow and a lion do not hang their marks at the same height.
-const FX_AIR_LIFT_PX := 14.0
 
 ## ⚠⚠ **`FX_SETTLE_FRAMES` WAS DELETED 2026-08-27, AND ITS OWN HEADER PREDICTED IT.** It said "nothing
 ## in `src/` reads it" and justified living here anyway, so that a capture and the screen could not
 ## disagree. **No capture ever read it either** — it occurred exactly once in the whole repo, at its
 ## own declaration, while every shooter hard-coded its own settle count. A number kept so two things
 ## agree, that neither of them reads, is a number that guarantees nothing.
-
-## Per-effect strength, indexed by the item numbers 1..12 — read it through `fx_gain_of`, never
-## directly. Every effect multiplies its own amplitude by its own slot, and 0.0 turns that effect off
-## completely.
-## This is structure rather than a feature deferred: every shipped game exposes these switches
-## (Vampire Survivors carries Flashing VFX and Weapons ScreenShake separately, Nuclear Throne sliders
-## screenshake to 0%), and Xbox Accessibility Guideline 118 forbids flashing above approximately
-## three per second. An options screen is out of scope here; the point of the array is that bolting
-## one on later touches no effect code.
-## ⚠ Note that slots 2 and 3 exist for DIFFERENT reasons — 3 is a photosensitivity handle (a halo can
-## toggle 3 to 7 times a second), 2 is a clutter handle (one contact point repeats at 1 Hz and covers
-## 0.078% of the screen). Explaining both the same way makes neither checkable.
-## ⚠ `const X := PackedFloat32Array([...])` is a parse error on 4.7.1, so this is a plain `const`
-## Array — read-only, but with no element typing, which is why the accessor casts.
-## ⚠ **SLOT 11 IS UNUSED**: it was the screen shake and the shake is deleted (the user, 2026-08-25).
-## It stays 1.0 and the table stays twelve long — renumbering would move every effect after it onto
-## its neighbour's gain, which is the failure `fx_gain_of` is written to prevent.
-const FX_GAIN := [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
 
 
 # ---------------------------------------------------------------------------------------------
@@ -2046,14 +1605,11 @@ static func sprite_half_px(type_id: int) -> float:
 	return body_radius_of(type_id) * BEAST_SPRITE_W_RATIO * 0.5
 
 
-
-## FX_GAIN holds twelve slots and combat-juice numbers its effects 1..12, so the off-by-one lives
-## here and in exactly one place. Spread across callers, one of them eventually reads its
-## neighbour's gain and the effect that appears to switch off is the wrong one — which is the
-## quietest possible failure, because the round stays green and the screen merely looks different.
-## The cast is the same one every read of a `const` Array in this file makes.
-static func fx_gain_of(item_no: int) -> float:
-	return float(FX_GAIN[item_no - 1])
+## ⚠⚠ **`FX_GAIN` AND `fx_gain_of` STOOD HERE AND BOTH ARE DELETED** (2026-08-29) with the twelve
+## effects. **The trap they were built for is the part to carry**: the effects were numbered 1..12 and
+## the table was indexed 0..11, so the off-by-one lived in ONE accessor. Spread across callers, one of
+## them eventually reads its neighbour's gain — and the effect that appears to switch off is the wrong
+## one, with the round still green and only the screen different.
 
 
 ## The modulate a body's picture is drawn with: its own side colour mixed `BEAST_TEAM_TINT` of the way
@@ -2119,17 +1675,14 @@ static func tile_point_px(p: Vector2) -> Vector2:
 ## readers of. **Nothing outside this file ever called one** — the island screen has carried no chrome
 ## since the start button and the slot row were deleted, and a rectangle nobody draws is not a layout.
 
-static func panel_rect_px() -> Rect2:
-	return Rect2(PANEL_ORIGIN_PX, PANEL_SIZE_PX)
+## ⚠ **`panel_rect_px` and `button_rect_px` stood here and both are deleted** (2026-08-29) with the
+## verdict panel. **The rule they kept between them survives**: one rectangle answering to two verbs
+## is how a restart gets pressed by someone aiming at start.
 
 
 ## Absolute viewport rectangles, not panel-relative ones: the shell hit-tests a mouse position
 ## against these, and a relative rect would have to be offset by whoever asked — which is the
 ## same value living in two places.
-
-
-static func button_rect_px() -> Rect2:
-	return Rect2(PANEL_ORIGIN_PX + BUTTON_OFFSET_PX, BUTTON_SIZE_PX)
 
 
 # --- the two new screens ------------------------------------------------------------------------

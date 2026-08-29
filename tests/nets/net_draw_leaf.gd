@@ -129,7 +129,6 @@ func _table() -> Dictionary:
 			"_sprite": 0,
 			"_put_body": 0,
 			"_paint_bodies": 0,
-			"_put_halo": 0,
 			# 티켓 「캐릭터」's first slice: a body's whole shadow, and the HP bar deleted from over it
 			# (2026-08-28, the user: 「체력바 없이 그림자도 단순하게 아래 동그라미정도해줘」).
 			# `_put_hp` and `_hp_rects` left the table with it.
@@ -148,42 +147,19 @@ func _table() -> Dictionary:
 			"_map_tiles": 0,
 			# ⚠ Every boat drawer left this table on 2026-08-29 with the boats themselves.
 			# move, re-wired in step 4.
-			"_beast_rect": 0,
 			"_facing_of": 0,
 			"_fx_step": 0,
-			"_drain_events": 0,
 			"_body_offset_of": 0,
-			"_lunge_offset": 0,
-			"_knock_offset": 0,
-			"_flash_of": 0,
 			"_gait_squash": 0,
-			"_spark_points": 0,
 			# The effect GEOMETRY: two vertex buffers committed to `ImmediateMesh` surfaces.
 			# `net_slots` reads the buffers AND the surface count — buffers alone stay green when
 			# `_fx_flush` is deleted, which is why both are runtime rows and none is a count here.
 			"_fx_layer": 0,
 			"_fx_begin": 0,
 			"_fx_flush": 0,
-			"_fx_commit": 0,
 			"_ground_y_px": 0,
 			"_g_tri": 0,
-			"_g_quad": 0,
-			"_g_seg": 0,
-			"_g_line": 0,
-			"_g_ring": 0,
 			"_g_disc": 0,
-			"_air_at": 0,
-			"_a_quad": 0,
-			"_a_seg": 0,
-			"_a_ring": 0,
-			"_a_disc": 0,
-			"_body_anchor": 0,
-			"_halo_of": 0,
-			"_a_seg3": 0,
-			"_fx_point3": 0,
-			"_paint_fx": 0,
-			"_paint_intent": 0,
-			"_paint_transients": 0,
 			# ⚠⚠ **FIFTEEN NAMES WERE MISSING FROM THIS TABLE AND SEVENTEEN WERE STALE** (2026-08-28).
 			# The stale ones are the 2D terrain pass — `_tile_colour`, `_quad`, `_skirt`, the noise and
 			# height helpers, `_terrain_material`, `_rebuild_ring` — deleted when the field went 3D and
@@ -221,29 +197,17 @@ func _table() -> Dictionary:
 		# ⚠ The class survives for its two STATIC helpers, which `panel_view` and `refit_view` read.
 		# ⚠ A name the table holds that the file no longer has is caught by `_scan`'s
 		# `표에는 있는데 파일에 없는 함수` direction, whose synthetic case (c2) proves it bites.
+			# ⚠⚠ **24 ROWS LEFT THIS BLOCK ON 2026-08-29** with the fight: the hit halo, the twelve
+			# effects, the whole AIR layer and the three painters that fed them. **The ground layer
+			# stayed, because a body's shadow is drawn into it.**
 		"hud_view.gd": {
 			"default_font": 0,
 			"type_label": 0,
 			"bind": 0,
 			"_draw": 0,
 		},
-		"panel_view.gd": {
-			"bind": 0,
-			"panel_active": 0,
-			"is_finished": 0,
-			"button_rect": 0,
-			"button_hit": 0,
-			"_fx_step": 0,
-			"_process": 0,
-			"_draw": 0,
-			"_paint_panel": 1,
-			"_paint_message": 2,
-			"_paint_button": 2,
-			"_message_text": 0,
-			"_message_colour": 0,
-		},
-		# `title-and-map`'s two new files. The title holds no `Run` at all — it IS `run == null` — so
-		# every function here is either geometry read out of `look.gd` or a clock of its own.
+		# ⚠ **`panel_view.gd` had its own block here and the FILE is deleted** (2026-08-29) with the
+		# verdict it drew.
 		"title_view.gd": {
 			"slot_rect_of": 0,
 			"slot_hit_rect_of": 0,
@@ -327,10 +291,12 @@ func run(t) -> void:
 	var view_files := _gd_files(VIEW_DIR)
 	# ⚠ **It was six until 2026-08-28** — `reward_view.gd` and `refit_view.gd` were deleted with the
 	# growth loop.
-	t.eq(view_files.size(), 4, "src/view/ 에 그릴 줄 아는 파일이 넷이다 %s" % str(view_files))
+	# ⚠ **IT WAS FOUR UNTIL 2026-08-29** — `panel_view.gd` went with the verdict.
+	t.eq(view_files.size(), 3, "src/view/ 에 그릴 줄 아는 파일이 셋이다 %s" % str(view_files))
 	# ⚠ **It was seven until 2026-08-28** — `reward_view.gd` and `refit_view.gd` were deleted with the
 	# card round and the refit board.
-	t.eq(table.size(), 5, "표도 파일 다섯을 덮는다")
+	# ⚠ **IT WAS FIVE UNTIL 2026-08-29** — `panel_view.gd` went with the verdict.
+	t.eq(table.size(), 4, "표도 파일 넷을 덮는다")
 
 	# -- 1~3. the per-function table, the closed class, and the leaf arguments ----------------------
 	var total_funcs := 0
@@ -415,7 +381,7 @@ func run(t) -> void:
 		if wides.size() > 0:
 			wide_bad.append("%s %s" % [path.get_file(), str(wides)])
 	t.ok(scanned >= 8, "look.gd 를 뺀 나머지 %d개를 실제로 훑었다" % scanned)
-	t.eq(wide_scanned, 5, "그중 뷰 넷과 셸 하나, 다섯을 넓힌 목록으로 다시 훑었다 — 셸이 빠지면 hold 초가 game.gd 에 박힌다")
+	t.eq(wide_scanned, 4, "그중 뷰 셋과 셸 하나, 넷을 넓힌 목록으로 다시 훑었다")
 	t.eq(colour_bad.size(), 0, "look.gd 밖에 Color( 도 Color. 도 없다 %s" % str(colour_bad))
 	t.eq(pixel_bad.size(), 0, "look.gd 밖에 픽셀 이름에 박힌 리터럴이 없다 %s" % str(pixel_bad))
 	t.eq(wide_bad.size(), 0, "뷰와 셸에는 시간·비율 이름에 박힌 리터럴도 없다 %s" % str(wide_bad))
@@ -455,20 +421,17 @@ func run(t) -> void:
 ## specified in world px reaches the glass multiplied by the zoom, and at `ZOOM_MIN` 0.45 the water
 ## route drew at 1.35 px with the whole round green. **Any new world-space width does that sum here.**
 func _world_widths() -> Dictionary:
-	return {
-		"SHOT_WIDTH_PX": "",
-		"BURST_WIDTH_PX": "",
-		"AREA_RING_WIDTH_PX": "",
-		"LAND_RING_WIDTH_PX": "",
-		"TARGET_LINE_WIDTH_PX":
-			"의도선은 알파 0.12 이고 한 번에 최대 14개가 섬 전체를 가로지른다 — 열두 연출 중 유일하게"
-			+ " 가독성에 손해일 수 있는 항목이라 look.gd 가 이미 적어 두었다. 굵히면 그 두 제한이 막으려던"
-			+ " 바로 그 어수선함이 된다",
-		"SPARK_WIDTH_PX":
-			"파편은 혼자 못 올린다 — 천장이 제 길이의 절반(SPARK_LEN_PX 5.0 / 2 = 2.5)이고 그 천장이"
-			+ " 바닥 4.0 보다 낮다. 올리려면 SPARK_LEN_PX 와 SPARK_REACH_PX 가 같이 움직여야 하고,"
-			+ " 그건 굵기 수정이 아니라 항목 2 를 눈으로 다시 재는 일이다",
-	}
+	# ⚠⚠ **EMPTY SINCE 2026-08-29, AND EMPTY IS A REAL ANSWER HERE.** Every name this table held was an
+	# effect's stroke width and the effects went with the fight. **The closure below is what keeps that
+	# safe**: the day `field_view.gd` draws with a `Look.*_WIDTH_PX` again, this table not holding it
+	# is red — which is the whole reason the set is closed against the file's own text in both
+	# directions rather than being a list somebody maintains.
+	#
+	# ⚠⚠ **THE DEFECT IT WAS WRITTEN FOR OUTLIVES IT AND ANY NEW WIDTH OWES THE SAME SUM**: a width
+	# given in WORLD px reaches the glass multiplied by the zoom, so at `ZOOM_MIN` 0.45 a 3.0 px line
+	# draws at **1.35 px** — under this file's own 2.0 px snap floor, at exactly the zoom an island
+	# opens at. Nine of twelve were under that floor and only one had ever been measured.
+	return {}
 
 
 func _world_width_table(t) -> void:
@@ -487,7 +450,7 @@ func _world_width_table(t) -> void:
 	var drawn := _look_width_names(_read(VIEW_DIR + "/field_view.gd"))
 	# ⚠ **It was eight until 2026-08-28.** `REFUSE_MARK_WIDTH_PX` left with the refusal mark, which
 	# went with the summon gesture — the constant still stands in `look.gd` with no reader at all.
-	t.eq(drawn.size(), 6, "field_view 가 그리는 데 쓰는 Look.*_WIDTH_PX 이름이 여섯이다 %s" % str(drawn))
+	t.eq(drawn.size(), 0, "field_view 는 Look.*_WIDTH_PX 를 하나도 안 쓴다 %s" % str(drawn))
 	var outside: Array[String] = []
 	for name: String in drawn:
 		if not table.has(name):
@@ -524,8 +487,8 @@ func _world_width_table(t) -> void:
 			t.ok(why.length() >= 40, "%s 가 바닥 밑인 이유가 적혀 있다" % name)
 	# ⚠ **It was six until 2026-08-28** — `REFUSE_MARK_WIDTH_PX` left the table with the refusal mark —
 	# **and five until 2026-08-29**, when `ROUTE_WIDTH_PX` left it with the boats.
-	t.eq(above, 4, "바닥 위가 넷이다")
-	t.eq(below, 2, "일부러 바닥 밑인 것이 둘이다 — 의도선·파편")
+	t.eq(above, 0, "바닥 위가 하나도 없다 — 표가 비었다")
+	t.eq(below, 0, "일부러 바닥 밑인 것도 없다")
 
 
 # -- the scanner turned on itself ----------------------------------------------------------------

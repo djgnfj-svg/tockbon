@@ -169,13 +169,6 @@ func run(t) -> void:
 	_the_real_island_still_has_a_route(t)
 	_the_field_climbs_only_by_the_stair(t)
 	_bricking_up_the_stair_seals_the_plateau(t)
-	_a_walker_refuses_the_wall_and_takes_the_stair(t)
-	_distance_carries_the_height(t)
-	_a_wolf_cannot_bite_across_a_tier_and_a_crow_can(t)
-	_a_swing_does_not_sweep_over_the_wall(t)
-	_a_wolf_climbs_the_stair_and_kills_what_is_up_there(t)
-	_melee_reaches_a_diagonal_one_level_up(t)
-	_an_enemy_posted_high_holds_its_tier(t)
 	# ⚠⚠ **「밀려도 층이 안 바뀐다」 IS A LIVE USER DECISION WHOSE MECHANISM WAS DELETED 2026-08-27.**
 	# 티켓 19, the user's own words: ***"높은 데서 밀리면 안 떨어져. 안 떨어지는 걸로."*** This row
 	# measured it, and measured each direction against its own FLAT control on the same board — because
@@ -625,51 +618,6 @@ func _bricking_up_the_stair_seals_the_plateau(t) -> void:
 		"두 판의 걸을 수 있는 칸 수가 같다 — 문을 막았다고 땅이 사라지지 않았다 (자가 점검)")
 
 
-## `step_toward` is asked the same question as the field, one step at a time, and it is asked with a
-## CONTROL: the same tile, the same target, the same field-building code — one board flat and one
-## tiered. **The flat walker steps east onto (5,1); the tiered one turns away to (3,2).** Then the
-## whole walk is run and the stair is asserted to be on the path, which is what "the wolf goes round"
-## looks like from the sim's side.
-##
-## **Mutation**: drop `can_step` out of `step_toward` and the tiered walker steps east like the flat
-## one, because the field it descends still knows the way round.
-func _a_walker_refuses_the_wall_and_takes_the_stair(t) -> void:
-	var flat := Grid.new()
-	flat.load_rows(FIXTURE_ROWS)
-	var flat_field := flat.flow_field(flat.tile_index(7, 1))
-	var flat_step := flat.step_toward(WALKER_ID, Vector2(4, 1), flat_field)
-	t.eq(flat_step, Vector2(5, 1),
-		"평지 대조군 — 벽이 없으면 (4,1) 에 선 몸은 동쪽 (5,1) 로 곧장 간다")
-	flat.release_all(WALKER_ID)
-
-	var g := Grid.new()
-	g.load_rows(FIXTURE_ROWS, FIXTURE_TIERS)
-	var field := g.flow_field(g.tile_index(7, 1))
-	var step := g.step_toward(WALKER_ID, Vector2(4, 1), field)
-	t.eq(step, Vector2(3, 2),
-		"층이 있으면 같은 자리에서 (3,2) 로 돌아선다 — 벽으로 안 올라간다")
-	t.eq(g.level_at(int(step.x), int(step.y)), 0, "돌아선 칸은 낮은 층이다")
-	g.release_all(WALKER_ID)
-
-	# The whole walk. The target's own tile is reserved the way a live fight reserves an enemy's, so
-	# the walker approaches rather than standing on it.
-	var claimed := g.reserved
-	claimed[g.tile_index(7, 1)] = Battle.ENEMY_UID_BASE
-	g.reserved = claimed
-	var pos := Vector2(1, 1)
-	var visited := [pos]
-	for _k in 60:
-		var next_pos: Vector2 = g.step_toward(WALKER_ID, pos, field)
-		if next_pos.distance_to(pos) <= Rules.EPS:
-			break
-		pos = next_pos
-		visited.append(pos)
-	g.release_all(WALKER_ID)
-	g.release_all(Battle.ENEMY_UID_BASE)
-	t.ok(visited.has(Vector2(4, 3)),
-		"낮은 땅에서 고원의 적까지 걸으면 계단 (4,3) 을 밟고 지나간다 %s" % str(visited))
-	t.ok(pos.distance_to(Vector2(7, 1)) <= sqrt(2.0) + Rules.EPS,
-		"그리고 고원의 적 옆에 도착한다 (%s)" % str(pos))
 
 
 # == the distance =====================================================================================
@@ -714,84 +662,10 @@ const PAIR_W := 20
 const ACROSS_THE_WALL := 2.2360679775
 
 
-## The arithmetic, stated once. A tier is two tiles tall, so the neighbour across a boundary is 2.236
-## away — **past a melee reach of 1.5 and inside a crow's 5.5.** ⚠ That is not a bonus and must not be
-## read as one: it is the distance being measured in the space the bodies are actually standing in.
-## The user refused 숫자 보너스 and this is a different object.
-func _distance_carries_the_height(t) -> void:
-	var b := _pair_battle([Rules.WOLF], [])
-	var low_a := Vector2(2, 3)
-	var low_b := Vector2(3, 3)
-	var below := Vector2(14, 3)
-	var above := Vector2(15, 3)
-	t.eq(b.grid.level_at(14, 3), 0, "(14,3) 은 낮은 층이다 (자가 점검)")
-	t.eq(b.grid.level_at(15, 3), 2, "(15,3) 은 높은 층이다 (자가 점검)")
-	t.ok(absf(b.grid.height_at(above) - Rules.TIER_RISE_TILES) < 1e-4,
-		"높은 층 타일의 높이가 한 층(%.2f 타일)이다" % Rules.TIER_RISE_TILES)
-	t.ok(absf(b.grid.height_at(below)) < 1e-4, "낮은 층 타일의 높이는 0이다")
-
-	t.ok(absf(b._dist(low_a, low_b) - 1.0) < 1e-4,
-		"같은 층에서 한 칸 옆은 여전히 1.00 이다 — 평지 리터럴이 하나도 안 움직이는 이유")
-	t.ok(absf(b._dist(below, above) - ACROSS_THE_WALL) < 1e-4,
-		"층 경계를 사이에 둔 한 칸 옆은 %.4f 다 (얻은 값 %.4f)" % [ACROSS_THE_WALL, b._dist(below, above)])
-	t.ok(absf(b._dist(above, below) - b._dist(below, above)) < 1e-6,
-		"그리고 재는 방향이 답을 안 바꾼다")
-
-	var melee: float = Rules.range_of(Rules.WOLF) + Rules.REACH_BONUS
-	var ranged: float = Rules.range_of(Rules.CROW) + Rules.REACH_BONUS
-	t.ok(b._within(low_a, low_b, melee), "늑대는 같은 층의 한 칸 옆을 문다")
-	t.ok(not b._within(below, above, melee),
-		"그런데 층 경계 너머는 못 문다 — %.2f 는 늑대의 %.2f 밖이다" % [ACROSS_THE_WALL, melee])
-	t.ok(b._within(below, above, ranged),
-		"까마귀는 넘어간다 — %.2f 는 %.2f 안이다. 벽이 모두를 막는 게 아니다" % [ACROSS_THE_WALL, ranged])
 
 
-## The same claim driven as a FIGHT, because arithmetic being right is not the same as anything asking
-## it. Two seconds of real `step`, HP read off both sides.
-##
-## ⚠ **Both halves are asserted in both runs.** The wolf run needs the flat pair to bleed (otherwise
-## "no damage anywhere" passes as "the wall works"), and the crow run needs the high enemy to bleed
-## (otherwise a wall that blocks everything passes too). **A ceiling with no floor is what this repo
-## found on four presentation rows at once.**
-func _a_wolf_cannot_bite_across_a_tier_and_a_crow_can(t) -> void:
-	var wolves := _pair_battle([Rules.WOLF, Rules.WOLF], [Vector2(2, 3), Vector2(14, 3)])
-	var w_before := [float(wolves.enemy_hp[0]), float(wolves.enemy_hp[1])]
-	_step_for(wolves, 2.0)
-	t.ok(float(wolves.enemy_hp[0]) < w_before[0] - Rules.EPS,
-		"늑대는 같은 층의 적을 실제로 깎는다 (%.1f → %.1f)" % [w_before[0], float(wolves.enemy_hp[0])])
-	t.ok(absf(float(wolves.enemy_hp[1]) - w_before[1]) < Rules.EPS,
-		"그런데 벽 위의 적은 한 대도 못 맞는다 (%.1f → %.1f)" % [w_before[1], float(wolves.enemy_hp[1])])
-
-	var crows := _pair_battle([Rules.CROW, Rules.CROW], [Vector2(2, 3), Vector2(14, 3)])
-	var c_before := [float(crows.enemy_hp[0]), float(crows.enemy_hp[1])]
-	_step_for(crows, 2.0)
-	t.ok(float(crows.enemy_hp[0]) < c_before[0] - Rules.EPS,
-		"까마귀도 같은 층의 적을 깎고 (%.1f → %.1f)" % [c_before[0], float(crows.enemy_hp[0])])
-	t.ok(float(crows.enemy_hp[1]) < c_before[1] - Rules.EPS,
-		"벽 위의 적도 깎는다 (%.1f → %.1f) — 대조군이 없으면 「벽이 막는다」와 「아무도 못 때린다」가 안 갈린다"
-			% [c_before[1], float(crows.enemy_hp[1])])
 
 
-## ⚠ **Splash rides `_within`, so it follows for free — and what follows for free also disappears
-## quietly.** The bear's swing is an `area` around the tile it bit; the row exists so that a day when
-## someone gives splash its own distance function, this reddens instead of the swing silently reaching
-## over the wall again.
-##
-## The board: the bear bites the low enemy at (14,3), a second low enemy stands a diagonal away at
-## (13,3) — **1.414, inside the 1.5 swing** — and the high enemy at (15,3) is a plane tile away but
-## 2.236 in the space it stands in. **The low neighbour is the floor and the high one is the ceiling.**
-func _a_swing_does_not_sweep_over_the_wall(t) -> void:
-	var b := _pair_battle([Rules.BEAR], [Vector2(14, 4)], [Vector2(14, 3), Vector2(13, 3), Vector2(15, 3)])
-	var area: float = Rules.area_of(Rules.BEAR)
-	t.ok(area > 1.0, "곰의 휘두르기 반경이 실제로 있다 (%.2f 타일, 자가 점검)" % area)
-	t.ok(area < ACROSS_THE_WALL, "그리고 그 반경이 층 경계 거리보다 짧다 (자가 점검)")
-	var before := [float(b.enemy_hp[0]), float(b.enemy_hp[1]), float(b.enemy_hp[2])]
-	_step_for(b, 2.0)
-	t.ok(float(b.enemy_hp[0]) < before[0] - Rules.EPS, "곰이 (14,3) 의 적을 문다 (자가 점검)")
-	t.ok(float(b.enemy_hp[1]) < before[1] - Rules.EPS,
-		"휘두르기가 대각선 옆 (13,3) 까지 쓸어낸다 — 바닥. 이게 없으면 「아무것도 안 쓸었다」가 통과한다")
-	t.ok(absf(float(b.enemy_hp[2]) - before[2]) < Rules.EPS,
-		"그런데 벽 위 (15,3) 은 안 쓸린다 (%.1f → %.1f)" % [before[2], float(b.enemy_hp[2])])
 
 
 ## ⚠⚠ **THE ROW THIS FILE WAS MISSING, AND ITS ABSENCE IS WHY A FROZEN GAME PASSED 3177 CHECKS.**
@@ -904,165 +778,10 @@ const CLIMB_ENEMY := Vector2(6, 3)
 const CLIMB_START := [Vector2(5, 2), Vector2(5, 3), Vector2(5, 4)]
 
 
-func _a_wolf_climbs_the_stair_and_kills_what_is_up_there(t) -> void:
-	var b := _battle_on(CLIMB_ROWS, CLIMB_TIERS, [Rules.WOLF, Rules.WOLF, Rules.WOLF],
-		CLIMB_START, [{"type_id": Rules.LION,
-			"tile": int(CLIMB_ENEMY.y) * CLIMB_W + int(CLIMB_ENEMY.x)}])
-	t.eq(b.grid.level_at(6, 3), 2, "적은 고원 서쪽 끝에 선다 (자가 점검)")
-	t.eq(b.grid.level_at(5, 3), 0, "그 바로 옆 (5,3) 은 낮은 층이다 — 얼어붙는 자리 (자가 점검)")
-	t.eq(b.grid.level_at(6, 6), 1, "계단은 고원 반대편 (6,6) 이다 (자가 점검)")
-	var melee: float = Rules.range_of(Rules.WOLF) + Rules.REACH_BONUS
-	t.ok(Vector2(5, 3).distance_to(CLIMB_ENEMY) <= melee,
-		"(5,3) 은 평면으로는 늑대 사거리 안이다 — 띠가 실제로 있다는 자가 점검")
-	t.ok(b._dist(Vector2(5, 3), CLIMB_ENEMY) > melee,
-		"그런데 실제 거리로는 사거리 밖이다 — 이 둘이 같이 참인 자리가 얼어붙는 띠다")
-
-	var hp_before := float(b.enemy_hp[0])
-	var start: Array = []
-	var moved: Array = []
-	for k in CLIMB_START.size():
-		start.append(b.soldier_pos[k])
-		moved.append(false)
-	var climbed := 0
-	var climbed_seen: Array = [false, false, false]
-	var enemy_left_high := 0
-	var left := 12.0
-	while left > Rules.EPS:
-		var dt: float = minf(left, 1.0 / 60.0)
-		b.step(dt)
-		left -= dt
-		var ep: Vector2 = b.enemy_pos[0]
-		if b.grid.level_at(int(round(ep.x)), int(round(ep.y))) != 2:
-			enemy_left_high += 1
-		for k in CLIMB_START.size():
-			var p: Vector2 = b.soldier_pos[k]
-			if p.distance_to(start[k]) > 0.5:
-				moved[k] = true
-			if b.grid.level_at(int(round(p.x)), int(round(p.y))) == 2:
-				climbed_seen[k] = true
-	for k in climbed_seen.size():
-		if bool(climbed_seen[k]):
-			climbed += 1
-
-	# ⚠⚠ **PER BODY, AND THE FIRST DRAFT WAS NOT.** It OR'd 「somebody moved」 across all three, and the
-	# one wolf that started outside the band did the whole journey by itself — **so the row was green
-	# with two wolves frozen solid.** That is this file's own named failure (「재려는 것 말고 다른 것이
-	# 같은 답을 낼 수 없는 판을 만든다」) arriving in the check written to catch it.
-	for k in CLIMB_START.size():
-		t.ok(bool(moved[k]),
-			"늑대 %d (%s 출발) 이 실제로 움직인다 — 벽 앞에서 얼어붙지 않는다" % [k, str(CLIMB_START[k])])
-	t.ok(climbed >= 2,
-		"셋 중 둘 이상이 계단을 밟고 고원에 올라선다 (%d 마리) — 티켓이 약속한 「돌아서 올라간다」" % climbed)
-	# ⚠⚠ **THE PAIR, ASSERTED TOGETHER, AND THAT IS THE WHOLE GUARD.** Holding enemies and a fight that
-	# ends are the two halves of one risk: **there is no time limit**, so an enemy that stays up there
-	# and cannot be reached is a board that spins forever. Neither row means anything alone — 「it held
-	# its ground」 is also true of an unreachable enemy, and 「it died」 is also true of one that walked
-	# down to be killed on the flat, which is the inversion this ticket exists to remove.
-	t.eq(enemy_left_high, 0,
-		"그 적은 12초 동안 고원을 한 프레임도 안 떠난다 — 내려와서 죽어 준 게 아니다")
-	t.ok(float(b.enemy_hp[0]) < hp_before - Rules.EPS,
-		"그런데도 실제로 깎인다 (%.1f → %.1f) — 버티는 적과 끝나는 싸움이 같이 성립한다"
-			% [hp_before, float(b.enemy_hp[0])])
 
 
-## ⚠⚠ **THE STAIR IS ONE TILE WIDE, SO A BODY ON IT THAT CANNOT SWING BLOCKS EVERYTHING BEHIND IT.**
-## Measured in play: a melee body stood on the island's only stair for 163 seconds without landing a
-## blow, because the enemy it was chasing stood DIAGONALLY above it. From a stair (level 1) to the
-## plateau (level 2) the orthogonal neighbour is `sqrt(1 + 1)` = 1.414 and the diagonal is
-## `sqrt(2 + 1)` = **1.732** — and melee reach was 1.500. **26 of 162 fights were lost to it.**
-##
-## Both bodies are pinned every frame, the way the verifier's own probe does it, so nothing here
-## measures walking — only whether the blow lands.
-##
-## ⚠ **Three cases, and the middle one is the fix.** The orthogonal case is the POSITIVE CONTROL: if it
-## ever stops landing, this fixture is broken rather than the sim. The flat two-tile case is the
-## CEILING: the new reach sits in `(sqrt(3), 2.0)` and must not have swallowed the next distance up.
-func _melee_reaches_a_diagonal_one_level_up(t) -> void:
-	var stair := Vector2(6, 6)
-	var g := Grid.new()
-	g.load_rows(CLIMB_ROWS, CLIMB_TIERS)
-	t.eq(g.level_at(6, 6), 1, "때리는 몸은 계단(1단) 위에 선다 (자가 점검)")
-	t.eq(g.level_at(6, 5), 2, "정직교 위 (6,5) 는 고원이다 (자가 점검)")
-	t.eq(g.level_at(7, 5), 2, "대각 위 (7,5) 도 고원이다 (자가 점검)")
-
-	var ortho := _pinned_damage(stair, Vector2(6, 5))
-	var diag := _pinned_damage(stair, Vector2(7, 5))
-	var flat_two := _pinned_damage(Vector2(2, 3), Vector2(4, 3))
-	t.ok(ortho > 0.0,
-		"양성 대조군 — 계단에서 정직교로 한 단 위(1.414)는 맞는다 (%.1f 피해). 이게 0이면 픽스처가 고장이다"
-			% ortho)
-	t.ok(diag > 0.0,
-		"그리고 대각으로 한 단 위(1.732)도 맞는다 (%.1f 피해) — 사거리 1.50 에서는 20초 동안 0이었다" % diag)
-	t.ok(flat_two <= 0.0,
-		"그런데 평지에서 두 칸 떨어진(2.000) 몸은 여전히 못 맞힌다 (%.1f 피해) — 창이 (1.732, 2.000) 안이다"
-			% flat_two)
-
-	var melee: float = Rules.range_of(Rules.WOLF) + Rules.REACH_BONUS
-	t.ok(melee > sqrt(3.0) and melee < 2.0,
-		"근접 사거리 %.3f 가 sqrt(3)=%.3f 와 2.000 사이에 있다 — 양쪽이 다 필요하다" % [melee, sqrt(3.0)])
 
 
-## ⚠⚠ **A DEFENDER POSTED ON HIGH GROUND MUST NOT WALK OFF IT, AND THAT IS THE WHOLE POINT OF THE
-## TICKET.** Measured in play: **most WON fights never sent anyone up the stairs at all** — the plateau
-## archers walked down and died on the flat, so the side doing the walking was the defender and 티켓
-## 19's answer («the advantage is positional, the enemy has to come round») was inverted.
-##
-## ⚠ **The control is the other half of the rule and it is not optional.** Holding must be NARROW — an
-## enemy on the low ground still advances, or the fight stops coming to the player at all.
-func _an_enemy_posted_high_holds_its_tier(t) -> void:
-	var high := _battle_on(HOLD_ROWS, HOLD_TIERS, [Rules.WOLF, Rules.WOLF],
-		[Vector2(1, 3), Vector2(1, 4)],
-		[{"type_id": Rules.WOLF, "tile": 3 * HOLD_W + 13}])
-	t.eq(high.grid.level_of(3 * HOLD_W + 13), 2, "그 방패병은 고원 위에서 시작한다 (자가 점검)")
-	t.ok(Rules.detect_of(Rules.WOLF) > 3.0,
-		"그리고 탐지 반경이 늑대들을 실제로 본다 (%.1f 타일, 자가 점검) — 안 보이면 안 움직이는 게 당연해진다"
-			% Rules.detect_of(Rules.WOLF))
-	# ⚠⚠ **THE SELF-CHECK THAT STOPS THIS ROW BEING VACUOUS.** 「It never left the plateau」 is also true
-	# of a plateau nothing can leave. The route down has to EXIST for the refusal to mean anything, so
-	# the game's own field is asked whether the enemy's tile is reachable from where the wolves stand —
-	# it is, through the stair at (6,6), and the enemy declines to use it.
-	var down := high.grid.flow_field(high.grid.tile_index(1, 3))
-	t.ok(int(down[3 * HOLD_W + 13]) != Grid.UNREACHABLE,
-		"늑대가 선 자리에서 그 적의 칸까지 길이 실제로 있다 (자가 점검) — 막혀 있으면 아래가 공허하다")
-
-	var left_high := 0
-	var start_high: Vector2 = high.enemy_pos[0]
-	var t_left := 5.0
-	while t_left > Rules.EPS:
-		var dt: float = minf(t_left, 1.0 / 60.0)
-		high.step(dt)
-		t_left -= dt
-		var p: Vector2 = high.enemy_pos[0]
-		if high.grid.level_at(int(round(p.x)), int(round(p.y))) != 2:
-			left_high += 1
-	t.eq(left_high, 0, "5초 동안 한 프레임도 고원을 안 떠난다 — 길이 있는데도 제 계단으로 안 내려간다")
-	# ⚠ **It is free to move ON its tier and it does.** The rule is 「does not leave its tier」, not
-	# 「stands still」 — a defender that shuffles along the plateau edge to face the attackers is exactly
-	# what holding ground looks like. A draft of this row asserted it never moved at all and reddened,
-	# which is the row claiming more than the rule says.
-	t.ok(high.enemy_pos[0].distance_to(start_high) > 0.0,
-		"그 안에서 움직이는 것은 자유다 (%.2f 타일 이동) — 「제자리에 못 박힌다」가 아니라 「층을 안 떠난다」이다"
-			% high.enemy_pos[0].distance_to(start_high))
-
-	# The other end. Same species, same board, posted on the LOW ground: it must still come.
-	var low := _battle_on(HOLD_ROWS, HOLD_TIERS, [Rules.WOLF, Rules.WOLF],
-		[Vector2(1, 3), Vector2(1, 4)],
-		[{"type_id": Rules.WOLF, "tile": 3 * HOLD_W + 5}])
-	t.eq(low.grid.level_of(3 * HOLD_W + 5), 0, "대조군의 방패병은 낮은 층에서 시작한다 (자가 점검)")
-	var start_low: Vector2 = low.enemy_pos[0]
-	var moved_low := false
-	t_left = 5.0
-	while t_left > Rules.EPS:
-		var dt2: float = minf(t_left, 1.0 / 60.0)
-		low.step(dt2)
-		t_left -= dt2
-		if low.enemy_pos[0].distance_to(start_low) > 0.5:
-			moved_low = true
-	t.ok(moved_low,
-		"낮은 층의 적은 여전히 다가온다 — 「전부 제자리를 지킨다」로 만들면 싸움이 플레이어에게 안 온다")
-	var lp: Vector2 = low.enemy_pos[0]
-	t.eq(low.grid.level_at(int(round(lp.x)), int(round(lp.y))), 0,
-		"그 적은 낮은 층에 머문다 — 붙들려서가 아니라 거기 있는 적을 쫓아서다 (자가 점검)")
 
 
 ## --- 「무리는 제 몸이 선 자리에서 조준한다」 삭제됨 2026-08-27 ------------------------------------------
@@ -1426,34 +1145,11 @@ func _battle_on(rows: Array, tiers: Array, species: Array, at: Array, spawns: Ar
 		army.recruit(slot)
 	var b := Battle.new()
 	b.setup(g, army, spawns)
-	b._committed = true
 	for k in at.size():
 		_ashore(b, k, at[k])
 	return b
 
 
-## How much HP a pinned melee body takes off a pinned enemy in 8 seconds on the climb board.
-##
-## ⚠ **Both bodies are put back every frame** — the verifier's own probe idiom. Nothing here measures
-## walking, reservation or pathfinding; only whether the blow lands from exactly that pair of tiles.
-func _pinned_damage(attacker: Vector2, victim: Vector2) -> float:
-	var b := _battle_on(CLIMB_ROWS, CLIMB_TIERS, [Rules.WOLF], [attacker],
-		[{"type_id": Rules.WOLF, "tile": int(victim.y) * CLIMB_W + int(victim.x)}])
-	b.enemy_pos[0] = victim
-	b.army.hp[0] = 9999.0
-	var hp0 := float(b.enemy_hp[0])
-	var left := 8.0
-	while left > Rules.EPS:
-		var dt: float = minf(left, 1.0 / 60.0)
-		b.step(dt)
-		left -= dt
-		# Pinned, every frame, both sides.
-		b.soldier_pos[0] = attacker
-		b._soldier_goal[0] = attacker
-		b.enemy_pos[0] = victim
-		b._enemy_goal[0] = victim
-		b.army.hp[0] = 9999.0
-	return hp0 - float(b.enemy_hp[0])
 func _ashore(b: Battle, i: int, p: Vector2) -> void:
 	b.soldier_state[i] = Battle.SoldierState.ASHORE
 	b.soldier_pos[i] = p
