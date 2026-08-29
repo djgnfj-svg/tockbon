@@ -1005,54 +1005,107 @@ const WATER_FIELD_SUBDIV := 16
 # ⚠⚠ **FOUR MOTIONS RUN AT ONCE AND NONE IS IN STEP WITH THE OTHERS** (the user: 「단순하게 원이 아니라
 # 이제 복합적으로 움직이는걸 원한 진짜 물처럼」). **A border on one clock is a ring pulsing**, and that is
 # what「원 같다」was. Take any one of the four out and it goes back to being a ring.
+#
+# ⚠⚠ **THE BORDER ITSELF WAS REPLACED ON 2026-08-29 — TWENTY-SEVEN VERSIONS SIDE BY SIDE**
+# (`prototypes/swash/`, each folder carrying a `NOTES.md`) **and the user chose `27-gaps`: two whites,
+# thin and hard-edged, slow, and broken.** The flat sea and the one border are untouched; what changed
+# is what that border is made of. **Everything from here down is that choice**, and the numbers below
+# were each set by eye against the island as it stood on 08-29.
 # ==============================================================================================
 
-## **해안선's width at rest, in tiles.** ⚠ The swing below runs either side of it.
-const WATER_LINE_TILES := 0.075
-## How hard its outer edge is. 1 holds full strength to the edge and stops; 0 is a fade the whole way.
-const WATER_LINE_HARD := 0.45
+## **해안선's width, in tiles, at FULL surge.** ⚠ At rest only `WATER_REST_FRAC` of it is on the rock.
+const WATER_LINE_TILES := 0.035
+## ⚠⚠ **How hard its outer edge is, AND THIS IS THE REAL ANSWER TO 「좀더 얇으면」, not the width above.**
+## A soft-edged line spends most of its width on a fade, so it reads thick at any width. **Thinning a
+## soft line makes it faint; hardening it makes it thin.** 1 holds full strength to the edge and stops.
+const WATER_LINE_HARD := 0.85
 const WATER_LINE_ALPHA := 0.90
 
-## **1. The shape of the line: three octaves, three sizes, three drifts.** ⚠ The amplitudes are in
-## TILES and they add, so the line can wander by their sum. The scales are inverted tiles — 0.45 is a
-## bend about two tiles across, 3.6 is a fray under a third of one.
+## **1. The shape of the line, and it TRAVELS along the coast.** `WATER_RUN` is tiles per second and
+## `WATER_CYCLE` is how long one lap of the crossfade takes — two copies half a lap apart, so the
+## pattern never visibly restarts. ⚠ The amplitudes are in TILES and they add; the scales are inverted
+## tiles, so 0.45 is a bend about two tiles across. `WATER_GRAD_STEP` is the stencil the seaward
+## direction is measured with.
+const WATER_RUN := 0.30
+const WATER_CYCLE := 2.6
+const WATER_GRAD_STEP := 0.06
 const WATER_WARP_A := 0.055
 const WATER_WARP_A_SCALE := 0.45
-const WATER_WARP_A_SPEED := 0.055
 const WATER_WARP_B := 0.030
 const WATER_WARP_B_SCALE := 1.30
-const WATER_WARP_B_SPEED := 0.130
-const WATER_WARP_C := 0.014
-const WATER_WARP_C_SCALE := 3.60
-const WATER_WARP_C_SPEED := 0.260
-
-## **2. How much the width swings, how fast, and how long a stretch of coast shares one phase.**
-## ⚠⚠ `WATER_ALONG_SCALE` is the ring-breaker: the phase is read along the coast, so one stretch is
-## running up while the next draws back.
-const WATER_SWING := 0.75
-const WATER_SWING_RATE := 0.55
+## ⚠⚠ **The ring-breaker**: the run's phase is read ALONG the coast, so one stretch is coming up while
+## the next is draining back. On one clock every point on the island swells at the same instant.
 const WATER_ALONG_SCALE := 0.55
-## How thin a stretch gets at the bottom of its swing, as a fraction of the resting width. ⚠ **Not 0**:
-## a line that vanishes is a line that blinks, and a blink reads as a fault rather than as water.
-const WATER_SWING_FLOOR := 0.18
 
-## **3. The one that lets go**, how far it gets before it is gone in tiles, and how wide a patch of coast
-## does it at all. ⚠ Over patches only, or the island wears two concentric rings.
-const WATER_PEEL := 0.55
-const WATER_PEEL_TILES := 0.42
+## **2. Where the coast bends.** The curvature is measured and a headland is given more energy than a
+## cove — which is why the bays stay quiet without a single number saying "bay".
+## ⚠⚠ **`WATER_CURVE_STEP` CANNOT SEE A BEND SMALLER THAN ABOUT ITSELF, IN TILES**, so it is the first
+## number to re-judge whenever the island's outline starts turning on a different unit. The outline
+## went 112 → 280 → 168 segments while these candidates were being judged.
+const WATER_CURVE_STEP := 0.30
+const WATER_REFRACT := 0.85
+const WATER_POINT_GAIN := 2.1
+const WATER_BAY_FLOOR := 0.35
+
+## **3. The run.** ⚠ **`WATER_RATE` 0.16 is a run about every six seconds, DOWN FROM 0.42** (the user:
+## 「너무 자주 하는데 파형이 좀더 느리게」). `WATER_RISE_FRAC` is how much of the cycle is the water
+## coming up; the rest is it draining. `WATER_SWASH` is how far up the rock it reaches, in tiles.
+const WATER_RATE := 0.16
+const WATER_SWASH := 0.16
+const WATER_RISE_FRAC := 0.22
+## ⚠⚠ **THE RESTING WIDTH AND THE SURGE ARE SEPARATE, AND THAT SEPARATION IS THE WHOLE POINT**
+## (the user: 「얇게 있다가 파형이 왔을떄만 두꺼워야하는데 미리 흔적이 너무 남아있는느낌이야 기본값이
+## 너무 있어」). `WATER_REST_FRAC` is the fraction of the width that sits on the rock doing nothing;
+## `WATER_SURGE` is what the arriving wave ADDS on top, in multiples of the same width, and it rides
+## the run so it is zero for most of the cycle. `WATER_REST_SHAPE` is how much the bay/point energy is
+## allowed to thin the RESTING line — at 0 the hairline is the same all round the island.
+const WATER_REST_FRAC := 0.45
+const WATER_SURGE := 1.6
+const WATER_REST_SHAPE := 0.7
+
+## **4. The second white, the one standing off the rock** — how far off in tiles, how wide the stroke
+## is, and how strong. ⚠⚠ **It is a LINE, not a band**: every 거품 drawn before it was a soft wash
+## fading outward and the reference frames have a hard stroke. ⚠ Keep `WATER_SECOND_W` at or under the
+## resting line or the two whites stop reading as two.
+## ⚠ **`WATER_SECOND_AT` is the first number that will look wrong if the blocks change size.**
+const WATER_SECOND_AT := 0.22
+const WATER_SECOND_W := 0.035
+const WATER_SECOND_AMT := 0.85
+
+## **5. The cuts, and there are two of them on the outer white.** `WATER_CUT_SCALE` is how long a
+## surviving piece is (inverted tiles — bigger is shorter), then how fast the pattern of gaps drifts and
+## where it switches. ⚠ `SHUT` and `OPEN` close together is a clean break; far apart is a fade, and a
+## fade is a dimming rather than a gap.
+const WATER_CUT_SCALE := 0.55
+const WATER_CUT_DRIFT := 0.03
+const WATER_CUT_SHUT := 0.40
+const WATER_CUT_OPEN := 0.62
+## **Where the second line is allowed to exist at all**, in units of the refraction's energy — which
+## runs from `WATER_BAY_FLOOR` in a cove to `WATER_POINT_GAIN` off a headland. Raising these walks the
+## second white back toward the points and out of the bays.
+const WATER_TIP_AT := 0.90
+const WATER_TIP_FULL := 1.30
+## ⚠⚠ **HOW MUCH THE INNER LINE IS ALLOWED TO THIN WHERE THE OUTER ONE IS MISSING, AND IT IS THE ONE
+## NUMBER THAT ARGUES WITH THE GLOSSARY.** `CONTEXT.md` defined 해안선 as ringing the island **without
+## a gap, because water is always touching land**. At 0 that rule holds; at 1 the coast can go bare.
+## **0.35 is deliberately partial — the line thins and never disappears.** If it ever reads as a hole
+## in the island, the glossary was right and the answer was `25-broken` or `26-tips`.
+const WATER_FIRST_CUT := 0.35
 
 ## ⚠⚠ **`WATER_ROLL` / `WATER_ROLL_TILES` STOOD HERE FOR ONE ROUND** (2026-08-29). They were 거품 —
-## the white line pushed IN toward the rim, which the sea had been missing since the 2026-08-28 rebuild
-## left it only the shoreline's breathing and the line that travels seaward. **The user asked for it,
-## saw it, and took it back**: 「별로다... 그 거품없애봐」.
-## ⇒ **The flat sea with one border stands**, now confirmed twice — once by seven candidates rendered
-## side by side, and once by adding the thing back and looking at it.
+## the white line pushed IN toward the rim. **The user asked for it, saw it, and took it back**:
+## 「별로다... 그 거품없애봐」. ⇒ **The flat sea with one border stands**, confirmed twice.
+## ⚠⚠ **AND ELEVEN DIALS OF THE 08-28 BORDER LEFT WITH `27-gaps`**: the third warp octave and all three
+## warp SPEEDS (the line travels now instead of the noise drifting), the four `SWING` dials (the resting
+## width and the surge replace them), and the three `PEEL` dials (the second white stands still off the
+## rock instead of a line letting go and sailing out). **Their values are in git at `05c2509`** and the
+## mechanism itself is kept whole in `prototypes/swash/01-now/`.
 
-const WATER_PEEL_GATE_SCALE := 0.85
-
-## **4. How much of the coast is quiet**, how wide a quiet stretch is in inverted tiles, and how slowly
+## **6. How much of the coast is quiet**, how wide a quiet stretch is in inverted tiles, and how slowly
 ## the quiet places move. ⚠ At 0 every part of the shore is equally lively, which is its own kind of ring.
-const WATER_CALM := 0.45
+## ⚠ **Down from 0.45**: the cuts now do most of the breaking-up, and two gates at full strength took
+## whole stretches of coast down to nothing at once.
+const WATER_CALM := 0.25
 const WATER_CALM_SCALE := 0.38
 const WATER_CALM_SPEED := 0.035
 

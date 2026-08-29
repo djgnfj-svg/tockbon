@@ -258,9 +258,14 @@ func _versions() -> Array:
 	return out
 
 
-## **Every dial the sea reads, taken from `look.gd`.** ⚠ A candidate that does not declare one of these
-## simply ignores it; a candidate that does gets the game's own value rather than its own default, which
-## is the only way "the same line, moving differently" means anything.
+## **The field, the colours and the shore offset go to everything; the DIALS go to the shipped sea only.**
+##
+## ⚠⚠ **IT USED TO HAND `look.gd`'s DIALS TO EVERY CANDIDATE, AND THAT STOPPED BEING SAFE ON 2026-08-29.**
+## While the candidates were being judged the game's numbers belonged to the sea they were competing
+## with, so overriding a candidate's own defaults with them was the only way "the same line, moving
+## differently" meant anything. **Then `27-gaps` won and its numbers were copied into `look.gd`** — and
+## the same override would now push the WINNER's width, hardness and rate onto all twenty-six losers,
+## which is twenty-six pictures of a comparison that was never run.
 func _apply(row: Array) -> void:
 	var sh: Shader = load(str(row[1]))
 	if sh == null:
@@ -275,29 +280,49 @@ func _apply(row: Array) -> void:
 	m.set_shader_parameter("shore_offset", Look.WATER_SHORE_OFFSET_TILES)
 	m.set_shader_parameter("sea", Look.COL_WATER)
 	m.set_shader_parameter("foam", Look.COL_WATER_FOAM)
+	if str(row[0]) == "shipped":
+		_hand_it_the_game_s_numbers(m)
+	_sea.material_override = m
+
+
+## **Index 0's dials, and index 0 only.** ⚠ It has to track `FieldView._hand_the_sea_its_look` — a dial
+## this file forgets is a dial the baseline draws at the shader's default rather than the game's value,
+## and the baseline is the one version here that is supposed to BE the game.
+func _hand_it_the_game_s_numbers(m: ShaderMaterial) -> void:
 	m.set_shader_parameter("line_tiles", Look.WATER_LINE_TILES)
 	m.set_shader_parameter("line_hard", Look.WATER_LINE_HARD)
 	m.set_shader_parameter("line_alpha", Look.WATER_LINE_ALPHA)
+	m.set_shader_parameter("run", Look.WATER_RUN)
+	m.set_shader_parameter("cycle", Look.WATER_CYCLE)
+	m.set_shader_parameter("grad_step", Look.WATER_GRAD_STEP)
 	m.set_shader_parameter("warp_a", Look.WATER_WARP_A)
 	m.set_shader_parameter("warp_a_scale", Look.WATER_WARP_A_SCALE)
-	m.set_shader_parameter("warp_a_speed", Look.WATER_WARP_A_SPEED)
 	m.set_shader_parameter("warp_b", Look.WATER_WARP_B)
 	m.set_shader_parameter("warp_b_scale", Look.WATER_WARP_B_SCALE)
-	m.set_shader_parameter("warp_b_speed", Look.WATER_WARP_B_SPEED)
-	m.set_shader_parameter("warp_c", Look.WATER_WARP_C)
-	m.set_shader_parameter("warp_c_scale", Look.WATER_WARP_C_SCALE)
-	m.set_shader_parameter("warp_c_speed", Look.WATER_WARP_C_SPEED)
-	m.set_shader_parameter("swing", Look.WATER_SWING)
-	m.set_shader_parameter("swing_rate", Look.WATER_SWING_RATE)
 	m.set_shader_parameter("along_scale", Look.WATER_ALONG_SCALE)
-	m.set_shader_parameter("swing_floor", Look.WATER_SWING_FLOOR)
-	m.set_shader_parameter("peel", Look.WATER_PEEL)
-	m.set_shader_parameter("peel_tiles", Look.WATER_PEEL_TILES)
-	m.set_shader_parameter("peel_gate_scale", Look.WATER_PEEL_GATE_SCALE)
+	m.set_shader_parameter("curve_step", Look.WATER_CURVE_STEP)
+	m.set_shader_parameter("refract_amt", Look.WATER_REFRACT)
+	m.set_shader_parameter("point_gain", Look.WATER_POINT_GAIN)
+	m.set_shader_parameter("bay_floor", Look.WATER_BAY_FLOOR)
+	m.set_shader_parameter("rate", Look.WATER_RATE)
+	m.set_shader_parameter("swash", Look.WATER_SWASH)
+	m.set_shader_parameter("rise_frac", Look.WATER_RISE_FRAC)
+	m.set_shader_parameter("rest_frac", Look.WATER_REST_FRAC)
+	m.set_shader_parameter("surge", Look.WATER_SURGE)
+	m.set_shader_parameter("rest_shape", Look.WATER_REST_SHAPE)
+	m.set_shader_parameter("second_at", Look.WATER_SECOND_AT)
+	m.set_shader_parameter("second_w", Look.WATER_SECOND_W)
+	m.set_shader_parameter("second_amt", Look.WATER_SECOND_AMT)
+	m.set_shader_parameter("cut_scale", Look.WATER_CUT_SCALE)
+	m.set_shader_parameter("cut_drift", Look.WATER_CUT_DRIFT)
+	m.set_shader_parameter("cut_shut", Look.WATER_CUT_SHUT)
+	m.set_shader_parameter("cut_open", Look.WATER_CUT_OPEN)
+	m.set_shader_parameter("tip_at", Look.WATER_TIP_AT)
+	m.set_shader_parameter("tip_full", Look.WATER_TIP_FULL)
+	m.set_shader_parameter("first_cut", Look.WATER_FIRST_CUT)
 	m.set_shader_parameter("calm", Look.WATER_CALM)
 	m.set_shader_parameter("calm_scale", Look.WATER_CALM_SCALE)
 	m.set_shader_parameter("calm_speed", Look.WATER_CALM_SPEED)
-	_sea.material_override = m
 
 
 func _show(k: int) -> void:

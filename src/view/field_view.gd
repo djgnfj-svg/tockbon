@@ -1016,10 +1016,16 @@ static func _hand_the_sea_its_numbers(mat: ShaderMaterial, g, margin: float,
 	_hand_the_sea_its_look(mat)
 
 
-## **Every dial the sea reads, and there are eighteen of them.** ⚠⚠ **There were about forty until
+## **Every dial the sea reads, and there are thirty-one of them.** ⚠⚠ **There were about forty until
 ## 2026-08-28**, when seven shorelines were built side by side in `prototypes/shoreline/` and the one
 ## that does the least won. Swell, ripple, drawn crests, travelling foam and the shallows all left with
 ## the old shader; **their constants are still in `look.gd`, parked and unread.**
+##
+## ⚠⚠ **The list was replaced again on 2026-08-29**, when twenty-seven versions of the border itself
+## were built side by side in `prototypes/swash/` and the user chose `27-gaps` — **two whites, thin and
+## hard-edged, slow, and broken.** Eleven dials of the 08-28 border went with it (the third warp octave,
+## the warp speeds, the swing set and the peel set) and eighteen arrived. **The flat sea and the single
+## border are untouched**; what changed is what that border is made of.
 ##
 ## ⚠ Split out and called from BOTH places on purpose: the material is built once at startup and the
 ## island's own numbers are handed over on every build, and a dial that only one of them set was a dial
@@ -1031,22 +1037,34 @@ static func _hand_the_sea_its_look(mat: ShaderMaterial) -> void:
 	mat.set_shader_parameter("line_tiles", Look.WATER_LINE_TILES)
 	mat.set_shader_parameter("line_hard", Look.WATER_LINE_HARD)
 	mat.set_shader_parameter("line_alpha", Look.WATER_LINE_ALPHA)
+	mat.set_shader_parameter("run", Look.WATER_RUN)
+	mat.set_shader_parameter("cycle", Look.WATER_CYCLE)
+	mat.set_shader_parameter("grad_step", Look.WATER_GRAD_STEP)
 	mat.set_shader_parameter("warp_a", Look.WATER_WARP_A)
 	mat.set_shader_parameter("warp_a_scale", Look.WATER_WARP_A_SCALE)
-	mat.set_shader_parameter("warp_a_speed", Look.WATER_WARP_A_SPEED)
 	mat.set_shader_parameter("warp_b", Look.WATER_WARP_B)
 	mat.set_shader_parameter("warp_b_scale", Look.WATER_WARP_B_SCALE)
-	mat.set_shader_parameter("warp_b_speed", Look.WATER_WARP_B_SPEED)
-	mat.set_shader_parameter("warp_c", Look.WATER_WARP_C)
-	mat.set_shader_parameter("warp_c_scale", Look.WATER_WARP_C_SCALE)
-	mat.set_shader_parameter("warp_c_speed", Look.WATER_WARP_C_SPEED)
-	mat.set_shader_parameter("swing", Look.WATER_SWING)
-	mat.set_shader_parameter("swing_rate", Look.WATER_SWING_RATE)
 	mat.set_shader_parameter("along_scale", Look.WATER_ALONG_SCALE)
-	mat.set_shader_parameter("swing_floor", Look.WATER_SWING_FLOOR)
-	mat.set_shader_parameter("peel", Look.WATER_PEEL)
-	mat.set_shader_parameter("peel_tiles", Look.WATER_PEEL_TILES)
-	mat.set_shader_parameter("peel_gate_scale", Look.WATER_PEEL_GATE_SCALE)
+	mat.set_shader_parameter("curve_step", Look.WATER_CURVE_STEP)
+	mat.set_shader_parameter("refract_amt", Look.WATER_REFRACT)
+	mat.set_shader_parameter("point_gain", Look.WATER_POINT_GAIN)
+	mat.set_shader_parameter("bay_floor", Look.WATER_BAY_FLOOR)
+	mat.set_shader_parameter("rate", Look.WATER_RATE)
+	mat.set_shader_parameter("swash", Look.WATER_SWASH)
+	mat.set_shader_parameter("rise_frac", Look.WATER_RISE_FRAC)
+	mat.set_shader_parameter("rest_frac", Look.WATER_REST_FRAC)
+	mat.set_shader_parameter("surge", Look.WATER_SURGE)
+	mat.set_shader_parameter("rest_shape", Look.WATER_REST_SHAPE)
+	mat.set_shader_parameter("second_at", Look.WATER_SECOND_AT)
+	mat.set_shader_parameter("second_w", Look.WATER_SECOND_W)
+	mat.set_shader_parameter("second_amt", Look.WATER_SECOND_AMT)
+	mat.set_shader_parameter("cut_scale", Look.WATER_CUT_SCALE)
+	mat.set_shader_parameter("cut_drift", Look.WATER_CUT_DRIFT)
+	mat.set_shader_parameter("cut_shut", Look.WATER_CUT_SHUT)
+	mat.set_shader_parameter("cut_open", Look.WATER_CUT_OPEN)
+	mat.set_shader_parameter("tip_at", Look.WATER_TIP_AT)
+	mat.set_shader_parameter("tip_full", Look.WATER_TIP_FULL)
+	mat.set_shader_parameter("first_cut", Look.WATER_FIRST_CUT)
 	mat.set_shader_parameter("calm", Look.WATER_CALM)
 	mat.set_shader_parameter("calm_scale", Look.WATER_CALM_SCALE)
 	mat.set_shader_parameter("calm_speed", Look.WATER_CALM_SPEED)

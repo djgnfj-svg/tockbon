@@ -4,21 +4,36 @@
 // ⚠ **Every colour and every number arrives as a uniform from `look.gd`.** That file is where this repo
 // keeps presentation values and a literal written here would be the one that nobody can find.
 //
-// ⚠⚠ **THIS FILE WAS REPLACED WHOLE ON 2026-08-28, AND THE SEA IT REPLACED IS NOT COMING BACK BY
-// ACCIDENT.** What stood here painted swell, ripples, drawn crests, travelling foam, a shallows tint and
-// a shoreline — about forty dials, every one of them picked by eye, and a day of rounds spent turning
-// them. Seven ways of drawing a shoreline were then built side by side on one block
-// (`prototypes/shoreline/`) and the user chose the one that does the least: **a flat sea and a border,
-// and nothing else at all.**
+// ⚠⚠ **THIS FILE WAS REPLACED WHOLE FOR THE SECOND TIME ON 2026-08-29.** On 08-28 forty dials of swell,
+// ripple, drawn crests, travelling foam and shallows were thrown away for **a flat sea and one border**
+// — Bad North's own answer, stated by its designer at Konsoll 2018: *"most of the water is just
+// completely flat, but then at the edge when something meets the water I highlight that instead."*
+// **That decision stands and this file does not touch it.** What changed is the border itself:
+// **twenty-seven versions of it were built side by side in `prototypes/swash/` and the user chose
+// `27-gaps`.**
 //
-// It is Bad North's own answer, stated by its designer at Konsoll 2018: *"most of the water is just
-// completely flat, but then at the edge when something meets the water I highlight that instead… it also
-// ties into the idea of expressing things in borders and not in… textures, not in field."*
+// **What the chosen border is, and every line of it is something the user judged by eye:**
 //
-// ⚠⚠ **What that means for this file**: there is no swell, no ripple, no drawn crest, no travelling foam
-// and no shallows in it. **Their constants still stand in `look.gd`, parked** — they are measurements and
-// deleting them throws away what they cost — but **nothing reads them and turning one changes nothing on
-// screen.** The old shader is recoverable from git; it is `water.gdshader` before this commit.
+//   1. **Two whites, not one.** A line on the rock, and a second stroke standing about `second_at`
+//      tiles off it with dark water between. ⚠⚠ **The second one is a LINE, not a band** — every 거품
+//      drawn before it was a soft wash fading outward, and the reference frames have a hard stroke
+//   2. **Thin because it is HARD, not because it is narrow.** ⚠⚠ `line_hard` 0.85 is the real answer
+//      to 「좀더 얇으면」: a soft edge spends most of its width fading, so it reads thick however narrow
+//      it is set. Thinning a soft line makes it faint; hardening it makes it thin
+//   3. **Slow** (the user: 「너무 자주 하는데 파형이 좀더 느리게」) — a run about every six seconds
+//   4. **A resting width and a surge, kept apart.** `rest_frac` of the line sits on the rock doing
+//      nothing and the wave ADDS `surge` on top. ⚠ The version with one width left a trace on screen
+//      before any wave arrived (the user: 「미리 흔적이 너무 남아있는느낌이야 기본값이 너무 있어」)
+//   5. **It breaks up.** The outer stroke is cut two ways at once — a slow drifting noise gate AND the
+//      coast's own curvature — so it is missing off some stretches and absent inside the coves
+//   6. **Bays are quiet because they are bays.** The refraction reads the bend of the coast, and the
+//      pattern crawls ALONG the shore so a quiet stretch does not stay quiet forever
+//
+// ⚠⚠ **IT ARGUES WITH THE GLOSSARY AND THAT IS THE DECISION.** `CONTEXT.md` defined 해안선 as ringing
+// the island **without a gap, because the water is always touching the land**. `first_cut` is how much
+// of that rule is given up: at 0 the rule holds, at 1 the coast can go bare. **It is deliberately
+// partial — the inner line THINS where the outer one is missing and never disappears.** If even that
+// reads as a hole in the island, the glossary was right and the answer was `25-broken` or `26-tips`.
 shader_type spatial;
 // **Unshaded on purpose.** A flat sea that still catches a highlight is not flat, and that highlight was
 // the single loudest thing on the sea this replaced.
@@ -41,44 +56,69 @@ uniform float line_tiles;
 uniform float line_hard;
 uniform float line_alpha;
 
-// --- 1. THE SHAPE OF THE LINE -------------------------------------------------------------------
-// ⚠⚠ **Three octaves, three sizes, three drifts, and they never line up** (2026-08-28, the user:
-// 「단순하게 원이 아니라 이제 복합적으로 움직이는걸 원한 진짜 물처럼」). One long enough to bend a whole
-// stretch of coast, one that puts a bay inside that bend, one fine enough to fray the edge. **A single
-// octave, however strong, reads as a wobble.** ⚠ Each drifts a different WAY as well as at a different
-// rate — three layers all sliding along +x is one layer with extra steps.
+// --- 1. THE SHAPE OF THE LINE, AND IT TRAVELS ---------------------------------------------------
+// ⚠⚠ **The warp is read in a frame that slides ALONG the coast** (`run` tiles per second), and two
+// copies of it are crossfaded so the pattern never restarts visibly (`cycle` seconds a lap). **This is
+// what stops the shore being a ring**: a stretch that is quiet now is a stretch the pattern has not
+// reached yet. ⚠ `grad_step` is the stencil the seaward direction is measured with.
+uniform float run;
+uniform float cycle;
+uniform float grad_step;
 uniform float warp_a;
 uniform float warp_a_scale;
-uniform float warp_a_speed;
 uniform float warp_b;
 uniform float warp_b_scale;
-uniform float warp_b_speed;
-uniform float warp_c;
-uniform float warp_c_scale;
-uniform float warp_c_speed;
-
-// --- 2. HOW THICK IT IS, STRETCH BY STRETCH -----------------------------------------------------
-// ⚠⚠ **The phase is read ALONG the coast**, so one stretch runs up while the next draws back. **This is
-// the layer that stops it being a ring** — on one clock every point on the island swells at the same
-// instant, which is nothing water does.
-uniform float swing;
-uniform float swing_rate;
 uniform float along_scale;
-uniform float swing_floor;
 
-// --- 3. THE ONE THAT LETS GO --------------------------------------------------------------------
-// ⚠ Once a cycle, over patches of coast only, a line separates and travels seaward, fading as it goes.
-// **Two lines on screen are the same line at two ages**, which is what backwash looks like.
-// ⚠⚠ **거품 — THE LINE THAT COMES IN — WAS PUT BACK ON 2026-08-29 AND TAKEN STRAIGHT OUT AGAIN.**
-// One band, starting 0.7 tiles out and closing on the rim half a cycle out of phase with `peel`. The
-// user saw it and said 「별로다... 그 거품없애봐」. **The measurement stands: a flat sea with one
-// border is still what this island wants**, which is what seven candidates said on 2026-08-28 and what
-// a second attempt has now confirmed from the other side.
-uniform float peel;
-uniform float peel_tiles;
-uniform float peel_gate_scale;
+// --- 2. WHERE THE COAST BENDS -------------------------------------------------------------------
+// ⚠⚠ **The bend of the coast is measured and the water is given more energy off a point than inside a
+// cove.** `curve_step` is the stencil it is measured with, and **it cannot see a bend smaller than
+// about that many tiles** — which is why it is the first number to re-judge whenever the island's
+// outline starts turning on a different unit.
+uniform float curve_step;
+uniform float refract_amt;
+uniform float point_gain;
+uniform float bay_floor;
 
-// --- 4. WHERE THE COAST IS QUIET ----------------------------------------------------------------
+// --- 3. THE RUN, AND THE WIDTH IT ADDS ----------------------------------------------------------
+// ⚠ `rate` is how often a run comes and `rise_frac` is how much of that cycle is the water coming UP;
+// the rest is it draining back. `swash` is how far up the rock it reaches, in tiles.
+uniform float rate;
+uniform float swash;
+uniform float rise_frac;
+// ⚠⚠ **`rest_frac` IS THE WHOLE POINT OF THIS SET.** It is what fraction of `line_tiles` is on the rock
+// when nothing is happening; `surge` is what the arriving wave ADDS on top, in multiples of the same.
+// **Below `rest_frac` there is no line at all**, and `surge` rides the run so it is zero for most of
+// the cycle. `rest_shape` is how much the bay/point energy is allowed to thin the RESTING line.
+uniform float rest_frac;
+uniform float surge;
+uniform float rest_shape;
+
+// --- 4. THE SECOND WHITE ------------------------------------------------------------------------
+// ⚠ `second_w` is a STROKE width, not a band: keep it at or under the resting line or the two whites
+// stop reading as two.
+uniform float second_at;
+uniform float second_w;
+uniform float second_amt;
+
+// --- 5. THE CUTS --------------------------------------------------------------------------------
+// **How long a surviving piece is** (`cut_scale` is inverted tiles — bigger is shorter), how fast the
+// pattern of gaps drifts, and where it switches. ⚠ `cut_shut` and `cut_open` close together is a clean
+// break; far apart is a fade, and a fade is a dimming rather than a gap.
+uniform float cut_scale;
+uniform float cut_drift;
+uniform float cut_shut;
+uniform float cut_open;
+// **Where the second line is allowed to exist at all**, in units of the refraction's energy. Energy
+// runs from `bay_floor` in a cove to `point_gain` off a headland, so raising `tip_at` walks the second
+// white back toward the points and out of the bays.
+uniform float tip_at;
+uniform float tip_full;
+// ⚠⚠ **How much the drifting gate is allowed to thin the line ON THE ROCK.** See the head of this file
+// before raising it — this is the number that argues with the glossary.
+uniform float first_cut;
+
+// --- 6. WHERE THE COAST IS QUIET ----------------------------------------------------------------
 // ⚠ A wide, slow patch map, so some stretches are busy and others nearly still. Without it every part of
 // the shore is equally lively, which is its own kind of ring.
 uniform float calm;
@@ -94,44 +134,95 @@ float vnoise(vec2 p) {
 			   mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
 }
 
+// **Distance to the coast in tiles**, negative on land. ⚠ `shore_offset` is added here and nowhere else,
+// so every reader below — both whites and the run — moves together when it moves.
+float sdf(vec2 p) {
+	vec2 uv = (p - field_origin) / max(field_size, vec2(1.0));
+	return (texture(land_field, clamp(uv, vec2(0.0), vec2(1.0))).r * 2.0 - 1.0) * field_span
+		   + shore_offset;
+}
+
+vec2 seaward(vec2 p) {
+	float e = max(grad_step, 0.001);
+	vec2 g = vec2(sdf(p + vec2(e, 0.0)) - sdf(p - vec2(e, 0.0)),
+				  sdf(p + vec2(0.0, e)) - sdf(p - vec2(0.0, e)));
+	return length(g) < 1e-5 ? vec2(0.0, 1.0) : normalize(g);
+}
+
+float bend(vec2 p) {
+	float e = max(curve_step, 0.01);
+	float c = sdf(p);
+	float s = sdf(p + vec2(e, 0.0)) + sdf(p - vec2(e, 0.0))
+			+ sdf(p + vec2(0.0, e)) + sdf(p - vec2(0.0, e)) - 4.0 * c;
+	return s / (e * e);
+}
+
+// The shape of one run: up fast, back slowly.
+float wash(float x, float r) {
+	r = clamp(r, 0.05, 0.95);
+	float u = x < r ? x / r : 1.0 - (x - r) / (1.0 - r);
+	return smoothstep(0.0, 1.0, u);
+}
+
+vec2 layer(vec2 p, vec2 tang, float age) {
+	vec2 q = p - tang * (age * run);
+	float w = (vnoise(q * warp_a_scale) - 0.5) * 2.0 * warp_a
+			+ (vnoise(q * warp_b_scale + vec2(37.0, 11.0)) - 0.5) * 2.0 * warp_b;
+	float along = vnoise(q * along_scale + vec2(11.0, 5.0));
+	return vec2(w, along);
+}
+
 void fragment() {
 	vec2 p = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xz;
 	float t = TIME;
-	vec2 uv = (p - field_origin) / max(field_size, vec2(1.0));
-	float d = (texture(land_field, clamp(uv, vec2(0.0), vec2(1.0))).r * 2.0 - 1.0) * field_span
-			  + shore_offset;
+	float d = sdf(p);
+	vec2 n = seaward(p);
+	vec2 tang = vec2(-n.y, n.x);
 
-	// 1. Bend the line itself.
-	float w = (vnoise(p * warp_a_scale + vec2(t * warp_a_speed, t * warp_a_speed * 0.35)) - 0.5)
-			  * 2.0 * warp_a
-			+ (vnoise(p * warp_b_scale - vec2(t * warp_b_speed * 0.4, t * warp_b_speed)) - 0.5)
-			  * 2.0 * warp_b
-			+ (vnoise(p * warp_c_scale + vec2(-t * warp_c_speed, t * warp_c_speed * 0.8)) - 0.5)
-			  * 2.0 * warp_c;
-	d += w;
+	// Two copies of the travelling pattern, half a lap apart, crossfaded — so it never restarts.
+	float c = max(cycle, 0.1);
+	float k = abs(1.0 - 2.0 * fract(t / c));
+	vec2 l0 = layer(p, tang, fract(t / c) * c);
+	vec2 l1 = layer(p, tang, fract(t / c + 0.5) * c);
+	float w = mix(l0.x, l1.x, k);
+	float along = mix(l0.y, l1.y, k);
 
-	// 4. How lively this stretch of coast is at all, and it drifts so the quiet places move.
+	// How much energy this stretch of coast gets: a cove is quiet, a headland is loud.
+	float kb = clamp(bend(p) * 0.5, -1.0, 1.0);
+	float energy = mix(1.0, mix(bay_floor, point_gain, kb * 0.5 + 0.5), refract_amt);
+
 	float live = mix(1.0 - calm, 1.0,
 					 smoothstep(0.25, 0.75,
 								vnoise(p * calm_scale + vec2(t * calm_speed, -t * calm_speed))));
 
-	// 2. This stretch's own place in the cycle, and the width that comes out of it.
-	float along = vnoise(p * along_scale + vec2(11.0, 5.0));
-	float ph = t * swing_rate + along * 6.2831;
-	float breathe = mix(swing_floor, 1.0 + swing,
-						(sin(ph) * 0.5 + 0.5) * live + (1.0 - live) * 0.5);
-	float bw = max(line_tiles, 0.0001) * breathe;
-	float band = 1.0 - smoothstep(bw * line_hard, bw, d);
+	// This stretch's own place in the run, read ALONG the coast so neighbours are out of step.
+	float x = fract(t * rate + along);
+	float up = wash(x, rise_frac);
+	float draining = step(rise_frac, x);
 
-	// 3. The one that has let go: a soft hump travelling out, over patches only.
-	if (peel > 0.001) {
-		float age = fract(ph / 6.2831);
-		float away = age * peel_tiles;
-		float pw = max(line_tiles, 0.0001) * 1.1;
-		float hump = exp(-pow((d - away) / pw, 2.0)) * (1.0 - age);
-		float where = smoothstep(0.35, 0.72, vnoise(p * peel_gate_scale + vec2(3.0, 17.0)));
-		band = max(band, hump * where * peel * live);
-	}
+	float ds = d + w - up * swash * energy * live;
 
-	ALBEDO = mix(sea.rgb, foam.rgb, clamp(band * line_alpha, 0.0, 1.0));
+	// **The line on the rock.**
+	float rest = max(line_tiles, 0.0001) * rest_frac * mix(1.0, energy, rest_shape);
+	float bw = rest + max(line_tiles, 0.0001) * surge * up * energy * live;
+	float band = 1.0 - smoothstep(bw * line_hard, bw, ds);
+	band *= mix(1.0, 0.72, draining * (1.0 - up));
+
+	// **THE SECOND LINE, AND IT IS THE REFERENCE'S OWN SHAPE.** In the frames the user sent, the coast
+	// wears two whites: one against the stone and one standing a little way off it, with dark water
+	// between them. ⚠⚠ **It is a LINE, not a band** — a crisp stroke at a fixed distance, not a soft
+	// wash — which is why it reads as thin at a width the wash would read as thick at.
+	// ⚠ It breathes with the wave rather than travelling: the gap opens as the water comes up.
+	float at = second_at * mix(0.82, 1.24, up);
+	float w2 = max(second_w, 0.0005);
+	float line2 = 1.0 - smoothstep(w2 * line_hard, w2, abs(ds - at));
+	line2 *= second_amt * clamp(energy, 0.0, 1.3) * live;
+	// Both cuts on the outer white: arbitrary drifting gaps, and only off the points.
+	float cut = smoothstep(cut_shut, cut_open,
+						   vnoise(p * cut_scale + vec2(t * cut_drift, -t * cut_drift * 0.7)));
+	line2 *= cut * smoothstep(tip_at, tip_full, energy);
+	// ⚠ And the inner line thins with the same gate — never to nothing.
+	band *= mix(1.0 - first_cut, 1.0, cut);
+
+	ALBEDO = mix(sea.rgb, foam.rgb, clamp(max(band, line2) * line_alpha, 0.0, 1.0));
 }
