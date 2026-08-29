@@ -1368,3 +1368,80 @@ written inside the MCP call; only what the game keeps goes into the island scrip
 
 ⚠ **What「different」 means was not said and is not guessed at anywhere.** The stair itself was accepted
 in the same session.
+
+## ✅✅ **The game got a one-line answer, and the map now runs to December — 2026-08-30**
+
+**Nothing was built this round.** The whole conversation was the user saying what the game is, and it
+ended with the sentence this repo has never had.
+
+### ⚠⚠ The core fun, in the user's own words
+
+> ***"Just, a game where you command a squad and build things to kill monsters."***
+
+**Measured first: the phrase had never been written down.** `log.md` did not contain the word "fun"
+once, there is no GDD, and the nearest thing was a line inside a rejected-fork doc —
+**"where you put them is the decision"**, the successor sentence left behind when
+`commit-before-the-fight` died twice.
+
+⚠⚠ **Why this mattered enough to spend a round on.** The second dead game shipped with
+**25 nets and 3541 green checks** and the user played it and said ***"it's just not fun"***. The
+post-mortem line is one sentence: **splitting cost nothing and absorbing undid it for free, so
+splitting was never a decision.** ⇒ **A tech tree that does not change a decision dies in the same
+place**, and that is the bar every week below is judged against.
+
+### ⚠⚠ **Stop asking whether something goes in December** — the user closed it
+
+> ***"December demo release is confirmed, and I am going to put in everything I say. Do not ask me
+> whether to put it in the December demo or not. Even if it is not a December demo, everything goes
+> in for a real game to exist in December. I mean I am going to put it all in."***
+
+⇒ **Scope is not a question any more.** The framing question ("is this in or out of the demo") is
+struck from the interview; **what is asked instead is how a thing is shaped.**
+
+### The loop the user drew, in order
+
+- **The island starts with one iron vein stuck in it, and it is not enough.**
+- **Wood is cut, and wooden towers and wooden weapons come from it.**
+- **Beasts come, and killing them is where resources come from too.**
+- **At first the squad goes and shoots; towers come later.**
+- **A boss arrives ten minutes in. The clock is NOT shown.** — ***"I will not show it. It just comes
+  on its own after ten minutes."***
+- **The boss drops a boss item, and the research bench carries the tech tree onward.**
+- **A wooden boat is built, and it sails out to new land with new resources.**
+- **Killing a specific boss is the game's clear condition.**
+
+### Answers given inside the round
+
+| Question | Answer |
+|---|---|
+| **How many resources** | **Three — wood, stone, iron.** The user overrode a recommendation of two: ***"it does not end in one board, it is long-term, so it will expand."*** |
+| **A bow: new unit type or equipment** | **Equipment.** The swordsman stays the only type |
+| **Boss timer** | **Ten minutes, and hidden** |
+| **What the boss drops** | **A boss item.** "Blueprint" was tried and dropped |
+| **The word for the tech** | **Tech tree.** ⚠ "Build" was already a dead word (2026-08-26) and would have collided |
+| **Multiplayer** | **Parked.** ***"Let us do single-player for now."*** ⚠ **Determinism is still honoured from now**, so it can be added rather than rebuilt |
+| **Viewpoint** | **An observer, not a hero being driven** |
+| **Raiding by boat** | **In.** It nearly got cut for size and the user brought it back with the wooden boat |
+
+### ⚠ Two things reversed inside the same conversation
+
+- **Gathering came back.** Two messages after the user settled that resources drop from beasts — which
+  removed the need for props, a gathering gesture and a mine — wood-cutting and an iron vein were put
+  back. **Both are true now: beasts drop, and the island is mined.**
+- **"One swordsman and no other type" got tested by the bow**, and survived: the bow is equipment.
+
+### The map
+
+**Fourteen weeks were written out to December**, where three weeks had been filled and ten blank.
+⚠⚠ **Weeks 4 onward are an ORDER somebody chose, not a measurement** — the roadmap says so on its
+own face, because a schedule that does not admit this is how a slip becomes a surprise.
+
+**Next week is the fight, cut into five**, and that cut has a reason: **the fight's tombstone carries
+seven rules**, so pushing all seven plus the boats into one week makes a defect unattributable.
+
+### ⚠ What the roadmap check found before any of this
+
+**Eight drifts, measured against the commits.** The worst two: **the net counts on the map were wrong**
+(the map said 79 red; the run said **통과 629 · 실패 59 · 11 nets**), and **the map claimed the range of
+red was three nets when it is seven of eleven.** Tickets 29 and 30 printed as done on the map while
+their own `Status:` said open, and tickets 36 and 37 existed on no row at all.
