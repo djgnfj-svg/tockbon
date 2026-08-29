@@ -183,6 +183,8 @@ func _table() -> Dictionary:
 			# gives it a shader, and one uniform lights the 칸 the cursor is on.
 			"_adopt_the_pads": 0,
 			"_tell_the_pads": 0,
+			# 티켓 34: how far the 판 have merged, worked out from the zoom and pushed to the shader.
+			"pad_merge": 0,
 			"set_pads_revealed": 0,
 		},
 		# ⚠⚠ **NINE NAMES LEFT THIS FILE IN ONE EDIT AND NOTHING ARRIVED** (2026-08-28). The start

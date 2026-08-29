@@ -3,6 +3,15 @@ Status: open
 
 # What says 「you may GO from here to there」 now that the 판 is a 조각
 
+## ⏸ **ANSWERED 2026-08-29 — there are none, and it waits for the stair**
+
+**The user**: 「판을 잇는 다리는 없어. 좀 있다가 계단 만들 때 필요하면 그때 이을 거야」 — ***"there are
+no bridges between the 판. Later, when the stair is made, if one is needed, that is when it gets
+joined."***
+
+⇒ **A flat board says nothing about 「go」 and that is accepted.** The question below is not closed, it
+is **parked against the stair** — what a bridge is only means something where there is a level to cross.
+
 ## The question
 
 **Between two 조각 판, what replaces the bridge?**

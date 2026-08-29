@@ -23,9 +23,23 @@ is far away it would be better if they could merge together more"*** (「봤는�
 합칠 수 있도록 되면 좋을듯?」). ⇒ **They merge into a 칸** (「멀면 칸단위로 하려고함」), **driven by
 zoom** (「줌에따라」), and **the seams inside a 칸 go completely** (「넷다 없애봐」).
 
-⚠⚠ **NOTHING WAS APPLIED.** Four mechanisms are built in `prototypes/merge/` and photographed at three
-distances; the round closed on ***"good, let's wrap up as is"*** (「좋네 이대로 마무리하자」) **without one
-being named**. **The shipped 판 does not merge at any distance.** ⇒ **ticket 34.**
+✅ **`01-grow` WON AND IT IS IN THE GAME** (「1번이 좋은데?」). **The vertices move**: the bake writes a
+second UV per point — where that point goes when its 칸 closes — and the shader walks it there by a
+`merge` the zoom decides. ⚠ **The session had closed once before that** on ***"good, let's wrap up as
+is"*** (「좋네 이대로 마무리하자」) with nothing applied; the user reopened it with ***"didn't it go into
+the game? let's do all the unfinished ones now"*** (「음 게임에 안들어갔나? 안끝난거 지금 다하자」).
+
+**Three more were settled the same evening, and all three by looking rather than by argument:**
+
+| What | The user's word |
+|---|---|
+| **The tone** — six flipped live on one key each | 「다 별론디 3번으로 해줘」 — ***"none are great, go with 3"***, the faintest light one |
+| **The gutter** | 「판의 틈은 없어졌고」 — off the table; the narrow bake ships |
+| **The island's shape** | 「섬 모양은 지금 이대로 괜찮은 거 같고」 — the display board stays, and ticket 31 closes on it |
+| **The bridges** | 「판을 잇는 다리는 없어 ... 계단 만들 때 필요하면 그때」 — none, parked against the stair |
+
+⚠⚠ **「다 별론디」 is the measurement, not the number.** The tone passed; it was not liked. The next
+round on the 판's look starts from that sentence.
 
 ### ⚠ This is the first round the new step 0 was used, and it changed the shape of the round
 

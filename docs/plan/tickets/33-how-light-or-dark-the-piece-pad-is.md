@@ -1,7 +1,20 @@
 Type: grilling
-Status: open
+Status: resolved
 
 # How light or dark the 조각 판 is, and how wide the gutter
+
+## Answer
+
+✅ **2026-08-29 — the faintest light one, and the gutter as it stands.**
+
+**Six tones were put on one key each and flipped in the running game.** The user: 「다 별론디 3번으로
+해줘」 — ***"none of them are great, but go with 3."*** ⇒ **`PAD_ALL_LIGHTEN` is +0.12**, the faintest
+of the three light ones; **all three dark ones were rejected on sight.**
+⚠ **「None of them are great」 is the measurement here** — the tone passed, it was not loved, and the
+next round on the 판's look should start from that sentence rather than from the number.
+
+**The gutter**: 「판의 틈은 없어졌고」 — the question is off the table, and what ships is the **narrow**
+bake (`PAD_GAP_IN` 0.13, a 0.26 gutter), which is what was on screen when it was said.
 
 ## The question
 

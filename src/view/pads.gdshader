@@ -40,8 +40,14 @@ uniform float hover_alpha : hint_range(0.0, 1.0) = 0.85;
 // 0..1 lighten before, so every old value means exactly what it meant.
 uniform float all_lighten : hint_range(-1.0, 1.0) = 0.25;
 uniform float hover_lighten : hint_range(-1.0, 1.0) = 0.55;
-// How far the hovered 칸 rises, in world units (one unit is one tile).
+// How far the hovered 조각 rises, in world units (one unit is one tile).
 uniform float hover_lift = 0.06;
+// ⚠⚠ **HOW FAR THE 판 HAVE MERGED**, 0 one-per-조각 and 1 one-per-칸 (2026-08-29, the user: 「멀면
+// 칸단위로 하려고함 줌에따라」). `field_view.pad_merge()` works it out from the zoom and pushes it here.
+uniform float merge : hint_range(0.0, 1.0) = 0.0;
+// The board's width in 조각, so a 판's index can be turned back into a position and from there into
+// which 칸 it belongs to. ⚠ **Pushed from the grid, never a literal** -- the island's size changes.
+uniform float board_w = 30.0;
 
 varying float v_is_hover;
 varying vec3 v_tone;
@@ -66,9 +72,25 @@ void vertex() {
 	// ⚠ **This is the answer to 「판정이 애매해」** (the user, 2026-08-28). A pad alone says 「you may
 	// stand here」 and says nothing about the wall beside it; the bridge is the half that says 「you may
 	// GO」, and its absence is what says you may not.
-	float on_cell = max(step(abs(UV.x - hover_cell), 0.25), step(abs(UV.y - hover_cell), 0.25));
-	v_is_hover = on_cell * step(0.5, show_all);
+	// ⚠⚠ **WHAT LIGHTS IS WHATEVER THE 판 IS AT THIS DISTANCE** (2026-08-29). Up close a 판 is one
+	// 조각, so one 조각 lights; far out the four have closed into one 칸, so the whole 칸 lights.
+	// **The mark that rises is the mark that was lying there** -- the user's own rule, and the merge
+	// is what carries it across.
+	// ⚠ **`UV.y` is not read any more.** glTF flips V, so the second channel arrives as `1 - cell`
+	// and never matched anything; it was the bridges' second index and the bridges are gone.
+	float on_cell = step(abs(UV.x - hover_cell), 0.25);
+	vec2 mine = vec2(mod(UV.x, board_w), floor(UV.x / board_w));
+	vec2 theirs = vec2(mod(hover_cell, board_w), floor(hover_cell / board_w));
+	float on_block = step(abs(floor(mine.x * 0.5) - floor(theirs.x * 0.5))
+						+ abs(floor(mine.y * 0.5) - floor(theirs.y * 0.5)), 0.1);
+	float lit = max(on_cell * (1.0 - merge), on_block * merge) * step(0.0, hover_cell);
+	v_is_hover = lit * step(0.5, show_all);
 	v_tone = COLOR.rgb;
+	// ⚠⚠ **THE MERGE IS A REAL DISPLACEMENT AND `UV2` IS WHERE EACH POINT GOES.** The bake stores it
+	// as `0.5 + delta`; **both axes come back straight** -- glTF flips V and Blender's +Y is Godot's
+	// -Z, and the two cancel. **Measured off the imported mesh on 2026-08-29**, not assumed.
+	VERTEX.x += (UV2.x - 0.5) * merge;
+	VERTEX.z += (UV2.y - 0.5) * merge;
 	VERTEX.y += v_is_hover * hover_lift;
 }
 

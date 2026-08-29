@@ -523,6 +523,8 @@ func zoom_at(at: Vector2, factor: float) -> void:
 	zoom = new_zoom
 	cam_px += before - screen_to_world_px(at)
 	_clamp_cam()
+	# ⚠ **The 판 merge with distance**, so every zoom is also a change to what they look like.
+	_tell_the_pads()
 
 
 ## Keeps the camera over the island. **It bounds the ground point at the MIDDLE of the screen**, not
@@ -756,6 +758,19 @@ func _tell_the_pads() -> void:
 		return
 	_pads_mat.set_shader_parameter("hover_cell", float(_hover_cell))
 	_pads_mat.set_shader_parameter("show_all", 1.0 if _pads_revealed else 0.0)
+	# ⚠⚠ **The merge and the board's width go the same way as the hover**, because the shader needs all
+	# three to answer one question: what lights up. Far out a 칸 is one 판, so the whole 칸 lights.
+	_pads_mat.set_shader_parameter("merge", pad_merge())
+	if battle != null and battle.grid != null:
+		_pads_mat.set_shader_parameter("board_w", float(battle.grid.w))
+
+
+## **How far the 판 have merged at the camera's current distance**, 0 apart and 1 one-per-칸.
+##
+## ⚠ **The only reader is the shader**, and the only thing that moves it is the zoom -- which is why
+## `zoom_at` has to say so. **A merge that lagged the camera by a frame reads as the board sliding.**
+func pad_merge() -> float:
+	return clampf((Look.PAD_APART_ZOOM - zoom) / (Look.PAD_APART_ZOOM - Look.PAD_MERGE_ZOOM), 0.0, 1.0)
 
 
 ## **Whether the whole board is showing.** The shell drives this off the reveal key being held —

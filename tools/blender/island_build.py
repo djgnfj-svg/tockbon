@@ -1240,9 +1240,14 @@ def tile_level(tx, ty):
     return PAD_TIER_LEVELS[PAD_TIER_CHARS.index(c)] if c in PAD_TIER_CHARS else 0
 
 
-def pad_outline(tx, ty):
-    """**One 판's outline** -- a rounded rectangle inside the 조각, pulled further in wherever the land
-    stops beside it.
+def pad_rings(tx, ty):
+    """**One 판's outline twice: as it rests, and as it stands when its 칸 has closed up.**
+
+    WARNING **THE TWO RINGS HAVE THE SAME POINTS IN THE SAME ORDER**, and that correspondence is what
+    the merge rides on: the game walks each vertex from the first to the second as the camera pulls
+    back (2026-08-29, the user: 「멀면 칸단위로 하려고함 줌에따라」, and 「1번이 좋은데?」 choosing the
+    mechanism that moves the vertices). **A corner keeps its points even at radius zero** -- dropping
+    them would break the pairing and nothing would error.
 
     WARNING **A side is 「open」 when a body could not walk that way**: water, off the board, or a wall
     more than one notch tall. That is `Grid.can_step`'s own test, so the 판 stops where walking does.
@@ -1255,25 +1260,38 @@ def pad_outline(tx, ty):
 
     w_, e_ = open_side(-1, 0), open_side(1, 0)
     n_, s_ = open_side(0, -1), open_side(0, 1)
-    x0 = tx + (PAD_COAST_IN if w_ else PAD_GAP_IN)
-    x1 = tx + 1.0 - (PAD_COAST_IN if e_ else PAD_GAP_IN)
-    # WARNING **Tile Y is not Blender Y.** The mesh is built on reversed rows.
+    # **Which sides face the other three 조각 of this 칸.** A 칸 is 2x2 and starts at tile 0, so the
+    # tile index's parity says it. WARNING **Blender Y runs the other way**: tile +y (south) is -y here.
+    in_w, in_e = tx % 2 == 1, tx % 2 == 0
+    in_n, in_s = ty % 2 == 1, ty % 2 == 0
     wy = TH - 1 - ty
-    y0 = wy + (PAD_COAST_IN if s_ else PAD_GAP_IN)
-    y1 = wy + 1.0 - (PAD_COAST_IN if n_ else PAD_GAP_IN)
-    corners = [((x1, y1), n_ or e_), ((x0, y1), n_ or w_), ((x0, y0), s_ or w_), ((x1, y0), s_ or e_)]
-    ring = []
-    for i, ((cx, cy), outer) in enumerate(corners):
-        r = min(PAD_R_OUT if outer else PAD_R_IN, (x1 - x0) * 0.5, (y1 - y0) * 0.5)
-        sx = 1 if cx > (x0 + x1) * 0.5 else -1
-        sy = 1 if cy > (y0 + y1) * 0.5 else -1
-        ax, ay = cx - sx * r, cy - sy * r
-        base = {0: 0.0, 1: math.pi * 0.5, 2: math.pi, 3: math.pi * 1.5}[i]
-        for t in range(PAD_ARC + 1):
-            a = base + math.pi * 0.5 * t / PAD_ARC
-            ring.append((ax + math.cos(a) * r, ay + math.sin(a) * r))
-    return ring
 
+    def ring_of(merged):
+        west = 0.0 if (merged and in_w) else (PAD_COAST_IN if w_ else PAD_GAP_IN)
+        east = 0.0 if (merged and in_e) else (PAD_COAST_IN if e_ else PAD_GAP_IN)
+        north = 0.0 if (merged and in_n) else (PAD_COAST_IN if n_ else PAD_GAP_IN)
+        south = 0.0 if (merged and in_s) else (PAD_COAST_IN if s_ else PAD_GAP_IN)
+        x0, x1 = tx + west, tx + 1.0 - east
+        y0, y1 = wy + south, wy + 1.0 - north
+        # corner order: (x1,y1) NE · (x0,y1) NW · (x0,y0) SW · (x1,y0) SE, and the two sides each joins
+        corners = [((x1, y1), n_ or e_, in_n or in_e), ((x0, y1), n_ or w_, in_n or in_w),
+                   ((x0, y0), s_ or w_, in_s or in_w), ((x1, y0), s_ or e_, in_s or in_e)]
+        out = []
+        for i, ((cx, cy), outer, inward) in enumerate(corners):
+            r = PAD_R_OUT if outer else PAD_R_IN
+            if merged and inward:
+                r = 0.0
+            r = min(r, (x1 - x0) * 0.5, (y1 - y0) * 0.5)
+            sx = 1 if cx > (x0 + x1) * 0.5 else -1
+            sy = 1 if cy > (y0 + y1) * 0.5 else -1
+            ax, ay = cx - sx * r, cy - sy * r
+            base = {0: 0.0, 1: math.pi * 0.5, 2: math.pi, 3: math.pi * 1.5}[i]
+            for t in range(PAD_ARC + 1):
+                a = base + math.pi * 0.5 * t / PAD_ARC
+                out.append((ax + math.cos(a) * r, ay + math.sin(a) * r))
+        return out
+
+    return ring_of(False), ring_of(True)
 
 def stamp_the_mats(isl):
     """**Builds the 판 as an object of its OWN** -- one pad per walkable 조각.
@@ -1307,17 +1325,31 @@ def stamp_the_mats(isl):
     bm = bmesh.new()
     lay = bm.loops.layers.color.new("Col")
     uvl = bm.loops.layers.uv.new("UVMap")
+    # WARNING **THE SECOND UV IS THE MERGE, NOT A TEXTURE COORDINATE.** It carries how far this vertex
+    # travels when its 칸 closes up, and `src/view/pads.gdshader` walks it there as the camera pulls
+    # back. **glTF's TEXCOORD_1 arrives in Godot as `UV2`**, and glTF flips V on the way -- the shader
+    # undoes that, and the number it undoes it with is measured rather than assumed.
+    uvl2 = bm.loops.layers.uv.new("UVMap.001")
     # WARNING **THE ISLAND CARRIES THE FIRST BLOCK TRANSFORM AFTER THE JOIN**, so a vertex added at a
     # world coordinate lands wherever that offset puts it. Measured 2026-08-28: the 판 came out in the
     # open sea, a whole block-width off the island, and it looked exactly like a row-order mistake.
     to_local = isl.matrix_world.inverted()
 
-    def lay_face(ring, z, cell):
+    def lay_face(ring, merged, z, cell):
         top = [bm.verts.new(to_local @ Vector((x, y, z))) for (x, y) in ring]
         bot = [bm.verts.new(to_local @ Vector((x, y, z - PAD_H))) for (x, y) in ring]
         mx = sum(x for (x, _) in ring) / len(ring)
         my = sum(y for (_, y) in ring) / len(ring)
         ctr = bm.verts.new(to_local @ Vector((mx, my, z)))
+        # **Where each vertex goes when the 칸 closes**, keyed by the vertex itself so the top ring, the
+        # skirt under it and the middle all agree. The middle travels by the average of the ring.
+        move = {}
+        cm = [sum(p[0] for p in merged) / len(merged) - mx, sum(p[1] for p in merged) / len(merged) - my]
+        move[ctr] = (cm[0], cm[1])
+        for i, v in enumerate(top):
+            move[v] = (merged[i][0] - ring[i][0], merged[i][1] - ring[i][1])
+        for i, v in enumerate(bot):
+            move[v] = (merged[i][0] - ring[i][0], merged[i][1] - ring[i][1])
         faces = []
         n = len(ring)
         for i in range(n):
@@ -1330,6 +1362,11 @@ def stamp_the_mats(isl):
                 wv = isl.matrix_world @ lp.vert.co
                 lp[lay] = (*ground_tone(z, 0.0, tone_noise(wv.x, wv.y)), 1.0)
                 lp[uvl].uv = (float(cell), float(cell))
+                d = move[lp.vert]
+                # WARNING **Offset by a half so the delta survives the trip.** A raw negative UV is
+                # legal but glTF's V flip makes the two axes disagree; storing `0.5 + d` keeps both
+                # positive and the shader subtracts the same half back.
+                lp[uvl2].uv = (0.5 + d[0], 0.5 + d[1])
 
     pad_n = 0
     for ty in range(TH):
@@ -1337,7 +1374,8 @@ def stamp_the_mats(isl):
             lv = tile_level(tx, ty)
             if lv < 0 or lv % 2 == 1:
                 continue
-            lay_face(pad_outline(tx, ty), TOP_H + lv * LEVEL_H + PAD_H, ty * TW + tx)
+            rest, merged = pad_rings(tx, ty)
+            lay_face(rest, merged, TOP_H + lv * LEVEL_H + PAD_H, ty * TW + tx)
             pad_n += 1
 
     bm.to_mesh(me)

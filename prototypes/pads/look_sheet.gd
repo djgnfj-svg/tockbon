@@ -25,6 +25,11 @@ const TONES := [
 	["dark3", -0.45],
 ]
 const NEAR_NOTCHES := 5
+## ⚠⚠ **THE CAMERA IS PINNED BEFORE EVERY SHOT** (2026-08-29). The `Game` node sits in the tree, so the
+## engine delivers real input to it -- a stray drag over the window turns the board, and one whole
+## twelve-shot sheet came out with two of its four rows at a different angle from the other two.
+var _open_cam := Vector2.ZERO
+var _open_zoom := 1.0
 
 var _game: Game = null
 var _tag := "bake"
@@ -71,6 +76,8 @@ func _boot_step() -> bool:
 			# body, in frame and clear of the body's own picture.
 			var b: Vector2i = _body_tile()
 			f.set_hover_tile(_game.battle.grid.tile_index(b.x + 2, b.y))
+			_open_cam = f.cam_px
+			_open_zoom = f.zoom
 			_booted = true
 	_boot += 1
 	return false
@@ -93,15 +100,30 @@ func _shoot_step() -> bool:
 	match _i % per:
 		0:
 			_game.field_view._pads_mat.set_shader_parameter("all_lighten", float(TONES[k][1]))
+			_pin()
 		1:
 			_save(name, "far")
 		2:
+			_pin()
 			_zoom(NEAR_NOTCHES)
 		3:
 			_save(name, "near")
-			_zoom(-NEAR_NOTCHES)
 	_i += 1
 	return false
+
+
+## **Back to exactly the view the island opened at**, angle included.
+func _pin() -> void:
+	var f: FieldView = _game.field_view
+	f.cam_yaw_deg = Look.CAM_YAW_DEG
+	f.cam_pitch_deg = Look.CAM_PITCH_DEG
+	f.zoom = _open_zoom
+	f.cam_px = _open_cam
+	f._place_camera()
+	# ⚠⚠ **The merge follows the zoom and only `zoom_at` says so.** Writing `zoom` straight leaves the
+	# 판 wearing the merge of whatever the last shot was -- a whole sheet of 「far」 came out unmerged
+	# because the shot before it had zoomed in.
+	f._tell_the_pads()
 
 
 func _zoom(notches: int) -> void:

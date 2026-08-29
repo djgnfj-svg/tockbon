@@ -1,7 +1,20 @@
 Type: grilling
-Status: open
+Status: resolved
 
 # The board on screen is a display of the kit, not an island to play
+
+## Answer
+
+✅ **2026-08-29 — it stays as it is.**
+
+**The user, after playing on it**: 「섬 모양은 지금 이대로 괜찮은 거 같고」 — ***"the island's shape
+seems fine just as it is."***
+
+⇒ **The three questions below are answered by「keep it」**: the size stays 30x26, every kind of block
+keeps its place, and the stair will be placed into THIS board rather than a board drawn for it.
+⚠ **What that leaves standing**: the islet still cannot be walked to and the plateau still cannot be
+climbed. **Neither is a defect any more** — the stair (ticket 06) is what opens the plateau, and the
+islet waits for boats.
 
 ## The question
 

@@ -1,7 +1,20 @@
 Type: grilling
-Status: open
+Status: resolved
 
 # Which of the four makes the 조각 판 merge into a 칸 as the camera pulls back
+
+## Answer
+
+✅ **2026-08-29 — `01-grow`, and it is in the game.**
+
+**The user, flipping the four in the lab**: 「1번이 좋은데?」 — ***"1 is the good one."***
+
+**What that took**: the bake now writes a second UV per vertex — **where that point goes when its 칸
+closes up** — and `src/view/pads.gdshader` walks it there by a `merge` the zoom decides
+(`Look.PAD_MERGE_ZOOM` 0.72 · `PAD_APART_ZOOM` 1.45). **The hover follows**: one 조각 up close, the
+whole 칸 far out.
+⚠ **The two thresholds were never judged in the game** — the island opens at zoom 0.76, which is
+already 94% merged. **That is the first thing to move if the change reads too early.**
 
 ## The question
 
