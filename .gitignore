@@ -37,8 +37,9 @@ build/
 # 에셋 생성 후보 — 한 번에 수십 장씩 나온다. 🔴 **고른 것만** assets/ 로 옮겨 커밋한다.
 tools/pixel/out/
 
-# 파이썬 도구 캐시
-tools/pixel/__pycache__/
+# Python bytecode cache. **Anywhere, not just `tools/pixel/`** — the rule was pinned to one folder
+# and `prototypes/palette/` grew its own the moment a script there was imported.
+__pycache__/
 
 # 🔴 검증자가 잠깐 만드는 계측기. `_` 로 시작하면 러너의 그물 스캔에도 안 걸린다.
 #  ⚠ **검증자가 끝나고 지우는 것이 계약이지만, 그 전에 누가 커밋하면 딸려 들어간다** —
