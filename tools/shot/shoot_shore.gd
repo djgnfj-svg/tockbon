@@ -1,8 +1,12 @@
 # **The shoreline, four times, seconds apart.** ⚠ Every other shooter saves ONE frame, and one frame
 # cannot answer 「is it moving?」 — a still line and a line caught mid-swing look identical in a single
 # picture. This walks the same flow `shoot_field.gd` does, stops at the island zoomed in, and saves four
-# frames spaced about a second and a half apart, so the swash, the peel and the travelling foam can be
-# judged by laying the four side by side.
+# frames spaced about a second and a half apart, so the run up the rock and the gaps in the outer white
+# can be judged by laying the four side by side.
+#
+# ⚠ **What it used to name is gone** (2026-08-29): the peel and the travelling foam left with the sea
+# that `27-gaps` replaced. What moves now is the width of the line on the rock, the second white
+# standing off it, and where the cuts fall.
 #
 # **Not a net** — it asserts nothing.
 #

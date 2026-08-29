@@ -1,6 +1,9 @@
 Type: task
 Status: resolved
 
+# 마우스를 올린 판이 다시 표시된다
+
+## Answer
 
 ✅ **CLOSED 2026-08-28.** The 판 is its own object inside `island.glb` again — `island_build.py` stopped
 welding it into the ground — and `field_view` gives it a shader. **The 칸 under the cursor rises and
@@ -9,7 +12,6 @@ lightens**, and every piece carries its 칸's index in its UV so one mesh and on
 한데?」). With TAB up nothing is drawn at all; holding TAB lays the whole 판 down and the hovered 칸
 stands out of it. **A hover means 「this one, of these」**, and without 「these」 on screen there was no
 「this one」.
-# 마우스를 올린 판이 다시 표시된다
 
 ## 무엇이 되면 끝인가
 

@@ -16,6 +16,61 @@
 [roadmap.md](roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅ **The chosen sea went into the game — 2026-08-29**
+
+⚠ **This section is in English because `CLAUDE.md` says every document is.** The rest of this file is
+Korean and predates that rule; nothing here has been translated, and the mismatch is written down rather
+than half-fixed.
+
+**The user opened the game, looked at it, and said** ***"So good..."*** (「너무 좋다...」). That is the
+whole acceptance and there was nothing else attached to it.
+
+`27-gaps` — chosen on 2026-08-29 out of twenty-seven seas rendered side by side — moved from
+`prototypes/swash/` into `src/`. **One white on the rock became two whites**, eighteen dials arrived and
+eleven left. ⚠⚠ **The 2026-08-28 decision was not re-opened**: a flat sea and a single border still, and
+what changed is only what that border is made of.
+
+### ⚠⚠ **The ticket carried a wrong number and the code won**
+
+**Ticket 28 said the wave adds 0.80 of the line's width. Every candidate from 23 on declares 1.6**, and
+1.6 is what was on the screen the user chose from. **The game ships 1.6 and the ticket line was
+corrected**, not the code. ⇒ **A number written into a ticket by hand is a copy, and the copy drifted.**
+
+### **The three numbers this ticket existed to re-judge were not turned**
+
+The ticket named `second_at`, `curve_step` and `cut_scale` as tuned against a coast that no longer
+exists — the outline went 112 → 280 → 168 segments while the candidates were being judged. **They were
+looked at on the new blocks and they passed as they were.** ⚠ **Two things came out of that look that no
+dial covers:**
+
+- **At the zoom an island OPENS at, the two whites blur into one.** The lab judged at ten tiles of screen
+  height; the display board opens at about twenty-six. **The sea was chosen roughly four times closer
+  than the game shows it.** Zooming in splits the two lines apart correctly
+- **The blocks' sides are near-white**, so the line ON the rock has nothing to contrast against. What
+  reads as the inner white at the opening zoom is the cliff face, not the water
+
+⇒ **Both wait for the island to stop being a display board** (ticket 31), because the answer to each may
+be the island's size rather than the sea's numbers.
+
+### **The glossary lost a word and it is written down, not deleted**
+
+**해안선 was defined as ringing the island with no gap, because water is always touching land.**
+`27-gaps` breaks the outer white and thins the inner one where it is missing. **The inner line never
+disappears, so half the old definition still holds** — the row was rewritten and the reversal put in the
+반전 table.
+
+### **The lab stopped lying about the losers**
+
+The island lab used to push `look.gd`'s dials onto every candidate, which was right while the game's
+numbers belonged to the sea they were competing with. **Once the winner's numbers were copied into
+`look.gd`, that same override would paint the winner's width and hardness onto the twenty-six losers** —
+twenty-six pictures of a comparison nobody ran. **Index 0 gets the dials now; the candidates keep their
+own.**
+
+### 그물
+
+**통과 521 · 실패 59**, 바꾸기 전과 똑같다. 실패는 전부 전시판(30x26)과 문서 쪽이고 바다와 무관하다.
+
 ## ✅ **전투를 지웠다 — 2026-08-29**
 
 ***"전투는 거의 없는데 아직 만든적 없어 전투를 다 지워야 할꺼나?"*** → ***"그냥 지워도됨 아직 전투 전혀

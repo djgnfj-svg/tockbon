@@ -3,6 +3,8 @@ Status: resolved
 
 # 바다가 어떻게 움직이나
 
+## Answer
+
 ✅ **CLOSED 2026-08-28.** The one line this ticket asked for: **the water runs up the rock, draws back,
 and lets a line go on its way out.** In the user's own words — 「멀어지면서 사라지는 거 있잖아. 그런
 거까지도 있었으면 좋겠네. 진짜인 것처럼」 and 「가끔씩 두 줄이 되기도 하면 좋을 거 같은데」.

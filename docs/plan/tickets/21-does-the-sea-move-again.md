@@ -1,6 +1,9 @@
 Type: grilling
 Status: resolved
 
+# 바다가 다시 움직여야 하나
+
+## Answer
 
 ✅ **CLOSED 2026-08-29, and the answer is NO — the flat sea stands.**
 The user asked for one thing back (「거품 1개는 있어야할듯」): 거품, the white line pushed IN toward the
@@ -12,7 +15,6 @@ constants and its wiring came straight back out.
 ⚠⚠ **So the 2026-08-28 measurement is now confirmed twice** — once by seven candidates rendered side by
 side, and once by adding the thing back and looking at it. **The parked constants in `look.gd` stay
 parked**; nothing reads them.
-# 바다가 다시 움직여야 하나
 
 ## 무엇을 정해야 하나
 

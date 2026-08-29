@@ -3,6 +3,8 @@ Status: resolved
 
 # 물 잔주름이 얼마나 끊겨야 하나
 
+## Answer
+
 ✅ **CLOSED 2026-08-28, and the question turned out to be the wrong one.** Seven candidates were rendered
 and **the four that only moved the old dials — chop, scale, strength, stretch — could not be told apart**:
 they are all the same soft haze, because the ripple only ever bent the surface normal and left the light
