@@ -36,7 +36,21 @@ python prototypes/pads/look_sheet.py
 - **The tone is signed since 2026-08-29**: positive pulls toward white, negative toward black, zero is
   bare ground
 
-## ⚠ **Not looked at yet — 2026-08-29**
+## ✅ **Looked at — 2026-08-29. It passed, with one thing wanted**
+
+**The user, on the game screen:**
+
+> 「봤는데 음 좋긴한데 멀면 좀더 합칠 수 있도록 되면 좋을듯? 뭔말알?」
+
+⇒ ***"I looked. It is good — but when the camera is far away it would be better if they could merge
+together more. You know what I mean?"***
+
+⚠⚠ **That is a pass on the 조각 판 and a separate want**: at distance the 284 separate marks read as
+too many separate things, and the gutters should close as the camera pulls back. **It is not about the
+tone or the gutter width this ticket holds** — those are still unpicked — and it is not a reversal of
+the 조각 unit. ⇒ **ticket 34.**
+
+## ~~⚠ Not looked at yet — 2026-08-29~~ — **answered above the same day**
 
 | What shipped | How to see it | When |
 |---|---|---|

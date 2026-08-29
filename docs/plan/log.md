@@ -16,6 +16,43 @@
 [roadmap.md](roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ⏳ **Four ways for the 판 to merge at a distance — 2026-08-29**
+
+**The user, after playing with the 조각 판 in the game**: ***"I looked. It is good — but when the camera
+is far away it would be better if they could merge together more"*** (「봤는데 음 좋긴한데 멀면 좀더
+합칠 수 있도록 되면 좋을듯?」). ⇒ **They merge into a 칸** (「멀면 칸단위로 하려고함」), **driven by
+zoom** (「줌에따라」), and **the seams inside a 칸 go completely** (「넷다 없애봐」).
+
+⚠⚠ **NOTHING WAS APPLIED.** Four mechanisms are built in `prototypes/merge/` and photographed at three
+distances; the round closed on ***"good, let's wrap up as is"*** (「좋네 이대로 마무리하자」) **without one
+being named**. **The shipped 판 does not merge at any distance.** ⇒ **ticket 34.**
+
+### ⚠ This is the first round the new step 0 was used, and it changed the shape of the round
+
+**The candidates were put to the user as a list before a folder existed**, and two of the four questions
+that would have been guessed at came back with answers that were not what would have been guessed:
+the merge target is the **칸** (the recommendation on the table was the whole island) and the tuning is
+deferred to the stair round. ⚠ **The set was still built with no fresh scout** — the outside material
+was not re-gathered, and that is said out loud rather than hidden.
+
+### **The hover was missing and the user caught it** — 「호버는 또 안만들었네?」
+
+**Four boards were photographed with nothing lighting up under the cursor.** ⇒ **All four now share one
+piece of shader code for it**, and the rule it keeps is the user's own from earlier the same day: **what
+lights is whatever the 판 IS at that distance** — one 조각 up close, the whole 칸 once they have closed
+up. ⚠ **A hover that differed per version would have made the four incomparable**, which is why it is one
+file rather than four.
+
+### What each one cannot do — **the line that will decide it**
+
+| | ⚠ Cannot |
+|---|---|
+| `01-grow` — the vertices move | merge into anything the bake did not already draw |
+| `02-carve` — the gutter is a shader number | hold a shape the rounded-rectangle formula cannot say |
+| `03-crossfade` — two boards faded across | be crossed slowly; the middle is a double exposure |
+| `04-filler` — a bar over each seam | change the OUTER shape; a merged 칸 stays four welded squares |
+
+
 ## ✅ **The 판 became a 조각 — 2026-08-29**
 
 ⚠ **This section is in English because `CLAUDE.md` says every document is.** The user's own words are
