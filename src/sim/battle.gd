@@ -97,6 +97,18 @@ var soldier_pos: Array = []               # Vector2, tile units
 ## is an enemy」the same value.
 ## ⚠ **Cleared on arrival.** It used to hand the body back to the fight; there is no fight, so it just stands.
 var soldier_order := PackedInt32Array()   # tile index the player ordered, or -1
+## **The straightened route the body is walking, one `PackedInt32Array` of 조각 per body**, and the index
+## of the next 조각 in it. Empty means 「walk on the field alone」, which is what every body did before
+## 티켓 37 and is still the always-valid fallback.
+##
+## ⚠⚠ **`_soldier_path_i` IS A PLAIN `Array` AND NOT A `PackedInt32Array`, DELIBERATELY.** It is written
+## every sub-step, and this file already carries the measurement one column over: a `PackedInt32Array`
+## written through a parameter lands in a copy-on-write copy — see `_settle`'s header, which records the
+## same trap costing a whole-table rescan every frame.
+## ⚠ **Cleared wherever the order is cleared.** A list left on a body after its order is gone sends it
+## walking somewhere nobody asked.
+var _soldier_path: Array = []
+var _soldier_path_i: Array = []
 var _soldier_goal: Array = []
 var _soldier_stale := PackedByteArray()
 ## False until `commit()`. **`step()` refuses to do anything at all while it is false.**
@@ -162,6 +174,8 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 	# `Battle` is new every island, so 「몸당 섬당 한 번」 needs no reset anywhere else.
 	soldier_pos = []
 	_soldier_goal = []
+	_soldier_path = []
+	_soldier_path_i = []
 	for i in roster:
 		# ⚠ **A soldier who died on an earlier island is DEAD here, never RESERVE.** Nothing kills a
 		# body any more, so no corpse can reach this line today — the rule is kept because the roster
@@ -171,6 +185,8 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 		_soldier_stale[i] = 0
 		soldier_pos.append(OFFMAP)
 		_soldier_goal.append(OFFMAP)
+		_soldier_path.append(PackedInt32Array())
+		_soldier_path_i.append(0)
 
 
 # --- the plan ------------------------------------------------------------------------------------
@@ -318,6 +334,7 @@ func place_ashore(soldier_id: int, near_tile: int) -> int:
 	soldier_pos[soldier_id] = here
 	_soldier_goal[soldier_id] = here
 	_soldier_stale[soldier_id] = 0
+	_clear_path(soldier_id)
 	var claimed := grid.reserved
 	claimed[tile] = soldier_id
 	grid.reserved = claimed
@@ -333,6 +350,11 @@ func place_ashore(soldier_id: int, near_tile: int) -> int:
 ## second copy of the walking rule**, and the two would drift.
 ## ⚠ **Not gated on the commit.** The commit is what starts the FIGHT; a body walking where it was
 ## told is what the player does before one — see `step`.
+##
+## ⚠⚠ **THE STRAIGHTENED ROUTE IS BUILT HERE, ONCE, AND NEVER REBUILT MID-ORDER** (티켓 37). A body stuck
+## at a neck would otherwise rebuild it every sub-step for no change, and the field underneath is already
+## correct. **An empty result is not an error** — the body then walks on the field alone, exactly as every
+## body did before this ticket.
 func order_walk(soldier_id: int, tile: int) -> bool:
 	if grid == null:
 		return false
@@ -343,6 +365,14 @@ func order_walk(soldier_id: int, tile: int) -> bool:
 	if tile < 0 or tile >= grid.passable.size() or grid.passable[tile] == 0:
 		return false
 	soldier_order[soldier_id] = tile
+	_clear_path(soldier_id)
+	var here := _tile_of(soldier_pos[soldier_id])
+	if here >= 0:
+		var raw := grid.path_from(_field_for(tile), here, tile)
+		if raw.size() > 1:
+			_soldier_path[soldier_id] = grid.string_pull(raw)
+			# Index 1: index 0 is the 조각 the body already stands on.
+			_soldier_path_i[soldier_id] = 1
 	return true
 
 
@@ -400,21 +430,24 @@ func _phase_orders(dt: float) -> void:
 			continue
 		if int(soldier_state[i]) != SoldierState.ASHORE:
 			soldier_order[i] = -1
+			_clear_path(i)
 			continue
 		var dest := _point_of_tile(dest_tile)
 		var was: Vector2 = soldier_pos[i]
 		if was.distance_to(dest) <= Rules.EPS:
 			soldier_order[i] = -1
+			_clear_path(i)
 			if _soldier_stale[i] != 0:
 				_settle(i, dest)
 				_soldier_stale[i] = 0
 			continue
 		soldier_pos[i] = _walk(i, was, _soldier_goal, i, army.speed_of(i) * dt,
-				_field_for(dest_tile), dest, 0.0)
+				_field_for(dest_tile), dest, 0.0, -1, dest_tile)
 		_soldier_stale[i] = 1
 		# Stuck: it did not move AND it is not part-way across a tile it still has to finish.
 		if soldier_pos[i].distance_to(was) <= Rules.EPS 				and was.distance_to(_soldier_goal[i]) <= Rules.EPS:
 			soldier_order[i] = -1
+			_clear_path(i)
 
 
 ## Everyone walks toward their target and **stops the instant it is in reach**. Without that one
@@ -550,9 +583,11 @@ func _phase_movement(dt: float) -> void:
 ## a parameter would land in a copy, leaving every unit re-requesting the same first step forever.
 ## `keep_level` is passed straight to `grid.step_toward` — -1 for everybody except a defender holding
 ## high ground. See `_enemy_home_level`.
+## `target_tile` is the 조각 `field` was built from; it reaches `step_toward`'s tie-break so an equal-cost
+## step goes along the line to the goal rather than off it.
 func _walk(uid: int, pos: Vector2, goals: Array, gi: int, step_len: float,
 		field: PackedInt32Array, stop_at: Vector2, stop_dist: float,
-		keep_level: int = -1) -> Vector2:
+		keep_level: int = -1, target_tile: int = -1) -> Vector2:
 	var remaining := step_len
 	var guard := 0
 	var here := pos
@@ -572,7 +607,7 @@ func _walk(uid: int, pos: Vector2, goals: Array, gi: int, step_len: float,
 			break
 		var goal: Vector2 = goals[gi]
 		if here.distance_to(goal) <= Rules.EPS:
-			goal = grid.step_toward(uid, here, field, keep_level)
+			goal = _next_goal(uid, gi, here, field, keep_level, target_tile)
 			goals[gi] = goal
 			if here.distance_to(goal) <= Rules.EPS:
 				# Every neighbour is taken or none is closer: the unit stands. That is the queue at
@@ -586,6 +621,63 @@ func _walk(uid: int, pos: Vector2, goals: Array, gi: int, step_len: float,
 			here += (goal - here) / to_go * remaining
 			remaining = 0.0
 	return here
+
+
+## **The next 조각 this body should walk to: the straightened route if it is still on it, the field
+## otherwise.** Returns `here` unchanged when nothing is open, which is the queue at a neck.
+##
+## ⚠ **`gi` addresses the per-body columns and `uid` is the reservation id.** They are the same soldier at
+## the only call site; the two names are kept apart because one is an index and one is an identity.
+##
+## The three steps, in this order:
+##
+## 1. ⚠⚠ **RESYNC FIRST, EVERY TIME, AND IT IS THE ADJACENCY GUARANTEE RATHER THAN TIDINESS.**
+##    `order_walk` builds the list from the 조각 the body's position rounds to, but the body may be
+##    half-way across a 조각 it already reserved — `_soldier_goal` points forward and `_walk` glides there
+##    first — so the stored index can be pointing at a neighbour of a 조각 the body has already left, up
+##    to two 조각 away and possibly behind it. **`step_along` refuses a non-adjacent 조각**, so without
+##    this the straightened route would simply stop working, quietly. Consecutive entries in the list are
+##    8-neighbours by construction, so resyncing makes the argument adjacent by construction too.
+##    ⚠ **The search starts one entry BEHIND the index and never earlier.** The index names the NEXT 조각,
+##    so the body is normally standing on the one before it — starting at the index itself would fail to
+##    find the body on its very first step and throw the route away before it was used. Starting one
+##    behind, the new index is never lower than the old one, which is what stops a body shuffling between
+##    two 조각 forever.
+##    ⚠ **Not found means the route is dropped**, not rebuilt: the field underneath is already correct.
+## 2. **The route**, through `step_along`.
+## 3. **Otherwise the field**, exactly as before this ticket. The next sub-step's resync decides whether
+##    the straightened route is rejoined — which is what makes the field the always-valid fallback.
+func _next_goal(uid: int, gi: int, here: Vector2, field: PackedInt32Array,
+		keep_level: int, target_tile: int) -> Vector2:
+	var path: PackedInt32Array = _soldier_path[gi]
+	if not path.is_empty():
+		var tile := _tile_of(here)
+		var idx := int(_soldier_path_i[gi])
+		var at := -1
+		for m in range(maxi(idx - 1, 0), path.size()):
+			if int(path[m]) == tile:
+				at = m
+				break
+		if at < 0:
+			_clear_path(gi)
+		else:
+			idx = at + 1
+			_soldier_path_i[gi] = idx
+			if idx < path.size():
+				var moved := grid.step_along(uid, here, int(path[idx]), keep_level)
+				if here.distance_to(moved) > Rules.EPS:
+					_soldier_path_i[gi] = idx + 1
+					return moved
+	return grid.step_toward(uid, here, field, keep_level, target_tile)
+
+
+## Throws the straightened route away. **Called at every site that clears an order** — a route that
+## outlives its order walks a body somewhere nobody asked.
+func _clear_path(i: int) -> void:
+	if i < 0 or i >= _soldier_path.size():
+		return
+	_soldier_path[i] = PackedInt32Array()
+	_soldier_path_i[i] = 0
 
 
 ## Gives back the tile behind a unit that has stopped for good, keeping only the one it stands on.

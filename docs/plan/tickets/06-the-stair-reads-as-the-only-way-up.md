@@ -1,5 +1,5 @@
 Type: task
-Status: open
+Status: resolved
 
 # 계단이 「여기로만 올라간다」로 읽힌다
 
@@ -326,3 +326,54 @@ happens on one, it is because somebody came down onto it from above, and only fo
 ⚠⚠ **This is a RULE, not a mark.** `Grid` lets a body stand and be reserved on a stair tile today; what
 exists is only that the stair carries no 판 and no light. **Whatever rebuilds the stair carries this**:
 a stair is crossed, never occupied.
+
+
+## Answer — **the stair was rebuilt on 2026-08-29, and it is on the island**
+
+**Thirteen candidates were stood on the board and looked at.** The user settled the size first, then the
+style, and accepted the result: ***"the stair, this much is fine."***
+
+### What is on the island now
+
+| | |
+|---|---|
+| **Size** | **One 블록 — 2x2 조각 — and that is settled.** The user: ***"let us go with the block for the stair itself. No thin stairs. Blocks. The same size every time, simple."*** |
+| **Treads** | **Four.** Two read as a low dais rather than a stair; three were close; the user picked four |
+| **Finish** | **Built the way a STOREY is built** (the user: ***"make the style like the second storey"***): each tread is a rock wall carried to a plate's thickness under its top, with a turf plate laid on it, inset 0.05 on the three sides that show. **The wall's top edge is a rim round the plate, and that rim is the gap that makes the green look like it is floating** |
+| **Corners** | Bevelled 0.025. ⚠ **The island's own 0.18 would eat a 0.25 tread**, so the island's bevel is APPLIED before the stair is welded on and the stair brings its own |
+| **Place** | 조각 (6,6) (7,6) (6,7) (7,7), climbing EAST into the plateau's west wall. ⚠ **Moved from 조각 4..5**, where it did not touch the plateau at all — two 조각 of flat ground sat in between and the climb went nowhere |
+
+### ⚠⚠ **The block under a stair stays FLAT, and that is the whole trick**
+
+**A block carries ONE height — the highest of the four 조각 it covers — so a stair 조각 written into the
+board used to lift its whole block half a tile.** The 판 of the other 조각 in that block then sat buried
+under the ground drawn over it, half a tile down.
+
+⇒ **`island_build.level_of` now ignores ODD notches.** The block is built flat as level 0, the staircase
+is laid on top as its own mesh, and the tier board still says `1` — which is what makes the climb legal
+and what keeps a 판 off the stair. **Measured: the 판 went 284 → 280, exactly the four stair 조각.**
+
+### What the twelve rejected candidates taught
+
+- **Rock tone is masonry.** Six treads in `wall_tone` with a kerb read as dressed stone on a fishing
+  island — the user: ***"the ground is earth and grass and this one thing alone is far too formal a
+  staircase"***
+- **All-grass disappears.** Painted in `ground_tone` the treads vanish into the floor from the game
+  camera; only their shadows showed
+- **Curved surfaces are a different island.** Four turf ramps and banks were built as smooth grids while
+  every face on this island is FLAT. Rejected as a group: ***"all of them are bad"***
+- **1x2 and 2x1 are out.** They fit and the rule takes them; the user does not want them
+
+### ⚠ The user's judgement on the round, verbatim
+
+***"It is a bit different from what I wanted, but let us wrap up."***
+
+**What「different」 means was not said, and nothing is guessed at here.** The stair itself was accepted
+in the same session; this line is about the round.
+
+### What this did NOT settle
+
+- **티켓 22** (bodies clip through the stair) and **티켓 23** (the stair floats) were both written against
+  the OLD stair, which had a kerb and six treads. **Neither has been re-measured against this one**
+- **A body may not STOP on a stair** — still a rule nothing holds. The stair carries no 판, and that is
+  all that exists

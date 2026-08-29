@@ -139,6 +139,26 @@ const TIER_STEP_TILES := TIER_RISE_TILES * 0.5
 ## and a tier boundary is not.
 const MAX_CLIMB_LEVELS := 1
 
+## --- What one step of a walk costs -----------------------------------------------------------------
+## ⚠⚠ **A DIAGONAL USED TO BE FREE, AND THAT IS WHY A STRAIGHT WALK ARCED TO THE TOP OF THE BOARD**
+## (티켓 37; the user, 2026-08-29, watching a body cross open ground). The flood added **1** to all eight
+## neighbours, so a straight line and a detour to the far edge of the island were the SAME cost — every
+## equal-cost arc was on the table, and the tie went to whichever neighbour the offset table listed first.
+##
+## ⚠ **They live here and not in `Grid` because they change which 조각 a body stands on.** `Grid` keeps the
+## board legend and the unreachable sentinel, which are facts about the board rather than about the rules.
+##
+## ⚠ **Integers, so no float ever enters the field.** `14/10` is 1.4 against a true `sqrt(2)` of 1.41421 —
+## a 1% error, and the standard integer octile pair. A float field would put a rounding boundary in the
+## middle of every tie, which is the same argument `TIER_RISE_TILES` makes about heights one rule up.
+##
+## ⚠ **The cheapest an 8-connected walk between two 조각 can cost is therefore
+## `ORTHO * max(|dx|,|dy|) + (DIAG - ORTHO) * min(|dx|,|dy|)`** — such a walk takes exactly `min` diagonal
+## steps and the rest orthogonal. **Every literal in the walking nets is derived from that identity**
+## rather than read off a run.
+const STEP_COST_ORTHO := 10
+const STEP_COST_DIAG := 14
+
 ## ⚠⚠ **HOW MANY TREADS BLENDER CUTS INTO ONE STAIR 칸, AND THE FEET HAVE TO LAND ON THEM**
 ## (2026-08-28, the user, watching a body climb: 「계단을 캐릭이 뚫고감 이건 근본적인문제인데」).
 ##

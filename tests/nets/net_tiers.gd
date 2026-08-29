@@ -498,10 +498,12 @@ func _the_walker_will_not_cut_a_corner(t) -> void:
 	var field := g.flow_field(goal)
 	var start := g.tile_index(2, 1)
 	t.ok(int(field[start]) != Grid.UNREACHABLE, "막힌 모서리를 돌아가는 길이 있다 (자가 점검)")
-	# ⚠ **The hop count is what says it went AROUND.** The straight-line diagonal distance is 2 steps
-	# ((2,1)->(3,2)->(4,1)); refused, the walk has to drop to (2,3)... and back up, which is longer.
-	t.ok(int(field[start]) > 2, "그리고 그 길이 대각선 지름길보다 길다 (%d 홉) — 모서리를 안 자른다"
-		% int(field[start]))
+	# ⚠ **The COST is what says it went AROUND.** The straight-line diagonal shortcut is two diagonal
+	# steps ((2,1)->(3,2)->(4,1)); refused, the walk has to drop to (2,3)... and back up, which is dearer.
+	# ⚠⚠ **It was `> 2` while a step cost one hop** (before 티켓 37). The claim is unchanged — the unit is
+	# not — and a literal 2 here would silently become 「dearer than a fifth of one diagonal」.
+	t.ok(int(field[start]) > 2 * Rules.STEP_COST_DIAG,
+		"그리고 그 길이 대각선 지름길보다 비싸다 (%d) — 모서리를 안 자른다" % int(field[start]))
 	var step := g.step_toward(1, Vector2(2.0, 1.0), field)
 	t.ok(step != Vector2(3.0, 2.0), "걸음도 그 대각선을 안 고른다")
 	t.ok(step != Vector2(2.0, 1.0), "그렇다고 선 채로 멈추지도 않는다 — 갈 데가 있다 (%s)" % str(step))
@@ -539,6 +541,15 @@ func _the_real_island_still_has_a_route(t) -> void:
 
 # == the field ========================================================================================
 
+## **The cheapest an 8-connected walk between two 조각 can cost**, in the flow field's own units. Derived
+## and never typed: such a walk takes exactly `min(|dx|,|dy|)` diagonal steps and the rest orthogonal, so
+## the two `Rules` constants are the whole of it. ⚠ It is what lets this file state a claim about a route
+## without a single number read off a run.
+static func _octile(ax: int, ay: int, bx: int, by: int) -> int:
+	var dx := absi(bx - ax)
+	var dy := absi(by - ay)
+	return Rules.STEP_COST_ORTHO * maxi(dx, dy) + (Rules.STEP_COST_DIAG - Rules.STEP_COST_ORTHO) * mini(dx, dy)
+
 ## **The flow field is where "walk to the stair" has to come out**, and the pair of measurements is
 ## what makes it a claim about height. The high tile (5,1) sits one tile east of the low tile (4,1):
 ##
@@ -548,23 +559,35 @@ func _the_real_island_still_has_a_route(t) -> void:
 ##
 ## **Mutation**: make `can_step` return `passable[to_tile] != 0` and the tiered numbers collapse onto
 ## the flat ones.
+##
+## ⚠⚠ **EVERY NUMBER HERE WAS A HOP COUNT AND IS NOW A COST** (티켓 37). A step stopped costing 1 the day
+## a diagonal stopped being free, so every literal in this function had to be restated — **the claims are
+## word for word what they were**, and each is written as `_octile(...)` against the fixture's own
+## coordinates rather than as a number typed by hand or read off a run.
+## ⚠ **The assertions that were RED are still red, on purpose.** `FIXTURE_TIERS` spells its plateau with
+## `1`, which has meant level **1** since the tier legend was widened — so this board has no level-2 조각
+## in it at all and no wall for the stair to be the door through. Restating the unit does not repair that,
+## and turning one of them into an inequality so it passes would be a green measuring nothing.
 func _the_field_climbs_only_by_the_stair(t) -> void:
 	var flat := Grid.new()
 	flat.load_rows(FIXTURE_ROWS)
 	var seed := flat.tile_index(1, 1)
 	var ff := flat.flow_field(seed)
-	t.eq(int(ff[flat.tile_index(4, 1)]), 3, "평지 대조군 — (4,1) 은 세 걸음이다")
-	t.eq(int(ff[flat.tile_index(5, 1)]), 4, "평지 대조군 — 그 옆 (5,1) 은 벽을 넘어 네 걸음이다")
+	t.eq(int(ff[flat.tile_index(4, 1)]), _octile(1, 1, 4, 1), "평지 대조군 — (4,1) 은 곧장 세 걸음 값이다")
+	t.eq(int(ff[flat.tile_index(5, 1)]), _octile(1, 1, 5, 1),
+		"평지 대조군 — 그 옆 (5,1) 은 벽을 넘어 곧장 네 걸음 값이다")
 
 	var g := Grid.new()
 	g.load_rows(FIXTURE_ROWS, FIXTURE_TIERS)
 	var tf := g.flow_field(g.tile_index(1, 1))
-	t.eq(int(tf[g.tile_index(4, 1)]), 3, "층이 있어도 낮은 땅 (4,1) 은 그대로 세 걸음이다")
-	t.eq(int(tf[g.tile_index(5, 1)]), 5,
-		"그런데 벽 너머 (5,1) 은 다섯 걸음이다 — 옆으로 한 걸음이 아니라 계단을 돌아온 값이다")
+	t.eq(int(tf[g.tile_index(4, 1)]), _octile(1, 1, 4, 1), "층이 있어도 낮은 땅 (4,1) 은 그대로 곧장 온 값이다")
+	# The claim, unchanged: (5,1) is not one step sideways from (4,1) — it is the seed's cost to the STAIR
+	# plus the stair's own cost out to (5,1). Two legs, each the cheapest its two 조각 allow.
+	t.eq(int(tf[g.tile_index(5, 1)]), _octile(1, 1, 4, 3) + _octile(4, 3, 5, 1),
+		"그런데 벽 너머 (5,1) 은 계단을 돌아온 값이다 — 옆으로 한 걸음이 아니다")
 
 	var stair_cost := int(tf[g.tile_index(4, 3)])
-	t.eq(stair_cost, 3, "계단까지는 세 걸음이다")
+	t.eq(stair_cost, _octile(1, 1, 4, 3), "계단까지는 곧장 간 값이다")
 	var cheapest_high := Grid.UNREACHABLE
 	var high_count := 0
 	var unreached_high := 0
@@ -578,8 +601,10 @@ func _the_field_climbs_only_by_the_stair(t) -> void:
 			cheapest_high = mini(cheapest_high, int(tf[tile]))
 	t.eq(high_count, FIXTURE_HIGH, "고원은 열두 칸이다 (자가 점검)")
 	t.eq(unreached_high, 0, "계단이 있으면 고원 열두 칸이 전부 닿는다")
-	t.eq(cheapest_high, stair_cost + 1,
-		"그리고 고원에서 제일 싼 칸이 계단보다 정확히 한 걸음 비싸다 — 문이 하나라는 것의 값")
+	# One ORTHOGONAL step off the stair's head, which is the cheapest a plateau 조각 can be — the diagonal
+	# neighbours of the same head cost more.
+	t.eq(cheapest_high, stair_cost + Rules.STEP_COST_ORTHO,
+		"그리고 고원에서 제일 싼 칸이 계단보다 정확히 직교 한 걸음 비싸다 — 문이 하나라는 것의 값")
 
 
 ## **The sharpest row in the file.** Take the one stair away and the plateau is not merely expensive,

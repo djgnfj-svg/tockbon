@@ -1273,3 +1273,98 @@ Bad North 강연이 말한 아홉 줄, 그리고 만들 때 지킬 일곱 가지
 
 > ***"다음부터 내가 리서칭이라고 하면은 그 에이전트인가 있거든. 그거 사용해야 할 듯"***
 > — *"from now on when I say researching, there is that agent — you should use it."*
+
+## ✅ **The stair came back, and the body walks straight — 2026-08-29**
+
+**Two things in one round: a stair on the island again (티켓 06), and the walk fixed (티켓 37).**
+
+### The stair — **thirteen candidates before one was picked**
+
+**Nine were rejected before the size was even settled.** What the user said, in order:
+
+> ***"계단 프로토타입 만들어서 진행해보자 일단 조각으로 해서 땅과 붙여야할지 고민중"***
+> — *"let us go ahead and prototype the stair. I am still weighing whether to do it in 조각 and attach
+> it to the ground."*
+
+> ***"크기랑 생김새 같이 정해야지 그럼 뭐. 당연히 같이 정하는 거고"***
+> — *"of course the size and the look get settled together."*
+
+⚠⚠ **The first five were rejected for TONE, and that is the measurement of this round.**
+
+> ***"스타일이 너무 다르다는 거야. 지금 뭔가 땅하고 풀인데 얘 혼자 뭔가 너무 격식된 이 계단이잖아? ...
+> 조금 얘도 좀 풀로 다리나 이렇게 경사로나 이런 식으로 돼야 돼"***
+> — *"the style is just too different. The ground is earth and grass and this one thing alone is far
+> too formal a staircase. It should be turf, a bridge, a ramp, something of that kind."*
+
+**Four turf ones were then built and rejected as a group** — every face on this island is FLAT and all
+four were smooth curved surfaces.
+
+> ***"다 별론데? 너무 별로야 그냥 그 계단 그 모양 자체도 별로고"***
+> — *"all of them are bad. The shape of the stair itself is bad too."*
+
+⚠⚠ **The user settled the size, and it closed the question the round had opened with.**
+
+> ***"일단 계단 자체도 일단은 블록 단위로 가자. 얇은 계단은 없는 걸로 하자. 블록으로 하자. 동일한
+> 사이즈로 단순하게"***
+> — *"let us go with the block for the stair itself. No thin stairs. Blocks. The same size every time,
+> simple."*
+
+**Then the finish, in one line:**
+
+> ***"2층과 비슷하게 해주면될듯 스타일을 ... 아래는 흰색이어야지 그래야 좀 더 티가 날 때 위에는
+> 뿌리고"***
+> — *"make the style like the second storey ... the bottom has to be white, that is what makes it show,
+> and the green on top."*
+
+⇒ **Four treads, each a rock wall with a turf plate inset on top of it.** Accepted:
+***"계단 이거 이 정도면 돼"*** — *"the stair, this much is fine."*
+
+### ⚠⚠ **The block under a stair stays flat, and that is what stopped the 판 from being buried**
+
+**A block takes the highest of the four 조각 it covers.** Writing a stair 조각 into the board therefore
+lifted the whole block half a tile, and the 판 of the other 조각 in it sat buried under the ground drawn
+over it. ⇒ **`level_of` ignores odd notches now.** The 판 went 284 → 280, exactly the four stair 조각.
+
+### The walk — **the diagonal was free**
+
+**The user saw it and said so:**
+
+> ***"유저 움직임도 개선해야하는거 아님? 지금 알고리즘이 없잖아? 최단경로로 가는 지금 너무 이상하게
+> 가는거 같아"***
+> — *"does the player's movement not need fixing too? There is no algorithm right now. The shortest
+> path it takes looks very strange."*
+
+⚠ **There WAS an algorithm — a flow field — and it was right by its own arithmetic.** Eight neighbours
+each cost 1, so a diagonal was free, and「straight east」and「run to the top of the board and come back
+down」were the same length. **A probe drew it**: A at (2,6), B at (20,6), and the walk went up to row 0.
+
+⇒ **10 orthogonal, 14 diagonal · a heap instead of a queue · ties broken toward the goal · the route
+pulled off the field when the order is given · that route string-pulled through `can_step`.**
+**Deviation from the straight line 4.06 → 0.00. Nets 521 → 629 passing, 59 failing, the same 59.**
+
+### ⚠ Two defects found while measuring, neither fixed
+
+**티켓 39** — `can_step` answers differently depending on which end asks, on a diagonal. **The flow field
+floods backwards from the target, so it records the direction a body does NOT walk.**
+**티켓 40** — `net_tiers` writes its plateau as `1`, and that letter changed meaning on 2026-08-26.
+**That board has no second-storey 조각 at all.** ⚠ **Some of the reds this roadmap blamed on「no stair」
+are this instead.**
+
+### ⚠⚠ **Blender MCP, and why it had to be said three times**
+
+> ***"야 뭘 만들든 무조건 블랜더 MCP라니까? 왜 자꾸 안 하냐고. 마지막으로 경고했어"***
+> — *"whatever you are making, it goes through Blender MCP. Why do you keep not doing it? This is the
+> last warning."*
+
+**Two reasons were given and neither was good enough**: the stair had to match the island's own tones,
+so the island script was read and the stair code drifted into a file with it; and sending a whole script
+through a tool call is longer than editing one line in a file. ⇒ **The line now: anything thrown away is
+written inside the MCP call; only what the game keeps goes into the island script.**
+
+### The user's judgement on the round
+
+> ***"약간 원하는 바랑은 다른긴한데 마무리하자"***
+> — *"it is a bit different from what I wanted, but let us wrap up."*
+
+⚠ **What「different」 means was not said and is not guessed at anywhere.** The stair itself was accepted
+in the same session.

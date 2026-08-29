@@ -552,8 +552,37 @@ func tile_index(tx: int, ty: int) -> int:
 
 
 
-## Breadth-first from `target_tile` over passable tiles, 8-way. Cost is hop count; unreachable tiles
-## keep `UNREACHABLE`.
+## **What one step from `a` to `b` costs.** The two 조각 are assumed to touch; this is asked only about
+## neighbours. `Rules` owns the numbers — see `Rules.STEP_COST_ORTHO`.
+func step_cost(a: int, b: int) -> int:
+	if w <= 0:
+		return Rules.STEP_COST_ORTHO
+	if (a % w) != (b % w) and (a / w) != (b / w):
+		return Rules.STEP_COST_DIAG
+	return Rules.STEP_COST_ORTHO
+
+
+## Cheapest-first flood from `target_tile` over passable tiles, 8-way. Cost is in `Rules.STEP_COST_*`
+## units; unreachable tiles keep `UNREACHABLE`.
+##
+## ⚠⚠ **IT WAS A HOP COUNT UNTIL 2026-08-29 AND THAT IS WHY WALKS ARCED** (티켓 37). Every one of the
+## eight neighbours cost **1**, so **a diagonal was free**: a straight line across open ground and a
+## detour to the edge of the island were the same price, and among all those equal-cost routes the tie
+## went to whichever offset `NEIGHBOURS` happens to list first — north-west. The user saw the result.
+##
+## ⚠⚠ **THE HEAP BUYS SPEED, NOT CORRECTNESS, AND THE FIRST DRAFT OF THIS HEADER CLAIMED OTHERWISE.**
+## What makes the answer right under weighted edges is the RE-PUSH below: a 조각 goes back on the queue
+## every time its value improves, so the flood converges whatever order it pops in. **Measured
+## 2026-08-29: scramble the heap, or swap it for a plain first-in-first-out queue, and all 288 조각 of
+## `net_walk`'s empty-board field stay exact; take the re-push away as well and 223 of them go wrong.**
+## ⇒ **Cheapest-first is what stops a 조각 being expanded several times** — without it this is
+## Bellman-Ford where it could be Dijkstra. **Nothing in the nets can see the difference except the
+## heap's own check**, so do not read the octile row as cover for this line. See `IntHeap` for why a heap
+## and not a bucket queue.
+##
+## ⚠ **`UNREACHABLE` is four orders of magnitude clear of any real value.** The shipped 48 x 32 board is
+## 1536 조각, so the worst conceivable route is under `1536 * STEP_COST_DIAG`, about 21500, against
+## `1 << 30`.
 ##
 ## **Reserved tiles are traversable here on purpose.** If occupancy entered the field, every field
 ## would have to be rebuilt the moment anybody moved; instead the field is terrain-only and cached,
@@ -569,15 +598,19 @@ func flow_field(target_tile: int) -> PackedInt32Array:
 	# tile — a soldier still aboard a boat — would otherwise produce an all-unreachable field, and
 	# every unit asking for it stands still for the rest of the island with nothing logged.
 	field[target_tile] = 0
-	var queue := PackedInt32Array()
-	queue.append(target_tile)
-	var head := 0
-	while head < queue.size():
-		var t := queue[head]
-		head += 1
+	var heap := IntHeap.new()
+	heap.push(0, target_tile)
+	while not heap.is_empty():
+		var t := heap.pop_value()
+		var cost := heap.last_cost
+		# ⚠ **Lazy deletion.** The heap has no decrease-key, so a 조각 reached more cheaply later is
+		# queued a second time and the earlier, dearer pair is still waiting. Expanding it again is
+		# harmless but wasted work — and reading `cost` from the pair rather than from `field` is what
+		# makes the skip possible at all.
+		if cost > int(field[t]):
+			continue
 		var tx := t % w
 		var ty := t / w
-		var next_cost := field[t] + 1
 		for k in NEIGHBOURS.size():
 			var nx := tx + int(NEIGHBOURS[k][0])
 			var ny := ty + int(NEIGHBOURS[k][1])
@@ -590,26 +623,84 @@ func flow_field(target_tile: int) -> PackedInt32Array:
 			# come out of. The plateau is `UNREACHABLE` until a stair is authored.
 			if not can_step(t, nt):
 				continue
-			if field[nt] <= next_cost:
+			var next_cost := cost + (Rules.STEP_COST_DIAG if nx != tx and ny != ty
+					else Rules.STEP_COST_ORTHO)
+			if int(field[nt]) <= next_cost:
 				continue
 			field[nt] = next_cost
-			queue.append(nt)
+			heap.push(next_cost, nt)
 	return field
+
+
+## **Which of two candidate 조각 a body standing on `cur` should step onto — the tie-break, written once
+## and shared by the descent and the path pull.** `true` when `cand` beats `best`; `best` of -1 means
+## nothing has been chosen yet.
+##
+## The keys, in order:
+##
+## 1. **The total cost of the route THROUGH the candidate** — `field[cand] + step_cost(cur, cand)`.
+## 2. **The smaller perpendicular deviation** from the straight line to `target_tile`.
+## 3. **The larger dot product** — of two steps equally off the line, the one that gets nearer wins.
+## 4. **The lower 조각 index.** Determinism, and nothing else.
+##
+## ⚠⚠ **KEY 1 IS THE ROUTE TOTAL AND NOT `field[cand]`, AND THE DIFFERENCE IS THE WHOLE OF WHETHER THIS
+## WORKS** (measured 2026-08-29, on 티켓 37's own first draft). Ranked by `field[cand]` alone a diagonal
+## neighbour is always `STEP_COST_DIAG` cheaper and an orthogonal one always `STEP_COST_ORTHO`, so **the
+## diagonal wins outright and there is never a tie for the other keys to break** — the body spends all its
+## diagonals first and then goes straight, which is a bent walk with every arrival check green. Every step
+## on an optimal route totals exactly `field[cur]`, so ranking by the total makes **all the optimal steps
+## tie**, which is the condition keys 2 and 3 were written for.
+##
+## ⚠ **With no target (`target_tile` of -1) keys 2 and 3 are skipped** and the rule is 「lowest total cost,
+## then lowest 조각 index」. That is not what this function's ancestor did — it took the lowest field value
+## and then whatever `NEIGHBOURS` listed first — so a three-argument caller does step somewhere else than
+## it used to. It is a better descent and the callers were read before it landed.
+func _better_step(field: PackedInt32Array, cur: int, target_tile: int, cand: int, best: int) -> bool:
+	if best < 0:
+		return true
+	var cost_a := int(field[cand]) + step_cost(cur, cand)
+	var cost_b := int(field[best]) + step_cost(cur, best)
+	if cost_a != cost_b:
+		return cost_a < cost_b
+	if target_tile >= 0:
+		var cx := cur % w
+		var cy := cur / w
+		var dx := (target_tile % w) - cx
+		var dy := (target_tile / w) - cy
+		var ax := (cand % w) - cx
+		var ay := (cand / w) - cy
+		var bx := (best % w) - cx
+		var by := (best / w) - cy
+		# The cross product is the step's own component ACROSS the line to the goal — the deviation the
+		# arc was made of. The dot is its component ALONG it.
+		var cross_a := absi(ax * dy - ay * dx)
+		var cross_b := absi(bx * dy - by * dx)
+		if cross_a != cross_b:
+			return cross_a < cross_b
+		var dot_a := ax * dx + ay * dy
+		var dot_b := bx * dx + by * dy
+		if dot_a != dot_b:
+			return dot_a > dot_b
+	return cand < best
 
 
 ## One step down `field`. `from` is in **tile units, tile centres on integers** — not pixels; the view
 ## multiplies by the tile size, and mixing the two is the 4.8x error this repo has already paid for.
 ##
-## Picks the neighbour with the lowest field value that is passable and either unreserved or already
-## this unit's, reserves it, releases the tile behind, and returns the point to walk toward. **If every
-## candidate is taken the unit's own position comes back and it stands** — that is the queue at a neck.
+## Picks the best neighbour that is passable, strictly cheaper than the tile the body stands on, and
+## either unreserved or already this unit's; reserves it, releases the tile behind, and returns the point
+## to walk toward. **If every candidate is taken the unit's own position comes back and it stands** —
+## that is the queue at a neck.
 ## ⚠ **`keep_level` is -1 for everybody except an enemy holding high ground.** At 0 or more the step
 ## must also LAND on that level, which is what stops a defender posted on a plateau walking down its
 ## own stair to meet the attackers — 티켓 19's positional advantage only exists if the side holding it
 ## stays there. **An optional argument rather than a second walker**: the tie-breaks, the reservation
 ## swap and the queue-at-a-neck behaviour are the same, and a second copy of them would drift.
+## ⚠ **`target_tile` is the 조각 the field was built from**, and it only feeds `_better_step`'s deviation
+## keys. Left at -1 the descent still works and still terminates; it simply has nothing to be straight
+## against.
 func step_toward(unit_id: int, from: Vector2, field: PackedInt32Array,
-		keep_level: int = -1) -> Vector2:
+		keep_level: int = -1, target_tile: int = -1) -> Vector2:
 	var n := w * h
 	if n == 0 or field.size() != n:
 		return from
@@ -618,7 +709,17 @@ func step_toward(unit_id: int, from: Vector2, field: PackedInt32Array,
 	var cur := cy * w + cx
 	_hold(unit_id, cur)
 	var best := -1
-	var best_cost := field[cur]
+	# ⚠ **The admission test, and it is NOT key 1.** Strictly cheaper than where the body stands: an `<=`
+	# here lets a unit already on the target tile step off onto an equal-cost neighbour and oscillate
+	# forever, which reads as jitter rather than as a bug. `_better_step` only ranks what survives this.
+	#
+	# ⚠⚠ **AND THAT SENTENCE IS UNMEASURED. NO CHECK ANYWHERE REDDENS IF THIS `>=` BECOMES `>`** —
+	# measured 2026-08-29 by an independent pass: the whole net round stayed green AND a 100-second run
+	# on the real island came out identical to the decimal. **It is written down rather than covered**,
+	# because a check built around this one mutation would pass because somebody wrote it around the
+	# mutation, which is worth less than an honest gap. ⇒ **Do not relax it on the grounds that nothing
+	# barks.** The oscillation it stops was paid for once and the payment is not in the nets.
+	var cur_cost := int(field[cur])
 	for k in NEIGHBOURS.size():
 		var nx := cx + int(NEIGHBOURS[k][0])
 		var ny := cy + int(NEIGHBOURS[k][1])
@@ -635,21 +736,183 @@ func step_toward(unit_id: int, from: Vector2, field: PackedInt32Array,
 			continue
 		if reserved[nt] != -1 and reserved[nt] != unit_id:
 			continue
-		# Strictly better than where it stands. An `<=` here lets a unit already on the target tile
-		# step off onto an equal-cost neighbour and oscillate forever, which reads as jitter rather
-		# than as a bug.
-		if field[nt] >= best_cost:
+		if int(field[nt]) >= cur_cost:
 			continue
-		best = nt
-		best_cost = field[nt]
+		if _better_step(field, cur, target_tile, nt, best):
+			best = nt
 	if best == -1:
 		_release_except(unit_id, cur, cur)
 		return from
-	_hold(unit_id, best)
-	# The swap: the tile behind is freed only once the unit's rounded position has moved onto the tile
-	# it was walking into, so the two-tile hold is never wider than two.
-	_release_except(unit_id, cur, best)
-	return Vector2(best % w, best / w)
+	return _commit_step(unit_id, cur, best)
+
+
+## **The same commit, for a 조각 the CALLER names** — the straightened route's step. Returns the 조각's
+## point on success, or `from` unchanged on a refusal, **releasing nothing** when it refuses: the caller
+## falls straight through to `step_toward`, which does its own release when it also refuses.
+##
+## ⚠⚠ **THE ADJACENCY TEST IS REQUIRED AND `can_step` DOES NOT SUPPLY IT.** Measured 2026-08-29:
+## `can_step` asks about bounds, passability, the level gap, the stair face and a diagonal's shoulders,
+## **and never whether the two 조각 touch** — it answers `true` for a pair fourteen 조각 apart. It has been
+## safe only because both older callers hand it one of eight neighbours. This one takes a 조각 named from
+## a stored list, and a stale index would otherwise glide a body several 조각 in a straight line holding
+## only the endpoints — through whatever stands between, with every reservation check green.
+func step_along(unit_id: int, from: Vector2, next_tile: int, keep_level: int = -1) -> Vector2:
+	var n := w * h
+	if n == 0:
+		return from
+	var cx := clampi(int(round(from.x)), 0, w - 1)
+	var cy := clampi(int(round(from.y)), 0, h - 1)
+	var cur := cy * w + cx
+	_hold(unit_id, cur)
+	if next_tile < 0 or next_tile >= n or next_tile == cur:
+		return from
+	if absi(next_tile % w - cx) > 1 or absi(next_tile / w - cy) > 1:
+		return from
+	if not can_step(cur, next_tile):
+		return from
+	if keep_level >= 0 and level_of(next_tile) != keep_level:
+		return from
+	if reserved[next_tile] != -1 and reserved[next_tile] != unit_id:
+		return from
+	return _commit_step(unit_id, cur, next_tile)
+
+
+## **The two-tile swap, written once.** Claim the 조각 being walked into, then let go of everything but
+## the pair. ⚠ A second copy of these two lines is how a body comes to hold three 조각 and halve every
+## doorway with nothing on screen to explain it.
+func _commit_step(unit_id: int, cur: int, dest: int) -> Vector2:
+	_hold(unit_id, dest)
+	_release_except(unit_id, cur, dest)
+	return Vector2(dest % w, dest / w)
+
+
+## **The 조각 a body would step through walking down `field` from `from_tile`, as far as `target_tile`.**
+## Empty when the field is the wrong size, the 조각 is off the board, or `from_tile` is `UNREACHABLE`.
+## Otherwise `[from_tile, ..., target_tile]`, using the same tie-break the descent uses.
+##
+## ⚠⚠ **IT RESERVES NOTHING, HOLDS NOTHING AND RELEASES NOTHING.** It is a question about the board, and a
+## query that wrote the reservation table would put a body's own hold in the way of its own route.
+## ⚠ **It ignores reservations and `keep_level` on purpose.** The field is terrain-only, and a list built
+## once at the moment of the order would otherwise bake in whoever happened to be standing there.
+## ⚠ **Bounded by `w * h` iterations.** A strictly-decreasing walk cannot loop, so the bound is a guard and
+## not a rule; reaching it means a defect, and the partial list comes back rather than the round hanging.
+func path_from(field: PackedInt32Array, from_tile: int, target_tile: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var n := w * h
+	if n == 0 or field.size() != n:
+		return out
+	if from_tile < 0 or from_tile >= n:
+		return out
+	if int(field[from_tile]) == UNREACHABLE:
+		return out
+	var cur := from_tile
+	out.append(cur)
+	var guard := 0
+	while cur != target_tile:
+		guard += 1
+		if guard > n:
+			break
+		var cx := cur % w
+		var cy := cur / w
+		var cur_cost := int(field[cur])
+		var best := -1
+		for k in NEIGHBOURS.size():
+			var nx := cx + int(NEIGHBOURS[k][0])
+			var ny := cy + int(NEIGHBOURS[k][1])
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var nt := ny * w + nx
+			if not can_step(cur, nt):
+				continue
+			if int(field[nt]) >= cur_cost:
+				continue
+			if _better_step(field, cur, target_tile, nt, best):
+				best = nt
+		if best == -1:
+			break
+		out.append(best)
+		cur = best
+	return out
+
+
+## **The 8-connected line from `a_tile` to `b_tile`, or empty when a body could not walk it.** `a_tile`
+## itself is NOT in the list — the caller already stands on it.
+##
+## ⚠⚠ **IT IS AN OCTILE LINE OF EXACTLY `max(|dx|, |dy|)` STEPS AND NOT A DENSE SAMPLE.** Measured
+## 2026-08-29 on 티켓 37's own first draft: sampling the segment every quarter 조각 and rounding each axis
+## on its own **emits a separate orthogonal step for each axis crossing**, so (2,10) -> (20,2) came out at
+## 24 steps and sixteen turns against the octile optimum of 18 — **the straightener made the walk more
+## crooked.** Interpolating the whole step index instead moves each axis by at most one per step, giving
+## exactly `min(|dx|,|dy|)` diagonals, which is the cheapest any 8-connected route between the two can be.
+##
+## ⚠⚠ **EVERY STEP IS ASKED THROUGH `can_step`, AND THAT IS THE WHOLE POINT OF THE FUNCTION.** A plain
+## passability test here walks a body up a staircase's flank — a stair may be entered only at its ends —
+## which is 티켓 22's subject and must not be fed.
+##
+## ⚠ **A thin line and not a supercover, and that is safe**: consecutive 조각 are 8-neighbours by
+## construction, and `can_step` refuses a diagonal whose shoulders are blocked, so the corner cannot be cut.
+func line_tiles(a_tile: int, b_tile: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var n := w * h
+	if n == 0 or a_tile < 0 or b_tile < 0 or a_tile >= n or b_tile >= n:
+		return out
+	var ax := a_tile % w
+	var ay := a_tile / w
+	var dx := (b_tile % w) - ax
+	var dy := (b_tile / w) - ay
+	var steps := maxi(absi(dx), absi(dy))
+	if steps == 0:
+		return out
+	var prev := a_tile
+	for i in range(1, steps + 1):
+		var x := ax + int(round(float(dx) * float(i) / float(steps)))
+		var y := ay + int(round(float(dy) * float(i) / float(steps)))
+		var nt := y * w + x
+		if not can_step(prev, nt):
+			return PackedInt32Array()
+		out.append(nt)
+		prev = nt
+	return out
+
+
+## **The same route with its corners pulled out.** Greedy from the front: standing at `path[i]`, take the
+## furthest `j` whose straight line from `path[i]` is walkable, append that line, and carry on from `j`.
+## A route of two 조각 or fewer comes back unchanged.
+##
+## ⚠ **The result is never longer than the input**, and that is a property rather than a per-fixture
+## coincidence: a straight line between two 조각 costs the octile minimum, which no 8-connected route
+## between them can beat. `net_walk` asserts it, because 「the smoothing made it longer」 is the one way
+## this fails invisibly.
+## ⚠ **It hands back an ADJACENT-조각 list, never waypoints.** The body still steps one 조각 at a time, so
+## reservation, the two-tile hold and the queue at a neck are all untouched — only the list is straighter.
+## A waypoint list would have the walker reserve 조각 it never names.
+## ⚠ It is O(n²) in 조각 and a route on this board is under sixty. A funnel algorithm buys nothing here.
+func string_pull(path: PackedInt32Array) -> PackedInt32Array:
+	if path.size() <= 2:
+		return path
+	var out := PackedInt32Array()
+	out.append(int(path[0]))
+	var i := 0
+	while i < path.size() - 1:
+		var j := path.size() - 1
+		var seg := PackedInt32Array()
+		while j > i + 1:
+			seg = line_tiles(int(path[i]), int(path[j]))
+			if not seg.is_empty():
+				break
+			j -= 1
+		if j == i + 1:
+			seg = line_tiles(int(path[i]), int(path[j]))
+			if seg.is_empty():
+				# ⚠ **The input's own step, kept verbatim.** Reaching here means the route handed in was
+				# not walkable to begin with; inventing a different 조각 would be this function deciding
+				# something it has no business deciding, so the step comes through unchanged and the
+				# walker refuses it later exactly as it would have.
+				seg = PackedInt32Array()
+				seg.append(int(path[j]))
+		out.append_array(seg)
+		i = j
+	return out
 
 
 ## Every tile this unit holds goes back. Called on death and on boarding.

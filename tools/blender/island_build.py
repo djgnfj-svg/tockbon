@@ -429,17 +429,14 @@ for _y in range(6, 8):          # piece (8,3) -- islet, well inside the shore
 # ⇒ **The plateau keeps its four 칸 and the stair moves out.** Its east side is the storey; north,
 # south and west are floor, and nothing raised stands over it.
 # WARNING **THE STAIR WAS TAKEN OUT ON 2026-08-29** (the user: 「계단 제거하자 다시만들어야할듯」).
-# The two lines that put a level-1 block here are commented rather than deleted, because the ARRANGEMENT
-# above is three rounds of measurement and whatever replaces the stair will be argued against it.
-# for _y in range(6, 8):
-#     for _x in range(4, 6):
-#         _hi[_y][_x] = "1"
-# ⚠⚠ **THE SECOND STOREY IS NOW UNREACHABLE.** A body crosses one notch and the plateau is two above
-# the ground, so with no odd-level block anywhere on the island there is no way up at all. **This is
-# the island being deliberately broken while a new stair is designed**, not an oversight -- and the
-# checks that walk from the shore to the plateau will say so.
-# ⚠ **`stair()` and the mouth-side logic in `build` are untouched** and simply never called; the level
-# they answer to has no block on the board.
+# WARNING **THE STAIR CAME BACK ON 2026-08-29** with a new shape, chosen on screen (티켓 06). It sits
+# against the plateau's west wall, one 블록 of 조각, and the arrangement above still holds: its east
+# side is the storey, its other three are floor, and nothing raised stands over it.
+# ⚠ **The 조각 moved from 4..5 to 6..7.** The plateau starts at 조각 x = 8, and at 4..5 the stair did not
+# touch it -- there were two 조각 of flat ground in between and the climb went nowhere.
+for _y in range(6, 8):
+    for _x in range(6, 8):
+        _hi[_y][_x] = "1"
 HIGH = ["".join(r) for r in _hi]
 
 TIER_CHARS = "./0123456789"
@@ -997,70 +994,84 @@ def block(name, z_top, coast_sides, cliff_sides, corner_out, wx, wy, grass_h=0.0
     return ob, wsegs
 
 
-TREADS = 6
-# WARNING **THE STAIR'S SIDES ARE WALLED** (2026-08-29, the user: 「뭔가 계단 옆으로 그냥 떨어지는거
-# 막아야하고」). The RULE has refused a sideways step onto or off a stair since 2026-08-28
-# (`Grid._stair_face_open`), but at the mouth the staircase is barely a notch above the floor beside
-# it — **the picture read as wide open while the rule said closed**, which is the disagreement this
-# closes from the other end.
-# WARNING **Inside the tread, not outside it.** A rail hung outside the 칸 would overlap the piece next
-# door and cut into whatever stands there.
-STAIR_RAIL_W = 0.13   # how far in from each edge the rail eats, in metres
-STAIR_RAIL_H = 0.20   # how far it stands above the tread it sits on. **A kerb, not a banister** — the
-                      # camera looks down, and anything taller hides the treads it is meant to frame
+# WARNING **THE STAIR WAS REBUILT ON 2026-08-29 AND THIS IS THE FOURTH SHAPE** (티켓 06). Thirteen
+# candidates were stood on the island and looked at; the user picked this one and settled the size:
+# **one 블록, four treads, always the same size — no thin stairs.**
+#
+# **What the twelve rejected ones taught, so none of them comes back by accident:**
+#  · **Rock tone is masonry.** Six treads cut in `wall_tone` with a kerb read as dressed stone on a
+#    fishing island — 「얘 혼자 뭔가 너무 격식된 계단」. The kerb is gone with it.
+#  · **All-grass disappears.** Painted in `ground_tone` the treads vanish into the floor from the game
+#    camera; only their shadows showed.
+#  · **Curved surfaces are a different island.** Four turf ramps and banks were built as smooth grids
+#    and every face on this island is FLAT. They were rejected as a group.
+#  · **1x2 and 2x1 are out.** They fit, the rule takes them, and the user does not want them.
+#
+# ⇒ **A tread is built the way a STOREY is built** (the user: make the style like the second storey):
+# a rock wall carried up to a plate's thickness under the tread, and a plate of turf laid on it, inset
+# on the three sides that show. The wall's top edge is then a rim all the way round the plate, and that
+# rim is what makes the green look like it is floating.
+STAIR_TREADS_MESH = 4     # ⚠ **NOT `Rules.STAIR_TREADS`** — that one is how many steps the FEET land
+                          # on, and the two are set from each other. If this moves, move that.
+STAIR_PLATE_INSET = 0.05  # how far the turf plate is pulled in from the wall under it, in metres
+STAIR_BEVEL = 0.025       # the island rounds every edge by 0.18; a tread only rises 0.25, so a bevel
+                          # anywhere near that eats the step. This is what fits.
 
 
 def stair(name):
-    """**The treads are drawn INSIDE the stair's own mesh.**
+    """**One 블록 of stair, four treads, built LOCAL: the climb runs +y, the width is x.**
 
-    WARNING Cutting the walked notch finer to make treads was the wrong lever and cost a round: the code
-    that splits a wall makes one seam per level, so halving the notch put twelve seams down one wall and
-    the island read as a stack of pancakes. Four treads then read as three big slabs; six with a nosing
-    is what finally reads as a stair.
+    Returns one object per piece — the caller welds them. ⚠ **Each piece is bevelled on its own before
+    the weld**, because the island's own 0.18 bevel is applied before a stair is joined and a tread
+    would otherwise be the only hard-edged thing on the board.
     """
-    base = -WALL_DOWN
-    run, rise = S / TREADS, STOREY / TREADS
-    prof = [(0.0, base), (0.0, TOP_H)]
-    for k in range(TREADS):
-        prof.append((k * run, TOP_H + k * rise))
-        prof.append((k * run - 0.035, TOP_H + (k + 1) * rise))
-        prof.append((k * run, TOP_H + (k + 1) * rise))
-    prof += [(S, TOP_H + STOREY), (S, base)]
-    bm = bmesh.new()
-    a = [bm.verts.new((0.0, y, z)) for (y, z) in prof]
-    b = [bm.verts.new((S, y, z)) for (y, z) in prof]
-    for k in range(len(prof)):
-        m = (k + 1) % len(prof)
-        bm.faces.new((a[k], b[k], b[m], a[m]))
-    bm.faces.new(list(reversed(a)))
-    bm.faces.new(b)
+    run, rise = S / STAIR_TREADS_MESH, STOREY / STAIR_TREADS_MESH
+    out = []
 
-    # The two rails: the same profile again, raised, on a narrow strip at each edge. **Built from the
-    # tread profile rather than from a straight slope**, so a rail sits on its own step and the flight
-    # still reads as steps from the side.
-    for x0, x1 in ((0.0, STAIR_RAIL_W), (S - STAIR_RAIL_W, S)):
-        top = [(y, z + STAIR_RAIL_H) for (y, z) in prof]
-        ra = [bm.verts.new((x0, y, z)) for (y, z) in top]
-        rb = [bm.verts.new((x1, y, z)) for (y, z) in top]
-        for k in range(len(top)):
-            m = (k + 1) % len(top)
-            bm.faces.new((ra[k], rb[k], rb[m], ra[m]))
-        bm.faces.new(list(reversed(ra)))
-        bm.faces.new(rb)
+    def piece(nm, x0, x1, y0, y1, z0, z1, tone):
+        bm = bmesh.new()
+        v = {}
+        for i, (x, y, z) in enumerate([(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
+                                       (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]):
+            v[i] = bm.verts.new((x, y, z))
+        for q in [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]:
+            bm.faces.new([v[i] for i in q])
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+        lay = bm.loops.layers.color.new("Col")
+        for f in bm.faces:
+            for lp in f.loops:
+                lay_c = tone(lp.vert.co.z)
+                lp[lay] = (*lay_c, 1.0)
+        me = bpy.data.meshes.new(nm)
+        bm.to_mesh(me)
+        bm.free()
+        me.update()
+        for p in me.polygons:
+            p.use_smooth = False
+        ob = bpy.data.objects.new(nm, me)
+        bpy.context.collection.objects.link(ob)
+        me.materials.append(vertex_mat("island_ground"))
+        out.append(ob)
 
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
-    lay = bm.loops.layers.color.new("Col")
-    for f in bm.faces:
-        for lp in f.loops:
-            # WARNING **A TREAD IS STONE WHATEVER ITS HEIGHT.** It is flat, so the steep test says turf,
-            # and turf is exactly what made the stair read as a lifted piece of the ground.
-            lp[lay] = (*wall_tone(lp.vert.co.z), 1.0)
-    me = bpy.data.meshes.new(name)
-    bm.to_mesh(me)
-    bm.free()
-    ob = bpy.data.objects.new(name, me)
-    bpy.context.collection.objects.link(ob)
-    return ob
+    for k in range(STAIR_TREADS_MESH):
+        top_z = TOP_H + (k + 1) * rise
+        ya = k * run
+        # the rock wall, carried down past the floor so nothing shows under it
+        piece("%s_wall_%d" % (name, k), 0.0, S, ya, S, -WALL_DOWN, top_z - GRASS_LIP, wall_tone)
+        # the turf plate: inset at the front and both flanks. **The back is not inset** -- the next
+        # tread's wall buries it, and pulling it in there would open a slot along every riser.
+        piece("%s_plate_%d" % (name, k), STAIR_PLATE_INSET, S - STAIR_PLATE_INSET,
+              ya + STAIR_PLATE_INSET, S, top_z - GRASS_LIP, top_z, ground_tone)
+
+    for ob in out:
+        for x in bpy.data.objects:
+            x.select_set(x is ob)
+        bpy.context.view_layer.objects.active = ob
+        b = ob.modifiers.new("bevel", "BEVEL")
+        b.width, b.segments = STAIR_BEVEL, 2
+        b.limit_method, b.angle_limit = "ANGLE", math.radians(24.0)
+        bpy.ops.object.modifier_apply(modifier=b.name)
+    return out
 
 
 # --- the board, read ---------------------------------------------------------------------------------
@@ -1074,12 +1085,23 @@ def is_land(px, py):
 
 
 def level_of(px, py):
+    """The block's own height. **ODD notches are ignored, and that is the stair rule** (2026-08-29).
+
+    WARNING A block carries ONE height -- the highest of the four 조각 it covers -- so a stair 조각
+    written into the board used to lift its whole block half a tile. **The 판 of the other 조각 in that
+    block then sat buried under the ground drawn over it**, half a tile down, which is what
+    「계단이 땅이랑 따로 논다」 was partly about. ⇒ The block stays FLAT under a stair and the staircase
+    is laid on top as its own mesh (see `stair` and the stair pass in `build`). The tier board still
+    says `1`, which is what makes the climb legal and what keeps a 판 off the stair.
+    """
     if not is_land(px, py):
         return -1
     best = 0
     for dy in range(2):
         for dx in range(2):
-            best = max(best, lvl_of(TIERS[py * 2 + dy][px * 2 + dx]))
+            lv = lvl_of(TIERS[py * 2 + dy][px * 2 + dx])
+            if lv % 2 == 0:
+                best = max(best, lv)
     return best
 
 
@@ -1524,6 +1546,57 @@ def build():
     b.width, b.segments = 0.18, 3
     b.limit_method, b.angle_limit = "ANGLE", math.radians(24.0)
     isl.hide_set(False)
+
+    # --- the stair pass --------------------------------------------------------------------------
+    # WARNING **A STAIR IS NOT A BLOCK AND IT IS WELDED ON AFTER THE ISLAND'S BEVEL IS APPLIED.**
+    # `level_of` ignores odd notches, so the block under a stair is built flat as level 0 and the
+    # staircase is laid on top. ⚠ **The 0.18 bevel would eat a 0.25 tread**, so it is applied to the
+    # island first and the stair brings its own, narrower one (`STAIR_BEVEL`).
+    # ⚠⚠ **THE CLIMB POINTS AT THE STOREY, and that has to agree with `Grid._build_runs`** — the rule
+    # there is that the mouth is the side touching the floor below and the climb is its opposite. On a
+    # stair with exactly one raised neighbour the two rules give the same answer; **if a stair is ever
+    # authored with two, this has to grow the same mouth-order tie-break `Grid.STAIR_MOUTH_ORDER` has.**
+    # The board's +y is the world's −y (the mesh is built on reversed rows), which is where the turns
+    # below come from: `stair()` builds its climb along local +y.
+    TURN_FOR = {"n": 0.0, "e": -90.0, "s": 180.0, "w": 90.0}
+    stair_parts = []
+    for py in range(PH):
+        for px in range(PW):
+            if not is_land(px, py):
+                continue
+            notches = {lvl_of(TIERS[py * 2 + dy][px * 2 + dx]) for dy in range(2) for dx in range(2)}
+            if notches != {1}:
+                continue
+            up = None
+            for sd in ("s", "e", "n", "w"):
+                dx, dy = NB[sd]
+                if level_of(px + dx, py + dy) == 2:
+                    up = sd
+                    break
+            if up is None:
+                print("stair at block (%d,%d) climbs to nothing -- skipped" % (px, py))
+                continue
+            for ob in stair("STAIR_%d_%d" % (px, py)):
+                for v in ob.data.vertices:
+                    v.co.x -= S * 0.5
+                    v.co.y -= S * 0.5
+                ob.rotation_euler = (0.0, 0.0, math.radians(TURN_FOR[up]))
+                ob.location = (px * S + S * 0.5, (PH - 1 - py) * S + S * 0.5, 0.0)
+                stair_parts.append(ob)
+            print("stair: block (%d,%d), climbs %s, %d parts" % (px, py, up, len(stair_parts)))
+    if stair_parts:
+        for o in bpy.data.objects:
+            o.select_set(o is isl)
+        bpy.context.view_layer.objects.active = isl
+        for mod in list(isl.modifiers):
+            bpy.ops.object.modifier_apply(modifier=mod.name)
+        for o in bpy.data.objects:
+            o.select_set(o is isl or o in stair_parts)
+        bpy.context.view_layer.objects.active = isl
+        bpy.ops.object.join()
+        isl = bpy.context.active_object
+        isl.name = "island"
+        isl.data.name = "island_mesh"
 
     pads = stamp_the_mats(isl)
 

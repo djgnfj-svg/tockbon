@@ -29,3 +29,13 @@ Status: open
 ## 무엇을 먼저 하나
 
 **사용자에게 「난간을 뚫는지, 계단 단을 뚫는지」를 물어서 갈래를 하나로 줄인다.** 둘은 고치는 데가 다르다.
+
+
+## ⚠⚠ **THE STAIR THIS TICKET WAS WRITTEN AGAINST NO LONGER EXISTS** (2026-08-29)
+
+**티켓 06 rebuilt it whole.** The one on the island now is **four treads, no kerb, one 블록**, finished
+the way a storey is — a rock wall with a turf plate inset on top of each tread. The old one had **six
+treads and a kerb down each side**, and the block under it was RAISED; the new block is flat and the
+staircase is a separate mesh laid on it.
+
+⇒ **Every measurement below was taken on the old shape.** Re-measure before acting on any of it.
