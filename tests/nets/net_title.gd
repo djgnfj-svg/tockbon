@@ -143,9 +143,12 @@ func _geometry_is_readable(t) -> void:
 			% Look.TITLE_SLOT_GAP_PX)
 
 	# 「칸의 글자가 30px보다 크다」 · 「제목 글자가 칸 글자보다 16px 이상 크다」 — both ends each.
-	t.ok(Look.TITLE_SLOT_FONT_SIZE_PX > Look.HUD_TIMER_FONT_SIZE_PX,
-		"칸 글자 %dpx 가 지금까지 가장 큰 글자였던 시계 %dpx 보다 크다"
-			% [Look.TITLE_SLOT_FONT_SIZE_PX, Look.HUD_TIMER_FONT_SIZE_PX])
+	# ⚠ The floor was `Look.HUD_TIMER_FONT_SIZE_PX`, the island clock, and **the HUD was deleted
+	# 2026-08-29**. 30 is that constant's own value, written down here rather than left pointing at a
+	# file that no longer holds it.
+	t.ok(Look.TITLE_SLOT_FONT_SIZE_PX > 30,
+		"칸 글자 %dpx 가 지금까지 가장 큰 글자였던 시계 30px 보다 크다"
+			% Look.TITLE_SLOT_FONT_SIZE_PX)
 	t.ok(Look.TITLE_SLOT_FONT_SIZE_PX <= 56, "그래도 56px 을 안 넘는다 — 네 글자가 칸을 넘어간다")
 	t.ok(Look.TITLE_FONT_SIZE_PX >= Look.TITLE_SLOT_FONT_SIZE_PX + 16,
 		"제목 %dpx 가 칸 글자보다 16px 이상 크다 — 제목이 화면에서 가장 큰 것이다"

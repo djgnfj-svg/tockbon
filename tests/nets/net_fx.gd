@@ -39,7 +39,6 @@ func run(t) -> void:
 	_attack_event_shape(t)
 	_splash_carries_only_real_victims(t)
 	_death_events_come_after_the_attacks_that_caused_them(t)
-	_land_events(t)
 	_begin_frame_clears(t)
 	_frame_ceiling_and_the_pile_up_without_it(t)
 	_lion_declares_before_it_lands(t)
@@ -210,44 +209,6 @@ func _death_events_come_after_the_attacks_that_caused_them(t) -> void:
 
 # -- landings --------------------------------------------------------------------------------------
 
-## One LAND per soldier put ashore, carrying the id and nothing else: `soldier_pos[id]` was written
-## one line earlier and is the answer, so the ambiguous "which tile" (the dock the boat aimed at, or
-## the spot this soldier actually stands on) never enters the event at all.
-func _land_events(t) -> void:
-	var army := _army_of([Rules.WOLF, Rules.WOLF])
-	var b := _planning_battle_of(_port(), army, [_spawn(ARENA_W, Rules.LION, 20, 9)])
-	# ⚠ **Two separate presses, never `a and b`.** A short-circuit would let a refused second summon
-	# hide behind the first, and this row's whole subject is that TWO bodies land.
-	var sea := _summonable_water_on(b)
-	t.ok(sea >= 0, "띠 안에 소환할 물 칸이 있다 (자가 점검 — 없으면 아래가 전부 공허하다)")
-	t.ok(b.summon(0, sea) >= 0, "병사 하나를 배에 실었다")
-	t.ok(b.summon(0, sea) >= 0, "병사 둘을 배에 실었다 — 한 명에 한 척이다")
-	t.eq(b.boats.size(), 2, "배가 정확히 두 척이다 — 둘째 소환이 거부되지 않았다")
-	t.ok(b.commit(), "시작을 눌러 두 척을 다 띄웠다")
-
-	var lands := []
-	var frames := 0
-	while frames < 80 and lands.is_empty():
-		frames += 1
-		b.begin_frame()
-		b.step(0.1)
-		for raw in b.events:
-			var ev: Dictionary = raw
-			if int(ev["kind"]) == Battle.Event.LAND:
-				lands.append(int(ev["id"]))
-	t.ok(frames < 80, "배가 %d 프레임 만에 도착했다 — 루프가 헛돌지 않았다" % frames)
-	t.eq(lands.size(), 2, "내린 병사 수만큼 LAND 가 나왔다")
-	t.ok(lands.has(0) and lands.has(1), "LAND 가 실은 것은 그 두 병사의 id 다")
-	var ashore := b.ashore_ids()
-	t.eq(ashore.size(), 2, "그 프레임에 둘 다 실제로 상륙해 있다")
-	var off := 0
-	for raw_id in lands:
-		var i := int(raw_id)
-		if b.soldier_pos[i] == Battle.OFFMAP:
-			off += 1
-	t.eq(off, 0, "LAND 가 난 병사의 자리는 이미 격자 위다 — 뷰가 soldier_pos 로 링을 놓는다")
-	t.ok(b.soldier_pos[0].distance_to(b.soldier_pos[1]) <= 1.5,
-			"둘이 붙어 내렸다 (상륙지에서 BFS) — 링 반지름 20 이 그래서 타일 반 칸이다")
 
 
 # -- begin_frame -----------------------------------------------------------------------------------
@@ -558,15 +519,6 @@ func _port() -> Array:
 	return rows
 
 
-## The first tile inside the summon band. ⚠ **The name says WATER on purpose** — `send` took a BEACH and
-## `summon` takes water, and handing one verb the other's tile is a silent `-1`. That confusion cost a
-## red round once; the name is what stops it costing a second.
-func _summonable_water_on(b: Battle) -> int:
-	var g := b.grid
-	for tile in g.w * g.h:
-		if g.can_summon_at(tile):
-			return tile
-	return -1
 
 
 func _grid_of(rows: Array) -> Grid:

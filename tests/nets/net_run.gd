@@ -183,7 +183,9 @@ func _wipe_loses(t) -> void:
 	t.eq(b.enemies_left(), 1, "픽스처가 짐승 한 마리를 세웠다 (자가 점검 — 0마리면 섬이 첫 칸에 이겨 버린다)")
 	# The smallest plan there is, then the start button: without a commit `step` returns before
 	# `_phase_clock` and the wipe would never be latched at all.
-	t.ok(b.summon(0, _summonable_water_on(b)) >= 0 and b.commit(), "한 명을 불러내고 시작을 눌렀다 (자가 점검)")
+	# ⚠ This summoned one body and pressed 시작; **both went with the boats** (2026-08-29). A body is
+	# stood on the island directly now, and the commit is what still opens the verdict.
+	t.ok(b.place_ashore(0, Islands.home_tile()) >= 0 and b.commit(), "한 명을 섬에 세우고 시작했다 (자가 점검)")
 	for i in range(r.army.type_id.size()):
 		r.army.kill(i)
 	t.eq(r.army.living_count(), 0, "병사가 하나도 안 남았다")
@@ -218,7 +220,7 @@ func _the_clock_ends_nothing(t) -> void:
 	var r := Run.new()
 	var b := _island_with_one_beast(r.army)
 	t.eq(b.enemies_left(), 1, "픽스처가 짐승 한 마리를 세웠다 (자가 점검)")
-	t.ok(b.summon(0, _summonable_water_on(b)) >= 0 and b.commit(), "한 명만 불러내고 시작을 눌렀다 (자가 점검)")
+	t.ok(b.place_ashore(0, Islands.home_tile()) >= 0 and b.commit(), "한 명만 섬에 세우고 시작했다 (자가 점검)")
 	# ⚠ **One sub-step per call, never `step(1.0)`.** `step` consumes whole `Rules.SIM_SUBSTEP_SEC`
 	# sub-steps and carries the leftover, so a 1.0 s call runs **59** of them and not 60 — the residue
 	# after sixty subtractions lands a hair under the sub-step in IEEE double — and the run would need
@@ -262,23 +264,6 @@ func _restart_resets(t) -> void:
 	t.eq(r.state(), Run.State.WON, "재시작 전에는 끝난 상태다 — 승리가 곧장 WON 이다")
 
 
-## ⚠⚠ **Found on the grid in front of it, not typed.** It used to be island 1's own literal tile, and
-## the day the first node stopped opening island 1 (2026-08-24 — every node has its own grid now) that
-## literal named water on a map 24 wide. **A tile this suite hard-codes is a tile that describes one
-## map**, and the thing being checked here has never been about which map.
-##
-## ⚠⚠ **IT ASKED FOR A LANDING AND IT ASKS FOR WATER NOW.** It read `home_harbour_for` and
-## `can_land_at` to find a beach a DRAG could reach; **the drag, `Battle.send` and the whole harbour
-## system behind them are deleted**, so the only way a body leaves the reserve is a summon — and
-## `summon` takes a WATER tile inside the band, never a beach. ⚠ **That the two verbs take different
-## kinds of tile cost a red round to notice once**; the name says which one this is so it cannot happen
-## twice.
-func _summonable_water_on(b: Battle) -> int:
-	var g := b.grid
-	for tile in g.w * g.h:
-		if g.can_summon_at(tile):
-			return tile
-	return -1
 
 
 ## The run's own island with **one wolf standing on it**, and the roster handed straight in so HP still

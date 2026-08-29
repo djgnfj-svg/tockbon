@@ -127,7 +127,6 @@ func _table() -> Dictionary:
 			# The bodies, as pooled billboards. `_put_*` writes node fields the engine consumes —
 			# that is the 3D leaf, and `net_shell` reads those fields back per enemy.
 			"_sprite": 0,
-			"_hull_box": 0,
 			"_put_body": 0,
 			"_paint_bodies": 0,
 			"_put_halo": 0,
@@ -144,20 +143,15 @@ func _table() -> Dictionary:
 			"_anim_sec": 0,
 			"_body_tex": 0,
 			"_put_soldier": 0,
-			"_put_hull": 0,
 			"_hide_unused": 0,
 			# The effect SIMULATION — carried across the move unchanged, still 0 draws each.
 			"_map_tiles": 0,
-			# Fed to the ground fx buffer by `_paint_boat_routes` — the caller it lost in the 3D
+			# ⚠ Every boat drawer left this table on 2026-08-29 with the boats themselves.
 			# move, re-wired in step 4.
-			"_route_ahead": 0,
-			"_tile_xy": 0,
-			"_hull_rect": 0,
 			"_beast_rect": 0,
 			"_facing_of": 0,
 			"_fx_step": 0,
 			"_drain_events": 0,
-			"_wait_blend": 0,
 			"_body_offset_of": 0,
 			"_lunge_offset": 0,
 			"_knock_offset": 0,
@@ -188,8 +182,6 @@ func _table() -> Dictionary:
 			"_a_seg3": 0,
 			"_fx_point3": 0,
 			"_paint_fx": 0,
-			# Step 4's revival: the caller `_route_ahead` had lost. 0 draws — it feeds the fx buffer.
-			"_paint_boat_routes": 0,
 			"_paint_intent": 0,
 			"_paint_transients": 0,
 			# ⚠⚠ **FIFTEEN NAMES WERE MISSING FROM THIS TABLE AND SEVENTEEN WERE STALE** (2026-08-28).
@@ -458,13 +450,16 @@ func run(t) -> void:
 ## the ticket). The closure below is what forced the re-derivation, both ways.
 ## ⚠ **A fifth left on 2026-08-28**: `REFUSE_MARK_WIDTH_PX`, with the refusal mark and the whole
 ## summon gesture behind it. The constant is still in `look.gd` and nothing reads it.
+## ⚠⚠ **A SIXTH LEFT ON 2026-08-29 AND IT IS THE ONE THIS TABLE WAS WRITTEN FOR**: `ROUTE_WIDTH_PX`,
+## deleted from `look.gd` with the boats. **The defect it recorded is what the table is** — a width
+## specified in world px reaches the glass multiplied by the zoom, and at `ZOOM_MIN` 0.45 the water
+## route drew at 1.35 px with the whole round green. **Any new world-space width does that sum here.**
 func _world_widths() -> Dictionary:
 	return {
 		"SHOT_WIDTH_PX": "",
 		"BURST_WIDTH_PX": "",
 		"AREA_RING_WIDTH_PX": "",
 		"LAND_RING_WIDTH_PX": "",
-		"ROUTE_WIDTH_PX": "",
 		"TARGET_LINE_WIDTH_PX":
 			"의도선은 알파 0.12 이고 한 번에 최대 14개가 섬 전체를 가로지른다 — 열두 연출 중 유일하게"
 			+ " 가독성에 손해일 수 있는 항목이라 look.gd 가 이미 적어 두었다. 굵히면 그 두 제한이 막으려던"
@@ -492,7 +487,7 @@ func _world_width_table(t) -> void:
 	var drawn := _look_width_names(_read(VIEW_DIR + "/field_view.gd"))
 	# ⚠ **It was eight until 2026-08-28.** `REFUSE_MARK_WIDTH_PX` left with the refusal mark, which
 	# went with the summon gesture — the constant still stands in `look.gd` with no reader at all.
-	t.eq(drawn.size(), 7, "field_view 가 그리는 데 쓰는 Look.*_WIDTH_PX 이름이 일곱이다 %s" % str(drawn))
+	t.eq(drawn.size(), 6, "field_view 가 그리는 데 쓰는 Look.*_WIDTH_PX 이름이 여섯이다 %s" % str(drawn))
 	var outside: Array[String] = []
 	for name: String in drawn:
 		if not table.has(name):
@@ -527,8 +522,9 @@ func _world_width_table(t) -> void:
 				"%s 는 일부러 바닥 밑이다 (%.2fpx) — 올렸다면 표의 이유가 낡은 것이니 여기서 문다"
 					% [name, on_glass])
 			t.ok(why.length() >= 40, "%s 가 바닥 밑인 이유가 적혀 있다" % name)
-	# ⚠ **It was six until 2026-08-28** — `REFUSE_MARK_WIDTH_PX` left the table with the refusal mark.
-	t.eq(above, 5, "바닥 위가 다섯이다")
+	# ⚠ **It was six until 2026-08-28** — `REFUSE_MARK_WIDTH_PX` left the table with the refusal mark —
+	# **and five until 2026-08-29**, when `ROUTE_WIDTH_PX` left it with the boats.
+	t.eq(above, 4, "바닥 위가 넷이다")
 	t.eq(below, 2, "일부러 바닥 밑인 것이 둘이다 — 의도선·파편")
 
 
@@ -665,7 +661,7 @@ func _invert_the_scanner(t) -> void:
 	t.eq(_look_width_names("\t_paint_thing(p, Look.NEW_MARK_WIDTH_PX)\n"),
 		["NEW_MARK_WIDTH_PX"] as Array[String],
 		"내일 추가된 굵기 이름을 뽑아낸다 — 표에 없으면 위에서 빨개진다 (스캐너 자가 점검)")
-	t.eq(_look_width_names("# ⚠ Look.ROUTE_WIDTH_PX was 3.0 and drew at 1.35 px\n").size(), 0,
+	t.eq(_look_width_names("# ⚠ Look.SHOT_WIDTH_PX was 3.0 and drew at 1.35 px\n").size(), 0,
 		"주석 안의 굵기 이름은 안 뽑는다 (스캐너 자가 점검)")
 	t.eq(_look_width_names("\tvar w := Look.BEAK_LENGTH_PX\n").size(), 0,
 		"굵기가 아닌 이름은 안 뽑는다 (스캐너 자가 점검)")

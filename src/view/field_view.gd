@@ -126,9 +126,7 @@ var _hover_cell := -1
 ## Which mat each tile belongs to, kept from the last `_rebuild_wash`. The hover mark reads it.
 var _wash_cell := PackedInt32Array()
 var _sprites: Array[Sprite3D] = []
-var _hulls: Array[MeshInstance3D] = []
 var _sprites_used := 0
-var _hulls_used := 0
 ## What the terrain in the mesh was built for. Rebuilding 5120 boxes every frame is waste; the island
 ## only changes when it opens, and the summonable band only when the plan is committed.
 var _built_for := ""
@@ -136,11 +134,10 @@ var _built_for := ""
 
 # --- what the sea is doing ----------------------------------------------------------------------
 
-## ⚠⚠ **THE PLAN'S OWN TWO FIELDS STOOD HERE AND ARE DELETED** (2026-08-28): `_summon_slot` and
-## `_summon_aim`, the slot a key had armed and the tile the cursor was over. The gesture they served
-## went with the start button — see `game.gd`'s header. `_wait_clock` is not part of it: it ages the
-## tint on a boat that has arrived and is waiting to unload.
-var _wait_clock := 0.0
+## ⚠⚠ **THE PLAN'S OWN THREE FIELDS STOOD HERE AND ALL THREE ARE DELETED**: `_summon_slot` and
+## `_summon_aim` on 2026-08-28 (the slot a key had armed and the tile the cursor was over), and
+## `_wait_clock` on 2026-08-29 with the boats — it aged the tint on a hull that had arrived and was
+## waiting to unload.
 
 
 func _ready() -> void:
@@ -317,7 +314,6 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	# flight over bodies that no longer exist, and every id in them means a different unit now.
 	_fx = []
 	_body = {}
-	_wait_clock = 0.0
 	# The survey: an island opens zoomed all the way out, so the WHOLE island is on screen before
 	# anything is planned — `plan-then-watch` 6.3, on the user's 「조금 더 카메라를 뒤로 빼야 될」.
 	# ⚠ **Not `ZOOM_MIN` any more.** See `Look.survey_zoom_of`: the opening view is a question about the
@@ -369,12 +365,11 @@ func _wash_cells(grid: Grid) -> PackedInt32Array:
 ## means an effect born this frame is at full amplitude on the frame it was born, so the flinch really
 ## does reach its full flinch once and the idle sway really does start from rest.
 ##
-## ⚠ **Every clock here is aged by the BARE frame delta**, `_wait_clock` included — there is no speed
+## ⚠ **Every clock here is aged by the BARE frame delta** — there is no speed
 ## multiplier to fold in, and a leaf handed a constant 1.0 is the shape "No fake code" names.
 func _process(delta: float) -> void:
 	_fx_step(delta)
 	_drain_events()
-	_wait_clock += delta
 	_place_camera()
 	# ⚠ **The buffers are opened BEFORE the bodies and flushed after everything.** The hit halo and the
 	# ghosts are painted from inside `_paint_bodies` — they are per-body facts and that is the one loop
@@ -1196,35 +1191,20 @@ func _sprite() -> Sprite3D:
 	return s
 
 
-func _hull_box() -> MeshInstance3D:
-	if _hulls_used < _hulls.size():
-		var reused := _hulls[_hulls_used]
-		_hulls_used += 1
-		reused.visible = true
-		return reused
-	var m := MeshInstance3D.new()
-	m.mesh = BoxMesh.new()
-	var mat := StandardMaterial3D.new()
-	# ⚠⚠ **Unshaded, like the summon ring and like the bodies standing on it.** `COL_BOAT` is a light
-	# tan measured on a FLAT BOARD, and under this world's sun plus fill plus ambient a 0.85 albedo
-	# lands well past 1.0 — every hull rendered as **a solid white rectangle**, which is what the first
-	# capture with big bodies made impossible to miss. A boat is the plan's own mark on the water and
-	# has to read the same at every sun angle, which is the ring's argument one object over.
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.material_override = mat
-	_world.add_child(m)
-	_hulls.append(m)
-	_hulls_used += 1
-	return m
+## ⚠⚠ **`_hull_box` STOOD HERE AND IT IS DELETED** (2026-08-29) with the boats. **The fact it cost a
+## capture to learn**: `COL_BOAT` was a tan measured on a FLAT BOARD, and under this world's sun plus
+## fill plus ambient a 0.85 albedo lands past 1.0 — every hull rendered as a solid white rectangle.
+## **A mark on the water has to read the same at every sun angle**, so its material was unshaded.
 
 
 ## Puts one billboard at a body's feet. `centre_px` is the same world px the flat board drew at, so
 ## every offset that already went through `_body_offset_of` follows across for free.
 ##
-## ⚠⚠ **`bleed_sec` IS MIXED IN AFTER THE FACTION TINT AND THAT ORDER IS THE WHOLE OF WHETHER IT CAN
-## BE SEEN.** Tinting a bled colour pulls it 45% back toward white and throws most of the pull away:
-## measured, the body's HUE did not move at all and only its brightness fell 27%, which reads as
-## shade rather than as blood. The side's colour is resolved first and the blood goes on top of it.
+## ⚠⚠ **A `bleed_sec` PARAMETER STOOD HERE AND IT IS DELETED** (2026-08-29) with the statuses — see
+## `battle.gd`'s status block for why nothing could ever light one. **The measurement it carried, for
+## the day blood comes back**: the blood must be mixed in AFTER the faction tint, because tinting an
+## already-bled colour pulls it 45% back toward white and throws most of the pull away — measured, the
+## body's HUE did not move at all and only its brightness fell 27%, which reads as shade, not as blood.
 ## ⚠⚠ **`at_tiles` IS THE BODY'S REAL PLACE AND `centre_px` IS WHERE IT IS DRAWN, AND THEY ARE NOT THE
 ## SAME POINT** (2026-08-28, the user: 「캐릭터가 좌우하면서 idle때 자꾸 2층을 넘어가네 이건 무슨
 ## 버그임?」). `centre_px` carries the lunge, the knock-back and the idle sway on top of the sim's
@@ -1241,7 +1221,7 @@ func _hull_box() -> MeshInstance3D:
 ## two axes were off by different amounts.
 ## ⇒ **The sim's own tile-unit position goes in, untouched.** The picture is offset afterwards.
 func _put_body(centre_px: Vector2, at_tiles: Vector2, radius: float, colour: Color, squash: Vector2,
-		tex: Texture2D, bleed_sec: float) -> float:
+		tex: Texture2D) -> float:
 	# ⚠⚠ **The shadow goes down FIRST and it is the body's only one** (2026-08-28, the user: 「그림자도
 	# 단순하게 아래 동그라미정도해줘」). It is drawn from here rather than from the two callers because
 	# this is the one place a body's centre and its drawn width are both in hand — putting it in the
@@ -1252,8 +1232,7 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, radius: float, colour: Col
 	var s := _sprite()
 	var pic: Texture2D = tex if tex != null else _tex_body
 	s.texture = pic
-	var team := Look.beast_tint(colour) if tex != null else colour
-	s.modulate = Look.bleeding(team, bleed_sec)
+	s.modulate = Look.beast_tint(colour) if tex != null else colour
 	var wide := (radius * Look.BEAST_SPRITE_W_RATIO if tex != null else radius * 2.0) 			* Look.BODY_SPRITE_SCALE
 	var sx := wide * squash.x / float(pic.get_width())
 	var sy := sx * squash.y / maxf(squash.x, 0.001)
@@ -1285,7 +1264,6 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, radius: float, colour: Col
 ## that are not ported yet.
 func _paint_bodies() -> void:
 	_sprites_used = 0
-	_hulls_used = 0
 	if battle == null or army == null or battle.grid == null:
 		_hide_unused()
 		return
@@ -1300,44 +1278,14 @@ func _paint_bodies() -> void:
 		var ekey := "e%d" % e
 		var ecentre := Look.tile_point_px(battle.enemy_pos[e]) + _body_offset_of(ekey)
 		var eradius := Look.body_radius_of(et)
-		# ⚠ **The bleed is handed DOWN rather than mixed in here**, so `_put_body` can put it on after
-		# the faction tint — see that function's own header for why the other order is invisible.
 		var etop := _put_body(ecentre, Vector2(battle.enemy_pos[e]), eradius,
 			Look.body_colour_of(true).lerp(Look.COL_FLASH, _flash_of(ekey)),
-			_gait_squash(ekey), _body_tex(ekey, et, _facing_of(e, true).x >= 0.0),
-			battle.status_left(Rules.Status.BLEED, e))
+			_gait_squash(ekey), _body_tex(ekey, et, _facing_of(e, true).x >= 0.0))
 		_put_halo(ekey, ecentre, Look.sprite_half_px(et), etop)
 
 	for raw_id in battle.ashore_ids():
 		var i := int(raw_id)
 		_put_soldier(i, battle.soldier_pos[i])
-
-	# The boats: a hull on the water and its passengers standing on it.
-	#
-	# ⚠⚠ **THIS USED TO SKIP EVERY BOAT BEFORE THE COMMIT AND THE USER CAUGHT IT** (2026-08-25:
-	# 「배를 놨으면 그게 바다에 보여야할듯」). The reason written here was *"a boat that has not left is
-	# its PLAN, and thirteen hulls stacked on one harbour is a blob that says nothing"* — and that was
-	# TRUE OF A GESTURE THAT NO LONGER EXISTS. It was the harbour drag: `Battle.send` starts every boat
-	# at `path[0]`, the harbour, so thirteen sends really did pile thirteen hulls on one tile. The drag
-	# is deleted and the shell has no caller for `send` at all; the sea summon starts a boat at
-	# `path[0]` too, and for a summon **that is the water tile the player pressed**. Thirteen summons
-	# are thirteen hulls in thirteen places.
-	# ⇒ **A placed boat is drawn from the moment it is placed.** What is drawn before the commit and
-	# after it is now the same picture, which is also the honest one: the boat EXISTS in `battle.boats`
-	# the instant the press lands, and a plan that shows nothing for a body it has already spent is the
-	# screen disagreeing with the sim.
-	for bk in battle.boats.size():
-		var boat: Dictionary = battle.boats[bk]
-		var anchor := Look.tile_point_px(Vector2(boat["pos"]))
-		var arrived := float(boat["t"]) * float(boat["speed"]) + Rules.EPS >= float(boat["dist"])
-		var waiting := int(boat["phase"]) == Battle.Phase.OUTBOUND and arrived
-		var hull_col := Look.COL_BOAT
-		if waiting:
-			hull_col = hull_col.lerp(Look.COL_HULL_WAIT, _wait_blend())
-		_put_hull(anchor, hull_col)
-		var soldiers: Array = boat["soldiers"]
-		for k in soldiers.size():
-			_put_soldier(int(soldiers[k]), Vector2(boat["pos"]))
 
 	_hide_unused()
 
@@ -1482,24 +1430,10 @@ func _put_soldier(i: int, at: Vector2) -> void:
 	# The wolf faces what it is walking at. `_facing_of` returns RIGHT when there is no target, so an
 	# idle body faces right rather than flipping on a zero vector.
 	var stex := _body_tex(skey, st, _facing_of(i, false).x >= 0.0)
-	# ⚠ **0.0, and not a lookup**: `battle`'s status arrays are per ENEMY. An allied body never carries
-	# one, and `_hit_soldiers` has no `_apply_statuses` twin — see `battle.gd`.
 	var stop := _put_body(scentre, at, sradius,
 		Look.body_colour_of(false).lerp(Look.COL_FLASH, _flash_of(skey)),
-		_gait_squash(skey), stex, 0.0)
+		_gait_squash(skey), stex)
 	_put_halo(skey, scentre, Look.sprite_half_px(st), stop)
-
-
-func _put_hull(anchor: Vector2, colour: Color) -> void:
-	var r := _hull_rect(anchor)
-	var m := _hull_box()
-	var box: BoxMesh = m.mesh
-	box.size = Vector3(r.size.x / Look.TILE_PX, Look.HULL_H_TILES, r.size.y / Look.TILE_PX)
-	var mat: StandardMaterial3D = m.material_override
-	mat.albedo_color = colour
-	m.position = Vector3(anchor.x / Look.TILE_PX,
-		Look.TERRAIN_H_WATER + Look.HULL_H_TILES * 0.5,
-		anchor.y / Look.TILE_PX)
 
 
 ## ⚠ **Hidden, never freed.** A pool that shrinks is a pool that reallocates on the next busy frame,
@@ -1508,8 +1442,6 @@ func _put_hull(anchor: Vector2, colour: Color) -> void:
 func _hide_unused() -> void:
 	for k in range(_sprites_used, _sprites.size()):
 		_sprites[k].visible = false
-	for k in range(_hulls_used, _hulls.size()):
-		_hulls[k].visible = false
 
 
 # --- the effect drawers, carried across the move unchanged -------------------------------------------
@@ -1571,39 +1503,12 @@ func _map_tiles() -> Vector2i:
 		return Vector2i(battle.grid.w, battle.grid.h)
 	return Vector2i(Look.GRID_W, Look.GRID_H)
 
-## The part of a boat's route it has NOT sailed yet, in canvas px: where the hull is standing now,
-## then every waypoint strictly past the segment it is on. **Draw 0** — it builds geometry and hands
-## it to `_paint_route`.
-##
-## ⚠⚠ **`leg` is read off the SIM and the walk is never re-derived here.** `_phase_boats` advances it
-## as the boat moves; a view that found its own segment by re-walking `cum` would be the same fact
-## computed in two places, and the two would drift the first time one of them changed — which is the
-## failure this file's own deleted `_deck_slots` comment records. The drawn line therefore cannot show
-## a boat sailing water it has already crossed, because the sim is what decides what is behind it.
-func _route_ahead(boat: Dictionary) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	out.append(Look.tile_point_px(Vector2(boat["pos"])))
-	var path: PackedVector2Array = boat["path"]
-	for k in range(int(boat["leg"]) + 1, path.size()):
-		out.append(Look.tile_point_px(path[k]))
-	return out
+## ⚠⚠ **`_route_ahead` · `_tile_xy` · `_hull_rect` STOOD HERE AND ALL THREE ARE DELETED**
+## (2026-08-29) with the boats. **What the route drawer knew**: `leg` was read off the SIM and the walk
+## was never re-derived here, so the drawn line could not show a boat sailing water it had already
+## crossed. A view that finds its own segment by re-walking the arc lengths is the same fact computed
+## in two places, and the two drift the first time one of them changes.
 
-func _tile_xy(tile: int) -> Vector2i:
-	var w := battle.grid.w
-	return Vector2i(tile % w, tile / w)
-
-## The hull rectangle, centred on world point `at` (`boat["pos"]`). **One size for every boat**: the
-## capacity column died with `Rules.BOATS` (`plan-then-watch`, 결정 14R), a boat carries the one
-## soldier that was dragged onto it, and nothing distinguishes two boats. `BOAT_SLOT_PX + 2 *
-## BOAT_HULL_PAD_PX` = 46 px wide.
-##
-## ⚠ **It lost its `boat` and `slot` arguments, and both are gone rather than defaulted.** There is no
-## fleet slot to index, and there is no second hull at one anchor to shift sideways — a boat is drawn
-## only after the commit, by which point it is moving.
-func _hull_rect(at: Vector2) -> Rect2:
-	var w := Look.BOAT_SLOT_PX + 2.0 * Look.BOAT_HULL_PAD_PX
-	var h := Look.BOAT_HULL_H_PX
-	return Rect2(at - Vector2(w, h) * 0.5, Vector2(w, h))
 
 ## Where the wolf goes: a rectangle centred on the body, **as wide as `BEAST_SPRITE_W_RATIO` body
 ## radii**, with the height taken from the texture's own aspect so the animal is never stretched.
@@ -1884,12 +1789,6 @@ func _drain_events() -> void:
 	# number of bodies instead, which is why this rule cannot reach a flash or a lunge.
 	while _fx.size() > Look.FX_MAX_COUNT:
 		_fx.remove_at(0)
-
-## P7. 0..1, one full on/off cycle every `HULL_WAIT_BLINK_SEC` — a raised cosine rather than a raw
-## sine, so it sits at exactly 0 and 1 at the ends of each half-cycle instead of sweeping through
-## every value with no rest, which reads as a pulse rather than a smear.
-func _wait_blend() -> float:
-	return 0.5 - 0.5 * cos(TAU * _wait_clock / Look.HULL_WAIT_BLINK_SEC)
 
 ## The one place a body's drawing offset is computed, so the body, the halo and the HP bar
 ## are all handed the same number. Split across call sites, one of them is eventually forgotten and
@@ -2262,36 +2161,14 @@ func _fx_point3(p: Vector2) -> Vector3:
 func _paint_fx() -> void:
 	if battle == null or army == null or battle.grid == null:
 		return
-	_paint_boat_routes()
 	_paint_intent()
 	_paint_transients()
 
 
-## ⚠⚠ **THREE PAINTERS STOOD HERE AND ALL THREE ARE DELETED** (2026-08-28): `_paint_plan` (the aim
-## ring and its water route), `_paint_placed_boats` (one ring per drop already made, which was the
-## undo's only picture) and `_paint_ghosts` (the bodies a press would land, drawn at the landing).
-## **All three drew the plan the player authored before pressing 시작**, and that gesture is gone —
-## see `game.gd`'s header. `grid.can_summon_at` / `summon_route` / `summon_landing_of` are untouched
-## in `sim`: the beasts' own boats will ask them.
-
-
-## **The remaining water route under every boat still crossing** — the part it has NOT sailed, read
-## straight off the sim's own `leg` through `_route_ahead` (whose header owns the argument for why
-## the view never re-walks it).
-##
-## ⚠ **The commit test is now always true and it is kept anyway.** The island commits itself at open
-## (`game._open_island`), so nothing reaches this function uncommitted — but `Battle` is drivable with
-## `.new()` and a headless net may step boats without ever committing, which is exactly the seam the
-## commit still marks. Only while OUTBOUND: an arrived boat has no water left to claim, and a line
-## drawn from its deck reads as a route it is about to sail again.
-func _paint_boat_routes() -> void:
-	if not battle.committed():
-		return
-	for raw_boat in battle.boats:
-		var boat: Dictionary = raw_boat
-		if int(boat["phase"]) != Battle.Phase.OUTBOUND:
-			continue
-		_g_line(_route_ahead(boat), Look.ROUTE_WIDTH_PX, Look.COL_ROUTE)
+## ⚠⚠ **EVERY BOAT PAINTER STOOD HERE AND ALL FOUR ARE DELETED.** `_paint_plan` (the aim ring and
+## its water route), `_paint_placed_boats` (one ring per drop, the undo's only picture) and
+## `_paint_ghosts` (the bodies a press would land) went on 2026-08-28 with the gesture that authored
+## them; `_paint_boat_routes` goes now (2026-08-29) with the boats themselves.
 
 
 ## **Who is going for whom**, one thin line per pair. The alpha is 0.12 and up to

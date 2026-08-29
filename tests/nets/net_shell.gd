@@ -106,16 +106,9 @@ class QuitGame extends Game:
 		quits += 1
 
 
-## The one button whose rect is `Look.start_rect_px()`, shaken or not — matched by SIZE, because the
-## shake moves the position and an exact rect compare would stop finding it on the frame of a refusal,
-## which is the one frame this net cares most about. `{}` when it is not on screen at all, which is
-## what a committed island has to produce.
-static func _start_button(hs: HudSpy) -> Dictionary:
-	var want := Look.start_rect_px()
-	for raw: Dictionary in hs.buttons:
-		if (raw["rect"] as Rect2).size == want.size:
-			return raw
-	return {}
+## ⚠ **`_start_button` stood here and it is deleted** (2026-08-29) with the start button. It matched
+## by SIZE rather than by an exact rect, because the refusal shake moves the position and an exact
+## compare stops finding the button on the one frame this net cared most about.
 
 
 ## ⚠ **`_speed_chips` is DELETED with the widget it read.** It matched five rects out of `buttons`;
@@ -301,15 +294,10 @@ func run(t) -> void:
 	# the whole harbour system behind them are deleted** (2026-08-27). ⚠ **The SUBJECT was never the
 	# harbour** — it is the shell driving the clock, and a boat on the board is only how a `commit()`
 	# becomes legal at all, so this is re-aimed rather than dropped.
-	# ⚠⚠ **The two verbs take different KINDS of tile**: `send` took a beach, `summon` takes WATER
-	# inside the band and answers -1 to anything else. Handing it a beach reddens this row for a reason
-	# that has nothing to do with the shell — it cost one red round once, and the helper's name is what
-	# stops it a second time.
-	var probe_tile := _summonable_water_on(game.battle)
-	t.ok(probe_tile >= 0, "소환 띠 안의 물 칸을 찾았다 (자가 점검 — 못 찾으면 아래가 전부 공허하다)")
-	t.ok(game.battle.summon(0, probe_tile) >= 0 and game.battle.commit(),
-		"한 명을 불러내고 확정했다 (자가 점검)")
-	t.eq(game.battle.boats.size(), 1, "그리고 배가 실제로 한 척 떠 있다 (바닥 — 빈 판이면 시계가 안 간다)")
+	# ⚠ **This summoned one body onto a boat and pressed 시작; the boats went 2026-08-29.** The island
+	# is committed directly now — the commit is what the clock is behind, and it is what this row is
+	# actually about.
+	t.ok(game.battle.commit(), "섬을 확정했다 (자가 점검)")
 	# ⚠ **Enough frames to cross ONE sub-step.** `step` consumes whole `Rules.SIM_SUBSTEP_SEC` chunks
 	# and carries the leftover, so three headless frames can accumulate less than 1/60 s and leave
 	# `elapsed` at exactly 0 for a reason that says nothing about the shell.
@@ -332,7 +320,6 @@ func run(t) -> void:
 	game._open_island()
 	await t.pump_frames(2)
 	t.ok(not game.battle.committed(), "다시 연 섬은 계획 상태다 (자가 점검)")
-	t.eq(game.battle.boats.size(), 0, "그리고 계획이 비어 있다 (자가 점검)")
 
 	# From here the sim is frozen, so a captured frame and a value read after it are the same instant.
 	game.set_process(false)
@@ -453,363 +440,26 @@ func run(t) -> void:
 	# one would measure the fixture. (`field_view._paint_bodies`' own comment records where the old
 	# enemies-then-allies rule went.)
 
-	# -- the HUD, and the number on it coming from the sim -----------------------------------------
-	# ⚠ **The timer rows are DELETED with the countdown** — nothing loses by the clock any more, so
-	# `HudView` stopped drawing it and `_paint_timer` is gone. The planning HUD is the start button,
-	# the slot row and the enemy count.
-
-	# ⚠⚠ **The berth boxes, the per-boat load labels, the two key slots AND the five speed chips are
-	# all DELETED.** What is on this layer during planning is ONE start button — one call to the hook —
-	# plus the timer and the enemy count. Three text items, against the shipped build's six and the
-	# eight this file counted one round ago.
-	t.eq(hs.buttons.size(), 1, "HUD 단추는 시작 하나뿐이다 — 배속 칩 다섯이 사라졌다")
-	var start_btn := _start_button(hs)
-	t.ok(not start_btn.is_empty(), "시작 버튼이 화면에 있다")
-	t.eq(str(start_btn["text"]), "시작", "시작 버튼에 「시작」이라고 쓰여 있다")
-	t.eq(start_btn["rect"], Look.start_rect_px(), "그리고 안 흔들린 자리에 있다")
-	t.eq(start_btn["bg"], Look.COL_START, "아직 아무것도 안 눌러서 시작 버튼이 기본색이다 (바닥)")
-	t.eq(start_btn["fsize"], Look.HUD_START_FONT_SIZE_PX, "글자 크기가 look.gd 값이다")
-	# The label has to be PLACED inside the box, not dropped at its origin — a glyph at the rect's own
-	# corner is a glyph nobody positioned, and it is the floor proving the label exists at all.
-	var start_at: Vector2 = start_btn["at"]
-	t.ok(start_at.distance_to((start_btn["rect"] as Rect2).position) > 1.0,
-		"그리고 글자가 상자 모서리가 아니라 상자 안쪽에 놓였다")
-	t.ok((start_btn["rect"] as Rect2).has_point(start_at), "그 자리가 상자 안이다 (천장)")
-
-	# ⚠⚠ **배속 칩이 화면에서 사라졌다, and it is asserted as an ABSENCE with a floor under it.**
-	# 「buttons has no chip」 is also true of a HUD that stopped drawing entirely, so the floor is the
-	# start button one block up: exactly one button, and it is the start button at its own rect.
-	var chip_shaped := 0
-	for raw_btn: Dictionary in hs.buttons:
-		if (raw_btn["rect"] as Rect2).size != Look.start_rect_px().size:
-			chip_shaped += 1
-	t.eq(chip_shaped, 0, "시작 버튼 말고는 HUD 에 상자가 하나도 없다 — 배속 칩이 그려지지 않는다")
-	t.eq((start_btn["rect"] as Rect2).size, Look.start_rect_px().size,
-		"그 하나가 시작 버튼의 크기다 (바닥 — HUD 가 통째로 죽어서 0개인 게 아니다)")
-
-	t.eq(hs.enemies.size(), 1, "남은 적 수를 한 번 그렸다")
-	t.eq(str(hs.enemies[0]["text"]), "적 %d" % b.enemies_left(), "남은 적 글자가 sim 의 수다")
-	t.eq(ps.panels.size(), 0, "전투 중에는 패널이 한 번도 안 그려졌다")
-	# ⚠ **The counted glyph budget, re-counted when the countdown died**: it was 3 (timer + start +
-	# enemy) and the timer went with the rule it counted to — **2 text items on the planning
-	# screen**. Recorded here so it cannot drift back up without somebody editing this number.
-	t.eq(hs.buttons.size() + hs.enemies.size(), 2,
-		"계획 화면의 글자 항목은 둘이다 (시작 1 + 적 1) — 시계는 지는 규칙과 함께 죽었다")
-	t.ok(int(start_btn["seq"]) < int(hs.enemies[0]["seq"]),
-		"HUD 는 시작 버튼 -> 남은 적 순서로 그린다")
-
-	# **The resting look of the start button**, captured before any press. Item 8's whole content is
-	# the DIFFERENCE from this, so it has to be read once while nothing has happened yet.
-	var rest_key_rect: Rect2 = start_btn["rect"]
-	var rest_key_at: Vector2 = start_btn["at"]
-
-	# -- every rectangle that reached a hook has area, and lands where its own space says it should ---
-	# ⚠ **The field half of this check is DELETED with its rects** — the field hands the engine 3D
-	# node fields, not rectangles, and the world-bound it was held to died with the canvas. The HUD
-	# half survives: `hud_view` is still a 2D layer in viewport coordinates.
-	var hud_rects: Array[Rect2] = []
-	for it: Dictionary in hs.buttons:
-		hud_rects.append(it["rect"])
-	_rects_land_on_screen(t, "전투 화면 — HUD", hud_rects)
-
-	# ⚠ The drag's own tile picks (`sendable_tile` / `second_tile` / `refuse_tile`) went with the drag.
-	# What the rows below still need is picked from the SUMMON band, further down.
-	# ⚠ The inland-refusal fixture went with the drag's release, which is what marked a refusal there.
-
-	# ⚠⚠ **초록색 해안이 사라졌다.** The wash used to be drawn from the moment the island opened and
-	# the user asked for its inverse (「못내림만 표시하면 됨 ㅇㅇ」). The hook is gone; the tile-pass
-	# overpaint rows that used to follow are gone WITH the tile pass itself — the terrain is one mesh
-	# built once, so "a second coat per frame" has no per-frame pass left to hide in.
-	t.ok(not fs.has_method("_paint_overlay"),
-		"타일 덧칠 훅 자체가 없다 — 초록 해안을 그릴 방법이 남아 있지 않다")
-	# ⚠ The row comparing `send`'s whole domain with one harbour's reach went with the drag.
-	# ⚠⚠ **And `send` itself is now DELETED from the sim** (2026-08-27), with `can_land_at`, `sendable`,
-	# `water_route`, `home_harbour_for` and the rest of the harbour tables — it had zero callers in
-	# `src/` once the drag went, so the domain that row compared no longer exists to be compared.
-	# **What outlives it**: the claim was 「the droppable union is WIDER than any one harbour's reach」,
-	# a floor that made the union a claim rather than a rename. A summon has no harbour to be wider
-	# than, so the claim has no successor here — the band's own two numbers are what `net_summon`
-	# holds to instead, floor and ceiling both.
-
-	# -- item 8: a refused START shakes the button, and an accepted one does not ---------------------
-	# ⚠ **This runs FIRST, while `boats` is still empty**, because an empty plan is the only thing that
-	# makes `commit()` refuse. Both ends of the amplitude are pinned — `REFUSE_SHAKE_PX`'s only reader
-	# is this shake now (`_berth_offset` died with the berths), so deleting the shake deletes the
-	# constant's last reader and a floor alone would not notice.
-	t.eq(b.boats.size(), 0, "아직 아무 배도 안 놓았다 (자가 점검)")
-	t.root.push_input(_press(Look.start_rect_px().get_center()), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(Look.start_rect_px().get_center()), true)
-	t.ok(not b.committed(), "배를 안 띄우고 누른 시작은 거절된다 — 판이 확정되지 않았다")
-	var refused_btn := _start_button(hs)
-	t.ok(not refused_btn.is_empty(), "거절당한 뒤에도 시작 버튼은 화면에 있다 (자가 점검)")
-	t.ok(refused_btn["bg"] != Look.COL_START, "거절된 시작 버튼 색이 기본색에서 벗어났다 (바닥)")
-	var key_shift: Vector2 = (refused_btn["rect"] as Rect2).position - rest_key_rect.position
-	t.ok(key_shift.length() > 0.0, "거절된 시작 버튼이 흔들렸다 (%.2f px)" % key_shift.length())
-	t.ok(key_shift.length() <= Look.REFUSE_SHAKE_PX + 0.01,
-		"그리고 REFUSE_SHAKE_PX 를 안 넘는다 (천장 — 바닥만 재면 진폭이 폭주해도 초록이다)")
-	t.ok(absf(key_shift.y) <= 0.0, "흔들림은 좌우뿐이다")
-	# ⚠ A tolerance and not `==`: both sides are differences of sums of the same floats. 0.01 px is two
-	# orders below the shake's own amplitude, so it cannot absorb the bug it exists to catch — shaking
-	# the box alone leaves the label at exactly 0.
-	var label_shift: Vector2 = (refused_btn["at"] as Vector2) - rest_key_at
-	t.ok(label_shift.distance_to(key_shift) < 0.01,
-		"글자도 상자와 같은 오프셋만큼 움직였다 (상자 %.3f · 글자 %.3f)" % [key_shift.x, label_shift.x])
-
-	# -- ⚠⚠ THE ENTIRE DRAG SUITE IS DELETED — ~320 LINES, SUBJECT AND ALL --------------------------
-	# What stood here: press a body at the harbour, watch the candidate ring follow the cursor and turn
-	# `COL_WIN`/`COL_LOSE`, read the drag's route preview point-for-point against `grid.water_route`,
-	# release over water and over inland and count the refusal marks, undo with the landing ring, prove
-	# the ring beats the body in the hit test, and author the whole ten-boat plan by dragging.
+	# -- ⚠⚠ THE WHOLE PLANNING PATH IS DELETED — ~360 LINES, SUBJECT AND ALL ------------------------
+	# What stood here (2026-08-29): the HUD's one start button read off the paint hook, every HUD
+	# rectangle held to the viewport it is laid out in, item 8's refusal shake with both ends of its
+	# amplitude pinned, ten summons filling the roster onto two beaches, the commit that made them all
+	# depart on one frame, the remaining route line under a crossing hull, the clock proving the shell
+	# hands `Battle.step` a real delta, and every press refused after the commit.
 	#
-	# **The gesture is deleted.** The user pointed at the harbour markers and the reserve stack and said
-	# ***"ㅇㅇ 지워줘"***, and the drag is what they had already called not fun (`idea-inbox` row 26).
-	# `_soldier_hit_at`, `field_view.set_drag`, `_drag_soldier` and `idle_soldier_rect` are gone.
+	# **All of it measured a screen and a gesture that no longer exist.** The HUD draws nothing, the
+	# summon gesture went 2026-08-28, and the boats went with `grid`'s water half. **What the rows
+	# knew that outlives them:**
 	#
-	# ⚠ **Deleted rather than repaired**, and what replaced it is not nothing: `net_slots` drives the
-	# summon through the INPUT path end to end — the band, the keys, the press, the beat, the sweep, the
-	# release, a dry slot, outside the band, after the commit, the aim marks and the slot row. This file
-	# needs a PLAN so the rows below it have boats on screen, so it calls the sim directly rather than
-	# re-driving a gesture another net already owns.
-	#
-	# ⚠⚠ **THREE THINGS THE DRAG SUITE MEASURED HAVE NO REPLACEMENT ANYWHERE**, and they are named here
-	# rather than quietly dropped:
-	#   1. **the route preview compared point-for-point with the sim's own route** — the only runtime
-	#      catch for `_paint_route` cutting a corner over the island (`net_draw_leaf` counts call sites
-	#      and cannot tell a polyline from a straight line). The summon draws its own route line and
-	#      `net_slots` reads it, but not against `grid.summon_route` point for point;
-	#   2. **the refusal mark's whole life** — that it fires on a refused release, at the cursor, once,
-	#      and NOT on an accepted one. `net_slots` counts refusals per beat; it does not check the mark
-	#      is absent on success;
-	#   3. **hit-test precedence** — a landing ring on top of a body. There is no body any more, so the
-	#      precedence itself is gone, not merely unmeasured.
-	#
-	# The plan below is authored with `battle.summon`, aimed at two different derived landings so the
-	# ghost-fan rows underneath still have two beaches to tell apart.
-	var band_tiles := []
-	for bt in b.grid.summon_hops.size():
-		if b.grid.can_summon_at(bt):
-			band_tiles.append(bt)
-	t.ok(band_tiles.size() > 0, "이 섬에 소환할 수 있는 바다 칸이 있다 (%d칸 — 자가 점검)" % band_tiles.size())
-	var tile_a := int(band_tiles[0])
-	var tile_b := -1
-	for raw_bt in band_tiles:
-		if b.grid.summon_landing_of(int(raw_bt)) != b.grid.summon_landing_of(tile_a):
-			tile_b = int(raw_bt)
-			break
-	t.ok(tile_b >= 0, "상륙지가 서로 다른 바다 칸 둘을 골랐다 (자가 점검)")
-	var second_px := Look.tile_point_px(b.grid.tile_point(b.grid.summon_landing_of(tile_b)))
-
-	# Two at one beach and one at the other — the fan rank has to be counted among the boats sharing a
-	# LANDING, not among all boats, and one beach cannot tell those two indices apart.
-	for press_tile in [tile_b, tile_b, tile_a]:
-		t.ok(b.summon(0, press_tile) >= 0, "바다를 눌러 한 척 띄웠다 (자가 점검)")
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), 3, "셋을 순서대로 띄웠다 — 둘은 같은 해변, 하나는 다른 해변")
-
-	# ⚠⚠ **OPEN 0 as a shell check, and it is the same claim the drag version made.** The brake is
-	# deliberately absent (the user: 「일단 빼고 만든 이후에 추가하자는 거임」), so every remaining body
-	# has to be placeable. **This also makes the crossing rows below mean something**: three boats at
-	# one distance cannot show a route shrinking or a fleet in motion, and ten at two distances can.
-	var before_fill := b.boats.size()
-	for slot_i in b.army.slot_count():
-		var guard := 0
-		while not b.slot_reserve_ids(slot_i).is_empty() and guard < 40:
-			t.ok(b.summon(slot_i, tile_a if guard % 2 == 0 else tile_b) >= 0,
-				"%d번 슬롯에서 한 명 더 내보냈다 (자가 점검)" % slot_i)
-			guard += 1
-	await t.pump_frames(1)
-	# ⚠⚠ **THE EXPECTATION READ `roster_start_count() + SPECIES_CARD_BODIES` — 10 + 4 = 14 — AND THE
-	# `+ 4` IS DELETED WITH THE BEAST CARD** (2026-08-27). Those four bodies arrived on the opening card
-	# back when a card could hand a summon slot a species; **an equipment card recruits nobody**, so what
-	# stands on the beach is the opening table alone. `START_SLOTS` is one row of ten ⇒ **10 boats**.
-	# ⚠ **The ten is not written on the assertion's own side** (it is in the label, where a wrong number
-	# reads as a wrong number rather than as a green): `roster_start_count()` sums the table, so an
-	# opening table that is re-tuned moves this expectation with it instead of reddening a hand copy.
-	t.eq(b.boats.size(), Rules.roster_start_count(),
-		"명단 전부(시작 병력 열 명)를 내보낼 수 있다 — 배 수에 상한이 없다")
-	t.ok(b.boats.size() > before_fill, "그리고 실제로 늘었다 (자가 점검)")
-	var all_transit := 0
-	for si5 in b.soldier_state.size():
-		if b.soldier_state[si5] == Battle.SoldierState.TRANSIT:
-			all_transit += 1
-	# ⚠ The same arithmetic as the row above, read off the SOLDIERS instead of the boats. **14 became 10
-	# because the four bodies the beast card used to bring with it are gone**, not because anything
-	# refused to sail — the boat count one row up is what would catch that.
-	t.eq(all_transit, Rules.roster_start_count(), "열 명 전부 배에 탔다")
-	t.eq(b.elapsed, 0.0, "열 척을 내보내는 동안에도 시계는 정확히 0이다")
-
-	# -- the start button commits, and the screen changes with it --------------------------------------
-	t.root.push_input(_press(Look.start_rect_px().get_center()), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(Look.start_rect_px().get_center()), true)
-	await t.pump_frames(1)
-	t.ok(b.committed(), "시작 버튼이 계획을 확정한다")
-	t.eq(_start_button(hs), {}, "확정한 순간 시작 버튼이 화면에서 사라진다 — 못 누르는 단추는 안 그린다")
-	var ghost_mod := Look.beast_tint(Look.ghost_tint())
-	var ghosts_after := 0
-	for sg: Sprite3D in _used_sprites(fs):
-		if sg.modulate == ghost_mod:
-			ghosts_after += 1
-	t.eq(ghosts_after, 0, "유령 색을 입은 몸이 하나도 없다 — 유령은 계획의 것이다")
-	t.eq(fs._hulls_used, b.boats.size(), "대신 배마다 선체가 하나씩 그려진다")
-	t.ok(fs._hulls[0].visible, "그 선체가 실제로 켜져 있다 (자가 점검)")
-	t.eq((fs._hulls[0].material_override as StandardMaterial3D).albedo_color, Look.COL_BOAT,
-		"선체 색이 look.gd 값이다 — 기다림 깜박임 전의 쉬는 색")
-	# ⚠⚠ **확정 뒤 HUD 에 상자가 하나도 없다.** The start button goes at the commit and the five speed
-	# chips no longer exist, so this layer answers no press at all — that is 결정 1 without the escape
-	# hatch the chips used to be. The floor for this zero is the `== 1` one section above, measured on
-	# the same HUD a few frames earlier.
-	t.eq(hs.buttons.size(), 0, "확정 뒤 HUD 에 상자가 하나도 안 남는다")
-	t.eq(hs.buttons.size() + hs.enemies.size(), 1,
-		"실행 화면의 글자 항목은 하나다 (적 1) — 시계는 지는 규칙과 함께 죽었다")
-
-	# -- ⚠⚠ 항해 중인 배의 「남은 길」 선은 아직 3D 로 안 돌아왔다 — 행도 그와 함께 내린다 -------------
-	# The rows that stood here read the drawn polyline against `path.slice(leg + 1)` every 0.05 s of
-	# a real crossing. **The picture itself is unported**: `_route_ahead` still computes the
-	# remaining route and NOTHING calls it — the aim's route came back with the twelve, the sailing
-	# boat's did not. A vanished check is worse than a red one, so the absence is stated here AND on
-	# ticket 09 (step 4's fx round owns the revival) instead of the rows being quietly dropped.
-	# The sim's own crossing is still advanced so the rows below start from the same state they did.
-	for _cn2 in 160:
-		game._process(0.05)
-		if b.boats.is_empty():
-			break
-		if int((b.boats[0] as Dictionary)["phase"]) != Battle.Phase.OUTBOUND:
-			break
-	await t.pump_frames(1)
-
-	# ⚠⚠ **결정 1 as a check.** All three plan branches are gated, and the three of them are pressed.
-	var boats_snapshot := b.boats.size()
-	# ⚠ The two branches that pressed a BODY and released a held soldier are deleted with the drag.
-	# What is left after the commit is the ring undo and the summon, and both are pressed below.
-	# ⚠⚠ **The summon's own post-commit gate is `net_slots`' `_after_the_commit`**, which presses a
-	# band tile with a slot still armed and reads the boat count AND the refusal count.
-	# ⚠ **The gate is on the BRANCH, not on the hit test.** `_ring_hit_at` still answers — it is a pure
-	# geometry lookup — so the row that matters is that pressing there changes nothing.
-	# ⚠ `second_px` is a WORLD point; the press has to arrive in SCREEN px, and the flat board's
-	# "park at zoom 1 and the two coincide" is gone — the pitch stretches the vertical. `_screen_of`
-	# is the one inverse this file writes, and `net_camera` is what pins the conversion it inverts.
-	# ⚠ The landing ring lies on LAND, so the aim carries that tile's own height — the flat inverse
-	# points a tile and a half short of it and the self-check below reddens on the aim rather than on
-	# the gate (2026-08-25).
-	var second_screen := _screen_of(fs, second_px,
-		fs._ground_h(int(second_px.x / Look.TILE_PX), int(second_px.y / Look.TILE_PX)))
-	t.ok(game._ring_hit_at(second_screen) >= 0, "고리 자체는 여전히 그 자리에 있다 (자가 점검)")
-	t.root.push_input(_press(second_screen), true)
-	await t.pump_frames(1)
-	t.root.push_input(_release(second_screen), true)
-	await t.pump_frames(1)
-	t.eq(b.boats.size(), boats_snapshot, "확정 뒤에는 고리를 눌러도 안 무른다")
-	# ⚠⚠ **THE RELEASE BRANCH'S OWN GATE IS DELETED WITH THE DRAG, and so is the row that reached it
-	# by hand.** That row was already labelled as unable to redden on its own — `Battle.send` refuses a
-	# committed island by itself — and `_on_left_release` now holds nothing that could author anything.
-
-	# -- the clock runs with nothing pressed at all ----------------------------------------------------
-	var elapsed_before := b.elapsed
-	for _n in 4:
-		game._process(0.016)
-	t.ok(b.elapsed > elapsed_before,
-		"시작하면 아무것도 안 눌러도 시계가 간다 (%.4f초) — 셸이 delta 를 안 넘기면 여기가 문다" % b.elapsed)
-
-	# -- ⚠⚠ 확정 뒤 화면 아무 데나 눌러도 시뮬레이션이 안 바뀐다 ----------------------------------------
-	# The four corners of the row the chips USED to occupy, typed as literals because
-	# `Look.speed_rect_px` no longer exists to ask. Pressed through `game._unhandled_input` directly —
-	# mouse clicks pushed at the root arrive at (2000, 6520) in a 64px headless window and hit nothing
-	# with no error at all, so half an input suite can be green while the other half is dead.
-	var ghost_row := Rect2(Vector2(1060.0, 648.0), Vector2(220.0, 40.0))
-	var corners: Array[Vector2] = [
-		ghost_row.position + Vector2(2.0, 2.0),
-		Vector2(ghost_row.end.x - 2.0, ghost_row.position.y + 2.0),
-		Vector2(ghost_row.position.x + 2.0, ghost_row.end.y - 2.0),
-		ghost_row.end - Vector2(2.0, 2.0),
-	]
-	# ⚠⚠ **THE WINDOW IS 30 FRAMES AND IT WAS 6** (2026-08-25). The first island stopped being a
-	# rectangle and grew a plateau reached through **one stair tile**, so fourteen bodies queue at that
-	# door — measured at up to 9.35 s motionless for a single body. 6 frames is 0.096 s, and a queue
-	# that is inching forward moves less than `Rules.EPS` in that time: **the floor row below went red
-	# on a sim that was working exactly as designed.** 0.48 s is still far under any queue and still
-	# reddens on a genuinely frozen screen.
-	# ⚠ **The queue itself is a real complaint and is not fixed here** — 티켓 26 carries it (「줄서기」),
-	# and widening this window does not make it smaller. This row was never the one measuring it.
-	const MOTION_FRAMES := 30
-	# The control arm: the same number of `_process` calls with NO presses at all. Run first, off a
-	# snapshot, so the comparison is against a number rather than against a hope.
-	var control_elapsed := b.elapsed
-	var control_substeps := b.substeps
-	for _cn in MOTION_FRAMES:
-		game._process(0.016)
-	var control_after_elapsed := b.elapsed - control_elapsed
-	var control_after_substeps := b.substeps - control_substeps
-
-	var pressed_elapsed := b.elapsed
-	var pressed_substeps := b.substeps
-	var pressed_positions: Array = []
-	for i5 in b.soldier_state.size():
-		pressed_positions.append(Vector2(b.soldier_pos[i5]))
-	for c5: Vector2 in corners:
-		game._unhandled_input(_press(c5))
-		game._unhandled_input(_release(c5))
-	for _pn in MOTION_FRAMES:
-		game._process(0.016)
-	t.ok(absf((b.elapsed - pressed_elapsed) - control_after_elapsed) <= 1e-5,
-		"옛 배속 줄 네 귀퉁이를 눌러도 시계가 아무것도 안 누른 판과 똑같이 간다")
-	t.eq(b.substeps - pressed_substeps, control_after_substeps,
-		"서브스텝 수도 똑같다 — 누름이 시뮬레이션을 한 번도 안 건드렸다")
-	# ⚠ **AT LEAST ONE, and it used to be ALL.** Under the drag every boat left from one harbour and
-	# every soldier was still at sea at this point, so "all of them moved" happened to hold. A summoned
-	# boat lands sooner and a soldier ASHORE that is blocked or already in reach stands still — which
-	# is correct behaviour, not a dead screen. The floor this row is (**the sim is not frozen**) is
-	# carried by one body in motion; that the sim advanced at all is pinned two lines up on `substeps`.
-	var moved := 0
-	var counted := 0
-	for i6 in b.soldier_state.size():
-		if b.soldier_state[i6] == Battle.SoldierState.RESERVE:
-			continue
-		counted += 1
-		if Vector2(pressed_positions[i6]).distance_to(Vector2(b.soldier_pos[i6])) > Rules.EPS:
-			moved += 1
-	t.ok(counted > 0, "셀 병사가 있다 (자가 점검 — 0명이면 아래가 공허하다)")
-	t.ok(moved > 0,
-		"그 사이 병사들은 실제로 움직이고 있었다 (%d/%d — 바닥, 죽은 화면이라 안 바뀐 게 아니다)"
-			% [moved, counted])
-	# And the camera still answers, which is what stops the row above being green because the screen
-	# is dead. Driven downward: `ZOOM_MAX` is 1.0 and the camera can be parked there.
-	var ghost_zoom := fs.zoom
-	game._unhandled_input(_wheel(ghost_row.get_center(), false))
-	t.ok(fs.zoom < ghost_zoom,
-		"그래도 같은 자리에서 휠은 화면을 움직인다 (%.3f -> %.3f)" % [ghost_zoom, fs.zoom])
-	fs.zoom = ghost_zoom
-	await t.pump_frames(1)
-
-	# ⚠⚠ **Without this row the three above are satisfied by a screen that does nothing at all.**
-	# `_on_wheel` and the `_panning` fall-through are NOT gated on the commit — three plan branches
-	# are, not four — and this is what says so.
-	# ⚠ The wheel is driven DOWNWARD: `Look.ZOOM_MAX` is 1.0 and the camera is parked there, so zooming
-	# in has nowhere to go and 「it did nothing」 would be the clamp, not the gate.
-	var zoom_before := fs.zoom
-	for _n3 in 2:
-		game._unhandled_input(_wheel(Vector2(640.0, 360.0), false))
-	t.ok(fs.zoom < zoom_before, "전투 중에도 휠은 화면을 움직인다 (%.3f -> %.3f)" % [zoom_before, fs.zoom])
-	# ⚠ And the camera is parked mid-map first. At `ZOOM_MIN` the map is narrower than the visible
-	# world on BOTH axes and `_clamp_cam` centres both, so a pan there cannot move anything — that is
-	# the framing the user asked for, not a defect, and a row that ignored it would measure the clamp.
-	fs.zoom = 1.0
-	fs.cam_px = Vector2(300.0, 300.0)
-	await t.pump_frames(1)
-	var cam_before: Vector2 = fs.cam_px
-	game._unhandled_input(_press(Vector2(640.0, 360.0)))
-	game._unhandled_input(_motion(Vector2(640.0, 360.0), Vector2(200.0, 120.0)))
-	game._unhandled_input(_release(Vector2(840.0, 480.0)))
-	t.ok(fs.cam_px != cam_before, "전투 중에도 화면은 끌린다 — 손이 멈춘 것이지 화면이 죽은 게 아니다")
-
-	# Left at ZOOM_MIN, the state `setup()` actually produced, so the wheel test right after this
-	# section still measures "zoomed IN from where the island opened" rather than from wherever this
-	# section happened to leave the camera. (`fs.set_drag(-1, -1)` stood here and is deleted with the
-	# gesture it cleared.)
-	fs.zoom = Look.ZOOM_MIN
-	fs.cam_px = Vector2.ZERO
-	await t.pump_frames(1)
+	#  · **The shake's amplitude was pinned at BOTH ends.** A floor alone stays green while the
+	#    amplitude runs away, and this net was the constant's only reader.
+	#  · **The label moved with the box, to a 0.01 px tolerance.** Shaking the box alone leaves the
+	#    glyph at exactly 0 — an exact `==` on two sums of the same floats is the wrong instrument.
+	#  · **Every press went in as an `InputEventMouseButton` handed to `_unhandled_input`**, never
+	#    `root.push_input` — the 64x64 headless window's 0.05 stretch sends a click thousands of px
+	#    away, silently.
+	#  · **The clock row is the one to rebuild first.** It caught the shell not handing `step` a delta,
+	#    and nothing measures that today.
 
 	# -- the camera, through the shell's own input path -----------------------------------------------
 	# The wheel zooms about the cursor; a left press on the FIELD (never the panel, which is not up
@@ -862,10 +512,9 @@ func run(t) -> void:
 	t.eq(ps.buttons[0]["rect"], Look.button_rect_px(), "단추가 look.gd 가 계산한 자리다")
 	t.eq(str(ps.buttons[0]["text"]), PanelView.BUTTON_LABEL, "단추에 다시 하기라고 쓰여 있다")
 	t.eq(ps.buttons[0]["bg"], Look.COL_BUTTON, "다시 하기 단추 색도 COL_BUTTON 이다 — 상수의 두 번째 못")
-	# ⚠ **And it is NOT `Look.start_rect_px()`.** One rect answering to two verbs is how a restart gets
-	# pressed by someone aiming at start; `panel_view.button_hit` owns this one.
-	t.ok(not Look.button_rect_px().intersects(Look.start_rect_px()),
-		"다시 하기 단추와 시작 버튼은 서로 다른 자리다 — 한 사각형이 두 동사를 받지 않는다")
+	# ⚠ **The row that held this rect apart from `Look.start_rect_px()` is deleted with that rect**
+	# (2026-08-29). The rule it enforced stands: **one rectangle answering to two verbs is how a restart
+	# gets pressed by someone aiming at start**, and `panel_view.button_hit` owns this one alone.
 	var button_rects: Array[Rect2] = []
 	for it: Dictionary in ps.buttons:
 		button_rects.append(it["rect"])
@@ -876,33 +525,11 @@ func run(t) -> void:
 
 	_panel_active_answers_all_five_screens(t)
 	await _one_press_reaches_the_first_island(t)
-	_the_plan_constants_have_both_ends(t)
-	_the_readers_themselves(t)
 	_the_speed_ladder_is_gone(t)
 	_speed_steps_survives_read_by_nobody(t)
 	_every_lose_reason_reads_differently(t)
 
 
-## The first tile on this island's grid that a summon press is allowed on — **WATER inside the band,
-## and the name says so on purpose.**
-##
-## ⚠⚠ **THE TWO VERBS TOOK DIFFERENT KINDS OF TILE AND IT COST A RED ROUND.** The deleted `Battle.send`
-## took a BEACH — a passable land tile a boat could unload onto — and every probe in this file used to
-## find one by walking `passable` for a tile `grid.home_harbour_for` answered on. `summon` takes water
-## and returns -1 for a beach, silently, so a fixture that hands it one reddens a row about the SHELL
-## for a reason that is entirely about tiles.
-##
-## ⚠ **Found on the grid in front of it, never typed.** A tile a net hard-codes is a tile that describes
-## one map, and every subject in this file has always been the shell rather than which map is open.
-##
-## ⚠ Deliberately the SAME shape and the same name as `net_run`'s own helper rather than a clever twin —
-## two spellings of one search is how the beach/water confusion comes back.
-func _summonable_water_on(b: Battle) -> int:
-	var g := b.grid
-	for tile in g.w * g.h:
-		if g.can_summon_at(tile):
-			return tile
-	return -1
 
 
 ## Presses a map node the way a hand does — through `_unhandled_input`, then the ring's walk run out
@@ -915,15 +542,11 @@ func _summonable_water_on(b: Battle) -> int:
 ## (`plan-then-watch`, 4.3) — `step` returns before `_phase_clock`, so an emptied `enemy_alive` would
 ## never be latched at all and the hold below would wait forever on a verdict that never comes.
 func _win_the_open_island(t, game: Game, label: String) -> void:
-	# ⚠⚠ **RE-AIMED FROM `send` ONTO `summon`, SAME SUBJECT.** This walked `passable` for a tile
-	# `grid.home_harbour_for` answered on and sent a boat to it; the harbour half is deleted and
-	# `summon` takes WATER inside the band, never a beach (a beach is a silent -1). What this helper
-	# is for has not moved: the island only needs to be COMMITTED so the hold below has a verdict to
-	# wait on, and one body on one boat is the cheapest legal plan there is.
-	var tile := _summonable_water_on(game.battle)
-	t.ok(tile >= 0, "%s 섬에서 소환 띠 안의 물 칸을 찾았다 (자가 점검)" % label)
-	t.ok(game.battle.summon(0, tile) >= 0 and game.battle.commit(),
-		"%s 섬에 한 명 불러내고 시작을 눌렀다 (자가 점검)" % label)
+	# ⚠⚠ **RE-AIMED TWICE, SAME SUBJECT.** It walked `passable` for a tile `home_harbour_for` answered
+	# on and sent a boat there; then it summoned one onto the water inside the band. **Both gestures are
+	# deleted.** What this helper is for has not moved: the island only needs to be COMMITTED so the
+	# hold below has a verdict to wait on.
+	t.ok(game.battle.commit(), "%s 섬을 확정했다 (자가 점검)" % label)
 	game.battle.enemy_alive.fill(0)
 	# ⚠ **Two whole sub-steps, never 0.016.** `step` consumes whole `Rules.SIM_SUBSTEP_SEC` chunks and
 	# carries the leftover, and 0.016 is a hair UNDER 1/60 — on a fresh island with no leftover banked
@@ -990,78 +613,6 @@ func _one_press_reaches_the_first_island(t) -> void:
 	game.queue_free()
 
 
-## ⚠⚠ **Every constant `plan-then-watch` 6.4 introduced, with the floor AND the ceiling its own row
-## wrote down, read back as numbers.** They were derived in a plan and then written into `look.gd` as
-## comments, and a comment cannot redden: `GHOST_ALPHA := 0.02` — invisible on screen, which deletes
-## the only picture carrying drop order — passed 1262 checks. **A correction pass only checks the row
-## someone is arguing about**, so the whole table is here and not the one value that was caught.
-##
-## ⚠ These are the ROW's bounds, not a restatement of the value. A row asserting `== 0.55` would be
-## one fact written twice and would redden on every honest re-tune; a row asserting only the floor
-## passes an amplitude that runs away. `ZOOM_MIN` and `WATER_MARGIN_TILES` are `net_camera`'s, which
-## bounds both at both ends. (`CLIFF_FACE_WIDTH_PX`'s two rows lived here until the cliff became mesh
-## geometry and the constant was deleted with the line it measured.)
-func _the_plan_constants_have_both_ends(t) -> void:
-	t.ok(Look.HUD_START_ORIGIN_PX.y >= 560.0,
-		"시작 버튼이 화면 아래쪽에 있다 (바닥 y>=560 — 위로 오면 섬 한가운데에 뜬다)")
-	t.ok(Look.HUD_START_ORIGIN_PX.y + Look.HUD_START_SIZE_PX.y <= 720.0,
-		"그리고 화면 아래로 안 넘친다 (천장 720)")
-	t.ok(Look.HUD_START_SIZE_PX.x > 150.0 and Look.HUD_START_SIZE_PX.y > 26.0,
-		"시작 버튼이 옛 키 상자(150x26)보다 두 축 다 크다 (바닥 — 판을 끝내는 단 한 번의 누름이다)")
-	t.ok(Look.HUD_START_SIZE_PX.x <= 320.0 and Look.HUD_START_SIZE_PX.y <= 96.0,
-		"그리고 (320, 96) 을 안 넘는다 (천장 — 화면 왼쪽 절반 안에 머문다)")
-	t.ok(Look.HUD_START_TEXT_OFFSET_PX.x > 0.0
-			and Look.HUD_START_TEXT_OFFSET_PX.y > float(Look.HUD_START_FONT_SIZE_PX),
-		"시작 글자가 상자 원점에 안 붙어 있다 (바닥 — 원점에 놓인 글자는 놓인 적이 없는 글자다)")
-	t.ok(Look.HUD_START_TEXT_OFFSET_PX.x <= Look.HUD_START_SIZE_PX.x
-			and Look.HUD_START_TEXT_OFFSET_PX.y <= Look.HUD_START_SIZE_PX.y,
-		"그리고 상자 안에 있다 (천장)")
-	t.ok(Look.HUD_START_FONT_SIZE_PX > Look.HUD_FONT_SIZE_PX,
-		"시작 글자가 보통 HUD 글자보다 크다 (바닥)")
-	t.ok(Look.HUD_START_FONT_SIZE_PX <= Look.HUD_TIMER_FONT_SIZE_PX + 8,
-		"그리고 시계 글자 + 8 을 안 넘는다 (천장)")
-	# ⚠ **The five `HUD_SPEED_*` bounds are deleted with the chips they measured.** What replaced them
-	# is `_the_speed_ladder_is_gone`, which asserts the constants themselves are absent — a bound on a
-	# constant nobody draws is a bound that rots.
-	#
-	# **The refusal mark's own three, both ends each** (`speed-off-open-landing`, 2.5).
-	t.ok(Look.REFUSE_MARK_SEC >= 0.25,
-		"거절 표시가 최소 0.25초는 남는다 (바닥 — 60fps 다섯 프레임 0.084초 아래는 이 리포가 두 번 못 봤다)")
-	t.ok(Look.REFUSE_MARK_SEC <= 0.6, "그리고 0.6초를 안 넘는다 (천장 — 다음 끌기까지 남아 있으면 안 된다)")
-	t.ok(Look.REFUSE_MARK_R_PX >= Look.TARGET_RING_R_PX,
-		"거절 표시가 후보 링(%.0f px)보다 크다 (바닥 — 같으면 「여기 놓을 수 있다」로 읽힌다)"
-			% Look.TARGET_RING_R_PX)
-	t.ok(Look.REFUSE_MARK_R_PX <= 40.0, "그리고 한 타일(40px)을 안 넘는다 (천장 — 이유가 될 지형을 덮는다)")
-	t.ok(Look.REFUSE_MARK_WIDTH_PX >= 5.0,
-		"굵기가 5 이상이다 (바닥 — ZOOM_MIN 0.45 에서 %.2f px, 이 파일의 2.0 px 스냅 바닥 위다)"
-			% (Look.REFUSE_MARK_WIDTH_PX * Look.ZOOM_MIN))
-	t.ok(Look.REFUSE_MARK_WIDTH_PX * Look.ZOOM_MIN >= 2.0,
-		"그 산술이 실제로 성립한다 (자가 점검 — 바닥이 도출된 부등식 자체를 잰다)")
-	t.ok(Look.REFUSE_MARK_WIDTH_PX <= 8.0, "그리고 8 을 안 넘는다 (천장 — 가리키는 칸을 삼킨다)")
-	# ⚠⚠ **THE FIVE `IDLE_SOLDIER_*` ROWS ARE DELETED WITH THE CONSTANTS.** They bounded the reserve
-	# stack's pitch, its column count and its origin, and the stack is gone (*"ㅇㅇ 지워줘"*).
-	# ⚠ The ghost rows below SURVIVE, and that is not an oversight: a summoned boat is drawn as a ghost
-	# at its derived landing before the commit exactly as a dropped one was, so `GHOST_FAN_PX` still
-	# has a picture to bound.
-	t.ok(Look.GHOST_FAN_PX.x >= 6.0 and Look.GHOST_FAN_PX.y >= 6.0,
-		"유령 부채가 벌어진다 (바닥 6 — 못 미치면 두 유령이 한 덩어리이고 놓은 순서에 그림이 없다)")
-	# ⚠ **The two labels below said 열셋 and they say 아홉 now** (2026-08-27). The expression never
-	# changed — it has always been `roster_start_count() - 1` — but the 열셋 was written when the beast
-	# card added four bodies to the ten and the landing force was fourteen. **The card is deleted, the
-	# force is the opening table alone, and the fan's worst case is nine ghosts behind the first.**
-	t.ok(Look.GHOST_FAN_PX.x <= 14.0 and Look.GHOST_FAN_PX.y <= 14.0,
-		"그리고 14 를 안 넘는다 (천장 — 넘으면 아홉이 3타일 넘게 퍼져 한 상륙으로 안 읽힌다)")
-	t.ok(Look.GHOST_FAN_PX.length() * float(Rules.roster_start_count()
-			- 1) > Look.TARGET_RING_R_PX,
-		"자가 점검 — 아홉을 한 칸에 놓으면 부채가 고리 밖까지 나간다 (그래서 순위는 해변마다 센다)")
-	t.ok(Look.CHIP_FX_SEC >= 0.1,
-		"누름 반응이 한 프레임보다 길다 (바닥 0.1s — 짧으면 팝이 되고 반응 자체가 안 보인다)")
-	t.ok(Look.CHIP_FX_SEC <= 0.4, "그리고 0.4s 를 안 넘는다 (천장 — 넘으면 다음 누름까지 남는다)")
-	t.ok(Look.REFUSE_SHAKE_PX >= 2.0, "거절 흔들림이 한 픽셀보다 크다 (바닥 2px)")
-	t.ok(Look.REFUSE_SHAKE_PX <= 12.0, "그리고 12px 를 안 넘는다 (천장 — 넘으면 단추가 자리를 뜬다)")
-	# ⚠ The two `CLIFF_FACE_WIDTH_PX` rows are DELETED with the constant (verify-read B): nothing has
-	# drawn a cliff line since the wall became mesh geometry, and a label bounding the legibility of a
-	# line that does not exist is a guarantee about nothing.
 
 
 ## -- surface-2 readers: the pooled nodes the engine draws --------------------------------------------
@@ -1224,37 +775,6 @@ func _wheel(at: Vector2, up: bool) -> InputEventMouseButton:
 
 # -- the readers themselves, inverted -----------------------------------------------------------------
 
-## ⚠⚠ **Cases that fail the READERS above rather than the tree.** `_start_button` is what says 「the
-## start button disappeared at the commit」 — written loosely (return the first button) it answers that
-## question about a screen that never drew any of it. This repo has twice shipped a check carrying the
-## defect it was written to catch, and neither was found by mutating the code.
-func _the_readers_themselves(t) -> void:
-	var fake := HudSpy.new()
-	t.eq(_start_button(fake), {}, "빈 화면에서 시작 버튼을 찾으면 빈 사전이다 — 첫 단추를 아무거나 주지 않는다")
-
-	# A box of some OTHER size: the reader must still not hand it back as the start button. This is
-	# what the five speed-chip rects used to be, and the case survives them.
-	fake.buttons.append({"seq": 0, "rect": Rect2(Vector2(1060.0, 648.0), Vector2(36.0, 40.0)),
-		"bg": Look.COL_BUTTON, "text": "x", "at": Vector2.ZERO, "fsize": 1,
-		"col": Look.COL_HUD_TEXT})
-	t.eq(_start_button(fake), {},
-		"다른 크기의 상자만 있는 화면에서도 시작 버튼은 못 찾는다 — 크기로 가려낸다")
-
-	# A start button shifted by a refusal shake must still be found: the reader matches on SIZE, and a
-	# reader that matched on the whole rect would stop finding it on the one frame that matters.
-	var shaken := Look.start_rect_px()
-	shaken.position += Vector2(Look.REFUSE_SHAKE_PX, 0.0)
-	fake.buttons.append({"seq": 9, "rect": shaken, "bg": Look.COL_START, "text": "시작",
-		"at": Vector2.ZERO, "fsize": 1, "col": Look.COL_HUD_TEXT})
-	t.ok(not _start_button(fake).is_empty(), "흔들린 시작 버튼도 찾는다 — 거절 프레임이 바로 그 프레임이다")
-
-	# ⚠ The two `_count_set` reader-rows are deleted with the helper itself — see its record above.
-	# They measured a counting loop whose only caller had already gone with the drag.
-
-	# A `HudView` is a `Node2D`, not a `RefCounted` — built outside the tree it still has to be freed by
-	# hand, or the round ends with a leaked `CanvasItem` RID and the wrapper reddens on stderr. Measured
-	# the first time this block ran.
-	fake.free()
 
 
 ## ⚠⚠ **배속 조작이 코드에서도 없어졌다.** Every deletion needs a check that the thing is GONE, not
@@ -1303,13 +823,18 @@ func _the_speed_ladder_is_gone(t) -> void:
 		look_methods.append(str((raw3 as Dictionary)["name"]))
 	t.ok(not look_methods.has("speed_rect_px"), "look.gd 에 speed_rect_px 가 없다")
 	t.ok(not look_methods.has("sendable_tint"), "look.gd 에 sendable_tint 도 없다")
-	t.ok(look_methods.has("start_rect_px"), "start_rect_px 는 그대로 있다 (자가 점검)")
+	# ⚠ **This was the self-check arm, and it FLIPPED on 2026-08-29** — `start_rect_px` went with the
+	# HUD. The self-check moved to a method that is still there, so the row still proves it is reading
+	# a real method list rather than an empty one.
+	t.ok(not look_methods.has("start_rect_px"), "look.gd 에 start_rect_px 도 없다 — HUD 와 같이 나갔다")
+	t.ok(look_methods.has("button_rect_px"), "button_rect_px 는 그대로 있다 (자가 점검)")
 
 	var hud_consts: Dictionary = hv.get_script().get_script_constant_map()
 	t.ok(not hud_consts.has("SPEED_LABELS"), "hud_view 에 SPEED_LABELS 가 없다")
 	# ⚠ **TYPE_LABELS 도 없다** — 짐승 이름이 `Rules.UNITS` 의 칸이 되면서 두 번째 표가 통째로 사라졌다.
 	t.ok(not hud_consts.has("TYPE_LABELS"), "hud_view 에 TYPE_LABELS 도 없다 — 이름은 표의 칸이다")
-	t.ok(hud_consts.has("CHIP_SLOT_BASE"), "CHIP_SLOT_BASE 는 그대로 있다 (자가 점검)")
+	# ⚠ **`CHIP_SLOT_BASE` was the self-check here and it is gone too** (2026-08-29) — `hud_view` holds
+	# no constants at all now, so the arm that proved this row reads a real map has nothing to name.
 
 	hv.free()
 	fv.free()

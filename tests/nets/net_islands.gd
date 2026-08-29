@@ -152,17 +152,17 @@ func run(t) -> void:
 	var grid := Grid.new()
 	Islands.load_into(grid)
 	t.eq(_count_char(rows, "H"), EXPECT_HARBOUR_CHARS, "판의 항구 글자가 %d 개다" % EXPECT_HARBOUR_CHARS)
-	t.eq(grid.harbour_tiles.size(), EXPECT_HARBOUR_CHARS,
-		"격자가 읽어낸 항구 칸 수도 같다 — 글자와 표가 어긋나지 않는다")
-	# ⚠ **WHERE, and not only how many.** `harbour_tiles` is the only record in the sim of where an `H`
-	# sits now that everything which used to read it is deleted, and 88 `H` scattered through the middle
-	# of the board would satisfy the count above on its own.
+	# ⚠⚠ **`grid.harbour_tiles` was read here and it is deleted** (2026-08-29) with the boats. **WHERE
+	# the `H` sits is still the claim**, so the ring is walked off the board's own text instead — 88 `H`
+	# scattered through the middle would satisfy a bare count on its own.
 	var off_ring: Array = []
-	for raw_h in grid.harbour_tiles:
-		var hx := int(raw_h) % grid.w
-		var hy := int(raw_h) / grid.w
-		if hx != 0 and hy != 0 and hx != grid.w - 1 and hy != grid.h - 1:
-			off_ring.append(int(raw_h))
+	for y in rows.size():
+		var row := str(rows[y])
+		for x in row.length():
+			if row[x] != "H":
+				continue
+			if x != 0 and y != 0 and x != row.length() - 1 and y != rows.size() - 1:
+				off_ring.append(y * row.length() + x)
 	t.eq(off_ring.size(), 0, "항구는 전부 판 가장자리 한 줄이다 — 배는 지도 밖에서 온다 %s" % str(off_ring))
 	t.eq(EXPECT_HARBOUR_CHARS, 2 * EXPECT_COLS + 2 * (EXPECT_ROWS - 2),
 		"그리고 그 52는 가장자리 한 바퀴 그대로다 (16x2 + 10x2 — 자가 점검)")

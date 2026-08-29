@@ -1381,11 +1381,16 @@ func _gd_files_under(roots: Array) -> Array:
 ## ⚠ **The shape of the answer changed with it.** A harbour's permission table was a per-harbour SET of
 ## allowed beaches; a summon has exactly ONE landing per press. So a tile is a landing here iff some
 ## band tile beaches on it — which is why this walks the band rather than the harbours.
+## ⚠⚠ **RE-AIMED 2026-08-29, and the subject narrowed with the code.** It asked whether some water
+## tile in the summon band beached on `tile`; **the band and the beaching are deleted with the boats.**
+## What is left of the question that this file actually uses is *「could a body be stood here at all」*,
+## which is the same predicate `Battle.place_ashore` searches on.
 func _is_landing(g: Grid, tile: int) -> bool:
-	for t in g.w * g.h:
-		if g.can_summon_at(t) and g.summon_landing_of(t) == tile:
-			return true
-	return false
+	if tile < 0 or tile >= g.w * g.h:
+		return false
+	if g.passable[tile] == 0 or g.water[tile] != 0:
+		return false
+	return not Grid.is_stair_level(g.level_of(tile))
 
 
 ## The two-pair island, with `species` recruited and placed at `at`, and a shieldbearer standing at

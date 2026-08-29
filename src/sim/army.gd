@@ -48,12 +48,12 @@ var slot_id := PackedInt32Array()
 ## would add an argument to `Battle.setup` and give the fight a second thing to be handed.
 var slots := PackedInt32Array()
 
-## The boards, one per beast type. Hangs off the ARMY and not off `Run`: `Battle` is handed `army` and
-## nothing else, so this is what lets `damage_of(i)` reach a board without a new argument on
-## `Battle.setup`. It also makes the design's own sentence structural — a body dies and its parts die
-## with it, the board does not — because `Army` outlives every `Battle` and no code has to remember to
-## move a board across an island.
-var loadout := Loadout.new()
+## ⚠⚠ **`var loadout := Loadout.new()` STOOD HERE AND IT IS DELETED** (2026-08-29). The equipment
+## board hung off the ARMY so `damage_of(i)` could reach it without a new argument on `Battle.setup`,
+## and it outlived every `Battle` so a body could die without its type's parts dying with it. **Both
+## arguments still hold and neither had anything to hold up**: with the refit screen deleted nothing
+## ever fitted an item, so the board was empty for the whole of every run and `stat_of` returned the
+## base number every time. The five lookups below now read `Rules` straight.
 
 
 ## Appends one soldier of `slot`'s type, born at that type's own current maximum HP, alive.
@@ -115,33 +115,33 @@ func _hp_desc(a: int, b: int) -> bool:
 	return hp[a] > hp[b]
 
 
-## Attack range in tiles: the type's board, base plus any fitted range item and the lit 범위 tier.
+## Attack range in tiles, off the species row.
 ## ⚠⚠ **A PER-SOLDIER BONUS USED TO BE ADDED HERE AND IS GONE** (2026-08-25): the beak reward put +1
 ## range on ONE body, and the user deleted the reward — 「부리 보상 없지 끝나면 카드보상으로
 ## 통일했잖아」. **Nothing is per-soldier any more**; every number a body fights with comes from its
 ## SPECIES board, which is what 티켓 11 decided equipment should be.
 func range_of(i: int) -> float:
-	return loadout.stat_of(int(type_id[i]), Rules.ITEM_COL_RANGE)
+	return Rules.range_of(int(type_id[i]))
 
 
-## The five per-soldier lookups. Each is one line reading `loadout.stat_of(type_id[i], COL)` — the same
-## call the dashboard reads, so the screen and the fight can never disagree about what a fitted item is
-## worth. ⚠ **Keyed on `type_id`, never `slot_id`** (티켓 11): the board is the type's, and a body of a
-## species no slot summons still has to read its own board.
+## The five per-soldier lookups. **Each is one line and it is the species row, nothing else.** ⚠ **Keyed
+## on `type_id`, never `slot_id`**: a body of a species no slot summons still has to read its own row.
+## ⚠ **They are kept as functions rather than inlined at the call sites** — `battle.gd` asks the ARMY
+## what a body of ITS roster fights with, and the day a per-body number comes back it comes back here.
 func max_hp_of(i: int) -> float:
-	return loadout.stat_of(int(type_id[i]), Rules.ITEM_COL_HP)
+	return Rules.hp_of(int(type_id[i]))
 
 
 func damage_of(i: int) -> float:
-	return loadout.stat_of(int(type_id[i]), Rules.ITEM_COL_DAMAGE)
+	return Rules.damage_of(int(type_id[i]))
 
 
 func period_of(i: int) -> float:
-	return loadout.stat_of(int(type_id[i]), Rules.ITEM_COL_PERIOD)
+	return Rules.period_of(int(type_id[i]))
 
 
 func speed_of(i: int) -> float:
-	return loadout.stat_of(int(type_id[i]), Rules.ITEM_COL_SPEED)
+	return Rules.speed_of(int(type_id[i]))
 
 
 ## Living soldiers of one SLOT, **highest HP first**. Mirrors `living_ids_of_type`'s shape and its
@@ -197,7 +197,7 @@ func slot_of_type(type_id: int) -> int:
 ## table could only warn about in prose** — with slots writable at runtime there is a door to try it
 ## through, and an enemy body walking out of a summon box would look completely ordinary.
 ##
-## ⚠ **A full roster REFUSES rather than replacing**, the same contract `Loadout.fit` carries: a
+## ⚠ **A full roster REFUSES rather than replacing** — a
 ## choice made silently inside a registration is a choice the player never made. The screen that asks
 ## which one to drop is 티켓 05 결정 10.
 func register_species(type_id: int) -> int:

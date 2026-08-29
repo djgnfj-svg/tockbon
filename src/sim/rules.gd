@@ -362,237 +362,41 @@ static func roster_start_count() -> int:
 	return sum
 
 
-## ⚠⚠ **THE BAND IS A MINIMUM DISTANCE FROM LAND, AND IT USED TO BE A MAXIMUM.** It was
-## `SUMMON_BAND_TILES := 2` — *within 2 hops of the coast* — and the user inverted it after playing:
-## ***"해안선에 배를 배치하는게 아니라 좀 거리를 둬야함 지형하고 많이 줘도됨 배가 가는게 중요하니까"***.
-## **The reason is a design reason and not a preference: the crossing is the thing worth watching, and a
-## band hugging the shore deletes it.** The name changed with the meaning — a constant whose sense
-## inverts under the same name is one nobody re-reads.
+## ⚠⚠ **THE SUMMON BAND STOOD HERE AND IT IS DELETED** (2026-08-29) with the gesture that pressed it:
+## `SUMMON_BAND_MIN_TILES`, `SUMMON_RADIUS_RATIO` and `summon_radius_of`.
 ##
-## **It is a rule and not a look value: it decides what `Grid.can_summon_at` REFUSES**, and the band the
-## view paints is that same predicate asked per tile — so the picture and the refusal are one fact.
-## **There is no maximum.** Every water tile the summon BFS reached and that is far enough is in the
-## band; 「많이 줘도됨」 is the whole of that.
+## ⚠⚠ **THE BAND WAS A MINIMUM DISTANCE FROM LAND AND IT USED TO BE A MAXIMUM**, and the user inverted
+## it after playing: ***"해안선에 배를 배치하는게 아니라 좀 거리를 둬야함 지형하고 많이 줘도됨 배가
+## 가는게 중요하니까"***. **The reason is a design reason and not a preference: the crossing is the
+## thing worth watching, and a band hugging the shore deletes it.** ⚠ The name changed with the
+## meaning — a constant whose sense inverts under the same name is one nobody re-reads.
 ##
-## ⚠⚠ **4 WAS CHOSEN FROM A SWEEP, NOT FROM TASTE.** Measured on all three shipped islands — band tiles ·
-## distinct reachable landings · crossing min/median/max seconds at `BOAT_SPEED` 4.0:
+## ⚠ **There was no maximum.** Every water tile the boat field reached and that was far enough was in,
+## the open sea included.
+
+
+## --- EQUIPMENT, RARITY, TAGS, STATUSES AND CARDS: ALL DELETED 2026-08-29 ---------------------------
+## ⚠⚠ **The whole growth half of the game is gone from this file, and it went because NOTHING COULD
+## REACH IT.** The reward screen and the refit screen were deleted 2026-08-28; from that moment
+## `Loadout.take_card` and `Loadout.fit` had no caller in `src/`, so **the board every item was fitted
+## into stayed empty for the whole of every run.** `tag_count` therefore answered 0 on every blow, so
+## `TAG_STAT_TIERS` added nothing to any stat and `TAG_STATUS_TIERS` lit no status — **bleed and slow
+## never once fired in a fight the player played.** Measured, not assumed: the only readers left were
+## the nets.
 ##
-##   shipped `<= 2`   190/174/186 · 82/75/80 · **0.25 / 0.60 / 0.71**  (spread 0.46 s)
-##   `>= 3`  <- this  534/516/540 · 45/40/43 · **0.85 / 2.47 / 5.96**  (spread 5.11 s)
-##   `>= 4`           470/460/478 · 42/38/40 · **1.10 / 2.47 / 5.96**  (spread 4.86 s)
-##   `>= 6`           360/360/366 · 34/35/34 · **1.60 / 2.83 / 5.96**  (spread 4.36 s)
-##   `>= 8`           256/256/256 · 32/33/27 · **2.10 / 3.18 / 5.96**  (spread 3.86 s)
-##   `>= 10`          152/152/152 · 30/31/25 · **2.60 / 3.54 / 5.96**  (spread 3.36 s)
-##   `>= 12`          **48/48/48 · 2/2/2** — see the cliff below
+## What went: `ITEM_COL_*` · `ITEMS` · `ITEM_CELLS` · `PERIOD_FLOOR_SEC` · `Rarity` · `RARITY_WEIGHT` ·
+## `Tag` · `TAG_LABELS` · `TAG_STAT_TIERS` and its accessors · `Status` · `StatusKind` · `STATUS_KIND` ·
+## `TAG_STATUS_TIERS` and its accessors · `stronger_status_tier` · `tag_thresholds_of` ·
+## `CARDS_PER_WIN` · `CARD_PICKS` · `CardKind` · the three `card_*_of` faces · `ITEM_COL_LABELS` ·
+## `item_effect_text` and every `item_*` accessor · `items_of_rarity` · `rarity_at_roll` ·
+## `rarity_weight_total` · `unit_stat`. `Loadout` went with them and `Army` now reads `Rules` directly.
 ##
-## ⚠ **The MAXIMUM crossing is 5.96 s at every value, because the water is finite** — so raising this
-## number lifts the floor and SHRINKS the spread. The spread peaks at 3 and decays from there. **This
-## number does not buy a longer crossing; it buys a longer SHORTEST one.**
-##
-## ⚠⚠ **THERE IS A CLIFF BETWEEN 10 AND 12, AND IT IS THE CEILING.** At 12 the band is 48 tiles and
-## resolves to **2 distinct landings on all three islands** (and on the 144-column map) — the four
-## corners of the sea, and nothing else. Every press on the island would produce one of two beaches.
-## **10 is the last usable value**; 8 is the last comfortable one.
-##
-## 4 was adopted first and **6 came from the user after playing it**: *"그냥 섬 이랑 더 거리를 더줘"*.
-## The price was stated rather than argued down: **6–8 more coast tiles stop being individually
-## addressable** (42/38/40 -> 34/35/34 of 84/76/82), the minimum crossing rises 1.10 -> 1.60 s, and the
-## spread NARROWS 4.86 -> 4.36 s.
-##
-## ⚠⚠ **AND THEN IT WENT 6 -> 3, AND THIS COMMENT KEPT SAYING 6 UNTIL 2026-08-27.** The constant below
-## is 3; commit `4d665f8` lowered it when the island shrank to 16x12 and never touched these lines.
-## **The `<- this` marker now points at the row the code actually runs.** ⚠ **Nobody has re-swept since
-## the island became 20x16 and Blender became the source of the board**, so the three columns above are
-## measurements of islands that no longer exist. **Re-sweep before arguing this number again.**
-## ⚠ **It still restores the term `sea-summon` §5.2 measured and §5.3 flattened**: the drag's crossing
-## spread was 4.50–4.75 s, and 4.36 s is within that band.
-##
-## Floor 3 — under it the minimum crossing drops below 0.85 s and the band starts touching the shore
-## again, which is what the user asked to end. **Ceiling 10, from the cliff above** — not from taste.
-const SUMMON_BAND_MIN_TILES := 3
-
-## ⚠⚠ **The OUTER edge of the band, and it is new** (2026-08-24, the user: 「내가 바다면 그 일정
-## 동그랗게 섬 기준으로 동그랗게 해서」). Until now the band had a floor and no ceiling: every reachable
-## water tile at least `SUMMON_BAND_MIN_TILES` from the shore was summonable, **including the whole open
-## ocean out to the edge of the map**. That is why it drew as huge slabs of sea rather than as a place.
-##
-## ⚠⚠ **A RATIO OF THE MAP AND NOT A FIXED DISTANCE, and that was measured the hard way.** It was a
-## flat 22 tiles for one round. On the shipped 48 x 32 islands that was right — the band went 360 tiles
-## to 280 and the landings it can reach 34 to 30. **On the long map it was a disaster**: 144 wide, and a
-## 22-tile circle about the middle left 280 band tiles of 1128 and **43 reachable landings of 138**, so
-## two thirds of that island could not be attacked at all. A circle 「섬 기준으로」 has to be a circle
-## about THAT island, so it is sized by the island.
-##
-## **0.46 of the longer side.** On 48 x 32 that is 22.1 — the value that was measured good by eye — and
-## on the 144-wide map it is 66.2, which reaches its ends again.
-## Floor 0.30 — under it the ring closes inside `SUMMON_BAND_MIN_TILES` on a square map and the band
-## pinches shut. Ceiling 0.75 — past it the ring leaves the water entirely on the shipped maps and the
-## rule is the old no-ceiling one wearing a number.
-##
-## ⚠ **Measured from the middle of the GRID, not from the land.** An island is not a disc and its centre
-## of mass wanders per map; the grid's middle is the same point every check and every player can point
-## at, and the ring drawn on screen is a circle about exactly it.
-const SUMMON_RADIUS_RATIO := 0.46
-
-
-## The radius that ratio comes to on a given grid, in tiles. **One function, so the predicate and the
-## ring cannot compute it two ways.**
-static func summon_radius_of(w: int, h: int) -> float:
-	return float(maxi(w, h)) * SUMMON_RADIUS_RATIO
-
-
-## --- Equipment: an ITEM LIST, not a body ------------------------------------------------------------
-## ⚠⚠ **THE BODY PARTS ARE GONE** (2026-08-24, the user: 「이게 세포 게임에 남아있던 것들이네. 갈아엎어」).
-## What stood here was `Part { HEAD, CHEST, BELLY, ARM, HAND, LEG }`, one cell bound to each, plus a
-## `Species { MAMMAL, BIRD, FISH }` that nothing read. **It was the cell game's own idea and it survived
-## two changes of game** — the wolf roguelike never had a body diagram to hang it on, and the cards still
-## said 「다리」 「손」 on screen the day this was written.
-##
-## What replaces it is what tickets 01 and 02 already decided and nothing had built: **an item goes into
-## an UNNAMED cell**, and a summon slot has a row of them. There is no head cell, and therefore no rule
-## anywhere forbidding a leg in it — the arrangement that needed forbidding does not exist.
-##
-## ⚠ **The board belongs to the beast TYPE and not to the body** (티켓 11 — it hung on the summon slot
-## until then). A soldier dying does not touch its type's equipment, which is 「늑대에게 투구를 끼우면
-## 모든 늑대가 낀다」 said in the code that exists rather than in the code that is planned — and all
-## five species have a board, summon slot or none, so no card is ever a dead draw.
-
-## The five columns an item may move — declared in UNITS' own order so the two tables read alike.
-const ITEM_COL_HP := 0
-const ITEM_COL_DAMAGE := 1
-const ITEM_COL_PERIOD := 2
-const ITEM_COL_RANGE := 3
-const ITEM_COL_SPEED := 4
-const ITEM_COL_TOTAL := 5
-
-## How rare a card is. ⚠ **It is a draw weight and nothing else this round** — no set bonus, no visual
-## change. 티켓 01 says only LEGENDARY ever changes what a beast looks like, and no beast has a second
-## picture yet, so writing that in now would be a rule with no picture behind it.
-enum Rarity { COMMON, RARE, EPIC, LEGENDARY }
-
-## How many of each rarity a hundred draws should hold. ⚠ **First values, not measured ones** — nothing
-## in this game has been balanced yet and pretending otherwise is worse than saying so.
-const RARITY_WEIGHT := [60, 26, 11, 3]
-
-## --- Tags: the combo axis (티켓 11) ---------------------------------------------------------------
-## An item carries at most ONE tag, and the count of one tag across EVERY board — all five species,
-## summoned or not — is what switches a combo on. The four are the user's own list: 출혈 · 공속 ·
-## 범위 · 디버프(감속).
-##
-## ⚠⚠ **Tiers are FLAT and a higher tier REPLACES a lower one. Nothing multiplies per copy.** The
-## unnamed cells already drove an attack period to -0.5 s once by stacking one item six times
-## (`PERIOD_FLOOR_SEC`'s own header); a per-copy multiplier is that same mine one axis over.
-##
-## ⚠ **Two tables, because there are two kinds of effect** — a tag that pushes a stat column
-## (`TAG_STAT_TIERS`) and a tag that leaves a status on whoever the blow hits (`TAG_STATUS_TIERS`).
-## Folding them into one table would leave half the columns as fake zeros in every row.
-const TAG_NONE := -1
-
-enum Tag { BLEED, ATK_SPEED, RANGE, DEBUFF }
-
-## What the card and the refit line print. Korean for the same reason the item names are.
-const TAG_LABELS = ["출혈", "공속", "범위", "디버프"]
-
-## One row per item: **name · hp · damage · period · range · speed · rarity · tag**, ADDED to the
-## type's own number. Nothing multiplies: two rules for one column is the second copy that diverges.
-## The tag column may be `TAG_NONE`; what a lit tag does lives in the two tier tables below, so a new
-## numeric tag line later is a tier-table row plus this column — one file.
-##
-## ⚠ **The names are Korean because the user reads them off the card**, and this is the same exception
-## the unit table's own 한국어 column already carries. Everything else in `src/` stays English.
-##
-## ⚠ **The fiction is that these come off the humans whose island was just taken.** That is why a bronze
-## plate and a flint tooth sit in one list: the beasts do not forge, they strip.
-##
-## ⚠ **A negative column is allowed and one row uses it.** 「질주의 발」 trades health for speed, and a
-## table where every row is an upgrade is a table where picking is not a decision.
-const ITEMS := [
-	# name              hp    dmg   period  range  speed  rarity            tag
-	["가죽끈",          3.0,  0.0,   0.00,   0.0,   0.0,  Rarity.COMMON,    TAG_NONE],
-	["돌 목걸이",       0.0,  1.0,   0.00,   0.0,   0.0,  Rarity.COMMON,    Tag.DEBUFF],
-	["나무 발톱",       0.0,  0.0,  -0.10,   0.0,   0.0,  Rarity.COMMON,    Tag.BLEED],
-	["마른 가죽",       0.0,  0.0,   0.00,   0.0,   0.6,  Rarity.COMMON,    TAG_NONE],
-	["뼛조각",          2.0,  0.5,   0.00,   0.0,   0.0,  Rarity.COMMON,    Tag.BLEED],
-	["말린 힘줄",       0.0,  0.0,  -0.05,   0.0,   0.3,  Rarity.COMMON,    Tag.ATK_SPEED],
-	["무두질 가죽",     6.0,  0.0,   0.00,   0.0,   0.0,  Rarity.RARE,      TAG_NONE],
-	["부싯돌 이빨",     0.0,  2.0,   0.00,   0.0,   0.0,  Rarity.RARE,      Tag.BLEED],
-	["사슴 힘줄",       0.0,  0.0,  -0.20,   0.0,   0.0,  Rarity.RARE,      Tag.ATK_SPEED],
-	["바람 갈기",       0.0,  0.0,   0.00,   0.0,   1.2,  Rarity.RARE,      TAG_NONE],
-	["뺏은 창끝",       0.0,  1.0,   0.00,   1.0,   0.0,  Rarity.RARE,      Tag.RANGE],
-	["방패 조각",       4.0,  0.0,   0.00,   0.0,  -0.3,  Rarity.RARE,      Tag.DEBUFF],
-	["청동 판",        10.0,  0.0,   0.00,   0.0,   0.0,  Rarity.EPIC,      TAG_NONE],
-	["늑대 송곳니",     0.0,  3.0,  -0.10,   0.0,   0.0,  Rarity.EPIC,      Tag.BLEED],
-	["사냥꾼의 눈",     0.0,  0.0,   0.00,   2.0,   0.0,  Rarity.EPIC,      Tag.RANGE],
-	["질주의 발",      -2.0,  0.0,   0.00,   0.0,   2.0,  Rarity.EPIC,      TAG_NONE],
-	["우두머리의 뿔",  12.0,  3.0,   0.00,   0.0,   0.0,  Rarity.LEGENDARY, Tag.DEBUFF],
-	["폭풍의 가죽",     0.0,  0.0,  -0.25,   0.0,   2.5,  Rarity.LEGENDARY, Tag.ATK_SPEED],
-]
-
-const _ITEM_COL_NAME := 0
-const _ITEM_COL_STATS := 1
-const _ITEM_COL_RARITY := 6
-const _ITEM_COL_TAG := 7
-
-## How many unnamed cells one summon slot's board has.
-## ⚠ **Six, which is what the board already drew** — the cells stopped being body parts, not stopped
-## existing, and `look.gd`'s refit layout is measured against six boxes. Changing this number is a
-## screen job as much as a rules one.
-const ITEM_CELLS := 6
-
-## ⚠⚠ **A REAL FLOOR, AND IT IS NOT A SAFETY BELT.** The old parts table wrote down that there was
-## deliberately NO clamp anywhere, because one part per cell meant the period could fall by at most one
-## row's worth and a floor would have been a branch no input could reach. **Unnamed cells deleted that
-## argument**: any item may be fitted six times, and six copies of the biggest period drop in the table
-## takes a 1.0 s attack to **-0.5 s**. `net_parts` measured exactly that the day the cells were unnamed.
-## ⇒ The clamp lives in `Loadout.stat_of`, and 0.20 s is the bound that net already carried as a literal.
-## ⚠ The ATK_SPEED tag term below lands on the same column and sits INSIDE that same clamp, because
-## `Loadout.bonus` is where the term is added and `stat_of` clamps after it.
-const PERIOD_FLOOR_SEC := 0.20
-
-
-## --- The numeric tag tiers -------------------------------------------------------------------------
-## One row per stat-pushing tag: tag · the `ITEM_COL_*` it pushes · tiers of [threshold, add].
-## The add is FLAT across the whole horde — every species' `Loadout.stat_of` reads it — and the
-## highest reached tier REPLACES the lower ones (see the Tag header). Tiers are listed ascending;
-## `tag_stat_bonus_at` walks them in order and keeps the last one reached.
-##
-## ⚠ **First values, not measured ones**, like `RARITY_WEIGHT`. The low thresholds went to the tags
-## with the fewest items (범위 2종 · 디버프 3종): a run draws at most one card per non-boss node,
-## `map_max_card_nodes_on_a_route()` of them in total, so a threshold is a real share of a whole run.
-const TAG_STAT_TIERS := [
-	[Tag.ATK_SPEED, ITEM_COL_PERIOD, [[3, -0.10], [5, -0.25]]],
-	[Tag.RANGE, ITEM_COL_RANGE, [[2, 0.5], [4, 1.0]]],
-]
-
-const _TSTAT_COL_TAG := 0
-const _TSTAT_COL_STAT := 1
-const _TSTAT_COL_TIERS := 2
-
-
-static func tag_stat_row_count() -> int:
-	return TAG_STAT_TIERS.size()
-
-
-static func tag_stat_tag_of(r: int) -> int:
-	return int((TAG_STAT_TIERS[r] as Array)[_TSTAT_COL_TAG])
-
-
-static func tag_stat_col_of(r: int) -> int:
-	return int((TAG_STAT_TIERS[r] as Array)[_TSTAT_COL_STAT])
-
-
-## The flat add row `r` puts on its column at `count` copies of its tag: the highest tier whose
-## threshold is reached, 0.0 below the first one. Replacement — never a sum of tiers — happens here
-## and nowhere else, so a caller cannot re-introduce the per-copy multiply by accident.
-static func tag_stat_bonus_at(r: int, count: int) -> float:
-	var add := 0.0
-	for raw in (TAG_STAT_TIERS[r] as Array)[_TSTAT_COL_TIERS]:
-		var tier: Array = raw
-		if count >= int(tier[0]):
-			add = float(tier[1])
-	return add
-
-
+## ⚠⚠ **WHAT TO READ BEFORE REBUILDING IT** (it is decided and unbuilt, not rejected): **roll the
+## RARITY first and the ITEM inside it second**, so adding a common item cannot quietly make
+## legendaries rarer. **A status is a table row plus one generic walk in `battle.gd`**, never one-off
+## code — the user, 2026-08-24: 「독부터 해서 정말 많이 있을듯」. **The board hangs on the SPECIES and
+## not on the body**, so a soldier dying does not strip its type's equipment. **An item goes into an
+## UNNAMED cell**: there is no head cell, so no rule anywhere has to forbid a leg in it.
 ## --- THE SHOVE TABLE: DELETED 2026-08-27 ----------------------------------------------------------
 ## `SPECIES_SHOVE`, `shove_tiles_of` and `shove_once_of` are gone, and so is every line in `battle.gd`
 ## that read them. **The table had been `[]` since 2026-08-26**: its two rows were 다람쥐's pull and
@@ -674,103 +478,6 @@ static func tag_stat_bonus_at(r: int, count: int) -> float:
 ## which is precisely what this block is the record of.
 
 
-## --- The status table ------------------------------------------------------------------------------
-## ⚠⚠ **Not one-off bleed code** (2026-08-24, the user: 「독부터 해서 정말 많이 있을듯」). A status is a
-## row here plus a generic walk in `battle.gd`; the day poison arrives it is one `Status` entry and one
-## `TAG_STATUS_TIERS` row, and `battle.gd` stays shut — poison is the DOT kind bleed already built.
-## A status of a NEW kind (one that touches a stat, the way SLOW touches enemy speed) also needs the
-## one read site for that stat, which is what SLOW built this round.
-##
-## The KIND decides what the magnitude means: DOT — damage per second; SLOW — a speed multiplier.
-enum Status { BLEED, SLOW }
-enum StatusKind { DOT, SLOW }
-
-## Kind per `Status`, index-aligned. Appended, never inserted — `battle.gd`'s flat status arrays are
-## indexed by these ordinals.
-const STATUS_KIND := [StatusKind.DOT, StatusKind.SLOW]
-
-
-static func status_count() -> int:
-	return STATUS_KIND.size()
-
-
-static func status_kind_of(s: int) -> int:
-	return int(STATUS_KIND[s])
-
-
-## One row per status-carrying tag: tag · the `Status` it leaves · tiers of
-## [threshold, magnitude, duration seconds]. A lit tier makes every allied blow leave that status on
-## everyone the blow actually hit; re-hitting REFRESHES (the lit tier's own values overwrite what is
-## stored) and never accumulates — the -0.5 s mine's cousin lives in the accumulate.
-## ⚠ **First values, not measured ones.**
-const TAG_STATUS_TIERS := [
-	[Tag.BLEED, Status.BLEED, [[3, 0.5, 2.0], [5, 1.5, 3.0]]],
-	[Tag.DEBUFF, Status.SLOW, [[2, 0.7, 2.0], [4, 0.5, 3.0]]],
-]
-
-const _TSTATUS_COL_TAG := 0
-const _TSTATUS_COL_STATUS := 1
-const _TSTATUS_COL_TIERS := 2
-
-
-static func tag_status_row_count() -> int:
-	return TAG_STATUS_TIERS.size()
-
-
-static func tag_status_tag_of(r: int) -> int:
-	return int((TAG_STATUS_TIERS[r] as Array)[_TSTATUS_COL_TAG])
-
-
-static func tag_status_status_of(r: int) -> int:
-	return int((TAG_STATUS_TIERS[r] as Array)[_TSTATUS_COL_STATUS])
-
-
-## The stronger of two tiers of the SAME status, either of which may be empty.
-##
-## ⚠⚠ **WHICH WAY 「강하다」 POINTS DEPENDS ON THE KIND, and reading it one way is a real defect.** A
-## DOT's magnitude is damage a second and BIGGER is stronger; a SLOW's is a speed multiplier and
-## SMALLER is stronger. One comparison for both hands a slowed enemy the weakest slow on the field.
-##
-## ⚠ **Ties on magnitude break on the LONGER duration**, so a source that is equally strong and lasts
-## longer is not silently discarded.
-##
-## ⚠ **This resolves the sources of ONE BLOW and is not a stacking rule.** What lands on a body is a
-## single tier, exactly as before; what changed is that a blow with two sources no longer lets
-## whichever was written last stand.
-##
-## ⚠⚠ **KEPT ON PURPOSE THOUGH ITS SECOND SOURCE DIED 2026-08-27, and here is exactly what it measures
-## today so nobody has to re-derive it.** `SPECIES_STATUS` was one of the two sources and it is deleted;
-## the other — `TAG_STATUS_TIERS` — is live and `_apply_statuses` still folds every row through this
-## function. **But no two rows in that table name the same `Status`** (출혈 -> BLEED, 디버프 -> SLOW),
-## so through `_apply_statuses` one argument is ALWAYS `{}` and only the two empty-arms below can fire.
-## ⇒ **The magnitude comparison is unreachable from `step` until a SECOND row names a status some other
-## row already names**, and `net_battle` exercises that arm by calling this function directly, which its
-## own header says so. **Do not read a green on that row as proof the fight resolves two sources** — it
-## proves the arithmetic, and the fight has nothing to resolve yet.
-static func stronger_status_tier(status: int, a: Dictionary, b: Dictionary) -> Dictionary:
-	if a.is_empty():
-		return b
-	if b.is_empty():
-		return a
-	var am := float(a["mag"])
-	var bm := float(b["mag"])
-	if not is_equal_approx(am, bm):
-		var a_wins := am > bm if status_kind_of(status) == StatusKind.DOT else am < bm
-		return a if a_wins else b
-	return a if float(a["sec"]) >= float(b["sec"]) else b
-
-
-## The lit tier of row `r` at `count` copies of its tag, as {"mag": .., "sec": ..} — empty below the
-## first threshold. The highest reached tier replaces the lower ones, same rule as the numeric table.
-static func tag_status_tier_at(r: int, count: int) -> Dictionary:
-	var lit := {}
-	for raw in (TAG_STATUS_TIERS[r] as Array)[_TSTATUS_COL_TIERS]:
-		var tier: Array = raw
-		if count >= int(tier[0]):
-			lit = {"mag": float(tier[1]), "sec": float(tier[2])}
-	return lit
-
-
 ## --- 종 고유 상태이상 / THE SPECIES-STATUS TABLE: DELETED 2026-08-27 ------------------------------
 ## `SPECIES_STATUS`, its four column constants and `species_status_of` are gone, and so is the arm of
 ## `Battle._apply_statuses` that read them. The table held ONE row — `[CROW, Status.BLEED, 0.5, 2.0]` —
@@ -803,209 +510,6 @@ static func tag_status_tier_at(r: int, count: int) -> Dictionary:
 ## 있을듯」. It was a second SOURCE and never a second mechanism: it wrote through the same `_put_status`,
 ## with the same overwrite rule and the same generic `_phase_status` walk, so a species row and a tag
 ## tier were indistinguishable by the time they reached the clock. **That shape is the one to rebuild** —
-## and on the ENEMY side, which is where the crow now stands.
-
-
-## Every threshold `tag` can light, ascending, walked over BOTH tier tables — the refit aggregate
-## reads this, so the screen's "count/next" line derives from the same rows the effects do and a new
-## tier is on screen the day its table row lands.
-static func tag_thresholds_of(tag: int) -> PackedInt32Array:
-	var out := PackedInt32Array()
-	for r in tag_stat_row_count():
-		if tag_stat_tag_of(r) == tag:
-			for raw in (TAG_STAT_TIERS[r] as Array)[_TSTAT_COL_TIERS]:
-				out.append(int((raw as Array)[0]))
-	for r in tag_status_row_count():
-		if tag_status_tag_of(r) == tag:
-			for raw in (TAG_STATUS_TIERS[r] as Array)[_TSTATUS_COL_TIERS]:
-				out.append(int((raw as Array)[0]))
-	out.sort()
-	return out
-
-## ⚠⚠ **THREE CARDS, ONE PICK** (2026-08-24, 티켓 06). It was six and two. **Two of three are left on
-## the table**, so the pick is a loss as well as a gain — which is the whole of what makes it a decision.
-const CARDS_PER_WIN := 3
-const CARD_PICKS := 1
-
-
-## --- What a card can BE ---------------------------------------------------------------------------
-## **A card is a piece of equipment.** `Run.cards[k]` holds an item id and `Run.card_kind[k]` says
-## which kind that is — and today there is only the one.
-## ⚠ **It was two from 티켓 15 to 2026-08-26**: the second was a BEAST, a summon slot filled with a
-## species plus bodies of it. The sides swapped and it became unpickable.
-## ⚠⚠ **ONE MEMBER SINCE 2026-08-27**, when the beast card was deleted. It is kept as an enum, and
-## `card_name_of`/`card_rarity_of`/`card_effect_text_of` still take a `kind` they now ignore, because
-## the shape those three exist for is 「the screen never asks what kind a card is」 — collapsing them to
-## one argument moves that question back onto `reward_view` the day a second kind arrives.
-## ⚠ **`kind` is therefore dead weight that is being carried on purpose.** If no second kind is decided
-## on, it should go, and going means the enum, the `card_kind` column in `Run`, and three signatures.
-enum CardKind { ITEM }
-
-## ⚠⚠ **THE BEAST CARD WAS DELETED 2026-08-27, TABLE AND MECHANISM TOGETHER.** `SPECIES_CARDS`,
-## `SPECIES_CARD_BODIES`, `SPECIES_CARD_WEIGHT`, `species_card_count/type_of/rarity_of` and every
-## branch that read them are gone.
-##
-## ⚠⚠ **THE TABLE HAD BEEN EMPTY SINCE 2026-08-26 AND THE MECHANISM WAS THEREFORE UNREACHABLE.** The
-## five rows registered a beast into a summon slot, and the beasts became the ENEMY: `Army.register_species`
-## refuses a row on the enemy's side, so every row would have been a card that cannot be picked. The
-## user chose what fills the hole in the same breath: 「성장 카드는 장비 위주로 주자」.
-##
-## ⚠ **The table was kept for one more day on the argument that 「a second player body is one row」.**
-## That argument is what this deletion rejects: `_draw_cards` could not write `CardKind.SPECIES` at
-## all with an empty pool, so `_take_species_card` was dead code behind a dead branch behind an empty
-## table — three layers, none of which any check could enter. **Wiring that nothing can reach is not
-## wiring that is ready, it is wiring that is unmeasured**, and a second player body needs the pool,
-## the weight and the recruit path re-argued from what that body actually is.
-
-## --- One card's face, whatever kind it is ---------------------------------------------------------
-## ⚠⚠ **These three exist so `reward_view` never asks what kind a card is.** A screen that branched on
-## the kind would be a second place that knows there are two of them, and the day a third arrives one
-## of the two gets missed.
-
-static func card_name_of(kind: int, value: int) -> String:
-	return item_name_of(value)
-
-
-static func card_rarity_of(kind: int, value: int) -> int:
-	return item_rarity_of(value)
-
-
-## What the card does, as one line. ⚠ **Built from the constants, never typed beside them** — the same
-## rule `item_effect_text` carries, and the reason the cards said 「다리」 for a round after legs
-## stopped existing.
-static func card_effect_text_of(kind: int, value: int) -> String:
-	return item_effect_text(value)
-
-
-## The five column names, in `ITEM_COL_*` order, and the one place they are spelled.
-## ⚠ **Korean, and that is the same exception the item names carry**: this string goes on a card the
-## user reads. `refit_view.STAT_LABELS` is the same five words for the dashboard and reads THIS.
-const ITEM_COL_LABELS = ["체력", "공격력", "공격주기", "사거리", "이동속도"]
-
-
-## What an item does, as one line — 「체력 +6」, 「공격력 +3 · 공격주기 -0.10」.
-##
-## ⚠⚠ **Built from the table, never typed beside it.** A description written by hand is a second copy
-## of the numbers, and the day one moves the card lies about it — which is exactly the failure this
-## whole rewrite was for: the cards said 「다리」 for a round after legs stopped existing.
-static func item_effect_text(item: int) -> String:
-	var parts := []
-	for col in ITEM_COL_TOTAL:
-		var v := item_bonus(item, col)
-		if absf(v) <= EPS:
-			continue
-		# The period is the one column measured in seconds and the one that is better when it falls,
-		# so it is the one printed to two decimals. ⚠ **`%g` does not exist in GDScript's `%`** — it is
-		# a silent 「unsupported format character」 at runtime, printed once per card per frame.
-		var shown := ""
-		if col == ITEM_COL_PERIOD:
-			shown = "%+.2f" % v
-		elif is_equal_approx(v, roundf(v)):
-			shown = "%+d" % int(roundf(v))
-		else:
-			shown = "%+.1f" % v
-		parts.append("%s %s" % [str(ITEM_COL_LABELS[col]), shown])
-	# The tag word rides at the end of the same line, so the card and the refit row both carry it with
-	# neither of them typing it.
-	var tag := item_tag_of(item)
-	if tag != TAG_NONE:
-		parts.append(str(TAG_LABELS[tag]))
-	return " · ".join(parts)
-
-
-static func item_count() -> int:
-	return ITEMS.size()
-
-
-static func item_name_of(item: int) -> String:
-	if item < 0 or item >= ITEMS.size():
-		return ""
-	return str((ITEMS[item] as Array)[_ITEM_COL_NAME])
-
-
-static func item_rarity_of(item: int) -> int:
-	if item < 0 or item >= ITEMS.size():
-		return Rarity.COMMON
-	return int((ITEMS[item] as Array)[_ITEM_COL_RARITY])
-
-
-## The tag item `item` carries, or `TAG_NONE` — for an untagged item and for an out-of-range id alike,
-## because an id that does not exist counts toward no combo.
-static func item_tag_of(item: int) -> int:
-	if item < 0 or item >= ITEMS.size():
-		return TAG_NONE
-	return int((ITEMS[item] as Array)[_ITEM_COL_TAG])
-
-
-static func tag_kind_count() -> int:
-	return TAG_LABELS.size()
-
-
-static func tag_label_of(tag: int) -> String:
-	if tag < 0 or tag >= TAG_LABELS.size():
-		return ""
-	return str(TAG_LABELS[tag])
-
-
-## What item `item` adds to column `col`. **The one reader of `ITEMS`' number columns**, so the offset
-## between "column 0 is hp" and "cell 1 of the row is hp" is written once.
-static func item_bonus(item: int, col: int) -> float:
-	if item < 0 or item >= ITEMS.size():
-		return 0.0
-	if col < 0 or col >= ITEM_COL_TOTAL:
-		return 0.0
-	return float((ITEMS[item] as Array)[_ITEM_COL_STATS + col])
-
-
-## Every item of one rarity, in table order. Used by the draw, which picks a rarity first and an item
-## inside it second — so adding a common item cannot quietly make legendaries rarer.
-static func items_of_rarity(rarity: int) -> PackedInt32Array:
-	var out := PackedInt32Array()
-	for i in ITEMS.size():
-		if int((ITEMS[i] as Array)[_ITEM_COL_RARITY]) == rarity:
-			out.append(i)
-	return out
-
-
-## The rarity a roll of `0 .. RARITY_WEIGHT sum - 1` lands on.
-## ⚠ **The caller owns the RNG.** `rules.gd` holds no state and never will — a table that could roll
-## its own number is a table two runs cannot be compared across.
-static func rarity_at_roll(roll: int) -> int:
-	var acc := 0
-	for r in RARITY_WEIGHT.size():
-		acc += int(RARITY_WEIGHT[r])
-		if roll < acc:
-			return r
-	return Rarity.COMMON
-
-
-static func rarity_weight_total() -> int:
-	var sum := 0
-	for w in RARITY_WEIGHT:
-		sum += int(w)
-	return sum
-
-
-## Maps an `ITEM_COL_*` onto the matching base-stat column, so the five columns are not named twice.
-## ⚠ This is what stops the five columns being named twice — every base number in the game is still
-## read through the existing `hp_of` · `damage_of` · `period_of` · `range_of` · `speed_of`, and this is
-## a `match` over those five and nothing else.
-static func unit_stat(type_id: int, col: int) -> float:
-	match col:
-		ITEM_COL_HP:
-			return hp_of(type_id)
-		ITEM_COL_DAMAGE:
-			return damage_of(type_id)
-		ITEM_COL_PERIOD:
-			return period_of(type_id)
-		ITEM_COL_RANGE:
-			return range_of(type_id)
-		ITEM_COL_SPEED:
-			return speed_of(type_id)
-	return 0.0
-
-
-
 
 # --- The boat ------------------------------------------------------------------------------------
 ## How fast a boat crosses, tiles per second. The ONE surviving number of the old `BOATS` table:
@@ -1018,22 +522,18 @@ static func unit_stat(type_id: int, col: int) -> float:
 ## only thing between the commit and the first blow. **It is also the lever the deferred brake would
 ## be built from** — a departure interval is this number's sibling — so do not retune it as a feel
 ## value.
-const BOAT_SPEED := 4.0
+# --- The boat: DELETED 2026-08-29 -----------------------------------------------------------------
+## ⚠⚠ **`BOAT_SPEED` and `ROUTE_SMOOTH_SAMPLE_TILES` stood here and both are gone** with the crossing
+## itself. **The beasts get boats later and they get built then** — the user, 2026-08-29.
+##
+##  · **Speed was 4.0 tiles a second**, and it is a RULE and not a feel value: it sets the crossing
+##    time, which is the only thing between the start and the first blow. A departure interval is this
+##    number's sibling, and a brake would be built from it.
+##  · **The route smoother sampled every 0.25 tiles, and that bound is not arbitrary.** Tile centres
+##    are on integers, so a tile spans ±0.5 around its centre: sample any coarser and two consecutive
+##    samples can round to tiles two apart, and a segment gets declared clear over a tile nobody
+##    looked at. **0.25 is that bound halved.**
 
-## How finely `grid._straight_is_all_water` samples a candidate segment, in TILES. It is the one knob
-## on the route smoother — see `grid.water_route`.
-##
-## ⚠ **It must stay at or under 0.5.** Tile centres are on integers, so a tile spans ±0.5 around its
-## centre; sample any coarser and two consecutive samples can round to tiles that are two apart, and
-## the segment would be declared clear over a tile nobody looked at. **0.25 is that bound halved**, so
-## a step moves at most 0.25 on either axis and the rounded tile can never jump. Floor: nothing under
-## 0.05, which is 20 samples a tile for no more certainty than 4 already buys.
-##
-## ⚠ **This is NOT `LINE_SAMPLE_STEP` restored.** That constant tuned the deleted straight-line
-## SENDABILITY test — the rule the user threw out (*"상륙 못하는 데가 있는 거지…"*). This one tunes a
-## post-pass over a route that is already legal. Same arithmetic, opposite job; see the smoother's own
-## comment before assuming the denylist came back with it.
-const ROUTE_SMOOTH_SAMPLE_TILES := 0.25
 
 
 # --- The clock the fight is computed at -----------------------------------------------------------

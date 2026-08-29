@@ -241,7 +241,7 @@ func _build_label() -> void:
 	root.add_child(layer)
 	_label = Label.new()
 	_label.position = Vector2(24.0, 18.0)
-	_label.add_theme_font_size_override("font_size", Look.HUD_FONT_SIZE_PX)
+	_label.add_theme_font_size_override("font_size", 22)  # was Look.HUD_FONT_SIZE_PX, deleted 2026-08-29 with the HUD
 	_label.add_theme_color_override("font_color", Color(0.94, 0.94, 0.90))
 	_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
 	_label.add_theme_constant_override("shadow_offset_x", 2)

@@ -54,14 +54,12 @@ func run(t) -> void:
 	_the_death_burst_stands_in_the_camera_plane(t)
 	_the_hit_halo(t)
 	_body_effects_ride_the_pooled_fields(t)
-	_the_boat_route_shrinks_with_the_sim(t)
 	_the_transient_drawer_is_capped(t)
 	_the_readers_themselves(t)
 	_every_row_wears_its_own_picture(t)
 	_only_the_wolf_has_frames_and_they_share_one_canvas(t)
 	_the_legs_run_on_time_not_on_distance(t)
 	_the_bite_rides_the_blow_that_lunges(t)
-	_a_bleeding_body_is_a_different_colour(t)
 	for raw in _created:
 		var fv: FieldView = raw
 		fv.free()
@@ -971,83 +969,6 @@ func _body_effects_ride_the_pooled_fields(t) -> void:
 		"걸음 스쿼시가 scale 에 (0.8, 1.2) 로 실린다 — 서 있으면 sin(0)=0 이라 안 찌그러진다")
 
 
-# == the sailing boat's remaining route (the caller `_route_ahead` lost) ==============================
-## Ticket 09's own founding shape, closed: the line was computed every frame and drawn by nobody.
-## `_paint_boat_routes` now feeds it to the floor layer — the SIM's own `leg` decides what is behind
-## the boat, and the drawn water shrinks as the crossing advances.
-##
-## ⚠⚠ **THE BOAT USED TO BE `send`'s AND IT IS A SUMMON NOW.** This row never had anything to say
-## about harbours — it wanted a body on a long crossing and `send` was the cheapest way to start one.
-## The whole harbour half is deleted, so the crossing starts from a WATER tile inside the summon band
-## instead of from a BEACH, and the fixture under it had to be redrawn with it (see `_reef_bay`).
-## ⚠ **The army is the SWORDSMAN's and no longer a wolf's.** `summon` needs a body in the slot's
-## reserve, `Army.register_species` refuses every `Side.ENEMY` row, and `_army_of([Rules.WOLF])`
-## therefore builds an army with **zero** slots — a fixture that looks like a roster and is not one.
-func _the_boat_route_shrinks_with_the_sim(t) -> void:
-	var rows := _reef_bay()
-	# ⚠ One idle enemy far inland, or there is nothing to win against: a battle with zero enemies
-	# latches WON on its first step and the boat freezes mid-bay — measured, 4000 sub-steps of leg 0.
-	var b := _planning_battle_of(rows, _army_of([Rules.SWORDSMAN]),
-		[_spawn(ARENA_W, Rules.WOLF, 20, 9)])
-	var fv := _view_of(b, rows)
-	# The band tile whose route is LONGEST, so the line holds interior waypoints and the crossing
-	# lasts long enough for `leg` to advance while the boat is still at sea.
-	var target := _longest_route_water_on(b)
-	t.ok(target >= 0, "소환 띠에서 항로가 가장 긴 물칸을 찾았다 (자가 점검)")
-	# ⚠⚠ **BOTH FLOORS ARE LOAD-BEARING AND THE SECOND ONE IS THE ONE THAT WAS NEARLY MISSED.** A
-	# route's LAST leg is water -> landing by construction, so it is at most 1.42 tiles: on a route of
-	# three points the boat beaches within a tile and a half of its first waypoint and the tail rows
-	# below can never see the line let go of anything. Measured on this fixture: **5 points, 15.44
-	# tiles, 6.95 of them still to sail after the first waypoint.**
-	var plan := b.grid.summon_route(target)
-	var tail := _sail_after_first_waypoint(plan)
-	t.ok(plan.size() >= 4 and tail >= 4.0,
-		"그 항로는 경유점이 둘 이상이고 첫 경유점 뒤로도 %.1f 타일 남는다 (자가 점검, %d점)"
-			% [tail, plan.size()])
-	t.ok(b.summon(0, target) >= 0, "그 물칸으로 한 명을 불러냈다 (자가 점검)")
-
-	# Before the commit the boat is its plan: no aim is armed, so the water carries NO route at all.
-	fv._process(0.0)
-	t.eq(_verts_of(fv._g_v, fv._g_c, Look.COL_ROUTE).size(), 0,
-		"확정 전에는 항로선이 없다 — 배는 아직 계획이고 물은 계획의 것이다")
-
-	t.ok(b.commit(), "확정했다 (자가 점검)")
-	fv._process(0.0)
-	var boat: Dictionary = b.boats[0]
-	var path: PackedVector2Array = boat["path"]
-	t.ok(path.size() >= 3, "항로에 경유점이 있다 (자가 점검, %d점)" % path.size())
-	var route0 := _verts_of(fv._g_v, fv._g_c, Look.COL_ROUTE)
-	t.ok(route0.size() >= 12, "확정하자 남은 항로선이 바닥에 깔렸다 (%d 정점)" % route0.size())
-	var missing := 0
-	for k in range(1, path.size()):
-		if _min_dist(route0, Look.tile_point_px(path[k]) / Look.TILE_PX) > 0.3:
-			missing += 1
-	t.eq(missing, 0, "모든 남은 경유점 곁에 정점이 있다 — 선이 sim 의 path 그대로다")
-	t.ok(_min_dist(route0, Look.tile_point_px(Vector2(boat["pos"])) / Look.TILE_PX) < 0.2,
-		"선의 머리가 선체 제 자리다")
-
-	# Sail. The sim's `leg` advances; the drawn line must let go of the water already crossed.
-	var guard := 0
-	while guard < 4000:
-		b.begin_frame()
-		b.step(Rules.SIM_SUBSTEP_SEC)
-		guard += 1
-		if int(boat["phase"]) != Battle.Phase.OUTBOUND:
-			break
-		if int(boat["leg"]) >= 1 \
-				and Vector2(boat["pos"]).distance_to(path[1]) > 1.5:
-			break
-	t.ok(int(boat["phase"]) == Battle.Phase.OUTBOUND and int(boat["leg"]) >= 1,
-		"아직 항해 중인 채로 첫 경유점을 지났다 (자가 점검, leg %d)" % int(boat["leg"]))
-	b.begin_frame()
-	fv._process(0.0)
-	var route1 := _verts_of(fv._g_v, fv._g_c, Look.COL_ROUTE)
-	t.ok(route1.size() < route0.size(),
-		"가면서 선이 줄었다 (%d -> %d 정점) — 이미 지나온 물을 다시 안 그린다" % [route0.size(), route1.size()])
-	t.ok(_min_dist(route1, Look.tile_point_px(path[1]) / Look.TILE_PX) > 0.8,
-		"지나온 경유점 곁에는 더 이상 정점이 없다")
-	t.ok(_min_dist(route1, Look.tile_point_px(Vector2(boat["pos"])) / Look.TILE_PX) < 0.2,
-		"머리는 여전히 선체 자리를 따라간다")
 
 
 # == the dry slot draws no plan — ⚠⚠ DELETED 2026-08-28 =============================================
@@ -1353,90 +1274,6 @@ func _the_bite_rides_the_blow_that_lunges(t) -> void:
 	t.ok(fv._body_tex("e0", Rules.WOLF, true) != null, "그리고 그 그림은 비어 있지 않다")
 
 
-# == 티켓 15: the bleed reaches the screen ============================================================
-## ⚠⚠ **`field_view` had ZERO lines reading `status_time` before this**, so 출혈 was the one beast
-## passive that happened entirely inside the sim. Four of the five come out as a body's POSITION or
-## its target and the field already draws those; without this row 「어느 짐승을 데려갈까」 would be a
-## four-way decision on screen and a five-way one in the rules.
-##
-## ⚠⚠ **BOTH ENDS, and the bleeding body is compared against a SIBLING OF THE SAME SPECIES** — not
-## against its own earlier colour, which a hit flash also moves. Floor: the two differ while the
-## clock runs. Ceiling: they are byte-identical once it expires, so a tint that never turned off
-## would redden too.
-##
-## ⚠ **The bleed is driven through a real blow**, never by writing `status_time` — a fixture that sets
-## the value it then reads back measures the view and not the seam between them.
-##
-## ⚠⚠ **THE SOURCE MOVED FROM THE SPECIES TO THE EQUIPMENT TAG, 2026-08-27.** It used to need no
-## equipment at all: `Rules.SPECIES_STATUS` gave 까마귀 an innate bleed, and this row read the duration
-## straight off `Rules.species_status_of(Rules.CROW)`. **That table was looked up against the PLAYER's
-## roster and the crow became an ENEMY on 2026-08-26**, so it answered `{}` on every blow and the fixture
-## was measuring a source that no longer fires. `TAG_STATUS_TIERS`' 출혈 row is live, carries the same
-## first-tier numbers (0.5 a second for 2 s), and needs three copies of a bleed item to light — hence
-## `_worn` below. **Nothing about what is drawn changed; only where the bleed comes from.**
-##
-## ⚠ Mutation: drop the `Look.bleeding` call in `_paint_bodies`; clamp `bleeding` to return `col`.
-func _a_bleeding_body_is_a_different_colour(t) -> void:
-	var rows := _open(ARENA_W, ARENA_H)
-	var army := _army_of([Rules.CROW])
-	_worn(army, ITEM_BLEED, 3, Rules.SWORDSMAN)
-	var lit := Rules.tag_status_tier_at(_bleed_row(), 3)
-	t.ok(not lit.is_empty(), "출혈 딱지 셋이면 1층이 켜진다 (자가 점검)")
-	var b := _battle_of(rows, army, [
-		_spawn(ARENA_W, Rules.WOLF, 6, 5),    # 0 — bitten
-		_spawn(ARENA_W, Rules.WOLF, 18, 9),   # 1 — the control sibling, far away
-	])
-	_ashore(b, 0, Vector2(3, 5))
-	b.begin_frame()
-	b.step(Rules.SIM_SUBSTEP_SEC)
-	t.ok(b.status_left(Rules.Status.BLEED, 0) > 0.0, "0번 적이 출혈 중이다 (자가 점검)")
-	t.eq(b.status_left(Rules.Status.BLEED, 1), 0.0, "1번 적은 아니다 (자가 점검)")
-
-	var fv := _view_of(b, rows)
-	fv._process(0.0)
-	# ⚠ **Aged past the hit flash before the colours are read.** The flash pulls the bitten body toward
-	# white on its own, so reading on the blow's own frame would be green with the tint deleted.
-	fv._process(Look.HIT_FLASH_SEC * 2.0)
-	var bleeding := _sprite_nearest(fv, b.enemy_pos[0])
-	var clean := _sprite_nearest(fv, b.enemy_pos[1])
-	t.ok(bleeding != null and clean != null, "두 몸을 화면에서 찾았다 (자가 점검)")
-	t.ok(bleeding.modulate != clean.modulate,
-		"출혈 중인 몸의 색이 같은 종의 안 출혈인 몸과 다르다 — 바닥 (%s vs %s)"
-			% [str(bleeding.modulate), str(clean.modulate)])
-	# ⚠ **Compared against the SIBLING and never against `body_colour_of` itself**: `_put_body` mixes
-	# the body colour into the sprite (`BEAST_TEAM_TINT`), so the raw team colour is not what reaches
-	# `modulate` — an equality against it would be measuring the mix, not the tint.
-	var clean_rest := clean.modulate
-
-	# ⚠⚠ **THE HUE, AND NOT ONLY THAT THE TWO DIFFER.** Mixed the other way round — bleed first, then
-	# the faction tint 45% back toward white — the pull was mostly thrown away: measured on cloth the
-	# body's hue did not move at all and only its brightness fell 27%, which reads as SHADE rather
-	# than as blood. A `modulate != modulate` row is green for that too.
-	var bled_share := bleeding.modulate.r \
-		/ maxf(bleeding.modulate.r + bleeding.modulate.g + bleeding.modulate.b, 0.001)
-	var clean_share := clean_rest.r \
-		/ maxf(clean_rest.r + clean_rest.g + clean_rest.b, 0.001)
-	t.ok(bled_share > clean_share + 0.03,
-		"출혈한 몸에서 붉은 채널이 차지하는 몫이 확실히 더 크다 (%.3f > %.3f) — 색조가 움직인다"
-			% [bled_share, clean_share])
-	t.ok(Look.bleeding(Color(0.5, 0.5, 0.5), 0.0) == Color(0.5, 0.5, 0.5),
-		"안 출혈이면 색을 하나도 안 건드린다 (계기 자가 점검)")
-
-	# The CEILING: park the bitten one out of reach, let the clock run out, and the two agree again.
-	var parked := Vector2(ARENA_W - 2, 2)
-	b.enemy_pos[0] = parked
-	b._enemy_goal[0] = parked
-	b._settle(Battle.ENEMY_UID_BASE + 0, parked)
-	var secs: float = float(lit["sec"])
-	for _k in int(ceil(secs / Rules.SIM_SUBSTEP_SEC)) + 4:
-		b.begin_frame()
-		b.step(Rules.SIM_SUBSTEP_SEC)
-	t.eq(b.status_left(Rules.Status.BLEED, 0), 0.0, "출혈이 끝났다 (자가 점검)")
-	fv._process(Look.HIT_FLASH_SEC * 2.0)
-	var healed := _sprite_nearest(fv, b.enemy_pos[0])
-	t.ok(healed != null, "옮긴 몸도 화면에서 찾았다 (자가 점검)")
-	t.eq(healed.modulate, clean_rest,
-		"지속 시간이 끝나면 안 출혈인 형제와 정확히 같은 색으로 돌아온다 — 천장")
 
 
 ## The pooled BODY sprite standing nearest tile point `at`. Matched by position rather than by index
@@ -1508,35 +1345,6 @@ func _reef_bay() -> Array:
 	return rows
 
 
-## The summon-band WATER tile whose `summon_route` is the LONGEST, or -1 if the band holds no tile
-## with an interior waypoint at all.
-##
-## ⚠⚠ **THE NAME SAYS WATER BECAUSE THE TWO VERBS TOOK DIFFERENT KINDS OF TILE AND THAT COST A RED
-## ROUND.** The deleted `send` took a BEACH — a passable land tile a boat could unload onto — and the
-## search this replaced ranked beaches by their distance from a harbour. `summon` takes a WATER tile
-## inside the band and answers -1 for anything else, so a fixture that hands it a beach reddens for a
-## reason that has nothing to do with what the row measures.
-##
-## ⚠ **It ranks by SAILED LENGTH and not by distance from anything.** What the row needs is a crossing
-## with water left in it after the first waypoint, and a tile far from a centre can still have a short
-## straight route — that is exactly what the whole `_port` band turned out to be.
-func _longest_route_water_on(b: Battle) -> int:
-	var g := b.grid
-	var best := -1
-	var best_span := 0.0
-	for tile in g.w * g.h:
-		if not g.can_summon_at(tile):
-			continue
-		var route := g.summon_route(tile)
-		if route.size() < 4:
-			continue
-		var span := 0.0
-		for k in range(1, route.size()):
-			span += route[k - 1].distance_to(route[k])
-		if span > best_span:
-			best_span = span
-			best = tile
-	return best
 
 
 ## How much water a route still holds AFTER its first waypoint, in tiles. **The floor the crossing row
@@ -1549,25 +1357,13 @@ func _sail_after_first_waypoint(route: PackedVector2Array) -> float:
 	return span
 
 
-## The bleed item, pinned with what it is for. ⚠ **It is fitted onto a board nobody summons**, so its
-## own stat columns cannot move the arithmetic any other row here is built from — what crosses is the
-## tag count, which `Loadout.tag_count` sums over every board at once.
-const ITEM_BLEED := 7    # 부싯돌 이빨 — 출혈 딱지, 문턱 3 (0.5/초 · 2초)
+## ⚠ **`ITEM_BLEED` and `_worn` stood here and both are deleted** (2026-08-29) with the statuses.
+## The fixture discipline outlives them: the item was fitted onto a board the fight does not use, so
+## its own stat columns could not move the arithmetic every other row here is built from.
 
 
-## Fits `n` copies of `item` onto `beast_type`'s board.
-func _worn(a: Army, item: int, n: int, beast_type: int) -> void:
-	for _i in n:
-		a.loadout.take_card(item)
-		a.loadout.fit(beast_type, 0)
 
 
-## The `TAG_STATUS_TIERS` row that carries 출혈, found rather than written as an index.
-func _bleed_row() -> int:
-	for r in Rules.tag_status_row_count():
-		if Rules.tag_status_status_of(r) == Rules.Status.BLEED:
-			return r
-	return -1
 
 
 ## ⚠ The slots are the ARMY's since 티켓 15, so each species is REGISTERED first and the slot it lands
