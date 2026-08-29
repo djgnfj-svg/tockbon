@@ -1235,3 +1235,41 @@ Bad North 강연이 말한 아홉 줄, 그리고 만들 때 지킬 일곱 가지
 
 **열 벌 전부 실험대 안에서만 산다.** 해안선은 지금 셰이더를 스크립트가 통째로 감싸 붙여서 **후보끼리
 글자 하나까지 같다** — 선이 달라 눈이 그쪽으로 가는 일이 없게 하려는 것이다.
+
+## 2026-08-29 — **픽셀랩이 붙었고, 나무를 카드로 세워 봤다**
+
+**픽셀랩 MCP 는 설치가 안 된 게 아니라 이 프로젝트에서 꺼져 있었다.** `.claude/settings.local.json`
+의 「끈 서버」 목록에 들어가 있었고, 켜니 도구 여든 개가 들어왔다. ⚠ **그 전까지는 설정 파일에 있던
+열쇠로 HTTP 를 직접 불러서 그림을 뽑고 있었다** — 그 방식으로는 여덟 방향 회전이 매번 다른 캐릭터로
+나왔고, MCP 로는 한 벌로 맞아떨어진다.
+
+**Bad North 캐릭터를 픽셀랩으로 똑같이 뽑는 것은 안 된다.** 스무 벌을 세 라운드로 물어서 전부 실패
+했다. 문장만 쓰면 잘 만든 픽셀 RPG 스프라이트가 나오고, 스타일 그림을 물리면 그 그림을 프레이밍째
+베낀다. **Bad North 의 몸은 픽셀아트가 아니라 3D 로우폴리를 찍은 렌더다.**
+
+> ***"이거는 너무 잘못 찍었고 ... 너무 못 뽑았다고"***
+> — *"these came out badly ... they came out really badly."*
+
+**나무는 네 번 다시 만들었다.** 아홉 종류를 온 섬에 흩뿌린 것 → 덩어리로 뭉친 것 → 외딴 섬에 다섯
+그루만 → 종류 하나에 크기만. 매번 사용자가 화면을 보고 잘랐다.
+
+> ***"퀄리티가 근데 너무 떨어지긴 한다"*** / ***"그림에 음영이 있네 이건. 우리는 그림에 음영이 없어"***
+> — *"the quality is really not there"* / *"this one has shading in the picture. Ours has none."*
+
+> ***"다 치우고 나무들만 한 곳을 몰아서 넣어주고 ... 2D 판넬이지만 그림자 질 수 있는 방법을 알아서
+> 적용해서"***
+> — *"clear everything out and put only trees, crowded in one place ... find a way for a 2D panel to
+> take a shadow and apply it."*
+
+> ***"종류가 많이 있을 필요도 없어. 하나에서 사이즈만 막 왔다 갔다 하면 돼 ... 나무를 너무 표현해.
+> 단순하게 단색으로 거의? 그리고 그림자가 있으면 된다니까"***
+> — *"there is no need for many kinds. One, with the size just going up and down ... the tree is
+> over-expressed. Simple, almost a single colour. And a shadow is all it needs."*
+
+⚠⚠ **이 라운드는 로드맵 표 바깥에서 일어났다.** 1 주는 「맵」이고 그 표에 장식 행이 없다. 티켓 **38**
+이 그것을 든다. **`src/` 는 한 줄도 안 건드렸다.**
+
+**사용자가 「리서칭」이라고 하면 `scout` 스킬을 쓰라고 못 박았다.**
+
+> ***"다음부터 내가 리서칭이라고 하면은 그 에이전트인가 있거든. 그거 사용해야 할 듯"***
+> — *"from now on when I say researching, there is that agent — you should use it."*
