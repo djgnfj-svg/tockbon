@@ -1,0 +1,187 @@
+// **27 — BOTH CUTS, AND THE LINE ON THE ROCK THINS TOO.** 25's drifting gaps and 26's headlands
+// together, plus the one thing the other two refuse: **the inner white is allowed to go faint.**//
+// **The ask** (2026-08-29, the user, on 23: 「좋긴한데 이제 끈어지거나 하는건 어렵나?」 — *"it is good,
+// but is making it break up hard now?"*). ⚠ **It is not hard** — one factor on the second line. What
+// is worth choosing is WHAT decides where the gaps fall.
+//
+// ⚠⚠ **THE LINE ON THE ROCK IS NOT CUT HERE.** The glossary says 해안선 rings the island without a gap
+// **because the water is always touching the land**, and that argument holds however broken the second
+// white gets. 27 is the one that tests it.
+//
+// ⚠⚠ **THIS IS THE ONE THAT ARGUES WITH THE GLOSSARY.** 해안선 is defined as ringing the island with no
+// gap, because water is always touching land. `first_cut` is how much of that rule is given up — at
+// 0 this file keeps it, at 1 the coast can be bare. **It is deliberately partial (0.35): the inner
+// line thins where the outer one is missing, but never disappears.**
+// ⇒ If even that reads as a hole in the island, the glossary was right and the answer is 25 or 26.
+shader_type spatial;
+render_mode unshaded;
+
+uniform sampler2D land_field : filter_linear;
+uniform vec2 field_origin;
+uniform vec2 field_size;
+uniform float field_span;
+
+uniform vec4 sea : source_color = vec4(0.430, 0.590, 0.660, 1.0);
+uniform vec4 foam : source_color = vec4(0.900, 0.940, 0.950, 1.0);
+
+/// ⚠ **The user's number.** See the head of this file.
+/// ⚠ **0.035, and the hardness below matters more than this number.**
+uniform float line_tiles = 0.035;
+/// ⚠⚠ **0.85, UP FROM 0.45, AND THIS IS THE REAL ANSWER TO 「좀더 얇으면」.** A soft-edged line
+/// spends most of its width on a fade, so it reads thick at any width. The reference frames have
+/// a hard stroke. **Thinning a soft line makes it faint; hardening it makes it thin.**
+uniform float line_hard = 0.85;
+uniform float line_alpha = 0.90;
+
+uniform float run = 0.30;
+uniform float cycle = 2.6;
+uniform float grad_step = 0.06;
+uniform float warp_a = 0.055;
+uniform float warp_a_scale = 0.45;
+uniform float warp_b = 0.030;
+uniform float warp_b_scale = 1.30;
+uniform float along_scale = 0.55;
+
+uniform float curve_step = 0.30;
+uniform float refract_amt = 0.85;
+uniform float point_gain = 2.1;
+uniform float bay_floor = 0.35;
+
+/// ⚠ **0.16, down from 0.42** (2026-08-29, the user: 「너무 자주 하는데 파형이 좀더 느리게」).
+uniform float rate = 0.16;
+uniform float swash = 0.16;
+uniform float rise_frac = 0.22;
+uniform float drain_spread = 0.85;
+/// ⚠⚠ **The user's other number.** How far out the incoming foam is born, in tiles.
+
+/// ⚠⚠ **THE RESTING WIDTH, AND IT IS THE WHOLE POINT OF THIS SET** (2026-08-29, the user: 「얇게
+/// 있다가 파형이 왔을떄만 두꺼워야하는데 미리 흔적이 너무 남아있는느낌이야 기본값이 너무 있어」 —
+/// *"it should be thin and only thicken when the wave arrives; there is too much trace left in
+/// advance, the base value is too much"*). What fraction of `line_tiles` is on the rock when nothing
+/// is happening. **Below this number there is no line at all.**
+uniform float rest_frac = 0.45;
+/// How much width the arriving wave ADDS, as multiples of `line_tiles`. ⚠ This rides on `up`, so it
+/// is zero for most of the cycle and full only at the top of a run.
+uniform float surge = 1.6;
+/// How much the bay/point energy is allowed to thin the RESTING line. At 0 the hairline is the same
+/// all round the island; at 1 the bays lose it too.
+uniform float rest_shape = 0.7;
+/// **The second white, the one standing off the rock** — where it sits in tiles, how wide the stroke
+/// is, and how strong. ⚠ `second_w` is a STROKE width, not a band: keep it at or under the resting
+/// line or the two whites stop reading as two.
+uniform float second_at = 0.22;
+uniform float second_w = 0.035;
+uniform float second_amt = 0.85;
+/// **The cut.** How long a surviving piece is (inverted tiles - bigger is shorter), how fast the
+/// pattern of gaps drifts, and where it switches. ⚠ `cut_shut` and `cut_open` close together is a
+/// clean break; far apart is a fade, and a fade is a dimming rather than a gap.
+uniform float cut_scale = 0.55;
+uniform float cut_drift = 0.03;
+uniform float cut_shut = 0.40;
+uniform float cut_open = 0.62;
+/// **Where the second line is allowed to exist at all**, in units of the refraction's energy. Energy
+/// runs from `bay_floor` in a cove to `point_gain` off a headland, so raising `tip_at` walks the second
+/// white back toward the points and out of the bays.
+uniform float tip_at = 0.90;
+uniform float tip_full = 1.30;
+/// How much the drifting gate is allowed to thin the line ON THE ROCK. ⚠ See the head of this file
+/// before raising it.
+uniform float first_cut = 0.35;
+uniform float calm = 0.25;
+uniform float calm_scale = 0.38;
+uniform float calm_speed = 0.035;
+
+float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+float vnoise(vec2 p) {
+	vec2 i = floor(p), f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x),
+			   mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
+}
+
+float sdf(vec2 p) {
+	vec2 uv = (p - field_origin) / max(field_size, vec2(1.0));
+	return (texture(land_field, clamp(uv, vec2(0.0), vec2(1.0))).r * 2.0 - 1.0) * field_span;
+}
+
+vec2 seaward(vec2 p) {
+	float e = max(grad_step, 0.001);
+	vec2 g = vec2(sdf(p + vec2(e, 0.0)) - sdf(p - vec2(e, 0.0)),
+				  sdf(p + vec2(0.0, e)) - sdf(p - vec2(0.0, e)));
+	return length(g) < 1e-5 ? vec2(0.0, 1.0) : normalize(g);
+}
+
+float bend(vec2 p) {
+	float e = max(curve_step, 0.01);
+	float c = sdf(p);
+	float s = sdf(p + vec2(e, 0.0)) + sdf(p - vec2(e, 0.0))
+			+ sdf(p + vec2(0.0, e)) + sdf(p - vec2(0.0, e)) - 4.0 * c;
+	return s / (e * e);
+}
+
+float wash(float x, float r) {
+	r = clamp(r, 0.05, 0.95);
+	float u = x < r ? x / r : 1.0 - (x - r) / (1.0 - r);
+	return smoothstep(0.0, 1.0, u);
+}
+
+vec2 layer(vec2 p, vec2 tang, float age) {
+	vec2 q = p - tang * (age * run);
+	float w = (vnoise(q * warp_a_scale) - 0.5) * 2.0 * warp_a
+			+ (vnoise(q * warp_b_scale + vec2(37.0, 11.0)) - 0.5) * 2.0 * warp_b;
+	float along = vnoise(q * along_scale + vec2(11.0, 5.0));
+	return vec2(w, along);
+}
+
+void fragment() {
+	vec2 p = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xz;
+	float t = TIME;
+	float d = sdf(p);
+	vec2 n = seaward(p);
+	vec2 tang = vec2(-n.y, n.x);
+
+	float c = max(cycle, 0.1);
+	float k = abs(1.0 - 2.0 * fract(t / c));
+	vec2 l0 = layer(p, tang, fract(t / c) * c);
+	vec2 l1 = layer(p, tang, fract(t / c + 0.5) * c);
+	float w = mix(l0.x, l1.x, k);
+	float along = mix(l0.y, l1.y, k);
+
+	float kb = clamp(bend(p) * 0.5, -1.0, 1.0);
+	float energy = mix(1.0, mix(bay_floor, point_gain, kb * 0.5 + 0.5), refract_amt);
+
+	float live = mix(1.0 - calm, 1.0,
+					 smoothstep(0.25, 0.75,
+								vnoise(p * calm_scale + vec2(t * calm_speed, -t * calm_speed))));
+
+	float x = fract(t * rate + along);
+	float up = wash(x, rise_frac);
+	float draining = step(rise_frac, x);
+
+	float ds = d + w - up * swash * energy * live;
+
+	// **The line on the rock.**
+	float rest = max(line_tiles, 0.0001) * rest_frac * mix(1.0, energy, rest_shape);
+	float bw = rest + max(line_tiles, 0.0001) * surge * up * energy * live;
+	float band = 1.0 - smoothstep(bw * line_hard, bw, ds);
+	band *= mix(1.0, 0.72, draining * (1.0 - up));
+
+	// **THE SECOND LINE, AND IT IS THE REFERENCE'S OWN SHAPE.** In the frames the user sent, the coast
+	// wears two whites: one against the stone and one standing a little way off it, with dark water
+	// between them. ⚠⚠ **It is a LINE, not a band** — a crisp stroke at a fixed distance, not a soft
+	// wash — which is why it reads as thin at a width the wash would read as thick at.
+	// ⚠ It breathes with the wave rather than travelling: the gap opens as the water comes up.
+	float at = second_at * mix(0.82, 1.24, up);
+	float w2 = max(second_w, 0.0005);
+	float line2 = 1.0 - smoothstep(w2 * line_hard, w2, abs(ds - at));
+	line2 *= second_amt * clamp(energy, 0.0, 1.3) * live;
+	// Both cuts on the outer white: arbitrary gaps, and only off the points.
+	float cut = smoothstep(cut_shut, cut_open,
+						   vnoise(p * cut_scale + vec2(t * cut_drift, -t * cut_drift * 0.7)));
+	line2 *= cut * smoothstep(tip_at, tip_full, energy);
+	// ⚠ And the inner line thins with the same gate — never to nothing.
+	band *= mix(1.0, mix(1.0 - first_cut, 1.0, cut), 1.0);
+
+	ALBEDO = mix(sea.rgb, foam.rgb, clamp(max(band, line2) * line_alpha, 0.0, 1.0));
+}
