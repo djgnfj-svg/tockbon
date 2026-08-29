@@ -7,6 +7,16 @@ Status: open
 
 **화면만 보고도 2층에 오르는 길이 계단 하나뿐임을 알 수 있다.**
 
+## ⚠⚠ 계단은 2026-08-29 에 삭제됐다
+
+The user, looking at the island: ***"Let's take the stair out, it needs making again."*** The level-1
+block is gone from the board and `stair()` is never called -- the function and the mouth-side logic are
+untouched, they simply have no level to answer to.
+
+⇒ **There is no way up at all**, so `net_tiers` is red and says so. **This ticket now covers building
+the stair again**, not making the old one read better: the shape is open, and ticket 31's island shape
+decides where it goes.
+
 ## 왜 이 티켓이 있나
 
 **계산은 이미 그렇게 되어 있는데 화면이 그 말을 안 한다.** 몸은 눈금 차이 1 까지만 넘으므로

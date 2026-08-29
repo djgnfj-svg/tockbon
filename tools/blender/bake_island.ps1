@@ -22,6 +22,11 @@ if (-not (Test-Path $godot)) {
     Write-Error "bake_island: 저장소 루트의 고도를 못 찾았다: $godot"
 }
 
+# WARNING **THIS RUNS `blocks_explode.py`, NOT `island_build.py` DIRECTLY** (2026-08-29, the user:
+# 「섬하나만 있지말고 블록만 있어야할듯」). That script RUNS the build -- so the GLB and the JSON come out
+# exactly the same -- and additionally keeps a copy of every block a moment before they are welded,
+# spreads them out, and hides the finished island. **Blender is then left showing the blocks**, which is
+# the thing being worked on, instead of one lump nobody can take apart.
 Write-Host "[1/3] 블렌더에서 굽는다"
 python tools\blender\send.py tools\blender\island_build.py
 if ($LASTEXITCODE -ne 0) { Write-Error "bake_island: 굽기가 실패했다. 블렌더가 켜져 있나?" }
