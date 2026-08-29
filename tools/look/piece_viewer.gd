@@ -41,7 +41,7 @@ extends SceneTree
 ##
 ## ⚠ **`--shot` stood beside `--shot1` until 2026-08-27 and is gone** — the tombstone where `_shoot_all`
 ## stood, below `_zoom`, carries what it knew. `--shot1` is the flag that survived, because it is the one
-## the sculpt agent's own command line actually carries.
+## `tools/blender/README.md`'s own loop actually carries.
 
 const GLB := "res://assets/terrain/pieces.glb"
 
@@ -477,8 +477,8 @@ func _zoom(by: float) -> void:
 ## longer exist: it was written for `pieces.glb`'s ten meshes, and `pieces.py` — the only thing that
 ## could bake that file — was deleted 2026-08-27. The live target, `island.glb`, holds **ONE** mesh, so
 ## "walk every mesh from two angles and then line them up in a row" degenerates to one piece
-## photographed twice plus a row of one. `--shot1` does that job properly and is the flag the sculpt
-## agent's command line actually carries.
+## photographed twice plus a row of one. `--shot1` does that job properly and is the flag
+## `tools/blender/README.md`'s loop actually carries.
 ##
 ## **What it knew, and it outlives the code.** ⚠⚠ **THE SECOND SHOT TURNED THE SEA OFF, AND THAT WAS
 ## NOT A PREFERENCE.** The two wall pieces hang from the waterline DOWNWARDS — `wall_coast` ran from

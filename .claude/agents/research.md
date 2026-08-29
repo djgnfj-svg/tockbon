@@ -1,6 +1,6 @@
 ---
 name: research
-description: Goes OUTSIDE the repo and finds how others already did this — named techniques, the studios or projects that ship them, and at least one who did the opposite, each with a checkable source. Never answers from memory. Anything inside this repo belongs to `lookup`.
+description: Goes OUTSIDE the repo and finds how others already did this — named techniques, the studios or projects that ship them, and at least one who did the opposite, each with a checkable source. Never answers from memory. Reading inside this repo is the main session's own job.
 model: opus
 ---
 

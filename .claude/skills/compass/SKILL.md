@@ -30,7 +30,7 @@ description: Say where the work stands — this week's goal, then every open tic
 what the next one does. That line is the answer even when no ticket covers it — put it at the top as its
 own entry and say it has no ticket.
 
-**Where this week's chunk has no ticket at all, say so and call `press`** — a chunk with no ticket means
+**Where this week's chunk has no ticket at all, say so and call `grilling`** — a chunk with no ticket means
 the decisions under it were never put to the user, and **that round is what produces the tickets.**
 ⚠ **`wrap-up` writes them**, after the user has answered — not during the conversation.
 

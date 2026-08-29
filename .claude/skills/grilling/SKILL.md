@@ -39,8 +39,8 @@ break the very thing they name.
 Each round the user answers reshapes the tree: settled decisions push the frontier outward and unblock questions that depended on them. Recompute the frontier and ask the next round. A question whose answer depends on another question still open in this round belongs to a _later_ round, not this one.
 
 Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, tools, etc.), dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself.
-**Two agents, and which one is not a judgement call**: **`lookup`** for anything inside this repo — docs,
-code, nets, git history — and **`research`** for anything outside it, which comes back with sources.
-⚠⚠ **`lookup` never touches the web and `research` never answers from memory.** Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the sub-agent to report; ask the rest of the frontier now. The _decisions_ are the user's: put each to them and wait.
+**Inside this repo — docs, code, nets, git history — read it yourself.** For anything OUTSIDE it, send
+**`research`**, which comes back with sources.
+⚠⚠ **`research` never answers from memory**, and it is the only agent here that goes to the web. Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the sub-agent to report; ask the rest of the frontier now. The _decisions_ are the user's: put each to them and wait.
 
 The session is done when the frontier is empty: every branch of the design tree visited, nothing left silently assumed. Do not act on it until the user confirms you have reached a shared understanding.

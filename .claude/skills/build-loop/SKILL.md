@@ -17,21 +17,44 @@ agent with **its own context window** — that is the entire reason this skill e
 The `claimed` ticket on the live map, or the one the user named. **If more than one is takeable and the
 user named none, ask which — first, before anything else.**
 
-## 1. Plan — the `spec` agent
+## 1. Interview, then write the plan — **you, here, not an agent**
 
-Spawn `spec` on that ticket. It writes an `## Implementation plan` section into the ticket itself and
-sets the `Status:` line to `claimed`. **Tell it to call the Skill tool with `plan-into-ticket`.**
+⚠⚠ **This step used to be the `spec` agent, and that agent was deleted on 2026-08-29** (the user: *"I do
+not think that agent is needed — the process is splitting into tickets, talking one ticket through with
+me, turning that into a planning document, and handing it to the builder"*). **Every part of that except
+the handoff is a conversation with the user, and an agent cannot have one.**
 
-⚠⚠ **Pass it the ticket and nothing else.** It has none of this conversation — a subagent inherits no
-context. **Anything it needs that is not written down does not reach it.** That is why the plan has to be
-prose in the ticket and not an understanding in your head.
+1. **Interview the user on this one ticket** until nothing is left to guess. **Call the Skill tool with
+   `plan-into-ticket`** — it holds what to ask and the shape the plan takes.
+2. **Write the plan into the ticket** as an `## Implementation plan` section and set `Status:` to
+   `claimed`. **The file never moves**; status is the line, not the folder.
 
-## 2. ⚠⚠ The one checkpoint — **the user reads the plan**
+⚠⚠ **The plan is what reaches builder, and nothing else does.** A subagent inherits no context, so
+**anything you understood but did not write down does not exist.** That is the whole reason the plan is
+prose in the ticket rather than an understanding in your head.
 
-**This is the only place the loop stops on purpose.** Put in front of the user: **what is being built, in
-what order, and what is out of scope.** Then go back and forth until they are done with it.
+### Attack it first — the `adversary` agent
 
-**Never proceed on silence.** The user's agreement is the absence of anything to disagree with, and that
+⚠⚠ **ALWAYS, and there is no small-ticket exception** (2026-08-29, the user: *"the adversarial
+review is needed even when it is small and obvious"*). **Send `adversary` at the finished plan before the
+user sees it**, every time. It reads plans the way `verify` reads code: **prove it wrong.**
+⚠ **"Small and obvious" is a judgement about the plan, made by whoever wrote it** — which is exactly
+the judgement this step exists to check. **On a genuinely small ticket it comes back in one line**, and
+that line is cheap.
+⚠⚠ **Put its blockers in front of the user WITH the plan**, never instead of it. **It does not decide,
+and it never proposes a different direction.**
+
+## 2. ⚠⚠ The one checkpoint — **the interview, not a read**
+
+**This is the only place the loop stops on purpose**, and it is **an interview** (2026-08-29, the user:
+*"an interview is needed, deep enough that the ambiguous parts disappear"*).
+
+**Put in front of the user**: what is being built, in what order, what is out of scope — **and every
+blocker `adversary` found, all at once.**
+
+⚠⚠ **Go until nothing is left for builder to guess.** If the answers open new gaps, ask again. **The bar
+is that builder never has to ask back** — a builder who guesses is how a round is spent.
+⚠ **Never proceed on silence.** The user's agreement is the absence of anything to disagree with, and that
 needs them to actually have seen it.
 
 ## 3. Build — the `builder` agent
@@ -56,7 +79,7 @@ longer independent eyes.
 
 ## 4. Verify — in parallel
 
-**`verify-read` and `verify-run` always. `verify-look` the moment anything reached the screen.**
+**`verify` always. `verify-look` the moment anything reached the screen.**
 
 ⚠ **Do not spawn the screen verifier on a stage that draws nothing** — that is a third of the round trips
 spent on nothing.
@@ -76,4 +99,4 @@ not done** · where anyone was unsure.
 ⚠ **If you find yourself pasting source into the chat, the context saving has already gone.**
 
 **Then name the next step**: another open ticket on this chunk → `build-loop` again · the chunk's bar now
-true → `press` to settle the next chunk with the user · the session ending → `wrap-up`.
+true → `grilling` to settle the next chunk with the user · the session ending → `wrap-up`.

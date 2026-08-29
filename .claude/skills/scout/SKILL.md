@@ -9,7 +9,7 @@ description: Find how others already did this — three worked cases with source
 The moment a search result lands in this session's window, the context this skill exists to save is gone.
 
 ⚠ **`research` is the outside half and it never answers from memory.** Anything that could be settled by
-reading this repo is `survey` and its **`lookup`** agent — a different agent, on purpose.
+reading this repo is done here, in the main session, rather than by sending an agent.
 
 ## When it is required, not optional
 

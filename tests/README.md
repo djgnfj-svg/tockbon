@@ -47,8 +47,9 @@ land in groups, never one at a time.
    (2000, 6520), hits nothing, and raises no error.** Keys pass through fine — so **half an input suite can
    be green while the other half is dead.** Call `game._unhandled_input(ev)` directly
 
-**Call `net-tuner` when a round grows.** The old game's round was ~28s and **one net was 24.3s of it,
-unnoticed for weeks.** Slow means verification gets skipped, and then none of the above matters.
+**Measure the round when it grows** — the `net-tuner` agent that used to own this was deleted 2026-08-29
+(called once in 149 sessions); **do it in the session at that moment.** The old game's round was ~28s and
+**one net was 24.3s of it, unnoticed for weeks.** Slow means verification gets skipped, and then none of the above matters.
 
 ---
 

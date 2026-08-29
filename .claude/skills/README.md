@@ -1,4 +1,4 @@
-# .claude/skills — 16 skills, and **every one of them fires on its own**
+# .claude/skills — 13 skills, and **every one of them fires on its own**
 
 ⚠⚠ **Nothing here has to be typed as a slash command** (2026-08-27, the user: *"having to type them
 myself is far too much bother — I would rather just say it"*). **Re-count instead of trusting this
@@ -6,8 +6,8 @@ total**: `ls -d .claude/skills/*/ | wc -l`.
 
 ## The chain — read this first
 
-**`compass`** (what now) → **`press`** (put the forks the user has not seen in front of them, after
-sending **`lookup`** inside and **`research`** outside) → **`build-loop`** (one ticket to code, through
+**`compass`** (what now) → **`grilling`** (settle what this stretch actually builds, sending **`research`**
+outside when an outside fact is needed) → **`build-loop`** (one ticket to code, through
 five agents) → **`wrap-up`** (write the answers into the map and the tickets, then commit), with
 **`roadmap`** checking the whole way.
 
@@ -40,18 +40,18 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 | **`wrap-up`** | **Closes the session** — repairs the docs that drifted, writes the new tickets, clears the loose images, runs the nets, commits. **Stops at the commit** |
 | **`naming`** | **Settles what a thing is CALLED** and writes it into `CONTEXT.md`, so the next round can say it in one word |
 | **`roadmap`** | **Checks the big picture** against the commits — drift, gaps, what December still owes. ⚠ **Reports only; never edits the map** |
-| **`press`** | ⚠⚠ **Asks what the user did not know to ask.** The forks this direction forces that they have not seen. Called by `roadmap`, `compass` and `wrap-up` |
 
 ## The rest of the chain
 
 | Skill | What it does |
 |---|---|
 | **`compass`** | Says where the work stands — the week's row, then every open ticket ranked |
-| **`survey`** | What already stands at one spot, what died, which net measures it, which green went false. **Sends the `lookup` agent** |
 | **`scout`** | How others already did it — three cases with sources, plus one who did the opposite. **Sends the `research` agent** |
 | **`build-loop`** | One ticket, plan → build → verify, each in its own agent |
 | **`plan-into-ticket`** | Writes an `## Implementation plan` INTO the ticket. Synthesis only, no interview |
-| **`grilling`** | Works the tree of what is **already** on the table. ⚠ **`press` is the other half** — what is not on it yet |
+| **`grilling`** | Works the tree of **what is being made**, until nothing is left assumed. **Called by `roadmap`, `compass` and `build-loop`** |
+| **`prototype`** | Builds one thing **three or more genuinely different ways** and puts them side by side, so a look is chosen by seeing rather than by argument. ⚠ **Called `spike` until 2026-08-29** — renamed to the word the user actually says |
+| **`listup`** | **Names what is actually at one spot, one line each, grouped by kind.** ⚠ **It judges nothing** |
 
 ## Kept from `mattpocock/skills`
 
@@ -59,9 +59,8 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 
 | Skill | Why it stays |
 |---|---|
-| **`code-review-mp`** | ⚠ **The one hole in the chain** — the upstream flow closed its build with a review and this repo never wired it in |
 | **`diagnosing-bugs`** | The hard bug: intermittent, or a regression between two known-good states |
-| **`domain-modeling`** | Keeps `CONTEXT.md` a clean glossary |
+| ~~`domain-modeling`~~ | ⚠⚠ **Folded into `naming` on 2026-08-29.** Both wrote `CONTEXT.md` and asked the same question; `naming` was this repo's own. **Its ADR half was dropped** — there is no `docs/adr/` here and decisions go to `docs/plan/log.md` |
 | **`codebase-design`** | The deep-module vocabulary interfaces are designed with |
 | **`writing-for-agents`** | How to write a skill. **The ones written here were written with it** |
 | **`resolving-merge-conflicts`** | Two sessions have collided on `main` once already |
@@ -74,15 +73,23 @@ cut three more the user said they do not use.** **The later word wins.**
 
 | Gone | What restoring it costs |
 |---|---|
-| **`breakdown`** | **`press` asks and `wrap-up` writes** — restoring it means two skills that both split work into tickets |
+| **`breakdown`** | **`grilling` asks and `wrap-up` writes** — restoring it means two skills that both split work into tickets |
 | **`tdd`** | The rule it carried survives: **no check at a seam that is not agreed**, and the agreed three are in `CONTEXT.md` |
-| **`prototype`** | Never fired once. This repo answers design questions by putting the real game on screen |
-| `wayfinder` `to-spec` `to-tickets` | **`compass` + `press` + the roadmap file replaced all three.** Restoring means two planning shapes at once |
+| ~~**`prototype`**~~ | ⚠⚠ **The NAME came back on 2026-08-29** on a different skill — the one written here that builds three mechanisms side by side. **The imported skill is still gone**, and restoring it now means two skills wearing one word. ⚠ This row used to say it never fired; the record shows **one** call |
+| `wayfinder` `to-spec` `to-tickets` | **`compass` + `grilling` + the roadmap file replaced all three.** Restoring means two planning shapes at once |
 | `triage` `to-questionnaire` | Both assume **other people** — a reporter filing bugs, a colleague to send a questionnaire to |
 | `implement` `improve-codebase-architecture` | `build-loop` owns the build; the architecture sweep never fired once |
 | `grill-me` `grill-with-docs` | Both wrap `grilling`, which is kept |
 | `ask-matt` `handoff` `teach` `wizard` `setup-matt-pocock-skills` | The router described the upstream flow only; the rest never fired |
 | `research` **the skill** | ⚠⚠ **It came back on 2026-08-27 as an AGENT, not a skill** — `scout` is the trigger, `research` is who goes and reads |
 
-⚠ **`docs/skill-config/` outlived its skills.** `issue-tracker.md` is now read by `code-review-mp` alone,
-and `domain.md` by anything exploring the code.
+## ⚠⚠ **Three more went on 2026-08-29, and the record is what they cost**
+
+**All three had fired ZERO times**, and the call counts were read out of the session transcripts rather
+than guessed at.
+
+| Gone | Why, and what it took with it |
+|---|---|
+| **`code-review-mp`** | It fetched the originating issue from a tracker. **This repo has no tracker; a ticket is a file.** Half its config was corrections saying so, and Claude Code ships its own `/code-review`. ⚠ **`docs/skill-config/` went with it** — it was the only reader left |
+| **`survey`** | The four questions were right; **being behind a trigger nobody said was not.** ⇒ **They live in `plan-into-ticket` step 1 now**, where a plan is written and they actually get asked |
+| **`press`** | ⚠⚠ **It put unseen forks on the table WITH a recommendation on each**, and the same day the user set the rule *"no recommendation unless I ask for one"*. **`roadmap` and `compass` call `grilling` in its place.** ⚠ **What is lost**: `grilling` works the tree of what is already on the table, so **nothing now volunteers a fork the user has not seen.** That gap is open on purpose |

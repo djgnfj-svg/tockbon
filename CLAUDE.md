@@ -75,17 +75,32 @@ it. ⚠ **No twin.** Korean twins existed and were deleted because the same fact
 
 **The answer goes in the first line. Reasons after it, never before.** Every line load-bearing. Stop.
 
-- **Label a recommendation, in two parts and in this order** — **what you recommend · why.**
-  **Never leave it to be inferred**; an unlabelled paragraph reads as description
-- ⚠ **No 「the case against」 attached to a recommendation** (2026-08-22, the user: *"I do not really get
-  why that against part keeps coming up."*). **If it is strong enough to matter, this is not a
-  recommendation — put the fork in a closing question instead**
-- ⚠ **Never recommend a technique the user has not named without first checking how others do it**
 - **No emoji.** Bold is the only emphasis
 - **No file paths, no line numbers, no code locations in chat** — say what the thing is, not where it lives
 - **No word only you understand.** A doc name or a net name standing in for the thing is not an answer
-- **A reply covering more than one subject is a list**
 - **The user is new to making games. Their agreement is the absence of anything to disagree with**
+
+## ⚠⚠ **No recommendation unless it was asked for** (2026-08-29, the user)
+
+***"Unless I say so, no recommendations — it is confusing rather than helpful."***
+⇒ **Report what is there and stop.** An unasked recommendation is one more thing to read, and one more
+thing to have to disagree with.
+
+- **When it IS asked for, label it** — **what you recommend · why**, in that order
+- ⚠ **No 「the case against」 attached to one** (2026-08-22, the user: *"I do not really get why that
+  against part keeps coming up."*)
+- ⚠ **Never recommend a technique the user has not named without first checking how others do it**
+
+## ⚠⚠ **It has to be readable** (2026-08-29, the user)
+
+***"What you are saying is too hard to look at, hard to read. Separate it properly and make it easy on
+the eye."*** **The failure is density, not length.**
+
+- **One bullet, one line.** Needs three lines of prose? Then it is its own heading, or it is cut
+- **Bold at most one phrase per line.** Bold on every clause emphasises nothing — that is what went wrong
+- **⚠ marks a thing that will actually bite**, never emphasis. Two per reply is already many
+- **One subject, one heading**, with a blank line between. A reply covering three subjects is three headings
+- **Short sentences.** A clause that only qualifies another clause gets deleted
 
 ## ⚠⚠ **A reply does NOT end with questions** (2026-08-27, the user)
 
@@ -121,13 +136,12 @@ probe. **The test is whether the PLAYER is meant to look at it.**
 
 # The docs
 
-**`docs/` is four folders and three loose files.** **Open a folder's README, not the folder.**
+**`docs/` is three folders and three loose files.** **Open a folder's README, not the folder.**
 
 | Path | What it holds |
 |---|---|
 | `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **Nearly empty, and that is a defect** — there is no GDD. When one is written it is **one page**. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
-| `docs/skill-config/` | **What imported skills read before they act, and the only configuration in `docs/`.** ⚠ **Not reading matter** — **`code-review-mp` is the only skill that loads it**, and it reads one file |
-| `docs/plan/` | **The only map.** **`roadmap.md` is what is being done** — **one dated row per week, each carrying a status mark**, plus the chunk table; **`log.md` is why it came out that way, and every quotation lives there**; **`tickets/NN-name.md`** are the work. **Status is a `Status:` line inside the file — files never move between folders.** The chain: `compass` → `press` (which sends `lookup` + `research`) → `build-loop` → `wrap-up`, with `roadmap` checking it. ⚠⚠ **Only `wrap-up` writes to these files, and only after the conversation is finished** |
+| `docs/plan/` | **The only map.** **`roadmap.md` is what is being done** — **one dated row per week, each carrying a status mark**, plus the chunk table; **`log.md` is why it came out that way, and every quotation lives there**; **`tickets/NN-name.md`** are the work. **Status is a `Status:` line inside the file — files never move between folders.** The chain: `compass` → `grilling` (which settles what a stretch actually builds, sending `research` outside when it needs an outside fact) → `build-loop` → `wrap-up`, with `roadmap` checking it. ⚠⚠ **Only `wrap-up` writes to these files, and only after the conversation is finished** |
 | `docs/reference/` | **What came in from outside**: the screenshots a decision was made from, and the notes `research` leaves when a search took real work. All `YYYY-MM-DD-what-it-is`. ⚠⚠ **A ticket keeps the conclusion; the material stays here** — and `wrap-up` asks before deleting a shot |
 | `lessons-from-two-dead-games` | **What the two games that died actually measured** |
 | `how-nets-lie` | **Every green measured to be false.** Read it before writing a check and before believing a green round |

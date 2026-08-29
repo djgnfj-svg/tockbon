@@ -1,46 +1,58 @@
-# .claude/agents — the build team, and the two that only read
+# .claude/agents — four that build, and one that goes outside
 
-**Nine definitions live here.** Five of them are one build team; `net-tuner` is called on its own when a
-round gets slow, **`sculpt` owns the 3D**, and **`lookup` and `research` only find things out.**
+**Five definitions live here.** **`research` is the only one that leaves the repo.**
 
-## ⚠⚠ The two readers, and why they are two
+## ⚠⚠ **`spec` is gone — planning is a conversation** (2026-08-29, the user)
 
-**Inside and outside are different jobs and they were one blur until 2026-08-27** (the user: *"there
-should be one that checks the documents inside and one that finds the facts outside the repo — how
-others do it"*). **The skills used to say "dispatch a subagent" with no name**, so whoever ran them
-picked whatever was nearest and the two halves got mixed.
+***"I do not think that agent is needed — the process is splitting into tickets, talking one ticket
+through with me, turning that into a planning document, and handing it to the builder."***
 
-| Agent | Reads | Never |
-|---|---|---|
-| **`lookup`** | This repo — `src/`, `docs/`, the nets, `git log` | **Never touches the web** |
-| **`research`** | Outside — primary sources, with links | **Never answers from memory** |
+**`spec` read a ticket and planned it alone.** ⚠⚠ **Everything the user said that was not written into
+the ticket never reached it**, so the plan carried the ticket's gaps and **builder filled them by
+guessing.** An agent cannot have the conversation the plan depends on.
+⇒ **The main session interviews the user and writes the plan into the ticket.** `plan-into-ticket` holds
+what to ask and the shape it takes; `adversary` attacks the result.
 
-**`survey` sends `lookup`. `scout` sends `research`. `grilling` sends whichever the question needs.**
-⚠ **Neither writes a file, edits anything, or decides.** Their whole output is findings.
+## ⚠⚠ **Reading this repo is not an agent's job any more** (2026-08-29, the user)
 
-⚠⚠ **`sculpt` exists because the 3D ate the conversation** (2026-08-27, the user: 「앞으로 3d 만드는거
-에이전트로 빼자 컨텍스트를 너무 먹는거 같은데」). Baking a mesh is a loop of change · bake · look · miss ·
-change again, and every turn of it lands a render and a tool dump in the main window. **Send it out and
-take back the picture and the numbers.**
-⚠ **It carries five traps that each cost a round** — the MCP client that hangs, the Godot import cache
-that serves yesterday's island in silence, face winding deciding whether a face exists, swallowed
-geometry errors, and a shadowed variable name. **Read it before doing any Blender work yourself.** ⚠ **The skill that used to drive this team was deleted on 2026-08-22** as 394 lines
-whose verification half was already in `how-nets-lie`. **This page is what was worth keeping.**
+**`lookup` read the inside and `research` reads the outside, and the split was set on 2026-08-27.** ⚠⚠
+**`lookup` was deleted after 149 sessions and ZERO calls** — nothing ever sent it, because the skill that
+was supposed to send it never fired either. **An agent nothing can reach is not a prepared path, it is
+an unmeasured one.**
+⇒ **The main session reads `src/`, `docs/`, the nets and `git log` itself.** `plan-into-ticket` carries
+the four questions and where to find each.
+⚠ **The outside half stands**: `research` never answers from memory, and `scout` is what sends it.
 
-✅ **A driver came back on 2026-08-24: the `build-loop` skill**, and it is deliberately thin — it reads
-this page's order and calls the agents, nothing more. **The user says 「짜줘」 and it runs.**
-⚠⚠ **It is model-invocable on purpose**: the imported planning skills are human-typed-only, which is
-what kept this team from ever being called. **The one place it stops is after the plan, for the user to read.**
+## ⚠⚠ **`sculpt` is gone — Blender is back in the main session** (2026-08-29, the user)
+
+**It was pulled out on 2026-08-27 because the 3D ate the conversation**, and it went back because **twice
+it did the work and sent no result**, so the caller measured everything by hand anyway. The agent saved
+context and spent a round each time.
+⇒ **What it knew is `tools/blender/README.md`** — the five traps, the mirror rule, the loop and the
+numbers. **Read that before touching a mesh**; the reading step is no longer somebody else's.
+
+## ⚠ **`net-tuner` is gone too** (2026-08-29, the user: *"when it gets long, we check it then"*)
+
+**Called once in 149 sessions**, and it was the second-largest file here. **When a round of nets gets slow
+or a net spins idle, measure it in the main session at that moment** rather than keeping a specialist
+standing by for it.
 
 ## The order
 
 ```
-spec        plans into the ticket, sets Status: claimed. Stuck → the question goes to the user, unanswered
+(main)      interviews the user on the ticket, writes the plan into it, sets Status: claimed
+adversary   ALWAYS, and before builder — attacks the plan. No small-ticket exception
 builder     implements per that plan. One chunk → nets green → report → HALT
-verifiers   verify-read + verify-run always. verify-look THE MOMENT anything reaches the screen
+verify      always. Reads it to prove it wrong, then runs it headless. Both passes, never one
+verify-look the moment anything reaches the screen, and not before
 judgment    all pass → Status: resolved + the answer under ## Answer + one line on the map
             any fail → batch the findings into ONE message back to builder
 ```
+
+⚠⚠ **`verify` was two agents until 2026-08-29** — `verify-read` and `verify-run`, merged because three
+verifiers on every ticket was too much ceremony. **The split survives as two passes inside one agent**,
+and it has to: reading catches "runs fine, but only for this case", running catches "reads plausibly,
+fails when run", and **fake code is always one of the two.**
 
 ## The four rules that cost rounds to learn
 
@@ -56,14 +68,13 @@ judgment    all pass → Status: resolved + the answer under ## Answer + one lin
 - ⚠ **Bounced three times without passing → stop and take it to the user.** Past that, builder starts bending
   the code to get past verification, which is the most common path to code that pretends to work
 
-**Judgment stays on opus** — spec and all three verifiers, and ⚠⚠ **each of the four now says so in its own
-frontmatter** (2026-08-27). Until then this paragraph was the only thing holding the rule: the files named
-no model at all, so they silently took whatever the session happened to be running, and the promise was
-kept by luck. Lowering a verifier to save money is how a round goes green for the wrong reason.
-`net-tuner` pins sonnet on purpose — it measures, it does not judge.
+**Judgment stays on opus** — `adversary`, `verify` and `verify-look`, and ⚠⚠ **each says so in its
+own frontmatter** (2026-08-27). Until then this paragraph was the only thing holding the rule: the files
+named no model at all, so they silently took whatever the session happened to be running, and the promise
+was kept by luck. Lowering a verifier to save money is how a round goes green for the wrong reason.
+⚠ **`builder` alone names no model** and takes the session's.
 
 ⚠ **The godot MCP server is off**, so the screen verifier opens its own window with a capture script it runs
-directly. ⚠⚠ **Two such scripts exist again** — `tools/look/` was rebuilt after the cell game took the old
-ones, and `src/` runs. **Read that folder's README before writing a third.** If the server is ever switched back on,
-`127.0.0.1:6550` holds **one client at a time** and three verifiers at once will fight over it — that is why
-the two headless verifiers are told headless-only.
+directly. ⚠⚠ **`tools/look/` holds two scripts and neither photographs a fight** — read that folder's README
+before writing a third. If the server is ever switched back on, `127.0.0.1:6550` holds **one client at a
+time**, which is why the headless verifier is told headless-only.

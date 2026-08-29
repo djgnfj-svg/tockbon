@@ -31,7 +31,7 @@ Built, fixed, deleted, decided. **"Almost done" is not done.** Do not mix done a
 ## 3. Write the tickets
 
 **Anything the user decided this session that no ticket holds.** ⚠ **You are writing down answers, not
-inventing work** — open forks are `press`'s round, and that happens before this step.
+inventing work** — open forks are `grilling`'s round, and that happens before this step.
 
 - `docs/plan/tickets/NN-<english-slug>.md`, numbered on from the last, and its number into the roadmap
 - **Answer is code → `Type: task`. Answer is what to build → `Type: grilling`**, the user answers it

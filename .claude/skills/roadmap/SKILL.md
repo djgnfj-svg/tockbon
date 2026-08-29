@@ -38,15 +38,21 @@ each names the file or commit it came from.
 
 **Where a section is empty, say it is empty.** A clean section is a measurement.
 
-## ⚠⚠ Then call `press` — **the report is not the end**
+## ⚠⚠ Then keep asking — **the report is not the end**
 
-**A drift report tells the user what is wrong with the map. It does not help them fill it.**
-⚠⚠ **They are new to making games and cannot ask for the fork they have never seen** — so after the
-three sections, **call `press`**, which sends `research` outside and `lookup` inside and comes back
-with the two to five decisions this stretch of the way forces.
+**A drift report tells the user what is wrong with the map. It does not help them fill it.** After the
+three sections, **two skills run, and they are not the same question:**
 
-⚠ **Skip it when the user has already said what they want.** `press` puts unseen forks on the table;
-it does not re-ask a settled one.
+| | What it asks | When |
+|---|---|---|
+| **`grilling`** | **What is actually being made**, worked down the tree until nothing is left assumed | ⚠⚠ **Whenever the map does not yet say what a stretch builds** (2026-08-29, the user: *"the roadmap should grill — what gets built has to be asked, and asked again"*) |
 
-⚠⚠ **The map is not edited here.** Fixing what this skill finds is the user's call, taken after they read
-it — the repair is a later round, and often a ticket.
+⚠⚠ **A roadmap row that names a week but not a thing is not a plan**, and this map has ten such weeks.
+**`grilling` is what turns one of them into something a ticket can be cut from** — run it on the nearest
+undecided stretch, not on all ten.
+
+⚠ **Skip `grilling` on a stretch that is already decided.** Re-opening a settled decision is the most
+expensive thing this skill can do.
+
+⚠⚠ **The map is still not edited here.** Fixing what this skill finds, and writing down what the grilling
+settled, is the user's call taken after they read it — the repair is a later round, and often a ticket.

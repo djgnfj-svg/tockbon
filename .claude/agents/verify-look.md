@@ -1,6 +1,6 @@
 ---
 name: verify-look
-description: Launches the game and verifies with your eyes that it matches the design. Screenshots are compared against the ticket's screen section. Numeric verification belongs to verify-run, code to verify-read.
+description: Launches the game and verifies with your eyes that it matches the design. Screenshots are compared against the ticket's screen section. Numbers and code both belong to `verify`.
 model: opus
 ---
 
@@ -12,7 +12,7 @@ model: opus
 
 The `## Screen` section of the claimed ticket — `docs/plan/tickets/<NN>-<이름>.md` — "what does the user see that tells them this happened".
 
-If that section is empty you cannot judge. Send it back to spec.
+If that section is empty you cannot judge. Report that, and stop.
 
 ## Method — the game screenshots itself
 
@@ -24,9 +24,12 @@ bridge section below is for when it is attached.
 
 ⚠⚠ **That sentence has turned over twice.** `tools/look/` was emptied with the cell game on 2026-08-22,
 and **it exists again**: `src/` runs, the game launches, and the folder holds **two scripts that both run** —
-`capture_refit.gd` (twelve frames of the reward pick and the refit board) and `probe_refit_hits.gd`
-(headless, reads no pixels, answers which control a press reaches). **Read `tools/look/README.md` before
-writing a third.** The shape a capture script takes is this:
+`capture_ground.gd` (two frames of the island with the buildings hidden and nobody stood up) and
+`piece_viewer.gd` (a window driven by hand, one baked block at a time under the game's light).
+⚠⚠ **The pair that stood here until 2026-08-29 — `capture_refit.gd` and `probe_refit_hits.gd` — was deleted
+with the reward pick and refit screens they photographed.** ⇒ **Neither a fight nor any other live screen has
+a capture script, and there is no probe at all**: the ticket you are handed will usually need you to write
+one. **Read `tools/look/README.md` before writing it.** The shape a capture script takes is this:
 
 ```
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://<capture-script>.gd -- <output-dir>
@@ -44,7 +47,7 @@ written into the repo.
 
 **Not `--headless`.** No swapchain, `root.get_texture()` comes back blank, every PNG is a black rectangle **with
 no error anywhere** — and one of the deleted tools *hung* there instead, waiting on a `frame_post_draw` that
-never comes. `capture_refit.gd` refuses `--headless` outright rather than writing the rule down.
+never comes. `capture_ground.gd` refuses `--headless` outright rather than writing the rule down.
 
 **A capture harness is an instrument, so invert it before trusting it.** ⚠⚠ **2026-08-22 — the capture
 harness this paragraph described went with the cell game, and so did every name it pinned** (`capture_map.gd`,
@@ -52,9 +55,10 @@ harness this paragraph described went with the cell game, and so did every name 
 is general**: take a **known-answer frame first**, because anything that re-centres or re-zooms between the
 write and the shutter **quietly undoes a staged camera, and the failure looks exactly like a change that had
 no effect.** Stage a camera through the values the view composes each frame, **never** by writing `position`
-directly. ⇒ **The concrete half lives in `tools/look/README.md` now** — `capture_refit.gd` shoots the title
-first for exactly this reason.
-that node reserves the composition for one place.
+directly. ⇒ **The concrete half lives in `tools/look/README.md` now.**
+⚠⚠ **The script that carried this rule shot the title first and it is deleted**, and `capture_ground.gd`
+has no known-answer frame at all — its first shot is already the subject. ⇒ **A capture script you write
+here owes one, and it is the first thing to put in it.**
 
 **Is there a path for the thing you want to see to reach the screen?** The most common miss, and it reads as a
 broken feature: sim and colour both in, but nothing in the shell ever calls the setter, so nothing appears.
@@ -99,7 +103,7 @@ A captured frame stays in the conversation forever. So:
 
 - **Few, small.** Only the moments the judgment needs.
 - **Report the result as text.** Do not hand screenshots to the team or main. Write what was and wasn't visible.
-- If a value is all you need, don't capture. That's verify-run's job.
+- If a value is all you need, don't capture. That's `verify`'s job.
 
 This isolation is why this agent exists separately. Expensive observation is digested here; only conclusions leave.
 
@@ -128,7 +132,7 @@ section only when the user has re-enabled the server.
 The bridge (`127.0.0.1:6550`) accepts **one client**, and `godot_*` is verify-look only; everything else is
 headless. `godot_*` screenshots are the one exception to the no-OS-capture rule — the editor captures its own
 viewport and steals no input. **Mouse coordinates cannot go through `godot_input`**: use
-`tree.root.push_input(ev, true)` inside `godot_exec` (why, in `agents/verify-run.md`).
+`tree.root.push_input(ev, true)` inside `godot_exec` (why, in `agents/verify.md`).
 
 Before launching: is the editor already up · the game window steals focus, so ask if the user is working ·
 is there a path for the thing to reach the screen.

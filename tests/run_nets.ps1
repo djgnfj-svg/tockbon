@@ -42,8 +42,8 @@ if ($null -eq $godot) {
 # even with exit code 0. It is taken to a file and read back as text.
 #
 # The PID and the net name are put into the file name. With a fixed name, **two people running at the same time
-#  overwrite each other's output.** This repo has verify-run and verify-read running the nets in parallel, so it
-#  is bound to happen — and it did.
+#  overwrite each other's output.** This repo runs `verify` alongside `builder`, and two sessions have shared
+#  `main` at once, so it is bound to happen — and it did.
 #  There are two symptoms and **the latter is far more dangerous**:
 #   · failures appear that do not exist (someone else's failure lines are read as mine)
 #   · **a real failure is buried under someone else's green** — nobody notices this one

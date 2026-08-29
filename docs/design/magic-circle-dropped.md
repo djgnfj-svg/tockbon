@@ -53,15 +53,17 @@ carried since the old game and was reworked four times in one conversation witho
 - **The action is the trigger.** Parry, dash, take a hit → that is what sets something off, not a timer.
   It is why the hands stop being idle
 - **Order changes the kind of result.** Confirmed on screen in the old game and recorded in
-  [`design/circle-rune-glyph.md`](../design/circle-rune-glyph.md). **It needs no magic theme to hold**
+  `design/circle-rune-glyph.md`, ⚠ **which was deleted 2026-08-29** — the magic-circle game is gone and
+  the doc had no frame left to stand in. **The claim itself needs no magic theme to hold**
 - Both were principles 1 and 8 of `planning-principles-ko.md`. ⚠ **That file is gone** — the Korean twins
   were deleted because the same fact in two files drifts. **The surviving copy is `planning-principles.md`,
   and its numbering is not the one this line counted on.** Read it by what it says, not by the number
 
 ## What's tied to it
 
-- **`design/circle-rune-glyph.md` loses its subject** but keeps its axes. It stays recovered because the
-  three-way time cut applies to anything that fires
+- ~~**`design/circle-rune-glyph.md` loses its subject** but keeps its axes. It stays recovered because the
+  three-way time cut applies to anything that fires~~ ⚠⚠ **It was deleted on 2026-08-29** — losing the
+  subject turned out to be the whole of it, and nothing had reached for those axes in a week
 - `tools/pixel/` glyph legibility work is **not needed.** Cells need almost no art, which is part of why
   the user chose them
 - **December is now August.** The user set the new target at **the end of August 2026** — a finishable
