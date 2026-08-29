@@ -312,3 +312,17 @@ difficult, basically."***
 3. ⚠⚠ **계단을 손으로 깎을 수 없다.** 지금 계단은 굽는 스크립트가 매번 계산해서 만든다 — 블렌더에서
    손으로 고쳐도 다음 굽기가 덮어쓴다. **손으로 깎으려면 계단이 파일 안의 칸이어야 하고, 그것이
    2026-08-26 에 접힌 그 길이다**
+
+## ⚠⚠ **A body may not STOP on a stair — 2026-08-29, and no code holds it**
+
+**The user, deciding where the 판 goes** (the mark is per 조각 now, and a stair carries none):
+
+> 「계단에는 판이 없을 예정이야 계단에서 머물수 없는게 좋을듯 계단에서 싸우려면 위에서 계단으로
+> 내려와서 그순간만 있는거임」
+
+⇒ ***"There will be no 판 on the stair. I do not want anyone able to STAY on a stair. If a fight
+happens on one, it is because somebody came down onto it from above, and only for that moment."***
+
+⚠⚠ **This is a RULE, not a mark.** `Grid` lets a body stand and be reserved on a stair tile today; what
+exists is only that the stair carries no 판 and no light. **Whatever rebuilds the stair carries this**:
+a stair is crossed, never occupied.

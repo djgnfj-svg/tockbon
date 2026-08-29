@@ -574,13 +574,15 @@ const COL_ENEMY := Color(1.0, 0.420, 0.361)
 ## killed them: 「위에 노드만 살짝 얹은 느낌이어서 너무 별로」·「너무 흰색이 너무 잘 보여」.
 ## ⚠ **What survives below shapes the HOVER's mask**, which is still drawn at runtime.
 
-## **How many tiles across one mat is.** ⚠⚠ **2, because the island is BUILT that way** —
-## `tools/blender/island_build.py` lays the whole island down as 2x2 pieces, and a raised block is
-## always a whole piece. A mat per TILE was on screen once and the user's word was 「너무 많으」; mats
-## grown freely from seeds were on screen once and the word was 「맘대로 되어있는」. **Two rejections,
-## and the piece is what both of them point back to.**
-## ⚠ The blocks start at tile 0, the same corner the bake starts from — offset them and every mat
-## straddles two pieces.
+## **How many tiles across one BLOCK is** — the unit the island is built in, and nothing else.
+##
+## ⚠⚠ **THE 판 STOPPED USING THIS ON 2026-08-29** (the user: 「판이 조각단위로 뜨고 그것으로 이동할 수
+## 있는게 좋을 것 같아」). It used to be the 판's own size: `field_view._wash_cells` numbered mats by
+## 2x2 piece and the bake stamped one 판 per piece. **Both are per 조각 now.** ⚠ The rejection this
+## constant was written on is the one that got reversed — one mat per tile was on screen once and the
+## word then was 「너무 많으」.
+## ⚠ **Still true, and still the island's unit**: the bake lays the whole island down as 2x2 blocks and
+## a raised block is always a whole block, starting at tile 0.
 const WASH_BLOCK_TILES := 2
 
 ## ⚠ **`SUMMON_RING_W_TILES` went with the boats** (2026-08-29), and `SUMMON_RING_SEGMENTS` before it.

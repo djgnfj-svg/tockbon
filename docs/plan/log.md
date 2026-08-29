@@ -16,6 +16,75 @@
 [roadmap.md](roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅ **The 판 became a 조각 — 2026-08-29**
+
+⚠ **This section is in English because `CLAUDE.md` says every document is.** The user's own words are
+translated and the Korean is kept beside them.
+
+**One 판 per 조각 now, not one per 칸.** The user, having seen both on screen: ***"Having tried it, I
+think the 판 rising per 조각, and moving by that, is what I want"*** (「근데 이번에 해보니 판이
+조각단위로 뜨고 그것으로 이동할 수 있는게 좋을 것 같아」).
+
+⚠⚠ **This reverses 2026-08-27's 「the hover unit is the 4-조각 칸」, and it reverses an older rejection
+too**: one mat per tile had been on screen once and the word then was 「너무 많으」. **What decided it is
+that the move order has always taken a 조각** — a 판 that was a 칸 meant the mark and the command spoke
+different units. 284 판 where there were 71.
+
+### What was settled, one line each
+
+| What | The user's word |
+|---|---|
+| **판 per 조각, and you move by it** | 「판이 조각단위로 뜨고 그것으로 이동할 수 있는게 좋을 것 같아」 |
+| **They must not touch** | ***"they have to be separate per 조각"*** 「조각마다 떨어져야함」 |
+| **Cut to the land at the edges** | ***"let's cut them to fit"*** 「맞춰 깍자」 |
+| **No 판 on a stair, and no standing on one** | 「계단에서 머물수 없는게 좋을듯 ... 위에서 계단으로 내려와서 그순간만 있는거임」 |
+| **TAB is a stopgap** | 「애초에 탭은 임시이기 때문에」 |
+| **Light and dark both, judged on screen** | 「밝게해보자 어둡게도 해서 프로토 타입으로 보는게 목적」 |
+
+⚠ **「A body may not stop on a stair」 is a RULE, not a mark**, and no code holds it. There is no stair
+on the island to hold it against either — it goes with ticket 06.
+
+### ⚠⚠ What this round got wrong, and it is a process failure rather than a code one
+
+**Five prototypes were built before anyone agreed what the 판 was for.** Two of the five answered a
+question that had not been asked, and the unit was wrong in a third. **Then four one-line remarks from
+the user were turned straight into four edits** — 「둥글게」, 「호버」, 「칸만」, 「판이 떠야함」 — and the
+third contradicted the first.
+
+**The user stopped it**: ***"I'm getting the feeling you're just doing this carelessly... don't code
+until I say so; let's settle it by answering, and then go"*** (「니가 뭔가 그냥 대충하고 있다는 느낌을
+받고 있는데 ... 내가 말할떄 까지 코딩하지 말고 대답하면서 확정을 짓고 진행하자」), and again on the
+mismatch itself: ***"you put a 판 on the 조각 and then the floating one rises somewhere else — your
+concept is a bit wrong"*** (「조각에 판을 올리고 왜 뜨는 판은 또 다른데 뜨네... 니가 개념이 좀 잘못된듯?」).
+
+⇒ **The harness was changed the same round**: `prototype` now has a step 0 that settles the set with the
+user before a folder exists, and a step 7 saying a remark on the finished sheet is a question rather
+than a work order. The chain in `.claude/skills/README.md` hangs `prototype` off `grilling` at both ends.
+
+### How it was baked — **MCP, not the script**
+
+⚠ **The user asked for it to be baked live, one piece at a time** (「스크립트로 굽지말고 mcp로 따로 구워
+하나씩」), so the 판 was built in the running Blender through the MCP path and looked at there before any
+of it reached the game. ⚠⚠ **`island_build.py` was then brought in line and run whole in Blender**, and
+it produced the same 284 판 — **a scene that a script cannot reproduce is a scene that dies at the next
+bake.**
+
+### What is NOT settled
+
+- **The bridges are gone.** The sloped strips that said 「you may GO from here to there」 were drawn
+  between 칸; nobody has decided what they are between 조각. A strip on every neighbouring pair welds
+  the board back into one slab. ⇒ **ticket 32**, and it comes back with the stair
+- **The tone and the gutter are not picked.** Twelve shots were put up — six tones, light and dark, at
+  two gutter widths — and the values shipped are the middle light one and the wide gutter, by default
+  rather than by choice. ⇒ **ticket 33**
+
+### The nets
+
+**58 failed / 580, and the same 58 with the change stashed away** — measured both ways rather than
+assumed. ⚠ **They are the display-board failures ticket 15 already holds** (`net_tiers` expects a 16x12
+island and beasts that no longer land).
+
+
 ## ✅ **The chosen sea went into the game — 2026-08-29**
 
 ⚠ **This section is in English because `CLAUDE.md` says every document is.** The rest of this file is

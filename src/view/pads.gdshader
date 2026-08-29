@@ -9,12 +9,14 @@ render_mode unshaded, cull_disabled, depth_draw_opaque, blend_mix;
 // mark went missing for a whole round. `tools/blender/island_build.py` exports it beside the island
 // now, and this shader is what decides when any of it is visible.
 //
-// ⚠⚠ **EVERY 판 CARRIES ITS 칸's INDEX IN `UV.x`**, written by the Blender run as `py * PW + px` —
+// ⚠⚠ **EVERY 판 CARRIES ITS 조각's INDEX IN `UV.x`**, written by the Blender run as `ty * W + tx` —
 // the same number `field_view._wash_cells` computes for a tile. **That is the whole mechanism**: one
-// mesh, one draw call, and a `hover_cell` uniform picks out exactly one 칸 without the game having
-// to split this into forty-eight nodes.
+// mesh, one draw call, and a `hover_cell` uniform picks out exactly one 조각 without the game having
+// to split this into hundreds of nodes.
+// ⚠ **It was the 칸's index until 2026-08-29** (the user: 「판이 조각단위로 뜨고 그것으로 이동할 수
+// 있는게 좋을 것 같아」). One 판 per 조각 is four times as many marks, and that is the trade taken.
 //
-// ⚠ **The lift is in the VERTEX stage and it is a real displacement.** A hovered 칸 rises; it does
+// ⚠ **The lift is in the VERTEX stage and it is a real displacement.** A hovered 조각 rises; it does
 // not merely brighten. Two channels rather than one, because a brightness alone was what the old
 // two-quad mark did and the user's word on that was 「위에 노드만 살짝 얹은 느낌이어서 너무 별로」.
 //
@@ -32,9 +34,12 @@ uniform float show_all : hint_range(0.0, 1.0) = 0.0;
 // at any time. **Both live in `look.gd`** and are pushed in from `field_view`.
 uniform float all_alpha : hint_range(0.0, 1.0) = 0.35;
 uniform float hover_alpha : hint_range(0.0, 1.0) = 0.85;
-// How much lighter than the ground a 판 is drawn, and how much lighter again the hovered one is.
-uniform float all_lighten : hint_range(0.0, 1.0) = 0.25;
-uniform float hover_lighten : hint_range(0.0, 1.0) = 0.55;
+// How far from the ground's own tone a 판 is drawn, and how far again the hovered one is.
+// ⚠⚠ **SIGNED SINCE 2026-08-29** (the user: 「밝게해보자 어둡게도 해서 프로토 타입으로 보는게 목적」).
+// **Positive is toward white, negative is toward black**, and zero is the bare ground. It was a
+// 0..1 lighten before, so every old value means exactly what it meant.
+uniform float all_lighten : hint_range(-1.0, 1.0) = 0.25;
+uniform float hover_lighten : hint_range(-1.0, 1.0) = 0.55;
 // How far the hovered 칸 rises, in world units (one unit is one tile).
 uniform float hover_lift = 0.06;
 
@@ -72,7 +77,10 @@ void fragment() {
 	// state the user asked for: an island with nothing drawn on it.
 	float a = show_all * all_alpha;
 	a = max(a, v_is_hover * hover_alpha);
-	float lighten = mix(all_lighten, hover_lighten, v_is_hover);
-	ALBEDO = mix(v_tone, vec3(1.0), lighten);
+	float tone = mix(all_lighten, hover_lighten, v_is_hover);
+	// ⚠ **Toward white or toward black, never both.** Mixing to a grey midpoint instead would wash a
+	// dark 판 out at exactly the strength where it starts to read.
+	vec3 target = tone >= 0.0 ? vec3(1.0) : vec3(0.0);
+	ALBEDO = mix(v_tone, target, abs(tone));
 	ALPHA = a;
 }

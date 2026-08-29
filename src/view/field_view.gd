@@ -332,28 +332,31 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	_place_camera()
 
 
-## **Which mat each tile belongs to** -- the index of its 2x2 piece, or -1 where nothing walks.
+## **Which 판 each tile belongs to** -- its own index, or -1 where nothing walks.
 ##
-## ⚠⚠ **2x2 BECAUSE THE ISLAND IS BUILT THAT WAY** -- `tools/blender/island_build.py` lays the whole
-## island down as 2x2 pieces and a raised block is always a whole piece, so the piece is the unit the
-## eye already reads. Two other units were on screen and rejected: one mat per TILE
-## (「너무 많으」) and mats grown freely from seeds (「맘대로 되어있는」).
+## ⚠⚠ **ONE 판 PER 조각 SINCE 2026-08-29** (the user, after seeing both on screen: 「판이 조각단위로
+## 뜨고 그것으로 이동할 수 있는게 좋을 것 같아」). This function used to answer the index of the tile's
+## **2x2 칸**, because the island is laid down in 2x2 pieces and a raised block is always a whole
+## piece. ⚠ **That is a reversal, not a cleanup**: one mat per tile had been on screen once before and
+## the word then was 「너무 많으」. What changed is that the move command has always taken a 조각, so a
+## 판 that was a 칸 meant the mark and the order spoke different units.
+## ⚠ **The Blender bake writes the same number into every 판's UV** — change one side and the cursor
+## lights the wrong thing.
 func _wash_cells(grid: Grid) -> PackedInt32Array:
 	var n := grid.w * grid.h
 	var cell := PackedInt32Array()
 	cell.resize(n)
-	var span := Look.WASH_BLOCK_TILES
-	var across := (grid.w + span - 1) / span
 	for ty in grid.h:
 		for tx in grid.w:
 			var t := ty * grid.w + tx
-			# ⚠⚠ **A STAIR CARRIES NO MAT** (2026-08-27, the user: 「계단에는 칸을 안만들어야하는데」).
-			# **No shape has to be authored per tile to say so** — the board already knows: an ODD notch
-			# IS a stair (`Grid.is_stair_level`), which is the same fact that makes the stair the only
-			# way up. A mat says「여기 서라」 and a stair is something a body passes THROUGH.
+			# ⚠⚠ **A STAIR CARRIES NO MAT** (2026-08-27, the user: 「계단에는 칸을 안만들어야하는데」,
+			# and again on 2026-08-29: 「계단에서 머물수 없는게 좋을듯」). **No shape has to be authored
+			# per tile to say so** — the board already knows: an ODD notch IS a stair
+			# (`Grid.is_stair_level`), which is the same fact that makes the stair the only way up.
+			# A mat says「여기 서라」 and a stair is something a body passes THROUGH.
 			# ⚠ It stays walkable. Only the light stops there.
 			var no_mat: bool = grid.passable[t] != 1 or Grid.is_stair_level(grid.level_of(t))
-			cell[t] = -1 if no_mat else (ty / span) * across + (tx / span)
+			cell[t] = -1 if no_mat else t
 	return cell
 
 

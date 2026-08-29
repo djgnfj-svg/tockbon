@@ -31,6 +31,12 @@ candidates, forty dials moved, and the user's answer was ***"아니그냥 어떻
 
 ## The steps
 
+0. ⚠⚠ **SETTLE THE SET WITH THE USER BEFORE A FOLDER EXISTS.** Put the question, and the list of
+   candidates, to them in `grilling`'s shape — **질문 · 추천 · 왜** — and wait. **What the thing must
+   DO, where and when it appears, and what UNIT it works on** are the three that decide whether the set
+   is about the right thing at all. ⚠ **This step was added on 2026-08-29 after a set of five was built
+   without asking any of them**: two candidates answered a question nobody had, and the unit was wrong
+   in a third.
 1. **Write the question down in one sentence**, and put it at the top of the sheet. Without it every
    one is judged on 「which is prettier」 and the round teaches nothing that survives it.
 2. **Send `scout` before building anything.** The mechanisms worth spiking are the ones that shipped
@@ -51,6 +57,12 @@ candidates, forty dials moved, and the user's answer was ***"아니그냥 어떻
    black with no error.
 6. **Report each one as three lines: what it buys · what it costs · what it CANNOT do.** The third line
    is the one that decides, and it is the one that is always missing.
+7. ⚠⚠ **THE JUDGING ROUND: A REMARK ON THE SHEET IS A QUESTION, NOT A WORK ORDER.** The user looking at
+   candidates writes in fragments — 「둥글게」, 「호버도」, 「칸만」. **Collect them, put them back as
+   questions, and change nothing until they are answered.** ⚠ **Measured 2026-08-29**: four fragments
+   in a row were turned straight into four edits, and the third contradicted the first
+   (***"your concept is a bit wrong"*** 「니가 개념이 좀 잘못된듯?」). **Then change ONE thing and
+   re-photograph**, so what moved is what is being looked at.
 
 **Done when every mechanism is in one sheet from the same camera, and each carries all three lines.**
 

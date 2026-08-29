@@ -11,6 +11,10 @@ outside when an outside fact is needed) → **`build-loop`** (one ticket to code
 five agents) → **`wrap-up`** (write the answers into the map and the tickets, then commit), with
 **`roadmap`** checking the whole way.
 
+⚠⚠ **When a LOOK is what is being chosen, `prototype` hangs off `grilling` at both ends** (2026-08-29):
+grilling settles what the thing must do and what the candidates are **before** a folder exists, and the
+remarks the user makes on the finished sheet go back through it rather than straight into an edit.
+
 ⚠⚠ **The user answers, and only `wrap-up` writes.** Nothing in this chain edits the map during a
 conversation — that rule was set on 2026-08-27 after it was broken twice in one session.
 

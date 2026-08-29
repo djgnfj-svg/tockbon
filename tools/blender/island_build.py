@@ -1200,93 +1200,108 @@ def starting_builds():
     return [{"kind": "keep", "x": at[0], "y": at[1]}]
 
 
-# --- the 판, and it is a SHAPE that gets stamped, not a shape cut out of the block ---------------------
-# WARNING **THE 판 STOPPED FOLLOWING THE 칸's OUTLINE ON 2026-08-28** (the user, on the game screen:
-# 「모양이 저렇게 막 스펙타클할 필요 없이... 외곽 라인에 맞춰줄 필요도 없다. 판도 몇 개 정해 가지고
-# 붙이면 될 듯. 레퍼런스 사진처럼 살짝 네모 동그란 느낌으로」). It was an inward offset of the 칸's own
-# wobbled edge, so every 판 was a different jagged polygon and the island read as cracked.
-# **A handful of rounded squares, stamped**, is what the reference actually shows.
-PAD_SIDE = 1.30     # one side of a 판, in metres. A 칸 is 2.0, so this leaves a clear gutter all round
-PAD_ROUND = 0.34    # corner radius. WARNING **0 is a square and half the side is a circle** — 「살짝
-                    # 네모 동그란」 is neither, and this is the number that says how far along
+# --- the 판: one per 조각, and no two of them touch ---------------------------------------------------
+# WARNING **THE 판 BECAME A 조각 ON 2026-08-29** (the user, having seen both on screen: 「판이 조각단위로
+# 뜨고 그것으로 이동할 수 있는게 좋을 것 같아」). It was one stamped rounded square per 칸 (2x2 tiles),
+# and one mat per TILE had been rejected before that with 「너무 많으」 -- **this is that rejection being
+# reversed.** The reason it flipped: the move command has always taken a 조각, so a 판 that was a 칸
+# meant the mark and the order spoke different units.
+# WARNING **THE SHAPES ARE CUT TO THE LAND** (the user, same round: 「맞춰 깍자」). A 판 pulls further in
+# on any side where the land stops and turns a rounder corner there, so it never hangs over the water or
+# off a cliff -- the block's own corner is rounded in the same place.
+# WARNING **`PAD_SIDE`, `PAD_ROUND` and `PAD_VARIANTS` WENT WITH THE 칸 판.** Three stamped variants
+# existed to break the repeat across 칸-sized marks; a 조각 판 is cut from its own neighbourhood, so two
+# in a row differ whenever the land around them does.
+PAD_H = 0.02        # how proud a 판 stands. **A lip, not a slab** -- 「더 얇게 붙어있어도 될 듯」
 PAD_ARC = 4         # segments per corner. Four is round enough at play distance and cheap
-PAD_H = 0.02        # how proud the 판 stands. **A lip, not a slab** — 「더 얇게 붙어있어도 될 듯」
-PAD_VARIANTS = 3    # WARNING **Three, and which one a 칸 gets comes from the 칸's own position hash.**
-                    # One shape repeated reads as a printed grid; a shape per 칸 is what was just
-                    # thrown out. Three is enough to break the repeat and few enough to stay a set
+PAD_GAP_IN = 0.22   # inset on a side facing another 판. **The gutter between two is twice this**
+PAD_COAST_IN = 0.30 # inset on a side where the land stops
+PAD_R_IN = 0.16     # corner radius inside the board
+PAD_R_OUT = 0.30    # corner radius where the land turns
 
 
-def pad_outline(cx, cy, k):
-    """**One 판's outline** — a rounded square, centred on `(cx, cy)`, variant `k`.
+# WARNING **THE MIRROR RULE, SECOND ENTRY.** These two lines are `Grid.TIER_CHARS` and
+# `Grid.TIER_LEVELS` in `src/sim/grid.gd`, and they decide what notch a tier character means. **Change
+# one, change the other in the same edit** -- a 판 drawn at the wrong notch floats or sinks in silence.
+PAD_TIER_CHARS = "./0123456789"
+PAD_TIER_LEVELS = [0, 1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-    WARNING **The variants differ in SIZE and CORNER, never in silhouette.** A variant that changed the
-    shape would be back to 「every 판 is its own polygon」, which is the thing this replaced.
+
+def tile_level(tx, ty):
+    """**The notch a 조각 stands at, or -1 for water and off the board.**
+
+    The 판 needs the TILE board; `level_of` answers the 칸 one.
     """
-    side = PAD_SIDE * (1.0 + (k - 1) * 0.06)
-    r = PAD_ROUND * (1.0 + (k - 1) * 0.18)
-    h = side * 0.5 - r
-    out = []
-    for i, (sx, sy) in enumerate(((1, 1), (-1, 1), (-1, -1), (1, -1))):
-        ax, ay = cx + sx * h, cy + sy * h
-        a0 = math.atan2(sy, 0.0) if sx * sy else 0.0
+    if not (0 <= tx < TW and 0 <= ty < TH):
+        return -1
+    if ROWS[ty][tx] != ".":
+        return -1
+    c = TIERS[ty][tx]
+    return PAD_TIER_LEVELS[PAD_TIER_CHARS.index(c)] if c in PAD_TIER_CHARS else 0
+
+
+def pad_outline(tx, ty):
+    """**One 판's outline** -- a rounded rectangle inside the 조각, pulled further in wherever the land
+    stops beside it.
+
+    WARNING **A side is 「open」 when a body could not walk that way**: water, off the board, or a wall
+    more than one notch tall. That is `Grid.can_step`'s own test, so the 판 stops where walking does.
+    """
+    lv = tile_level(tx, ty)
+
+    def open_side(dx, dy):
+        nl = tile_level(tx + dx, ty + dy)
+        return nl < 0 or abs(nl - lv) > 1
+
+    w_, e_ = open_side(-1, 0), open_side(1, 0)
+    n_, s_ = open_side(0, -1), open_side(0, 1)
+    x0 = tx + (PAD_COAST_IN if w_ else PAD_GAP_IN)
+    x1 = tx + 1.0 - (PAD_COAST_IN if e_ else PAD_GAP_IN)
+    # WARNING **Tile Y is not Blender Y.** The mesh is built on reversed rows.
+    wy = TH - 1 - ty
+    y0 = wy + (PAD_COAST_IN if s_ else PAD_GAP_IN)
+    y1 = wy + 1.0 - (PAD_COAST_IN if n_ else PAD_GAP_IN)
+    corners = [((x1, y1), n_ or e_), ((x0, y1), n_ or w_), ((x0, y0), s_ or w_), ((x1, y0), s_ or e_)]
+    ring = []
+    for i, ((cx, cy), outer) in enumerate(corners):
+        r = min(PAD_R_OUT if outer else PAD_R_IN, (x1 - x0) * 0.5, (y1 - y0) * 0.5)
+        sx = 1 if cx > (x0 + x1) * 0.5 else -1
+        sy = 1 if cy > (y0 + y1) * 0.5 else -1
+        ax, ay = cx - sx * r, cy - sy * r
         base = {0: 0.0, 1: math.pi * 0.5, 2: math.pi, 3: math.pi * 1.5}[i]
         for t in range(PAD_ARC + 1):
             a = base + math.pi * 0.5 * t / PAD_ARC
-            out.append((ax + math.cos(a) * r, ay + math.sin(a) * r))
-    return out
-
-
-# --- what a 판 says, and the two things it has to say ------------------------------------------------
-# WARNING **A 판 USED TO SAY ONLY 「you may STAND here」 AND THAT IS WHAT WAS AMBIGUOUS** (2026-08-28, the
-# user, on the game screen: 「조각이 이 층 조각이 조금 애매한 거 그 판정이 애매해 ... 걸쳐져 있다 못 가는
-# 부분이 확실히 되는데 그런 게 좀 안 돼 있는데」). A low 판 and a high 판 sat side by side with a wall
-# between them and nothing on screen said so: the gap between two 판 that CONNECT looked exactly like
-# the gap between two that do not.
-# ⇒ **A 판 now carries both**: the pad says 「stand」, and a BRIDGE between two pads says 「go」.
-PAD_BRIDGE_W = 0.34   # the bridge width, in metres. WARNING **Narrower than the pad own side**, or the
-                      # board reads as one poured slab and the 칸 stop being 칸
-# WARNING **`PAD_STAIR_SIDE` AND `PAD_STAIR_LONG` STOOD HERE AND BOTH ARE DELETED** (2026-08-28). They
-# sized a narrow bar drawn on the stair 칸 for one round; the user took it back on sight (「계단에 왜
-# 그게 생겼지? 판이?」) and kept the bridges instead (「경로선이 보이는건 좋은데」). **A stair is passed
-# THROUGH, not stood on**, which is what 2026-08-27's 「계단에는 칸을 안만들어야하는데」 already said.
-
-
-def climb_open(a_level, b_level):
-    """**Whether a body may cross between two 칸 at these levels** - the rule `Grid.can_step` keeps.
-
-    WARNING **THE NUMBER 1 IS `Rules.MAX_CLIMB_LEVELS` AND IT LIVES IN `rules.gd`.** Blender cannot read
-    that file, so the two agree by this comment and by `net_tiers` measuring the game own half. **If the
-    climb rule ever changes, this is the second place.**
-    WARNING A level below 0 is water or a hole: nothing crosses to it.
-    """
-    if a_level < 0 or b_level < 0:
-        return False
-    return abs(a_level - b_level) <= 1
+            ring.append((ax + math.cos(a) * r, ay + math.sin(a) * r))
+    return ring
 
 
 def stamp_the_mats(isl):
-    """**Builds the 판 as an object of its OWN** - one pad per walkable 칸, plus a bridge wherever two
-    neighbouring 칸 may actually be crossed between.
+    """**Builds the 판 as an object of its OWN** -- one pad per walkable 조각.
 
-    WARNING **A STAIR CARRIES NO PAD** (2026-08-27, the user: 「계단에는 칸을 안만들어야하는데」). It
-    was given one for a single round on 2026-08-28 and taken straight back out. **What says a stair is
-    a door is the BRIDGES running into it** - the sloped strips from the floor below and the storey
-    above - not a pad pretending it is somewhere to stand.
+    WARNING **A STAIR CARRIES NO PAD** (2026-08-27, the user: 「계단에는 칸을 안만들어야하는데」, and
+    again 2026-08-29: 「계단에서 머물수 없는게 좋을듯 ... 위에서 계단으로 내려와서 그순간만 있는거임」).
+    An ODD notch IS a stair, the same fact that makes the stair the only way up.
+
+    WARNING **THE BRIDGES ARE GONE AND THAT IS NOT SETTLED** (2026-08-29). A sloped strip used to run
+    between two 칸 a body may cross between -- the half that said 「you may GO」, written for 「판정이
+    애매해」. **Between 조각 판 nobody has decided what it should be**: a strip on every neighbouring pair
+    welds the board back into one slab, and there is no stair on the island right now for one to run
+    into. => **It comes back with the stair (ticket 06)**, and until then the board says 「stand」 and
+    nothing about 「go」.
 
     WARNING **IT USED TO ADD THE 판 STRAIGHT INTO THE ISLAND OWN MESH AND THAT IS REVERSED**
     (2026-08-28, the user: 「마우스올리면 호버되도록해주고 특정버튼 눌러야 그 뜨게해줘 판이」). Baked into
-    the ground the 판 could be neither hidden nor lit one at a time - the game had no node to touch.
+    the ground the 판 could be neither hidden nor lit one at a time.
 
-    WARNING **EVERY 판 CARRIES ITS 칸 INDEX IN ITS UV**, as `u = py * PW + px`, `v = 0`. That is the same
-    number `field_view._wash_cells` computes for a tile, so the shader lights exactly the 칸 the cursor
-    is on. **Both sides derive it from PW; a hand-copied width here would light the wrong 칸.**
-    WARNING **A BRIDGE CARRIES BOTH 칸 INDICES** - `u` is the 칸 it was written from, `v` is the
-    neighbour. The shader lights on EITHER, so the way up is visible from the bottom and the way down
-    from the top. A single index would light a bridge from one end only, and which end would be an
-    accident of the loop order.
+    WARNING **EVERY 판 CARRIES ITS 조각 INDEX IN ITS UV**, as `u = v = ty * TW + tx`. That is the same
+    number `field_view._wash_cells` computes for a tile, so the shader lights exactly the 조각 the cursor
+    is on. **Both sides derive it from the tile width; a hand-copied width lights the wrong one.**
+    WARNING **BOTH UV CHANNELS CARRY IT.** The shader matches on either because a bridge used to put two
+    different indices there; with the bridges gone the two are always equal, and the shader is left as it
+    is so a bridge can come back without touching it.
 
-    WARNING **Vertex colour is the ground own tone, exactly as before.** The shader tints from there
-    rather than inventing a colour, so a lit 판 still reads as the ground it is standing on.
+    WARNING **Vertex colour is the ground own tone.** The shader tints from there rather than inventing a
+    colour, so a lit 판 still reads as the ground it is standing on.
     """
     me = bpy.data.meshes.new("pads_mesh")
     bm = bmesh.new()
@@ -1297,29 +1312,14 @@ def stamp_the_mats(isl):
     # open sea, a whole block-width off the island, and it looked exactly like a row-order mistake.
     to_local = isl.matrix_world.inverted()
 
-    def top_z(level):
-        return TOP_H + level * LEVEL_H + PAD_H
-
-    def paint(faces, z):
-        bmesh.ops.recalc_face_normals(bm, faces=faces)
-        return faces
-
-    def lay_face(ring, z, cell, cell_b=None):
-        """One flat rounded shape with a skirt, at height `z`, keyed to `cell`.
-
-        WARNING **THE UV CARRIES TWO 칸 INDICES, NOT ONE** - `u` and `v`. A pad puts its own index in
-        both; a BRIDGE puts the two 칸 it joins. The shader lights a piece when EITHER matches the 칸
-        under the cursor, so a bridge lights from both ends: standing on the low 칸 you see the way up,
-        standing on the high one you see the way down. **With one index a bridge would only ever light
-        from whichever end the exporter happened to pick.**
-        """
+    def lay_face(ring, z, cell):
         top = [bm.verts.new(to_local @ Vector((x, y, z))) for (x, y) in ring]
         bot = [bm.verts.new(to_local @ Vector((x, y, z - PAD_H))) for (x, y) in ring]
         mx = sum(x for (x, _) in ring) / len(ring)
         my = sum(y for (_, y) in ring) / len(ring)
         ctr = bm.verts.new(to_local @ Vector((mx, my, z)))
-        n = len(ring)
         faces = []
+        n = len(ring)
         for i in range(n):
             j = (i + 1) % n
             faces.append(bm.faces.new((ctr, top[i], top[j])))
@@ -1329,71 +1329,16 @@ def stamp_the_mats(isl):
             for lp in f.loops:
                 wv = isl.matrix_world @ lp.vert.co
                 lp[lay] = (*ground_tone(z, 0.0, tone_noise(wv.x, wv.y)), 1.0)
-                lp[uvl].uv = (float(cell), float(cell if cell_b is None else cell_b))
-
-    def lay_bridge(ax, ay, az, bx, by, bz, cell_a, cell_b):
-        """**A sloped strip between two pad centres** - the whole of 「you may go from here to there」.
-
-        WARNING **It is SLOPED and not stepped**, and that is the point at a stair: the strip visibly
-        climbs, so a 칸 one notch up reads as reachable and a 칸 two notches up has no strip at all.
-        """
-        dx, dy = bx - ax, by - ay
-        L = math.hypot(dx, dy) or 1.0
-        nx, ny = -dy / L * PAD_BRIDGE_W * 0.5, dx / L * PAD_BRIDGE_W * 0.5
-        quad = [(ax + nx, ay + ny, az), (bx + nx, by + ny, bz),
-                (bx - nx, by - ny, bz), (ax - nx, ay - ny, az)]
-        top = [bm.verts.new(to_local @ Vector(q)) for q in quad]
-        bot = [bm.verts.new(to_local @ Vector((q[0], q[1], q[2] - PAD_H))) for q in quad]
-        faces = [bm.faces.new(tuple(top))]
-        for i in range(4):
-            j = (i + 1) % 4
-            faces.append(bm.faces.new((top[i], bot[i], bot[j], top[j])))
-        bmesh.ops.recalc_face_normals(bm, faces=faces)
-        for f in faces:
-            for lp in f.loops:
-                wv = isl.matrix_world @ lp.vert.co
-                lp[lay] = (*ground_tone(az, 0.0, tone_noise(wv.x, wv.y)), 1.0)
-                lp[uvl].uv = (float(cell_a), float(cell_b))
-
-    def centre_of(px, py):
-        wy = (PH - 1 - py) * S
-        return px * S + S * 0.5, wy + S * 0.5
+                lp[uvl].uv = (float(cell), float(cell))
 
     pad_n = 0
-    bridge_n = 0
-    for py in range(PH):
-        for px in range(PW):
-            L = level_of(px, py)
-            if L < 0:
+    for ty in range(TH):
+        for tx in range(TW):
+            lv = tile_level(tx, ty)
+            if lv < 0 or lv % 2 == 1:
                 continue
-            cx, cy = centre_of(px, py)
-            cell = py * PW + px
-            # WARNING **A STAIR CARRIES NO PAD, AND IT GOT ONE FOR ONE ROUND** (2026-08-28). It was
-            # given a narrow bar because the only door in and out of the plateau was drawing nothing;
-            # the user took it back the moment it was on screen (「계단에 왜 그게 생겼지? 판이?」) and
-            # kept the other half (「경로선이 보이는건 좋은데」).
-            # WARNING **The BRIDGES are what say the stair is a door**, and they are drawn below
-            # whatever this branch does: two sloped strips run into the stair 칸 from the floor below
-            # and the storey above, so the way up is visible without the stair pretending to be a
-            # place to stand. **That is the original rule restored, not a new one** — 2026-08-27:
-            # 「계단에는 칸을 안만들어야하는데」.
-            if L != 1:
-                k = int((h2(cx, cy, 11.0) * 0.5 + 0.5) * PAD_VARIANTS) % PAD_VARIANTS
-                lay_face(pad_outline(cx, cy, k), top_z(L), cell)
-                pad_n += 1
-
-            # The bridges. WARNING **East and south only**, so each pair is written once - the west and
-            # north neighbours draw their own halves when their turn comes.
-            # WARNING **ORTHOGONAL only.** A diagonal crossing needs both shoulders open
-            # (`Grid.can_step`), and a strip across a corner would promise a step the sim refuses.
-            for (dx, dy) in ((1, 0), (0, 1)):
-                nl = level_of(px + dx, py + dy)
-                if not climb_open(L, nl):
-                    continue
-                nx, ny = centre_of(px + dx, py + dy)
-                lay_bridge(cx, cy, top_z(L), nx, ny, top_z(nl),
-                           cell, (py + dy) * PW + (px + dx))
-                bridge_n += 1
+            lay_face(pad_outline(tx, ty), TOP_H + lv * LEVEL_H + PAD_H, ty * TW + tx)
+            pad_n += 1
 
     bm.to_mesh(me)
     bm.free()
@@ -1404,8 +1349,8 @@ def stamp_the_mats(isl):
     pads_obj.matrix_world = isl.matrix_world.copy()
     bpy.context.collection.objects.link(pads_obj)
     me.materials.append(vertex_mat("island_ground"))
-    print("pads %d, bridges %d (side %.2f, bridge %.2f, lip %.2f)"
-          % (pad_n, bridge_n, PAD_SIDE, PAD_BRIDGE_W, PAD_H))
+    print("pads %d, one per 조각 (gutter %.2f, coast inset %.2f, lip %.2f)"
+          % (pad_n, PAD_GAP_IN * 2.0, PAD_COAST_IN, PAD_H))
     return pads_obj
 
 

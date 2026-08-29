@@ -1,0 +1,45 @@
+Type: grilling
+Status: open
+
+# How light or dark the 조각 판 is, and how wide the gutter
+
+## The question
+
+**Which of the twelve is it?** Six tones — three lighter than the ground and three darker — at two
+gutter widths, all on the real island under the game's own camera.
+
+## Why this is asked
+
+**The user asked to see both** (2026-08-29): 「밝게해보자 어둡게도 해서 프로토 타입으로 보는게 목적」.
+The sheet was made and put on screen; **the pick did not come back before the round closed.**
+
+⚠⚠ **What ships right now is a default, not a choice**: the middle light tone (`PAD_ALL_LIGHTEN` 0.25)
+and the **wide** gutter (`PAD_GAP_IN` 0.22 in the bake). Both were what happened to be in place.
+
+## Where the pictures are
+
+`docs/reference/2026-08-29-pad-tone-and-gutter-sheet.png` — twelve shots, near and far, made by
+`prototypes/pads/look_sheet.gd`. **Re-take them with:**
+
+```
+Godot_v4.7.1-stable_win64.exe --path . -s prototypes/pads/look_sheet.gd -- <tag>
+python prototypes/pads/look_sheet.py
+```
+
+⚠ **The gutter needs a re-bake to change, the tone does not.** The tone is one uniform pushed from
+`look.gd`; the gutter is geometry in `tools/blender/island_build.py`.
+
+## What is already known from looking
+
+- **The 판 currently reads DARKER than the sand** at the shipped value, which is what the light half of
+  the sheet exists to answer — a mark meaning 「you may stand here」 that reads as shade is the failure
+- **The tone is signed since 2026-08-29**: positive pulls toward white, negative toward black, zero is
+  bare ground
+
+## ⚠ **Not looked at yet — 2026-08-29**
+
+| What shipped | How to see it | When |
+|---|---|---|
+| **The 조각 판 in the real game** — one mark per 조각, 284 of them, hover on one 조각 | Run the game, press 시작하기, then **hold TAB**. The whole board's marks appear; the 조각 under the cursor lightens and lifts | 2026-08-29 |
+
+**The user has said nothing about it on screen.** ⚠ **Silence is this row, not a pass.**
