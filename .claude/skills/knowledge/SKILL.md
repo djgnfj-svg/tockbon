@@ -20,9 +20,10 @@ no red and exit code 0. **This skill is its two halves: reaching it, and growing
 
 ## Reach
 
-1. **Read `docs/knowledge/README.md`.** Three pages today; the table there says what each holds.
-2. **Open the page the work touches, whole.** ⚠ Each is under 65 lines — **there is no skimming budget
-   to save.**
+1. **Read `docs/knowledge/README.md`.** Its table says what each page holds. ⚠⚠ **There are no pages
+   yet** — say so plainly and carry on; an empty folder is a measurement, not a fault.
+2. **Open the page the work touches, whole.** ⚠ A page here is short by rule — **there is no skimming
+   budget to save.**
 3. **Say which entry applies before the code is written**, in one line. ⚠⚠ **A page read after the tool
    surprises you is a page that cost its round anyway.**
 

@@ -25,11 +25,19 @@ is cut down to a pointer.
 
 ## The pages
 
-| Page | What it holds |
+⚠⚠ **None yet. The folder, the bar and the skill stand; what goes in is the user's to design.**
+
+**Three were drafted on 2026-08-31 and pulled the same day** — the model wrote them alone, out of
+`log.md` and the net runner's comments. **They are recoverable from commit `f0dd191`** if the shape turns
+out to be right.
+
+**What they covered, so the ground is not surveyed twice**
+
+| Draft | What it held |
 |---|---|
-| `what-godot-does-quietly.md` | **Engine behaviour that fails without saying so** — the error that eats the rest of a function, the cached asset, the light term that is already multiplied |
-| `what-survives-the-blender-export.md` | **What the `.glb` keeps and what it silently changes** — the non-planar quad that becomes a bright/dark seam, and the trick that finds it |
-| `measuring-a-thing-that-has-size.md` | **Why four rounds of「fixed」were not** — a point instrument against a body 2 조각 wide, and two grids half a 조각 apart |
+| **What Godot does quietly** | The runtime error that abandons its function, `push_error` not stopping anything, `.call()` dropping a coroutine, the import cache, `DIFFUSE_LIGHT` already carrying `ALBEDO` |
+| **What survives the Blender export** | The non-planar quad that becomes a bright/dark seam, and the flat-shading trick that finds it without a render |
+| **Measuring a thing that has size** | A point instrument against a hull 2 조각 wide, and two grids half a 조각 apart |
 
 ## The bar a page has to clear
 
