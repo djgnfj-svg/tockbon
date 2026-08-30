@@ -213,7 +213,7 @@ func _the_open_water_is_what_the_border_is_drawn_onto(t) -> void:
 
 ## **The scatter drifts on the screen's clock, and the candidate's did not.**
 ##
-## ⚠⚠ **THIS IS THE ROW THE MECHANISM ARRIVED NEEDING.** `prototypes/sea` writes `lab_t` from outside so
+## ⚠⚠ **THIS IS THE ROW THE MECHANISM ARRIVED NEEDING.** `.prototypes/sea` writes `lab_t` from outside so
 ## six photographs can be taken at one instant. Carried across verbatim that uniform is written by
 ## nobody, **sits at zero for the life of the process, and the whole scatter is nailed to the world** —
 ## compiling, declared, handed over, and still. `_the_shader_itself_compiles_and_sees_them` refuses the

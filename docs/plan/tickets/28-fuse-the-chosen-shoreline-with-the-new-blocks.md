@@ -39,7 +39,7 @@ losers and the pictures show a comparison that was never run.
 ## What was decided
 
 **2026-08-29. Twenty-seven sea shaders were built side by side and the user chose `27-gaps`.** They
-live in `prototypes/swash/`, each folder carrying a `NOTES.md` with what it buys, what it costs and
+live in `.prototypes/swash/`, each folder carrying a `NOTES.md` with what it buys, what it costs and
 what it cannot do. **Nothing in `src/` was touched** (the user: 「프로토 타입 view를 만들어주는거임 ㅇㅇ
 본코드 건들지말고」).
 
@@ -83,7 +83,7 @@ above are the starting point, not the answer.
 ## How to see it
 
 ```
-Godot_v4.7.1-stable_win64.exe --path . -s prototypes/swash/island_lab.gd 27
+Godot_v4.7.1-stable_win64.exe --path . -s .prototypes/swash/island_lab.gd 27
 ```
 
 **0..9 pick, SHIFT+n for the tens, CTRL+n for the twenties · LEFT/RIGHT step · Q/E turn · W/S zoom ·
@@ -105,5 +105,5 @@ written onto it rather than deleting it.**
 
 - **Bodies, boats and the HUD.** The island lab shows the island and the sea only. **A sea that survives
   it still has to be looked at with a fight running on top of it** — that is a separate look
-- **The wafer lab** (`prototypes/swash/lab.gd`). It answered *how does the line move*; this ticket is
+- **The wafer lab** (`.prototypes/swash/lab.gd`). It answered *how does the line move*; this ticket is
   about the island

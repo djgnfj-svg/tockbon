@@ -13,7 +13,7 @@ extends RefCounted
 ## a history built into `_wake` and never handed to the material is a buffer with no commit, and every
 ## row about `_wake` alone stays green when `set_shader_parameter` is deleted.
 ##
-## ⚠⚠ **THE LAB SAILED ITS BOAT AT 4.0 조각/s AND THE GAME SAILS AT 1.2.** `prototypes/wake/common.gd`
+## ⚠⚠ **THE LAB SAILED ITS BOAT AT 4.0 조각/s AND THE GAME SAILS AT 1.2.** `.prototypes/wake/common.gd`
 ## copied `Rules.BOAT_SPEED_TILES` by hand and the copy went stale, so the trail the user chose was
 ## about 16 조각 long and the same `WAKE_LIFE_SEC` draws 4.8 조각 here. **Nothing in this file holds
 ## that down**, deliberately: it is a value for the screen to judge again, and a check written round

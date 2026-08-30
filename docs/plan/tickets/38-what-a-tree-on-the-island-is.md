@@ -15,12 +15,12 @@ Status: open
 
 ## 무엇을 만들어서 보여줬나
 
-**`prototypes/props/lab.gd`** — 진짜 게임을 열고, 외딴 섬 위에 나무 다섯 그루를 세운다.
+**`.prototypes/props/lab.gd`** — 진짜 게임을 열고, 외딴 섬 위에 나무 다섯 그루를 세운다.
 **`src/` 는 한 줄도 안 건드렸다.**
 
 ```
-Godot_v4.7.1-stable_win64.exe --path . -s prototypes/props/lab.gd
-Godot_v4.7.1-stable_win64.exe --path . -s prototypes/props/lab.gd -- shoot
+Godot_v4.7.1-stable_win64.exe --path . -s .prototypes/props/lab.gd
+Godot_v4.7.1-stable_win64.exe --path . -s .prototypes/props/lab.gd -- shoot
 ```
 
 **나무 한 장이 전부다.** 종류는 하나고 크기만 1.6~3.6 미터에서 굴린다 (사용자: 「종류가 많이 있을

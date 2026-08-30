@@ -45,7 +45,7 @@ candidates, forty dials moved, and the user's answer was ***"아니그냥 어떻
    skipped.**
 3. **Choose three to five mechanisms that fail differently.** Two that break under the same condition
    are one prototype photographed twice.
-4. **Build each as a throwaway under `prototypes/<subject>/<NN-name>/`** — one folder per subject, one
+4. **Build each as a throwaway under `.prototypes/<subject>/<NN-name>/`** — one folder per subject, one
    folder per version inside it, numbered in the order they were built. ⚠ **Never in `src/`**: the folder
    rule there is what lets a net drive the game headless, and a throwaway is not going to obey it.
    ⚠ **A prototype that has to be clean is not one** — the point is to reach a picture in an hour, not
@@ -76,5 +76,5 @@ this skill is written against, because two mechanisms cannot show a spread.
 
 **The winner becomes a ticket.** The sheet goes to `docs/reference/` as `YYYY-MM-DD-<subject>-prototypes`,
 and the ticket names it; **each version's three lines stay in its own `NOTES.md`** under
-`prototypes/<subject>/`. ⚠ **The losers are deleted once one has won** — a throwaway left in the
+`.prototypes/<subject>/`. ⚠ **The losers are deleted once one has won** — a throwaway left in the
 tree becomes code nobody dares remove, and this repo has paid that before.

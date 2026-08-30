@@ -79,7 +79,7 @@ whether the 46 walking frames are replaced by H, when animation gets attached, a
 swordsman is re-drawn.
 
 **Normal maps were baked** (`north_n` · `south_n` · `east_n` · `west_n`, free, from
-`prototypes/props/bake_normals.py`) **and are NOT wired.** ⚠ **Head-on wolves are 5 screen pixels
+`.prototypes/props/bake_normals.py`) **and are NOT wired.** ⚠ **Head-on wolves are 5 screen pixels
 wide and a normal map has nowhere to put a gradient in 5 pixels.** Side-on is 17.
 
 ---

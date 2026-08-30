@@ -38,7 +38,7 @@ build/
 tools/pixel/out/
 
 # Python bytecode cache. **Anywhere, not just `tools/pixel/`** — the rule was pinned to one folder
-# and `prototypes/palette/` grew its own the moment a script there was imported.
+# and `.prototypes/palette/` grew its own the moment a script there was imported.
 __pycache__/
 
 # 🔴 검증자가 잠깐 만드는 계측기. `_` 로 시작하면 러너의 그물 스캔에도 안 걸린다.

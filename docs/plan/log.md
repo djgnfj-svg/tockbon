@@ -146,7 +146,7 @@ than half-fixed.
 whole acceptance and there was nothing else attached to it.
 
 `27-gaps` — chosen on 2026-08-29 out of twenty-seven seas rendered side by side — moved from
-`prototypes/swash/` into `src/`. **One white on the rock became two whites**, eighteen dials arrived and
+`.prototypes/swash/` into `src/`. **One white on the rock became two whites**, eighteen dials arrived and
 eleven left. ⚠⚠ **The 2026-08-28 decision was not re-opened**: a flat sea and a single border still, and
 what changed is only what that border is made of.
 

@@ -9,7 +9,7 @@
 // — Bad North's own answer, stated by its designer at Konsoll 2018: *"most of the water is just
 // completely flat, but then at the edge when something meets the water I highlight that instead."*
 // **That decision stands and this file does not touch it.** What changed is the border itself:
-// **twenty-seven versions of it were built side by side in `prototypes/swash/` and the user chose
+// **twenty-seven versions of it were built side by side in `.prototypes/swash/` and the user chose
 // `27-gaps`.**
 //
 // **What the chosen border is, and every line of it is something the user judged by eye:**
@@ -126,7 +126,7 @@ uniform float calm_scale;
 uniform float calm_speed;
 
 // --- 7. THE HULLS: the trail behind one and the mark round it, AND THEY ARE ONE SHAPE -----------
-// **Chosen by eye out of nine candidates** (2026-08-30, `prototypes/wake/`): **one fading line down
+// **Chosen by eye out of nine candidates** (2026-08-30, `.prototypes/wake/`): **one fading line down
 // the track, no V.** ⚠⚠ **THE ONE LINE IS NOW TWO, ONE OFF EACH SIDE OF THE HULL** (2026-08-30, the
 // user watching it run: 「배 옆면에서 나오는것처럼 해줄 수 있나?」 — *"can you make it look like it
 // comes off the boat's sides?"*). **It is still the chosen candidate**: the same stroke, the same
@@ -187,7 +187,7 @@ uniform float hull_halo_amt;
 uniform float hull_halo_aft;
 
 // --- 8. THE OPEN WATER: THINGS ON IT YOU CAN COUNT ----------------------------------------------
-// **Chosen by eye out of five candidates** (2026-08-30, `prototypes/sea/06-fleck`, judged with a hull
+// **Chosen by eye out of five candidates** (2026-08-30, `.prototypes/sea/06-fleck`, judged with a hull
 // crossing in frame). The open sea outside the border had never been chosen at all — it was one flat
 // colour arrived at by subtraction, and the user watching a boat cross it: 「물이 좀 너무 없긴하다
 // 뭔가」. **What this adds is not a field and not a pattern**: a lattice with at most one pale object

@@ -55,7 +55,7 @@ ground makes it bend.**
 
 **2026-08-29, the user saw it in the game and said the movement looks wrong.**
 
-**Measured the same day** with a throwaway probe (`prototypes/stairs/walk_probe.gd`), on an empty
+**Measured the same day** with a throwaway probe (`.prototypes/stairs/walk_probe.gd`), on an empty
 24 x 12 board, A at (2,6) and B at (20,6):
 
 ```
@@ -124,7 +124,7 @@ claim each makes is still true and has to be restated in cost units, **without r
 of the assertions that is red.**
 
 **Nothing else in `src/` or `tests/` reads a field value as a number** — grep for `UNREACHABLE` and for
-`flow_field` across `src`, `tests`, `tools` and `prototypes` returns only these, `walk_probe`, and
+`flow_field` across `src`, `tests`, `tools` and `.prototypes` returns only these, `walk_probe`, and
 `Battle`'s cache, which passes the array through untouched. `net_islands._reaches` counts 조각 steps
 against `WALK_STEPS_MAX` and tests arrival, so cost units never reach it.
 
@@ -268,9 +268,9 @@ mid-order** — a body stuck at a neck would rebuild it every sub-step, and the 
 | `src/sim/battle.gd` | The path hangs on the body: two columns, built in `order_walk`, consumed in `_walk`, cleared everywhere an order is |
 | `tests/nets/net_walk.gd` **(new)** | The subject's own net — the field's values, the shape of the walk, the pull |
 | `tests/nets/net_tiers.gd` | Two green checks restate their claim in cost units instead of hop counts |
-| `prototypes/stairs/walk_probe.gd` | Re-run to get the after picture. ⚠ It may be re-run or deleted; nothing else in the repo reads it |
+| `.prototypes/stairs/walk_probe.gd` | Re-run to get the after picture. ⚠ It may be re-run or deleted; nothing else in the repo reads it |
 
-⚠⚠ **`assets/terrain/`, `prototypes/` (beyond re-running that one probe) and `tools/blender/` are OFF
+⚠⚠ **`assets/terrain/`, `.prototypes/` (beyond re-running that one probe) and `tools/blender/` are OFF
 LIMITS this round** — another session is working on the stair there right now.
 
 ### What goes into `grid.gd`, precisely
@@ -438,7 +438,7 @@ not worth a funnel algorithm.
 5. `battle.gd` hangs the path on the body.
 6. **`net_tiers`'s hop counts restated in cost units.** ⚠ Do this LAST, against a field that is
    already weighted.
-7. **Teach `prototypes/stairs/walk_probe.gd` to measure what the game does**, then re-run it and
+7. **Teach `.prototypes/stairs/walk_probe.gd` to measure what the game does**, then re-run it and
    record the after picture. ⚠⚠ **As it stands the probe measures the WRONG THING** — it calls
    `step_toward` with three arguments, so the deviation keys are switched off in the very instrument
    acceptance 1 is read from, and it never touches `string_pull` at all. **It must pass the target
@@ -527,7 +527,7 @@ suspecting the check.**
 
 ### Acceptance
 
-1. **`prototypes/stairs/walk_probe.gd`, passing the target 조각, prints a straight line** for
+1. **`.prototypes/stairs/walk_probe.gd`, passing the target 조각, prints a straight line** for
    "straight east": 19 조각, 0 turns — and the other three walks carry **no 조각 more than 1.0 off
    their own straight segment**, measured perpendicular. ⚠ **Before this ticket that number is
    4.06 · 2.47 · 2.22**, and with the weighting alone but the wrong key 1 it stays there.

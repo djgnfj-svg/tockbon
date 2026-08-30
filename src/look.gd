@@ -274,7 +274,7 @@ const PAD_HOVER_LIFT := 0.06            # world units. **3x the 판's own 0.02 t
 ## 하려고함 줌에따라」, then 「1번이 좋은데?」 picking the mechanism that MOVES the vertices). Below
 ## `PAD_MERGE_ZOOM` a 칸 is one lump; above `PAD_APART_ZOOM` the four are separate; between them it is
 ## a straight ramp. ⚠ **Zoom is bigger the CLOSER the camera is**, so the merged bound is the lower one.
-## ⚠ Chosen by eye in `prototypes/merge/` against `ZOOM_MIN` 0.50 and the opening framing near 1.0;
+## ⚠ Chosen by eye in `.prototypes/merge/` against `ZOOM_MIN` 0.50 and the opening framing near 1.0;
 ## **nobody has re-judged them in the game**, and they are the first thing to move if the change
 ## happens too early or too late.
 const PAD_MERGE_ZOOM := 0.72
@@ -702,7 +702,7 @@ const COL_ENEMY := Color(1.0, 0.420, 0.361)
 ## and over about 0.8 it stops being a line and becomes the band it existed to replace.
 # ⚠⚠ ==============================================================================================
 # **PARKED 2026-08-28 — EVERYTHING FROM HERE TO `WATER_SHORE_OFFSET_TILES` IS UNREAD.** The sea shader
-# was replaced whole when the flat-border spike won (`prototypes/shoreline/`), and the sea these belong
+# was replaced whole when the flat-border spike won (`.prototypes/shoreline/`), and the sea these belong
 # to — swell, ripples, drawn crests, travelling foam, the shallows and the shore warp — is not drawn any
 # more. **Turning any of them changes nothing on screen.**
 #
@@ -878,7 +878,7 @@ const WATER_FIELD_SUBDIV := 16
 
 # ⚠⚠ ==============================================================================================
 # **해안선 — the whole sea, since 2026-08-28.** Seven mechanisms were built side by side on one block in
-# `prototypes/shoreline/` and the user chose the one that does the least: **a flat sea and a border.**
+# `.prototypes/shoreline/` and the user chose the one that does the least: **a flat sea and a border.**
 # Everything above this line that is not `COL_WATER` or `COL_WATER_FOAM` belongs to the sea that was
 # replaced, and **nothing reads it any more** — see the parking note over that block.
 #
@@ -887,7 +887,7 @@ const WATER_FIELD_SUBDIV := 16
 # what「원 같다」was. Take any one of the four out and it goes back to being a ring.
 #
 # ⚠⚠ **THE BORDER ITSELF WAS REPLACED ON 2026-08-29 — TWENTY-SEVEN VERSIONS SIDE BY SIDE**
-# (`prototypes/swash/`, each folder carrying a `NOTES.md`) **and the user chose `27-gaps`: two whites,
+# (`.prototypes/swash/`, each folder carrying a `NOTES.md`) **and the user chose `27-gaps`: two whites,
 # thin and hard-edged, slow, and broken.** The flat sea and the one border are untouched; what changed
 # is what that border is made of. **Everything from here down is that choice**, and the numbers below
 # were each set by eye against the island as it stood on 08-29.
@@ -979,7 +979,7 @@ const WATER_FIRST_CUT := 0.35
 ## warp SPEEDS (the line travels now instead of the noise drifting), the four `SWING` dials (the resting
 ## width and the surge replace them), and the three `PEEL` dials (the second white stands still off the
 ## rock instead of a line letting go and sailing out). **Their values are in git at `05c2509`** and the
-## mechanism itself is kept whole in `prototypes/swash/01-now/`.
+## mechanism itself is kept whole in `.prototypes/swash/01-now/`.
 
 ## **6. How much of the coast is quiet**, how wide a quiet stretch is in inverted tiles, and how slowly
 ## the quiet places move. ⚠ At 0 every part of the shore is equally lively, which is its own kind of ring.
@@ -996,7 +996,7 @@ const WATER_CALM_SPEED := 0.035
 ## of away from any rock was arrived at by subtraction and never judged**, and the user watching a boat
 ## cross it said 「물이 좀 너무 없긴하다 뭔가」 — *"there is a bit too little water to it, somehow."*
 ## **Five mechanisms were built side by side with a hull crossing in frame and the user chose the one
-## that puts countable objects on the water** (`prototypes/sea/06-fleck`), then: 「약하게 넣어주면될듯」
+## that puts countable objects on the water** (`.prototypes/sea/06-fleck`), then: 「약하게 넣어주면될듯」
 ## — *"weakly is probably how to put it in."*
 ##
 ## ⚠⚠ **`WATER_FLECK_AMT` IS THE ONE DIAL 「약하게」 MOVED, AND IT IS THE ONE TO MOVE AGAIN.** How many
@@ -1062,7 +1062,7 @@ const WATER_FLECK_CURRENT := Vector2(-0.055, -0.030)
 # same shader, the same array and the same loop. **What is NOT there is the envelope itself**: an arm
 # is the run of the points where the rings a moving hull throws off are tangent, and that is about a
 # dozen lines in `water.gdshader` plus the arms' own dials. **A dial change on top of those lines, and
-# not a rebuild.** The lab that shot it is in `prototypes/wake/`.
+# not a rebuild.** The lab that shot it is in `.prototypes/wake/`.
 #
 # **The bow half is new and NOBODY HAS LOOKED AT IT.** What the screen found was that the hull reads as
 # **a cut-out sticker laid on the sea** — its outline simply ends and flat blue begins, which is why

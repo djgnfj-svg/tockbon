@@ -1081,12 +1081,12 @@ static func _hand_the_sea_its_numbers(mat: ShaderMaterial, g, margin: float,
 ## **Every dial the sea reads.** ⚠ **The count used to be written into this line and it was six out by
 ## the time anybody read it** — the list below is the only place it lives now.
 ## ⚠⚠ **There were about forty until
-## 2026-08-28**, when seven shorelines were built side by side in `prototypes/shoreline/` and the one
+## 2026-08-28**, when seven shorelines were built side by side in `.prototypes/shoreline/` and the one
 ## that does the least won. Swell, ripple, drawn crests, travelling foam and the shallows all left with
 ## the old shader; **their constants are still in `look.gd`, parked and unread.**
 ##
 ## ⚠⚠ **The list was replaced again on 2026-08-29**, when twenty-seven versions of the border itself
-## were built side by side in `prototypes/swash/` and the user chose `27-gaps` — **two whites, thin and
+## were built side by side in `.prototypes/swash/` and the user chose `27-gaps` — **two whites, thin and
 ## hard-edged, slow, and broken.** Eleven dials of the 08-28 border went with it (the third warp octave,
 ## the warp speeds, the swing set and the peel set) and eighteen arrived. **The flat sea and the single
 ## border are untouched**; what changed is what that border is made of.
