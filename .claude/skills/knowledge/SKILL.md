@@ -1,11 +1,11 @@
 ---
 name: knowledge
-description: Reach the measured tool knowledge in docs/knowledge/ before writing code against Godot, Blender or a measuring instrument, and add a page when a round measures something still true next month. Use when the user says 개발지식 / 이거 어떻게 하더라 / 전에 어떻게 했지 / 이거 남겨줘, when work is about to touch the engine or the exporter, or when a session lands a durable fact no document holds.
+description: Reach the measured tool knowledge in docs/개발지식/ before writing code against Godot, Blender or a measuring instrument, and add a page when a round measures something still true next month. Use when the user says 개발지식 / 이거 어떻게 하더라 / 전에 어떻게 했지 / 이거 남겨줘, when work is about to touch the engine or the exporter, or when a session lands a durable fact no document holds.
 ---
 
 # knowledge — 개발지식, read before typing and written after measuring
 
-**`docs/knowledge/` holds what the TOOLS do that nobody tells you** — the failure that has no exception,
+**`docs/개발지식/` holds what the TOOLS do that nobody tells you** — the failure that has no exception,
 no red and exit code 0. **This skill is its two halves: reaching it, and growing it.**
 
 ⚠⚠ **Neither half invents anything.** A page carries a number and how it was taken, or it is not written.
@@ -20,7 +20,7 @@ no red and exit code 0. **This skill is its two halves: reaching it, and growing
 
 ## Reach
 
-1. **Read `docs/knowledge/README.md`.** Its table says what each page holds. ⚠⚠ **There are no pages
+1. **Read `docs/개발지식/README.md`.** Its table says what each page holds. ⚠⚠ **There are no pages
    yet** — say so plainly and carry on; an empty folder is a measurement, not a fault.
 2. **Open the page the work touches, whole.** ⚠ A page here is short by rule — **there is no skimming
    budget to save.**
