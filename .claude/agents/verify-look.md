@@ -23,13 +23,18 @@ local file is not in the repo**, so check the session's own tool list rather tha
 bridge section below is for when it is attached.
 
 ⚠⚠ **That sentence has turned over twice.** `tools/look/` was emptied with the cell game on 2026-08-22,
-and **it exists again**: `src/` runs, the game launches, and the folder holds **two scripts that both run** —
-`capture_ground.gd` (two frames of the island with the buildings hidden and nobody stood up) and
-`piece_viewer.gd` (a window driven by hand, one baked block at a time under the game's light).
-⚠⚠ **The pair that stood here until 2026-08-29 — `capture_refit.gd` and `probe_refit_hits.gd` — was deleted
-with the reward pick and refit screens they photographed.** ⇒ **Neither a fight nor any other live screen has
-a capture script, and there is no probe at all**: the ticket you are handed will usually need you to write
-one. **Read `tools/look/README.md` before writing it.** The shape a capture script takes is this:
+and **it exists again**: `src/` runs, the game launches, and the folder holds **five scripts that all run** —
+`capture_ground.gd` (the island with the buildings hidden and nobody stood up), `piece_viewer.gd` (a window
+driven by hand, one baked block at a time under the game's light), and the three the boat bought on
+2026-08-30: `capture_boat.gd` (the arriving hull, found by panning or centred and zoomed),
+`capture_float.gd` and `capture_float2.gd` (one frozen moment, re-shot with one part of the water turned
+off at a time).
+⚠⚠ **The three boat scripts opened the title with a real mouse event and shot `00_title` first**, which is
+the known-answer frame this page demands and `capture_ground.gd` still does not have. ⇒ **Copy one of
+them, not `capture_ground.gd`.**
+⚠ **No script here photographs a FIGHT, and there is no probe at all**: the ticket you are handed will
+often still need you to write one. **Read `tools/look/README.md` before writing it.** The shape a capture
+script takes is this:
 
 ```
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://<capture-script>.gd -- <output-dir>
@@ -56,9 +61,10 @@ is general**: take a **known-answer frame first**, because anything that re-cent
 write and the shutter **quietly undoes a staged camera, and the failure looks exactly like a change that had
 no effect.** Stage a camera through the values the view composes each frame, **never** by writing `position`
 directly. ⇒ **The concrete half lives in `tools/look/README.md` now.**
-⚠⚠ **The script that carried this rule shot the title first and it is deleted**, and `capture_ground.gd`
-has no known-answer frame at all — its first shot is already the subject. ⇒ **A capture script you write
-here owes one, and it is the first thing to put in it.**
+⚠⚠ **The script that carried this rule was deleted, and the rule came back on 2026-08-30**: all three
+boat scripts open the title and shoot `00_title` before anything else. **`capture_ground.gd` is the one
+that still has no known-answer frame** — its first shot is already the subject. ⇒ **A capture script you
+write here owes one, and it is the first thing to put in it.**
 
 **Is there a path for the thing you want to see to reach the screen?** The most common miss, and it reads as a
 broken feature: sim and colour both in, but nothing in the shell ever calls the setter, so nothing appears.

@@ -151,7 +151,7 @@ probe. **The test is whether the PLAYER is meant to look at it.**
 
 | Path | What it holds |
 |---|---|
-| `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **Nearly empty, and that is a defect** — there is no GDD. When one is written it is **one page**. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
+| `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **Sixteen fork docs and NO GDD, which is the defect** — the folder is not thin, the one page that says what the game is has never been written. When it is, it is **one page**. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
 | `docs/roadmap.md` | **The only map, and it sits at the top of `docs/`** (moved 2026-08-30) — **what is being done** — **one dated row per week, each carrying a status mark**, plus the chunk table |
 | `docs/plan/` | **`log.md` is why it came out that way, and every quotation lives there**; **`tickets/NN-name.md`** are the work. **Status is a `Status:` line inside the file — files never move between folders.** The chain: `compass` → `grilling` (which settles what a stretch actually builds, sending `research` outside when it needs an outside fact) → `build-loop` → `wrap-up`, with `roadmap` checking it. ⚠⚠ **Only `wrap-up` writes to these files, and only after the conversation is finished** |
 | `docs/reference/` | **What came in from outside**: the screenshots a decision was made from, and the notes `research` leaves when a search took real work. All `YYYY-MM-DD-what-it-is`. ⚠⚠ **A ticket keeps the conclusion; the material stays here** — and `wrap-up` asks before deleting a shot |
@@ -184,6 +184,8 @@ only when the pixels are the subject.**
 
 ⚠ **`CONTEXT.md` is the glossary and the three agreed test seams** — **no check is written at a seam
 that is not named there.** ⚠ **It is imported at the top of this file, so it is already in context**;
-there is no reading step to skip and no excuse for guessing a word. ⚠ **Parts of its vocabulary predate
-the swap** and still read as though the beast were the player. **Where a word in it disagrees with
-`src/`, the code is what is true.**
+there is no reading step to skip and no excuse for guessing a word.
+⚠ **It was fully re-swapped by 2026-08-30** — the swordsman is the player and the beasts are the enemy
+everywhere in it, and the code names that read the other way (`soldier`, `army`, `unit`) are listed as
+such in its own mismatch table. **Where a word in it disagrees with `src/`, the code is still what is
+true.**

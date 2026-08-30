@@ -2,14 +2,16 @@ extends RefCounted
 ## The process shape, forced — **rewritten 2026-08-22 when the process changed underneath it.**
 ##
 ## It used to scan `docs/plans/{2.active,3.done}` for a round log and a "were the open questions sent"
-## line. **That folder is gone**: plans moved to `docs/plan/` where `wayfinder` keeps a map and its
+## line. **That folder is gone**: plans moved to `docs/plan/`, which holds the decision log and the
 ## tickets, and status is a line inside a file instead of the folder the file sits in.
+## ⚠ **`wayfinder` was named here as the skill that kept the map and it was deleted on 2026-08-27** —
+## no skill owns the map now, and only `wrap-up` writes to any of these files.
 ##
 ## ⚠ **What a green here means TODAY, stated up front so nobody reads more into it.**
-## The tree half walks `docs/plan/` and checks whatever it finds. **With no map written yet it finds
-## nothing, and its label says so out loud — read the count in the label, not the colour.** What carries
-## real weight today is the scanner self-checks at the bottom: they drive the same pure functions the tree
-## half uses, so a parser that has stopped working goes red with or without a map.
+## The tree half walks `docs/plan/` and checks whatever it finds, and **the label carries how much was
+## actually walked — read the count in it, not the colour.** What carries real weight is the scanner
+## self-checks at the bottom: they drive the same pure functions the tree half uses, so a parser that has
+## stopped working goes red with or without a map.
 ##
 ## ⚠ **It cannot check that any of it is TRUE.** A `Status: resolved` on a ticket nobody resolved, or an
 ## `## Answer` holding one word, both pass. **Absent → present is the whole of what is bought here**, and
@@ -30,7 +32,12 @@ const ANSWER_HEAD := "## Answer"
 ## Assembled so this file's own header cannot trip the scan it performs.
 const DECIDED_HEAD := "## 지금까지의" + " 결정"
 
-const MAP_SECTIONS := ["## Destination", "## Notes", DECIDED_HEAD, "## Not yet specified", "## Out of scope"]
+## ⚠⚠ **Four of the five sections this once demanded died on 2026-08-27**, when the map was rewritten
+## and `log.md` was narrowed to 「왜 그렇게 됐나」 alone — the plan folder's own README is what says so.
+## `## Destination`, `## Notes`, `## Not yet specified` and `## Out of scope` belonged to a map shape no
+## file in this repo has worn since, and **this net went on demanding all four**, so its red said the docs
+## were broken when the net was. **What is left is the one section the log genuinely carries.**
+const MAP_SECTIONS := [DECIDED_HEAD]
 
 
 func run(t) -> void:
@@ -78,7 +85,7 @@ func _tree(t) -> void:
 				resolved_without_answer.append(name)
 
 	var walked := "지도 %d개 · 티켓 %d개" % [efforts.size(), tickets]
-	t.ok(bad_head.is_empty(), "%s — 지도가 다섯 절을 다 갖고 있다 %s" % [walked, str(bad_head)])
+	t.ok(bad_head.is_empty(), "%s — 지도가 요구된 절을 다 갖고 있다 %s" % [walked, str(bad_head)])
 	t.ok(bad_field.is_empty(), "%s — 모든 티켓이 Type 과 Status 를 legal 한 값으로 갖는다 %s" % [walked, str(bad_field)])
 	t.ok(dangling.is_empty(), "%s — Blocked by 가 실재하는 티켓만 가리킨다 %s" % [walked, str(dangling)])
 	t.ok(resolved_without_answer.is_empty(), "%s — resolved 인 티켓은 답을 들고 있다 %s" % [walked, str(resolved_without_answer)])
@@ -153,14 +160,16 @@ func _scanner_self_checks(t) -> void:
 		full += h + "\n\n내용\n\n"
 	var missing_none := 0
 	var missing_one := 0
-	var short_map := full.replace("## Out of scope\n", "")
+	# ⚠ The removal is driven off `MAP_SECTIONS` itself rather than off a literal heading, so shrinking
+	# or growing that list cannot leave this self-check quietly removing a section nobody asks for.
+	var short_map := full.replace(MAP_SECTIONS[0] + "\n", "")
 	for h: String in MAP_SECTIONS:
 		if not full.contains(h):
 			missing_none += 1
 		if not short_map.contains(h):
 			missing_one += 1
-	t.eq(missing_none, 0, "다섯 절을 다 가진 지도는 안 잡는다 (스캐너 자가 점검)")
-	t.eq(missing_one, 1, "「범위 밖」이 빠진 지도를 잡는다 (스캐너 자가 점검)")
+	t.eq(missing_none, 0, "요구된 절을 다 가진 지도는 안 잡는다 (스캐너 자가 점검)")
+	t.eq(missing_one, 1, "절 하나가 빠진 지도를 잡는다 (스캐너 자가 점검)")
 
 
 # -- io ---------------------------------------------------------------------------------------------------

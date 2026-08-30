@@ -1,11 +1,19 @@
 # tools/look — the game screenshots itself
 
-**This is verify-look without the bridge.** Two scripts live in this folder and **both run**:
+**This is verify-look without the bridge.** Five scripts live in this folder and **all five run**:
 
 | Script | Reads pixels? | The one question it answers |
 |---|---|---|
 | `piece_viewer.gd` | on `S` and `--shot1` | **what does one baked block look like under the GAME's light?** Driven by hand: a window, one piece at a time, turn it, tilt it, outline on and off |
 | `capture_ground.gd` | yes | **what does the ground actually look like?** Two frames — the island, the sea and the mats, with the buildings hidden and nobody stood up |
+| `capture_boat.gd` | yes | **where is the arriving hull, and what does it look like up close?** Opens the title, presses 시작하기 through a real mouse event, then `find` (scan with the pan keys) or `close` (centre one and zoom in) |
+| `capture_float.gd` | yes | **what makes the boat read as floating?** One frozen moment, shot once with everything on and then once per part removed — the part that takes the floating with it is the answer |
+| `capture_float2.gd` | yes | **which white mark stands off the hull?** The water draws four things about a boat — halo, contact shadow, break line, trail — and this turns them off one at a time |
+
+⚠⚠ **The last three were written on 2026-08-30 for the boat and they are one-off sheets by shape**, not
+standing instruments: each stages one framing and answers one question. **Read one before writing a sixth**
+— `capture_boat.gd` is the closest thing here to a template, because it opens the game the way a player
+does and shoots a known-answer frame first.
 
 ⚠⚠ **`piece_viewer.gd` is the answer to 「블록 하나하나를 내가 보고 싶어」** (2026-08-27, the user). It
 exists because a piece shown under BLENDER's light lies: ticket 01 records over and over that a value
@@ -26,12 +34,16 @@ rule is written in the prose those sections themselves carried: **a thing whose 
 distilled and deleted, not archived in place.** What they measured that still binds is the four rules
 below; the rest is gone.
 
-## Running the two
+## Running them
 
 ```
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/piece_viewer.gd
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/piece_viewer.gd -- --glb res://assets/terrain/island.glb
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_ground.gd -- <output-dir>
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_boat.gd -- <output-dir> find
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_boat.gd -- <output-dir> close
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_float.gd -- <output-dir>
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_float2.gd -- <output-dir>
 ```
 
 **The viewer's hand**: `← →` the piece · `Tab` one / all ten · **left-drag pan** · `H` re-centre ·
@@ -46,7 +58,7 @@ is recorded in the viewer itself** — why the second shot turns the sea off, an
 Two PNGs from `capture_ground.gd` — the board, then the same board zoomed five steps in — and it quits
 on its own.
 
-## The three rules a capture script here obeys
+## The three rules every capture script here obeys
 
 - **Not `--headless`.** A headless run has no swapchain, `root.get_texture()` comes back blank, and every
   PNG is a black rectangle **with no error anywhere**. Worse than blank: the dummy renderer never emits
@@ -80,11 +92,11 @@ back unable to answer it, and read exactly like a zoom that had no effect.
 ⇒ **A capture harness is an instrument, and `CLAUDE.md`'s rule about inverting the instrument rather than
 the subject applies to it too.** The script that carried this rule was `capture_refit.gd`, which shot
 `00_title` first — a screen this repo had already looked at — for exactly this reason.
-⚠⚠ **It is deleted, and `capture_ground.gd` has no known-answer frame**: its first shot is already the
-subject. **The rule still binds and nothing implements it.** Its first frame is the island at play
-scale, which the user has seen many times, so it is the nearest thing to a known answer — but it is the
-subject and the check at once, and **if it is wrong the second frame is unreadable** in exactly the way
-this paragraph describes.
+⚠⚠ **It is deleted, and the rule came back on 2026-08-30**: `capture_boat.gd`, `capture_float.gd` and
+`capture_float2.gd` all shoot `00_title` first — a screen this repo has looked at many times — before they
+touch their subject. **`capture_ground.gd` is the one still without one**: its first frame is the island at
+play scale, which is the nearest thing to a known answer it has, but it is the subject and the check at
+once, and **if it is wrong the second frame is unreadable** in exactly the way this paragraph describes.
 
 ## Two staging rules that made the frames honest
 

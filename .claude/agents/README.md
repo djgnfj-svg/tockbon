@@ -75,6 +75,6 @@ was kept by luck. Lowering a verifier to save money is how a round goes green fo
 ⚠ **`builder` alone names no model** and takes the session's.
 
 ⚠ **The godot MCP server is off**, so the screen verifier opens its own window with a capture script it runs
-directly. ⚠⚠ **`tools/look/` holds two scripts and neither photographs a fight** — read that folder's README
+directly. ⚠⚠ **`tools/look/` holds five scripts and none photographs a fight** — read that folder's README
 before writing a third. If the server is ever switched back on, `127.0.0.1:6550` holds **one client at a
 time**, which is why the headless verifier is told headless-only.
