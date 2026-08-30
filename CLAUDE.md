@@ -59,8 +59,11 @@ it. ⚠ **No twin.** Korean twins existed and were deleted because the same fact
 
 # Reply rule — **the core, and nothing else**
 
-**The answer goes in the first line. Reasons after it, never before.** Every line load-bearing. Stop.
+**The answer goes in the FIRST LINE and is under 100 characters.** Reasons after it, never before. Stop.
 
+- ⚠⚠ **No abstract word.** Name the thing and the number. **Never** 「improved」 「cleaned up」 「optimised」
+  「the structure」 「the system」 「properly」 — **a sentence that would still be true of a different repo
+  says nothing**
 - **No emoji.** Bold is the only emphasis
 - **No file paths, no line numbers, no code locations in chat** — say what the thing is, not where it lives
 - **No word only you understand.** A doc name or a net name standing in for the thing is not an answer

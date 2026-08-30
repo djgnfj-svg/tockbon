@@ -18,11 +18,14 @@ anyway. **What it knew is this page**, and reading it is the step that used to b
 
 ## The five traps, all measured, each one cost a round
 
-⚠⚠ **1. `send.py` IS the MCP path. Never call the `mcp__blender__*` tools.**
-Blender 5.1 ships an official MCP extension on port 9876 speaking **JSON terminated by a NULL byte**. The
-`mcp__blender__*` tools a session may offer are a **community add-on's client** speaking bare JSON with no
-terminator. **They connect, send, and never return** — no error, no timeout you will enjoy. An afternoon
-went to this on 2026-08-26; the finding is at the top of `send.py`.
+⚠⚠ **1. The `mcp__blender__*` tools WORK. Use them first.**
+**Measured 2026-08-30**: `get_scene_info` came back with 29 objects and 56 materials, and
+`execute_blender_code` ran Python and returned its stdout — **Blender 5.1.1, Python 3.13.9.**
+⚠⚠ **This paragraph said the opposite for four days and it was wrong.** The port-9876 protocol clash was
+real on 2026-08-26 and **the user fixed it**; nobody re-tested, so the warning outlived the fault and a
+session went on hand-rolling what the tools already did. **A doc saying a tool is broken is a doc to
+re-test, not to quote.**
+⇒ **`send.py` is the fallback**, and it now speaks the same protocol the tools do.
 
 ⚠⚠ **2. Godot serves a CACHED island and says nothing.**
 Blender writes `assets/terrain/island.glb`; Godot reads its own converted copy under `.godot/imported/`,

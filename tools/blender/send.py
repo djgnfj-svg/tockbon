@@ -1,16 +1,13 @@
 # Sends Python to the running Blender and prints what it says back.
 #
-# ⚠⚠ **This exists because TWO MCP servers fight over port 9876** (found 2026-08-26). Blender 5.1 ships
-# an official MCP extension (`lab_blender_org/mcp`) that listens on 9876, and the community
-# `blender-mcp` add-on wants the same port. They do NOT speak the same protocol:
+# ⚠ **This is the FALLBACK, not the main path** (2026-08-30). The `mcp__blender__*` tools work —
+# measured the same day against Blender 5.1.1 — so reach for them first, and use this when a script is
+# long enough that piping a file beats pasting code.
 #
-#   · official  — one JSON object terminated by a NULL byte: {"type":"execute","code":...,
-#                 "strict_json":bool}\0 , and the reply is JSON terminated by a NULL byte
-#   · community — a bare JSON object with no terminator: {"type":"get_scene_info","params":{}}
-#
-# ⇒ **The community client hangs forever against the official server.** It connects, sends, and the
-# server sits waiting for a terminator that never comes. Nothing in the error output says so — the
-# call just never returns, which is what cost an afternoon.
+# It was written on 2026-08-26 when two MCP servers fought over port 9876: the official Blender 5.1
+# extension wanted JSON with a terminator byte, the community add-on wanted bare JSON, and the community
+# client hung forever against the official server with no error. **The user fixed that**, and this file
+# already speaks the surviving protocol — the same one the tools speak.
 #
 # Usage:
 #   python tools/blender/send.py path/to/script.py
