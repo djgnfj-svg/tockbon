@@ -5,7 +5,7 @@ description: Writes code following the implementation plan already written into 
 
 # builder — implementation
 
-Write the code in `## Implementation plan` of the claimed ticket — `docs/roadmap/task-NN-<name>/MM-<name>.md`, the one whose `Status:` is `claimed`.
+Write the code in `## Implementation plan` of the claimed ticket — `docs/roadmap/task-NN-<name>/MM-<name>/TICKET.md`, the one whose `Status:` is `claimed`.
 
 ## Never
 

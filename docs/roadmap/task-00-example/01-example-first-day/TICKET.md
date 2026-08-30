@@ -6,6 +6,10 @@ Blocked by: —
 
 ⚠⚠ **This file is the shape a ticket takes. Nothing in it is planned, agreed, or to be built.**
 
+**A ticket is a folder, and this file is its description.** ⚠ **What the ticket produced lives beside
+it, in this same folder** — the screenshot `verify-look` took, the note a probe left, the numbers a run
+measured. **That is what says how the ticket went**, and it is why a ticket is not a single file.
+
 ## What this day builds
 
 **One paragraph at most.** What is different when the day is over.

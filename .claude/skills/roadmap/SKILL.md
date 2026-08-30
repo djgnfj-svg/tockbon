@@ -17,8 +17,8 @@ being written**. Balance, fun, and polish are judged by playing, not by reading 
 | Layer | What it is | Where it lives |
 |---|---|---|
 | **The roadmap** | **The whole way to the December demo, on one page.** The tasks fall out of it | `docs/roadmap/README.md` |
-| **A task** | **One numbered folder.** `TASK.md` says what is on screen when it ends; the tickets that build it sit beside it | `docs/roadmap/task-NN-<english-slug>/TASK.md` |
-| **A ticket** | **One day of work**, numbered from `01` inside its own task | `docs/roadmap/task-NN-<slug>/MM-<english-slug>.md` |
+| **A task** | **One numbered folder.** `TASK.md` says what is on screen when it ends; the ticket folders that build it sit beside it | `docs/roadmap/task-NN-<english-slug>/TASK.md` |
+| **A ticket** | **One day of work, and a folder too.** `TICKET.md` describes it; **what it produced piles up beside it** — the screenshot, the measurement, the note that says how it went | `docs/roadmap/task-NN-<slug>/MM-<english-slug>/TICKET.md` |
 
 **A ticket's number is unique inside its task, never across the repo.** Task `03`'s second ticket is
 **03-02**, and task `04` has its own `02`.
@@ -35,7 +35,8 @@ under `docs/roadmap/` — there is no `tasks/` layer.**
 ## Read
 
 1. **The roadmap** — `docs/roadmap/README.md`. Every row, every chunk, its bar, its tasks, its order.
-2. **Every task** — `docs/roadmap/task-*/TASK.md` and every ticket inside it, `Status:` line included.
+2. **Every task** — `docs/roadmap/task-*/TASK.md` and the `TICKET.md` in every ticket folder inside it,
+   `Status:` line included.
    ⚠ **Where a task folder holds no ticket yet, say so** — an empty task is a measurement, not a fault.
 3. **The decision log and the commits** — `docs/roadmap/log.md` and
    `git log --oneline --since=<the log's last dated row>`.

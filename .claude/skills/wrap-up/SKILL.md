@@ -33,8 +33,11 @@ Built, fixed, deleted, decided. **"Almost done" is not done.** Do not mix done a
 **Anything the user decided this session that no ticket holds.** ⚠ **You are writing down answers, not
 inventing work** — open forks are `grilling`'s round, and that happens before this step.
 
-- `docs/roadmap/task-NN-<english-slug>/MM-<english-slug>.md` — **inside the task it serves**, numbered on
-  from the last ticket **in that task**, starting at `01`. Its task's number goes into the roadmap
+- `docs/roadmap/task-NN-<english-slug>/MM-<english-slug>/TICKET.md` — **a folder inside the task it
+  serves**, numbered on from the last ticket **in that task**, starting at `01`. Its task's number goes
+  into the roadmap
+- ⚠ **What the ticket produced goes in that same folder** — the screenshot, the measurement, the note.
+  **That is where a ticket says how it went**, and step 4's loose images land here instead of being cleared
 - **A ticket is one day.** ⚠ **If it does not fit in a day, the user says how it splits** — never you
 - **A task with no folder yet** gets `docs/roadmap/task-NN-<english-slug>/TASK.md` first, one sentence
   saying what is on screen when the task ends. ⚠ **Task folders sit directly under `docs/roadmap/`**

@@ -22,12 +22,14 @@ extends RefCounted
 
 const SCRATCH := "res://docs/roadmap"
 const MAP_FILE := "log.md"
-## ⚠⚠ **Rewritten 2026-08-31: there is no flat `tickets/` folder any more.** A task is `task-NN-name/`
-## sitting directly under `docs/roadmap/`, its `TASK.md` says what the task is, and the `MM-name.md`
-## files beside it are its tickets — **numbered from `01` inside that task**, so `Blocked by:` is
-## resolved against that task's own files and never across the repo.
+## ⚠⚠ **Rewritten 2026-08-31: there is no flat `tickets/` folder any more, and a ticket is a FOLDER.**
+## A task is `task-NN-name/` sitting directly under `docs/roadmap/`, its `TASK.md` says what the task
+## is, and each `MM-name/` folder beside it is one ticket — `TICKET.md` describes it and **whatever it
+## produced piles up in that same folder.** Tickets are **numbered from `01` inside their own task**, so
+## `Blocked by:` is resolved against that task's own tickets and never across the repo.
 const TASK_PREFIX := "task-"
 const TASK_FILE := "TASK.md"
+const TICKET_FILE := "TICKET.md"
 
 const TYPES := ["grilling", "research", "prototype", "task"]
 ## ⚠ **`superseded` is the fourth**, added 2026-08-30: 티켓 10 과 27 were kept as tombstones on purpose
@@ -66,6 +68,7 @@ func _tree(t) -> void:
 	var dangling: Array[String] = []
 	var resolved_without_answer: Array[String] = []
 	var task_without_task_file: Array[String] = []
+	var ticket_without_ticket_file: Array[String] = []
 
 	for effort: String in efforts:
 		var map_text := _read(effort.path_join(MAP_FILE))
@@ -79,16 +82,20 @@ func _tree(t) -> void:
 				task_without_task_file.append(task_dir.get_file())
 
 			# ⚠ Built per task, not per repo: `Blocked by: 01` inside task 03 means **03-01**, and the
-			# same `01` inside task 04 is a different file. A repo-wide set would let a dangling
+			# same `01` inside task 04 is a different ticket. A repo-wide set would let a dangling
 			# reference pass because some other task happened to own that number.
-			var files := _ticket_files(task_dir)
+			var ticket_dirs := _ticket_dirs(task_dir)
 			var numbers := {}
-			for p: String in files:
+			for p: String in ticket_dirs:
 				numbers[_leading_number(p.get_file())] = true
-			for p: String in files:
+			for p: String in ticket_dirs:
 				tickets += 1
-				var text := _read(p)
 				var name := "%s/%s" % [task_dir.get_file(), p.get_file()]
+				var ticket_path := p.path_join(TICKET_FILE)
+				if not FileAccess.file_exists(ticket_path):
+					ticket_without_ticket_file.append(name)
+					continue
+				var text := _read(ticket_path)
 				if not TYPES.has(ticket_field(text, "Type")):
 					bad_field.append(name + " → Type")
 				if not STATES.has(ticket_field(text, "Status")):
@@ -103,6 +110,8 @@ func _tree(t) -> void:
 	t.ok(bad_head.is_empty(), "%s — 지도가 요구된 절을 다 갖고 있다 %s" % [walked, str(bad_head)])
 	t.ok(task_without_task_file.is_empty(),
 		"%s — 태스크 폴더는 TASK.md 를 들고 있다 %s" % [walked, str(task_without_task_file)])
+	t.ok(ticket_without_ticket_file.is_empty(),
+		"%s — 티켓 폴더는 TICKET.md 를 들고 있다 %s" % [walked, str(ticket_without_ticket_file)])
 	t.ok(bad_field.is_empty(), "%s — 모든 티켓이 Type 과 Status 를 legal 한 값으로 갖는다 %s" % [walked, str(bad_field)])
 	t.ok(dangling.is_empty(), "%s — Blocked by 가 실재하는 티켓만 가리킨다 %s" % [walked, str(dangling)])
 	t.ok(resolved_without_answer.is_empty(), "%s — resolved 인 티켓은 답을 들고 있다 %s" % [walked, str(resolved_without_answer)])
@@ -215,16 +224,15 @@ func _task_dirs(effort: String) -> Array[String]:
 	return out
 
 
-## ⚠ `TASK.md` is the task's own description, not a ticket, so it is excluded — counting it would make
-## every task look like it carried one more day than it does.
-func _ticket_files(task_dir: String) -> Array[String]:
+## Every ticket folder inside one task. ⚠ **A ticket is a folder, not a file** — `TASK.md` sits beside
+## them as a plain file and is therefore never counted as a day.
+func _ticket_dirs(task_dir: String) -> Array[String]:
 	var out: Array[String] = []
 	var d := DirAccess.open(task_dir)
 	if d == null:
 		return out
-	for f: String in d.get_files():
-		if f.ends_with(".md") and f != TASK_FILE and f != "README.md":
-			out.append(task_dir.path_join(f))
+	for sub: String in d.get_directories():
+		out.append(task_dir.path_join(sub))
 	out.sort()
 	return out
 

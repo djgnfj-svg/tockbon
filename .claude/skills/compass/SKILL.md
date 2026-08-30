@@ -11,14 +11,14 @@ description: Say where the work stands — this week's goal, then every open tic
 
 1. **The roadmap** — `docs/roadmap/README.md`. It holds **this week's chunk** and the bar that
    closes it. This is the only place the week is stated.
-2. **Every task and its tickets** — `docs/roadmap/task-NN-<slug>/TASK.md` and the `MM-<slug>.md` ticket
-   files beside it. Each ticket carries a `Status:` line (`open` · `claimed` · `resolved`) and may
-   carry `Blocked by: MM`. ⚠ **A ticket is named by its two-tier number** — task `03`'s second ticket
-   is **03-02**, and each task numbers its own tickets from `01`.
+2. **Every task and its tickets** — `docs/roadmap/task-NN-<slug>/TASK.md`, and the `TICKET.md` inside
+   each `MM-<slug>/` folder beside it. Each `TICKET.md` carries a `Status:` line (`open` · `claimed` ·
+   `resolved`) and may carry `Blocked by: MM`. ⚠ **A ticket is named by its two-tier number** — task
+   `03`'s second ticket is **03-02**, and each task numbers its own tickets from `01`.
 3. **The decision log's last five rows and the last five commits** — the table at the foot of
    `docs/roadmap/log.md`, and `git log --oneline -5`. They say what actually landed.
 
-**Done when every task's `TASK.md` and every ticket file inside it has been opened**, not a sample.
+**Done when every task's `TASK.md` and every `TICKET.md` inside it has been opened**, not a sample.
 
 ## Rank
 
