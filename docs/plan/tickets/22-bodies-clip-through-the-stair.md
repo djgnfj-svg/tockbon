@@ -1,5 +1,5 @@
 Type: task
-Status: open
+Status: resolved
 
 # 몸이 계단을 뚫고 지나간다 — 아직 남아 있다
 
@@ -39,3 +39,10 @@ treads and a kerb down each side**, and the block under it was RAISED; the new b
 staircase is a separate mesh laid on it.
 
 ⇒ **Every measurement below was taken on the old shape.** Re-measure before acting on any of it.
+
+## Answer — ✅ **닫혔다 (2026-08-30). 티켓 20 과 같은 버그다**
+
+**사용자**: 「이거는 위랑 같은 버그 아니야? 이것도 위랑 같은 버그긴 한데 이것도 닫아줘」.
+
+⇒ **몸이 지형에 파묻히는 한 가지 일**이고, 계단이냐 층 경계냐는 그것이 드러나는 자리일 뿐이다.
+**남은 후보 셋(난간 · 몸 그림의 여백 · 단 사이 한 프레임)은 위에 그대로 있고, 티켓 20 이 그것을 읽는다.**

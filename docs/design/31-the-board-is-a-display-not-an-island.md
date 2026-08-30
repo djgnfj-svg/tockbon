@@ -1,5 +1,4 @@
-Type: grilling
-Status: resolved
+Status: ✅ **유효하다.** 2026-08-29 에 사용자가 「섬 모양은 지금 이대로 괜찮은 거 같고」라고 해서 전시판이 그대로 놀 섬이 됐다. (티켓 31 이었다)
 
 # The board on screen is a display of the kit, not an island to play
 

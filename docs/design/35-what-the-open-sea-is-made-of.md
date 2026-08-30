@@ -1,5 +1,4 @@
-Type: grilling
-Status: resolved
+Status: ✅ **유효하다.** 2026-08-30 에 두 번째로 물어서 사용자가 `06-fleck` 을 골랐다 — 첫 라운드에 열 벌이 다 물린 이유는 빈 물을 봤기 때문이다. (티켓 35 였다)
 
 # 열린 바다는 무엇으로 채우나
 
@@ -27,7 +26,7 @@ time it stands because nothing better was found, not because flat won a comparis
 붙여서 글자 하나까지 같다.** 두 실험대의 `README.md` 가 그 장치를 들고 있고, 후보마다 `NOTES.md` 에
 **사는 것 · 드는 값 · 못 하는 것** 세 줄이 있다.
 
-### `prototypes/sea/` — **무늬 다섯.** 물의 색에 무엇을 칠하나
+### `.prototypes/sea/` — **무늬 다섯.** 물의 색에 무엇을 칠하나
 
 | | 어디서 나오나 | 먼 바다 |
 |---|---|---|
@@ -37,7 +36,7 @@ time it stands because nothing better was found, not because flat won a comparis
 | `04-bands` | 땅까지의 거리를 계단으로 자름 (Ameye · A Short Hike) | ⛔ **없다** |
 | `05-paper` | 화면 픽셀 격자에 점으로 찍음 (A Short Hike) | ✅ |
 
-### `prototypes/wave/` — **빛 다섯.** 해가 물을 어떻게 만지나
+### `.prototypes/wave/` — **빛 다섯.** 해가 물을 어떻게 만지나
 
 ⚠⚠ **이 계열은 바다에 빛을 켜야 존재한다.** 지금 바다는 `unshaded` 라 빛을 아예 안 받는다.
 
@@ -77,7 +76,7 @@ time it stands because nothing better was found, not because flat won a comparis
 ## 다시 열 때 무엇부터 읽나
 
 1. **위의 「무엇이 재어졌나」 다섯 줄.** 전부 실측이고 다시 재면 라운드 하나가 날아간다
-2. **`prototypes/sea/` 와 `prototypes/wave/` 의 `NOTES.md` 열 장** — 각각 **못 하는 것** 한 줄이 있고,
+2. **`.prototypes/sea/` 와 `.prototypes/wave/` 의 `NOTES.md` 열 장** — 각각 **못 하는 것** 한 줄이 있고,
    그 줄이 그 방식을 다시 고르지 않을 이유다
 3. ⚠ **`look.gd` 에 죽은 물 상수 40 개가 산 것 40 개와 나란히 있다.** 8월 28일에 갈린 옛 바다의 것이고
    **아무것도 안 읽는다.** 바다를 다시 만지는 날 그중 하나를 돌리면 화면이 안 바뀐다
@@ -98,7 +97,7 @@ flat**, and it was parked. **Two things changed and they are why the answer came
 1. **The first round judged EMPTY water.** There was no boat and no wake in any of the ten frames.
 2. **The camera now roams 20 조각 out over open water**, so open sea is looked at for much longer.
 
-**Five new candidates were built with a boat crossing in every frame** (`prototypes/sea/06-fleck` ·
+**Five new candidates were built with a boat crossing in every frame** (`.prototypes/sea/06-fleck` ·
 `07-near` · `08-drift` · `09-rim`, plus `10-grain` as a **control** — the rejected fine-grain pattern
 kept in the sheet so the others could not win merely by being quiet). **The user picked `06-fleck`**
 from the running lab: countable objects scattered on the water, drifting as one current.
@@ -113,7 +112,7 @@ thing that will fix it.
 
 ## ⚠ Chosen in the lab, NOT yet judged in the game
 
-**The user picked it from `prototypes/sea/open_lab.gd`, not from the running game.** The game was
+**The user picked it from `.prototypes/sea/open_lab.gd`, not from the running game.** The game was
 launched with it in and the session moved on to another subject before they said anything about it.
 **Silence is a row, not a pass.**
 

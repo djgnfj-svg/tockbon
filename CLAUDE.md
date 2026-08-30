@@ -5,13 +5,11 @@
 @CONTEXT.md
 
 ***"판이 뭔지 제대로 이해한 거 맞아? ... 시작하면 바로 읽어야지."*** **A round was spent building the
-wrong thing because the word 판 was guessed at instead of read** — and the answer was in `CONTEXT.md`
-the whole time. **The import above puts it in context at every session start**, so there is no round
-where it has not been read.
+wrong thing because the word 판 was guessed at instead of read.**
 
-⚠⚠ **A word you are about to use for a thing on screen is a word to check there FIRST**, not after the
-user says it is wrong. ⚠ **Where a word in it disagrees with `src/`, the code is what is true** — and
-**say so out loud** rather than quietly picking one.
+⚠⚠ **A word you are about to use for a thing on screen is checked there FIRST**, not after the user
+says it is wrong. ⚠ **Where it disagrees with `src/`, the code is true** — and **say so out loud**
+rather than quietly picking one.
 
 
 ## ⚠⚠ **The ground the game is played on**
@@ -21,24 +19,14 @@ user says it is wrong. ⚠ **Where a word in it disagrees with `src/`, the code 
 ⚠ **The bar is Bad North.** **The island HAS a second storey and a stair, and they passed by eye.**
 ⇒ **Do not delete them.**
 
-⚠⚠ **How a storey is measured** (2026-08-26, the user): **one notch is half a tile · a storey is two
-notches · a stair is one notch.** Ground is level 0, the stair 1, the second storey 2 — and a body may
-cross **one** notch, which is what makes the stair the only way up. ⚠⚠ **There is NO third storey**
-(2026-08-29, the user: *"Design change: no third storey."*). **Two storeys is the ceiling** — level 2 is
-as high as the island goes, and levels 3 and 4 are not a thing to build toward.
-
 ⚠⚠ **Read ticket 01 — what one piece is — BEFORE opening Blender.** Skipping it cost a round: a live
 rule (**corners are not cut at 45°, they are slightly tilted**) got trampled.
 
 **A human company holds one island and builds it up. The beasts come by boat.** ⚠⚠ **The sides were
-swapped 2026-08-26 by the user.** The player is **one swordsman and no other type** — the faceless
-low-poly body that used to be the enemy — and the beasts (**wolf, bear, crow, lion**) are what lands on
-your coast. **The island is ONE**; drawing eight was what the project could not afford. **The boats
-belong to the beasts; the player never places one.** **A timer brings a boss.** **Raiding another island
-is how more are taken.** **There is no eating for parts** — the art could not carry it.
-
-⚠ **`Hands do not move during a fight` is dead** (2026-08-25, after the user played Bad North).
-**Hands move**: squads are commanded on the board, at any time.
+swapped 2026-08-26 by the user.** **The island is ONE**; drawing eight was what the project could not
+afford. **The player never places a boat.** **A timer brings a boss.** **Raiding another island is how
+more are taken.** **There is no eating for parts** — the art could not carry it.
+**Squads are commanded on the board at any time** — hands move.
 
 **The frame** — ⚠⚠ **December is a DEMO, not a release** (2026-08-26, the user: *"Change it to a December
 demo."*) · **roguelike** · **funding after it** · **raiding other islands is IN, not deferred.**
@@ -46,9 +34,8 @@ demo."*) · **roguelike** · **funding after it** · **raiding other islands is 
 ⚠ **What DEMO returns**: saves, an options screen, sound, a store page and its builds, and language stop
 being December's problem. None were built, so nothing is lost.
 
-**The code runs and the game launches. There is no GDD.** ⚠⚠ **What is being made is read out of
-`docs/plan/`, and it is the only planning map there is.** **Do not go looking for a second map, and do
-not cite one.**
+**The code runs and the game launches.** ⚠⚠ **What is being made is read out of `docs/plan/` and the
+roadmap, and there is no third place.** **Do not go looking for one, and do not cite one.**
 
 ⚠⚠ **`main` is not the whole repo.** Two sessions collided on it once and one rebuilt the docs around a
 game folded on another branch. ⇒ **Run `git ls-remote --heads origin` before concluding anything.**
@@ -109,17 +96,14 @@ the eye."*** **The failure is density, not length.**
   plain prose, at the end. **A question you can settle by reading the repo is not a question**
 - ⚠ **Never close a live conversation by asking whether to begin**
 - ⚠ **Do not compensate by moving the questions into the body.** Fewer words on screen is the point
-- ⚠ **Unchanged by this**: **finding facts is your job, never the user's**, and **a recommendation is
-  still labelled**
+- ⚠ **Unchanged by this**: **finding facts is your job, never the user's**
 
-**Grilling is a skill now and nothing else** — `grilling`, invoked when the user is **choosing a
-direction or brainstorming**, or asks for it by name. **The shape a question is printed in lives there.**
+**The shape a question is printed in lives in the `grilling` skill, and nowhere else.**
 
 # Running the game
 
-**"게임 켜줘" means: start `Godot_v4.7.1-stable_win64.exe` in this folder with `--path` at this
-folder, and nothing else.** ⚠ **`play.bat` did not raise a window** (2026-08-29) — call the engine
-directly. ⚠ **Never the 4.6.1 in the user's `~/bin`**: the nets run on the 4.7.1 sitting here.
+**"게임 켜줘" = run THIS folder's `Godot_v4.7.1-stable_win64.exe` with `--path` here. Nothing else** —
+not `play.bat`, not the other Godot in `~/bin`.
 
 # Nothing pretends to work
 
@@ -147,7 +131,7 @@ probe. **The test is whether the PLAYER is meant to look at it.**
 
 # The docs
 
-**`docs/` is three folders and four loose files.** **Open a folder's README, not the folder.**
+**Open a folder's README, not the folder.**
 
 | Path | What it holds |
 |---|---|
@@ -159,8 +143,8 @@ probe. **The test is whether the PLAYER is meant to look at it.**
 | `how-nets-lie` | **Every green measured to be false.** Read it before writing a check and before believing a green round |
 | `planning-principles` | **How to judge a direction.** Survived both resets on purpose — read it first |
 
-- **An idea the user picks becomes a ticket on the map**, not a design doc. **What is built is read out of
-  `src/` and `tests/nets/`.** **When a fork is taken, record the rejected branch in `docs/design/`**
+- **An idea the user picks becomes a ticket on the map**, not a design doc. **When a fork is taken,
+  record the rejected branch in `docs/design/`**
 - ⚠ **The user's own words about a game are a measurement, and this repo has had very few of them.** When
   the user says what they thought of something they played, **carry the judgement into the ticket it
   belongs to, in English and word for word** — never soften it, never leave it only in chat
@@ -182,10 +166,4 @@ whole game headless in seconds.
 pixels, what survived measured **input → state**. ⇒ **Prefer the shape that survives; reach for pixels
 only when the pixels are the subject.**
 
-⚠ **`CONTEXT.md` is the glossary and the three agreed test seams** — **no check is written at a seam
-that is not named there.** ⚠ **It is imported at the top of this file, so it is already in context**;
-there is no reading step to skip and no excuse for guessing a word.
-⚠ **It was fully re-swapped by 2026-08-30** — the swordsman is the player and the beasts are the enemy
-everywhere in it, and the code names that read the other way (`soldier`, `army`, `unit`) are listed as
-such in its own mismatch table. **Where a word in it disagrees with `src/`, the code is still what is
-true.**
+⚠ **No check is written at a seam `CONTEXT.md` does not name.**

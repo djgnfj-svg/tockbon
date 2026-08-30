@@ -1,5 +1,5 @@
 Type: grilling
-Status: open
+Status: resolved
 
 # 계단이 붕 떠 보인다
 
@@ -37,3 +37,12 @@ treads and a kerb down each side**, and the block under it was RAISED; the new b
 staircase is a separate mesh laid on it.
 
 ⇒ **Every measurement below was taken on the old shape.** Re-measure before acting on any of it.
+
+## Answer — ✅ **닫혔다 (2026-08-30). 사용자가 해결됐다고 판정했다**
+
+**사용자**: 「이거는 해결했었걸? 아 이거 해결했어」.
+
+⚠ **어느 후보로 해결됐는지는 이 티켓에 안 남아 있다.** 계단은 2026-08-29 저녁에 통째로 다시 세워졌고
+(**단 넷 · 난간 없음 · 블록 하나**), 떠 보이던 것은 그 재건에 딸려 없어졌다.
+⚠ **덤불은 아직 안 놓였다** — `island.json` 의 `props` 는 여전히 빈 배열이다. 밑동을 감추는 장식은
+이 티켓이 아니라 티켓 38(섬 위의 나무)이 들 자리다.

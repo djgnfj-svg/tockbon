@@ -1,5 +1,4 @@
-Type: grilling
-Status: resolved
+Status: ✅ **유효하다.** 2026-08-29 에 넷 중 사용자가 `01-grow` 를 골랐고 게임에 들어갔다. ⚠ 문턱 둘은 아직 게임에서 판정 안 됐다. (티켓 34 였다)
 
 # Which of the four makes the 조각 판 merge into a 칸 as the camera pulls back
 
@@ -40,7 +39,7 @@ together more."***
 
 ## The four, and the line that decides each
 
-**Built in `prototypes/merge/`; the sheet is `docs/reference/2026-08-29-pad-merge-prototypes.png`.**
+**Built in `.prototypes/merge/`; the sheet is `docs/reference/2026-08-29-pad-merge-prototypes.png`.**
 
 | | Where the merge comes from | ⚠ What it CANNOT do |
 |---|---|---|

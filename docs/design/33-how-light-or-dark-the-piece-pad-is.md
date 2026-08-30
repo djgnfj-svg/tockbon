@@ -1,5 +1,4 @@
-Type: grilling
-Status: resolved
+Status: ✅ **유효하다.** 2026-08-29 에 밝기 여섯을 게임에서 눌러 보고 사용자가 3번을 골랐다 — 「다 별론디 3번으로 해줘」가 그대로 실측이다. (티켓 33 이었다)
 
 # How light or dark the 조각 판 is, and how wide the gutter
 
@@ -32,11 +31,11 @@ and the **wide** gutter (`PAD_GAP_IN` 0.22 in the bake). Both were what happened
 ## Where the pictures are
 
 `docs/reference/2026-08-29-pad-tone-and-gutter-sheet.png` — twelve shots, near and far, made by
-`prototypes/pads/look_sheet.gd`. **Re-take them with:**
+`.prototypes/pads/look_sheet.gd`. **Re-take them with:**
 
 ```
-Godot_v4.7.1-stable_win64.exe --path . -s prototypes/pads/look_sheet.gd -- <tag>
-python prototypes/pads/look_sheet.py
+Godot_v4.7.1-stable_win64.exe --path . -s .prototypes/pads/look_sheet.gd -- <tag>
+python .prototypes/pads/look_sheet.py
 ```
 
 ⚠ **The gutter needs a re-bake to change, the tone does not.** The tone is one uniform pushed from
