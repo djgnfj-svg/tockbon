@@ -1654,3 +1654,46 @@ spit and the satellite island. Ticket **53**.
 
 **629 통과 / 59 ᄉᡴ패 → 1048 / 63.** ⚠ **The four extra reds are not new failures — they are old ones that
 became visible** when the abandoned checks started running. **No red in this session was caused by it.**
+
+## 🔍 **A read-only session: nothing was built, three things were settled — 2026-08-30**
+
+The user asked why the island appears to be re-made by a tool every round. **Nothing was edited in
+`src/` or `assets/`, and no ticket was opened** — the ticket rule of this same day says the next one is
+written with `grilling`, one at a time.
+
+### The island is not re-made, and the question was worth asking
+
+**One Blender run writes both `island.glb` and `island.json`, both are committed, and the game reads
+only the files.** Godot was driven headless, with no link to Blender of any kind, and read the board
+back whole: 30 자 × 26 줄, 284 칸 of land and 496 of water. **No terrain is built at runtime.**
+
+⚠ **Sixteen re-bakes exist in the history and fifteen sit in a commit that also changed the recipe.**
+The island has never been re-baked for no reason.
+
+### ⚠⚠ It cannot be edited with a mouse in Godot, and that is the point
+
+`island.glb` is an imported asset, so an edit there is thrown away by the next bake. **The larger reason
+is that the board walked on is the JSON and not the mesh**: moving the mesh in the editor would change
+the picture and leave every rule untouched — the exact state this file's own August entry records
+`Islands` being rewritten to make impossible.
+
+### The islet is why four nets are red, and the island is not what is wrong
+
+**Land is 284 칸 and the largest walkable body is 280.** The four left over are the islet, whose
+boat-reachable shore at 680 · 681 · 710 · 711 leads nowhere on foot. **Design 31 already decided this is
+not a defect** — the islet waits for boats — so what is stale is the net's rule 「every landing spot
+walks to the island」. Written onto design 31, and counted as a third cause on roadmap ticket **15**.
+
+### What a second island costs, measured before it is needed
+
+`docs/design/README.md` says the island count grows by raiding others, and nothing recorded what stood
+in the way. **It is the sim and not Blender**: `Islands` is a static class holding one hardcoded path in
+one static cache, and **twelve call sites across `sim`, `view` and `shell` ask for 「the island」 without
+naming which one.**
+
+⚠ **The Blender half is the cheap half.** A board is thirteen lines of characters, and the heights, the
+twelve blocks, the colour ramp and the shore cut are shared by every island that script will ever bake —
+so a second island costs almost none of what the first one cost.
+
+⚠⚠ **Seven islands were deleted in August for the opposite reason: drawing them, not running them.**
+That is the cost that has actually fallen — a board is typed now rather than modelled.
