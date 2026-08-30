@@ -1,4 +1,4 @@
-Type: task
+Type: grilling
 Status: open
 
 # 대각선 문이 한쪽으로만 열린다

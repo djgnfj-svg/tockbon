@@ -81,3 +81,17 @@ swordsman is re-drawn.
 **Normal maps were baked** (`north_n` · `south_n` · `east_n` · `west_n`, free, from
 `prototypes/props/bake_normals.py`) **and are NOT wired.** ⚠ **Head-on wolves are 5 screen pixels
 wide and a normal map has nowhere to put a gradient in 5 pixels.** Side-on is 17.
+
+---
+
+## ⚠⚠ 이것이 절반만 하고 닫혀 있었다 — 2026-08-30 에 사용자가 화면에서 잡아냈다
+
+**H 는 배 갑판에만 들어가 있었다.** 섬 위에서 걷는 늑대는 **옛 옆모습 두 장**을 그대로 쓰고 있었고,
+사용자가 켜 보고 말했다: 「늑대가 내가 골랐던 H 늑대가 아닌거야? 그떄 골랐던 늑대가 아니네?」.
+
+**같은 날 섬에도 올렸다** — 네 방향을 카메라 각도로 고르는 방식은 갑판 것을 그대로 쓴다.
+
+⚠ **H 로 바꾸기만 하면 늑대가 오히려 작아진다** — **H 는 틀의 72% 를 채우고 옛 늑대는 82% 를
+채운다.** 20.3 → 17.7 px. 그래서 크기를 1.70 배 따로 줘서 **30.1 x 19.6 px** 이 됐다.
+
+⚠⚠ **걷기·물기 46 장은 같이 못 왔다** — 옛 규격이라 섞으면 몸이 뜬다. **티켓 58 이 그것을 든다.**

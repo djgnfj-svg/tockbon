@@ -41,15 +41,37 @@ enum SoldierState { RESERVE, ASHORE, DEAD }
 ## fills by accident** — the reason `TRANSIT` and `LOADED` were both deleted before this.
 enum BoatState { SAILING, ARRIVED }
 
-## ⚠⚠ **`Event` AND `ENEMY_UID_BASE` STOOD HERE AND BOTH ARE DELETED** (2026-08-29) with the fight.
+## ⚠⚠ **`Event` STOOD HERE AND IT IS DELETED** (2026-08-29) with the fight, and it is NOT coming back
+## with it. It was ATTACK · DEATH · LAND, an enum and never a string — `Battle.Event.ATTAK` is a parse
+## error and `"ATTAK"` is a silent miss that draws nothing with every check about it green. **The view
+## decided how long and in what colour**, because a duration in this file would be a rule that changes
+## what happens. ⚠ **Nothing needs one this round**: 티켓 41's 목~일 slice builds the STATE of a fight
+## and no new mark on screen, and the view reads state.
+
+## **What separates a beast's reservation id from a 검사's**, so the two can never release each other's
+## 조각. ⚠⚠ **RESTORED 2026-08-30 unchanged.** Without it 늑대 0 and 검사 0 hold one name, and the
+## symptom is one body walking through another **with every reservation check still green.**
+## ⚠ **It is a base and not a flag**: a reservation slot holds one int, and a body's reservation id is
+## `ENEMY_UID_BASE + index` for a beast and its bare index for a 검사.
+const ENEMY_UID_BASE := 1 << 20
+
+## **The name the 성채's own 조각 are held under.**
 ##
-##  · **`Event` was ATTACK · DEATH · LAND, an enum and never a string** — `Battle.Event.ATTAK` is a
-##    parse error and `"ATTAK"` is a silent miss that draws nothing with every check about it green.
-##    **The view decided how long and in what colour**, because a duration in this file would be a
-##    rule that changes what happens.
-##  · **`ENEMY_UID_BASE` kept enemy ids disjoint from soldier ids** in `grid.reserved`. Without it
-##    enemy 0 and soldier 0 release each other's 조각, and the symptom is one body walking through
-##    another with every reservation check still green.
+## ⚠⚠ **NOTHING MARKS A BUILDING'S 조각 IMPASSABLE AND THAT COST A ROUND ONCE** — a body placed on the
+## keep's 조각 stands INSIDE the house and the island reads as empty (measured 2026-08-27, `Run`'s own
+## note). **Reserving them fixes it at the cause and for everyone**: the free-tile search skips them, so
+## a 검사 mustering, a 늑대 stepping off a boat and a body walking past all refuse the house without any
+## of the three carrying a rule about buildings.
+## ⚠ **It is never released.** `release_all` is per-id and nothing in this file names this one.
+const KEEP_UID := ENEMY_UID_BASE - 1
+
+## What `soldier_target` and `enemy_target` hold when they are not naming a body.
+##
+## ⚠⚠ **`TARGET_KEEP` IS -2 AND NOT -1, AND THAT IS THE WHOLE OF WHY IT IS A CONSTANT.** 「I am hitting
+## the 성채」 and 「I am hitting nothing」 collapsed onto one value would stop the 성채 burning with every
+## count of living beasts still green — and the run would simply never be losable.
+const TARGET_NONE := -1
+const TARGET_KEEP := -2
 
 ## A flow field older than this is thrown away and rebuilt on the next request. The grid is 1536
 ## tiles (`boat-and-landing`'s 48 x 32), so one BFS is ~1536 operations and twenty units at 2 Hz is
@@ -77,22 +99,41 @@ var army: Army = null
 ## difference between a sim the shell really stepped and one it silently never stepped at all.
 var elapsed := 0.0
 
-# --- enemies: DELETED 2026-08-29 -----------------------------------------------------------------
-## ⚠⚠ **ELEVEN PARALLEL COLUMNS STOOD HERE** — type, HP, alive, position, target, windup, windup
-## target, cooldown, goal, stale and home level — **and all of them are gone with the fight.**
-## **Two of them were PUBLIC on purpose and that is the part worth keeping:**
+# --- the beasts ashore. Parallel columns, indexed by the order they stepped off a boat -------------
+## ⚠⚠ **A ROW IS NEVER REMOVED.** `enemy_alive` flips to 0 and the row stays where it is forever, the
+## same contract `Army` keeps and for the same reason: an index is an identity, and `grid.reserved`,
+## `soldier_target` and the view all hold indices. **Compacting would renumber every one of them at
+## once, silently.**
 ##
-##  · **The telegraph was per-body STATE, not an event.** `enemy_windup` counted down for the whole
+## ⚠⚠ **ELEVEN COLUMNS STOOD HERE BEFORE 2026-08-29 AND SEVEN COME BACK.** The four that do not are the
+## telegraph's (`windup`, `windup_at`), the splash's, and `_enemy_home_level`. **The last one is a
+## decision and not an omission**, and it is the one to read before anything is added here:
+##
+##  · **Only a body that STARTED high held its storey**, read off its spawn 조각 at setup. Enemies walk
+##    at one thing and nothing else, so the ones posted on a plateau walked down their own stair and
+##    died on the flat — **measured in play: most WON fights never sent anyone up the stairs, because
+##    the defenders came down.** ⚠ Giving EVERY body a holding behaviour is the failure on the other
+##    side: then the fight never comes to the player at all.
+##  · ⚠⚠ **NOTHING STARTS HIGH THIS ROUND.** Every beast arrives by boat and steps off at the water's
+##    edge, so the column would be 0 on every row and `keep_level` is passed as -1 at the one call site
+##    that could use it. **A column that can only ever hold one value is a branch nobody can test**, so
+##    it is written down here rather than built. The day something is posted on a plateau, this is the
+##    paragraph to read first.
+##  · **The telegraph was per-body STATE and not an event.** `enemy_windup` counted down for the whole
 ##    length the view had to draw, and an event plus a view-side clock is a second copy of that
-##    countdown. **Two clocks drift.**
-##  · **The declared blow was re-checked against `enemy_windup_at`, not against the current target**,
-##    so the ring the view drew and the damage that landed could never name two different bodies.
-##
-## ⚠ **`_enemy_home_level` is the one to read before rebuilding**: only a defender that STARTED high
-## held its storey. Enemies walk at the nearest body and nothing else, so the ones posted on a plateau
-## walked down their own stair and died on the flat — **measured in play: most WON fights never sent
-## anyone up the stairs, because the defenders came down.** ⚠ Giving EVERY enemy a holding behaviour
-## is the failure on the other side: then the fight never comes to the player at all.
+##    countdown — **two clocks drift.** There is no heavy attack in this game yet.
+var enemy_type := PackedInt32Array()
+var enemy_hp := PackedFloat32Array()
+var enemy_alive := PackedByteArray()
+var enemy_pos: Array = []                 # Vector2, tile units
+## A 검사's id, or `TARGET_KEEP`, or `TARGET_NONE`. **Re-chosen every sub-step** — see `_phase_targeting`.
+var enemy_target := PackedInt32Array()
+## Seconds until this body may swing again. **0 means ready**, and a body that has just landed is ready:
+## the first blow does not wait a period. ⚠ 티켓 41's 「6 타 7.2 초」 column is the arithmetic for a body
+## that waits one first, and the ticket marks that column as arithmetic rather than play.
+var enemy_cool := PackedFloat32Array()
+var _enemy_goal: Array = []
+var _enemy_stale := PackedByteArray()
 
 # --- soldiers. Indexed by ARMY id, so index i is the same soldier here and in `army` --------------
 var soldier_state := PackedInt32Array()
@@ -120,6 +161,35 @@ var _soldier_path: Array = []
 var _soldier_path_i: Array = []
 var _soldier_goal: Array = []
 var _soldier_stale := PackedByteArray()
+## **A 검사's live HP, and it lives HERE and not on `Army`.**
+##
+## ⚠⚠ **THAT IS THE REVIVAL, NOT AN OVERSIGHT** (2026-08-30). A wound used to have to survive islands
+## because death was permanent; **a body stands again at the 성채 after `Rules.REVIVE_SEC`**, so a wound
+## cannot outlive the island it was taken on. `Army.max_hp_of` is what a body is born and healed to.
+var soldier_hp := PackedFloat32Array()
+## The beast index this body is hitting, or `TARGET_NONE`. ⚠ **Never `TARGET_KEEP`** — the 성채 is his.
+var soldier_target := PackedInt32Array()
+## Seconds until this body may swing again. See `enemy_cool` for why 0 means ready.
+var soldier_cool := PackedFloat32Array()
+## Seconds until a DEAD body stands again at the 성채. **Only read while `soldier_state` is DEAD.**
+var soldier_revive := PackedFloat32Array()
+
+# --- the 성채, and the only way this island is lost ------------------------------------------------
+## Every 조각 the 성채 covers, handed in by `setup` from the island file. **Empty is a real board**: a
+## fixture with no house cannot be lost and nothing musters on it.
+var keep_tiles := PackedInt32Array()
+var keep_hp := 0.0
+## **Where a 검사 appears — at the opening and again after he dies.** -1 for a board with no 성채.
+##
+## ⚠⚠ **IT IS THE DOORSTEP AND NOT THE HOUSE, AND IT IS ONE FIELD BECAUSE THE TWO EVENTS ARE ONE RULE.**
+## The opening watch used to be stood by `Run` off the island file and a revival would have been stood
+## here off `keep_tiles`, which is **two answers to 「where does a 검사 appear」** — and they would have
+## disagreed the first time the 성채 moved off level ground, one body on the plateau and one below it.
+var muster_tile := -1
+## **The island's verdict, and this week there is exactly one.** 티켓 41: 「이기는 조건 — 이번 주에
+## 없다」, so there is no `Outcome` enum and no WON. ⚠ **A one-member enum every reader compares against
+## is a branch that always takes the same arm**, which is the shape `Run` was caught carrying twice.
+var lost := false
 ## False until `commit()`. **`step()` refuses to do anything at all while it is false.**
 ## Whole sub-steps only: `step` adds `dt` here and consumes `Rules.SIM_SUBSTEP_SEC` at a time, so the
 ## decomposition is additive over ANY sequence of `dt`s and a 6x run lands on the same state as a 1x
@@ -157,8 +227,9 @@ var boat_beach := PackedInt32Array()
 ## derivation.
 var boat_stop: Array = []                 # Vector2, tile units
 var boat_state := PackedInt32Array()      # BoatState
-## How many are aboard. ⚠ **A COUNT AND NOT BODIES**: nothing in `army` or in `grid.reserved` knows
-## about a rider, which is what 「아직 아무도 안 내렸다」 means. Unloading is 목~일.
+## **How many are still aboard.** ⚠ **A COUNT AND NOT BODIES**: a rider is nowhere in `grid.reserved`
+## until it steps off, and `_phase_landings` is what turns one into a row of the beast columns. **It
+## only ever goes down**, and a hull that reaches 0 keeps sitting where it stopped.
 var boat_riders := PackedInt32Array()
 
 ## Where in `grid.beach_ring` the NEXT boat's 조각 comes from, already taken modulo the ring size.
@@ -179,11 +250,18 @@ var _field_age := {}                      # target tile -> seconds since it was 
 ## afterwards would leave every enemy standing on a tile anyone may walk into.
 ##
 ## `spawns` is `islands.gd`'s `spawns_of` output: `[{"type_id": int, "tile": int}]`.
+##
+## ⚠⚠ **`keep` AND `muster` BOTH DEFAULT TO 「there is none」, AND THAT IS A REAL BOARD RATHER THAN A
+## CONVENIENCE.** Every net fixture in this repo but one hands this file a hand-drawn rectangle with no
+## house on it; **an island with no 성채 cannot be lost and musters nobody**, which is what those
+## fixtures are entitled to. `Run` is the caller that has both, and it reads them off the island file.
 @warning_ignore("shadowed_variable")
-func setup(grid: Grid, army: Army, spawns: Array) -> void:
+func setup(grid: Grid, army: Army, spawns: Array,
+		keep: PackedInt32Array = PackedInt32Array(), muster: int = -1) -> void:
 	self.grid = grid
 	self.army = army
 	elapsed = 0.0
+	lost = false
 	_fields = {}
 	_field_age = {}
 	# Every time. A `Battle` is reused across islands, and a leftover `_substep_acc` is a fraction of
@@ -202,6 +280,21 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 	_beach_cursor = 0
 	_boats_launched = 0
 
+	# Every time, for the same reason the hulls are: a reused `Battle` carrying the previous island's
+	# beasts would open the next one with the last one's 늑대 already ashore.
+	enemy_type = PackedInt32Array()
+	enemy_hp = PackedFloat32Array()
+	enemy_alive = PackedByteArray()
+	enemy_pos = []
+	enemy_target = PackedInt32Array()
+	enemy_cool = PackedFloat32Array()
+	_enemy_goal = []
+	_enemy_stale = PackedByteArray()
+
+	keep_tiles = keep
+	muster_tile = muster
+	keep_hp = 0.0 if keep.is_empty() else Rules.KEEP_MAX_HP
+
 	if grid == null or grid.w <= 0 or grid.h <= 0:
 		# Not swallowed: a battle on an unloaded grid has no tiles, so every unit would stand still
 		# for the whole island and the round would read as "nothing happened" with nothing to point
@@ -216,6 +309,19 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 	# is kept because `Islands.spawns()` and the board's spawn letters are untouched, and the day
 	# bodies come back this is where they land.
 
+	# ⚠⚠ **THE HOUSE HOLDS ITS OWN 조각, AND THAT IS WHAT KEEPS EVERYTHING OUT OF IT.** Nothing marks a
+	# building impassable, so without this a mustering 검사, a 늑대 stepping off a boat and a body
+	# walking past all have to carry their own rule about buildings — three copies, and the island opens
+	# looking empty the first time one of them is forgotten. **See `KEEP_UID`.**
+	# ⚠ **After the boat and enemy resets and before anything is placed**: `load_rows` clears the
+	# reservation table, so this must not run before whoever called it.
+	# ⚠⚠ **`grid.fill` AND NOT `grid.hold`, SINCE 2026-08-30.** A 조각 admits `Rules.TILE_CAPACITY`
+	# bodies now, so a house holding ONE slot would leave the rest free and every body on the island
+	# would walk into it — **a building takes the whole 조각 or it is not a wall.**
+	if not keep_tiles.is_empty():
+		for k in keep_tiles.size():
+			grid.fill(KEEP_UID, int(keep_tiles[k]))
+
 	var roster := army.type_id.size()
 	soldier_state = PackedInt32Array()
 	soldier_state.resize(roster)
@@ -223,6 +329,14 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 	soldier_order.resize(roster)
 	_soldier_stale = PackedByteArray()
 	_soldier_stale.resize(roster)
+	soldier_hp = PackedFloat32Array()
+	soldier_hp.resize(roster)
+	soldier_target = PackedInt32Array()
+	soldier_target.resize(roster)
+	soldier_cool = PackedFloat32Array()
+	soldier_cool.resize(roster)
+	soldier_revive = PackedFloat32Array()
+	soldier_revive.resize(roster)
 	# resize on a fresh array zero-fills, so nobody has charged yet. **Per island for free**: a
 	# `Battle` is new every island, so 「몸당 섬당 한 번」 needs no reset anywhere else.
 	soldier_pos = []
@@ -236,6 +350,12 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 		soldier_state[i] = SoldierState.RESERVE if army.alive[i] != 0 else SoldierState.DEAD
 		soldier_order[i] = -1
 		_soldier_stale[i] = 0
+		# ⚠ **Zero until he stands.** `place_ashore` is the one writer of a full bar — see its header:
+		# a body that stands on the island stands whole, and there is exactly one door onto the island.
+		soldier_hp[i] = 0.0
+		soldier_target[i] = TARGET_NONE
+		soldier_cool[i] = 0.0
+		soldier_revive[i] = 0.0
 		soldier_pos.append(OFFMAP)
 		_soldier_goal.append(OFFMAP)
 		_soldier_path.append(PackedInt32Array())
@@ -336,6 +456,13 @@ func step(dt: float) -> void:
 		return
 	if dt <= 0.0:
 		return
+	# ⚠⚠ **A LOST ISLAND STOPS ACCUMULATING, AND THIS IS A PER-CALL FACT LIKE THE TWO ABOVE IT.** The
+	# sub-step loop below breaks on the same flag, and the two are NOT a duplicate: that one stops the
+	# five phases after the 성채 falls **within the frame it fell in**, this one stops `_substep_acc`
+	# growing without bound for the rest of the session. Delete this and the clock stays still while the
+	# leftover creeps up, so a later change that clears `lost` would run a hundred sub-steps at once.
+	if lost:
+		return
 	_substep_acc += dt
 	while _substep_acc >= Rules.SIM_SUBSTEP_SEC:
 		_substep_acc -= Rules.SIM_SUBSTEP_SEC
@@ -346,19 +473,40 @@ func step(dt: float) -> void:
 		# ⚠ **Advanced by the SUB-STEP and never by `dt`** — the whole point of the decomposition is
 		# that the same simulated second costs the same number of passes whatever `dt` arrives.
 		elapsed += Rules.SIM_SUBSTEP_SEC
-		# ⚠⚠ **SIX PHASES STOOD HERE AND TWO ARE LEFT** (2026-08-29). Targeting, attacks, deaths and
-		# the verdict went with the fight, and the `_committed` gate that used to hold them back went
-		# with them. **The order the survivors keep is still the contract**: orders move a body, then
-		# movement finishes whatever 조각 anyone was mid-way across.
-		# ⚠ **`_phase_orders` runs BEFORE `_phase_movement` and `_phase_movement` skips whoever it
-		# moved** — falling through walks one body twice in a sub-step, at double speed.
-		# ⚠ **Boats sit BETWEEN the two**, which is where the crossing phase always sat: a hull that
-		# reaches the shore on this sub-step is at the shore for the rest of it. Nothing lands yet, so
-		# the order buys nothing today — it is written now so the day landings return they do not have
-		# to be inserted into an order somebody else chose.
+		# ⚠⚠ **THE ORDER IS A CONTRACT AND NOT AN IMPLEMENTATION DETAIL**, and every line of it was
+		# paid for once:
+		#
+		#  · **Orders before movement, and movement skips whoever orders moved** — falling through
+		#    walks one body twice in a sub-step, at double speed and toward two different places.
+		#  · **Boats before landings**, so a hull that reaches the shore on this sub-step unloads on
+		#    this sub-step rather than on the next one.
+		#  · **Landings before targeting**, so a 늑대 that steps off is in the fight the moment it is
+		#    standing rather than a sub-step behind everything else.
+		#  · **Targeting before movement**, because 「something is in reach」 is what stops a body
+		#    walking. Chosen at the position it is standing in, and re-checked in `_phase_attacks`
+		#    against the position it ends the sub-step in — **the choice and the blow are different
+		#    questions and a body may move between them.**
+		#  · ⚠⚠ **ATTACKS BEFORE DEATHS.** Two bodies that finish each other off both land their blow;
+		#    resolved together, whichever the loop reaches first gets a **free kill, and a free kill is
+		#    invisible in final state.**
+		#  · **The muster last**, so a body that died this sub-step starts its own clock this sub-step
+		#    and not on the next one.
 		_phase_orders(Rules.SIM_SUBSTEP_SEC)
 		_phase_boats(Rules.SIM_SUBSTEP_SEC)
+		_phase_landings()
+		_phase_targeting()
 		_phase_movement(Rules.SIM_SUBSTEP_SEC)
+		_phase_attacks(Rules.SIM_SUBSTEP_SEC)
+		_phase_deaths()
+		_phase_muster(Rules.SIM_SUBSTEP_SEC)
+		# ⚠⚠ **THE VERDICT IS LAST AND IT BREAKS.** Hoisted out of the loop, a 성채 that fell on
+		# sub-step 3 of 6 would let 4, 5 and 6 keep swinging — bodies dying after the run was already
+		# over, and only at a big `dt`. ⚠ **The floor is `keep_tiles`, not `keep_hp`**: a board with no
+		# house sits at 0 HP forever and would otherwise be lost on its first frame.
+		if not keep_tiles.is_empty() and keep_hp <= 0.0:
+			keep_hp = 0.0
+			lost = true
+			break
 
 
 ## **Stands one body on the island with no boat and no crossing.** Returns the tile it took, or -1.
@@ -392,11 +540,58 @@ func place_ashore(soldier_id: int, near_tile: int) -> int:
 	soldier_pos[soldier_id] = here
 	_soldier_goal[soldier_id] = here
 	_soldier_stale[soldier_id] = 0
+	# ⚠⚠ **A BODY THAT STANDS ON THE ISLAND STANDS WHOLE, AND THIS IS THE ONE PLACE THAT IS TRUE.**
+	# The opening watch and a revival are the same call, so a wound healed in one and not the other is
+	# not a shape this file can have. **`soldier_hp` is 0 until this line runs** — see `setup`.
+	soldier_hp[soldier_id] = army.max_hp_of(soldier_id)
+	soldier_target[soldier_id] = TARGET_NONE
+	soldier_cool[soldier_id] = 0.0
+	soldier_revive[soldier_id] = 0.0
 	_clear_path(soldier_id)
-	var claimed := grid.reserved
-	claimed[tile] = soldier_id
-	grid.reserved = claimed
+	grid.hold(soldier_id, tile)
 	return tile
+
+
+## **Stands one 검사 at the 성채's doorstep** — the opening watch and every revival, through one call.
+## Returns the 조각 he took, or -1.
+##
+## ⚠ **-1 is a real answer and not an error.** A board with no 성채 has no doorstep, and a doorstep with
+## nothing free beside it is a house nobody can come out of — both are boards, and both are silent here
+## on purpose. `_phase_muster` retries on the next sub-step rather than losing the body.
+func stand_at_keep(soldier_id: int) -> int:
+	if muster_tile < 0:
+		return -1
+	return place_ashore(soldier_id, muster_tile)
+
+
+## **Puts one beast on the island at the nearest free 조각 to `near_tile`.** Returns its index, or -1
+## when there is nowhere to stand. ⚠ **The index is an identity for the rest of the island** — rows are
+## never removed, see the column block above.
+##
+## ⚠ **The same search a 검사 lands through**, so a house standing on the aimed 조각 puts the body
+## beside it rather than inside it, and two beasts can never take one 조각: each reserves before the
+## next one searches.
+func land_beast(type_id: int, near_tile: int) -> int:
+	if grid == null:
+		return -1
+	if type_id < 0 or type_id >= Rules.UNITS.size():
+		return -1
+	var spots := _free_tiles_from(near_tile, 1)
+	if spots.is_empty():
+		return -1
+	var tile := int(spots[0])
+	var here := _point_of_tile(tile)
+	var e := enemy_type.size()
+	enemy_type.append(type_id)
+	enemy_hp.append(Rules.hp_of(type_id))
+	enemy_alive.append(1)
+	enemy_pos.append(here)
+	enemy_target.append(TARGET_NONE)
+	enemy_cool.append(0.0)
+	_enemy_goal.append(here)
+	_enemy_stale.append(0)
+	grid.hold(ENEMY_UID_BASE + e, tile)
+	return e
 
 
 ## **The player tells one body to go and stand on a tile.** Returns false and changes nothing if the
@@ -453,19 +648,39 @@ func ashore_ids() -> Array:
 	return out
 
 
+## Beasts standing on the island right now, as indices. **The dead rows stay in the columns and are not
+## in here** — the view draws this and nothing else, so a corpse cannot be left on screen.
+func living_enemy_ids() -> Array:
+	var out := []
+	for e in enemy_alive.size():
+		if enemy_alive[e] != 0:
+			out.append(e)
+	return out
+
+
+## **How far `p` is from the nearest 조각 of the 성채, height included.** `INF` for a board with none.
+##
+## ⚠⚠ **THE NEAREST 조각 AND NOT THE LOW CORNER.** A house is a footprint, and a reach measured to one
+## corner lets a body stand against the far wall swinging at nothing — the same 「a mean is not a place
+## anybody stands」 trap `_dist`'s own header records.
+func keep_gap(p: Vector2) -> float:
+	var best := INF
+	for k in keep_tiles.size():
+		var tile := int(keep_tiles[k])
+		best = minf(best, _dist(p, _point_of_tile(tile)))
+	return best
+
+
 
 # --- phases --------------------------------------------------------------------------------------
 
 ## Boat crossings, both legs. Soldiers aboard an OUTBOUND boat are dragged along with it so an enemy
 ## on the coast can target them where the boat actually is; a RETURNING boat carries nobody, so the
-## ⚠⚠ **`_phase_boats` · `_phase_landings` · `_arrived` · `_try_unload` STOOD HERE AND ALL FOUR ARE
-## DELETED** (2026-08-29) with `boats`, `_next_boat_uid`, `Phase`, `SoldierState.TRANSIT` and the whole
-## water half of `grid.gd`. **The player stopped placing boats on 2026-08-28 and `summon` lost its last
-## caller with it**, so nothing ever appended a hull and every crossing phase walked an empty array.
-## **Boats come back on the BEASTS' side and they get built then**, not resurrected — the user,
-## 2026-08-29: 그때 만드는 게 맞을듯.
+## ⚠⚠ **THE PLAYER'S CROSSING WAS DELETED 2026-08-29 AND THE BEASTS' WAS BUILT 2026-08-30**, not
+## resurrected — the user, 2026-08-29: 그때 만드는 게 맞을듯. `_phase_boats` and `_phase_landings` above
+## are the beasts', and `boats`, `_next_boat_uid`, `Phase` and `SoldierState.TRANSIT` are still gone.
 ##
-## ⚠⚠ **WHAT THE CROSSING KNEW, each line a defect that was paid for once:**
+## ⚠⚠ **WHAT THE PLAYER'S CROSSING KNEW, each line a defect that was paid for once:**
 ##
 ##  · **A soldier aboard an outbound boat was `is_hittable` and shared the boat's position**, so a
 ##    crow could already hit one and the tracer had somewhere to land. A crossing that is untargetable
@@ -500,7 +715,7 @@ func _phase_orders(dt: float) -> void:
 				_soldier_stale[i] = 0
 			continue
 		soldier_pos[i] = _walk(i, was, _soldier_goal, i, army.speed_of(i) * dt,
-				_field_for(dest_tile), dest, 0.0, -1, dest_tile)
+				_field_for(dest_tile), dest, 0.0, _soldier_path, _soldier_path_i, -1, dest_tile)
 		_soldier_stale[i] = 1
 		# Stuck: it did not move AND it is not part-way across a tile it still has to finish.
 		if soldier_pos[i].distance_to(was) <= Rules.EPS 				and was.distance_to(_soldier_goal[i]) <= Rules.EPS:
@@ -595,6 +810,63 @@ func _launch_if_due() -> void:
 	boat_riders.append(Rules.BOAT_CAPACITY)
 
 
+## **An arrived boat puts its riders on the beach.**
+##
+## ⚠⚠ **ONE AT A TIME THROUGH `land_beast`, AND THAT IS WHAT MAKES 「한 조각에 하나」 STRUCTURAL.** Each
+## body reserves the 조각 it takes before the next one searches, so two riders cannot be handed the same
+## answer — there is no separate rule saying they must not, and so no rule to forget.
+##
+## ⚠ **A full beach leaves the rest aboard rather than piling them up or dropping them.** The search
+## walks over occupied 조각 and collects free ones, so a crowded shore unloads over several sub-steps;
+## a beach with nothing free at all keeps its riders, and they come off when something moves.
+##
+## ⚠ **An emptied boat is not removed.** Nothing erases a hull this round — 티켓 41: 「배는 쌓인다」 —
+## and an erase would renumber every index the view is holding.
+func _phase_landings() -> void:
+	for i in boat_pos.size():
+		if int(boat_state[i]) != BoatState.ARRIVED:
+			continue
+		while int(boat_riders[i]) > 0:
+			if land_beast(Rules.BOAT_RIDER_TYPE, int(boat_beach[i])) < 0:
+				break
+			boat_riders[i] = int(boat_riders[i]) - 1
+
+
+## **Who each body is hitting, decided fresh every sub-step.**
+##
+## ⚠⚠ **RE-CHOSEN AND NOT KEPT, WHICH IS A SIMPLIFICATION OF THE DELETED RULE AND IS WRITTEN DOWN AS
+## ONE.** The old fight kept a target while it was alive AND in reach, and re-chose the moment either
+## failed. **Re-choosing every sub-step is the same answer** — the predicate is exactly 「alive and in
+## reach」 and nothing here is sticky — and it is one rule instead of two that have to agree. ⚠ It stops
+## being the same answer the day a blow has a wind-up: a declaration has to survive the body drifting
+## out of reach, and that is the paragraph to read when the lion's telegraph comes back.
+##
+## ⚠⚠ **A 검사 IN REACH BEATS THE 성채.** A 늑대 walks at the house and swings at whatever gets between,
+## so a defender who has closed is what it is fighting — and without this order eight 늑대 would stand
+## in a line of swordsmen hammering the wall behind them.
+##
+## ⚠ **A 검사 never targets the 성채.** It is his.
+func _phase_targeting() -> void:
+	for i in soldier_state.size():
+		if int(soldier_state[i]) != SoldierState.ASHORE:
+			soldier_target[i] = TARGET_NONE
+			continue
+		soldier_target[i] = _nearest_enemy(soldier_pos[i], army.reach_of(i))
+
+	for e in enemy_type.size():
+		if enemy_alive[e] == 0:
+			enemy_target[e] = TARGET_NONE
+			continue
+		var reach := Rules.reach_of(int(enemy_type[e]))
+		var who := _nearest_soldier(enemy_pos[e], reach)
+		if who >= 0:
+			enemy_target[e] = who
+		elif keep_gap(enemy_pos[e]) <= reach + Rules.EPS:
+			enemy_target[e] = TARGET_KEEP
+		else:
+			enemy_target[e] = TARGET_NONE
+
+
 ## Everyone walks toward their target and **stops the instant it is in reach**. Without that one
 ## rule a range-4 soldier walks all the way into melee and the ranged type stops existing; the plan
 ## measured it moving island 3's damage taken by 30%.
@@ -623,38 +895,173 @@ func _phase_movement(dt: float) -> void:
 			_settle(i, goal)
 			_soldier_stale[i] = 0
 
+	# ⚠⚠ **THE BEASTS WALK AT THE 성채 AND AT NOTHING ELSE**, which is 티켓 41's 「늑대가 무엇을 향해
+	# 걷나 — 성채」 whole. **They do not chase a 검사**: a body in reach stops them, and a body out of
+	# reach is something they walk past. ⚠ That is the ticket's rule and not a simplification of a
+	# richer one — there is no detect radius in this path, and `UNITS`' detect column has no reader.
+	# ⚠ **`keep_level` is -1 for every one of them.** Nothing starts high this round — see the column
+	# block at the top of this file for why that is a decision rather than a gap.
+	var anchor := -1 if keep_tiles.is_empty() else int(keep_tiles[0])
+	for e in enemy_type.size():
+		if enemy_alive[e] == 0:
+			continue
+		var speed := Rules.speed_of(int(enemy_type[e])) * dt
+		var here: Vector2 = enemy_pos[e]
+		var e_goal: Vector2 = _enemy_goal[e]
+		# **Something is in reach, or there is nowhere to be**: finish the 조각 already reserved, then
+		# stand. ⚠ **Finishing it is not tidiness** — stopping mid-조각 holds BOTH for the rest of the
+		# island, which halves a doorway with nothing on screen to explain it.
+		if int(enemy_target[e]) != TARGET_NONE or anchor < 0:
+			if here.distance_to(e_goal) > Rules.EPS:
+				enemy_pos[e] = _glide(here, e_goal, speed)
+			elif _enemy_stale[e] != 0:
+				_settle(ENEMY_UID_BASE + e, e_goal)
+				_enemy_stale[e] = 0
+			continue
+		# ⚠ **Empty route columns.** A beast is never ordered, so it has no straightened route to walk —
+		# it descends the field, which is what `_next_goal` falls back to.
+		enemy_pos[e] = _walk(ENEMY_UID_BASE + e, here, _enemy_goal, e, speed,
+				_field_for(anchor), _point_of_tile(anchor), Rules.reach_of(int(enemy_type[e])),
+				[], [], -1, anchor)
+		_enemy_stale[e] = 1
 
-## --- THE FIGHT: DELETED 2026-08-29 ----------------------------------------------------------------
-## ***"그냥 지워도됨 아직 전투 전혀 없어"*** (the user, 2026-08-29, asked twice)
+
+## --- THE FIGHT --------------------------------------------------------------------------------------
+## ⚠⚠ **DELETED 2026-08-29, REBUILT 2026-08-30** (티켓 41's 목~일 slice). The user deleted it because
+## nothing could reach it — ***"그냥 지워도됨 아직 전투 전혀 없어"*** — and what reaches it now is a boat
+## that lands 늑대.
 ##
-## **`_phase_targeting` · `_phase_attacks` · `_windup_of` · `_hit_enemies` · `_hit_soldiers` ·
-## `_phase_deaths` · `_phase_clock` · `_the_landing_force_is_gone` stood here and all eight are gone**,
-## with every `enemy_*` column, `Outcome`, `Lose`, `events`, `commit` and the verdict.
+## **Four of the lessons the deleted block carried are honoured in the code above and below**: damage
+## and death in different phases, deaths latching in the SAME sub-step as the blow, nothing holding a
+## storey it did not start on, and a verdict that needs a 성채 to be about. **Three are NOT built and are
+## kept here rather than pretended:**
 ##
-## ⚠⚠ **IT HAD NEVER RUN IN THE SHIPPED GAME.** The island file carries no spawn letters, so there was
-## nothing to fight, and every phase above sat behind a `_committed` gate whose only caller — the start
-## button — was deleted 2026-08-28. **What the user saw was a swordsman walking, and nothing else.**
+##  · **The heavy attack was TELEGRAPHED** — the lion declared its blow 0.6 s ahead, as per-body state
+##    the view drew for its whole length. **A dead attacker's declaration dies with it**, or the view
+##    keeps drawing a telegraph over a corpse. **There is no wind-up in this game today**: a body swings
+##    the sub-step it comes into reach.
+##  · **A blow's victims were resolved ONCE** — the primary and the splash list — and every effect read
+##    that one list. **There is no splash today**: `UNITS`' area column has no reader, and the two rows
+##    that carry one (곰 · 사자) are not in this fight.
+##  · **WON was checked before either loss.** 티켓 41: 「이기는 조건 — 이번 주에 없다」, so there is one
+##    verdict and nothing to order it against.
+
+
+## **The blows, and the cooldown that spaces them.**
 ##
-## ⚠⚠ **WHAT A REBUILT FIGHT OWES, each line a defect that was paid for once:**
+## ⚠⚠ **REACH IS RE-CHECKED HERE AND NOT INHERITED FROM `_phase_targeting`.** Movement runs between the
+## two, so a body may have finished a 조각 and drifted out of the reach the choice was made in — landing
+## the blow anyway is a hit from further than the rule allows, on every frame, invisibly.
 ##
-##  · **Damage lands in one phase and death latches in a LATER one.** A body reduced to 0 by an earlier
-##    attacker in the same phase still swings; otherwise whoever the loop reached first gets a free
-##    kill, and a free kill is invisible in final state.
-##  · **Deaths latch in the SAME sub-step as the blow**, never a frame later, or a corpse stands at
-##    zero HP for a frame.
-##  · **A target is kept while it is alive AND in reach**, and re-chosen the moment either fails.
-##  · **The heavy attack is TELEGRAPHED**: the lion declared its blow 0.6 s ahead, and the declaration
-##    was per-body state the view could draw. **A dead attacker's declaration dies with it**, or the
-##    view keeps drawing a telegraph over a corpse for the rest of the island.
-##  · **A blow's victims are resolved ONCE** — the primary and the splash list — and every effect reads
-##    that one list. Walking the radius a second time lights up bodies that were already dead.
-##  · **An enemy posted high HOLDS its storey.** It was read off the spawn 조각 at setup, so a body
-##    somehow moved later still holds the storey it was placed to hold. **Making every body hold its
-##    post is the failure on the other side** — then the fight never comes to the player.
-##  · **WON is checked before either loss**, so an island cleared on the same sub-step the last body
-##    dies is a win.
-##  · ⚠ **The verdict needs something to be about.** A commit with no enemies on the board reads as a
-##    win on the first frame — that is why the gate was kept the whole time the fight was unreachable.
+## ⚠⚠ **0 IS READY AND A BODY THAT HAS JUST ARRIVED IS READY.** The alternative is a period of dead time
+## at every contact, and 「붙어서 가만히 있으면 재미가 죽는다」 is the user's line about exactly that.
+## ⚠ **The ready test carries `EPS` rather than being `<= 0.0`.** The clock is a sum of sub-steps against
+## a period that divides it exactly, so the last bit decides whether a blow lands on the 60th sub-step or
+## the 61st — and a bare comparison there is a coin flip that changes an outcome.
+func _phase_attacks(dt: float) -> void:
+	for i in soldier_state.size():
+		if int(soldier_state[i]) != SoldierState.ASHORE:
+			continue
+		soldier_cool[i] = maxf(float(soldier_cool[i]) - dt, 0.0)
+		var tgt := int(soldier_target[i])
+		if tgt < 0 or float(soldier_cool[i]) > Rules.EPS:
+			continue
+		if enemy_alive[tgt] == 0:
+			continue
+		if _dist(soldier_pos[i], enemy_pos[tgt]) > army.reach_of(i) + Rules.EPS:
+			continue
+		enemy_hp[tgt] = float(enemy_hp[tgt]) - army.damage_of(i)
+		soldier_cool[i] = army.period_of(i)
+
+	for e in enemy_type.size():
+		if enemy_alive[e] == 0:
+			continue
+		enemy_cool[e] = maxf(float(enemy_cool[e]) - dt, 0.0)
+		var etgt := int(enemy_target[e])
+		if etgt == TARGET_NONE or float(enemy_cool[e]) > Rules.EPS:
+			continue
+		var ty := int(enemy_type[e])
+		var reach := Rules.reach_of(ty)
+		if etgt == TARGET_KEEP:
+			if keep_gap(enemy_pos[e]) > reach + Rules.EPS:
+				continue
+			keep_hp -= Rules.damage_of(ty)
+		else:
+			if int(soldier_state[etgt]) != SoldierState.ASHORE:
+				continue
+			if _dist(enemy_pos[e], soldier_pos[etgt]) > reach + Rules.EPS:
+				continue
+			soldier_hp[etgt] = float(soldier_hp[etgt]) - Rules.damage_of(ty)
+		enemy_cool[e] = Rules.period_of(ty)
+
+
+## **Everything at or below 0 HP dies, in the sub-step the blow landed and in a phase of its own.**
+##
+## ⚠⚠ **THE ROW STAYS.** `enemy_alive` flips to 0 and the index keeps naming the same body forever —
+## `grid.reserved`, the target columns and the view all hold indices, and compacting renumbers every one
+## of them with nothing to bark about it.
+##
+## ⚠⚠ **A CORPSE LETS GO OF ITS 조각 AND EVERY POINTER AT IT IS CLEARED IN THE SAME PLACE.** Four things
+## move together here and three of them are invisible: the reservation, the target columns naming the
+## dead body, the drifting goal, and the position. **Leaving the goal set is what makes a body slide
+## toward (-1,-1) at walking speed** — measured once, and `place_ashore`'s header still records it.
+func _phase_deaths() -> void:
+	for e in enemy_type.size():
+		if enemy_alive[e] == 0 or float(enemy_hp[e]) > 0.0:
+			continue
+		enemy_alive[e] = 0
+		enemy_hp[e] = 0.0
+		enemy_target[e] = TARGET_NONE
+		_enemy_stale[e] = 0
+		grid.release_all(ENEMY_UID_BASE + e)
+		enemy_pos[e] = OFFMAP
+		_enemy_goal[e] = OFFMAP
+		for i in soldier_target.size():
+			if int(soldier_target[i]) == e:
+				soldier_target[i] = TARGET_NONE
+
+	for i in soldier_state.size():
+		if int(soldier_state[i]) != SoldierState.ASHORE or float(soldier_hp[i]) > 0.0:
+			continue
+		soldier_hp[i] = 0.0
+		soldier_state[i] = SoldierState.DEAD
+		soldier_order[i] = -1
+		soldier_target[i] = TARGET_NONE
+		_soldier_stale[i] = 0
+		_clear_path(i)
+		grid.release_all(i)
+		soldier_pos[i] = OFFMAP
+		_soldier_goal[i] = OFFMAP
+		soldier_revive[i] = Rules.REVIVE_SEC
+		for e2 in enemy_target.size():
+			if int(enemy_target[e2]) == i:
+				enemy_target[e2] = TARGET_NONE
+
+
+## **A dead 검사 counts down and stands again at the 성채.**
+##
+## ⚠⚠ **「죽으면 영영 죽는다」 WAS OVERTURNED 2026-08-30** — the user weighed both and chose revival.
+## **Death is a loss of TIME now**, and `Rules.REVIVE_SEC` is the whole of what it costs.
+##
+## ⚠⚠ **`army.alive` IS STILL READ AND IT IS NOT THE SAME QUESTION.** A body the ROSTER killed is dead
+## across islands and is not coming back; `setup` puts one straight into DEAD, and without this line it
+## would muster itself on the first sub-step of every island afterwards.
+##
+## ⚠ **Nowhere to stand is a retry, not a loss.** `stand_at_keep` answers -1 for a board with no 성채 and
+## for a doorstep with nothing free beside it — the second is temporary, so the body stays DEAD at zero
+## on the clock and tries again next sub-step.
+func _phase_muster(dt: float) -> void:
+	for i in soldier_state.size():
+		if int(soldier_state[i]) != SoldierState.DEAD:
+			continue
+		if army.alive[i] == 0:
+			continue
+		soldier_revive[i] = maxf(float(soldier_revive[i]) - dt, 0.0)
+		if float(soldier_revive[i]) > Rules.EPS:
+			continue
+		soldier_state[i] = SoldierState.RESERVE
+		if stand_at_keep(i) < 0:
+			soldier_state[i] = SoldierState.DEAD
 ## --- THE SHOVE AND THE CHARGE: DELETED 2026-08-27 --------------------------------------------------
 ## `_shove_victims`, `_shove` and the `_charged` column are gone with `Rules.SPECIES_SHOVE`. The table
 ## had been `[]` since 2026-08-26: its two rows were 다람쥐's pull and 소's charge, and both species
@@ -730,8 +1137,16 @@ func _phase_movement(dt: float) -> void:
 ## high ground. See `_enemy_home_level`.
 ## `target_tile` is the 조각 `field` was built from; it reaches `step_toward`'s tie-break so an equal-cost
 ## step goes along the line to the goal rather than off it.
+## ⚠⚠ **`paths` AND `path_is` ARE PARAMETERS AND THEY USED TO BE READ STRAIGHT OFF `_soldier_path`**
+## (fixed 2026-08-30). `goals` was already an argument because a `PackedVector2Array` written through one
+## lands in a copy — but the ROUTE was reached for by name, so this function only worked for a 검사.
+## **The first beast that walked indexed the 검사 columns and went out of bounds**, and it did it inside
+## `_phase_movement` where a `push_error` is not a stop: the round filled with backtraces and timed out.
+## ⇒ **A caller with no straightened route hands in empty arrays**, and 「no route」 is then a fact about
+## the argument rather than about which side is calling.
 func _walk(uid: int, pos: Vector2, goals: Array, gi: int, step_len: float,
 		field: PackedInt32Array, stop_at: Vector2, stop_dist: float,
+		paths: Array, path_is: Array,
 		keep_level: int = -1, target_tile: int = -1) -> Vector2:
 	var remaining := step_len
 	var guard := 0
@@ -752,7 +1167,7 @@ func _walk(uid: int, pos: Vector2, goals: Array, gi: int, step_len: float,
 			break
 		var goal: Vector2 = goals[gi]
 		if here.distance_to(goal) <= Rules.EPS:
-			goal = _next_goal(uid, gi, here, field, keep_level, target_tile)
+			goal = _next_goal(uid, gi, here, field, paths, path_is, keep_level, target_tile)
 			goals[gi] = goal
 			if here.distance_to(goal) <= Rules.EPS:
 				# Every neighbour is taken or none is closer: the unit stands. That is the queue at
@@ -793,25 +1208,30 @@ func _walk(uid: int, pos: Vector2, goals: Array, gi: int, step_len: float,
 ## 3. **Otherwise the field**, exactly as before this ticket. The next sub-step's resync decides whether
 ##    the straightened route is rejoined — which is what makes the field the always-valid fallback.
 func _next_goal(uid: int, gi: int, here: Vector2, field: PackedInt32Array,
-		keep_level: int, target_tile: int) -> Vector2:
-	var path: PackedInt32Array = _soldier_path[gi]
+		paths: Array, path_is: Array, keep_level: int, target_tile: int) -> Vector2:
+	# ⚠ **An empty list is a body that walks on the field alone**, which is what every body did before
+	# 티켓 37 and is still the always-valid fallback — and it is now also every beast.
+	var path: PackedInt32Array = paths[gi] if gi < paths.size() else PackedInt32Array()
 	if not path.is_empty():
 		var tile := _tile_of(here)
-		var idx := int(_soldier_path_i[gi])
+		var idx := int(path_is[gi])
 		var at := -1
 		for m in range(maxi(idx - 1, 0), path.size()):
 			if int(path[m]) == tile:
 				at = m
 				break
 		if at < 0:
+			# ⚠ **Reachable only for a body that HAS a route, and only a 검사 ever has one** — a beast
+			# hands in empty columns and never enters this branch. `_clear_path` stays the one owner of
+			# 「throw the route away」 rather than these two writes being spelled out a second time here.
 			_clear_path(gi)
 		else:
 			idx = at + 1
-			_soldier_path_i[gi] = idx
+			path_is[gi] = idx
 			if idx < path.size():
 				var moved := grid.step_along(uid, here, int(path[idx]), keep_level)
 				if here.distance_to(moved) > Rules.EPS:
-					_soldier_path_i[gi] = idx + 1
+					path_is[gi] = idx + 1
 					return moved
 	return grid.step_toward(uid, here, field, keep_level, target_tile)
 
@@ -841,9 +1261,7 @@ func _settle(uid: int, goal: Vector2) -> void:
 	var tile := _tile_of(goal)
 	if tile < 0:
 		return
-	var claimed := grid.reserved
-	claimed[tile] = uid
-	grid.reserved = claimed
+	grid.hold(uid, tile)
 
 
 func _glide(pos: Vector2, goal: Vector2, step_len: float) -> Vector2:
@@ -887,26 +1305,57 @@ func _dist(a: Vector2, b: Vector2) -> float:
 	return sqrt(a.distance_squared_to(b) + dh * dh)
 
 
-# --- targeting helpers: DELETED 2026-08-29 -------------------------------------------------------
-## ⚠⚠ **`_soldier_reach` · `_enemy_reach` · `_dist` · `_within` · `_nearest_enemy` · `_nearest_soldier`
-## STOOD HERE AND ALL SIX ARE GONE** with the fight. **What they knew, and what a rebuilt fight owes:**
+# --- targeting helpers -----------------------------------------------------------------------------
+## ⚠⚠ **`_soldier_reach` · `_enemy_reach` · `_within` STOOD HERE AND ARE NOT COMING BACK AS FUNCTIONS.**
+## Reach is `range + REACH_BONUS` and **`Rules.reach_of` is the one place that sum is written** — two
+## per-side wrappers over one rule is the second copy this file has paid for elsewhere.
 ##
-##  · **Reach is `range + REACH_BONUS`, and the bonus was 1.75, measured in play.** The window is
-##    「above the stair diagonal, below the flat two-tile orthogonal」. At 1.5 a body on a stair could
-##    reach the plateau beside it ORTHOGONALLY (sqrt(1 + 0.25) = 1.118) and **not diagonally**
-##    (sqrt(2 + 0.25) = 1.5) — measured with the attacker pinned on the stairs: **orthogonal, three
-##    hits and a kill; diagonal, ZERO hits and ZERO damage.** The stair is one 조각 wide, so the horde
-##    behind the body that cannot hit is stuck in the doorway. **26 of 162 fights were lost that way,
-##    and in 24 of them every surviving enemy stood on exactly those diagonal 조각.**
-##  · **Distance is 3D and the height comes from the LEVEL, never from the drawn mesh.** Two bodies a
-##    조각 apart across a storey boundary are `sqrt(1 + 1)` apart, not 1.
-##  · **The comparison carried an epsilon.** A diagonal is exactly sqrt(2); a bare `<=` on that
-##    boundary is a coin flip that changes which bodies can fight from frame to frame.
-##  · **Nearest was Euclidean and ties went to the SMALLER id.** A tie broken by iteration order makes
+## **What the deleted pair knew and what the two below keep:**
+##
+##  · **Distance is 3D and the height comes from the LEVEL, never from the drawn mesh** — `_dist`, which
+##    survived the deletion because `_walk` stops on it.
+##  · **The comparison carries an epsilon.** A diagonal is exactly sqrt(2); a bare `<=` on that boundary
+##    is a coin flip that changes which bodies can fight from frame to frame.
+##  · **Nearest is Euclidean and ties go to the SMALLER index.** A tie broken by iteration order makes
 ##    two runs from identical state diverge with every check about them green.
-##  · **An enemy's movement scan and its shooting scan were different sets.** Chasing something
-##    unreachable asks the flow field for a path that comes back unreachable everywhere, and then
-##    EVERY body stands still for the rest of the island with nothing logged.
+##  · ⚠ **An enemy's movement scan and its target scan were different sets, and here they are different
+##    QUESTIONS**: a beast walks at the 성채 and never at a body, so nothing can ask the flow field for a
+##    path to something unreachable and freeze the whole island doing it.
+
+## **The nearest living beast within `reach` of `p`, or `TARGET_NONE`.** Ties go to the lower index.
+##
+## ⚠ **`< best` and never `<= best`**, which is the whole of the tie-break: the loop runs upward, so a
+## later body has to be strictly nearer to displace an earlier one.
+func _nearest_enemy(p: Vector2, reach: float) -> int:
+	var who := TARGET_NONE
+	var best := INF
+	for e in enemy_type.size():
+		if enemy_alive[e] == 0:
+			continue
+		var d := _dist(p, enemy_pos[e])
+		if d > reach + Rules.EPS:
+			continue
+		if d < best:
+			best = d
+			who = e
+	return who
+
+
+## **The nearest 검사 standing on the island within `reach` of `p`, or `TARGET_NONE`.** Same tie-break,
+## and it is the same rule rather than a mirror of one: see `_nearest_enemy`.
+func _nearest_soldier(p: Vector2, reach: float) -> int:
+	var who := TARGET_NONE
+	var best := INF
+	for i in soldier_state.size():
+		if int(soldier_state[i]) != SoldierState.ASHORE:
+			continue
+		var d := _dist(p, soldier_pos[i])
+		if d > reach + Rules.EPS:
+			continue
+		if d < best:
+			best = d
+			who = i
+	return who
 # --- field cache ---------------------------------------------------------------------------------
 
 func _age_fields(dt: float) -> void:
@@ -952,12 +1401,17 @@ func _tile_of(pos: Vector2) -> int:
 ## first when it is free.
 ##
 ## ⚠ **This is where the drop order becomes a picture.** A boat is one soldier now, so with several
-## boats aimed at one beach every call after the first finds the target tile already reserved and
-## walks one ring out. Combined with `_phase_landings`' ascending pass that makes "the first dropped
-## stands in front" a property of the search order rather than of a rule someone maintains — and it is
-## the ONLY thing the drop order decides, since every boat departs on the commit sub-step.
+## boats aimed at one beach every call after the first finds the target 조각 fuller than it left it, and
+## once it is full walks one ring out. Combined with `_phase_landings`' ascending pass that makes "the
+## first dropped stands in front" a property of the search order rather than of a rule someone
+## maintains — and it is the ONLY thing the drop order decides, since every boat departs on the commit
+## sub-step.
+## ⚠⚠ **THE BEACH NOW FILLS DEEP BEFORE IT FILLS WIDE** (2026-08-30). While a 조각 admitted one body
+## the landing 조각 was taken by the first body ashore and everyone after it stepped out a ring; with
+## `Rules.TILE_CAPACITY` slots the same 조각 comes back until it is full. **That is the pile the user
+## asked for**, and it is a property of this search rather than of a rule anybody maintains.
 ##
-## The search WALKS OVER reserved tiles and only COLLECTS unreserved ones. A search that refused to
+## The search WALKS OVER full tiles and only COLLECTS ones with room. A search that refused to
 ## cross an occupied tile would be sealed in by the first soldier to land, and the boat behind it
 ## would wait out the island at a coast with an empty beach two tiles away.
 func _free_tiles_from(target_tile: int, wanted: int) -> PackedInt32Array:
@@ -983,7 +1437,7 @@ func _free_tiles_from(target_tile: int, wanted: int) -> PackedInt32Array:
 		head += 1
 		# Collect only at the landing's own height. A body walks off a boat; it does not climb on the
 		# way out, so a full beach must NOT spill up the stair.
-		if grid.passable[t] != 0 and grid.reserved[t] == -1 and grid.level_of(t) == want_level:
+		if grid.passable[t] != 0 and grid.has_room(t) and grid.level_of(t) == want_level:
 			out.append(t)
 		var tx := t % grid.w
 		var ty := t / grid.w

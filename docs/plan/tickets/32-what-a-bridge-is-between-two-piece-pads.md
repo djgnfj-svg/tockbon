@@ -3,6 +3,9 @@ Status: open
 
 # What says 「you may GO from here to there」 now that the 판 is a 조각
 
+⚠⚠ **「칸」 in this ticket is what the glossary now calls 「블록」** — the 2x2 lump Blender builds as
+one object. **The word flipped on 2026-08-29**; quotations keep the word the user said.
+
 ## ⏸ **ANSWERED 2026-08-29 — there are none, and it waits for the stair**
 
 **The user**: 「판을 잇는 다리는 없어. 좀 있다가 계단 만들 때 필요하면 그때 이을 거야」 — ***"there are
@@ -42,3 +45,9 @@ and the user kept it on sight (「경로선이 보이는건 좋은데」).
 
 ⚠ **Blocked on the stair** (ticket 06). Guessing at it before there is a level change to look at puts a
 guess on screen before anyone can see it was one.
+
+## ⚠⚠ The blocker is gone (2026-08-30)
+
+**Ticket 06 closed on 2026-08-29** — the stair stands on the island and the user said 「이 정도면 돼」.
+⇒ **The condition the user parked this against has arrived**: there is a level change on screen to judge
+a bridge against. **This is no longer parked; it is waiting to be asked.**

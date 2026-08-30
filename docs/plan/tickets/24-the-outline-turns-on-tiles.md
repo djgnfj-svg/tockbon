@@ -1,7 +1,10 @@
-Type: task
+Type: grilling
 Status: open
 
 # 섬 윤곽이 조각 단위로 꺾인다
+
+⚠⚠ **「칸」 in this ticket is what the glossary now calls 「블록」** — the 2x2 lump Blender builds as
+one object. **The word flipped on 2026-08-29**; quotations keep the word the user said.
 
 ## 무엇이 되면 끝인가
 

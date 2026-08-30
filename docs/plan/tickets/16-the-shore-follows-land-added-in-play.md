@@ -3,6 +3,9 @@ Status: open
 
 # 해안선이 게임 중에 놓인 땅을 따라간다
 
+⚠⚠ **「칸」 in this ticket is what the glossary now calls 「블록」** — the 2x2 lump Blender builds as
+one object. **The word flipped on 2026-08-29**; quotations keep the word the user said.
+
 ## 무엇이 되면 끝인가
 
 **플레이어가 블록을 하나 놓으면 그 자리의 물가와 거품이 새 해안을 따라간다.**

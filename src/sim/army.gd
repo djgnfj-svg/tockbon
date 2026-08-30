@@ -75,19 +75,42 @@ func recruit(slot: int) -> int:
 	return id
 
 
-## ⚠⚠ **`range_of` · `max_hp_of` · `damage_of` · `period_of` STOOD HERE AND ALL FOUR ARE DELETED**
-## (2026-08-29) with the fight. **`speed_of` is the one left**, because a body still walks.
+## ⚠⚠ **`max_hp_of` · `damage_of` · `period_of` · `reach_of` ARE BACK** (2026-08-30, 티켓 41) after
+## going with the fight on 2026-08-29. **They are four lines that read `Rules` and hold nothing**, which
+## is the whole point: a body's numbers come from its species and this object owns which species.
 ##
-## ⚠ **They were keyed on `type_id`, never on `slot_id`**, and that is the rule to keep: a body of a
-## species no slot summons still has to read its own row.
+## ⚠ **Keyed on `type_id`, never on `slot_id`** — a body of a species no slot summons still has to read
+## its own row.
 ##
-## ⚠⚠ **A PER-SOLDIER BONUS USED TO BE ADDED IN `range_of` AND IS GONE** (2026-08-25): the beak reward
-## put +1 range on ONE body, and the user deleted the reward — 「부리 보상 없지 끝나면 카드보상으로
-## 통일했잖아」. **Nothing is per-soldier**; every number a body fights with comes from its species.
+## ⚠⚠ **A PER-SOLDIER BONUS USED TO BE ADDED IN `range_of` AND IT IS NOT COMING BACK** (2026-08-25):
+## the beak reward put +1 range on ONE body, and the user deleted the reward — 「부리 보상 없지 끝나면
+## 카드보상으로 통일했잖아」. **Nothing is per-soldier**; every number a body fights with comes from its
+## species, which is why every one of these is a straight forward to `Rules`.
+##
+## ⚠⚠ **THERE IS NO `hp` COLUMN AND THAT IS THE REVIVAL, NOT AN OVERSIGHT** (2026-08-30). A wound used
+## to have to survive islands, so it lived here; **a 검사 stands again at the 성채 after
+## `Rules.REVIVE_SEC`**, so a wound cannot outlive the island it was taken on. **Live HP is
+## `Battle.soldier_hp`** and this answers only what a body is born and healed to.
 
 
 func speed_of(i: int) -> float:
 	return Rules.speed_of(int(type_id[i]))
+
+
+func max_hp_of(i: int) -> float:
+	return Rules.hp_of(int(type_id[i]))
+
+
+func damage_of(i: int) -> float:
+	return Rules.damage_of(int(type_id[i]))
+
+
+func period_of(i: int) -> float:
+	return Rules.period_of(int(type_id[i]))
+
+
+func reach_of(i: int) -> float:
+	return Rules.reach_of(int(type_id[i]))
 
 
 ## --- the summon slots -----------------------------------------------------------------------------

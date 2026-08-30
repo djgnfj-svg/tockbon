@@ -1,4 +1,4 @@
-# .claude/skills — 13 skills, and **every one of them fires on its own**
+# .claude/skills — 15 skills, and **every one of them fires on its own**
 
 ⚠⚠ **Nothing here has to be typed as a slash command** (2026-08-27, the user: *"having to type them
 myself is far too much bother — I would rather just say it"*). **Re-count instead of trusting this
@@ -14,6 +14,9 @@ five agents) → **`wrap-up`** (write the answers into the map and the tickets, 
 ⚠⚠ **When a LOOK is what is being chosen, `prototype` hangs off `grilling` at both ends** (2026-08-29):
 grilling settles what the thing must do and what the candidates are **before** a folder exists, and the
 remarks the user makes on the finished sheet go back through it rather than straight into an edit.
+
+⚠⚠ **`prototype` chooses a METHOD, `commission` chooses a PICTURE.** Both end at a sheet the user looks
+at, and both treat a remark on that sheet as a question rather than a work order.
 
 ⚠⚠ **The user answers, and only `wrap-up` writes.** Nothing in this chain edits the map during a
 conversation — that rule was set on 2026-08-27 after it was broken twice in one session.
@@ -56,6 +59,7 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 | **`grilling`** | Works the tree of **what is being made**, until nothing is left assumed. **Called by `roadmap`, `compass` and `build-loop`** |
 | **`prototype`** | Builds one thing **three or more genuinely different ways** and puts them side by side, so a look is chosen by seeing rather than by argument. ⚠ **Called `spike` until 2026-08-29** — renamed to the word the user actually says |
 | **`listup`** | **Names what is actually at one spot, one line each, grouped by kind.** ⚠ **It judges nothing** |
+| **`commission`** | **시안** — pulls candidate PICTURES so the user chooses by looking. **대화 → 로컬 → 유료**, in that order. ⚠ **Asks before touching the GPU**, and paid generation only when the user says so |
 
 ## Kept from `mattpocock/skills`
 

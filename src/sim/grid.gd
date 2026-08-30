@@ -149,7 +149,15 @@ var _ring_built := 0
 ## ⚠ **Empty is a real state**: every hand-built fixture loads rows and no outline, and every rule that
 ## reads this falls back to the 조각 grid when it is empty.
 var coast: Array = []
-var reserved := PackedInt32Array()     # tile -> unit id, or -1
+## ⚠⚠ **`Rules.TILE_CAPACITY` SLOTS PER 조각, SLOT-MAJOR: `reserved[tile * cap + k]`.** It held one
+## id per 조각 until 2026-08-30, when a 조각 stopped admitting exactly one body — see that constant for
+## the user's own figure and why it is nine to a 칸 rather than three to a 조각.
+## ⚠ **Nothing outside this file may index it.** `slot_of`, `holds`, `hold_count`, `has_room` and
+## `can_hold` are the readers, and a raw `reserved[tile]` now names slot 0 of a 조각 three times lower
+## down the board — a plausible number for the wrong 조각, which is this repo's own named false green.
+## ⚠ **The slot is a PLACE and not an identity**: the view reads it to spread a crowd inside its 조각,
+## and it changes whenever the body ahead of it in that 조각 leaves.
+var reserved := PackedInt32Array()     # tile * Rules.TILE_CAPACITY + slot -> unit id, or -1
 
 ## unit id -> Array of tiles it currently holds. At most two: the tile it stands on and the tile it is
 ## walking into. This is only the fast path for releasing — `reserved` is the authority, which is why
@@ -183,7 +191,7 @@ func load_rows(rows: Array, tiers: Array = []) -> void:
 	level = PackedByteArray()
 	level.resize(n)
 	reserved = PackedInt32Array()
-	reserved.resize(n)
+	reserved.resize(n * Rules.TILE_CAPACITY)
 	reserved.fill(-1)
 
 	# Built once per load rather than per tile: the string is assembled from a table, and 1536 tiles
@@ -1220,7 +1228,7 @@ func step_toward(unit_id: int, from: Vector2, field: PackedInt32Array,
 	var cx := clampi(int(round(from.x)), 0, w - 1)
 	var cy := clampi(int(round(from.y)), 0, h - 1)
 	var cur := cy * w + cx
-	_hold(unit_id, cur)
+	hold(unit_id, cur)
 	var best := -1
 	# ⚠ **The admission test, and it is NOT key 1.** Strictly cheaper than where the body stands: an `<=`
 	# here lets a unit already on the target tile step off onto an equal-cost neighbour and oscillate
@@ -1247,7 +1255,7 @@ func step_toward(unit_id: int, from: Vector2, field: PackedInt32Array,
 			continue
 		if keep_level >= 0 and level_of(nt) != keep_level:
 			continue
-		if reserved[nt] != -1 and reserved[nt] != unit_id:
+		if not can_hold(nt, unit_id):
 			continue
 		if int(field[nt]) >= cur_cost:
 			continue
@@ -1276,7 +1284,7 @@ func step_along(unit_id: int, from: Vector2, next_tile: int, keep_level: int = -
 	var cx := clampi(int(round(from.x)), 0, w - 1)
 	var cy := clampi(int(round(from.y)), 0, h - 1)
 	var cur := cy * w + cx
-	_hold(unit_id, cur)
+	hold(unit_id, cur)
 	if next_tile < 0 or next_tile >= n or next_tile == cur:
 		return from
 	if absi(next_tile % w - cx) > 1 or absi(next_tile / w - cy) > 1:
@@ -1285,7 +1293,7 @@ func step_along(unit_id: int, from: Vector2, next_tile: int, keep_level: int = -
 		return from
 	if keep_level >= 0 and level_of(next_tile) != keep_level:
 		return from
-	if reserved[next_tile] != -1 and reserved[next_tile] != unit_id:
+	if not can_hold(next_tile, unit_id):
 		return from
 	return _commit_step(unit_id, cur, next_tile)
 
@@ -1294,7 +1302,7 @@ func step_along(unit_id: int, from: Vector2, next_tile: int, keep_level: int = -
 ## the pair. ⚠ A second copy of these two lines is how a body comes to hold three 조각 and halve every
 ## doorway with nothing on screen to explain it.
 func _commit_step(unit_id: int, cur: int, dest: int) -> Vector2:
-	_hold(unit_id, dest)
+	hold(unit_id, dest)
 	_release_except(unit_id, cur, dest)
 	return Vector2(dest % w, dest / w)
 
@@ -1430,26 +1438,128 @@ func string_pull(path: PackedInt32Array) -> PackedInt32Array:
 
 ## Every tile this unit holds goes back. Called on death and on boarding.
 ##
-## Rescans `reserved` in full rather than walking `_held`: `battle` may write `reserved` directly when
-## it places a landing soldier, and a tile that never entered `_held` would stay locked for the rest of
-## the island with no unit standing on it.
+## Rescans `reserved` in full rather than walking `_held`, and the reason held for as long as `battle`
+## wrote the table by hand: a tile that never entered `_held` would stay locked for the rest of the
+## island with no unit standing on it. **`battle` goes through `hold` now** (2026-08-30) and the rescan
+## stays anyway — `reserved` is the authority and `_held` is the fast path, and a release that trusted
+## the fast path would leak exactly the slot the fast path had already lost.
+##
+## ⚠ **The loop walks SLOTS and not 조각.** A unit holds at most one slot per 조각, so clearing every
+## entry that names it is the same set either way — but the index is not a tile number and nothing here
+## may treat it as one.
 func release_all(unit_id: int) -> void:
-	for t in reserved.size():
-		if reserved[t] == unit_id:
-			reserved[t] = -1
+	for k in reserved.size():
+		if reserved[k] == unit_id:
+			reserved[k] = -1
 	_held.erase(unit_id)
 
 
-## Claims `tile` unless someone else already holds it. A tile already marked with this unit's id but
-## missing from `_held` is adopted, so a direct write by `battle` still gets released later.
-func _hold(unit_id: int, tile: int) -> void:
-	if reserved[tile] != -1 and reserved[tile] != unit_id:
-		return
-	reserved[tile] = unit_id
+## Claims a slot in `tile` unless the 조각 is full. A 조각 this unit is already standing in is adopted
+## rather than claimed twice, so a body never holds two slots of one 조각 and never widens a neck by
+## being asked about it. **Answers whether the unit stands there when the call returns.**
+##
+## ⚠⚠ **PUBLIC SINCE 2026-08-30, and `battle` writing `reserved` by hand is what it replaced.** Three
+## sites there set one int and relied on `release_all`'s full rescan to undo it; with slots there is a
+## free one to find first, and three copies of that search would be three chances to pick a different
+## slot for the same body.
+func hold(unit_id: int, tile: int) -> bool:
+	var k := slot_of(tile, unit_id)
+	if k < 0:
+		k = _free_slot(tile)
+		if k < 0:
+			return false
+		reserved[tile * Rules.TILE_CAPACITY + k] = unit_id
 	var held: Array = _held.get(unit_id, [])
 	if not held.has(tile):
 		held.append(tile)
 	_held[unit_id] = held
+	return true
+
+
+## **Takes the WHOLE 조각 for one unit — what a building does, and nothing that walks.** Answers
+## whether the 조각 came out wholly this unit's; a slot somebody else is standing in is left alone and
+## turns the answer false, because evicting a body from under itself is the shape that puts a walker
+## inside a wall with every reservation check green.
+##
+## ⚠⚠ **WITHOUT THIS THE 성채 STOPPED BEING A WALL THE DAY A 조각 HELD MORE THAN ONE BODY.** One id in
+## one slot leaves `Rules.TILE_CAPACITY - 1` slots free, and every body on the island would walk into
+## the house through them.
+func fill(unit_id: int, tile: int) -> bool:
+	var cap := Rules.TILE_CAPACITY
+	if tile < 0 or tile >= w * h:
+		return false
+	var base := tile * cap
+	var whole := true
+	for k in cap:
+		if reserved[base + k] == -1:
+			reserved[base + k] = unit_id
+		elif reserved[base + k] != unit_id:
+			whole = false
+	var held: Array = _held.get(unit_id, [])
+	if not held.has(tile):
+		held.append(tile)
+	_held[unit_id] = held
+	return whole
+
+
+## **Which slot of `tile` this unit stands in, or -1.** ⚠ **It is a place inside the 조각 and not a
+## name**: the view spreads a crowd by it, and it changes when the body ahead of it leaves.
+func slot_of(tile: int, unit_id: int) -> int:
+	var cap := Rules.TILE_CAPACITY
+	if tile < 0 or tile >= w * h:
+		return -1
+	var base := tile * cap
+	for k in cap:
+		if reserved[base + k] == unit_id:
+			return k
+	return -1
+
+
+## Whether this unit is standing in `tile`.
+func holds(tile: int, unit_id: int) -> bool:
+	return slot_of(tile, unit_id) >= 0
+
+
+## **How many bodies stand in `tile` right now.** Zero on an off-board 조각, which is the same answer
+## an empty one gives — nothing here distinguishes them and nothing asks.
+func hold_count(tile: int) -> int:
+	var cap := Rules.TILE_CAPACITY
+	if tile < 0 or tile >= w * h:
+		return 0
+	var base := tile * cap
+	var n := 0
+	for k in cap:
+		if reserved[base + k] != -1:
+			n += 1
+	return n
+
+
+## Whether one more body would fit in `tile`.
+func has_room(tile: int) -> bool:
+	return _free_slot(tile) >= 0
+
+
+## Whether this unit may stand in `tile` — it already does, or there is room for it.
+## **This is the admission test every walker asks**, and it is one function so the field walk and the
+## straightened route cannot come to disagree about what a full 조각 is.
+func can_hold(tile: int, unit_id: int) -> bool:
+	return slot_of(tile, unit_id) >= 0 or _free_slot(tile) >= 0
+
+
+## The lowest empty slot of `tile`, or -1 when it is full or off the board.
+##
+## ⚠⚠ **LOWEST AND NOT ANY, AND THAT IS THE WHOLE OF DETERMINISM HERE.** A body's place inside a 조각
+## has to be a function of who was already standing there — pick any free slot and the same seed stops
+## giving the same fight, and the crowd the view draws off these indices reshuffles every frame.
+func _free_slot(tile: int) -> int:
+	var cap := Rules.TILE_CAPACITY
+	if tile < 0 or tile >= w * h:
+		return -1
+	var base := tile * cap
+	for k in cap:
+		if reserved[base + k] == -1:
+			return k
+	return -1
 
 
 func _release_except(unit_id: int, keep_a: int, keep_b: int) -> void:
@@ -1462,6 +1572,7 @@ func _release_except(unit_id: int, keep_a: int, keep_b: int) -> void:
 			if not kept.has(tile):
 				kept.append(tile)
 			continue
-		if reserved[tile] == unit_id:
-			reserved[tile] = -1
+		var k := slot_of(tile, unit_id)
+		if k >= 0:
+			reserved[tile * Rules.TILE_CAPACITY + k] = -1
 	_held[unit_id] = kept

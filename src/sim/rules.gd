@@ -48,51 +48,37 @@ enum Side { PLAYER, ENEMY }
 
 
 # --- Reach ---------------------------------------------------------------------------------------
-## ⚠⚠ **`REACH_BONUS` STOOD HERE AND IT IS DELETED** (2026-08-29) with the fight, and **it is the most
-## expensive number this file ever held.** 1.75, and the window it sat in was 「above the stair
-## diagonal, below the flat two-조각 orthogonal」.
+## **How far past its own range column every body can reach, and it is the most expensive number this
+## file has ever held.** ⚠⚠ **RESTORED 2026-08-30 at exactly 1.75** — it was deleted 2026-08-29 with
+## the fight and the fight is being rebuilt. **Nothing about it was re-derived and nothing may be.**
 ##
-## **At 1.5 a body on a stair reached the plateau beside it orthogonally and NOT diagonally**, measured
-## with the attacker pinned on the stairs: **three hits and a kill one way, ZERO hits and ZERO damage
-## the other.** A stair is one 조각 wide, so everything behind the body that cannot hit is stuck in the
-## doorway. **26 of 162 fights were lost that way**, and in 24 of them every surviving enemy stood on
-## exactly those diagonal 조각.
+## **The window is 「above the stair diagonal, below the flat two-조각 orthogonal」.** A body on a stair
+## (level 1) reaching an enemy on the plateau beside it (level 2) is inside 1.5 ORTHOGONALLY and outside
+## it DIAGONALLY. Measured in play with the attacker pinned on the stairs: **orthogonal, three hits and
+## a kill; diagonal, ZERO hits and ZERO damage.** A stair is one 조각 wide, so the horde behind the body
+## that cannot hit is stuck in the doorway. **26 of 162 fights were lost that way, and in 24 of them
+## every surviving enemy stood on exactly those diagonal 조각.**
 ##
-## ⚠⚠ **IT WAS NOT A MELEE-ONLY CHANGE AND NO VALUE COULD MAKE IT ONE.** The bonus was added to EVERY
-## species' range, so moving it moved every species' reach. Swept over every pair at every level
-## difference, 1.75 gave exactly two species one new flat-ground distance and nothing else moved.
-## **1.75 was the smallest drift that closed the defect**, and the drift was written down rather than
-## discovered later.
+## ⚠⚠ **The numbers in that paragraph were measured while a notch was a whole 조각, and a notch is half
+## a 조각 now** (2026-08-27, see `TIER_RISE_TILES`). **The defect and the fix are unchanged; only the
+## margins moved.** Today the stair diagonal is `sqrt(2 + 0.25)` = **1.5** and the flat two-조각
+## orthogonal is **2.0**, so the window is `(1.5, 2.0)` and **1.75 sits dead centre, +0.25 above and
+## -0.25 below.** Both bounds are exact (heights are exact multiples of `TIER_STEP_TILES`) and `EPS` is
+## 1e-4.
+##
+## ⚠⚠ **IT IS NOT A MELEE-ONLY CHANGE AND NO VALUE COULD MAKE IT ONE.** This bonus is added to EVERY
+## species' range, so raising it moves every species' reach. Swept over every 조각-aligned pair at every
+## level difference: at 1.75 exactly **two** species gained a flat-ground distance —
+## **다람쥐 3.50 -> 3.75 gains 3.606** and **까마귀 5.50 -> 5.75 gains 5.657** — and nothing else moved.
+## **There is no way to avoid those two**: 다람쥐's next distance enters at a bonus of 1.606, which is
+## BELOW the 1.732 melee needs, so any value that fixes the stair also gives it that 조각. ⚠ **1.85 was
+## the other candidate** — more comfortable margins, but it also handed 창병 the 2-조각 diagonal (2.828)
+## and 까마귀 a second 조각. **1.75 is the smallest drift that closes the defect.**
 ##
 ## ⚠ **Do not retune it to make a plateau safe.** The user's line is 「2층은 안전한 땅이고 그 안전을
 ## 값으로 산다」, and the reach is shared by every body and every weapon — **a storey-aware refusal
 ## belongs where the height is already known**, not in this number.
-## ⚠⚠ **RAISED 1.5 -> 1.75** (2026-08-25, 티켓 19). **1.5 covered the flat 8-neighbourhood and nothing
-## else, and the neighbourhood stopped being flat.** A body on a stair (level 1) reaching an enemy on
-## the plateau beside it (level 2) is `sqrt(1 + 1)` = **1.414 orthogonally** — inside 1.5 — but
-## `sqrt(2 + 1)` = **1.732 diagonally**, outside it. Measured in play with the attacker pinned on the
-## stairs: **orthogonal, three hits and a kill; diagonal, ZERO hits and ZERO damage.** The stair is one
-## tile wide, so the horde behind the body that cannot hit is stuck in the doorway and the archers
-## above shoot the queue. **26 of 162 fights lost that way, and in 24 of them every surviving enemy was
-## clustered on exactly those diagonal tiles.**
-##
-## **The window is 「above the stair diagonal, below the flat two-tile orthogonal」.** ⚠⚠ **The numbers
-## in the paragraph above were measured while a notch was a whole tile, and a notch is half a tile now**
-## (2026-08-27, see `TIER_RISE_TILES`). **The defect and the fix are unchanged; only the margins moved.**
-## Today the stair diagonal is `sqrt(2 + 0.25)` = **1.5** and the flat two-tile orthogonal is **2.0**, so
-## the window is `(1.5, 2.0)` and **1.75 sits dead centre, +0.25 above and -0.25 below.** Both bounds are
-## exact (heights are exact multiples of `TIER_STEP_TILES`) and `EPS` is 1e-4.
-##
-## ⚠⚠ **IT IS NOT A MELEE-ONLY CHANGE AND NO VALUE COULD MAKE IT ONE.** This bonus is added to EVERY
-## species' range, so raising it moves every species' reach. Swept over every tile-aligned pair at
-## every level difference: at 1.75 exactly **two** species gain a flat-ground distance —
-## **다람쥐 3.50 -> 3.75 gains 3.606** and **까마귀 5.50 -> 5.75 gains 5.657** — and nothing else moves.
-## **There is no way to avoid those two**: 다람쥐's next distance enters at a bonus of 1.606, which is
-## BELOW the 1.732 melee needs, so any value that fixes the stair also gives it that tile.
-## ⚠ **1.85 was the other candidate** — more comfortable margins, but it also hands 창병 the 2-tile
-## diagonal (2.828) and 까마귀 a second tile. **1.75 is the smallest drift that closes the defect**, and
-## the drift is written here rather than discovered later. **Nothing else moved**: 곰's sweep, 사자's
-## area, 다람쥐's pull and every detection radius are their own table columns and read no bonus.
+const REACH_BONUS := 1.75
 
 ## Compare reach with this epsilon. A diagonal is exactly sqrt(2); a bare `<=` on that boundary is
 ## a coin flip that changes which units can fight from frame to frame.
@@ -138,6 +124,27 @@ const TIER_STEP_TILES := TIER_RISE_TILES * 0.5
 ## The largest level difference a body may step across. **1**, so a stair is passable from both sides
 ## and a tier boundary is not.
 const MAX_CLIMB_LEVELS := 1
+
+## --- How many bodies stand on one 조각 -------------------------------------------------------------
+## ⚠⚠ **THE 「ONE BODY PER 조각」 RULE THE WHOLE FIGHT WAS BUILT ON IS GONE** (2026-08-30, the user at
+## the screen: bodies should be bigger, and **about nine of them should fit in one 칸**). A 칸 is the
+## 2x2 block of four 조각 — see the glossary, where the two words are the trap this line turns on — so
+## nine to a 칸 is more than two per 조각, and a reservation table holding one id per 조각 could not
+## express it.
+##
+## **3 is the smallest uniform per-조각 cap that admits the user's figure**: at 2 a 칸 holds eight,
+## which is fewer than was asked for. ⚠ **It therefore admits TWELVE and not nine**, and that
+## overshoot is written down rather than hidden — no uniform per-조각 cap gives exactly nine over four
+## 조각, and 「about nine」 is a floor rather than a ceiling.
+##
+## ⚠⚠ **THE SLOT INDEX INSIDE A 조각 IS NOT PRIVATE TO THE RESERVATION.** `Grid.slot_of` answers it and
+## the view reads it to spread a crowd apart on screen, because three bodies handed the same 조각 centre
+## draw as one body. **The sim owns the slot and the drawing owns the offset** — see
+## `Look.crowd_offset_px`.
+##
+## ⚠ **Raising this does not widen a doorway by itself.** A neck is measured in 조각, and the queue at
+## one is now three deep per 조각 instead of one.
+const TILE_CAPACITY := 3
 
 ## --- What one step of a walk costs -----------------------------------------------------------------
 ## ⚠⚠ **A DIAGONAL USED TO BE FREE, AND THAT IS WHY A STRAIGHT WALK ARCED TO THE TOP OF THE BOARD**
@@ -235,19 +242,43 @@ const _COL_SIDE := 8
 const _COL_LABEL := 9
 
 
-## ⚠⚠ **`name_of` · `hp_of` · `damage_of` · `period_of` · `range_of` · `area_of` · `detect_of` STOOD
-## HERE AND ALL SEVEN ARE DELETED** (2026-08-29) with the fight. `speed_of`, `side_of` and `label_of`
-## are what is left, because a body still walks, still belongs to a side and is still named on screen.
-##
-## ⚠⚠ **THE COLUMNS THEY READ ARE STILL IN `UNITS` AND THAT IS DELIBERATE.** They are not dead code,
-## they are the only numbers in this repo that came from PLAYING: the wolf's row is the one a whole
-## run was fought on and it carried through two side swaps unchanged, and the swordsman's row is
-## interpolated between the two humans a run was played against. **Deleting an accessor costs one
-## line to restore; deleting a measurement costs another 162 fights.**
+## ⚠⚠ **`hp_of` · `damage_of` · `period_of` · `range_of` ARE BACK** (2026-08-30, 티켓 41's 목~일
+## slice) after being deleted with the fight on 2026-08-29. **Their columns never left `UNITS`**, which
+## is why restoring them cost four lines: they are the only numbers in this repo that came from PLAYING,
+## and the deletion note said so at the time. `name_of`, `area_of` and `detect_of` stay deleted — the
+## splash radius and the detection radius have no reader, and a beast walks at the 성채 rather than
+## noticing anything.
 
 
 static func speed_of(type_id: int) -> float:
 	return float(UNITS[type_id][_COL_SPEED])
+
+
+## What a body of this row is born with, and what it is healed back to when it stands again.
+static func hp_of(type_id: int) -> float:
+	return float(UNITS[type_id][_COL_HP])
+
+
+## What one blow takes off.
+static func damage_of(type_id: int) -> float:
+	return float(UNITS[type_id][_COL_DAMAGE])
+
+
+## Seconds between blows.
+static func period_of(type_id: int) -> float:
+	return float(UNITS[type_id][_COL_PERIOD])
+
+
+## The row's own range column, **without the bonus.** Nothing outside `reach_of` should read this: a
+## caller that adds `REACH_BONUS` itself is the second copy of the reach rule, and the two drift.
+static func range_of(type_id: int) -> float:
+	return float(UNITS[type_id][_COL_RANGE])
+
+
+## **How far this row can actually hit, and the ONE place the bonus is added.** A sword's range column
+## is 0, so a swordsman's whole reach is the bonus — see `REACH_BONUS` for what that number cost.
+static func reach_of(type_id: int) -> float:
+	return range_of(type_id) + REACH_BONUS
 
 
 static func side_of(type_id: int) -> int:
@@ -283,9 +314,37 @@ static func player_type_count() -> int:
 
 
 # --- The run -------------------------------------------------------------------------------------
-## Starting force: 10 soldiers (`roster_start_count()`, below `START_SLOTS`). A run starts from this
-## identical state every time — no meta, no unlocks, no carry between runs.
+## A run starts from this identical state every time — no meta, no unlocks, no carry between runs.
+
+## **How many 검사 a run opens with, and every one of them stands on the island at the opening frame.**
 ##
+## ⚠ PLACEHOLDER — the user has not chosen this value (2026-08-30). Judged by playing.
+##
+## ⚠⚠ **IT IS THE ROSTER *AND* THE NUMBER ON SCREEN, WHICH USED TO BE TWO DIFFERENT NUMBERS.** The
+## roster opened with ten and `Run` stood exactly ONE of them, so nine bodies existed, counted, and
+## could never be seen. **The 「one」 was 2026-08-27's** 「칸단위 부대는 따로 없음 아직」 — squads did
+## not exist and ten bodies would have walked as one lump. 티켓 41 settles the unit as 「몸 하나」, so
+## bodies are commanded one at a time and there is nothing left for the split to buy.
+const SWORDSMAN_START_COUNT := 4
+
+## **How long a dead 검사 waits before he stands again at the 성채.**
+##
+## ⚠ PLACEHOLDER — the user has not chosen this value (2026-08-30). Judged by playing.
+##
+## ⚠⚠ **「죽으면 영영 죽는다」 WAS OVERTURNED 2026-08-30** — the user weighed both and chose revival.
+## **Death is a loss of TIME now and not a loss of a body**, so this number is the whole of what dying
+## costs, and `Army.alive` stays 1 through it.
+const REVIVE_SEC := 20.0
+
+## **What the 성채 can take before the run is lost.**
+##
+## ⚠ **Chosen by the builder, not by the user and not by play** (2026-08-30). The arithmetic it was
+## chosen off: a boat lands `BOAT_CAPACITY` 늑대 at `damage_of(WOLF)` a blow every `period_of(WOLF)`,
+## which is 16 a second if every one of them reaches the walls — so this is **fifteen seconds of one
+## undefended boat**, and `BOAT_INTERVAL_SEC` is thirty. **A single boat that walks in unopposed must
+## not end the run, and two must.** ⚠ It is a literal and not that product: retuning the 늑대 must not
+## silently move the 성채's health.
+const KEEP_MAX_HP := 240.0
 
 # --- The summon slots ------------------------------------------------------------------------------
 ## 번호키가 드는 칸. **칸은 회차 상태다** (`Army.slots`) — 상수가 아니다.
@@ -305,12 +364,13 @@ const SUMMON_SLOT_MAX := 5
 ## against a landing force of ten, and a first island nobody wins is a game whose card screen nobody
 ## ever sees.
 ##
-## ⚠⚠ **ONE ROW, TEN WOLVES** (2026-08-25, the user: 「시작할 때 뭐 늑대만 있지 않아?」). It was two
-## rows — six wolves and four crows — and the crow row moved to a CARD: a run opens holding one
-## species and the second arrives on the opening card screen. **The ten did not move**, only how it is
-## split.
+## ⚠⚠ **ONE ROW, ONE SPECIES** (2026-08-25, the user: 「시작할 때 뭐 늑대만 있지 않아?」, then the
+## 2026-08-26 side swap, then 티켓 41's 「병종 — 검사 하나」). It was two rows once; there is one body
+## in this game and there is one row.
+## ⚠ **The count is `SWORDSMAN_START_COUNT` and never a literal here** — it is the number the user is
+## going to move after playing, and a second copy of it in this table is the copy that would rot.
 const START_SLOTS := [
-	[SWORDSMAN, 10],
+	[SWORDSMAN, SWORDSMAN_START_COUNT],
 ]
 
 const _START_COL_TYPE := 0
@@ -499,6 +559,12 @@ const BOAT_STANDOFF_TILES := BOAT_HULL_HALF_TILES + BOAT_BEACH_GAP_TILES
 ## How many ride one boat. ⚠ **Decided, not tuned** (티켓 41: 「한 배에 몇 — 여덟」). Four benches, two
 ## each, and `Look.BOAT_DECK_SLOTS` is what puts them on the deck.
 const BOAT_CAPACITY := 8
+
+## **Which row of `UNITS` walks off a boat.** ⚠ **Decided, not tuned** (티켓 41: 「무엇이 타고 오나 —
+## 늑대. 확정」). It is a constant and not a literal at the landing, because the deck pictures, the
+## bodies that step off and the row whose numbers they fight with have to be one species — and three
+## sites naming 늑대 separately is how two of them stay 늑대 the day the third stops being.
+const BOAT_RIDER_TYPE := WOLF
 
 ## **How far round the beach ring the next boat comes, as a fraction of a full turn.**
 ##

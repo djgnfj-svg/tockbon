@@ -23,7 +23,9 @@ const MAP_FILE := "log.md"
 const ISSUE_DIR := "tickets"
 
 const TYPES := ["grilling", "research", "prototype", "task"]
-const STATES := ["open", "claimed", "resolved"]
+## ⚠ **`superseded` is the fourth**, added 2026-08-30: 티켓 10 과 27 were kept as tombstones on purpose
+## (the roadmap says so) and this list red-flagged both for a month.
+const STATES := ["open", "claimed", "resolved", "superseded"]
 const ANSWER_HEAD := "## Answer"
 ## Assembled so this file's own header cannot trip the scan it performs.
 const DECIDED_HEAD := "## 지금까지의" + " 결정"

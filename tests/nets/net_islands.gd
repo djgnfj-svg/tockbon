@@ -228,8 +228,15 @@ func run(t) -> void:
 	# summon slot any more**, so a run cannot gain a single body after `setup` and the largest roster it
 	# can ever field IS the opening table. ⚠ The SUMMON SLOT system itself is untouched — what died is
 	# the only thing that used to write into it, so the term is worth zero rather than absent in spirit.
-	t.eq(min_region_floor, 11, "가장 좁아도 되는 상륙지 바닥은 11칸이다 (최대 병력 10 + 여유 1) — 자가 점검")
-	t.eq(_max_roster(), 10, "그 최대 병력 10이 개막 표 그대로다 — 회차 중에 병력이 느는 길이 없다 (자가 점검)")
+	# ⚠⚠ **38 -> 26 -> 10 -> 5** (2026-08-30, 티켓 41): the opening roster fell from ten to
+	# `Rules.SWORDSMAN_START_COUNT` the day the roster and the number of bodies on screen became one
+	# number. **The literal moved onto that constant rather than being retyped as 5**, because it is a
+	# placeholder the user is going to move after playing and a second copy of it here would rot.
+	t.eq(min_region_floor, Rules.SWORDSMAN_START_COUNT + 1,
+		"가장 좁아도 되는 상륙지 바닥은 시작 병력 + 여유 1 이다 (%d) — 자가 점검"
+			% (Rules.SWORDSMAN_START_COUNT + 1))
+	t.eq(_max_roster(), Rules.SWORDSMAN_START_COUNT,
+		"그 최대 병력이 개막 표 그대로다 — 회차 중에 병력이 느는 길이 없다 (자가 점검)")
 
 	var comp_id := PackedInt32Array()
 	comp_id.resize(grid.passable.size())
@@ -505,12 +512,17 @@ func _reaches(grid: Grid, start_tile: int, goal_tile: int, reach: float, field: 
 ## rule had a harbour to answer with; the tile this row needs is a COAST tile, and every tile in the
 ## pocket is one.
 func _the_floor_actually_rejects_something(t, floor_now: int) -> void:
+	# ⚠⚠ **RE-PRICED 9 -> 4 ON 2026-08-30, WHICH IS WHAT THE HEADER ABOVE SAYS TO DO.** The floor is
+	# `Rules.SWORDSMAN_START_COUNT + 1` and that constant fell from ten to four with 티켓 41, **so the
+	# nine-조각 pocket walked straight over a floor of 5 and this fixture stopped biting anything.** The
+	# pocket is now exactly the size of the opening force: it holds every body and is still refused,
+	# which is the whole of what the 「+1」 in the floor buys.
 	var g := Grid.new()
 	g.load_rows([
 		"~~~~~~~~~~~~~~~~",
-		"~....~~~~~~~~~~~",
-		"~....~~~~~~~~~~~",
-		"~.~~~~~~~~~~~~~~",
+		"~..~~~~~~~~~~~~~",
+		"~..~~~~~~~~~~~~~",
+		"~~~~~~~~~~~~~~~~",
 		"~~~~~~~~~~~~~~~~",
 		"~~~~~~~~~~~~~~~~",
 		"~~~~~~~~~~~~~~~~",
@@ -520,7 +532,8 @@ func _the_floor_actually_rejects_something(t, floor_now: int) -> void:
 	for tile in g.passable.size():
 		if g.passable[tile] != 0:
 			pocket += 1
-	t.eq(pocket, 9, "합성 주머니는 정확히 9칸이다 (자가 점검)")
+	t.eq(pocket, Rules.SWORDSMAN_START_COUNT,
+		"합성 주머니가 시작 병력과 딱 같은 %d칸이다 (자가 점검)" % Rules.SWORDSMAN_START_COUNT)
 
 	var landing_here := -1
 	for tile in g.passable.size():
@@ -532,9 +545,13 @@ func _the_floor_actually_rejects_something(t, floor_now: int) -> void:
 			"그 칸이 든 땅덩이가 주머니 전부다 — 하나의 연결 성분이다 (자가 점검)")
 
 	t.ok(pocket < floor_now,
-			"상륙 구역은 최대 병력보다 크다 — 9칸 주머니는 지금 바닥(%d)에 걸린다" % floor_now)
-	t.ok(pocket >= 5,
-			"그리고 옛 정원 바닥 5는 그 주머니를 통과시켰다 — 두 식의 차이가 여기서 갈린다")
+			"그 주머니가 상륙 구역 바닥(%d)에 걸린다 — 딱 맞는 땅은 좁은 땅이다" % floor_now)
+	# ⚠⚠ **THE FLOOR UNDER THE CEILING, AND IT USED TO BE 「옛 정원 바닥 5」.** That comparison was
+	# between two formulas and one of them is deleted; **the two agree now**, so re-stating it would be
+	# a row about nothing. What still divides is the 「+1」: the pocket holds every body a run fields and
+	# is refused anyway, so this fixture bites the margin rather than the roster.
+	t.ok(pocket >= Rules.roster_start_count(),
+			"그런데 병력 자체는 그 안에 다 선다 — 무는 것은 바닥의 「+1」이지 병력 수가 아니다")
 
 
 func _touches_water(g: Grid, tile: int) -> bool:

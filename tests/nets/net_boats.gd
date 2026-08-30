@@ -135,9 +135,13 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 	# written here on two earlier rounds were both taken against bench-to-bench, which is the wrong
 	# spacing for the thing that goes wrong. **A check must not be described as stricter than it is**,
 	# and the pin is what actually holds the decision.
-	t.eq(Look.BOAT_RIDER_W_RATIO, 6.0, "갑판 늑대는 몸 반지름의 6배로 그린다")
+	# ⚠⚠ **THE PIN READ 6.0 UNTIL 2026-08-30 AND THE DECK IS UNCHANGED.** `BODY_SPRITE_SCALE` used to
+	# be multiplied in downstream, so the drawn width was always `6.0 x 0.45`; the 0.45 is folded into
+	# the ratio now and the row below no longer multiplies it. **The pin moves with the arithmetic, not
+	# with a judgement** — see that constant for why the two were separated.
+	t.eq(Look.BOAT_RIDER_W_RATIO, 2.70, "갑판 늑대는 몸 반지름의 2.7배로 그린다")
 	var bench_gap := absf((Look.BOAT_DECK_SLOTS[2] as Vector3).x - (Look.BOAT_DECK_SLOTS[0] as Vector3).x)
-	var rider_wide := Look.body_radius_of(Rules.WOLF) * Look.BOAT_RIDER_W_RATIO 			* Look.BODY_SPRITE_SCALE / Look.TILE_PX
+	var rider_wide := Look.body_radius_of(Rules.WOLF) * Look.BOAT_RIDER_W_RATIO / Look.TILE_PX
 	# The two seats on one plank — the spacing that actually binds. ⚠ Read off the table, not typed.
 	var seat_gap := absf((Look.BOAT_DECK_SLOTS[1] as Vector3).z - (Look.BOAT_DECK_SLOTS[0] as Vector3).z)
 	t.ok(bench_gap > 0.0, "판자 사이 간격이 %.2f 조각이다 (자가 점검)" % bench_gap)
@@ -810,17 +814,27 @@ func _the_riders_are_aboard_and_not_on_the_board(t) -> void:
 
 	# Nothing landed. **Both halves**: no body is standing, and no 조각 is claimed by one.
 	t.eq(b.ashore_ids().size(), 0, "그런데 판 위에 선 몸은 하나도 없다")
+	# ⚠ **Counted over `Grid.hold_count` and not by indexing `reserved`.** That array is
+	# `Rules.TILE_CAPACITY` slots per 조각 since 2026-08-30, so a raw index names a slot of some other
+	# 조각 entirely — a plausible number for the wrong place, which is this repo's own named false green.
 	var claimed := 0
-	for tile in b.grid.reserved.size():
-		if int(b.grid.reserved[tile]) != -1:
-			claimed += 1
-	t.eq(claimed, 0, "판의 어느 조각도 잡혀 있지 않다 — 내리는 것은 이번 주가 아니다")
+	for tile in b.grid.w * b.grid.h:
+		claimed += b.grid.hold_count(tile)
+	t.eq(claimed, 0, "판의 어느 조각도 잡혀 있지 않다 — 아직 아무도 안 내렸다")
 
-	# Right through the arrival, too: an ARRIVED boat still does not unload this round.
-	b.step((Rules.BOAT_START_DIST_TILES - Rules.BOAT_STANDOFF_TILES) / Rules.BOAT_SPEED_TILES + 1.0)
-	t.eq(int(b.boat_state[0]), Battle.BoatState.ARRIVED, "배가 다 왔다 (자가 점검)")
-	t.eq(int(b.boat_riders[0]), Rules.BOAT_CAPACITY, "다 와서도 여덟이 그대로 타 있다")
-	t.eq(b.ashore_ids().size(), 0, "그리고 아무도 안 내렸다")
+	# ⚠⚠ **THE SECOND HALF USED TO READ 「다 와서도 여덟이 그대로 타 있다」 AND IT IS DEAD** (2026-08-30).
+	# 티켓 41's 목~일 slice unloads an ARRIVED boat, so that row now asserts the landing away. **What
+	# survives is the claim this file actually owns — the CROSSING**: a hull still at sea carries every
+	# one of its riders and puts nobody on the board. **The landing itself is `net_fight`'s subject** and
+	# is not re-measured here; two files measuring one rule is how they come to disagree.
+	b.step((Rules.BOAT_START_DIST_TILES - Rules.BOAT_STANDOFF_TILES) / Rules.BOAT_SPEED_TILES - 0.5)
+	t.eq(int(b.boat_state[0]), Battle.BoatState.SAILING, "아직 건너는 중이다 (자가 점검)")
+	t.eq(int(b.boat_riders[0]), Rules.BOAT_CAPACITY, "건너는 내내 여덟이 그대로 타 있다")
+	t.eq(b.ashore_ids().size(), 0, "그리고 판 위에 선 몸은 여전히 없다")
+	var claimed_late := 0
+	for tile2 in b.grid.w * b.grid.h:
+		claimed_late += b.grid.hold_count(tile2)
+	t.eq(claimed_late, 0, "잡힌 조각도 여전히 없다 — 바다 위의 늑대는 판에 없다")
 
 
 ## **The same crossing at 1x and at a tenth of the frame rate.** `step` decomposes into whole sub-steps,

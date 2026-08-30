@@ -47,8 +47,13 @@ func _the_run_slots(t) -> void:
 	a.add_starting_force()
 	t.eq(Rules.START_SLOTS.size(), 1, "회차는 표의 한 줄로 연다 (리터럴)")
 	t.eq(a.slot_count(), Rules.START_SLOTS.size(), "그리고 새 군대의 칸 수는 그 표가 정한다")
-	t.eq(Rules.roster_start_count(), 10,
-		"시작 병력은 열이다 (리터럴) — 작은 섬 넷의 밀도가 전부 이 열에 맞춰져 있다")
+	# ⚠⚠ **IT WAS TEN AND THE PICTURE WAS ONE** (2026-08-30, 티켓 41). The opening table held ten and
+	# `Run` stood exactly one of them, so nine bodies existed, counted, and could never be seen. **The
+	# two are one number now**, and the literal moved onto the constant the user is going to retune.
+	t.eq(Rules.roster_start_count(), Rules.SWORDSMAN_START_COUNT,
+		"시작 병력이 곧 검사 시작 수다 — 명부에만 있고 판에 못 서는 몸이 없다")
+	t.eq(Rules.SWORDSMAN_START_COUNT, 4,
+		"그리고 그 수는 넷이다 (리터럴 — ⚠ 사용자가 아직 안 고른 임시값이다)")
 	# ⚠⚠ **REPAIRED 2026-08-28 — this said WOLF from before the 2026-08-26 side swap** (`START_SLOTS`
 	# used to open on ten wolves; the opening roster is `[[SWORDSMAN, 10]]` today, per `rules.gd`).
 	t.eq(a.slot_type_of(0), Rules.SWORDSMAN, "1번 칸은 검사다")

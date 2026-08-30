@@ -291,11 +291,49 @@ const SPRITE_PIXEL_SIZE := 1.0 / TILE_PX
 ## **That is a knowing mismatch, taken because the bodies are placeholders being redone** (the user,
 ## earlier today: 「캐릭터랑 건물제거 다시잡을꺼임」). When the real body arrives, the radius and this
 ## number are settled together and this one goes back to 1.
-const BODY_SPRITE_SCALE := 0.45
+##
+## ⚠⚠ **0.45 -> 0.80** (2026-08-30, the user at the screen: 「늑대들이 잘 안 보이고, 조각당 하나보다는
+## 더 크게」). **The 2026-08-28 shrink above is not deleted — it is the ceiling this value was raised
+## INTO**, and the two judgements pull opposite ways because **one constant sizes both species**:
+##
+## | at this scale | 검사 drawn | 늑대 drawn |
+## |---|---|---|
+## | 1.00, the value the user rejected | 34.3 x 41.6 px | 30.8 x 16.6 px |
+## | **0.80, here** | **27.4 x 33.3 px** | **24.6 x 13.3 px** |
+## | 0.45, what was on screen | 15.4 x 18.7 px | 13.9 x 7.5 px |
+##
+## ⚠⚠ **THE 늑대 COLUMN ABOVE IS THE SIDE-VIEW WOLF AND THAT PICTURE IS GONE** (2026-08-30). It is
+## kept because it is what the 0.45 -> 0.80 judgement was made against; **what stands there now is H
+## at its own 1.70, drawn 41.9 x 41.9 of frame around 30.1 x 19.6 of animal.**
+##
+## ⚠⚠ **THE WOLF'S HEIGHT IS NOT WHAT THIS CONSTANT IS FIGHTING, AND THE PER-SPECIES COLUMN IT ASKED
+## FOR NOW EXISTS** (2026-08-30) — the third column of `BEAST_TEX`. A body is sized by WIDTH off
+## `BEAST_SPRITE_W_RATIO`, so a wide flat animal stands short beside a narrow tall man at any shared
+## scale, and **raising this raised that gap along with everything else.** ⇒ **This number is what
+## every body shares and the column is where one species departs from it**; the two multiply, and
+## neither is the other's copy.
+## ⚠ **The ceiling is the swordsman and it is measured, not guessed**: past about 0.96 he is a whole
+## 조각 tall again, which is the picture 「집이랑 캐릭터 확 줄여줘」 rejected. **He is the reason this
+## value did NOT move again on 2026-08-30** — the user's own words were 「I'd like the character to be
+## about right」, and what moved instead was the wolf's own column.
+const BODY_SPRITE_SCALE := 0.80
 ## ⚠⚠ **How big a building is drawn.** Same round, same reason: the one house on the island stood taller
 ## than the two-storey rock behind it. **Nothing reads a building's size but the eye** — no rule, no
 ## check, no footprint — so unlike the body above this one costs nothing and hides nothing.
 const BUILD_SCALE := 0.45
+
+## **How far off its 조각's centre a body stands when it is not alone there, as a fraction of a 조각.**
+##
+## ⚠⚠ **A 조각 ADMITS `Rules.TILE_CAPACITY` BODIES SINCE 2026-08-30 AND THEY WOULD OTHERWISE DRAW AS
+## ONE.** The sim walks every one of them to the same 조각 centre, so without this the second and third
+## body in a 조각 are hidden exactly behind the first — the count changes and the screen does not, which
+## is this repo's own named fake.
+##
+## ⚠ **It is DRAWING and the sim knows nothing about it.** Reach, the flow field and every distance
+## are still measured from the 조각 centre; what moves is the picture and the disc under it.
+## ⚠ **Under 0.5 or a body is drawn outside its own 조각** and reads as standing on its neighbour.
+## 0.30 leaves a clear gap at `Rules.TILE_CAPACITY` = 3 and still keeps every body inside its square.
+const CROWD_SPREAD_RATIO := 0.30
 
 
 ## **The hills** (2026-08-24, the user: 「뭔가 대각선으로 올라가는 건 있나 혹시? 뭔가 지금 너무 딱딱해서
@@ -1511,15 +1549,28 @@ const COL_SLOT_OFF := Color(0.420, 0.420, 0.440)
 const BODY_RADIUS_RATIO := [0.245, 0.22, 0.31, 0.174, 0.342]
 
 
-## The wolf. **The ally ashore is a picture now, not a rounded square** (2026-08-24, the user:
-## 「지금 아직 세포여서 보기가 힘드네」). Two files and not one plus a flip, because flipping inside
-## `_draw` costs a `draw_set_transform` and `net_draw_leaf` counts every `draw_*` call site — a
-## mirrored copy on disk keeps the leaf at exactly one call.
+## **The wolf, seen from four sides — H, the picture the user chose** (티켓 48). Screen-right,
+## screen-left, screen-down (coming at the camera), screen-up (going away).
 ##
-## ⚠ **The ghost wears its own species' picture too** (티켓 15) — it used to be the wolf whatever was
-## in the slot, which agreed with the plan only while one slot existed.
-const BEAST_WOLF_R := "res://assets/beast/wolf_r.png"
-const BEAST_WOLF_L := "res://assets/beast/wolf_l.png"
+## ⚠⚠ **THE FILE NAMES ARE COMPASS WORDS AND WHAT THEY ARE USED AS IS SCREEN DIRECTIONS.** The board
+## turns, so a picker written against world north would spin every wolf the moment the player presses
+## the turn key with nothing else on screen moving. **The heading is measured against the camera's own
+## two ground axes** — `field_view._facing_index`.
+## ⚠ **`wolf_h/` also carries `*_n.png` normal maps and NOTHING READS THEM** (티켓 50). Bodies are
+## drawn unshaded, and a head-on wolf is a few screen px wide — there is nowhere to put a gradient.
+const BEAST_WOLF_H_R := "res://assets/beast/wolf_h/east.png"
+const BEAST_WOLF_H_L := "res://assets/beast/wolf_h/west.png"
+const BEAST_WOLF_H_D := "res://assets/beast/wolf_h/south.png"
+const BEAST_WOLF_H_U := "res://assets/beast/wolf_h/north.png"
+## ⚠⚠ **`BEAST_WOLF_R` / `_L` STOOD HERE AND THEY ARE DELETED** (2026-08-30, the user at the screen:
+## 「the wolf isn't the H wolf I chose? That's not the wolf I picked」). They were `wolf_r.png` /
+## `wolf_l.png`, the 74 x 40 side-view wolf, and they walked the island while H — chosen 2026-08-30 and
+## marked resolved — had only ever reached the boat deck.
+## ⚠⚠ **THE 46 WALK AND BITE FRAMES WENT WITH THEM AND THEY ARE STILL ON DISK** (`wolf_walk_*`,
+## `wolf_bite_*`). They are the OLD animal on a 74 x 40 canvas; H is 92 x 92 with no frames at all, and
+## **mixing two canvases is a measured defect** — 티켓 48: 「캔버스가 프레임마다 다르면 몸이 뛰고
+## 떠오른다」. ⇒ **The wolf walks unanimated until H is given its own strips**, which is one row of the
+## table below and nothing else.
 const BEAST_BEAR_R := "res://assets/beast/bear_r.png"
 const BEAST_BEAR_L := "res://assets/beast/bear_l.png"
 const BEAST_CROW_R := "res://assets/beast/crow_r.png"
@@ -1543,10 +1594,12 @@ const ANIM_NAME := ["", "walk", "bite"]
 
 ## Frames per strip, in `Anim` order starting at `WALK`. **A 0 is a row with no strip of that kind.**
 const NO_ANIM_FRAMES := [0, 0]
-## ⚠ **WALK loops 0-1-2-3; BITE plays 0-1-2-3 once and hands the body back to WALK.** Frame 0 of the
-## bite is the only closed mouth in the strip, so a bite that looped would leave the jaw hanging open
-## for the whole fight.
-const WOLF_ANIM_FRAMES := [4, 4]
+## ⚠⚠ **`WOLF_ANIM_FRAMES := [4, 4]` STOOD HERE AND IT IS DELETED** (2026-08-30) with the side-view
+## wolf it counted — see `BEAST_WOLF_H_R` above. **NO ROW DECLARES A STRIP ANY MORE**, so everything
+## below this line runs and finds nothing, which is exactly what it was built to do: a species with no
+## art wears its standing picture through the same call. **The rule it carried, for the day H is given
+## frames**: WALK loops 0-1-2-3; BITE plays 0-1-2-3 once and hands the body back to WALK, because
+## frame 0 of the bite is the only closed mouth and a looped bite leaves the jaw open all fight.
 
 ## How long one frame of any strip is held. **One rate for the whole animal**: 0.12 s puts the walk
 ## cycle at 0.48 s (8 fps, four frames), which at a 49 px body is a stride you can count — the same
@@ -1557,23 +1610,48 @@ const WOLF_ANIM_FRAMES := [4, 4]
 ## first frames while the mouth carries the rest.
 const BEAST_FRAME_SEC := 0.12
 
-## ⚠⚠ **ONE ROW PER `Rules.UNITS` ROW: the picture that row wears facing right, and facing left.**
+## ⚠⚠ **ONE ROW PER `Rules.UNITS` ROW, AND IT IS THE WHOLE OF HOW A SPECIES IS DRAWN:** the pictures
+## it wears, the strips it animates with, and how big it is drawn against everything else.
 ## This replaces `field_view._beast_tex`'s `if` chain, and with it the `is_enemy` argument that chain
 ## needed. **That argument existed only because two species shared one row** — 소 and 까마귀 were the
 ## enemy's rows while the player's two slots borrowed their bodies, so one row had to answer with two
 ## different pictures depending on who was asking. Split the rows and there is nothing for it to point
 ## at: **one row, one picture**, and the argument going away is the structural proof the move landed.
 ##
-## ⚠ **An empty string is a row with NO picture**, and `field_view` draws the plain rounded shape for
+## ⚠⚠ **THE FIRST COLUMN IS A LIST AND ITS LENGTH SAYS HOW MANY WAYS THE SPECIES CAN FACE**
+## (2026-08-30, 티켓 25's substance). It was two slots, right and left, and **two slots cannot hold the
+## four the H wolf came with.** The order is `FACE_RIGHT · FACE_LEFT · FACE_DOWN · FACE_UP`, and the
+## first two mean the same thing at both lengths on purpose: a row that gains its up and down pictures
+## later does not have its existing two move.
+## ⚠ **An EMPTY list is a row with NO picture**, and `field_view` draws the plain rounded shape for
 ## it. The lion is the only one: the last boss is still a beast in a game whose enemies became human,
 ## and **where it goes is an open question** (티켓 17) — handing it the caveman's picture here would
 ## answer that by accident, in a place nobody would look for it.
 ##
-## ⚠⚠ **The third column is the row's OWN animation, and it is the only place one is declared.** A
+## ⚠⚠ **The second column is the row's OWN animation, and it is the only place one is declared.** A
 ## species animates by editing its own row; every consumer asks the row and falls back on the standing
 ## picture when the row says nothing, so **there is no species named anywhere in `field_view`**. A
 ## second list — "these ones have frames" — is the shape that has to be hand-synced with this one, and
-## the day they disagree the wrong animal walks.
+## the day they disagree the wrong animal walks. ⚠ **Every row says 0 today** — see `NO_ANIM_FRAMES`.
+##
+## ⚠⚠ **THE THIRD COLUMN IS HOW BIG THIS SPECIES IS DRAWN, AND IT IS ON THE PICTURE'S OWN ROW BECAUSE
+## IT WAS CHOSEN FOR THAT PICTURE** (2026-08-30, the user at the screen: 「the wolf ... is so small I
+## can't spot it」 against 「I'd like the character to be about right」 for the swordsman). One shared
+## `BODY_SPRITE_SCALE` had to answer both and could not: **a body is drawn to a WIDTH**, so a 74 x 40
+## wolf stood short beside a 33 x 40 man, and past about 0.96 the man was a whole 조각 tall again —
+## which is the picture 2026-08-28's 「집이랑 캐릭터 확 줄여줘」 rejected. **Raising the shared number
+## could only reach the wolf by breaking the man.**
+## ⚠⚠ **IT MULTIPLIES THE FRAME AND NOT THE ANIMAL, WHICH IS WHY THE WOLF'S NUMBER IS SO LARGE.**
+## Measured off the four files: H's ink fills **72% of its 92 x 92 frame side-on and 24% head-on**,
+## against `wolf_r.png`'s 82% — so at 1.0 the H wolf ashore would be SMALLER ink than the side-view
+## wolf it replaces (17.7 px against 20.3), even though its frame is nearly twice as tall.
+## ⚠ **1.70 is anchored on the swordsman, the one body the user says is about right**: it puts the
+## wolf's side-on ink at 30.1 x 19.6 px against the man's 27.4 x 33.3 — an animal his size, lying
+## lower. **The frame it sits in is 41.9 px, just over one 조각, and almost all of that is empty.**
+## ⚠ **`rules.gd` refuses this column and says so in its own header** — body size changes nothing about
+## what happens, so it lives here. It sits beside the picture rather than in a fourth parallel array
+## for the same reason `BODY_RADIUS_RATIO` is not in `UNITS`: **replace the picture and this number
+## must be re-judged**, and adjacency is what makes that impossible to miss.
 ## ⚠⚠ **FIVE ROWS SINCE THE SIDES SWAPPED** (2026-08-26): the swordsman the player is, and the four
 ## beasts he fights.
 ## ⚠⚠ **"The player's second weapon is a row here, not a drawing" STOOD ON THIS LINE AND IT IS NOW
@@ -1584,24 +1662,51 @@ const BEAST_FRAME_SEC := 0.12
 ## be card art now. ⇒ **A second player body costs a new DRAWING, not a new row**, and the estimate
 ## anyone makes off this table has to include that.
 const BEAST_TEX := [
-	[HUMAN_SWORD_R, HUMAN_SWORD_L, NO_ANIM_FRAMES],
-	[BEAST_WOLF_R, BEAST_WOLF_L, WOLF_ANIM_FRAMES],
-	[BEAST_BEAR_R, BEAST_BEAR_L, NO_ANIM_FRAMES],
-	[BEAST_CROW_R, BEAST_CROW_L, NO_ANIM_FRAMES],
-	["", "", NO_ANIM_FRAMES],
+	[[HUMAN_SWORD_R, HUMAN_SWORD_L], NO_ANIM_FRAMES, 1.0],
+	[[BEAST_WOLF_H_R, BEAST_WOLF_H_L, BEAST_WOLF_H_D, BEAST_WOLF_H_U], NO_ANIM_FRAMES, 1.70],
+	[[BEAST_BEAR_R, BEAST_BEAR_L], NO_ANIM_FRAMES, 1.0],
+	[[BEAST_CROW_R, BEAST_CROW_L], NO_ANIM_FRAMES, 1.0],
+	[[], NO_ANIM_FRAMES, 1.0],
 ]
 
-const _TEX_COL_RIGHT := 0
-const _TEX_COL_LEFT := 1
-const _TEX_COL_FRAMES := 2
+const _TEX_COL_PICS := 0
+const _TEX_COL_FRAMES := 1
+const _TEX_COL_DRAW := 2
+
+## **Which way a body is facing, as an index into its own row's picture list.**
+##
+## ⚠⚠ **THESE ARE SCREEN DIRECTIONS AND NOT COMPASS ONES.** The board turns; the resolution lives in
+## `field_view._facing_index`, which is the only place that holds the camera's two ground axes.
+## ⚠ **RIGHT and LEFT come first so a two-picture row and a four-picture row agree on them** — the day
+## a species gains its up and down pictures, the two it already had do not move.
+const FACE_RIGHT := 0
+const FACE_LEFT := 1
+const FACE_DOWN := 2
+const FACE_UP := 3
 
 
-## The picture path row `type_id` wears facing `facing_right`, or `""` for a row with none.
-static func beast_tex_path(type_id: int, facing_right: bool) -> String:
+## **How many ways row `type_id` can face**, which is however many pictures it declares. 0 for a row
+## with none, so a caller never has to know which rows are drawn at all.
+static func beast_facings(type_id: int) -> int:
 	if type_id < 0 or type_id >= BEAST_TEX.size():
+		return 0
+	return (BEAST_TEX[type_id][_TEX_COL_PICS] as Array).size()
+
+
+## The picture path row `type_id` wears facing `facing`, or `""` for a row with none — **and `""` for
+## a facing that row does not have**, which is the same answer and the same fallback.
+static func beast_tex_path(type_id: int, facing: int) -> String:
+	if facing < 0 or facing >= beast_facings(type_id):
 		return ""
-	var row: Array = BEAST_TEX[type_id]
-	return str(row[_TEX_COL_RIGHT if facing_right else _TEX_COL_LEFT])
+	return str((BEAST_TEX[type_id][_TEX_COL_PICS] as Array)[facing])
+
+
+## **How big row `type_id` is drawn, as a multiple of what `BEAST_SPRITE_W_RATIO` gives everything.**
+## 1.0 for an unknown row, so a bad id draws at the shared size rather than vanishing.
+static func beast_draw_scale(type_id: int) -> float:
+	if type_id < 0 or type_id >= BEAST_TEX.size():
+		return 1.0
+	return float(BEAST_TEX[type_id][_TEX_COL_DRAW])
 
 
 ## How many frames row `type_id`'s `anim` strip holds. **0 for `IDLE`, for an unknown row and for any
@@ -1623,12 +1728,20 @@ static func beast_anim_frames(type_id: int, anim: int) -> int:
 ##
 ## Falls back on the standing picture for `IDLE`, for a row with no strip and for a row with no
 ## picture at all, so **a caller never has to ask whether this species is animated.**
-static func beast_frame_path(type_id: int, anim: int, frame: int, facing_right: bool) -> String:
-	var idle := beast_tex_path(type_id, facing_right)
+## ⚠ **The facing suffix is read off the standing picture rather than rebuilt from the index.** A
+## picture that carries none — the four-facing wolf's files are compass words — keeps its whole name as
+## the stem, so its frames would be `<name>_walk_0.png`. **Nothing declares a strip today**, so no such
+## file exists; what this does is refuse to invent `_r` for a picture that never had one.
+static func beast_frame_path(type_id: int, anim: int, frame: int, facing: int) -> String:
+	var idle := beast_tex_path(type_id, facing)
 	var count := beast_anim_frames(type_id, anim)
 	if idle.is_empty() or count <= 0 or frame < 0 or frame >= count:
 		return idle
-	var tail := "_r.png" if facing_right else "_l.png"
+	var tail := ".png"
+	for suffix in ["_r.png", "_l.png"]:
+		if idle.ends_with(str(suffix)):
+			tail = str(suffix)
+			break
 	return "%s_%s_%d%s" % [idle.trim_suffix(tail), str(ANIM_NAME[anim]), frame, tail]
 
 ## How far the body's own colour is mixed INTO the wolf. **0 is the raw grey animal and 1 is a solid
@@ -1921,10 +2034,30 @@ const IDLE_SWAY_RATIO := 0.25         # of the drawn half-width: wolf 6.1 px, be
 const IDLE_PERIOD_SEC := 1.1
 
 const GAIT_PERIOD_TILES := 0.7        # one cycle every 28 px
-const GAIT_SQUASH := 0.20             # max displacement crow 2.0 · ranged 2.2 · melee 2.8 ·
-                                      # bison 3.2 · lion 4.4 px. The crow sits exactly on the 2.0 px
-                                      # floor; at 0.12 all five bodies were at or under it, which
-                                      # would have made this item invisible and therefore pointless
+## ⚠⚠ **0.20 -> 0.1125** (2026-08-30, the user at the screen: 「it bounces far too much. I'd like the
+## character to be about right」). The squash is a FRACTION of the drawn size, so it grew with the
+## bodies when `BODY_SPRITE_SCALE` went 0.45 -> 0.80 earlier the same day: **0.20 x 0.45 / 0.80 =
+## 0.1125 puts every body back to the displacement it had before that raise**, and that is the whole
+## derivation — no new number was chosen by eye.
+##
+## ⚠⚠ **THE px FIGURES THAT STOOD HERE DESCRIBED TODAY AND NOT 0.45, WHICH IS THE OPPOSITE OF WHAT
+## THEY WERE READ AS.** They were 「crow 2.0 · ranged 2.2 · melee 2.8 · bison 3.2 · lion 4.4」 against
+## species names from the nine-row table that died with the side swap. Re-measured at 0.20 with the
+## five rows that exist: 까마귀 1.9 · 늑대 2.5 · 검사 2.7 · 곰 3.5 · 사자 3.8 px — **so 0.20 was already
+## producing roughly those numbers, and「bring the stale figures back」would have changed nothing.**
+## ⇒ **What moved this was the user at the screen, not the arithmetic.**
+##
+## **Measured at 0.1125, max displacement of one edge — half-width first, half-height second:**
+## 까마귀 1.10 / 0.73 · 사자 1.23 / 1.23 (no picture, drawn as a square) · 검사 1.54 / 1.87 ·
+## 곰 1.95 / 1.66 · 늑대 2.36 / 2.36 px. ⚠ **The wolf is the largest because its own draw column is
+## 1.70** — see `BEAST_TEX` — so it barely moved while everything else halved.
+##
+## ⚠⚠ **THIS CONTRADICTS A MEASUREMENT THAT IS STILL TRUE AND THE CONTRADICTION IS DELIBERATE.** The
+## old note said 「the crow sits exactly on the 2.0 px floor; at 0.12 all five bodies were at or under
+## it, which would have made this item invisible」 — and at 0.1125 four of the five are under 2.0 px.
+## **The user looked at the screen and called it too much anyway**, which outranks a floor nobody has
+## re-measured since the bodies, the species table and the camera all changed.
+const GAIT_SQUASH := 0.1125
 
 
 ## --- what it costs to lay a flat mark on ground that is no longer flat -------------------------------
@@ -1958,6 +2091,25 @@ const FX_GROUND_STEP_PX := 20.0
 # ---------------------------------------------------------------------------------------------
 # Accessors
 # ---------------------------------------------------------------------------------------------
+
+## **Where inside its own 조각 the body in reservation slot `slot` stands, in canvas px.**
+##
+## ⚠⚠ **SLOT 0 IS THE 조각 CENTRE AND EVERY OTHER SLOT RINGS IT.** A body standing alone is always in
+## slot 0 — `Grid._free_slot` hands out the lowest free one — so **a lone body is drawn exactly where it
+## was before the crowd existed**, and nothing about the single-body picture had to be re-judged.
+##
+## ⚠ **`cap` is passed in rather than read from `Rules`.** This file is presentation and holds no rule;
+## the caller already has the capacity in hand, and a copy of it here would be the second place the
+## number lives.
+## ⚠ **The ring is in WORLD axes, not screen axes.** These px are the same px `tile_point_px` answers
+## in, so the spread is fixed to the ground and does not swing when the board is turned.
+static func crowd_offset_px(slot: int, cap: int) -> Vector2:
+	if slot <= 0 or cap <= 1:
+		return Vector2.ZERO
+	var around := maxi(cap - 1, 1)
+	var a := TAU * float(slot - 1) / float(around)
+	return Vector2(cos(a), sin(a)) * CROWD_SPREAD_RATIO * TILE_PX
+
 
 ## A `const` Array is read-only but its elements are untyped, so every read casts.
 static func body_radius_of(type_id: int) -> float:
@@ -2164,20 +2316,12 @@ const BOAT_DECK_SLOTS := [
 	Vector3(1.45, 0.4375, -0.155), Vector3(1.45, 0.4375, 0.155),
 ]
 
-## **The rider seen from four sides — screen-down, screen-up, screen-right, screen-left, in that
-## order.** ⚠ **The order IS the meaning**: `field_view._boat_rider_tex` indexes this and does not
-## branch, so re-ordering these four rows turns every wolf on every deck around at once.
-##
-## ⚠ **A different set of pictures from `BEAST_WOLF_R` / `_L`.** The walking wolf is drawn from the side
-## and flipped for the other way, and a boat comes toward the camera as often as across it. **The file
-## names are compass words and what they are used as is SCREEN directions** — the heading is measured
-## against the camera's own yaw, and the camera turns.
-const BOAT_RIDER_TEX := [
-	"res://assets/beast/wolf_h/south.png",
-	"res://assets/beast/wolf_h/north.png",
-	"res://assets/beast/wolf_h/east.png",
-	"res://assets/beast/wolf_h/west.png",
-]
+## ⚠⚠ **`BOAT_RIDER_TEX` STOOD HERE AND IT IS DELETED** (2026-08-30). It named the four `wolf_h`
+## pictures a second time, in a second order, while the wolf's own row in `BEAST_TEX` named nothing but
+## the old side-view animal. **That is how the deck ended up wearing the picture the user chose and the
+## island wearing the one he did not** — the two lists could not disagree out loud, because neither
+## mentioned the other. ⇒ **The deck reads the wolf's row like everything else does**, and the day the
+## wolf's pictures change, the boat changes with it or nothing does.
 
 ## The rider's picture width as a multiple of a wolf's body radius. ⚠ **Its own number and not
 ## `BEAST_SPRITE_W_RATIO`**: these four are drawn square (92 x 92) where the walking wolf is wide and
@@ -2208,7 +2352,20 @@ const BOAT_RIDER_TEX := [
 ## seat-to-seat ceiling above was reached by the side-on picture; the head-on one has never been near
 ## it. **Nothing here is retuned for that** — the ratio is pinned and this note is what stops the next
 ## reader taking 6 for the size of the animal.
-const BOAT_RIDER_W_RATIO := 6.0
+##
+## ⚠⚠ **6.0 -> 2.70, AND NOT ONE PIXEL OF THE DECK MOVED** (2026-08-30). Every measurement above was
+## taken with `BODY_SPRITE_SCALE` multiplied in downstream, so 「6 radii」 has always reached the deck as
+## `6.0 x 0.45 = 2.70` — which is why the numbers beside it read 0.594 and 0.426 조각 rather than the
+## 1.3 and 0.95 that six bare radii would give. **The 0.45 is folded in here and the drawing no longer
+## reads that constant.**
+## ⚠⚠ **THE COUPLING IS WHAT WAS ACTUALLY WRONG.** `BODY_SPRITE_SCALE` is how big a body is drawn ON
+## THE ISLAND and it was raised the same day so the wolves could be told apart there; through the old
+## multiplication that raise went straight to the deck, where **the riders overflowed their benches**
+## and the shadow discs under them stopped covering them. **The deck was judged against the boat and
+## the island against the island** — two judgements, and one number cannot hold both.
+## ⚠⚠ **`BEAST_TEX`'s draw column DOES NOT REACH HERE EITHER, for the same reason** (2026-08-30). The
+## wolf's 1.70 is how big it reads on grass; a rider sized off it would be 1.70 times over its bench.
+const BOAT_RIDER_W_RATIO := 2.70
 
 
 ## **The disc laid on the plank under a rider, as a fraction of the gap between the two riders sharing

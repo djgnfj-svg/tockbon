@@ -304,7 +304,7 @@ func run(t) -> void:
 	# camera is the only thing moving and a `cam_px` that changed changed because of an input.
 	# ⚠ **After the drag rows, not before**: `_a_drag_...` leaves the yaw at its opening angle, and
 	# every direction row below reads `cam_px` axes that only line up with the screen at that yaw.
-	_the_right_button_pans_and_never_commands(t, game, fs)
+	_the_right_button_turns_and_never_commands(t, game, fs)
 	_the_edge_of_the_window_pans(t, game, fs)
 
 	var b: Battle = game.battle
@@ -391,11 +391,27 @@ func run(t) -> void:
 	# beasts standing on it and no body of the player's ashore, so the census was 「one sprite per live
 	# enemy and nothing else」. **The enemies are deleted**; what stands on the island is the watch the
 	# run puts there.
+	# ⚠⚠ **ONE FRAME IS PUMPED HERE AND WITHOUT IT THIS ROW READS TWO INSTANTS** (2026-08-30). The
+	# header above says the sim is frozen from `set_process(false)`, and **the edge-pan row in between
+	# calls `game._process` by hand** — which steps it, with no engine frame after to repaint. **A body
+	# walking is then painted where it was and read where it is.** It went unseen while the watch was
+	# ONE body: the only order it was ever given aimed at the 조각 it already stood on, so it cleared on
+	# the sub-step it arrived and nothing ever moved. **Four bodies is what made it visible.**
+	await t.pump_frames(1)
 	var ashore := battle_ashore(b)
 	t.ok(ashore.size() > 0, "섬에 선 몸이 있다 (%d명)" % ashore.size())
+	# ⚠⚠ **THE DECK COUNTS AND IT USED TO BE INVISIBLE HERE** (2026-08-30). A rider is a body sprite out
+	# of the same pool, and by this point in the file the island's clock has run past
+	# `BOAT_FIRST_SEC` — **so eight of them were on screen while this row said 「섬에 선 몸 수」 and
+	# passed.** What hid them was the stale frame the row above now pumps away. ⚠ **The three terms come
+	# from the SIM**, never from the pool: counted off the pool this would compare it with itself.
+	var riders := 0
+	for k in b.boat_riders.size():
+		riders += int(b.boat_riders[k])
 	var bodies := _body_sprites(fs)
-	t.eq(bodies.size(), ashore.size(),
-		"몸 스프라이트 수 = 섬에 선 몸 수 — 화면에 있는 것과 sim 이 아는 것이 같다")
+	t.eq(bodies.size(), ashore.size() + b.living_enemy_ids().size() + riders,
+		"몸 스프라이트 수 = 섬에 선 몸 + 판 위의 짐승 + 갑판 위의 늑대 (%d + %d + %d) — 화면에 있는 것과 sim 이 아는 것이 같다"
+			% [ashore.size(), b.living_enemy_ids().size(), riders])
 	var body_bad := 0
 	for raw_i in ashore:
 		var i: int = raw_i
@@ -413,8 +429,14 @@ func run(t) -> void:
 			body_bad += 1
 			continue
 		# The size really is the type's own radius through the sprite-width ratio.
-		var want_sx := Look.body_radius_of(st) * Look.BEAST_SPRITE_W_RATIO / float(s.texture.get_width()) \
-			if textured else Look.body_radius_of(st) * 2.0 / float(s.texture.get_width())
+		# ⚠⚠ **BOTH DRAW FACTORS, AND THE SPECIES' ROW SAYS ONE OF THEM** (2026-08-30). This compared
+		# against the bare ratio while `_put_body` has multiplied `BODY_SPRITE_SCALE` in since
+		# 2026-08-28 and the row's own draw column since today — **a size row that does not carry every
+		# factor is a size row that goes green on a size nothing drew.**
+		var drawn := Look.BODY_SPRITE_SCALE * Look.beast_draw_scale(st)
+		var want_sx := Look.body_radius_of(st) * Look.BEAST_SPRITE_W_RATIO * drawn \
+				/ float(s.texture.get_width()) \
+			if textured else Look.body_radius_of(st) * 2.0 * drawn / float(s.texture.get_width())
 		if absf(s.scale.x - want_sx) > 0.001:
 			body_bad += 1
 	t.eq(body_bad, 0, "몸마다 자리·색·크기가 sim 의 그 몸에게서 나왔다")
@@ -466,34 +488,32 @@ func run(t) -> void:
 	# here) begins a pan, motion moves it, release ends it. Docks are gone, so this replaces the old
 	# "dock click corrected by the shake" item 11 — the shake still folds into the SAME expression
 	# (`field_view._place_camera`), and `net_camera` is what pins that directly.
-	# ⚠⚠ **THE BARE WHEEL TURNS THE BOARD AND NO LONGER ZOOMS** (2026-08-30, the user: 「마우스 휠이
-	# 회전 오른쪽이 끌어서 이동으로 해야할듯」). **Both halves or neither**: a wheel that turned AND
-	# zoomed would pass the turn rows on its own, and the zoom row is what says the old behaviour
-	# actually left.
+	# ⚠⚠ **THE BARE WHEEL ZOOMS. IT TURNED THE BOARD FOR ONE ROUND AND THE USER REVERSED IT**
+	# (2026-08-30 morning: 「마우스 휠이 회전 오른쪽이 끌어서 이동으로 해야할듯」; the same day at the screen:
+	# 「마우스 휠이 확대 축소가 맞고, 오른쪽 버튼은 카메라 회전으로 이해했어」). **The later word wins.**
+	# ⚠⚠ **BOTH HALVES OR NEITHER**: a wheel that zoomed AND turned would pass the zoom rows on its own,
+	# and the yaw row is what says the turn actually left the wheel.
+	# ⚠ **SHIFT+wheel is deleted with it.** It was the previous builder's own pairing, never the user's,
+	# and with the bare wheel zooming again it is a second unowned path to one state — so the row that
+	# measured it is deleted rather than left asserting a gesture nobody chose.
 	var before_zoom := fs.zoom
 	var before_yaw := fs.cam_yaw_deg
 	game._unhandled_input(_wheel(Vector2(640.0, 360.0), true))
-	t.eq(fs.zoom, before_zoom, "맨 휠은 줌을 안 건드린다 — 휠은 더 이상 확대가 아니다")
-	t.ok(absf(fs.cam_yaw_deg - fmod(before_yaw + Look.CAM_YAW_STEP_DEG, 360.0)) < 0.001,
-		"휠 한 칸이 판을 Q·E 와 똑같은 %.0f° 만큼 돌린다 (%.2f°)"
-			% [Look.CAM_YAW_STEP_DEG, fs.cam_yaw_deg])
-	# **Down is the other way**, and this is the row that stops both notches turning the same way.
-	before_yaw = fs.cam_yaw_deg
+	t.ok(fs.zoom > before_zoom, "휠을 올리면 확대된다 (%.4f -> %.4f)" % [before_zoom, fs.zoom])
+	t.ok(absf(fs.cam_yaw_deg - before_yaw) < 0.001,
+		"그리고 휠은 판을 안 돌린다 — 한 굴림이 두 가지를 하지 않는다 (%.2f°)" % fs.cam_yaw_deg)
+	# **Down is the other way**, and this is the row that stops both notches doing the same thing.
+	var up_zoom := fs.zoom
 	game._unhandled_input(_wheel(Vector2(640.0, 360.0), false))
-	t.ok(absf(fs.cam_yaw_deg - fmod(before_yaw - Look.CAM_YAW_STEP_DEG + 360.0, 360.0)) < 0.001,
-		"아래로 굴리면 정확히 되돌아온다 (%.2f°)" % fs.cam_yaw_deg)
-
-	# ⚠⚠ **SHIFT + WHEEL IS THE ZOOM, AND THAT PAIRING IS UNOWNED.** The user moved the wheel onto the
-	# turn and never said where zoom went — see `game.gd`'s `_on_wheel`, which records it as the
-	# builder's call and cheap to move. **This row is the other half of that cost**: one branch there,
-	# one row here.
-	before_yaw = fs.cam_yaw_deg
+	t.ok(fs.zoom < up_zoom, "아래로 굴리면 축소된다 (%.4f -> %.4f)" % [up_zoom, fs.zoom])
+	t.ok(absf(fs.zoom - before_zoom) < 0.0001,
+		"한 칸 올리고 한 칸 내리면 제자리로 돌아온다 (%.4f)" % fs.zoom)
+	# **The ceiling is real and the wheel is what reaches it.**
 	for _n in 8:
-		game._unhandled_input(_wheel(Vector2(640.0, 360.0), true, true))
-	t.ok(fs.zoom > before_zoom, "시프트를 잡고 휠을 올리면 확대된다")
+		game._unhandled_input(_wheel(Vector2(640.0, 360.0), true))
 	t.eq(fs.zoom, Look.ZOOM_MAX, "계속 올리면 ZOOM_MAX 에서 멈춘다 — 8번이면 이미 넘친다 (바닥)")
 	t.ok(absf(fs.cam_yaw_deg - before_yaw) < 0.001,
-		"그리고 시프트 휠은 판을 안 돌린다 — 한 굴림이 두 가지를 하지 않는다 (%.2f°)" % fs.cam_yaw_deg)
+		"열 번을 굴려도 판은 그대로다 (%.2f°)" % fs.cam_yaw_deg)
 
 	# ⚠⚠ **THE SENTENCE THAT STOOD HERE — 「a drag can never MOVE the camera on this island」 — IS A
 	# DELETED RULE** (2026-08-30, 티켓 41). It was true while `_clamp_cam` was bounded by the island:
@@ -723,17 +743,20 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 	t.ok(b.grid.passable[body_tile] != 0, "자가 점검 — 누른 자리가 걸을 수 있는 조각이다")
 
 
-## **The right button drags the camera and commands nobody** (2026-08-30, the user: 「오른쪽이 끌어서
-## 이동으로 해야할듯」).
+## **The right button TURNS the board and commands nobody** (2026-08-30, the user at the screen:
+## 「오른쪽 버튼은 카메라 회전으로 이해했어」).
 ##
-## ⚠⚠ **THE TWO ROWS ARE THE SAME GESTURE MEASURED ON ITS TWO OUTCOMES**, exactly as the left
-## button's pair is. A right button that panned but also ordered would pass the pan row; one that
-## ordered nothing but never panned would pass the order row. **Neither row is worth anything alone.**
+## ⚠⚠ **THIS FUNCTION MEASURED A PAN FOR ONE ROUND** (「오른쪽이 끌어서 이동으로 해야할듯」, the same
+## day, earlier). **The later word wins** and the old rows are rewritten rather than kept beside the
+## new ones — two sets asserting opposite gestures is not a record, it is one of them lying.
 ##
-## ⚠ **The right button reuses the left's threshold on purpose**, so the under-threshold row below is
-## not a duplicate of the left one — it is what says the reuse is real rather than a second path that
-## happens to look similar today.
-func _the_right_button_pans_and_never_commands(t, game, fs: FieldView) -> void:
+## ⚠⚠ **THE ROWS ARE THE SAME GESTURE MEASURED ON ITS TWO OUTCOMES.** A right button that turned but
+## also ordered would pass the turn row; one that ordered nothing but never turned would pass the order
+## row. **Neither row is worth anything alone.**
+##
+## ⚠ **The camera is asked to stay PUT as well as to turn.** The right button moved `cam_px` this
+## morning, and a turn that also panned would read as the old gesture surviving under the new one.
+func _the_right_button_turns_and_never_commands(t, game, fs: FieldView) -> void:
 	var b: Battle = game.battle
 	for i in b.soldier_order.size():
 		b.soldier_order[i] = -1
@@ -750,25 +773,36 @@ func _the_right_button_pans_and_never_commands(t, game, fs: FieldView) -> void:
 	var body_tile := int(round(body.y)) * b.grid.w + int(round(body.x))
 	t.eq(game._tile_at(on_land), body_tile, "자가 점검 — 그 화면 점이 몸이 선 조각으로 돌아온다")
 
-	# -- a right click in place: nothing moves and nobody is sent -------------------------------------
+	# -- a right click in place: nothing turns and nobody is sent ------------------------------------
 	var held := fs.cam_px
+	var held_yaw := fs.cam_yaw_deg
 	game._unhandled_input(_rpress(on_land))
 	game._unhandled_input(_rrelease())
 	t.eq(fs.cam_px, held, "오른쪽을 제자리에서 누르고 떼면 카메라가 안 움직인다")
+	t.ok(absf(fs.cam_yaw_deg - held_yaw) < 0.001,
+		"그리고 판도 안 돌아간다 — 안 움직인 끌기는 회전이 아니다 (%.2f°)" % fs.cam_yaw_deg)
 	var ordered := 0
 	for i in b.soldier_order.size():
 		if int(b.soldier_order[i]) >= 0:
 			ordered += 1
 	t.eq(ordered, 0, "그리고 아무도 명령받지 않는다 — 오른쪽은 절대 보내지 않는다")
 
-	# -- a right drag: the camera moves ---------------------------------------------------------------
-	var before := fs.cam_px
+	# -- a right drag: the board turns, by the pixels the hand travelled ------------------------------
+	# ⚠ **The expected yaw is `Look.CAM_YAW_PER_PX_DEG` times the HORIZONTAL travel and nothing else** —
+	# the vertical 40 px of the same motion must not reach the camera, or a stray diagonal tilts the
+	# board as well as turning it.
+	var before_yaw := fs.cam_yaw_deg
+	var before_px := fs.cam_px
 	game._unhandled_input(_rpress(on_land))
-	game._unhandled_input(_motion(on_land + Vector2(2.0, 0.0), Vector2(2.0, 0.0)))
-	t.eq(fs.cam_px, before, "오른쪽도 문턱 아래로 움직인 것은 아직 이동이 아니다 — 왼쪽과 같은 문턱을 쓴다")
-	game._unhandled_input(_motion(on_land + Vector2(60.0, 40.0), Vector2(58.0, 40.0)))
-	t.ok(fs.cam_px.distance_to(before) > 1.0,
-		"문턱을 넘겨 오른쪽으로 끌면 카메라가 움직인다 (%.1f px)" % fs.cam_px.distance_to(before))
+	game._unhandled_input(_motion(on_land + Vector2(60.0, 40.0), Vector2(60.0, 40.0)))
+	var want := fmod(before_yaw + 60.0 * Look.CAM_YAW_PER_PX_DEG + 360.0, 360.0)
+	t.ok(absf(fs.cam_yaw_deg - want) < 0.001,
+		"오른쪽으로 60px 끌면 판이 %.2f° 로 돌아간다 (%.2f°)" % [want, fs.cam_yaw_deg])
+	t.eq(fs.cam_px, before_px, "그러면서 카메라는 안 움직인다 — 돌리기는 이동이 아니다")
+	# **The other way comes back**, which is the row that stops both directions turning one way.
+	game._unhandled_input(_motion(on_land, Vector2(-60.0, -40.0)))
+	t.ok(absf(fs.cam_yaw_deg - fmod(before_yaw + 360.0, 360.0)) < 0.001,
+		"되돌리면 정확히 제자리로 돌아온다 (%.2f°)" % fs.cam_yaw_deg)
 	game._unhandled_input(_rrelease())
 	ordered = 0
 	for i in b.soldier_order.size():
@@ -776,10 +810,11 @@ func _the_right_button_pans_and_never_commands(t, game, fs: FieldView) -> void:
 			ordered += 1
 	t.eq(ordered, 0, "끌고 나서도 아무도 명령받지 않는다")
 
-	# **The release really ended it**, or the next motion pans behind the player's back.
-	var after := fs.cam_px
-	game._unhandled_input(_motion(on_land + Vector2(120.0, 80.0), Vector2(60.0, 40.0)))
-	t.eq(fs.cam_px, after, "오른쪽을 뗀 뒤의 움직임은 카메라를 안 끈다")
+	# **The release really ended it**, or the next motion turns the board behind the player's back.
+	var after_yaw := fs.cam_yaw_deg
+	game._unhandled_input(_motion(on_land + Vector2(120.0, 80.0), Vector2(120.0, 80.0)))
+	t.ok(absf(fs.cam_yaw_deg - after_yaw) < 0.001,
+		"오른쪽을 뗀 뒤의 움직임은 판을 안 돌린다 (%.2f°)" % fs.cam_yaw_deg)
 
 
 ## **The pointer parked against a side of the window pans the camera, and that is how it travels now**
@@ -1232,15 +1267,15 @@ func _motion(at: Vector2, relative: Vector2) -> InputEventMouseMotion:
 	return ev
 
 
-## ⚠ **`shift` is a flag ON THE EVENT and not the `Input` singleton.** The shell reads
-## `click.shift_pressed`, which the OS fills in on every mouse event, so a net sets it the same way
-## it sets the position — nothing here has to reach for a modifier state it cannot move headless.
-func _wheel(at: Vector2, up: bool, shift: bool = false) -> InputEventMouseButton:
+## ⚠⚠ **THE `shift` ARGUMENT IS GONE** (2026-08-30). It set `shift_pressed` on the event for the
+## SHIFT+wheel zoom, which was the previous builder's own pairing and is deleted with the wheel going
+## back onto the plain zoom — **the shell reads no modifier at all now**, so a net that set one would
+## be driving a flag nothing looks at.
+func _wheel(at: Vector2, up: bool) -> InputEventMouseButton:
 	var ev := InputEventMouseButton.new()
 	ev.button_index = MOUSE_BUTTON_WHEEL_UP if up else MOUSE_BUTTON_WHEEL_DOWN
 	ev.pressed = true
 	ev.position = at
-	ev.shift_pressed = shift
 	return ev
 
 

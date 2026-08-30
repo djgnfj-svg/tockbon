@@ -3,6 +3,9 @@ Status: open
 
 # 안으로 파고드는 모서리가 뾰족하다
 
+⚠⚠ **「칸」 in this ticket is what the glossary now calls 「블록」** — the 2x2 lump Blender builds as
+one object. **The word flipped on 2026-08-29**; quotations keep the word the user said.
+
 ## 무엇이 되면 끝인가
 
 **섬 윤곽이 안으로 꺾이는 자리가 바깥으로 튀어나온 모서리와 똑같이 둥글다.**

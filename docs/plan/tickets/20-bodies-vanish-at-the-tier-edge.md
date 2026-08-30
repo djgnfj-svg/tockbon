@@ -3,6 +3,9 @@ Status: open
 
 # 1층과 2층의 경계에서 몸이 사라진다
 
+⚠⚠ **「칸」 in this ticket is what the glossary now calls 「블록」** — the 2x2 lump Blender builds as
+one object. **The word flipped on 2026-08-29**; quotations keep the word the user said.
+
 ## 무엇이 되면 끝인가
 
 **검사가 2층 가장자리를 걸어도 어느 프레임에서도 안 사라진다.**

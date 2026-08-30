@@ -88,11 +88,15 @@ func _reset() -> void:
 ##
 ## The `Grid` is new every time. `load_rows` does clear reservations, but a grid built here can never
 ## be one another `Battle` still holds unit ids inside.
+## ⚠⚠ **THIS IS THE ONE PLACE THE ISLAND FILE AND THE FIGHT MEET.** `Battle` never reads `Islands` — it
+## is handed a board, a 성채 and a doorstep, so every net fixture in the repo is a legal island. The
+## 성채's own 조각 are what burns; the doorstep is where a 검사 appears, at the opening and after he dies.
 func begin_island() -> Battle:
 	var grid := Grid.new()
 	Islands.load_into(grid)
 	var battle := Battle.new()
-	battle.setup(grid, army, Islands.spawns())
+	battle.setup(grid, army, Islands.spawns(), Islands.keep_tiles(),
+			Islands.beside_home_tile(grid.w))
 	_stand_the_watch(battle)
 	return battle
 
@@ -104,25 +108,22 @@ func begin_island() -> Battle:
 ## this island and the beasts are what lands on it — and an island that opens with nobody on it says
 ## the opposite of that on the one screen the player actually looks at.
 ##
-## ⚠ **ONE, and not the whole roster** (2026-08-27, the user: ***"칸단위 부대는 따로 없음 아직"***).
-## Squads do not exist yet, so ten bodies would be ten bodies walking as one lump — the picture that
-## makes「부대가 없다」look like a bug rather than a decision. **Raising this number is one line, on the
-## day squads arrive.**
+## ⚠⚠ **EVERY LIVING BODY, AND IT USED TO BE EXACTLY ONE** (2026-08-27, the user: ***"칸단위 부대는
+## 따로 없음 아직"***). Squads did not exist, so ten bodies would have walked as one lump. **티켓 41
+## settles the unit as 「몸 하나」** — bodies are commanded one at a time — so there is nothing left for
+## the split to buy, and what it cost was nine bodies that existed, counted, and could never be seen.
+## ⇒ **The roster and the picture are `Rules.SWORDSMAN_START_COUNT`, one number.**
 ##
-## ⚠ **BESIDE the keep and not ON it.** `Builds` gives every kind a footprint but nothing marks those
-## tiles impassable, so a body placed on the keep's own tile stands INSIDE the house and the island
-## opens looking empty — measured 2026-08-27, and it read exactly like「아무도 안 세워졌다」.
-## ⚠ Silent when there is nowhere to stand: `place_ashore` answers -1 and the island opens empty, which
-## is the honest picture of a board with no free land next to its keep.
+## ⚠ **BESIDE the keep and not ON it**, and that is no longer this function's problem: `Battle.setup`
+## reserves the 성채's own 조각, so the free-tile search cannot hand back a 조각 inside the house. It was
+## measured 2026-08-27 and read exactly like「아무도 안 세워졌다」.
+## ⚠ Silent when there is nowhere to stand: `stand_at_keep` answers -1 and that body is simply not on
+## the board, which is the honest picture of an island with no free land beside its 성채.
 func _stand_the_watch(battle: Battle) -> void:
-	var home := Islands.beside_home_tile(battle.grid.w)
-	if home < 0:
-		return
 	for i in army.type_id.size():
 		if army.alive[i] == 0:
 			continue
-		battle.place_ashore(i, home)
-		return
+		battle.stand_at_keep(i)
 
 
 ## ⚠⚠ **`finish_island` · `state` · `_advance` · `_island_cleared` STOOD HERE AND ALL FOUR ARE

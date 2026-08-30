@@ -112,6 +112,46 @@ static func beside_home_tile(stride: int) -> int:
 	return y * stride + x
 
 
+## **Every 조각 the 성채 covers**, empty when the island carries none.
+##
+## ⚠⚠ **FOUND BY KIND AND NOT BY BEING FIRST IN THE LIST.** `home_tile` above takes the first building
+## because it is the doorstep of whatever the island opens with; **the thing the run is LOST with is the
+## 성채 specifically**, and `Builds.KEEP` is the one place that word is spelled. The day a second
+## building stands before it in the file, this keeps answering and that one moves.
+##
+## ⚠ **The whole footprint and not the corner**, because a 늑대 walks up to whichever side of it is
+## nearest — a reach measured to the low corner alone would let one stand inside the far half of the
+## house and swing at nothing.
+## ⚠ `stride` is the file's own width here and not a caller's grid, unlike `beside_home_tile`: this
+## answers 조각 numbers for the board the file describes, and a caller holding a different board has a
+## bigger problem than a wrong index.
+static func keep_tiles() -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var stride := int(_load().get("w", 0))
+	var tall := rows().size()
+	if stride <= 0 or tall <= 0:
+		return out
+	for raw in builds():
+		var row := raw as Dictionary
+		if str(row.get("kind", "")) != Builds.KEEP:
+			continue
+		var span := Builds.footprint_of(Builds.KEEP)
+		var x0 := int(row.get("x", 0))
+		var y0 := int(row.get("y", 0))
+		for dy in maxi(span.y, 1):
+			for dx in maxi(span.x, 1):
+				var x := x0 + dx
+				var y := y0 + dy
+				# Off the board is dropped rather than clamped: a clamped 조각 is a real 조각 somewhere
+				# else, and a 성채 that could be hit from the wrong corner of the island is worse than
+				# one that is a 조각 smaller than it is drawn.
+				if x < 0 or y < 0 or x >= stride or y >= tall:
+					continue
+				out.append(y * stride + x)
+		break
+	return out
+
+
 ## **What is scattered on the ground** — trees, rocks, bushes — as
 ## `{"kind", "x", "y", "ox", "oy", "yaw", "scale"}`.
 ##

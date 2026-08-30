@@ -1183,9 +1183,10 @@ func _ashore(b: Battle, i: int, p: Vector2) -> void:
 	b.soldier_state[i] = Battle.SoldierState.ASHORE
 	b.soldier_pos[i] = p
 	b._soldier_goal[i] = p
-	var claimed := b.grid.reserved
-	claimed[b.grid.tile_index(int(round(p.x)), int(round(p.y)))] = i
-	b.grid.reserved = claimed
+	# ⚠⚠ **`Grid.hold` AND NOT A WRITE INTO `reserved`.** That array holds `Rules.TILE_CAPACITY` slots
+	# per 조각 since 2026-08-30, so a raw `reserved[tile] = i` writes a slot of some other 조각 —
+	# **silently**, and this fixture would stand bodies that hold nothing.
+	b.grid.hold(i, b.grid.tile_index(int(round(p.x)), int(round(p.y))))
 
 
 ## Real seconds through the real `step`, a frame at a time. **Not one big `step(2.0)`** — the sim runs

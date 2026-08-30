@@ -37,3 +37,12 @@ whole deck rose and fell as the boat turned.
 ## Not this ticket
 
 **Which set wins, and whether the swordsman is re-drawn.** Those are the user's — ticket 51.
+
+---
+
+## ⚠⚠ 2026-08-30 에 이 티켓의 절반이 뜻을 잃었다
+
+**판 위의 늑대가 H (92x92) 로 바뀌었다.** 손에 있는 **걷기·물기 46 장은 옛 늑대 74x40** 이라
+**이제 붙일 수 있는 몸이 없다.** 붙이면 몸이 뜬다.
+
+⇒ **남은 절반은 노멀맵뿐이다.** 애니메이션은 **티켓 58** 로 넘어갔고, 거기서 H 규격으로 다시 뽑는다.

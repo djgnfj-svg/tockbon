@@ -138,14 +138,22 @@ func _table() -> Dictionary:
 			# `_put_hp` and `_hp_rects` left the table with it.
 			"_put_ground_shadow": 0,
 			"_beast_tex": 0,
+			# **Which of its row's pictures a body wears, resolved against the camera's own two ground
+			# axes.** It is the deck's old `_boat_rider_tex` generalised, and the deck comes through it.
+			"_facing_index": 0,
 			"_load_beast_tex": 0,
+			# **Where each body picture's ink ends inside its own frame**, so a body stands on the
+			# animal and not on the empty rows under it. An alpha scan, and it strokes nothing.
+			"_measure_body_feet": 0,
 			# The wolf's frame strips. `_body_tex` picks the picture and the other three feed it; not
 			# one of them strokes a canvas, same as the standing lookup they sit beside.
 			"_load_beast_anim": 0,
 			"_anim_strip": 0,
 			"_anim_sec": 0,
 			"_body_tex": 0,
-			"_put_soldier": 0,
+			"_put_walker": 0,
+			# Which slot of its 조각 a body holds — a read of `Grid`, and it strokes nothing.
+			"_crowd_slot_of": 0,
 			"_hide_unused": 0,
 			# The effect SIMULATION — carried across the move unchanged, still 0 draws each.
 			"_map_tiles": 0,
@@ -155,15 +163,12 @@ func _table() -> Dictionary:
 			# riders come out of the same `Sprite3D` pool the bodies do — so the whole set is node
 			# fields the engine consumes, and the `draw_*` column is 0 for all of it, like every other
 			# row in this table.
-			"_load_rider_tex": 0,
-			"_measure_rider_feet": 0,
 			"_boat": 0,
 			"_hide_unused_boats": 0,
 			"_paint_boats": 0,
 			"_boat_heading": 0,
 			"_boat_yaw": 0,
 			"_paint_riders": 0,
-			"_boat_rider_tex": 0,
 			"_boat_centre": 0,
 			# **The disc under a rider is a mesh on the hull and not a `draw_*`.** It rides the boat's own
 			# transform, which is the whole reason it is built as a child rather than painted each frame —

@@ -54,10 +54,11 @@ func run(t) -> void:
 	_the_hills_never_swallow_the_tier(t)
 	_the_first_island_opens_with_room_around_it(t)
 	_a_body_lays_one_shadow_disc(t)
+	_bodies_sharing_a_piece_are_drawn_apart(t)
 	_a_body_stands_on_its_own_tile_and_not_the_next_one(t)
 	_the_readers_themselves(t)
 	_every_row_wears_its_own_picture(t)
-	_the_bite_rides_the_blow_that_lunges(t)
+	_the_wolf_ashore_wears_the_picture_that_was_chosen(t)
 	for raw in _created:
 		var fv: FieldView = raw
 		fv.free()
@@ -206,7 +207,11 @@ func _the_first_island_opens_with_room_around_it(t) -> void:
 	t.ok(down < 0.75 and down > 0.45,
 		"세로도 마찬가지다 (%.0f%%)" % (down * 100.0))
 
-	var wolf_px := Look.body_radius_of(Rules.WOLF) * Look.BEAST_SPRITE_W_RATIO * zoom
+	# ⚠⚠ **BOTH SCALE FACTORS, BECAUSE BOTH REACH THE SCREEN** (2026-08-30). This read the bare ratio
+	# and so measured a width nothing has ever drawn — `BODY_SPRITE_SCALE` has multiplied it since
+	# 2026-08-28 and the wolf's own draw column since today. ⚠ **And it is the FRAME**: H's ink fills
+	# 72% of it side-on and 24% head-on, so the animal is smaller than whatever this says.
+	var wolf_px := Look.body_radius_of(Rules.WOLF) * Look.BEAST_SPRITE_W_RATIO 		* Look.BODY_SPRITE_SCALE * Look.beast_draw_scale(Rules.WOLF) * zoom
 	t.ok(wolf_px >= Look.TILE_PX,
 		"그 줌에서 늑대가 화면에 %.1fpx 로 선다 — 한 칸(%.0fpx)보다 작아지면 뒤로 그만 빼는 것이다"
 			% [wolf_px, Look.TILE_PX])
@@ -273,6 +278,66 @@ func _a_body_lays_one_shadow_disc(t) -> void:
 	var two := _verts_of(fv2._g_v, fv2._g_c, Look.COL_BODY_SHADOW)
 	t.ok(two.size() > one.size(),
 		"몸이 둘이면 그림자도 둘이다 (%d -> %d 정점) — 프레임당 하나가 아니다" % [one.size(), two.size()])
+
+
+## **Two bodies on ONE 조각 are drawn in two places, and a body standing alone is not moved at all.**
+##
+## ⚠⚠ **A 조각 ADMITS `Rules.TILE_CAPACITY` BODIES SINCE 2026-08-30** (the user at the screen: about
+## nine to a 칸). The sim walks every one of them to the same 조각 centre, so **without a spread the
+## count changes and the screen does not** — the second body is hidden exactly behind the first, which
+## is this repo's own named 「screen changes but the sim doesn't」 wearing its other face.
+##
+## ⚠ **The alone row is the floor.** A drawer that scattered every body unconditionally would pass the
+## apart row on its own, and it would have moved the single-body picture nobody asked to move.
+## ⚠ **Inside its own 조각 is the ceiling.** A spread past half a 조각 draws a body standing on its
+## neighbour, and the reservation it holds would then disagree with the ground it appears to be on.
+##
+## ⚠ Mutation: make `Look.crowd_offset_px` answer `Vector2.ZERO` and the apart row reddens; make it
+## answer for slot 0 too and the alone row does.
+func _bodies_sharing_a_piece_are_drawn_apart(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN, Rules.SWORDSMAN]), [])
+	_ashore(b, 0, Vector2(14.0, 6.0))
+	_ashore(b, 1, Vector2(14.0, 6.0))
+	var tile := b.grid.tile_index(14, 6)
+	t.eq(b.grid.hold_count(tile), 2, "몸 둘이 한 조각에 서 있다 (자가 점검)")
+	t.eq(b.grid.slot_of(tile, 0), 0, "첫 몸이 0번 자리다 (자가 점검)")
+	t.eq(b.grid.slot_of(tile, 1), 1, "둘째 몸이 1번 자리다 (자가 점검)")
+	t.ok((b.soldier_pos[0] as Vector2).is_equal_approx(b.soldier_pos[1] as Vector2),
+		"그리고 sim 의 자리는 완전히 같다 — 갈라놓는 것은 그림뿐이다 (자가 점검)")
+
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	var at := _body_spots(fv)
+	t.eq(at.size(), 2, "화면에 몸이 둘 그려졌다 (자가 점검)")
+	if at.size() < 2:
+		return
+	var apart: float = (at[0] as Vector2).distance_to(at[1] as Vector2)
+	var want := Look.crowd_offset_px(1, Rules.TILE_CAPACITY).length() / Look.TILE_PX
+	t.ok(want > 0.01, "자리마다 밀어내는 거리가 실제로 있다 (%.3f 조각 — 자가 점검)" % want)
+	t.ok(absf(apart - want) < 0.01,
+		"한 조각에 선 둘이 %.3f 조각 떨어져 그려진다 (기대 %.3f)" % [apart, want])
+
+	# **Inside its own 조각**, both of them — a spread past half a 조각 stands a body on its neighbour.
+	for raw_pt in at:
+		var pt: Vector2 = raw_pt
+		t.ok(pt.distance_to(Vector2(14.5, 6.5)) < 0.5,
+			"그러고도 제 조각 안이다 (%.2f, %.2f)" % [pt.x, pt.y])
+
+	# ⚠ **The floor: a body ALONE is not moved.** Slot 0 is the 조각 centre, so the single-body picture
+	# is exactly what it was before crowds existed.
+	var solo := _battle_of(rows, _army_of([Rules.SWORDSMAN, Rules.SWORDSMAN]), [])
+	_ashore(solo, 0, Vector2(14.0, 6.0))
+	var fv2 := _view_of(solo, rows)
+	fv2._process(0.0)
+	var one := _body_spots(fv2)
+	t.eq(one.size(), 1, "혼자 선 몸 하나만 그려졌다 (자가 점검)")
+	if one.is_empty():
+		return
+	t.ok((one[0] as Vector2).distance_to(Vector2(14.5, 6.5)) < 0.01,
+		"혼자면 조각 한가운데 그대로다 — 무조건 흩뿌리는 게 아니다 (%.3f, %.3f)"
+			% [(one[0] as Vector2).x, (one[0] as Vector2).y])
+
 
 
 ## ⚠⚠ **A BODY ON THE LIP OF THE PLATEAU SANK INTO THE GROUND** (2026-08-28, the user: 「지금보면
@@ -388,7 +453,7 @@ func _every_row_wears_its_own_picture(t) -> void:
 	fv._process(0.0)
 	var seen := {}
 	for ty in Rules.UNITS.size():
-		var tex := fv._beast_tex(ty, true)
+		var tex := fv._beast_tex(ty, Vector2.RIGHT)
 		t.ok(tex != null, "%d 번 줄에 그림이 있다" % ty)
 		seen[tex] = int(seen.get(tex, 0)) + 1
 	t.eq(seen.size(), Rules.UNITS.size(),
@@ -397,90 +462,115 @@ func _every_row_wears_its_own_picture(t) -> void:
 	t.ok(fv._sprites_used > 0, "그리고 몸이 실제로 화면에 섰다 (자가 점검)")
 	# The `is_enemy` argument is gone, so the same row facing the same way is the same picture whoever
 	# is asking. Asserted as an EQUALITY, which is what a deleted selector actually means.
-	t.eq(fv._beast_tex(Rules.WOLF, true), fv._beast_tex(Rules.WOLF, true),
+	t.eq(fv._beast_tex(Rules.WOLF, Vector2.RIGHT), fv._beast_tex(Rules.WOLF, Vector2.RIGHT),
 		"같은 줄은 같은 그림을 준다 — 묻는 쪽이 편을 안 고른다")
 
 
-## **The bite and the lunge start on one event**, and the strip plays once. The lunge already existed;
-## the mouth is hung on the same line of the same event so the two cannot drift into a wolf snapping
-## at nothing.
+## **The wolf on the island is the picture the user chose, and it faces four ways.**
 ##
-## ⚠ Both ends: nothing is biting before the blow, the strip is entered at frame 0 (the only closed
-## mouth), it reaches frame 3, it never goes backwards, and it hands the body back to the walk strip.
-## And the row beside it: a species with NO strip wears its standing picture through the same call.
+## ⚠⚠ **IT REPLACES `_the_bite_rides_the_blow_that_lunges`, WHOSE SUBJECT NO LONGER EXISTS**
+## (2026-08-30). That row watched the 46 side-view walk and bite frames; **H is 92 x 92 with no frames
+## at all**, so the wolf's row declares none and there is no strip left to watch. ⚠ **That row had also
+## been dead since 2026-08-29** — it read `push` and `lunge` off a body entry the fight's deletion took
+## away — so what it measured had already stopped being measured.
 ##
-## ⚠ Mutation: drop the `ab["bite"]` line; start the bite from a clock of its own; loop the strip;
-## make `_body_tex` ignore the bite clock.
-func _the_bite_rides_the_blow_that_lunges(t) -> void:
-	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([Rules.WOLF]),
-		[_spawn(ARENA_W, Rules.WOLF, 12, 6)])
-	_ashore(b, 0, Vector2(11.0, 6.0))
-	var fv := _view_of(b, rows)
-	var walk := fv._anim_strip(Rules.WOLF, Look.Anim.WALK, true)
-	var bite := fv._anim_strip(Rules.WOLF, Look.Anim.BITE, true)
-	t.eq(bite.size(), 4, "물기 띠가 넉 장으로 올라왔다 (자가 점검)")
-	t.ok(walk.find(bite[0]) < 0, "걷기와 물기는 다른 그림이다 (자가 점검)")
+## ⚠⚠ **티켓 48 WAS MARKED RESOLVED WHILE THIS WAS FALSE.** H reached the boat deck and the island kept
+## walking `wolf_r.png`, because the deck named its four pictures in a list of its own and the wolf's
+## row named the old animal. **This is the row that would have caught it**: it reads the wolf's own row,
+## which is now the only place either surface looks.
+##
+## ⚠ Mutation: point the wolf's row back at `wolf_r.png` / `wolf_l.png`; drop its two head-on pictures;
+## give the bear four; foot the body on its frame instead of its ink.
+func _the_wolf_ashore_wears_the_picture_that_was_chosen(t) -> void:
+	# **The row itself, before anything is drawn.** ⚠ The paths are read off `Look`, not off the pool:
+	# a pool that loaded nothing is `null` four times and「four pictures」 would still be green.
+	t.eq(Look.beast_facings(Rules.WOLF), 4, "늑대 줄이 그림 넉 장을 든다 — 좌·우·앞·뒤")
+	var paths := []
+	for f in Look.beast_facings(Rules.WOLF):
+		paths.append(Look.beast_tex_path(Rules.WOLF, f))
+	var h_count := 0
+	for raw in paths:
+		if str(raw).contains("wolf_h/"):
+			h_count += 1
+	t.eq(h_count, 4, "넉 장이 전부 사용자가 고른 H 다 %s" % str(paths))
+	t.eq(_distinct(paths), 4, "그리고 서로 다른 파일 넷이다 %s" % str(paths))
+	for raw in paths:
+		t.ok(not str(raw).ends_with("wolf_r.png") and not str(raw).ends_with("wolf_l.png"),
+			"옛 옆모습 늑대가 한 장도 안 남았다 (%s)" % str(raw))
+	# ⚠ **The other rows keep the two they had.** Fixing one row by breaking three is the failure this
+	# guards, and it is the shape 「a list per species」 was chosen to make impossible.
+	for ty in [Rules.SWORDSMAN, Rules.BEAR, Rules.CROW]:
+		t.eq(Look.beast_facings(ty), 2, "%d 번 줄은 좌우 두 장 그대로다" % ty)
 
-	# ⚠ **A view frame with the sim not yet stepped**, so the body entry exists and no event has been
-	# drained. `_ashore` puts the wolf in contact, so the blow lands on the FIRST stepped frame —
-	# stepping here first would have read the clock one frame after it started and called that "before
-	# the blow". It did, on the first run of this row.
-	fv._process(0.0)
-	t.ok(float((fv._body["s0"] as Dictionary)["bite"]) <= 0.0,
-		"때리기 전에는 아무것도 안 물고 있다")
-	t.ok(walk.find(fv._body_tex("s0", Rules.WOLF, true)) >= 0,
-		"그래서 걷기 띠를 입고 있다")
+	# **A two-picture row can never answer with a head-on picture, whatever way it walks.** Asked at the
+	# heading that would pick one if the row had it — straight down the screen.
+	#
+	# ⚠⚠ **THE FIXTURE IS THE BOAT'S, DRIVEN UNTIL THE FIRST HULL HAS UNLOADED**, because a spawn alone
+	# no longer stands a beast on the island — they come by boat since 티켓 41, and three functions in
+	# this file are red on exactly that. **These wolves walked off a deck**, which is also the only way
+	# to have one ashore and one aboard in one frame.
+	var pack := _boat_view(Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC)
+	var fv: FieldView = pack["fv"]
+	var b: Battle = pack["b"]
+	fv.cam_yaw_deg = 0.0
+	for ty in [Rules.SWORDSMAN, Rules.BEAR, Rules.CROW]:
+		t.ok(fv._facing_index(ty, Vector2(0.0, 1.0)) <= Look.FACE_LEFT,
+			"%d 번 줄은 화면 아래로 걸어도 옆모습 둘 중 하나다" % ty)
+	# And the wolf, which does have them, does not.
+	t.eq(fv._facing_index(Rules.WOLF, Vector2(0.0, 1.0)), Look.FACE_DOWN,
+		"늑대는 화면 아래로 걸으면 앞모습이다 — 넉 장을 든 줄만 여기로 온다")
+	t.eq(fv._facing_index(Rules.WOLF, Vector2(0.0, -1.0)), Look.FACE_UP, "위로 걸으면 뒷모습이다")
 
-	var swung := false
-	for k in 240:
-		b.step(1.0 / 60.0)
-		fv._process(1.0 / 60.0)
-		if float((fv._body["s0"] as Dictionary)["push"]) > 0.0:
-			swung = true
-			break
-	t.ok(swung, "늑대가 실제로 한 대 쳤다 (자가 점검)")
-	var s0: Dictionary = fv._body["s0"]
-	# ⚠ **Read on the SAME frame, off the body the code wrote both onto.** Two separate reads a frame
-	# apart would pass for two clocks started a frame apart, which is the thing this row exists for.
-	t.ok(float(s0["lunge"]) > 0.0, "그 프레임에 런지가 켜졌다 (%.3f초 남음)" % float(s0["lunge"]))
-	t.ok(float(s0["bite"]) > 0.0, "그리고 같은 프레임에 물기도 켜졌다 (%.3f초 남음)" % float(s0["bite"]))
-	t.ok(is_equal_approx(float(s0["bite"]), fv._anim_sec(Rules.WOLF, Look.Anim.BITE)),
-		"물기 시계는 띠 길이 그대로 시작한다 (%.2f초)" % fv._anim_sec(Rules.WOLF, Look.Anim.BITE))
-	t.eq(fv._body_tex("s0", Rules.WOLF, true), bite[0],
-		"입은 다문 첫 장부터 열린다 — 여기서 어긋나면 무는 순간이 이미 벌어진 입이다")
+	# **And a body really did reach the pool wearing one of the four**, read off the sprite the engine
+	# consumes rather than off the lookup that chose it.
+	# ⚠ **Sprite 0 is the first living beast**: `_paint_bodies` walks the beasts, then the company, then
+	# the decks, and this fixture has no company. The count beside it is the self-check.
+	var ashore := b.living_enemy_ids().size()
+	t.ok(ashore > 0, "늑대가 배에서 내려 판 위에 %d 마리 서 있다 (자가 점검)" % ashore)
+	t.ok(fv._sprites_used > ashore, "그리고 갑판에도 아직 남아 있다 (자가 점검) — 한 프레임에 둘 다 있다")
+	if ashore <= 0 or fv._sprites_used <= 0:
+		return
+	var sp: Sprite3D = fv._sprites[0]
+	t.ok(paths.has(str(sp.texture.resource_path)),
+		"판 위의 몸이 입은 것이 늑대 줄의 그림이다 (%s)" % str(sp.texture.resource_path))
+	t.eq(Vector2i(sp.texture.get_width(), sp.texture.get_height()), Vector2i(92, 92),
+		"92 x 92 다 — 74 x 40 이 남아 있으면 여기서 문다")
 
-	# The sim is FROZEN from here — `begin_frame` still clears the event list, so nothing re-fires and
-	# the strip is watched alone. A second blow mid-strip would make the sequence below meaningless.
-	var seq: Array[int] = []
-	for k in 40:
-		fv._process(1.0 / 60.0)
-		if float((fv._body["s0"] as Dictionary)["bite"]) <= 0.0:
-			break
-		seq.append(bite.find(fv._body_tex("s0", Rules.WOLF, true)))
-	t.ok(seq.size() >= 20, "무는 동안 %d 프레임을 봤다 — 0.48초면 28 남짓이다" % seq.size())
-	var back := 0
-	var out := 0
-	for k in seq.size():
-		if seq[k] < 0:
-			out += 1
-		elif k > 0 and seq[k - 1] >= 0 and seq[k] < seq[k - 1]:
-			back += 1
-	t.eq(out, 0, "무는 내내 물기 띠 안의 그림을 입는다 %s" % str(seq))
-	t.eq(back, 0, "그리고 한 번도 앞 장으로 안 돌아간다 — 한 번만 재생한다 %s" % str(seq))
-	t.eq(seq[seq.size() - 1], bite.size() - 1,
-		"마지막에 넷째 장까지 간다 — 못 닿으면 제일 크게 벌린 입이 화면에 안 나온다 %s" % str(seq))
+	# **It stands on the animal and not on the frame around it.** ⚠ The padding is scanned off the PNG's
+	# own alpha, never asked of `_foot_body` — reading the view's answer back at it is the shape that put
+	# five green checks over five real defects in one day.
+	# ⚠⚠ **THE GROUND IS ASKED OF `Grid` AND `Islands`, WHICH ARE SIM**, never of the view's own
+	# `_stand_h`. ⚠ **And it is NOT zero on a flat arena**: the Blender island's level-0 top stands
+	# `Islands.base_h()` above zero, which cost a round in 2026-08-27 when a plate was drawn at zero and
+	# spent the whole session underground.
+	var who := int(b.living_enemy_ids()[0])
+	var stands: Vector2 = b.enemy_pos[who]
+	var tall := float(sp.texture.get_height()) * sp.scale.y / Look.TILE_PX
+	var pad := _ink_pad_below(sp.texture)
+	var ground := b.grid.surface_h(stands) + Islands.base_h() + Look.BODY_LIFT_PX / Look.TILE_PX
+	var frame_bottom := sp.position.y - tall * 0.5
+	t.ok(absf(frame_bottom + pad * tall - ground) < 0.0005,
+		"늑대의 발이 땅에 정확히 닿는다 (어긋난 높이 %.6f 조각)" % absf(frame_bottom + pad * tall - ground))
+	# The second half: the FRAME hangs below the ground by exactly the empty rows. Without it a view
+	# that never changed would have to be caught by arithmetic alone.
+	t.ok(ground - frame_bottom > 0.05,
+		"그림틀의 아래끝은 땅보다 %.4f 조각 아래다 — 땅에 세운 것은 틀이 아니라 짐승이다"
+			% (ground - frame_bottom))
 
-	fv._process(1.0 / 60.0)
-	t.ok(float((fv._body["s0"] as Dictionary)["bite"]) <= 0.0, "물기가 끝났다 (자가 점검)")
-	t.ok(walk.find(fv._body_tex("s0", Rules.WOLF, true)) >= 0,
-		"그리고 걷기 띠로 돌아간다 — 안 돌아가면 입을 벌린 채 남은 싸움을 한다")
+	# **How big it is drawn, which is the other half of what the user said.** The frame is what the
+	# ratio sizes; the animal inside it is what he was looking for.
+	var frame_px := float(sp.texture.get_width()) * sp.scale.x
+	var ink_px := _ink_width_frac(sp.texture) * frame_px
+	t.ok(ink_px > 20.3,
+		"늑대가 옛 늑대(20.3px)보다 넓게 그려진다 (틀 %.1fpx 안에 짐승 %.1fpx)" % [frame_px, ink_px])
 
-	# ⚠ The other eight, through the SAME call: the enemy standing right there has no strip at all.
-	t.eq(fv._body_tex("e0", Rules.WOLF, true), fv._beast_tex(Rules.WOLF, true),
-		"띠 없는 종은 같은 호출로 서 있는 그림을 받는다")
-	t.ok(fv._body_tex("e0", Rules.WOLF, true) != null, "그리고 그 그림은 비어 있지 않다")
 
+## How many distinct entries an array holds.
+func _distinct(items: Array) -> int:
+	var seen := {}
+	for raw in items:
+		seen[raw] = true
+	return seen.size()
 
 
 
@@ -542,10 +632,8 @@ func _every_hull_stands_on_its_own_boat(t) -> void:
 	var count := [0, 0]
 	var stray := 0
 	var reach := Rules.BOAT_HULL_HALF_TILES + 1.0
-	for k in fv._sprites_used:
-		var sp: Sprite3D = fv._sprites[k]
-		if not fv._tex_rider.has(sp.texture):
-			continue
+	for raw_sp in _rider_sprites(fv, b):
+		var sp: Sprite3D = raw_sp
 		var at := Vector2(sp.position.x, sp.position.z)
 		var best := -1
 		var best_d := reach
@@ -559,8 +647,17 @@ func _every_hull_stands_on_its_own_boat(t) -> void:
 		else:
 			count[best] += 1
 	t.eq(stray, 0, "갑판 늑대가 전부 어느 한 선체 옆에 서 있다 — 배와 상관없는 자리에 선 것이 없다")
-	t.eq(count[0], Rules.BOAT_CAPACITY, "첫 배에 여덟")
-	t.eq(count[1], Rules.BOAT_CAPACITY, "둘째 배에도 여덟 — 둘째 배의 갑판도 실제로 그려진다")
+	# ⚠⚠ **READ OFF `boat_riders` AND NOT PINNED AT EIGHT** (2026-08-30, 티켓 41's 목~일 slice). By 35
+	# seconds the first boat has already unloaded, so 「첫 배에 여덟」 became a claim about an EMPTY deck
+	# — and pinning it there would be asserting the landing away. **What a deck draws is what is still
+	# aboard**, which is the claim that survives riders becoming bodies. The two floors under it are the
+	# next two rows: one deck full, one deck empty, so this pair can never be 「0 == 0」 twice.
+	t.eq(count[0], int(b.boat_riders[0]),
+		"첫 배의 갑판에 아직 탄 수만큼 서 있다 (%d)" % int(b.boat_riders[0]))
+	t.eq(count[1], int(b.boat_riders[1]),
+		"둘째 배의 갑판도 그렇다 — 둘째 배도 실제로 그려진다 (%d)" % int(b.boat_riders[1]))
+	t.eq(int(b.boat_riders[0]), 0, "먼저 온 배는 다 내려놨다 — 갑판이 비면 그림도 빈다")
+	t.eq(int(b.boat_riders[1]), Rules.BOAT_CAPACITY, "아직 건너는 배에는 여덟이 그대로 타 있다")
 
 
 ## **The hull is a real committed mesh, and its bow points where it is sailing.**
@@ -676,10 +773,8 @@ func _the_deck_carries_eight_riders(t) -> void:
 
 	var riders := 0
 	var below_deck := 0
-	for k in fv._sprites_used:
-		var sp: Sprite3D = fv._sprites[k]
-		if not fv._tex_rider.has(sp.texture):
-			continue
+	for raw_sp in _rider_sprites(fv, pack["b"] as Battle):
+		var sp: Sprite3D = raw_sp
 		riders += 1
 		if sp.position.y <= hull.position.y:
 			below_deck += 1
@@ -698,27 +793,30 @@ func _the_rider_faces_the_screen_and_not_the_compass(t) -> void:
 	var pack := _boat_view()
 	var fv: FieldView = pack["fv"]
 	fv.cam_yaw_deg = 0.0
-	# `Look.BOAT_RIDER_TEX` order: screen-down, screen-up, screen-right, screen-left.
-	var south: Texture2D = fv._tex_rider[0]
-	var north: Texture2D = fv._tex_rider[1]
-	var east: Texture2D = fv._tex_rider[2]
-	var west: Texture2D = fv._tex_rider[3]
+	# ⚠ **The wolf's own row in `Look.BEAST_TEX`, in `Look.FACE_*` order** — screen-right, screen-left,
+	# screen-down, screen-up. **The deck has no picture list of its own since 2026-08-30**, which is what
+	# makes this row measure the island's wolf and the deck's wolf at once.
+	var pics: Array = fv._tex_facing[Rules.WOLF]
+	var east: Texture2D = pics[Look.FACE_RIGHT]
+	var west: Texture2D = pics[Look.FACE_LEFT]
+	var south: Texture2D = pics[Look.FACE_DOWN]
+	var north: Texture2D = pics[Look.FACE_UP]
 	t.ok(south != north and east != west and south != east,
 		"네 그림이 서로 다른 파일이다 (자가 점검)")
 
-	t.ok(fv._boat_rider_tex(Vector2(0.0, 1.0)) == south, "화면 아래로 가면 이쪽을 본 그림이다")
-	t.ok(fv._boat_rider_tex(Vector2(0.0, -1.0)) == north, "화면 위로 가면 등을 보인다")
-	t.ok(fv._boat_rider_tex(Vector2(1.0, 0.0)) == east, "화면 오른쪽으로 가면 오른쪽 그림이다")
-	t.ok(fv._boat_rider_tex(Vector2(-1.0, 0.0)) == west, "왼쪽도 마찬가지다")
+	t.ok(fv._beast_tex(Rules.WOLF, Vector2(0.0, 1.0)) == south, "화면 아래로 가면 이쪽을 본 그림이다")
+	t.ok(fv._beast_tex(Rules.WOLF, Vector2(0.0, -1.0)) == north, "화면 위로 가면 등을 보인다")
+	t.ok(fv._beast_tex(Rules.WOLF, Vector2(1.0, 0.0)) == east, "화면 오른쪽으로 가면 오른쪽 그림이다")
+	t.ok(fv._beast_tex(Rules.WOLF, Vector2(-1.0, 0.0)) == west, "왼쪽도 마찬가지다")
 
 	fv.cam_yaw_deg = 90.0
-	t.ok(fv._boat_rider_tex(Vector2(0.0, 1.0)) == east,
+	t.ok(fv._beast_tex(Rules.WOLF, Vector2(0.0, 1.0)) == east,
 		"판을 90도 돌리면 같은 방향이 오른쪽 그림이 된다 — 나침반이 아니라 화면 기준이다")
 
 
 ## **The wolf stands on the plank. Its 92 x 92 FRAME does not.**
 ##
-## ⚠⚠ **THE PADDING IS RE-MEASURED HERE, OFF THE PNG'S OWN ALPHA, AND NOT ASKED OF `_foot_rider`.**
+## ⚠⚠ **THE PADDING IS RE-MEASURED HERE, OFF THE PNG'S OWN ALPHA, AND NOT ASKED OF `_foot_body`.**
 ## Reading the view's own answer back at it is the shape where a check and the code it checks share one
 ## blind spot — five of those went green in one day. **The net scans the image itself**, so a footing
 ## computed from the wrong rows fails here even though the view is perfectly self-consistent.
@@ -735,10 +833,8 @@ func _the_rider_stands_on_the_plank_and_not_on_its_frame(t) -> void:
 	var worst_ink := 0.0
 	var least_frame_drop := 1e9
 	var seen := 0
-	for k in fv._sprites_used:
-		var sp: Sprite3D = fv._sprites[k]
-		if not fv._tex_rider.has(sp.texture):
-			continue
+	for raw_sp in _rider_sprites(fv, pack["b"] as Battle):
+		var sp: Sprite3D = raw_sp
 		var slot := hull.transform * (Look.BOAT_DECK_SLOTS[seen] as Vector3)
 		var tall := float(sp.texture.get_height()) * sp.scale.y / Look.TILE_PX
 		var pad := _ink_pad_below(sp.texture)
@@ -774,10 +870,10 @@ func _the_footing_survives_the_picture_changing(t) -> void:
 
 	fv.cam_yaw_deg = 0.0
 	fv._process(0.0)
-	var first := _rider_feet(fv, hull)
+	var first := _rider_feet(fv, pack["b"] as Battle, hull)
 	fv.cam_yaw_deg = 90.0
 	fv._process(0.0)
-	var turned := _rider_feet(fv, hull)
+	var turned := _rider_feet(fv, pack["b"] as Battle, hull)
 
 	t.ok(first["tex"] != turned["tex"],
 		"판을 돌리자 다른 그림을 입었다 (자가 점검 — 같은 그림이면 아래가 공허하다)")
@@ -837,11 +933,11 @@ func _every_taken_seat_carries_a_disc_that_rides_the_hull(t) -> void:
 	# **The disc rides the hull.** Two view clocks apart, the world point under a rider and the rider
 	# itself must have moved by the SAME amount — the bob and the roll live in the hull's transform and
 	# nothing else re-applies them.
-	var rider0 := _first_rider(fv)
+	var rider0 := _first_rider(fv, pack["b"] as Battle)
 	var disc0 := _world_point(holder.get_child(0) as Node3D, fv._world)
 	var was_rider := rider0.position
 	fv._process(0.7)
-	var moved_rider := _first_rider(fv).position - was_rider
+	var moved_rider := _first_rider(fv, pack["b"] as Battle).position - was_rider
 	var moved_disc := _world_point(holder.get_child(0) as Node3D, fv._world) - disc0
 	t.ok(moved_disc.length() > 0.0005,
 		"한 프레임 뒤 원판이 %.5f 조각 움직였다 — 배와 같이 흔들린다 (자가 점검)" % moved_disc.length())
@@ -874,7 +970,7 @@ func _every_taken_seat_carries_a_disc_that_rides_the_hull(t) -> void:
 func _the_disc_is_wider_than_the_wolf_standing_on_it(t) -> void:
 	var pack := _boat_view()
 	var fv: FieldView = pack["fv"]
-	var rider := _first_rider(fv)
+	var rider := _first_rider(fv, pack["b"] as Battle)
 	var ink_w := _ink_width_frac(rider.texture) * float(rider.texture.get_width()) * rider.scale.x / Look.TILE_PX
 	var across := Look.boat_rider_shadow_r_tiles() * 2.0
 	t.ok(ink_w > 0.1, "갑판 늑대가 %.3f 조각 폭으로 그려져 있다 (자가 점검)" % ink_w)
@@ -904,7 +1000,7 @@ func _boat_view(secs: float = -1.0) -> Dictionary:
 
 ## **How much of a rider picture's own height is empty BELOW the animal, as a fraction.**
 ##
-## ⚠⚠ **THE NET SCANS THE PNG ITSELF AND DOES NOT ASK THE VIEW.** `field_view._foot_rider` holds the
+## ⚠⚠ **THE NET SCANS THE PNG ITSELF AND DOES NOT ASK THE VIEW.** `field_view._foot_body` holds the
 ## same quantity; reading it back would make every footing row a tautology, which is exactly the shape
 ## that put five green checks over five real defects in one day.
 func _ink_pad_below(pic: Texture2D) -> float:
@@ -934,15 +1030,31 @@ func _ink_width_frac(pic: Texture2D) -> float:
 	return 0.0 if hi < 0 else float(hi - lo + 1) / float(w)
 
 
+## **The pooled sprites that are RIDERS — and it is NOT asked of the picture they wear.**
+##
+## ⚠⚠ **A RIDER AND A WOLF ASHORE WEAR THE SAME FOUR PICTURES SINCE 2026-08-30**, which is the whole
+## point of the wolf having one list of pictures instead of two. 「its texture is a `wolf_h` one」 stopped
+## naming a rider that day and started naming every wolf on the island as well — measured: three wolves
+## that had already landed were counted as riders standing nowhere near a hull.
+## ⚠⚠ **THE BOUNDARY COMES FROM THE SIM**, never from the pool: the field paints every body the sim says
+## is standing, and only then a single deck. ⇒ **The draw order is load-bearing here**, so it is
+## asserted rather than assumed — the two rows that call this both check where every sprite it hands
+## back actually is, and a rider that leaked into the body run would land nowhere near a bench.
+func _rider_sprites(fv: FieldView, b: Battle) -> Array:
+	var bodies := b.living_enemy_ids().size() + b.ashore_ids().size()
+	var out := []
+	for k in range(bodies, fv._sprites_used):
+		out.append(fv._sprites[k])
+	return out
+
+
 ## The worst gap between a rider's drawn feet and its own seat, plus which picture the deck is wearing.
-func _rider_feet(fv: FieldView, hull: Node3D) -> Dictionary:
+func _rider_feet(fv: FieldView, b: Battle, hull: Node3D) -> Dictionary:
 	var worst := 0.0
 	var seat := 0
 	var pic: Texture2D = null
-	for k in fv._sprites_used:
-		var sp: Sprite3D = fv._sprites[k]
-		if not fv._tex_rider.has(sp.texture):
-			continue
+	for raw_sp in _rider_sprites(fv, b):
+		var sp: Sprite3D = raw_sp
 		pic = sp.texture
 		var slot := hull.transform * (Look.BOAT_DECK_SLOTS[seat] as Vector3)
 		var tall := float(sp.texture.get_height()) * sp.scale.y / Look.TILE_PX
@@ -951,12 +1063,9 @@ func _rider_feet(fv: FieldView, hull: Node3D) -> Dictionary:
 	return {"worst": worst, "tex": pic, "pad": 0.0 if pic == null else _ink_pad_below(pic)}
 
 
-func _first_rider(fv: FieldView) -> Sprite3D:
-	for k in fv._sprites_used:
-		var sp: Sprite3D = fv._sprites[k]
-		if fv._tex_rider.has(sp.texture):
-			return sp
-	return null
+func _first_rider(fv: FieldView, b: Battle) -> Sprite3D:
+	var riders := _rider_sprites(fv, b)
+	return null if riders.is_empty() else riders[0] as Sprite3D
 
 
 ## **A node's point in `stop`'s space, walked up the real parent chain.**
@@ -1114,9 +1223,10 @@ func _ashore(b: Battle, i: int, p: Vector2) -> void:
 	b.soldier_state[i] = Battle.SoldierState.ASHORE
 	b.soldier_pos[i] = p
 	b._soldier_goal[i] = p
-	var claimed := b.grid.reserved
-	claimed[int(round(p.y)) * b.grid.w + int(round(p.x))] = i
-	b.grid.reserved = claimed
+	# ⚠⚠ **`Grid.hold` AND NOT A WRITE INTO `reserved`.** That array holds `Rules.TILE_CAPACITY` slots
+	# per 조각 since 2026-08-30, so `reserved[tile] = i` now writes slot 0 of a 조각 three rows away —
+	# **silently**, with every row here still green and the body holding nothing.
+	b.grid.hold(i, int(round(p.y)) * b.grid.w + int(round(p.x)))
 
 
 func _view_of(b: Battle, rows: Array, _tiers: Array = []) -> FieldView:
@@ -1148,6 +1258,18 @@ func _body_entry(at: Vector2) -> Dictionary:
 
 
 ## The first pooled body sprite — anything not wearing the one-texel bar texture.
+## **Where every body in the pool is drawn, in tile units on the ground plane.** ⚠ **`z` and not `y`**:
+## `_put_body` writes the world x/z out of the canvas px and puts the sprite's own height in y.
+func _body_spots(fv: FieldView) -> Array:
+	var out := []
+	for k in fv._sprites_used:
+		var s: Sprite3D = fv._sprites[k]
+		if s.texture != fv._tex_flat:
+			out.append(Vector2(s.position.x, s.position.z))
+	return out
+
+
+
 func _body_sprite(fv: FieldView) -> Sprite3D:
 	for k in fv._sprites_used:
 		var s: Sprite3D = fv._sprites[k]

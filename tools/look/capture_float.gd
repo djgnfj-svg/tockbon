@@ -86,15 +86,19 @@ func _series(tag: String, zoom_steps: int) -> void:
 	_wake(Look.WAKE_ALPHA)
 
 	# 3 — the riders, then the riders and their shadow discs.
-	var keep := _fv._tex_rider.duplicate()
-	_fv._tex_rider.clear()
+	# ⚠ **The wolf's own picture row, which the deck reads since 2026-08-30.** `_tex_rider` was the
+	# deck's second copy of these four and it is deleted; emptying the row is what leaves `_beast_tex`
+	# with nothing to answer, so `_paint_riders` returns before it draws one.
+	var pics: Array = _fv._tex_facing[Rules.WOLF]
+	var keep := pics.duplicate()
+	pics.clear()
 	_repaint()
 	await _shot("%s4_no_riders" % tag)
 	_hide_in_hulls(["deck_shadows"], false)
 	_repaint()
 	await _shot("%s5_no_riders_no_discs" % tag)
 	_hide_in_hulls(["deck_shadows"], true)
-	_fv._tex_rider.assign(keep)
+	pics.assign(keep)
 
 	# 4 — the bow post and the stern block.
 	_hide_in_hulls(["boat_stem", "boat_tail"], false)
@@ -105,12 +109,12 @@ func _series(tag: String, zoom_steps: int) -> void:
 	# 5 — the bare hull: no rig, no posts, no riders, no discs, no wake.
 	_hide_in_hulls(["boat_sail", "boat_yard", "boat_mast", "boat_stem", "boat_tail",
 		"deck_shadows"], false)
-	_fv._tex_rider.clear()
+	pics.clear()
 	_wake(0.0)
 	_repaint()
 	await _shot("%s7_hull_only" % tag)
 	_wake(Look.WAKE_ALPHA)
-	_fv._tex_rider.assign(keep)
+	pics.assign(keep)
 	_hide_in_hulls(["boat_sail", "boat_yard", "boat_mast", "boat_stem", "boat_tail",
 		"deck_shadows"], true)
 	_repaint()

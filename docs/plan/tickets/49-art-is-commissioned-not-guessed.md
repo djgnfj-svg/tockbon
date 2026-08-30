@@ -1,5 +1,5 @@
 Type: grilling
-Status: open
+Status: resolved
 
 # 그림은 발주하는 것이지 짐작하는 것이 아니다 — **스킬 하나가 없다**
 
@@ -48,3 +48,11 @@ Status: open
 
 ⚠ **이 저장소의 스킬 이름은 다 한 낱말이고 하는 짓을 그대로 부른다** — `compass` · `grilling` ·
 `prototype` · `wrap-up` · `scout` · `naming` · `listup`.
+
+## Answer — ✅ **닫혔다 (2026-08-30), 스킬이 섰다**
+
+**`.claude/skills/commission/SKILL.md` 가 있다.** 이름은 위에서 추천한 `commission` 그대로 서 있고,
+스킬 자신이 첫머리에서 **「티켓 49 가 이 스킬이 없었다는 기록이고, 이것이 그 스킬이다」**라고 적는다.
+
+⚠ **사용자가 이름을 골랐다는 기록은 이 저장소에 없다.** 추천대로 세워졌을 뿐이라, 다른 이름을 원하면
+이 줄이 뒤집힐 자리다.

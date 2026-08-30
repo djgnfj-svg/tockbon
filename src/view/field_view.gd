@@ -94,16 +94,25 @@ var cam_pitch_deg := Look.CAM_PITCH_DEG
 
 # --- pictures ---------------------------------------------------------------------------------------
 
-## One texture per row of `Look.BEAST_TEX`, both facings, loaded once. **`null` where that row's path
-## is empty**, which `_put_body` already draws the plain rounded shape for.
-var _tex_facing_r: Array[Texture2D] = _load_beast_tex(true)
-var _tex_facing_l: Array[Texture2D] = _load_beast_tex(false)
-## The frame strips, `[type][anim][frame]`, loaded once beside the standing pictures. **Empty wherever
-## `Look.BEAST_TEX` declares no strip** — which is eight of the nine rows today, and is exactly why
-## nothing below names a species: an empty strip falls back on the standing picture at the one place a
-## body's picture is chosen, so the ninth species animates by editing its own row and nothing else.
-var _tex_anim_r: Array = _load_beast_anim(true)
-var _tex_anim_l: Array = _load_beast_anim(false)
+## **`[type][facing]`, every picture every row of `Look.BEAST_TEX` declares, loaded once.** A row's
+## inner array is as long as that row has facings — two for the side-on species, four for the wolf —
+## and **an empty inner array is a row with no picture at all**, which `_put_body` already draws the
+## plain rounded shape for.
+##
+## ⚠⚠ **IT WAS TWO FLAT ARRAYS, `_tex_facing_r` AND `_tex_facing_l`** (2026-08-30, 티켓 25). Two
+## parallel arrays are exactly two facings and no more, so the H wolf's four could not be held here at
+## all — and while they could not, the deck loaded them from a second list of its own and the island
+## kept walking the picture the user had already replaced.
+var _tex_facing: Array = _load_beast_tex()
+## The frame strips, `[type][facing][anim][frame]`, loaded once beside the standing pictures. **Empty
+## wherever `Look.BEAST_TEX` declares no strip** — which is EVERY row today, and is exactly why nothing
+## below names a species: an empty strip falls back on the standing picture at the one place a body's
+## picture is chosen, so a species animates by editing its own row and nothing else.
+var _tex_anim: Array = _load_beast_anim()
+## **How far each body picture's opaque ink stands above the bottom of its own frame**, as a fraction
+## of that frame's height, keyed by the picture. See `_measure_body_feet`. ⚠ **Declared here and not
+## beside the boats**, because the island needs it for exactly the reason the deck always did.
+var _foot_body: Dictionary = _measure_body_feet(_tex_facing)
 ## The rounded square, baked once. Every enemy wears it, tinted — the same two marks `_paint_body`
 ## drew by hand (the outline and the centre dot) with nothing filled between them.
 var _tex_body: Texture2D = null
@@ -1341,20 +1350,38 @@ func _billboard_scale(pic: Texture2D, wide: float, squash: Vector2) -> Vector3:
 ## sank into the ground. ⚠ The y axis was worse still — `TILE_H_PX` need not equal `TILE_PX`, so the
 ## two axes were off by different amounts.
 ## ⇒ **The sim's own tile-unit position goes in, untouched.** The picture is offset afterwards.
-func _put_body(centre_px: Vector2, at_tiles: Vector2, radius: float, colour: Color, squash: Vector2,
-		tex: Texture2D) -> void:
+## ⚠⚠ **`crowd_px` IS THE THIRD POINT AND IT IS NOT A FOURTH IDEA OF WHERE THE BODY IS.** A 조각
+## admits `Rules.TILE_CAPACITY` bodies since 2026-08-30 and the sim walks every one of them to the same
+## 조각 centre; this is how far off that centre THIS body is drawn. **The shadow takes it and the idle
+## sway does not** — a crowd offset is where the body is standing, so the disc goes with it, while the
+## sway is the body moving over a disc that stays put.
+## ⚠⚠ **IT TOOK A `radius` AND IT TAKES THE `type_id` IT WAS DERIVED FROM** (2026-08-30). The radius is
+## one read of the row; the row also says how big this species is drawn, and passing the derived number
+## while the caller kept the row is how the two would have been read in two places.
+func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id: int, colour: Color,
+		squash: Vector2, tex: Texture2D) -> void:
+	var radius := Look.body_radius_of(type_id)
 	# ⚠⚠ **The shadow goes down FIRST and it is the body's only one** (2026-08-28, the user: 「그림자도
 	# 단순하게 아래 동그라미정도해줘」). It is drawn from here rather than from the two callers because
 	# this is the one place a body's centre and its drawn width are both in hand — putting it in the
 	# callers is how the deck soldier lost its HP bar once, one function over.
 	# ⚠ **The shadow goes under the SIM's position, not the swayed one.** A shadow that slides with the
 	# idle sway reads as the body hovering; a body swaying over a still shadow reads as breathing.
-	_put_ground_shadow(Look.tile_point_px(at_tiles), radius)
+	# ⚠⚠ **`beast_draw_scale` IS THE SPECIES' OWN DEPARTURE FROM THE SHARED SIZE** (2026-08-30, the
+	# user: 「the wolf ... is so small I can't spot it」 against 「I'd like the character to be about
+	# right」 for the swordsman). One number could not answer both judgements — see `BODY_SPRITE_SCALE`.
+	var wide := (radius * Look.BEAST_SPRITE_W_RATIO if tex != null else radius * 2.0) \
+			* Look.BODY_SPRITE_SCALE * Look.beast_draw_scale(type_id)
+	# ⚠⚠ **THE DISC IS A FRACTION OF THE DRAWN PICTURE, NOT OF THE SIM RADIUS** (2026-08-30, the user:
+	# 「the soldiers have no shadow」). It was `radius * BODY_SPRITE_SCALE * 0.62`, and the picture is
+	# `radius * BEAST_SPRITE_W_RATIO(3.5) * BODY_SPRITE_SCALE` across — **so the disc was one fifth of the
+	# body's width and sat entirely hidden underneath it.** The swordsman showed it worst: his picture is
+	# 33x40 where a wolf's is 74x40, so at one drawn WIDTH he stands far taller and buries the disc.
+	_put_ground_shadow(Look.tile_point_px(at_tiles) + crowd_px, wide * 0.5)
 	var s := _sprite()
 	var pic: Texture2D = tex if tex != null else _tex_body
 	s.texture = pic
 	s.modulate = Look.beast_tint(colour) if tex != null else colour
-	var wide := (radius * Look.BEAST_SPRITE_W_RATIO if tex != null else radius * 2.0) 			* Look.BODY_SPRITE_SCALE
 	s.scale = _billboard_scale(pic, wide, squash)
 	var tall := float(pic.get_height()) * s.scale.y / Look.TILE_PX
 	# ⚠⚠ **`_stand_h` AND NOT `_ground_h`, SO A BODY WALKS UP THE STAIR INSTEAD OF POPPING UP IT.**
@@ -1364,7 +1391,14 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, radius: float, colour: Col
 	# `Grid.surface_h`, which exists next to `height_at` precisely so the drawn ground and the measured
 	# ground can differ without either pretending to be the other.
 	var foot := _stand_h(at_tiles) + Look.BODY_LIFT_PX / Look.TILE_PX
-	s.position = Vector3(centre_px.x / Look.TILE_PX, foot + tall * 0.5, centre_px.y / Look.TILE_PX)
+	# ⚠⚠ **AND THE FRAME'S BOTTOM IS NOT THE ANIMAL'S FEET** — see `_measure_body_feet`, which the deck
+	# has needed since it was built and the island needs now that the wolf ashore is a 92 x 92 frame
+	# with 11 to 25 empty rows under it. **Footed by the frame it hangs 0.26 조각 above the ground, by a
+	# DIFFERENT amount per picture**, so the animal would rise and fall as it turned. ⚠ **Every other
+	# body picture measures 0 rows**, so nothing but the wolf moved when this went in.
+	var sole := float(_foot_body.get(pic, 0.0)) * tall
+	s.position = Vector3(centre_px.x / Look.TILE_PX, foot - sole + tall * 0.5,
+		centre_px.y / Look.TILE_PX)
 	# ⚠⚠ **THE TOP USED TO BE RETURNED HERE and the halo that read it is deleted** (2026-08-29).
 	# **The rule it carried is the part to keep**: a wolf is 55 x 40 and a caveman 36 x 40, so sized by
 	# WIDTH off the same radius the man stands half again as tall as the animal. ⇒ **Nothing that
@@ -1390,13 +1424,18 @@ func _paint_bodies() -> void:
 		_hide_unused()
 		return
 
-	# ⚠⚠ **AN ENEMY LOOP STOOD ABOVE THIS AND IT IS DELETED** (2026-08-29) with the fight. It drew
-	# enemies first and allies after, so an ally on the same 조각 read on top of what it was fighting —
-	# **in 3D the depth buffer decides that, not the order**, and the order was kept only so whoever
-	# read it next could see where the rule went.
+	# ⚠ **Beasts first and 검사 after, which is the order the deleted drawer kept** — and in 3D the
+	# depth buffer decides what reads on top, not the order. It is written this way so the day
+	# something needs the order back, it is here rather than having to be rediscovered.
+	for raw_id in battle.living_enemy_ids():
+		var e := int(raw_id)
+		_put_walker("e%d" % e, int(battle.enemy_type[e]), battle.enemy_pos[e], true,
+			_crowd_slot_of(battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e))
+
 	for raw_id in battle.ashore_ids():
 		var i := int(raw_id)
-		_put_soldier(i, battle.soldier_pos[i])
+		_put_walker("s%d" % i, int(army.type_id[i]), battle.soldier_pos[i], false,
+			_crowd_slot_of(battle.soldier_pos[i], i))
 
 	# ⚠ **Inside this function and not beside it.** The riders come out of the same `Sprite3D` pool the
 	# bodies do, and that pool is opened by the `_sprites_used = 0` above and closed by the
@@ -1420,8 +1459,11 @@ func _paint_bodies() -> void:
 ## ⚠ **No offset toward or away from the sun.** The disc laid under props in 2026-08-25 was offset by
 ## `(sin(yaw), cos(yaw))` — *toward* the sun, the wrong way — and nobody caught it for as long as it
 ## was the only shadow there was. **A disc directly under the body cannot be pointing the wrong way.**
-func _put_ground_shadow(centre_px: Vector2, radius: float) -> void:
-	var r := radius * Look.BODY_SPRITE_SCALE * Look.BODY_SHADOW_RADIUS_RATIO
+## ⚠⚠ **`half_px` IS THE DRAWN PICTURE'S HALF-WIDTH AND IT ALREADY CARRIES `BODY_SPRITE_SCALE`**
+## (2026-08-30). It took the SIM radius until then and multiplied the scale in here, which is how the
+## disc ended up one fifth of the body's width. **Do not multiply the scale in again.**
+func _put_ground_shadow(centre_px: Vector2, half_px: float) -> void:
+	var r := half_px * Look.BODY_SHADOW_RADIUS_RATIO
 	_g_disc(centre_px, r, Look.COL_BODY_SHADOW)
 
 
@@ -1437,46 +1479,83 @@ func _put_ground_shadow(centre_px: Vector2, radius: float) -> void:
 ## answer with two pictures depending on who asked. `Rules.UNITS` has a row per species now, so there
 ## is nothing left for it to select between. Which side a body is on still reaches the screen, through
 ## `Look.body_colour_of`; it is a TINT and not a different animal.
-func _beast_tex(type_id: int, facing_right: bool) -> Texture2D:
-	var pool: Array[Texture2D] = _tex_facing_r if facing_right else _tex_facing_l
-	if type_id < 0 or type_id >= pool.size():
+func _beast_tex(type_id: int, head: Vector2) -> Texture2D:
+	if type_id < 0 or type_id >= _tex_facing.size():
 		return null
-	return pool[type_id]
+	var pics: Array = _tex_facing[type_id]
+	var facing := _facing_index(type_id, head)
+	if facing < 0 or facing >= pics.size():
+		return null
+	return pics[facing]
+
+
+## **Which of its row's pictures a body heading `head` wears. ONE rule, and the only place the camera's
+## own axes decide anything about a body's picture.**
+##
+## ⚠⚠ **SCREEN AXES AND NOT A COMPASS.** The board turns, so a picker written against world north puts
+## a body facing the wrong way the moment the player presses the turn key — and nothing else on screen
+## moves, so it reads as the bodies spinning for no reason. This is the resolution the boat deck has
+## used since it was built; **it is not a second copy of it, it is the same one, and the deck now comes
+## through here too.**
+## ⚠⚠ **THE ROW'S OWN LENGTH IS WHAT DECIDES WHETHER UP AND DOWN EXIST**, so a species gains them by
+## gaining two pictures and nothing here is edited. A two-picture row leans its whole heading onto
+## screen-right, which is what a side-on drawing can say.
+## ⚠ **A tie goes to right/left**, which is what the deck did before this and is worth keeping: a
+## body walking exactly diagonally reads better side-on than head-on.
+## ⚠⚠ **THE TWO-PICTURE ROWS MOVED FROM WORLD `head.x` TO SCREEN RIGHT** (2026-08-30). At the opening
+## yaw the two are the same axis, so nothing changed on the screen the user is looking at; **turned,
+## the swordsman, the bear and the crow used to face backwards** and now do not. It is one rule because
+## two rules in one picker is how the wolf and the man end up disagreeing about which way is right.
+func _facing_index(type_id: int, head: Vector2) -> int:
+	var right := head.dot(_ground_right())
+	var down := head.dot(_ground_down())
+	if Look.beast_facings(type_id) > Look.FACE_DOWN and absf(down) > absf(right):
+		return Look.FACE_DOWN if down >= 0.0 else Look.FACE_UP
+	return Look.FACE_RIGHT if right >= 0.0 else Look.FACE_LEFT
 
 
 ## ⚠ **Static so it can run in a member initialiser**, which is where the ten hand-named `load()`
-## calls it replaces used to run. `null` for an empty path rather than a missing entry: the array is
-## indexed by unit row and a short one would fault on the last species instead of drawing a square.
-static func _load_beast_tex(facing_right: bool) -> Array[Texture2D]:
-	var out: Array[Texture2D] = []
+## calls it replaces used to run. `null` for an empty path rather than a missing entry: the outer array
+## is indexed by unit row and a short one would fault on the last species instead of drawing a square.
+static func _load_beast_tex() -> Array:
+	var out := []
 	for ty in Look.BEAST_TEX.size():
-		var path := Look.beast_tex_path(ty, facing_right)
-		out.append(null if path.is_empty() else load(path) as Texture2D)
+		var pics: Array[Texture2D] = []
+		for facing in Look.beast_facings(ty):
+			var path := Look.beast_tex_path(ty, facing)
+			pics.append(null if path.is_empty() else load(path) as Texture2D)
+		out.append(pics)
 	return out
 
 
 ## Every strip every row declares, loaded once. **Static for the same reason `_load_beast_tex` is** —
-## it runs in a member initialiser. The loop walks `Anim` rather than a list of animated species, so a
-## row that declares nothing contributes an empty strip and costs no branch anywhere downstream.
-static func _load_beast_anim(facing_right: bool) -> Array:
+## it runs in a member initialiser. The loop walks the row's own facings and `Anim` rather than a list
+## of animated species, so a row that declares nothing contributes an empty strip and costs no branch
+## anywhere downstream. ⚠ **Every row declares nothing today** — see `Look.NO_ANIM_FRAMES`.
+static func _load_beast_anim() -> Array:
 	var out := []
 	for ty in Look.BEAST_TEX.size():
-		var per_anim := []
-		for anim in Look.ANIM_NAME.size():
-			var strip: Array[Texture2D] = []
-			for f in Look.beast_anim_frames(ty, anim):
-				strip.append(load(Look.beast_frame_path(ty, anim, f, facing_right)) as Texture2D)
-			per_anim.append(strip)
-		out.append(per_anim)
+		var per_facing := []
+		for facing in Look.beast_facings(ty):
+			var per_anim := []
+			for anim in Look.ANIM_NAME.size():
+				var strip: Array[Texture2D] = []
+				for f in Look.beast_anim_frames(ty, anim):
+					strip.append(load(Look.beast_frame_path(ty, anim, f, facing)) as Texture2D)
+				per_anim.append(strip)
+			per_facing.append(per_anim)
+		out.append(per_facing)
 	return out
 
 
-## Row `type_id`'s `anim` strip facing `facing_right`, empty where there is none.
-func _anim_strip(type_id: int, anim: int, facing_right: bool) -> Array:
-	var pool: Array = _tex_anim_r if facing_right else _tex_anim_l
-	if type_id < 0 or type_id >= pool.size():
+## Row `type_id`'s `anim` strip facing `facing`, empty where there is none.
+func _anim_strip(type_id: int, anim: int, facing: int) -> Array:
+	if type_id < 0 or type_id >= _tex_anim.size():
 		return []
-	var per_anim: Array = pool[type_id]
+	var per_facing: Array = _tex_anim[type_id]
+	if facing < 0 or facing >= per_facing.size():
+		return []
+	var per_anim: Array = per_facing[facing]
 	if anim < 0 or anim >= per_anim.size():
 		return []
 	return per_anim[anim]
@@ -1499,14 +1578,14 @@ func _anim_sec(type_id: int, anim: int) -> float:
 ## distance they made a body in contact the only completely motionless thing on the island, which is
 ## what the user was looking at when he said 「그냥 붙어서 그냥 벌렁벌렁하는 거밖에 없어」. A standing
 ## body keeps cycling its legs and `_idle_offset` is what says it is standing.
-func _body_tex(key: String, type_id: int, facing_right: bool) -> Texture2D:
-	var idle := _beast_tex(type_id, facing_right)
+func _body_tex(key: String, type_id: int, head: Vector2) -> Texture2D:
+	var idle := _beast_tex(type_id, head)
 	if not _body.has(key):
 		return idle
 	var b: Dictionary = _body[key]
 	var bite := float(b["bite"])
 	var anim := Look.Anim.BITE if bite > 0.0 else Look.Anim.WALK
-	var strip := _anim_strip(type_id, anim, facing_right)
+	var strip := _anim_strip(type_id, anim, _facing_index(type_id, head))
 	if strip.is_empty():
 		return idle
 	var at := 0
@@ -1521,18 +1600,44 @@ func _body_tex(key: String, type_id: int, facing_right: bool) -> Texture2D:
 	return strip[at] as Texture2D
 
 
-## One soldier at a tile position, ashore or on a deck. Both call sites want the same body, the same
-## gait and the same facing, and splitting them is how one of the two silently loses whatever the
-## other gains — it happened once with the HP bar, which is itself deleted now.
-func _put_soldier(i: int, at: Vector2) -> void:
-	var st := int(army.type_id[i])
-	var skey := "s%d" % i
-	var sradius := Look.body_radius_of(st)
-	var scentre := Look.tile_point_px(at) + _body_offset_of(skey)
-	# The wolf faces what it is walking at. `_facing_of` returns RIGHT when there is no target, so an
-	# idle body faces right rather than flipping on a zero vector.
-	var stex := _body_tex(skey, st, _facing_of(i, false).x >= 0.0)
-	_put_body(scentre, at, sradius, Look.body_colour_of(false), _gait_squash(skey), stex)
+## **One walking body at a 조각 position — a 검사 or a 짐승, and it is deliberately ONE function.**
+##
+## ⚠⚠ **IT TOOK A SOLDIER ID AND IT TAKES A KEY NOW** (2026-08-30, 티켓 41). The two sides index
+## different columns in the sim, so an id alone cannot say which body it names; **the key is what every
+## per-body clock in this file is already stored under**, so passing it in is what stops the beast arm
+## growing its own copy of the gait, the sway and the facing. **Splitting them is how one of the two
+## silently loses whatever the other gains** — it happened once with the HP bar, itself deleted now.
+##
+## ⚠ **The side reaches the screen as a TINT and never as a different animal** — `Look.body_colour_of`.
+## The picture comes from the unit row, which is why a 검사 and a 늑대 need no branch here at all.
+func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: int) -> void:
+	# ⚠ **The crowd offset is kept apart from the sway** and handed down separately — see `_put_body`,
+	# where the shadow takes one and not the other.
+	var crowd := Look.crowd_offset_px(slot, Rules.TILE_CAPACITY)
+	var centre := Look.tile_point_px(at) + crowd + _body_offset_of(key)
+	# A body faces the way it last walked. `_facing_of` returns RIGHT when it has never moved, so a
+	# body standing still faces right rather than flipping on a zero vector.
+	var tex := _body_tex(key, type_id, _facing_of(key))
+	_put_body(centre, at, crowd, type_id, Look.body_colour_of(is_enemy), _gait_squash(key), tex)
+
+
+## **Which slot of its own 조각 this body holds, or 0 when the sim does not say.**
+##
+## ⚠⚠ **THE SIM OWNS THE SLOT AND THIS ONLY READS IT.** `Grid` hands the lowest free slot to whoever
+## claims a 조각, so the number is already deterministic and already the same for everyone looking; a
+## slot invented here — off the body's index, say — would put two bodies in one place the moment one of
+## them died.
+##
+## ⚠ **0 on a refusal, and 0 is the 조각 centre**, which is where a body was drawn before crowds
+## existed. A body mid-step holds the 조각 it is walking into as well as the one it stands on; the
+## rounded position is which of the two it is nearer, and that is the one it is drawn in.
+func _crowd_slot_of(at: Vector2, unit_id: int) -> int:
+	if battle == null or battle.grid == null or battle.grid.w <= 0:
+		return 0
+	var g := battle.grid
+	var tx := clampi(int(round(at.x)), 0, g.w - 1)
+	var ty := clampi(int(round(at.y)), 0, g.h - 1)
+	return maxi(g.slot_of(ty * g.w + tx, unit_id), 0)
 
 
 ## ⚠ **Hidden, never freed.** A pool that shrinks is a pool that reallocates on the next busy frame,
@@ -1554,17 +1659,10 @@ func _hide_unused() -> void:
 var _boats: Array[Node3D] = []
 var _boats_used := 0
 var _boat_scene: PackedScene = null
-## The four rider pictures, loaded once, in `Look.BOAT_RIDER_TEX`'s own order.
-var _tex_rider: Array[Texture2D] = _load_rider_tex()
-## **How far each rider picture's opaque ink stands above the bottom of its own 92 x 92 frame**, as a
-## fraction of that frame's height, **keyed by the picture itself.**
-##
-## ⚠⚠ **KEYED BY THE TEXTURE AND NOT BY INDEX.** A second array in `Look.BOAT_RIDER_TEX`'s order would
-## have to be kept in step with `_tex_rider` by hand, and the day the two disagree a wolf is footed
-## with another wolf's padding — silently, because every value in range is plausible.
-## ⚠ **Measured off the alpha channel, not typed.** The four files carry 11 to 25 empty rows under the
-## animal, so a constant here would be wrong for three of them however it was chosen.
-var _foot_rider: Dictionary = _measure_rider_feet(_tex_rider)
+## ⚠⚠ **`_tex_rider` AND `_load_rider_tex` STOOD HERE AND BOTH ARE DELETED** (2026-08-30). They loaded
+## the four `wolf_h` pictures from a list of the deck's own, which is why the deck could wear the
+## picture the user chose while the island wore the one he did not. **The riders read the wolf's row in
+## `Look.BEAST_TEX`, through the same `_beast_tex` every body ashore goes through.**
 ## Seconds since this view was built, and **the only clock the bob and the roll read**. Advanced from
 ## `_process`'s own delta, so the sea rides the render loop like everything else in this file. ⚠ **Not
 ## `battle.elapsed`** — that is the sim's clock, and a hull that stopped bobbing when the sim was not
@@ -1572,40 +1670,41 @@ var _foot_rider: Dictionary = _measure_rider_feet(_tex_rider)
 var _sea_clock := 0.0
 
 
-static func _load_rider_tex() -> Array[Texture2D]:
-	var out: Array[Texture2D] = []
-	for raw in Look.BOAT_RIDER_TEX:
-		out.append(load(str(raw)) as Texture2D)
-	return out
-
-
-## **Where each rider picture's animal actually ends, so the animal can be stood on the plank rather
-## than the frame around it.**
+## **Where each body picture's animal actually ends, so it can be stood on the ground rather than on
+## the frame around it.**
 ##
 ## ⚠⚠ **THE FRAME'S BOTTOM IS NOT THE WOLF'S FEET.** `east.png` and `west.png` carry 25 empty rows
-## under the animal, `south.png` 23 and `north.png` 11 — out of 92. Footed by the frame, a rider hangs
-## **0.16 조각 above its own seat**, and it hangs a DIFFERENT amount per picture, so the whole deck
-## changes height when the boat turns.
-## ⚠ **Once, at load.** Four 92 x 92 alpha scans, and the answer cannot change while the game runs.
-static func _measure_rider_feet(pics: Array[Texture2D]) -> Dictionary:
+## under the animal, `south.png` 23 and `north.png` 11 — out of 92. Footed by the frame, a wolf hangs
+## **0.26 조각 above the ground it stands on**, and it hangs a DIFFERENT amount per picture, so it
+## rises and falls as it turns. ⚠ **Every other body picture measures 0**, so this costs the swordsman,
+## the bear and the crow nothing at all.
+## ⚠ **Once, at load**, and the answer cannot change while the game runs.
+##
+## ⚠⚠ **KEYED BY THE TEXTURE AND NOT BY INDEX.** A parallel array in the picture pool's own shape would
+## have to be kept in step with it by hand, and the day the two disagree a body is footed with another
+## species' padding — silently, because every value in range is plausible.
+## ⚠ **Measured off the alpha channel, not typed.** A constant would be wrong for three of the wolf's
+## four pictures however it was chosen.
+static func _measure_body_feet(pool: Array) -> Dictionary:
 	var out := {}
-	for pic in pics:
-		if pic == null:
-			continue
-		var img := pic.get_image()
-		if img == null:
-			continue
-		var h := img.get_height()
-		var w := img.get_width()
-		var last := -1
-		for y in h:
-			for x in w:
-				if img.get_pixel(x, y).a > 0.0:
-					last = y
-					break
-		# **A picture with no opaque pixel at all foots at the frame**, which is what the old code did
-		# for every picture — the fallback is the previous behaviour and not a guess.
-		out[pic] = 0.0 if last < 0 else float(h - 1 - last) / float(h)
+	for raw_pics in pool:
+		for pic: Texture2D in (raw_pics as Array):
+			if pic == null or out.has(pic):
+				continue
+			var img := pic.get_image()
+			if img == null:
+				continue
+			var h := img.get_height()
+			var w := img.get_width()
+			var last := -1
+			for y in h:
+				for x in w:
+					if img.get_pixel(x, y).a > 0.0:
+						last = y
+						break
+			# **A picture with no opaque pixel at all foots at the frame**, which is what the old code
+			# did for every picture — the fallback is the previous behaviour and not a guess.
+			out[pic] = 0.0 if last < 0 else float(h - 1 - last) / float(h)
 	return out
 
 
@@ -1799,11 +1898,17 @@ func _boat_yaw(head: Vector2) -> float:
 ## Eight wolves on four benches. **Placed through the hull's own transform**, so the bob and the roll
 ## carry them without either being written down twice.
 func _paint_riders(hull: Node3D, i: int, head: Vector2) -> void:
-	var pic := _boat_rider_tex(head)
+	# ⚠⚠ **THE WOLF'S OWN ROW, THROUGH THE SAME CALL A BODY ASHORE MAKES** (2026-08-30). The deck had a
+	# picture list and a picker of its own until then, and the island's wolf had a different pair of
+	# pictures — which is exactly how the deck came to wear the animal the user chose while the island
+	# did not. **There is one list now and the boat is not allowed its own.**
+	var pic := _beast_tex(Rules.WOLF, head)
 	if pic == null:
 		return
 	var riders := int(battle.boat_riders[i])
-	var wide := Look.body_radius_of(Rules.WOLF) * Look.BOAT_RIDER_W_RATIO * Look.BODY_SPRITE_SCALE
+	# ⚠ **`BODY_SPRITE_SCALE` is NOT a factor here since 2026-08-30** — it is folded into
+	# `BOAT_RIDER_W_RATIO`, so retuning how big a body reads on the ISLAND cannot resize the deck.
+	var wide := Look.body_radius_of(Rules.WOLF) * Look.BOAT_RIDER_W_RATIO
 	var shadows := hull.get_node_or_null(NodePath(DECK_SHADOWS))
 	# ⚠ **The deck is what limits it, not the count.** A boat carrying more than there are benches puts
 	# the extras nowhere rather than stacking two on one seat.
@@ -1833,31 +1938,20 @@ func _paint_riders(hull: Node3D, i: int, head: Vector2) -> void:
 		# The sprite is centred on its own middle, so half its drawn height puts the bottom of its
 		# FRAME on the plank.
 		var tall := float(pic.get_height()) * s.scale.y / Look.TILE_PX
-		# ⚠⚠ **AND THE FRAME'S BOTTOM IS NOT THE WOLF'S FEET** — see `_measure_rider_feet`. The empty
+		# ⚠⚠ **AND THE FRAME'S BOTTOM IS NOT THE WOLF'S FEET** — see `_measure_body_feet`. The empty
 		# rows under the animal are subtracted back off, so what stands on the plank is the animal.
 		# **It is worth 0.16 조각 on the side-on picture** — a quarter of the wolf's own height, and the
 		# difference between an animal whose legs start below the gunwale line and one whose whole body
 		# is above it. ⚠ **And the four pictures differ**, so without this the deck's riders rise and
 		# fall as the boat turns.
-		var foot := float(_foot_rider.get(pic, 0.0)) * tall
+		var foot := float(_foot_body.get(pic, 0.0)) * tall
 		s.position = Vector3(seat.x, seat.y - foot + tall * 0.5, seat.z)
 
 
-## **Which of the four rider pictures faces the camera right.** ⚠ **Measured against the board's own two
-## screen axes and not against a compass** — the board turns, so a fixed north would spin every wolf on
-## the deck when the player turns the camera and nothing else moved.
-func _boat_rider_tex(head: Vector2) -> Texture2D:
-	var right := head.dot(_ground_right())
-	var down := head.dot(_ground_down())
-	# The order here IS `Look.BOAT_RIDER_TEX`'s order: down, up, right, left.
-	var k := 0
-	if absf(right) >= absf(down):
-		k = 2 if right >= 0.0 else 3
-	else:
-		k = 0 if down >= 0.0 else 1
-	if k >= _tex_rider.size():
-		return null
-	return _tex_rider[k]
+## ⚠⚠ **`_boat_rider_tex` STOOD HERE AND IT IS DELETED** (2026-08-30). It resolved a heading against the
+## board's two screen axes and indexed the deck's own picture list. **The resolution is not gone — it is
+## `_facing_index`**, which every body on the island now goes through as well; what is gone is the deck
+## having a second copy of it and a second list to point it at.
 
 
 # --- what the water does about a hull ----------------------------------------------------------------
@@ -2052,11 +2146,13 @@ func _map_tiles() -> Vector2i:
 ## Which way a body is FACING, as a unit vector. **RIGHT when it has never moved**, because a zero
 ## vector normalised is zero, which would collapse a facing mark to a point.
 ##
-## ⚠⚠ **IT TOOK AN `is_enemy` FLAG AND POINTED AT THE BODY'S TARGET** until 2026-08-29. With the fight
-## deleted there is nothing to point at, so **a body faces the way it last walked** — `_fx_step`
-## already records that as `head`, and it is the same value the gait phases on.
-func _facing_of(i: int, _is_enemy: bool = false) -> Vector2:
-	var b: Dictionary = _body.get("s%d" % i, {})
+## ⚠⚠ **IT TOOK AN `is_enemy` FLAG AND POINTED AT THE BODY'S TARGET** until 2026-08-29, and it takes the
+## body's own KEY now (2026-08-30). **A body faces the way it last walked** — `_fx_step` records that as
+## `head`, and it is the same value the gait phases on. ⚠ **Not the target, even though there are targets
+## again**: a 늑대 that turns to face something it cannot reach reads as a body looking the wrong way,
+## and the walk is what the picture is phased on everywhere else in this file.
+func _facing_of(key: String) -> Vector2:
+	var b: Dictionary = _body.get(key, {})
 	var head: Vector2 = b.get("head", Vector2.RIGHT)
 	return head if head.length_squared() > Rules.EPS else Vector2.RIGHT
 
@@ -2078,12 +2174,17 @@ func _fx_step(delta: float) -> void:
 	if battle == null or army == null:
 		return
 
-	# ⚠ **An enemy arm stood beside this and it is deleted** (2026-08-29) with the fight.
+	# ⚠ **Both sides into one list**, so the gait, the sway and the facing are one clock per body and
+	# not two tables that have to be kept in step.
 	var walkers := []
 	for raw_id in battle.ashore_ids():
 		var i := int(raw_id)
 		walkers.append(["s%d" % i, battle.soldier_pos[i],
 			Look.sprite_half_px(int(army.type_id[i]))])
+	for raw_id in battle.living_enemy_ids():
+		var e := int(raw_id)
+		walkers.append(["e%d" % e, battle.enemy_pos[e],
+			Look.sprite_half_px(int(battle.enemy_type[e]))])
 
 	for raw_walker in walkers:
 		var walker: Array = raw_walker
@@ -2142,23 +2243,28 @@ func _body_offset_of(key: String) -> Vector2:
 ## wobble cannot be measured.
 ## ⚠ **Zero until `IDLE_AFTER_SEC` and it starts FROM zero**: the sway is a `sin` of elapsed
 ## stillness, so a body that has just stopped eases in rather than snapping sideways.
-func _idle_offset(key: String) -> Vector2:
-	if not _body.has(key):
-		return Vector2.ZERO
-	var b: Dictionary = _body[key]
-	# `.get`, because a net may hand-build a body entry that has no history yet — and "no history"
-	# is exactly "not standing still", which is the right answer for a body nobody has stepped.
-	var still := float(b.get("still", 0.0))
-	if still <= Look.IDLE_AFTER_SEC:
-		return Vector2.ZERO
-	var phase := TAU * float(absi(key.hash()) % 100) / 100.0
-	# ⚠ **No `fx_gain_of` here, deliberately.** The twelve slots are numbered for the twelve
-	# combat-juice effects and the sway is not one of them; borrowing slot 12 would tie it to the
-	# GAIT, so switching the walk cycle off would silently switch this off too — which is the exact
-	# failure `fx_gain_of`'s own comment names.
-	var amp := Look.IDLE_SWAY_RATIO * float(b.get("half", 0.0))
-	var t := still - Look.IDLE_AFTER_SEC
-	return Vector2(sin(TAU * t / Look.IDLE_PERIOD_SEC + phase), 0.0) * amp
+## ⚠⚠ **THE SIDEWAYS SWAY IS OFF** (2026-08-30, the user at the screen: 「why are they wobbling left and
+## right so much? the swordsman and the wolf... it feels like they are shaking, this needs removing」,
+## and 「the springy up-and-down is right, this is not」). **The bodies had just gone from 0.45 to 0.80
+## scale and this amplitude is a ratio of the drawn half-width, so it grew by 78% with them.**
+##
+## ⚠ **What this costs, said out loud**: the gait phases on DISTANCE, so a body that cannot move now has
+## NOTHING moving on it — which is exactly the state 「붙어서 가만히 있으면 재미가 죽는다」(*"존나
+## 중요해"*, 2026-08-25) was written against. **The user's own words say the motion should be up and
+## down**, and this offset cannot deliver that: it is added to a point on the GROUND plane, where
+## `.y` is depth into the screen and not height. **A vertical bob is a change to the body's `foot`
+## height in `_put_body`, and it is not this function.**
+##
+## ⚠⚠ **THE BODY IS KEPT AS A RECIPE AND NOT AS DEAD CODE.** A second function left sitting here was
+## caught by `net_draw_leaf` the moment it was written, which is that net doing its job. What it did,
+## so it can be rebuilt on the day the bob goes in:
+## **zero until `still > IDLE_AFTER_SEC`; amplitude `IDLE_SWAY_RATIO * half`, the drawn half-width, so
+## it survives the art changing; `sin(TAU * (still - IDLE_AFTER_SEC) / IDLE_PERIOD_SEC + phase)`, with
+## `phase` taken off `absi(key.hash()) % 100` so a queue does not breathe in unison; and NOT routed
+## through `fx_gain_of`, because borrowing the gait's slot would switch the two off together.**
+## **The three constants are still in `look.gd` and nothing else reads them.**
+func _idle_offset(_key: String) -> Vector2:
+	return Vector2.ZERO
 
 ## Item 12. `1 - s*sin(phase)` along the heading and `1 + s*sin(phase)` across it, delivered in
 ## SCREEN axes because that is all `_rounded_square` can apply.

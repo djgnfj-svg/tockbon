@@ -182,16 +182,34 @@ func _the_queue_at_a_neck_survives(t) -> void:
 			and g.passable[g.tile_index(3, 3)] == 0,
 		"그리고 그 줄에서 지나갈 수 있는 조각은 그 하나뿐이다 (자가 점검)")
 
-	# The other body takes the door first.
+	# The other bodies take the door first — **all `Rules.TILE_CAPACITY` of them.**
+	# ⚠⚠ **ONE BODY IN THE DOOR STOPPED BEING A QUEUE ON 2026-08-30.** A 조각 admits
+	# `Rules.TILE_CAPACITY` bodies now, so a fixture that put one there and expected the next to stand
+	# was measuring nothing — the second body simply walks in beside the first. **The neck is full or it
+	# is not a neck**, and this row is written off that constant so it stays true at any capacity.
 	g.step_toward(OTHER_ID, Vector2(2.0, 2.0), field)
-	t.eq(int(g.reserved[door]), OTHER_ID, "다른 몸이 문을 잡았다 (자가 점검)")
+	t.ok(g.holds(door, OTHER_ID), "다른 몸이 문으로 들어갔다 (자가 점검)")
+	for k in range(1, Rules.TILE_CAPACITY):
+		g.hold(OTHER_ID + k, door)
+	t.eq(g.hold_count(door), Rules.TILE_CAPACITY,
+		"그리고 문이 꽉 찼다 — %d 명 (자가 점검)" % Rules.TILE_CAPACITY)
+	t.ok(not g.has_room(door), "더 설 자리가 없다 (자가 점검)")
 
 	var from := Vector2(2.0, 2.0)
 	var stood := g.step_toward(WALK_ID, from, field)
-	t.ok(stood.is_equal_approx(from), "문이 잡혀 있으면 뒤에 선 몸은 제자리에 선다 — 목이 좁은 줄")
+	t.ok(stood.is_equal_approx(from), "문이 꽉 차 있으면 뒤에 선 몸은 제자리에 선다 — 목이 좁은 줄")
 
-	# The control: free the door and the very same body walks through it.
+	# ⚠⚠ **THE HALF-FULL DOOR IS THE ROW THAT SAYS THIS MEASURES A CAPACITY AND NOT A LOCK.** Let one
+	# body out and the queue moves — a walker that refused every occupied 조각 would still be standing.
 	g.release_all(OTHER_ID)
+	t.eq(g.hold_count(door), Rules.TILE_CAPACITY - 1, "한 명만 빠졌다 (자가 점검)")
+	t.ok(not g.step_toward(WALK_ID, from, field).is_equal_approx(from),
+		"한 자리만 비어도 그 몸이 문으로 들어간다 — 꽉 찬 것만 막는다")
+
+	# The control: free the door entirely and the very same body walks through it.
+	for k in range(1, Rules.TILE_CAPACITY):
+		g.release_all(OTHER_ID + k)
+	g.release_all(WALK_ID)
 	var moved := g.step_toward(WALK_ID, from, field)
 	t.ok(not moved.is_equal_approx(from), "문이 비면 그 몸이 실제로 지나간다 (대조군 — 보행자가 고장난 게 아니다)")
 
@@ -283,9 +301,12 @@ func _path_from_touches_nothing(t) -> void:
 	var before := g.reserved.duplicate()
 	var path := g.path_from(field, g.tile_index(2, 6), target)
 	t.ok(path.size() > 1, "길을 실제로 하나 받았다 (자가 점검, %d 조각)" % path.size())
+	# ⚠ **The loop walks SLOTS, not 조각** — `reserved` is `Rules.TILE_CAPACITY` entries per 조각 since
+	# 2026-08-30. Comparing the whole array against its own copy is the same claim either way, and the
+	# count is 「slots that changed」; nothing here may treat the index as a 조각 number.
 	var moved := 0
-	for tile in g.reserved.size():
-		if int(g.reserved[tile]) != int(before[tile]):
+	for k in g.reserved.size():
+		if int(g.reserved[k]) != int(before[k]):
 			moved += 1
 	t.eq(moved, 0, "길을 물어봐도 예약표가 한 조각도 안 바뀐다")
 	t.eq(g._held.size(), 0, "그리고 아무도 조각을 쥐지 않았다")
@@ -428,16 +449,16 @@ func _step_along_refuses_a_tile_that_is_not_adjacent(t) -> void:
 	t.ok(g.can_step(g.tile_index(6, 5), far), "열네 조각 건너에도 참이라고 답한다 (자가 점검)")
 
 	t.ok(g.step_along(WALK_ID, from, two_away).is_equal_approx(from), "두 조각 건너로는 안 미끄러진다")
-	t.eq(int(g.reserved[two_away]), -1, "그리고 그 조각을 예약하지도 않는다")
+	t.eq(g.hold_count(two_away), 0, "그리고 그 조각을 예약하지도 않는다")
 	t.ok(g.step_along(WALK_ID, from, far).is_equal_approx(from), "열네 조각 건너로도 안 미끄러진다")
-	t.eq(int(g.reserved[far]), -1, "그 조각도 예약 안 된다")
+	t.eq(g.hold_count(far), 0, "그 조각도 예약 안 된다")
 
 	# The control: the very same call with a real neighbour moves, so the refusals above are not a
 	# function that refuses everything.
 	var next := g.tile_index(7, 5)
 	t.ok(g.step_along(WALK_ID, from, next).is_equal_approx(Vector2(7.0, 5.0)),
 		"이웃한 조각으로는 그대로 간다 (대조군)")
-	t.eq(int(g.reserved[next]), WALK_ID, "그리고 그 조각을 쥔다")
+	t.ok(g.holds(next, WALK_ID), "그리고 그 조각을 쥔다")
 
 
 ## The route is a second way to step, and a second way to step that did not honour reservation is two
@@ -446,11 +467,11 @@ func _step_along_refuses_what_somebody_else_holds(t) -> void:
 	var g := _empty(24, 12)
 	var from := Vector2(6.0, 5.0)
 	var next := g.tile_index(7, 5)
-	var claimed := g.reserved
-	claimed[next] = OTHER_ID
-	g.reserved = claimed
+	_crowd(g, next, OTHER_ID)
+	t.ok(not g.has_room(next), "남들이 그 조각을 꽉 채웠다 (자가 점검)")
 	t.ok(g.step_along(WALK_ID, from, next).is_equal_approx(from), "남이 쥔 조각으로는 안 간다")
-	t.eq(int(g.reserved[next]), OTHER_ID, "그리고 그 조각의 임자가 안 바뀐다")
+	t.ok(g.holds(next, OTHER_ID) and g.hold_count(next) == Rules.TILE_CAPACITY,
+		"그리고 그 조각의 임자가 안 바뀐다")
 	t.ok(_held_count(g, WALK_ID) <= 1, "거절당한 몸은 제가 선 조각 하나만 쥐고 있다")
 
 	# keep_level refuses on the route too, not only on the field.
@@ -516,15 +537,15 @@ func _a_blocked_next_tile_falls_back_to_the_field(t) -> void:
 	var blocked := int(stored[1])
 	t.eq(blocked, g.tile_index(3, 6), "길의 다음 조각은 (3,6) 이다 (자가 점검)")
 
-	var claimed := g.reserved
-	claimed[blocked] = OTHER_ID
-	g.reserved = claimed
+	_crowd(g, blocked, OTHER_ID)
+	t.ok(not g.has_room(blocked), "그 조각이 꽉 찼다 (자가 점검)")
 
 	var was: Vector2 = b.soldier_pos[0]
 	_step_for(b, 1.0)
 	var now: Vector2 = b.soldier_pos[0]
 	t.ok(now.distance_to(was) > 1.0, "길이 막혀도 몸은 선 채로 안 멈춘다 (%s -> %s)" % [str(was), str(now)])
-	t.eq(int(g.reserved[blocked]), OTHER_ID, "그리고 남이 쥔 조각을 뺏지도 않는다")
+	t.ok(g.holds(blocked, OTHER_ID) and g.hold_count(blocked) == Rules.TILE_CAPACITY,
+		"그리고 남이 쥔 조각을 뺏지도 않는다")
 	t.ok(now.x > was.x, "게다가 목적지 쪽으로 간다 — 흐름장이 받아준 것이다")
 
 
@@ -836,11 +857,27 @@ func _worst_offset(g: Grid, walk: PackedInt32Array, a: Vector2i, b: Vector2i) ->
 	return worst
 
 
+## **Fills every slot of `tile` with a DIFFERENT body**, so the 조각 is genuinely full.
+##
+## ⚠⚠ **ONE ID IN ONE SLOT REFUSES NOBODY SINCE 2026-08-30.** A 조각 admits `Rules.TILE_CAPACITY`
+## bodies, so a fixture that wrote a single owner and then asserted a walker was turned away would be
+## green on a walker that was simply not moving. ⚠ **Different ids and not one repeated**: one body may
+## hold only one slot of a 조각, which is what `Grid.hold` adopts rather than claims twice.
+func _crowd(g: Grid, tile: int, base_id: int) -> void:
+	for k in Rules.TILE_CAPACITY:
+		g.hold(base_id + k, tile)
+
+
+
 ## How many 조각 the reservation table says this body holds. **`reserved` and not the grid's own fast
 ## path**: the table is the authority, and a hold that never entered the fast path is the one that leaks.
+##
+## ⚠ **The scan is over SLOTS and the answer is still 조각.** `reserved` carries `Rules.TILE_CAPACITY`
+## entries per 조각 since 2026-08-30, and **one body may hold at most one slot of a 조각** — which
+## `Grid.hold` enforces by adopting rather than claiming twice — so counting entries counts 조각.
 func _held_count(g: Grid, unit_id: int) -> int:
 	var n := 0
-	for tile in g.reserved.size():
-		if int(g.reserved[tile]) == unit_id:
+	for k in g.reserved.size():
+		if int(g.reserved[k]) == unit_id:
 			n += 1
 	return n
