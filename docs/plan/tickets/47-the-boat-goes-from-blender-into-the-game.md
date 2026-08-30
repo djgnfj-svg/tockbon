@@ -1,5 +1,5 @@
 Type: task
-Status: open
+Status: resolved
 
 # 배가 블렌더에서 게임으로 들어간다
 
@@ -44,3 +44,34 @@ Status: open
 
 - **항해 계산과 상륙** — 티켓 41
 - **플레이어가 만드는 나무 배** — 10 주
+
+---
+
+## Answer — **2026-08-30. It went in, and then it was re-baked because of what the screen said**
+
+**The boat is in the game**, loaded the way the island is, and it sails, bobs, rolls and points where
+it is going. **But the three things this ticket said would be judged on the game screen all failed
+there**, and a second Blender round fixed them:
+
+| What the screen said | What was done |
+|---|---|
+| **It reads as a shallow bowl, not a boat** | Rebuilt angular — three cross-sections deliberately colinear, twice, so the bow and stern are each ONE flat panel. **Angularity came from WHERE the sections sit, not how many** |
+| **The five per-part colours all sat in one cream band** — the dark hull did not exist on screen | Hull-to-gunwale luminance **1.36 → 2.55**, the same six colours the small boat uses, so the two read as one fleet |
+| **The sail's shadow lay across the deck as a grey stain** | Sail halved in area, 1.772 × 1.229 → 1.100 × 1.000 |
+
+## ⚠⚠ And the wedge banding was measured, not guessed — it was GEOMETRY
+
+**The old `boat.glb` had 24 hull polygons up to 20.4° out of plane and 38 sail polygons up to 35.8°.**
+A non-planar quad exports as two triangles with different normals, and that is the bright/dark panel
+on screen. **The new one has zero.**
+
+⚠ **Two documents were measured wrong by this and `wrap-up` did not fix them** — see the new ticket:
+`docs/how-nets-lie.md` still calls the keep's wedge shading OPEN, and `buildings_build.py` claims
+`use_smooth = False` is insufficient in Blender 4.1+, which is **not true in the Blender this repo runs**.
+
+## ✅ What else came out of it
+
+- **`tools/blender/boat_build.py` now exists.** ⚠⚠ **Before this the big boat could not be re-baked at
+  all** — there was no script.
+- **The mesh's AABB is unchanged to four decimals**, deliberately: `Rules.BOAT_HULL_HALF_TILES` and
+  `BOAT_HULL_BEAM_TILES` are read from it and 61 beaches depend on them. **The build script asserts it.**

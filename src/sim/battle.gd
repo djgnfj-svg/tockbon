@@ -32,6 +32,15 @@ extends RefCounted
 ## writer fills by accident**, which is the same reason a `LOADED` state was deleted before it.
 enum SoldierState { RESERVE, ASHORE, DEAD }
 
+## Where one of the beasts' boats is in its crossing.
+##
+## ⚠⚠ **THERE IS NO `RETURNING` AND NO `SPENT`, AND THAT IS THIS ROUND'S SCOPE AND NOT AN OVERSIGHT.**
+## The old player-side boat sailed back to its harbour and was freed; **an ARRIVED boat here never
+## leaves**, so by the second interval two of them sit off different shores. 티켓 41: 「배는 쌓인다.
+## 그것은 원한 것이지 결함이 아니다」. **An enum member no code path can enter is a slot a future writer
+## fills by accident** — the reason `TRANSIT` and `LOADED` were both deleted before this.
+enum BoatState { SAILING, ARRIVED }
+
 ## ⚠⚠ **`Event` AND `ENEMY_UID_BASE` STOOD HERE AND BOTH ARE DELETED** (2026-08-29) with the fight.
 ##
 ##  · **`Event` was ATTACK · DEATH · LAND, an enum and never a string** — `Battle.Event.ATTAK` is a
@@ -127,6 +136,40 @@ var _substep_acc := 0.0
 ## 「서브스텝 횟수 자체가 같다」.
 var substeps := 0
 
+# --- the beasts' boats. Parallel columns, indexed by the order they were born ---------------------
+## ⚠⚠ **A BOAT'S POSITION IS FLAT AND THE BOB IS NOT HERE.** The hull rises and falls on screen, and
+## that motion is `look.gd`'s — a net driving this file must not be able to see it. Height at sea is
+## presentation all the way down: nothing about a crossing is decided by it.
+##
+## ⚠ **They pile up on purpose.** Nothing removes a boat this round, so these arrays only ever grow
+## across one island. The day a boat unloads and leaves, that is a state on `boat_state` and not an
+## erase — an erase renumbers every index the view is holding.
+var boat_pos: Array = []                  # Vector2, tile units, tile centres on integers
+## The 조각 each boat is aimed at — always a member of `grid.beach_ring`.
+var boat_beach := PackedInt32Array()
+## Where each boat comes to rest, in 조각 units. **Frozen at launch, deliberately.**
+##
+## ⚠ **It is eight neighbour lookups and it could be derived every sub-step, and it is not.** The board
+## cannot change during an island, so the answer cannot either — and the day the bearing grows a line
+## test (see `Grid.seaward_at`'s own note on inland water) that derivation stops being eight lookups
+## and starts being thousands a frame. **One call per boat, ever.** `net_boats` rebuilds the point from
+## the board rather than reading this back, so the stored copy is still measured against its own
+## derivation.
+var boat_stop: Array = []                 # Vector2, tile units
+var boat_state := PackedInt32Array()      # BoatState
+## How many are aboard. ⚠ **A COUNT AND NOT BODIES**: nothing in `army` or in `grid.reserved` knows
+## about a rider, which is what 「아직 아무도 안 내렸다」 means. Unloading is 목~일.
+var boat_riders := PackedInt32Array()
+
+## Where in `grid.beach_ring` the NEXT boat's 조각 comes from, already taken modulo the ring size.
+## ⚠ **`Rules.beach_stride_for` is what advances it** — see that function for why the stride is derived
+## from the ring's own size rather than written down.
+var _beach_cursor := 0
+## How many launches this island has had, including ones a coastless board refused. **It and `elapsed`
+## are the whole clock**: a second countdown of its own would be a second clock, and the seams between
+## two clocks are where this project's defects have come from.
+var _boats_launched := 0
+
 var _fields := {}                         # target tile -> PackedInt32Array
 var _field_age := {}                      # target tile -> seconds since it was built
 
@@ -148,6 +191,16 @@ func setup(grid: Grid, army: Army, spawns: Array) -> void:
 	# fresh one.
 	_substep_acc = 0.0
 	substeps = 0
+
+	# Every time, for the same reason `_substep_acc` is: a reused `Battle` carrying the previous
+	# island's hulls would open the next island with boats already ashore.
+	boat_pos = []
+	boat_beach = PackedInt32Array()
+	boat_stop = []
+	boat_state = PackedInt32Array()
+	boat_riders = PackedInt32Array()
+	_beach_cursor = 0
+	_boats_launched = 0
 
 	if grid == null or grid.w <= 0 or grid.h <= 0:
 		# Not swallowed: a battle on an unloaded grid has no tiles, so every unit would stand still
@@ -299,7 +352,12 @@ func step(dt: float) -> void:
 		# movement finishes whatever 조각 anyone was mid-way across.
 		# ⚠ **`_phase_orders` runs BEFORE `_phase_movement` and `_phase_movement` skips whoever it
 		# moved** — falling through walks one body twice in a sub-step, at double speed.
+		# ⚠ **Boats sit BETWEEN the two**, which is where the crossing phase always sat: a hull that
+		# reaches the shore on this sub-step is at the shore for the rest of it. Nothing lands yet, so
+		# the order buys nothing today — it is written now so the day landings return they do not have
+		# to be inserted into an order somebody else chose.
 		_phase_orders(Rules.SIM_SUBSTEP_SEC)
+		_phase_boats(Rules.SIM_SUBSTEP_SEC)
 		_phase_movement(Rules.SIM_SUBSTEP_SEC)
 
 
@@ -448,6 +506,93 @@ func _phase_orders(dt: float) -> void:
 		if soldier_pos[i].distance_to(was) <= Rules.EPS 				and was.distance_to(_soldier_goal[i]) <= Rules.EPS:
 			soldier_order[i] = -1
 			_clear_path(i)
+
+
+## **The beasts' crossing.** Every sailing hull closes on its resting point, then a new one is born if
+## the clock says so.
+##
+## ⚠⚠ **MOVING COMES BEFORE LAUNCHING, AND THAT IS WHAT MAKES `BOAT_START_DIST_TILES` TRUE.** A boat
+## launched first and moved in the same pass is one sub-step nearer the shore than the constant says on
+## the very sub-step it is born, so 「배가 24조각 떨어진 데서 뜬다」 would be off by 0.067 조각 with every
+## check about the crossing still green. **Born, then still for one sub-step, then sailing.**
+##
+## ⚠ **The step is clamped to what is left, never overshot.** The old crossing tested arrival on the arc
+## length rather than on proximity, and a hull that overshot its beach unloaded anyway; a clamp cannot
+## overshoot, so there is no second arrival test to keep in step with the movement.
+func _phase_boats(dt: float) -> void:
+	var step_len := Rules.BOAT_SPEED_TILES * dt
+	for i in boat_pos.size():
+		if int(boat_state[i]) != BoatState.SAILING:
+			continue
+		var stop: Vector2 = boat_stop[i]
+		var here: Vector2 = boat_pos[i]
+		var left := here.distance_to(stop)
+		if left <= step_len:
+			boat_pos[i] = stop
+			boat_state[i] = BoatState.ARRIVED
+			continue
+		boat_pos[i] = here + (stop - here) / left * step_len
+	_launch_if_due()
+
+
+## Births one boat when the clock has reached the next launch.
+##
+## ⚠⚠ **THE DUE TIME IS COUNTED OFF `_boats_launched` AND NOT OFF A COUNTDOWN.** `elapsed` is the only
+## clock in this file and a countdown beside it would be a second one; worse, a countdown reset by
+## subtraction drifts, so the tenth boat would arrive at a time nobody chose.
+##
+## ⚠ **Half a sub-step of slack, and it is not a fudge.** `elapsed` is a sum of `SIM_SUBSTEP_SEC`, so
+## whether it lands a hair above or a hair below an exact 5.0 is decided by the last bit of a 300-term
+## float sum. The slack makes the launch happen on the sub-step NEAREST the due time, on every board and
+## at every frame rate.
+func _launch_if_due() -> void:
+	var due := Rules.BOAT_FIRST_SEC + float(_boats_launched) * Rules.BOAT_INTERVAL_SEC
+	if elapsed < due - Rules.SIM_SUBSTEP_SEC * 0.5:
+		return
+	# ⚠ **Counted whether or not a hull is born.** A board with no coast would otherwise be due on every
+	# sub-step for the rest of the island.
+	_boats_launched += 1
+	var ring := grid.beach_ring(Rules.BOAT_START_DIST_TILES)
+	if ring.is_empty():
+		# **Not swallowed and not an error.** A board with no coast a boat can come to is a board
+		# nothing can sail to; barking here would have to be forgiven by every net that hands this file
+		# a landlocked fixture, and `net_boats` builds one on purpose.
+		return
+	var beach := int(ring[_beach_cursor % ring.size()])
+	# ⚠ **Asked of the ring's own size, every launch.** A stride stored at `setup` would be right until
+	# somebody moved `BOAT_START_DIST_TILES`, which changes how many 조각 the sea can reach and so
+	# changes the ring — see `Rules.beach_stride_for`, which records that going wrong twice.
+	_beach_cursor = (_beach_cursor + Rules.beach_stride_for(ring.size())) % ring.size()
+	# ⚠⚠ **ONE bearing call decides both ends of the crossing**, so the birth point, the resting point
+	# and the whole line between them are one straight line by construction rather than by two sums
+	# that happen to agree.
+	var out := grid.seaward_at(beach)
+	var centre := _point_of_tile(beach)
+	# ⚠⚠ **THE STOP IS MEASURED FROM THE WATER'S EDGE ON THE APPROACH LINE, NOT FROM THE BEACH 조각.**
+	# A standoff taken from the target alone is blind to any other coastline that lies nearer along the
+	# same line, and **two arrivals in four put the bow on the grass** — 0.38 조각 over on one straight
+	# approach, 0.80 on a diagonal. `Grid.land_reach_along` answers how far the land juts seaward of the
+	# beach's own centre; adding the standoff to it leaves exactly the same gap on every side.
+	# ⚠ **0 for a clean straight approach**, so the two beaches that were already right do not move.
+	# ⚠⚠ **THE HULL'S FORWARD FOOTPRINT AGAINST THE DRAWN SHORE, WITH THE 조각 RULE AS A FLOOR.** A stop
+	# measured along the centre line still put the forward SHOULDER on the grass — seen on screen at the
+	# five worst beaches, four of them overlapping, every one diagonal or near it. `Grid.hull_stop_along`
+	# sweeps the beam; `land_reach_along` is the 조각 answer and is what a board with no outline has.
+	# ⚠ **The larger of the two, always.** The outline can ask for more than the 조각 grid and does; it
+	# must never be allowed to ask for less.
+	# ⚠ **The 조각 rule is the FLOOR the drawn search starts from, not a rival answer to be maxed with.**
+	# Maxing them let a hull take the 조각 answer at a beach where the outline had already said that
+	# position was on the grass. See `Grid.hull_stop_along`.
+	var floor_d := grid.land_reach_along(beach, out, Rules.BOAT_START_DIST_TILES) 			+ Rules.BOAT_STANDOFF_TILES
+	var stop_d := grid.hull_stop_along(beach, out, Rules.BOAT_HULL_HALF_TILES,
+			Rules.BOAT_HULL_BEAM_TILES * 0.5, Rules.BOAT_BEACH_GAP_TILES, floor_d)
+	if stop_d == -INF:
+		stop_d = floor_d
+	boat_beach.append(beach)
+	boat_pos.append(centre + out * Rules.BOAT_START_DIST_TILES)
+	boat_stop.append(centre + out * stop_d)
+	boat_state.append(BoatState.SAILING)
+	boat_riders.append(Rules.BOAT_CAPACITY)
 
 
 ## Everyone walks toward their target and **stops the instant it is in reach**. Without that one

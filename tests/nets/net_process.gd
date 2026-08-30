@@ -37,6 +37,10 @@ func run(t) -> void:
 
 
 # -- the tree ---------------------------------------------------------------------------------------------
+	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
+	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
+	t.done()
+
 ## One assertion per defect kind, each label carrying **how much was actually walked**. A reader who sees
 ## `지도 0개` knows this line measured nothing; a bare green would have hidden that.
 func _tree(t) -> void:

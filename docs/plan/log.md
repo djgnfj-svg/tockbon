@@ -1520,3 +1520,137 @@ build to look at — different grain."*** **The recommended name is `commission`
 **The eight candidates went out as a published page instead**, with the island's real turf, rock, shore
 and water colours behind the sprites. ⚠ **Judging a sprite on white is judging it on ground it will
 never stand on.**
+
+## ✅✅ **The boat crossed, the sea got flecks, and the controls went to the mouse — 2026-08-30 night**
+
+**Week 1 closed and week 2's Mon–Wed half was finished the same day.** The user, opening the session:
+*"The map we said we'd do this week is finished. It went well."* Then: *"Let's do next week's thing early
+— a boat floating on the sea, the boat coming all the way to our island, and wolves on top of it. That's
+this session's goal."*
+
+### What went in
+
+- **A boat sails in on a fixed interval, stops off the shore, and carries eight wolves.**
+- **The wake**, chosen out of nine candidates, and **the hull's contact with the water.**
+- **The open sea got flecks**, chosen out of five.
+- **The camera moved to the mouse**: screen-edge pan, right-drag pan, wheel to rotate.
+- **The big boat was re-baked** and **a small four-seat boat was built.**
+- ⚠⚠ **The net wrapper stopped hiding checks that never ran.**
+
+### ⚠⚠ The measurement of the day: **70 checks had never executed, behind a reported 752**
+
+**A GDScript runtime error abandons the function it lands in and the caller resumes on its next line.**
+So a throw *inside* `run()` discards every check below it, while a throw one frame deeper discards only
+that frame. **That single difference is why `net_camera` printed all 87 of its rows and `net_shell`
+silently lost 16 — and the two are indistinguishable in the summary.**
+
+⚠ **The 2026-08-25 fix for this exists, works, and is OVERCLAIMED.** `_run_net` fires when the counters
+do not move *at all*; its comment claims it also catches "an uncaught runtime error mid-`run()`".
+**`net_shell` asserted 56 checks and then died — the counters had moved, so the guard stayed silent.**
+**The overclaim is why nobody looked again after two recurrences.**
+
+⇒ **Three pieces built**: `t.done()` as a sentinel every `run()` must reach; the abandoned functions
+printed per net, parsed from the stderr backtrace the wrapper already reads; and **the count itself
+marked — `통과 56 (불완전)` rather than `통과 56`**, because the whole failure is that a number reads
+healthy. Both mutations bit, including the per-function case no sentinel can ever see.
+
+### ⚠⚠ And the same shape appeared **eight times in one day** at a smaller scale
+
+**A check that shares its blind spot with the code it checks cannot catch that defect**, and every time
+it was found the same way: break the thing, watch the check stay green.
+
+| Where | What was shared |
+|---|---|
+| `net_boats._line_is_all_water` | A line-for-line copy of `Grid._clear_water_line` |
+| The stop-point check | Both computed `target + seaward * STANDOFF` |
+| The wake's side lines | The net re-did the shader's own arithmetic and confirmed itself |
+| The edge-pan band | The check read the same constant the code read — widening it to 200 px changed nothing |
+
+⚠ **Three of these the builders caught and deleted themselves**, which is the outcome to want.
+
+### The boat kept being wrong in ways only the screen could say
+
+**Four rounds of "fixed" that were not.** Each was measured, not argued.
+
+1. **Every boat parked on the grass.** `BOAT_STANDOFF_TILES` was 2.0 against a hull half-length of 2.6,
+   so the overlap was **exactly `half-length − standoff` = 0.6 호ᅡ각** — worst on diagonals, a third of the hull.
+2. **Deriving the standoff fixed two beaches of four.** It measured to the chosen 호ᅡ각 and was blind to
+   coastline nearer along the approach.
+3. **Measuring against the water overshot instead** — a boat halted **7.89 호ᅡ각 out in open sea with nothing
+   in frame explaining why.** ⚠ **Worse than the grass**, because a beached boat at least looks like
+   something happened.
+4. **Asking "how far in can the hull stand" rather than "where is the furthest land" closed it.**
+   Furthest stop **5.08 호ᅡ각**, nothing on land.
+
+⚠⚠ **Two boundaries had been conflated the whole time.** `Islands.coast()` — what the player sees — sits
+**half a 호ᅡ각 off the 호ᅡ각 grid**, verified by scoring the outline against `grid.passable`: 100% agreement at
++0.5, 94.4% at 0. **A net saying "0.60 from the shore" was measuring 0.60 from the tile grid.**
+
+⚠ **And both instruments measured a POINT.** The hull is 2.01 호ᅡ각 across, so on a diagonal **the forward
+shoulder reaches land before the bow tip does.** The stop is now swept as a footprint, five rays wide.
+
+### The wedge banding was geometry, and two documents are wrong about it
+
+**The old `boat.glb` had 24 hull polygons up to 20.4° out of plane and 38 sail polygons up to 35.8°.**
+A non-planar quad exports as two triangles with different normals — that is the bright/dark panel.
+**The rebuilt boat has zero.** ⚠ Measured by a reusable trick: a flat-shaded glTF splits vertices per
+face, so **two triangles sharing raw indices were one polygon**, and the angle between them is its bend.
+
+⚠⚠ **`docs/how-nets-lie.md` still calls the keep's version OPEN while `buildings_build.py` records that a
+fifth fix closed it, and `buildings_build.py`'s claim that `use_smooth = False` is insufficient in
+Blender 4.1+ was measured false in the Blender this repo runs.** Ticket **56**.
+
+### What the user chose by eye, and what it cost to ask badly
+
+| What | Chosen | ⚠ |
+|---|---|---|
+| **The wake** | `04d-single` — one line. *"Something simple is all it needs."* | ⚠⚠ **The lab drove the boat at 4.0 호ᅡ각/s and the game runs at 1.2** — a stale hand-copy. **The approved 16-호ᅡ각 trail draws 4.8 here.** Ticket **55** |
+| **Where it comes from** | *"Can you make it look like it comes off the boat's sides?"* | The heading was already stored on every past point and unread |
+| **The open sea** | `06-fleck`, *"put it in weakly"* — 0.11 → **0.09** | ⚠ **This question was asked once before and all ten lost.** What changed: the first round judged EMPTY water, and the camera now roams 20 호ᅡ각 out |
+| **Wolf facings** | **Four** | ⚠ The camera turns 15° per press, so four is already a compromise |
+
+### ⚠ 「띄어져 있는 부분」 — the island's own vocabulary was wrong on a boat
+
+The user photographed an arriving boat: *"I'd like it to arrive without the floating part like this."*
+**It was the water marks.** The break line stood **0.35–0.47 호ᅡ각 clear of the planking** and the trail's two
+side lines started **0.67 호ᅡ각 out in open water**, offset by the amidships half-beam at a point where the
+hull had already tapered to 0.336.
+
+⚠⚠ **Reusing the 해안선's shape — two whites with dark water between — was my instruction and it was wrong
+here. The island is large and that band reads as water; a boat is small and the same band reads as a gap.**
+
+### What the screen said about the deck wolves, twice
+
+**「6× the sprite」 does not mean 6× the wolf.** The four `wolf_h` images fill **22–73% of their 92×92
+frame**; the real animal is **0.426 호ᅡ각 side-on and 0.129 head-on**. ⚠ **And they floated 0.161 호ᅡ각 above
+the plank by a different amount per picture**, so the deck rose and fell as the boat turned. **They now
+stand on their ink.**
+
+⚠⚠ **The rider ceiling was measured wrong twice** — 「about 8×」 and 「10.1× of headroom」 both used the
+**1.0 호ᅡ각 between benches**. **The binding gap is the two seats ON one bench, 0.292 호ᅡ각**, and 6× has
+already reached it: eight wolves read as **four pairs**.
+
+### The controls
+
+*"Rather than WASD, the mouse going to the edge and moving automatically feels right."* · *"The wheel
+rotates and the right button drags to move."* ⚠ **Zoom had nowhere to go and was put on Shift+wheel by
+me, not by the user** — written into the code as unowned.
+
+⚠ **A pre-existing red explained itself on the way**: 「dragging the field pans」 had a stale gesture that
+never crossed the 6 px threshold, so `pan_by` was never called. **And dragging on LAND did not merely
+fail to pan — the press landed as a walk order and the swordsman left his post.**
+
+### ⚠ What the session did NOT build, said plainly
+
+**There is no beast in this game.** `boat_riders` is a count, and the eight wolves on a deck are drawn
+from that number. **No enemy column, no landing, no damage, no death, no keep health.** Bear and crow
+have two stills each; **the lion has no picture at all.** The 16 wolf walk/bite frames are wired to
+nothing. ⇒ Tickets **41 · 50 · 51**.
+
+**And a whole shore is never attacked**: 86 shore 호ᅡ각, 61 in the ring, **25 never visited** — the southern
+spit and the satellite island. Ticket **53**.
+
+### Nets
+
+**629 통과 / 59 ᄉᡴ패 → 1048 / 63.** ⚠ **The four extra reds are not new failures — they are old ones that
+became visible** when the abandoned checks started running. **No red in this session was caused by it.**

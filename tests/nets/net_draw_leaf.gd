@@ -128,6 +128,10 @@ func _table() -> Dictionary:
 			# that is the 3D leaf, and `net_shell` reads those fields back per enemy.
 			"_sprite": 0,
 			"_put_body": 0,
+			# The width arithmetic `_put_body` and the deck riders share. It was inline in `_put_body`
+			# until the riders needed the same number, and a second copy of it is a rider drawn at a
+			# size nobody chose.
+			"_billboard_scale": 0,
 			"_paint_bodies": 0,
 			# 티켓 「캐릭터」's first slice: a body's whole shadow, and the HP bar deleted from over it
 			# (2026-08-28, the user: 「체력바 없이 그림자도 단순하게 아래 동그라미정도해줘」).
@@ -145,8 +149,41 @@ func _table() -> Dictionary:
 			"_hide_unused": 0,
 			# The effect SIMULATION — carried across the move unchanged, still 0 draws each.
 			"_map_tiles": 0,
-			# ⚠ Every boat drawer left this table on 2026-08-29 with the boats themselves.
-			# move, re-wired in step 4.
+			# ⚠⚠ **THE BOATS ARE BACK AND THEY ARE THE BEASTS' NOW** (티켓 41). Every boat drawer left
+			# this table on 2026-08-29 with the player's own crossing; **nothing here is one of those
+			# coming back.** The hull is `boat.glb` instantiated into a pool of `Node3D`, and the eight
+			# riders come out of the same `Sprite3D` pool the bodies do — so the whole set is node
+			# fields the engine consumes, and the `draw_*` column is 0 for all of it, like every other
+			# row in this table.
+			"_load_rider_tex": 0,
+			"_measure_rider_feet": 0,
+			"_boat": 0,
+			"_hide_unused_boats": 0,
+			"_paint_boats": 0,
+			"_boat_heading": 0,
+			"_boat_yaw": 0,
+			"_paint_riders": 0,
+			"_boat_rider_tex": 0,
+			"_boat_centre": 0,
+			# **The disc under a rider is a mesh on the hull and not a `draw_*`.** It rides the boat's own
+			# transform, which is the whole reason it is built as a child rather than painted each frame —
+			# a `draw_*` appearing in any of these three would mean the deck's shadow had been started a
+			# second way, in the layer that cannot follow a bob.
+			"_put_deck_shadows": 0,
+			"_disc_mesh": 0,
+			"_disc_material": 0,
+			# ⚠⚠ **THE WAKE AND THE CONTACT ARE A SHADER, SO EVERY ROW HERE IS 0 AND THAT IS THE POINT.**
+			# The water draws both out of a uniform array of where the hulls have been; there is no buffer,
+			# no trail geometry and nothing committed to a surface, so a `draw_*` in any of these seven
+			# would mean somebody had started drawing the wake a second way. `net_wake` reads the array
+			# itself and the material it lands on.
+			"_wake_empty": 0,
+			"_wake_no_last": 0,
+			"_wake_commit": 0,
+			"_wake_forget": 0,
+			"_wake_head_rad": 0,
+			"_wake_stamp": 0,
+			"_paint_wake": 0,
 			"_facing_of": 0,
 			"_fx_step": 0,
 			"_body_offset_of": 0,
@@ -397,6 +434,10 @@ func run(t) -> void:
 
 
 # -- 5. the world-width table --------------------------------------------------------------------
+	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
+	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
+	t.done()
+
 ## Which side of the `ZOOM_MIN` snap floor each width `field_view` draws with sits on. **An empty
 ## string means ABOVE the floor; any other string is the REASON it is deliberately below**, and the
 ## reason is the whole licence — a row cannot be moved to the below side without writing one.

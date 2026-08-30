@@ -101,6 +101,10 @@ func run(t) -> void:
 
 
 # -- the docs half ---------------------------------------------------------------------------------------
+	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
+	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
+	t.done()
+
 ## See the header. Prose, not comments, so the whole file is scanned and consecutive non-blank lines are
 ## joined the same two ways — a citation wrapped across a line break in Markdown is the same shape.
 func _docs_carry_no_line_numbers(t, line_re: RegEx) -> void:

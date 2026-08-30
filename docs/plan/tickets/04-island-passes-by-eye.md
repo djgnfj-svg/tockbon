@@ -1,5 +1,5 @@
 Type: grilling
-Status: open
+Status: resolved
 
 # 섬을 화면에서 보고, 어디가 아직 아닌지 짚는다
 
@@ -40,3 +40,15 @@ Status: open
 ## 여기서 갈라져 나간 것
 
 (아직 없음)
+
+---
+
+## Answer — **2026-08-30, the user closed it in one line**
+
+***"The map we said we'd do this week is finished. It went well."***
+
+**Chunk 1 and week 1 are closed.** The user played the island on screen and said so; no list of
+「this bit is still not right」 came back, which is what this ticket existed to collect.
+
+⚠ **What was left open moved rather than died** — 18 · 20 · 22 · 23 · 24 · 29 · 30 · 39 · 40 are
+still `open` and are now polish rather than a gate. **They no longer hold a week.**

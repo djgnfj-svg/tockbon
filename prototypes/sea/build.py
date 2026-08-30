@@ -24,7 +24,12 @@ The one function a `mech.gdshader` must define:
 A `mech.gdshader` may also declare its own `void vertex()`. It is spliced in above `fragment()`, so
 everything the shipped file defines — the field uniforms, `sdf`, `vnoise`, `h21` — is already in scope.
 
-    python prototypes/sea/build.py
+    python prototypes/sea/build.py              <- every folder that has a mech.gdshader
+    python prototypes/sea/build.py 06-fleck ..  <- only the ones named
+
+⚠ **The named form is why the 2026-08-29 five can be left alone.** Their pictures were shot against
+the shipped shader as it stood then and the user has already judged them; re-splicing rewrites five
+generated files for a comparison nobody is going to run again.
 """
 import pathlib
 import sys
@@ -61,8 +66,11 @@ def build(folder, ship):
 
 def main():
     ship = SHIPPED.read_text(encoding="utf-8")
+    only = set(sys.argv[1:])
     made = 0
     for folder in sorted(HERE.iterdir()):
+        if only and folder.name not in only:
+            continue
         if folder.is_dir() and (folder / "mech.gdshader").exists():
             build(folder, ship)
             made += 1

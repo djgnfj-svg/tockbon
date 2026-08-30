@@ -47,6 +47,10 @@ func run(t) -> void:
 
 
 # == the heap =========================================================================================
+	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
+	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
+	t.done()
+
 
 ## **Ordering is the one thing a 「did the body arrive」 check can never see**, so it is measured directly:
 ## push out of order, pop everything, and read what comes back.

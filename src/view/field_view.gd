@@ -313,14 +313,25 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	# flight over bodies that no longer exist, and every id in them means a different unit now.
 	_fx = []
 	_body = {}
+	# ⚠ **And the water forgets every hull.** The blocks are indexed by boat number, so island 2's
+	# first boat would otherwise open wearing island 1's first boat's trail.
+	_wake = _wake_empty()
+	_wake_last = _wake_no_last()
 	# The survey: an island opens zoomed all the way out, so the WHOLE island is on screen before
 	# anything is planned — `plan-then-watch` 6.3, on the user's 「조금 더 카메라를 뒤로 빼야 될」.
 	# ⚠ **Not `ZOOM_MIN` any more.** See `Look.survey_zoom_of`: the opening view is a question about the
 	# grid that just loaded, and a constant could only ever answer it for one map size.
 	zoom = Look.survey_zoom_of(_map_tiles().x, _map_tiles().y)
-	cam_px = Vector2.ZERO
 	cam_yaw_deg = Look.CAM_YAW_DEG
 	cam_pitch_deg = Look.CAM_PITCH_DEG
+	# ⚠⚠ **THE OPENING FRAME IS CENTRED HERE AND IT USED TO BE THE CLAMP THAT DID IT.** This was
+	# `cam_px = Vector2.ZERO` followed by `_clamp_cam()`, and it worked only because the clamp pinned
+	# any axis narrower than the view to the middle. **The clamp lets the camera roam out to sea now**
+	# (`Look.CAM_ROAM_TILES`), so zero is a perfectly legal place to be and the island would open in
+	# the corner. **The framing has to be said out loud rather than fall out of a bound.**
+	# ⚠ Same arithmetic the clamp used, so every opening literal in `net_camera` is unchanged.
+	var map_px := Vector2(float(_map_tiles().x), float(_map_tiles().y)) * Look.TILE_PX
+	cam_px = map_px * 0.5 - _visible_ground_px() * 0.5
 	_clamp_cam()
 	# ⚠ **Forces a terrain rebuild even when the same island re-opens.** `_built_for` is a fingerprint
 	# of the rows, and re-entering island 0 from the map would otherwise keep the mesh from the last
@@ -371,6 +382,11 @@ func _wash_cells(grid: Grid) -> PackedInt32Array:
 ## multiplier to fold in, and a leaf handed a constant 1.0 is the shape "No fake code" names.
 func _process(delta: float) -> void:
 	_fx_step(delta)
+	# The sea's own clock — the bob and the roll, and nothing else, read it. See `_sea_clock`.
+	_sea_clock += delta
+	# ⚠ **After the tick and not before it.** Every remembered point is stamped with `_sea_clock`,
+	# and a stamp taken before the tick is a frame behind the hull the same frame is about to draw.
+	_paint_wake()
 	_place_camera()
 	# ⚠ **The buffer is opened BEFORE the bodies and flushed after them.** A body's shadow is painted
 	# from inside `_paint_bodies` — it is a per-body fact, and that is the one loop with a body's
@@ -537,17 +553,30 @@ func zoom_at(at: Vector2, factor: float) -> void:
 ## below reduces to the old one term for term, which is why the pan and zoom checks that drove it
 ## still describe it.
 ##
-## An axis whose map is narrower than the visible ground is CENTRED on it rather than clamped to an
-## empty range — that is the survey framing an island opens at.
+## ⚠⚠ **THE BOUND IS THE ISLAND PLUS `Look.CAM_ROAM_TILES` OF SEA, AND IT USED TO BE THE ISLAND ITSELF.**
+## Under the old bound an axis whose board was narrower than the visible ground was CENTRED on it — and
+## every island is narrower than the view at its own opening zoom, so **the camera could not move at
+## all**. That was right while the island was the whole game; it is wrong now that **finding a boat out
+## at sea is the player's job and the camera is the only tool for it** (2026-08-30, the user: 「안
+## 알아채는 게 맞겠다」).
+##
+## ⚠ **The centring branch survives, one level out.** When the ROAM rectangle is still narrower than
+## the view there is no range to clamp into and the middle is the only answer — that is a tiny board or
+## a very wide zoom, not the shipped island.
+## ⚠ **The opening frame is no longer this function's doing** — see `setup`, which now says the
+## centring out loud instead of leaning on a bound that has moved.
 func _clamp_cam() -> void:
 	var map_px := Vector2(float(_map_tiles().x), float(_map_tiles().y)) * Look.TILE_PX
 	var visible := _visible_ground_px()
+	var roam := Look.CAM_ROAM_TILES * Look.TILE_PX
 	var centre := cam_px + visible * 0.5
 	for axis in 2:
-		if map_px[axis] < visible[axis]:
-			centre[axis] = map_px[axis] * 0.5
+		var lo := -roam
+		var hi := map_px[axis] + roam
+		if hi - lo < visible[axis]:
+			centre[axis] = (lo + hi) * 0.5
 		else:
-			centre[axis] = clampf(centre[axis], visible[axis] * 0.5, map_px[axis] - visible[axis] * 0.5)
+			centre[axis] = clampf(centre[axis], lo + visible[axis] * 0.5, hi - visible[axis] * 0.5)
 	cam_px = centre - visible * 0.5
 
 
@@ -666,6 +695,12 @@ const ISLAND_SCENE := "res://assets/terrain/island.glb"
 const BUILDINGS_SCENE := "res://assets/buildings/buildings.glb"
 ## The scatter — trees, rocks, bushes. One file, one node per kind, cloned out of.
 const PROPS_SCENE := "res://assets/props/props.glb"
+## **The beasts' hull, as one object Blender made.** ⚠ **Loaded, never built** (`CLAUDE.md`: what the
+## player looks at is made in a tool). It arrives at its authored size and nothing scales it — 티켓 47
+## says the hull, the sail and their proportions are judged on the game screen, after it is in.
+## ⚠ **It sits here and not in `look.gd` because it is a scene path**, and the three above it already
+## decided where those live. Every number the hull is DRAWN with is still `look.gd`'s.
+const BOAT_SCENE := "res://assets/props/boat.glb"
 
 var _island: Node3D = null
 ## **The 판 object, found inside the island scene by name**, and the material this file put on it.
@@ -1034,7 +1069,9 @@ static func _hand_the_sea_its_numbers(mat: ShaderMaterial, g, margin: float,
 	_hand_the_sea_its_look(mat)
 
 
-## **Every dial the sea reads, and there are thirty-one of them.** ⚠⚠ **There were about forty until
+## **Every dial the sea reads.** ⚠ **The count used to be written into this line and it was six out by
+## the time anybody read it** — the list below is the only place it lives now.
+## ⚠⚠ **There were about forty until
 ## 2026-08-28**, when seven shorelines were built side by side in `prototypes/shoreline/` and the one
 ## that does the least won. Swell, ripple, drawn crests, travelling foam and the shallows all left with
 ## the old shader; **their constants are still in `look.gd`, parked and unread.**
@@ -1086,6 +1123,44 @@ static func _hand_the_sea_its_look(mat: ShaderMaterial) -> void:
 	mat.set_shader_parameter("calm", Look.WATER_CALM)
 	mat.set_shader_parameter("calm_scale", Look.WATER_CALM_SCALE)
 	mat.set_shader_parameter("calm_speed", Look.WATER_CALM_SPEED)
+
+	# **Section 8's dials — the open water itself**, chosen 2026-08-30 out of five candidates shot with
+	# a hull crossing. ⚠ **They are constants like the rest of this list and none of them moves**: the
+	# scatter drifts on `TIME` inside the shader, so there is nothing here to hand over per frame.
+	mat.set_shader_parameter("fleck_col", Look.COL_WATER_FLECK)
+	mat.set_shader_parameter("fleck_cell", Look.WATER_FLECK_CELL)
+	mat.set_shader_parameter("fleck_fill", Look.WATER_FLECK_FILL)
+	mat.set_shader_parameter("fleck_r_min", Look.WATER_FLECK_R_MIN)
+	mat.set_shader_parameter("fleck_r_max", Look.WATER_FLECK_R_MAX)
+	mat.set_shader_parameter("fleck_hard", Look.WATER_FLECK_HARD)
+	mat.set_shader_parameter("fleck_amt", Look.WATER_FLECK_AMT)
+	mat.set_shader_parameter("fleck_current", Look.WATER_FLECK_CURRENT)
+
+	# ⚠⚠ **Section 7's dials, and the two that MOVE are not here.** `wake_hull` and `wake_t` change
+	# every frame and are handed over by `_paint_wake`; everything below is a constant, so it goes with
+	# the rest of the sea's numbers and cannot be the dial that only one of the two call sites set.
+	mat.set_shader_parameter("wake_life", Look.WAKE_LIFE_SEC)
+	mat.set_shader_parameter("wake_stern", Look.wake_stern_tiles())
+	mat.set_shader_parameter("wake_w", Look.WAKE_W_TILES)
+	mat.set_shader_parameter("wake_hard", Look.WAKE_HARD)
+	mat.set_shader_parameter("wake_side_close", Look.WAKE_SIDE_CLOSE)
+	mat.set_shader_parameter("wake_alpha", Look.WAKE_ALPHA)
+	mat.set_shader_parameter("wake_froth_scale", Look.WAKE_FROTH_SCALE)
+	mat.set_shader_parameter("wake_froth_amt", Look.WAKE_FROTH_AMT)
+	# ⚠ **The hull's own footprint comes out of `Rules` and not out of `Look`**: where a boat stops is
+	# a rule, the box it stops with is the same box, and a second copy here would be right until the
+	# next export of `boat.glb`.
+	mat.set_shader_parameter("hull_half", Rules.BOAT_HULL_HALF_TILES)
+	mat.set_shader_parameter("hull_beam", Rules.BOAT_HULL_BEAM_TILES * 0.5)
+	mat.set_shader_parameter("hull_shadow_w", Look.HULL_SHADOW_W_TILES)
+	mat.set_shader_parameter("hull_shadow_bow", Look.HULL_SHADOW_BOW)
+	mat.set_shader_parameter("hull_shadow_col", Look.hull_shadow_colour())
+	mat.set_shader_parameter("hull_break_w", Look.HULL_BREAK_W_TILES)
+	mat.set_shader_parameter("hull_break_amt", Look.HULL_BREAK_AMT)
+	mat.set_shader_parameter("hull_break_bow", Look.HULL_BREAK_BOW)
+	mat.set_shader_parameter("hull_halo_tiles", Look.HULL_HALO_TILES)
+	mat.set_shader_parameter("hull_halo_amt", Look.HULL_HALO_AMT)
+	mat.set_shader_parameter("hull_halo_aft", Look.HULL_HALO_AFT)
 
 ## **Dresses the island.** ⚠ Everything about where each prop goes was decided when the island was
 ## built; this reads the list and clones. **Nothing is randomised here** — a scatter that rolled dice at
@@ -1230,6 +1305,19 @@ func _sprite() -> Sprite3D:
 ## **A mark on the water has to read the same at every sun angle**, so its material was unshaded.
 
 
+## **The scale a `Sprite3D` needs so `pic` draws `wide` world-px across**, squashed by `squash`.
+##
+## ⚠ **One place, because a body on the ground and a rider on a deck are the same picture drawn the
+## same size.** Splitting the arithmetic is how one of the two silently loses whatever the other gains —
+## it happened once with the HP bar, and the note about it is still in `_put_soldier`.
+## ⚠ `squash.x` is divided by, so it is floored: a squash of zero is a width of zero and a scale of
+## infinity, and an infinite scale is a body that fills the screen for one frame.
+func _billboard_scale(pic: Texture2D, wide: float, squash: Vector2) -> Vector3:
+	var sx := wide * squash.x / float(pic.get_width())
+	var sy := sx * squash.y / maxf(squash.x, 0.001)
+	return Vector3(sx, sy, 1.0)
+
+
 ## Puts one billboard at a body's feet. `centre_px` is the same world px the flat board drew at, so
 ## every offset that already went through `_body_offset_of` follows across for free.
 ##
@@ -1267,10 +1355,8 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, radius: float, colour: Col
 	s.texture = pic
 	s.modulate = Look.beast_tint(colour) if tex != null else colour
 	var wide := (radius * Look.BEAST_SPRITE_W_RATIO if tex != null else radius * 2.0) 			* Look.BODY_SPRITE_SCALE
-	var sx := wide * squash.x / float(pic.get_width())
-	var sy := sx * squash.y / maxf(squash.x, 0.001)
-	s.scale = Vector3(sx, sy, 1.0)
-	var tall := float(pic.get_height()) * sy / Look.TILE_PX
+	s.scale = _billboard_scale(pic, wide, squash)
+	var tall := float(pic.get_height()) * s.scale.y / Look.TILE_PX
 	# ⚠⚠ **`_stand_h` AND NOT `_ground_h`, SO A BODY WALKS UP THE STAIR INSTEAD OF POPPING UP IT.**
 	# `_ground_h` is one number per tile, which is right for the RULES and wrong for the feet: a stair
 	# run climbs a whole storey across its tiles, so a body standing on one would float half a storey
@@ -1298,6 +1384,9 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, radius: float, colour: Col
 func _paint_bodies() -> void:
 	_sprites_used = 0
 	if battle == null or army == null or battle.grid == null:
+		# ⚠ **Still called on the empty path**: `_paint_boats` is what hides a pooled hull, so skipping
+		# it here would leave the last island's boats standing on the title screen.
+		_paint_boats()
 		_hide_unused()
 		return
 
@@ -1308,6 +1397,12 @@ func _paint_bodies() -> void:
 	for raw_id in battle.ashore_ids():
 		var i := int(raw_id)
 		_put_soldier(i, battle.soldier_pos[i])
+
+	# ⚠ **Inside this function and not beside it.** The riders come out of the same `Sprite3D` pool the
+	# bodies do, and that pool is opened by the `_sprites_used = 0` above and closed by the
+	# `_hide_unused()` below — painted outside the pair, every rider would be hidden the same frame it
+	# was drawn.
+	_paint_boats()
 
 	_hide_unused()
 
@@ -1447,6 +1542,441 @@ func _hide_unused() -> void:
 	for k in range(_sprites_used, _sprites.size()):
 		_sprites[k].visible = false
 
+
+# --- the beasts' boats, and the riders standing on them ---------------------------------------------
+## **The sim's boat is a flat point and a landing 조각. Everything below is what the eye is given on top
+## of that** — the bob, the roll, the hull's yaw and eight wolves on the benches. ⚠ **Nothing here is
+## read back by `sim`**, which is the whole of the view seam's rule.
+
+## One instantiated `boat.glb` per live hull. **Pooled and hidden, never freed**, the same rule
+## `_sprite` keeps — and it bites harder here: instantiating a `PackedScene` is a whole scene build, and
+## doing one per frame per boat is the shape that made the old per-frame node churn expensive.
+var _boats: Array[Node3D] = []
+var _boats_used := 0
+var _boat_scene: PackedScene = null
+## The four rider pictures, loaded once, in `Look.BOAT_RIDER_TEX`'s own order.
+var _tex_rider: Array[Texture2D] = _load_rider_tex()
+## **How far each rider picture's opaque ink stands above the bottom of its own 92 x 92 frame**, as a
+## fraction of that frame's height, **keyed by the picture itself.**
+##
+## ⚠⚠ **KEYED BY THE TEXTURE AND NOT BY INDEX.** A second array in `Look.BOAT_RIDER_TEX`'s order would
+## have to be kept in step with `_tex_rider` by hand, and the day the two disagree a wolf is footed
+## with another wolf's padding — silently, because every value in range is plausible.
+## ⚠ **Measured off the alpha channel, not typed.** The four files carry 11 to 25 empty rows under the
+## animal, so a constant here would be wrong for three of them however it was chosen.
+var _foot_rider: Dictionary = _measure_rider_feet(_tex_rider)
+## Seconds since this view was built, and **the only clock the bob and the roll read**. Advanced from
+## `_process`'s own delta, so the sea rides the render loop like everything else in this file. ⚠ **Not
+## `battle.elapsed`** — that is the sim's clock, and a hull that stopped bobbing when the sim was not
+## stepped would read as the picture having frozen.
+var _sea_clock := 0.0
+
+
+static func _load_rider_tex() -> Array[Texture2D]:
+	var out: Array[Texture2D] = []
+	for raw in Look.BOAT_RIDER_TEX:
+		out.append(load(str(raw)) as Texture2D)
+	return out
+
+
+## **Where each rider picture's animal actually ends, so the animal can be stood on the plank rather
+## than the frame around it.**
+##
+## ⚠⚠ **THE FRAME'S BOTTOM IS NOT THE WOLF'S FEET.** `east.png` and `west.png` carry 25 empty rows
+## under the animal, `south.png` 23 and `north.png` 11 — out of 92. Footed by the frame, a rider hangs
+## **0.16 조각 above its own seat**, and it hangs a DIFFERENT amount per picture, so the whole deck
+## changes height when the boat turns.
+## ⚠ **Once, at load.** Four 92 x 92 alpha scans, and the answer cannot change while the game runs.
+static func _measure_rider_feet(pics: Array[Texture2D]) -> Dictionary:
+	var out := {}
+	for pic in pics:
+		if pic == null:
+			continue
+		var img := pic.get_image()
+		if img == null:
+			continue
+		var h := img.get_height()
+		var w := img.get_width()
+		var last := -1
+		for y in h:
+			for x in w:
+				if img.get_pixel(x, y).a > 0.0:
+					last = y
+					break
+		# **A picture with no opaque pixel at all foots at the frame**, which is what the old code did
+		# for every picture — the fallback is the previous behaviour and not a guess.
+		out[pic] = 0.0 if last < 0 else float(h - 1 - last) / float(h)
+	return out
+
+
+## A pooled hull. Null when the scene will not load, and **that is a real state**: `boat.glb` had never
+## been imported before this ticket, and a caller that assumed a node came back would take the whole
+## frame down instead of drawing one thing less.
+func _boat() -> Node3D:
+	if _boats_used < _boats.size():
+		var reused := _boats[_boats_used]
+		_boats_used += 1
+		reused.visible = true
+		return reused
+	if _world == null:
+		return null
+	if _boat_scene == null:
+		_boat_scene = load(BOAT_SCENE) as PackedScene
+	if _boat_scene == null:
+		return null
+	var made := _boat_scene.instantiate() as Node3D
+	if made == null:
+		return null
+	# ⚠ **The rim and NOT `_use_vertex_colours`.** The buildings and the scatter are objects standing on
+	# the world and the rim is what separates them from it — a hull on open water needs it more, not
+	# less. But `boat.glb` carries no COLOR_0 attribute at all (its six materials hold their own
+	# colours), so reading vertex colours as albedo would multiply by nothing and land it white.
+	_outline(made)
+	# ⚠⚠ **AFTER `_outline` AND NEVER BEFORE.** `_outline` walks every `MeshInstance3D` under the node
+	# and hangs a swollen black shell off it. Run over the shadow discs it would ring each one in ink,
+	# which on a 13 px disc is the disc.
+	_put_deck_shadows(made)
+	_world.add_child(made)
+	_boats.append(made)
+	_boats_used += 1
+	return made
+
+
+## The name of the node holding one hull's eight deck shadows. ⚠ **The hull owns them and there is no
+## second list of them anywhere** — a parallel array indexed by hull would have to be grown, shrunk and
+## hidden in step with `_boats` by hand.
+const DECK_SHADOWS := "deck_shadows"
+
+
+## **One disc on the plank under each seat, built once with the hull.**
+##
+## ⚠⚠ **A CHILD OF THE HULL, WHICH IS THE WHOLE REASON IT IS BUILT HERE.** The boat bobs and rolls, and
+## both live in the hull's own transform — see `_paint_boats`. A disc placed from the boat's POSITION
+## each frame would keep the bob and lose the roll, and it would lose it in the way that is hardest to
+## see: the shadow stays put while the deck under it tilts.
+##
+## ⚠ **The same idea as `_put_ground_shadow` and not the same code, and the difference is the surface.**
+## A body's disc goes into the ground fx buffer, which wears the terrain's height at every vertex — a
+## deck is not the terrain, and it moves. What is shared is the decision, which lives in `Look`:
+## a flat disc directly underneath, no offset toward the sun, dark and cool rather than black.
+func _put_deck_shadows(hull: Node3D) -> void:
+	var holder := Node3D.new()
+	holder.name = DECK_SHADOWS
+	for raw_slot in Look.BOAT_DECK_SLOTS:
+		var slot := raw_slot as Vector3
+		var m := MeshInstance3D.new()
+		m.mesh = _disc_mesh()
+		# ⚠ **`material_override` and not a surface material**, so `_outline` — which reads
+		# `surface_get_material` — cannot reach the disc even if the call order above is changed back.
+		m.material_override = _disc_material()
+		m.position = Vector3(slot.x, slot.y + Look.BOAT_RIDER_SHADOW_LIFT_TILES, slot.z)
+		# It is a shadow. Casting one would be the shadow of a shadow, and the sun would find its edge.
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		holder.add_child(m)
+	hull.add_child(holder)
+
+
+## The one disc mesh and the one material every deck shadow wears. ⚠ **Shared, because every disc in
+## the game is the same disc** — a per-instance copy is a second place the size could be written.
+var _disc_cache: ArrayMesh = null
+var _disc_mat: StandardMaterial3D = null
+
+
+## A flat disc lying in the hull's own XZ plane, at `Look.boat_rider_shadow_r_tiles()`.
+##
+## ⚠ **The radius is read inside and not passed in.** With a parameter and a cache the second caller's
+## radius is silently the first caller's, and every value in range looks right.
+func _disc_mesh() -> ArrayMesh:
+	if _disc_cache != null:
+		return _disc_cache
+	var r := Look.boat_rider_shadow_r_tiles()
+	var v := PackedVector3Array()
+	var segs := Look.BOAT_RIDER_SHADOW_SEGS
+	for k in segs:
+		var a0 := TAU * float(k) / float(segs)
+		var a1 := TAU * float(k + 1) / float(segs)
+		v.append(Vector3.ZERO)
+		v.append(Vector3(cos(a0) * r, 0.0, sin(a0) * r))
+		v.append(Vector3(cos(a1) * r, 0.0, sin(a1) * r))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = v
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_disc_cache = mesh
+	return mesh
+
+
+func _disc_material() -> StandardMaterial3D:
+	if _disc_mat != null:
+		return _disc_mat
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Look.COL_BOAT_RIDER_SHADOW
+	# A shadow that takes the light is not a shadow — the same rule the outline shell keeps.
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# ⚠ **Both faces.** The hull rolls, and a one-sided disc vanishes the moment the deck tips away.
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# ⚠ **Depth is read but not written.** The gunwale must be able to hide it; the wolf standing on it
+	# must not be sorted behind it.
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	_disc_mat = mat
+	return mat
+
+
+func _hide_unused_boats() -> void:
+	for k in range(_boats_used, _boats.size()):
+		_boats[k].visible = false
+
+
+## Every live hull, and the riders standing on it.
+##
+## ⚠ **The riders come out of `_sprite()`**, so this must run inside `_paint_bodies`' pool window — see
+## the call site.
+func _paint_boats() -> void:
+	_boats_used = 0
+	if battle == null or battle.grid == null:
+		_hide_unused_boats()
+		return
+	for i in battle.boat_pos.size():
+		var hull := _boat()
+		if hull == null:
+			break
+		var centre := _boat_centre(i)
+		# ⚠ **Each hull is one `BOAT_BOB_PHASE_PER_HULL` further along its own bob**, so two boats
+		# sitting off the same island do not rise and fall as one object — see that constant.
+		var phase := float(i) * Look.BOAT_BOB_PHASE_PER_HULL
+		var bob := sin(_sea_clock * TAU / Look.BOAT_BOB_SEC + phase) * Look.BOAT_BOB_TILES
+		hull.position = Vector3(centre.x, Look.SEA_Y_TILES + Look.BOAT_DRAFT_TILES + bob, centre.y)
+		var head := _boat_heading(i)
+		hull.rotation = Vector3(0.0, _boat_yaw(head), 0.0)
+		# ⚠ **`rotate_object_local` and not a second Euler term.** The lean is about the hull's OWN
+		# length, which is its local +X — written into `rotation.x` it would be a lean about the world's
+		# x axis, and a boat sailing east would pitch bow-up instead of rolling.
+		var roll := sin(_sea_clock * TAU / Look.BOAT_ROLL_SEC + phase) * Look.BOAT_ROLL_DEG
+		hull.rotate_object_local(Vector3.RIGHT, deg_to_rad(roll))
+		_paint_riders(hull, i, head)
+	_hide_unused_boats()
+
+
+## **Which way the hull is pointing, in 조각 units** — at the 조각 it is going to.
+##
+## ⚠ An ARRIVED boat is not on top of its beach 조각, it is `Rules.BOAT_STANDOFF_TILES` short of it, so
+## this stays well defined after it stops and the hull keeps facing the shore. The guard below is for a
+## degenerate board where the two coincide, not for arrival.
+## **Where a hull's middle is, in 조각.**
+##
+## ⚠ **One place, because the hull and the water both need it.** The boat is drawn at this point and
+## every mark the water makes about it is measured from the same one; two copies of the conversion
+## would put the shadow beside the boat instead of under it.
+func _boat_centre(i: int) -> Vector2:
+	return Look.tile_point_px(battle.boat_pos[i]) / Look.TILE_PX
+
+
+func _boat_heading(i: int) -> Vector2:
+	var beach := int(battle.boat_beach[i])
+	var target := Vector2(beach % battle.grid.w, beach / battle.grid.w)
+	var d: Vector2 = target - (battle.boat_pos[i] as Vector2)
+	if d.length() <= 0.001:
+		return Vector2(0.0, -1.0)
+	return d.normalized()
+
+
+## The `rotation.y` that turns the model's bow along `head`.
+##
+## ⚠⚠ **THE MODEL'S BOW IS +X, MEASURED OFF THE FILE AND NOT GUESSED.** Inside `boat.glb`, `boat_stem`
+## sits at local x = +2.30 and `boat_tail` at x = −2.26, and the hull's bounds run −2.60 .. +2.60 along x
+## against −0.95 .. +0.95 along z: the long axis is X and the sharp end is the positive one. **Godot's
+## own convention is −Z forward**, so a yaw written for that convention would sail every boat broadside
+## on with every position check still green.
+##
+## ⇒ `rotation.y = θ` sends local +X to world `(cos θ, 0, −sin θ)`. A tile-space heading `(hx, hy)` is
+## world `(hx, 0, hy)`, so `cos θ = hx` and `−sin θ = hy`, which is `θ = atan2(−hy, hx)`.
+func _boat_yaw(head: Vector2) -> float:
+	return atan2(-head.y, head.x)
+
+
+## Eight wolves on four benches. **Placed through the hull's own transform**, so the bob and the roll
+## carry them without either being written down twice.
+func _paint_riders(hull: Node3D, i: int, head: Vector2) -> void:
+	var pic := _boat_rider_tex(head)
+	if pic == null:
+		return
+	var riders := int(battle.boat_riders[i])
+	var wide := Look.body_radius_of(Rules.WOLF) * Look.BOAT_RIDER_W_RATIO * Look.BODY_SPRITE_SCALE
+	var shadows := hull.get_node_or_null(NodePath(DECK_SHADOWS))
+	# ⚠ **The deck is what limits it, not the count.** A boat carrying more than there are benches puts
+	# the extras nowhere rather than stacking two on one seat.
+	# ⚠⚠ **ONE LOOP OVER THE SEATS AND NOT ONE PER THING A SEAT CARRIES.** The wolf and the disc under
+	# it are the same seat being occupied; asked in two places, the day one of them is skipped is the
+	# day a shadow lies on an empty plank.
+	for k in Look.BOAT_DECK_SLOTS.size():
+		var aboard := k < riders
+		if shadows != null and k < shadows.get_child_count():
+			(shadows.get_child(k) as Node3D).visible = aboard
+		if not aboard:
+			continue
+		var s := _sprite()
+		s.texture = pic
+		s.modulate = Look.beast_tint(Look.body_colour_of(true))
+		s.scale = _billboard_scale(pic, wide, Vector2.ONE)
+		# ⚠⚠ **`hull.transform *` AND NOT `hull.to_global`, AND IT IS A MEASUREMENT.** `to_global` reads
+		# `get_global_transform`, which on a node that is not inside the tree **errors and hands back
+		# IDENTITY** — so every rider landed at its raw local offset in world space. In the game the
+		# hull is under `_world` and treed, so the picture was right; **`net_fx_view` builds its view
+		# untreed, so every rider row it holds was measuring nothing, and it barked 96 times in one
+		# round saying so.** Multiplying by the hull's own transform is the same answer here (`_world`
+		# is at identity and nothing moves it) and it is the same answer untreed.
+		# ⚠ **The roll and the bob ride along for free**, because both are in that transform — which is
+		# the whole reason a seat is asked of the hull rather than rebuilt from the boat's position.
+		var seat := hull.transform * (Look.BOAT_DECK_SLOTS[k] as Vector3)
+		# The sprite is centred on its own middle, so half its drawn height puts the bottom of its
+		# FRAME on the plank.
+		var tall := float(pic.get_height()) * s.scale.y / Look.TILE_PX
+		# ⚠⚠ **AND THE FRAME'S BOTTOM IS NOT THE WOLF'S FEET** — see `_measure_rider_feet`. The empty
+		# rows under the animal are subtracted back off, so what stands on the plank is the animal.
+		# **It is worth 0.16 조각 on the side-on picture** — a quarter of the wolf's own height, and the
+		# difference between an animal whose legs start below the gunwale line and one whose whole body
+		# is above it. ⚠ **And the four pictures differ**, so without this the deck's riders rise and
+		# fall as the boat turns.
+		var foot := float(_foot_rider.get(pic, 0.0)) * tall
+		s.position = Vector3(seat.x, seat.y - foot + tall * 0.5, seat.z)
+
+
+## **Which of the four rider pictures faces the camera right.** ⚠ **Measured against the board's own two
+## screen axes and not against a compass** — the board turns, so a fixed north would spin every wolf on
+## the deck when the player turns the camera and nothing else moved.
+func _boat_rider_tex(head: Vector2) -> Texture2D:
+	var right := head.dot(_ground_right())
+	var down := head.dot(_ground_down())
+	# The order here IS `Look.BOAT_RIDER_TEX`'s order: down, up, right, left.
+	var k := 0
+	if absf(right) >= absf(down):
+		k = 2 if right >= 0.0 else 3
+	else:
+		k = 0 if down >= 0.0 else 1
+	if k >= _tex_rider.size():
+		return null
+	return _tex_rider[k]
+
+
+# --- what the water does about a hull ----------------------------------------------------------------
+## **The wake and the contact, and it is ONE array because they are one shape.**
+##
+## One block of `Look.WAKE_SLOTS` per hull, and **every slot is a point on that hull's transom track**:
+## slot 0 is where the transom is NOW and carries the heading, the rest are where it has been, newest
+## first. The water shader reads the lot and draws both halves — see section 7 of `water.gdshader`.
+##
+## ⚠ **A slot with a negative time was never written**, which is the only「no hull here」 either side
+## carries. `_sea_clock` never goes below zero, so there is no second flag to keep in step.
+## ⚠⚠ **NOTHING HERE IS READ BACK BY `sim` AND NOTHING IN IT IS A FACT `sim` OWNS.** It is `boat_pos`
+## remembered for a few seconds so that the water has something to draw.
+var _wake := _wake_empty()
+## When each hull's newest remembered point was taken, on `_sea_clock`. Negative for a hull with none.
+var _wake_last := _wake_no_last()
+
+
+## An empty history — every slot unwritten.
+## ⚠ **`resize` alone is not this.** A `PackedVector4Array` grows filled with `Vector4.ZERO`, whose z
+## is 0.0 — which reads as「written at time zero」 and stands twelve hulls on the origin.
+static func _wake_empty() -> PackedVector4Array:
+	var out := PackedVector4Array()
+	out.resize(Look.WAKE_HULLS * Look.WAKE_SLOTS)
+	for k in out.size():
+		out[k] = Vector4(0.0, 0.0, -1.0, 0.0)
+	return out
+
+
+static func _wake_no_last() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(Look.WAKE_HULLS)
+	out.fill(-1.0)
+	return out
+
+
+## **Pushes one remembered point onto a hull's block**, newest first, dropping the oldest off the end.
+## ⚠ **Slot 0 is not touched here** — that one is rewritten every frame with where the hull is now,
+## and this is what turns one of those frames into a point that stays.
+static func _wake_commit(hist: PackedVector4Array, hull: int,
+						 at: Vector4) -> PackedVector4Array:
+	var base := hull * Look.WAKE_SLOTS
+	for k in range(Look.WAKE_SLOTS - 1, 1, -1):
+		hist[base + k] = hist[base + k - 1]
+	hist[base + 1] = at
+	return hist
+
+
+## **Wipes one hull's whole block.** ⚠ Without it the last island opens the next one wearing its
+## trails, and a hull that never sailed is drawn with a mark round nothing.
+static func _wake_forget(hist: PackedVector4Array, hull: int) -> PackedVector4Array:
+	var base := hull * Look.WAKE_SLOTS
+	for k in Look.WAKE_SLOTS:
+		hist[base + k] = Vector4(0.0, 0.0, -1.0, 0.0)
+	return hist
+
+
+## **The heading a slot carries, in radians, measured in 조각 space.**
+##
+## ⚠⚠ **THIS IS NOT `_boat_yaw` AND THE TWO DISAGREE ON EVERY HEADING BUT DUE EAST AND DUE WEST.**
+## `_boat_yaw` answers the `rotation.y` that turns a MODEL whose bow is +X, and Godot's own convention
+## puts +X at world `(cos θ, 0, −sin θ)` — so it carries a sign flip this does not. The shader reads
+## `vec2(cos w, sin w)` straight, in the same 조각 space `boat_pos` speaks, and handing it a model yaw
+## would draw every mark on the wrong side of the boat with every position check still green.
+static func _wake_head_rad(head: Vector2) -> float:
+	return atan2(head.y, head.x)
+
+
+## **When a hull was last anywhere but here** — the moment its marks are aged from.
+##
+## ⚠⚠ **A HULL THAT HAS STOPPED STOPS MARKING THE WATER, AND WITHOUT THIS IT NEVER DOES.** An
+## arrived boat sits off its beach for the rest of the island; stamped with `_sea_clock` every frame
+## its newest point is forever nought seconds old, and the trail collapses to **a bright dot the width
+## of the stroke, sitting on its transom, that never goes out.** Frozen at the last moment it actually
+## moved, the whole trail ages out and stays out — which is what a wake is.
+##
+## ⚠ **A band and not an equality, and the band is the array's and not the arithmetic's.** A
+## `PackedVector4Array` holds 32-bit floats, so a stored coordinate differs from the one that was
+## written in about its seventh digit; one frame of real motion is `Rules.BOAT_SPEED_TILES / 60`, which
+## is two hundred times the band either way.
+func _wake_stamp(hull: int, stern: Vector2) -> float:
+	var was: Vector4 = _wake[hull * Look.WAKE_SLOTS]
+	if was.z < 0.0:
+		return _sea_clock
+	var still := absf(was.x - stern.x) < Look.WAKE_STILL_TILES 			and absf(was.y - stern.y) < Look.WAKE_STILL_TILES
+	return was.z if still else _sea_clock
+
+
+## **Remembers where every hull is, and hands the lot to the water.**
+##
+## ⚠⚠ **THE CLOCK IS `_sea_clock` AND THE SHADER IS HANDED THE SAME NUMBER.** Every slot is stamped
+## against it, so a shader ageing them against its own `TIME` would fade a trail by however far the
+## two stand apart — which is however long the game sat on the title screen.
+## ⚠ **Called after the clock is ticked**, so a slot is stamped with the moment the same frame draws.
+func _paint_wake() -> void:
+	if _sea == null:
+		return
+	var mat := _sea.material_override as ShaderMaterial
+	if mat == null:
+		return
+	var live := 0
+	if battle != null and battle.grid != null:
+		live = battle.boat_pos.size()
+	# ⚠ **Over the SLOTS and not over the boats.** Past `Look.WAKE_HULLS` there is no block to write
+	# into; a loop over the boats would run off the end of the array the thirteenth time one lands.
+	for h in Look.WAKE_HULLS:
+		if h >= live:
+			_wake = _wake_forget(_wake, h)
+			_wake_last[h] = -1.0
+			continue
+		var head := _boat_heading(h)
+		var stern := _boat_centre(h) + head * Look.wake_stern_tiles()
+		var now := Vector4(stern.x, stern.y, _wake_stamp(h, stern), _wake_head_rad(head))
+		_wake[h * Look.WAKE_SLOTS] = now
+		if _wake_last[h] < 0.0 or _sea_clock - _wake_last[h] >= Look.wake_every_sec():
+			_wake_last[h] = _sea_clock
+			_wake = _wake_commit(_wake, h, now)
+	mat.set_shader_parameter("wake_hull", _wake)
+	mat.set_shader_parameter("wake_t", _sea_clock)
 
 # --- the body clocks, carried across the move unchanged ----------------------------------------------
 ## ⚠⚠ **Everything below this line is the file as it was.** The effects were never drawing code: they

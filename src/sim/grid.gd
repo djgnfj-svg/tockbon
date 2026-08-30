@@ -131,6 +131,24 @@ var level := PackedByteArray()
 ## nets never ask. See `_build_runs`.
 var _runs := {}
 var _runs_built := 0
+## The beach ring — every coast 조각 a boat may come to. ⚠ **Derived from `passable` and `water` and
+## cached, exactly like `_runs`**: it is a restatement of the board, so a second source for it could
+## disagree with the first. See `beach_ring`.
+var _ring := PackedInt32Array()
+var _ring_built := 0
+## **The baked outline the island's mesh was actually cut to**, as `[x0, y0, x1, y1]` segments — what
+## the PLAYER sees the land end on, which is not where `passable` ends.
+##
+## ⚠⚠ **IT IS HALF A 조각 OFF RAW TILE COORDINATES, AND THAT OFFSET IS THE WHOLE REASON THIS IS WRITTEN
+## DOWN.** A 조각 at integer `(n, m)` has its centre at `(n + 0.5, m + 0.5)` in this space — the same
+## `+0.5` `Look.tile_point_px` already applies. Calibrated by scoring 「inside the outline」 against
+## `passable` 조각 by 조각: **+0.5 agrees on 100.0%, +0.0 on 94.4%, -0.5 on 88.5%.** ⚠ **A ray fired
+## from a raw tile coordinate is off by up to 0.707 조각 on a diagonal**, and that error is what made an
+## earlier measurement of this say -0.97 where an independent one said -0.23.
+##
+## ⚠ **Empty is a real state**: every hand-built fixture loads rows and no outline, and every rule that
+## reads this falls back to the 조각 grid when it is empty.
+var coast: Array = []
 var reserved := PackedInt32Array()     # tile -> unit id, or -1
 
 ## unit id -> Array of tiles it currently holds. At most two: the tile it stands on and the tile it is
@@ -172,6 +190,13 @@ func load_rows(rows: Array, tiers: Array = []) -> void:
 	# rebuilding it would be a walk of `SPAWN_ROWS` per tile for an answer that cannot change.
 	_runs = {}
 	_runs_built = 0
+	_ring = PackedInt32Array()
+	_ring_built = 0
+	# ⚠ **NOT cleared here.** `Islands.load_into` sets it after calling this, and a board loaded twice
+	# from the same island would otherwise lose its outline on the second pass.
+	_main = PackedByteArray()
+	_main_built = 0
+	_centre = Vector2.ZERO
 	var land := land_chars()
 	for y in h:
 		var row := String(rows[y])
@@ -410,6 +435,494 @@ func _build_runs() -> void:
 				continue
 			for tile in cells.keys():
 				_runs[tile] = [ax, int((cells[tile] as Vector2i).x), run_n]
+
+
+## --- the shore a boat comes to ------------------------------------------------------------------
+
+## ⚠⚠ **IT IS CALLED A BEACH AND NOT A LANDING, AND THE NAME IS LOAD-BEARING.** `net_tiers._is_landing`
+## already means 「passable and not a stair」 and answers 280 조각 on this island; **a 해변 is a coast 조각
+## a boat may come to** and there are far fewer. Two rules under one word is how this repo has twice
+## ended up with a check quietly measuring the other one.
+
+## Every 조각 in the biggest walkable body of land, as a `w*h` byte table. **Cached and derived**, like
+## `_runs`: it is a restatement of `passable` plus `can_step`, and a second source could disagree.
+var _main := PackedByteArray()
+var _main_built := 0
+## The reach `_ring` was built for. **The ring depends on it** — see `beach_ring` — so a caller asking
+## for a different one gets it rebuilt rather than the previous answer.
+var _ring_reach := -1.0
+## The middle of that body of land, in 조각 units. Cached with it.
+var _centre := Vector2.ZERO
+
+
+## **Every coast 조각 a boat may come to: land, with water beside it, and walkable to the rest of the
+## island — in a ring, ordered by angle about the island's middle.**
+##
+## ⚠⚠ **THE ORDER IS THE POINT AND IT IS NOT 조각-NUMBER ORDER.** A row-major list is not a loop round
+## an island: the stride `Rules.beach_stride_for` hands back walks it into a handful of fixed beaches,
+## because 37 rows down is still the same coast. **Sorted by angle, a stride IS「go round to the other
+## side」** — see that constant.
+##
+## ⚠⚠ **A DETACHED ISLET IS EXCLUDED, AND THAT IS `_main` AND NOT A SPECIAL CASE.** The shipped board
+## is 284 land 조각 in two pieces: one of 280, and a 2x2 with no walk to them. All four of the small
+## one's 조각 touch water, so a bare coast test hands them back — **and they are beaches nothing can
+## walk inland from.**
+##
+## ⚠ **Off the board is NOT water.** The board is the only thing this file knows; the terrain mesh runs
+## wider than it, but that is the picture's fact and not the rule's.
+##
+## ⚠⚠ **`can_land_at` STOOD WHERE THIS DOES AND THIS IS NOT IT COMING BACK.** That one took a harbour
+## and ran a BFS over water to it, because the player's boat departed from a named harbour. **The
+## beasts' boats depart from open sea**, so there is nothing to route from. The 39/42/40% of shore its
+## straight-line sampler used to refuse is recorded in this file's own header and is not something this
+## can bring back.
+## ⚠⚠ **AND A THIRD TERM: A HULL HAS TO FIT IN FRONT OF IT.** A coast 조각 can stand on INLAND water — a
+## lake or a pool inside the island — and `seaward_at` is a local rule that happily aims a boat into it.
+## The hull is then born on the island and sails across it, and **every distance check about the
+## crossing stays green through that**, because a crossing is measured from the beach 조각 and knows
+## nothing about what lies between. ⇒ **a 조각 whose stop point would sit at or past where the hull is
+## born is not a beach** — see `land_reach_along`, which is what the stop is built on.
+## ⚠ **`reach` is therefore part of what a beach IS**, which is why it is a parameter and not a
+## constant this file holds: `Rules.BOAT_START_DIST_TILES` says how far out a hull is born, and a 조각
+## reachable from 4 조각 out need not be reachable from 24.
+func beach_ring(reach: float) -> PackedInt32Array:
+	if _ring_built == 0 or reach != _ring_reach:
+		_build_ring(reach)
+	return _ring
+
+
+func _build_ring(reach: float) -> void:
+	_ring_built = 1
+	_ring_reach = reach
+	_ring = PackedInt32Array()
+	var main := main_land()
+	var centre := island_centre()
+	var found: Array = []
+	for t in passable.size():
+		if passable[t] == 0 or main[t] == 0:
+			continue
+		if not _touches_water(t):
+			continue
+		var here := Vector2(t % w, t / w)
+		# ⚠⚠ **ADMISSION IS 「CAN A HULL GET IN AND STILL HAVE A CROSSING」, NOT 「IS THE LINE CLEAR」.**
+		# The old test refused any beach with land anywhere on its approach; the boat now stops OUTSIDE
+		# the outermost land instead, so a headland on the line moves the stop rather than deleting the
+		# beach. **What is left to refuse is a corridor with no room**: a beach whose stop point would
+		# sit at or past where the hull is born has no crossing at all — and an inner-shore 조각, whose
+		# line runs into the island itself, is exactly that.
+		# ⚠ `reach` is `Rules.BOAT_START_DIST_TILES` — see this function's header on why the ring
+		# depends on it.
+		var lead := land_reach_along(t, seaward_at(t), reach)
+		# ⚠⚠ **THE HULL MUST STOP IN FRONT OF *THIS* BEACH AND NOT IN FRONT OF SOMETHING ELSE.** Dropping
+		# this and keeping only the room test below let **22 inner-shore 조각 straight back into the
+		# ring** — measured: their seaward line crosses their pool, runs into the island body and comes
+		# out the far side, so the outermost land is a dozen 조각 away, the arithmetic is satisfied, and
+		# the boat parks in open water nowhere near the 조각 it is aimed at.
+		# ⇒ **The land the hull stops against has to be within a hull's length of the beach.** That is
+		# `BOAT_STANDOFF_TILES` and not a new number: a headland 0.98 or 1.40 조각 out is the same shore
+		# seen at an angle and the stop simply moves; a dozen 조각 out is a different shore.
+		if lead >= Rules.BOAT_STANDOFF_TILES:
+			continue
+		# And room to cross at all. ⚠ **Its own line**: the test above is about WHICH land, this one is
+		# about whether a hull born at `reach` has anywhere to sail to.
+		# ⚠⚠ **THE FOOTPRINT IS WHAT DECIDES IT WHERE THERE IS AN OUTLINE.** The 조각 rule above is a
+		# floor and the drawn shore can push the stop further out than it — a beach that cannot take the
+		# hull's whole forward half is not a beach. **On a board with no outline this is the 조각 rule
+		# alone**, which is every fixture.
+		var floor_d := lead + Rules.BOAT_STANDOFF_TILES
+		var stop_d := hull_stop_along(t, seaward_at(t), Rules.BOAT_HULL_HALF_TILES,
+				Rules.BOAT_HULL_BEAM_TILES * 0.5, Rules.BOAT_BEACH_GAP_TILES, floor_d)
+		if stop_d == -INF:
+			stop_d = floor_d
+		if stop_d >= reach:
+			continue
+		# ⚠⚠ **AND A BEACH THAT CANNOT TAKE THE HULL NEAR IT IS NOT A BEACH.** On a few 조각 the seaward
+		# bearing runs ALONGSIDE the coast rather than out of it, so a shoulder ray lies inside land for
+		# several 조각 and no stop within reach of the shore clears the hull's width. **The rule then
+		# walks the boat out to 7.89 조각 and it parks in open sea with nothing in frame explaining it** —
+		# which reads worse than a bow on the grass, because a beached boat at least looks like something
+		# happened. ⇒ **Drop the 조각 instead of stranding a boat off it.**
+		# ⚠ **A hull length past the plain standoff is the line**, the same bound `net_boats` asserts.
+		if stop_d > Rules.BOAT_STANDOFF_TILES + Rules.BOAT_HULL_HALF_TILES:
+			continue
+		found.append([(here - centre).angle(), t])
+	# ⚠ **Ties break on the LOWER 조각 number.** `sort_custom` is not stable, so two beaches at the same
+	# angle — the near and far ends of one spoke — would otherwise order themselves differently between
+	# two runs from identical state, and every beach after the first would move with them.
+	found.sort_custom(func(a, b):
+		if float(a[0]) == float(b[0]):
+			return int(a[1]) < int(b[1])
+		return float(a[0]) < float(b[0]))
+	for row in found:
+		_ring.append(int(row[1]))
+
+
+## Whether any of the eight neighbours of `t` is water. ⚠ **Its own function and not folded into the
+## bearing**: water on two exactly opposite sides sums to nothing, and a 조각 on a one-조각 isthmus is
+## still coast.
+func _touches_water(t: int) -> bool:
+	var tx := t % w
+	var ty := t / w
+	for k in NEIGHBOURS.size():
+		var nx := tx + int(NEIGHBOURS[k][0])
+		var ny := ty + int(NEIGHBOURS[k][1])
+		if nx < 0 or ny < 0 or nx >= w or ny >= h:
+			continue
+		if water[ny * w + nx] != 0:
+			return true
+	return false
+
+
+## The biggest body of land a body can walk around, as a byte per 조각.
+##
+## ⚠ **Flooded with `can_step` and not with `passable`**, so a strip of land reachable only over a tier
+## wall is its own body — which is what「walkable to the rest of the island」has to mean if it is going
+## to keep a boat off a beach nothing can leave.
+## ⚠ **Ties on size go to the body containing the LOWEST 조각 number**, because the scan is ascending and
+## a later body has to be strictly bigger to take the title.
+func main_land() -> PackedByteArray:
+	if _main_built == 0:
+		_build_main()
+	return _main
+
+
+## The middle of the island, in 조각 units — the mean of `main_land`'s 조각.
+##
+## ⚠⚠ **THE MEAN OF THE LAND AND NOT THE MIDDLE OF THE BOARD.** The board is padded with sea and it is
+## not padded evenly; a bearing taken from the board's middle would push every boat off toward whichever
+## side had more water on it. **Nor is it the mean of ALL land** — a detached islet would drag it.
+func island_centre() -> Vector2:
+	if _main_built == 0:
+		_build_main()
+	return _centre
+
+
+func _build_main() -> void:
+	_main_built = 1
+	var n := w * h
+	_main = PackedByteArray()
+	_main.resize(n)
+	_centre = Vector2.ZERO
+	if n == 0:
+		return
+	var seen := PackedByteArray()
+	seen.resize(n)
+	var best := PackedInt32Array()
+	for t in n:
+		if passable[t] == 0 or seen[t] != 0:
+			continue
+		var body := PackedInt32Array()
+		var queue := PackedInt32Array()
+		queue.append(t)
+		seen[t] = 1
+		var head := 0
+		while head < queue.size():
+			var cur := queue[head]
+			head += 1
+			body.append(cur)
+			var cx := cur % w
+			var cy := cur / w
+			for k in NEIGHBOURS.size():
+				var nx := cx + int(NEIGHBOURS[k][0])
+				var ny := cy + int(NEIGHBOURS[k][1])
+				if nx < 0 or ny < 0 or nx >= w or ny >= h:
+					continue
+				var nt := ny * w + nx
+				if seen[nt] != 0 or not can_step(cur, nt):
+					continue
+				seen[nt] = 1
+				queue.append(nt)
+		if body.size() > best.size():
+			best = body
+	var sum := Vector2.ZERO
+	for k in best.size():
+		var t2 := int(best[k])
+		_main[t2] = 1
+		sum += Vector2(t2 % w, t2 / w)
+	if best.size() > 0:
+		_centre = sum / float(best.size())
+
+
+## **Which way is out to sea from a beach 조각, as a unit vector in 조각 units.**
+##
+## ⚠⚠ **A BOAT THAT GOT THIS BACKWARDS WOULD BE BORN INLAND AND SAIL ACROSS THE ISLAND**, and every
+## distance check about the crossing would stay green through it — a crossing is measured from the
+## beach 조각 and knows nothing about which side of it the water is on. `net_boats` measures the
+## direction on its own, by stepping one 조각 along it and asking the board what is there.
+##
+## ⚠⚠ **THE FALLBACK CHAIN IS THREE LINKS AND IT IS WRITTEN DOWN HERE SO IT IS NOT RE-DERIVED.**
+##
+##  1. **The sum of the watery neighbours' offsets.** Local, so a beach inside a bay faces out of the
+##     BAY rather than out of the island — which a line drawn from the island's middle does not do.
+##  2. **Away from the middle of the main land**, when that sum is zero. It is zero for exactly one
+##     shape: water balanced on opposite sides, which is a 조각 on a one-조각 isthmus, and there the
+##     local answer genuinely has nothing to say.
+##  3. **North**, when even that is zero — a one-조각 island, or a beach standing on the middle. **Never
+##     a zero vector**: that puts the boat exactly on top of its own beach and the crossing has no
+##     length at all.
+##
+## ⚠ **The radial-from-the-middle rule was measured against this and lost.** It is link 2 here for a
+## reason: used as link 1 it aims a bay's beaches at the far arm of their own bay.
+## ⚠⚠ **IT DOES NOT TEST WHAT IS BETWEEN THE BEACH AND THE OPEN SEA, AND IT MUST NOT.** A beach on
+## inland water gets a bearing into that water, and a hull born far enough out along it lands on the
+## island. **That is `beach_ring`'s third term, not this function's** — this one answers 「which way is
+## the water from here」 for a 조각, and folding a reach into it would make a direction depend on how
+## far somebody meant to sail.
+func seaward_at(t: int) -> Vector2:
+	if w <= 0 or t < 0 or t >= water.size():
+		return Vector2.ZERO
+	var local := _sea_neighbours(t)
+	if local.length() > Rules.EPS:
+		return local.normalized()
+	var away := Vector2(t % w, t / w) - island_centre()
+	if away.length() > Rules.EPS:
+		return away.normalized()
+	return Vector2(0.0, -1.0)
+
+
+## **How far seaward of `t`'s own centre the land on the approach line reaches, in 조각.**
+##
+## ⚠⚠ **THE STANDOFF USED TO BE MEASURED TO THE TARGET 조각 AND NOTHING ELSE, AND TWO BOATS IN FOUR
+## PARKED ON THE GRASS** (2026-08-30, measured on the running game across four arrivals). The hull is
+## 2.6 조각 to the bow and the stop was 3.2 out from the beach — exact, and blind: **a different piece
+## of coastline lay on the approach line NEARER than the beach itself.** East it stuck out 0.98 조각 and
+## the bow went 0.38 over; on a diagonal it stuck out 1.40 and the bow went 0.80 over, a third of the
+## hull on the turf. **The number was right about the wrong thing.**
+##
+## ⇒ **This is what the boat actually has to stop against.** It walks the line seaward and answers the
+## distance to the OUTERMOST land 조각's centre, projected on the line — **0 when nothing juts out and
+## the target itself is the first thing there**, which is exactly the straight-approach case that was
+## already correct. `Battle` adds the hull's half-length and the gap to it.
+##
+## ⚠ **The outermost and not the nearest**, and that is what makes one number enough: everything between
+## the stop and the beach is inside `reach` of it, so a hull that clears the outermost land clears the
+## whole run in. **There is no second test for 「is the crossing clear」** — this is it.
+func land_reach_along(t: int, dir: Vector2, reach: float) -> float:
+	if w <= 0 or t < 0 or t >= passable.size():
+		return 0.0
+	var from := Vector2(t % w, t / w)
+	var far := 0.0
+	for raw in _line_tiles_along(from, dir, reach):
+		var nt := int(raw)
+		if passable[nt] == 0:
+			continue
+		var d := (Vector2(nt % w, nt / w) - from).dot(dir)
+		far = maxf(far, d)
+	return far
+
+
+## How many lateral rays the hull's beam is swept with. **Odd, so one of them is the centre line** —
+## the ray every earlier version of this measured, and the one a straight approach is decided by.
+## ⚠ **5 and not 2**: the ends alone miss a shore that bulges into the middle of the beam.
+const HULL_SWEEP_RAYS := 5
+
+## **Where a hull of this size must stop, as a distance from `t`'s centre along `dir`: the INNERMOST
+## place its whole body still clears the DRAWN shore by `gap`.**
+##
+## ⚠⚠ **IT ASKED 「WHERE IS THE FURTHEST LAND ON THIS LINE」 AND THAT PARKED BOATS IN OPEN SEA**
+## (2026-08-30, seen on screen). The rays are parallel, so on an approach running ALONGSIDE a coast a
+## shoulder ray reaches land far ahead — and the old rule retreated until the hull cleared THAT, which
+## put the furthest boat **7.89 조각 out against a normal of 3.82–3.90**, sitting in clear water with
+## nothing in frame explaining it. ⚠ **Every beach that used to put a bow on the grass became one of
+## the far-out ones**, all at clearance about +1.00 against a median of +0.61 — the rule was not
+## correcting them by the gap, it was overshooting.
+##
+## ⇒ **The question is 「how far in can the hull stand」, not 「where is the outermost land」.** Land the
+## hull stops SHORT of cannot push it out; only land between the bow and the stop can. **The window is
+## `[s - half_len - gap, s]`** — bow, gap, and back to where the hull's origin sits — and the answer is
+## the smallest `s` whose window holds no land on any swept ray.
+##
+## ⚠⚠ **THE STERN HALF IS DELIBERATELY OUTSIDE THE WINDOW.** Including it (`s + half_len`) put the
+## furthest boat at **11.82 조각** and left (8,15) at 7.89: land SEAWARD of the stop is land the hull
+## already sailed past, and letting it dirty the window walks the boat outward until that land is
+## behind it again. **Whether the run in was clear at all is the ring's admission test, not this one.**
+##
+## ⚠ **Solved on the crossings rather than stepped.** Every candidate stop is 「just clear of the top of
+## some land interval」, so the answer is one of a handful of numbers and there is nothing to sample at.
+## ⚠ **`-INF` when there is no outline, or when nothing within reach works** — the caller keeps the 조각
+## rule as its floor, and every fixture is that case.
+## ⚠⚠ **`floor` IS WHERE THE SEARCH STARTS AND NOT A CLAMP ON ITS ANSWER.** 「Innermost clear」 taken
+## from zero finds a POCKET of water close inshore — measured: five beaches came back with a stop
+## nearer than the 조각 rule, the caller took the 조각 rule instead, and the hull was on the grass
+## again at exactly the beaches this whole round is about. **The hull arrives from the sea**, so the
+## only positions it can take are the ones at or beyond where the 조각 rule already puts it.
+func hull_stop_along(t: int, dir: Vector2, half_len: float, half_beam: float, gap: float,
+		floor: float) -> float:
+	if coast.is_empty() or w <= 0 or t < 0 or t >= passable.size():
+		return -INF
+	# ⚠ **`+0.5`** — see `coast`. Without it every diagonal is measured from the wrong place.
+	var centre := Vector2(t % w, t / w) + Vector2(0.5, 0.5)
+	var side := Vector2(-dir.y, dir.x)
+	var rays: Array = []
+	for k in HULL_SWEEP_RAYS:
+		var across := (float(k) / float(HULL_SWEEP_RAYS - 1)) * 2.0 - 1.0
+		rays.append(_coast_hits(centre + side * (half_beam * across), dir))
+
+	# Every candidate is one land interval's top, plus the body in front of the stop. Zero is in the
+	# list so a beach with nothing in the way answers 0 and the 조각 floor decides it.
+	var cands := PackedFloat32Array()
+	cands.append(floor)
+	for raw in rays:
+		var hits: PackedFloat32Array = raw
+		for hi in hits:
+			# ⚠⚠ **`Rules.EPS`, AND WITHOUT IT EVERY CANDIDATE REJECTS ITSELF.** A stop placed exactly
+			# `half_len + gap` beyond a crossing puts that crossing exactly ON the window's lower edge,
+			# and a `>=` test then calls its own candidate blocked. **Measured: every candidate was
+			# refused, the function answered -INF for 32 beaches, the caller fell back to the 조각 floor
+			# and the hull was 0.01 조각 short of the shore** — a boundary comparison deciding a whole
+			# rule, which is the case `Rules.EPS` exists for.
+			cands.append(hi + half_len + gap + Rules.EPS)
+	var sorted := Array(cands)
+	sorted.sort()
+	for raw_s in sorted:
+		var stop := float(raw_s)
+		if stop < floor or stop > Rules.BOAT_START_DIST_TILES:
+			continue
+		if _body_clear(rays, stop - half_len - gap, stop):
+			return stop
+	return -INF
+
+
+## Whether no ray has land anywhere in `[lo, hi]`.
+##
+## ⚠ **Two ways in and both are needed**: a crossing INSIDE the window means the shore passes through
+## the body, and a window entirely inside land has no crossing in it at all — the midpoint's parity is
+## what catches the second.
+func _body_clear(rays: Array, lo: float, hi: float) -> bool:
+	var mid := (lo + hi) * 0.5
+	for raw in rays:
+		var hits: PackedFloat32Array = raw
+		var beyond := 0
+		for h in hits:
+			if h >= lo and h <= hi:
+				return false
+			if h > mid:
+				beyond += 1
+		if beyond % 2 == 1:
+			return false
+	return true
+
+
+## Every distance along the ray at which the outline crosses it. **Unbounded on purpose** — the parity
+## test above counts crossings beyond a point, and a truncated list makes 「inside」 read as 「outside」.
+func _coast_hits(from: Vector2, dir: Vector2) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for raw in coast:
+		var seg := raw as Array
+		var a := Vector2(float(seg[0]), float(seg[1]))
+		var b := Vector2(float(seg[2]), float(seg[3]))
+		var ab := b - a
+		var denom := dir.cross(ab)
+		if absf(denom) < 1e-9:
+			continue
+		var ao := a - from
+		var along := ao.cross(dir) / denom
+		if along < 0.0 or along > 1.0:
+			continue
+		out.append(ao.cross(ab) / denom)
+	return out
+
+
+## Whether the straight line out of `t` along `dir` clears land for `reach` 조각.
+##
+## ⚠ **Sampled every quarter 조각**, which cannot step over one: a 조각 is one unit across, so four
+## samples land inside every one the line passes through.
+## ⚠ **`t` itself is skipped and it has to be** — a beach IS land, so a line leaving one would be
+## refused by its own starting 조각 at every angle.
+## ⚠ **Off the board counts as open.** The board is the only thing this file knows and the terrain mesh
+## runs wider than it; a line that leaves the board has left the island behind.
+func _clear_water_line(t: int, from: Vector2, dir: Vector2, reach: float) -> bool:
+	for raw in _line_tiles_along(from, dir, reach):
+		var nt := int(raw)
+		if nt == t:
+			continue
+		if passable[nt] != 0:
+			return false
+	return true
+
+
+## **Every 조각 the ray from `from` along `dir` passes through, out to `reach`, starting 조각 included.**
+##
+## ⚠⚠ **A GRID TRAVERSAL AND NOT A SAMPLER, AND THE DIFFERENCE IS MEASURED.** This was four samples per
+## 조각 with a `round()`, and an interval — any interval — steps over a 조각 the ray only clips. **It
+## walks boundaries instead**: at each step it crosses whichever of the two 조각 edges is nearer along
+## the ray, so it cannot skip one at any step size, because it has no step size.
+##
+## ⚠⚠ **AN EXACT TIE CROSSES BOTH EDGES AT ONCE AND THE RAY ENTERS THE *DIAGONAL* 조각.** `seaward_at`
+## hands back an exact 45 degrees whenever a beach's watery neighbours sum to a diagonal, which is most
+## corner beaches, and such a ray passes through 조각 CORNERS. **Measured: stepping one axis and then
+## the other reported four 조각 as crossed that the ray only ever touched the corner of.**
+func _line_tiles_along(from: Vector2, dir: Vector2, reach: float) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var cx := int(round(from.x))
+	var cy := int(round(from.y))
+	if cx < 0 or cy < 0 or cx >= w or cy >= h:
+		return out
+	out.append(cy * w + cx)
+	var step_x := 0
+	var step_y := 0
+	if dir.x > 0.0:
+		step_x = 1
+	elif dir.x < 0.0:
+		step_x = -1
+	if dir.y > 0.0:
+		step_y = 1
+	elif dir.y < 0.0:
+		step_y = -1
+	# ⚠ **An axis the ray does not move along never crosses an edge** — INF rather than a division by
+	# zero, which would poison every comparison below with a NAN.
+	var next_x := INF
+	var delta_x := INF
+	if step_x != 0:
+		next_x = (float(cx) + 0.5 * float(step_x) - from.x) / dir.x
+		delta_x = 1.0 / absf(dir.x)
+	var next_y := INF
+	var delta_y := INF
+	if step_y != 0:
+		next_y = (float(cy) + 0.5 * float(step_y) - from.y) / dir.y
+		delta_y = 1.0 / absf(dir.y)
+	var travelled := 0.0
+	# A bound on the loop and not on the geometry: a ray crosses at most one edge per 조각 per axis.
+	# **A net that can hang prints no verdict at all**, which disarms mutation testing on the whole file.
+	for _guard in int(ceil(reach * 2.0)) + 4:
+		if absf(next_x - next_y) <= 1e-9:
+			travelled = next_x
+			cx += step_x
+			cy += step_y
+			next_x += delta_x
+			next_y += delta_y
+		elif next_x < next_y:
+			travelled = next_x
+			cx += step_x
+			next_x += delta_x
+		else:
+			travelled = next_y
+			cy += step_y
+			next_y += delta_y
+		if travelled > reach:
+			return out
+		if cx < 0 or cy < 0 or cx >= w or cy >= h:
+			continue
+		out.append(cy * w + cx)
+	return out
+
+
+## The sum of the offsets of `t`'s watery neighbours, unnormalised. Zero means either no water at all
+## or water balanced on opposite sides — `seaward_at`'s chain is what tells those two apart.
+func _sea_neighbours(t: int) -> Vector2:
+	var tx := t % w
+	var ty := t / w
+	var sum := Vector2.ZERO
+	for k in NEIGHBOURS.size():
+		var dx := int(NEIGHBOURS[k][0])
+		var dy := int(NEIGHBOURS[k][1])
+		var nx := tx + dx
+		var ny := ty + dy
+		if nx < 0 or ny < 0 or nx >= w or ny >= h:
+			continue
+		if water[ny * w + nx] != 0:
+			sum += Vector2(dx, dy)
+	return sum
 
 
 ## **Whether a body standing on `from_tile` may walk into `to_tile` — the stair rule, and the only

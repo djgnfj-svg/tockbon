@@ -1,5 +1,5 @@
 Type: task
-Status: open
+Status: claimed
 
 # 짐승이 오고 싸운다 — **2 주의 전부**
 
@@ -69,3 +69,134 @@ Status: open
 
 - **배 3D** — 티켓 47
 - **늑대 판떼기** — 티켓 48
+
+---
+
+## Implementation plan — **the 월~수 slice only: the boat sails in with wolves aboard**
+
+**Written 2026-08-30. Scope is the crossing and nothing past it.** The user, on a phone, cut the
+eight-question interview short: ***"the boat is made, it just needs to come across the water"***, so the
+numbers below were chosen rather than asked. **Every one is a single line in `rules.gd` or `look.gd`.**
+
+### What is true right now — **measured, not assumed**
+
+| What | State |
+|---|---|
+| **`Battle`** | Two phases left: `_phase_orders`, `_phase_movement`. **No combat, no boats, no spawn loop.** The boat code deleted on 2026-08-29 was player-side and is not being revived |
+| **`assets/props/boat.glb`** | On disk, **referenced by nothing**, and **Godot has never imported it** — there is no `.import` beside it |
+| **`assets/beast/wolf_h/`** | Four PNGs: `north` `south` `east` `west`. No animation frames |
+| **The sea** | ONE `PlaneMesh`, `SEA_SPAN_TILES = 400`, at `y = Look.SEA_Y_TILES = 0.075`. The shoreline is a shader on that quad, not geometry |
+| **Loading a mesh** | `load("res://...glb") as PackedScene` then instantiate — the way `island.glb`, `buildings.glb`, `props.glb` already come in |
+| **Bodies** | Pooled `Sprite3D` via `FieldView._sprite()`; `pixel_size = 1/TILE_PX`; world point from `Look.tile_point_px` + a Y read off the tile's level |
+| **The sim is stepped** | `Game._process` calls `battle.step(delta)` every frame once a run exists |
+
+⚠ **Ticket 48 says the swordsman has no body picture. That is wrong** — `sword_r.png`/`sword_l.png` are
+full body-with-sword drawings. The bodiless ones are `bow`/`spear`/`shield`, leftovers from a second-weapon
+idea dropped 2026-08-27 and wired to nothing.
+
+### Seam — **`src/sim/`, the agreed main seam. Net FIRST.**
+
+**This work adds state to `Battle`, so the check is written before the code** (the folder rule).
+**A new net file `tests/nets/net_boats.gd`**, driven with `.new()` and `step(dt)` alone — no tree, no
+pixels. **No new seam is being introduced.**
+
+⚠ **The boat on screen is measured at the view seam's pooled-node surface** (`Sprite3D` fields for the
+wolves) **and the committed surface count** for the boat mesh — buffers alone stay green when a flush is
+deleted. **Nothing asserts pixels.**
+
+### The numbers — **all new, all one line each**
+
+| Constant | Value | Why this one |
+|---|---|---|
+| `BOAT_FIRST_SEC` | **5.0** | Long enough to see the empty island, short enough that a launch shows the boat |
+| `BOAT_INTERVAL_SEC` | **30.0** | 「일정하게」 — random timing is later |
+| `BOAT_SPEED_TILES` | **4.0** | ⚠ **Already measured. Do not re-derive** |
+| `BOAT_START_DIST_TILES` | **24.0** | 6 seconds of crossing at 4.0/s. The crossing is the whole gap between start and first blow |
+| `BOAT_STANDOFF_TILES` | **2.0** | 「배가 서는 자리는 해안에서 거리를 두고」 |
+| `BOAT_CAPACITY` | **8** | ⚠ **Already decided.** Four benches, two each |
+| `BOAT_LANDING_STRIDE` | **37** | Walks the landing ring so consecutive boats arrive on different sides. Coprime with 84, so it visits every tile before repeating |
+
+**Presentation, in `look.gd`:**
+
+| Constant | Value |
+|---|---|
+| `BOAT_BOB_TILES` | **0.06** — vertical rise and fall |
+| `BOAT_BOB_SEC` | **2.2** — one full bob |
+| `BOAT_ROLL_DEG` | **3.0** — side-to-side lean, on a different period so it does not beat with the bob |
+| `BOAT_DECK_SLOTS` | **eight local offsets**, four benches by two — read off the mesh, in tile units |
+
+⚠ **The bob and roll are the view's, not the sim's.** The sim's boat has a flat position; the screen adds
+the motion. **A net must not be able to see the bob.**
+
+### Order — **each step is possible only once the one above stands**
+
+1. **`net_boats.gd` first**, red, against nothing: a boat exists after `BOAT_FIRST_SEC`, it is
+   `BOAT_START_DIST_TILES` from its landing tile, it closes that distance at `BOAT_SPEED_TILES`, it stops
+   at `BOAT_STANDOFF_TILES` and never moves again, a second boat arrives one interval later on a different
+   landing tile, and **eight wolves are aboard and none of them is on the board.**
+2. **The landing ring.** `Grid` lost `can_land_at` with the player's boats. **Rebuild the set: every land
+   tile with water in any of the 8 directions.** ⚠ **The measured answer is 84 tiles** — if the count comes
+   out different, say so rather than adjusting the expectation.
+3. **Boats in `Battle`.** Parallel arrays, the way `soldier_*` already is: `boat_pos` (Vector2, tile
+   units), `boat_landing` (tile), `boat_state` (SAILING · ARRIVED), `boat_riders` (how many aboard).
+   A `_phase_boats` between orders and movement. ⚠ **Ties break on the lower tile number** — that rule is
+   the whole of determinism here.
+4. **The boat on screen.** `FieldView` loads `boat.glb` the same way it loads the island, one instantiated
+   node per live boat, pooled and hidden rather than freed. Y from `SEA_Y_TILES` plus the bob; yaw from the
+   heading toward the landing tile.
+5. **Wolves on the deck.** Pooled `Sprite3D`, one per rider, at the eight deck offsets rotated by the
+   boat's yaw. Texture picked from `wolf_h` by the boat's heading against the camera's yaw.
+
+### Risk — **what this could silently break**
+
+- ⚠⚠ **`boat.glb` has never been imported.** Godot writes the `.import` on first open. **If the mesh comes
+  in shaded in bright and dark wedges, that is a known open failure** — the keep does it too, four fixes
+  were tried and all four rendered identically. **Do not spend the round on it; report it and move on.**
+- ⚠ **`Battle.setup` still takes a `spawns` argument whose contents nothing reads.** Boats are the thing
+  that will eventually fill it. **Do not wire spawns this round** — beasts arrive by boat and by nothing else.
+- ⚠ **The camera is orthogonal and sits far back.** A fade or a scale written as "distance from camera"
+  multiplies by zero here. **That has cost a round before.**
+- ⚠ **A wolf sprite and a boat mesh are different pipelines.** The sprite is a pooled `Sprite3D` at
+  `pixel_size = 1/TILE_PX`; getting it to sit ON the deck rather than through it is a Y offset, not a scale.
+- ⚠ **`net_islands` and `net_tiers` are already red for reasons that predate this** (the island is smaller
+  than the nets expect). **Do not fold those reds into this ticket** — ticket 15 holds them.
+
+### Acceptance
+
+- **`net_boats` green**, and it fails when `BOAT_SPEED_TILES` is changed — a net that passes at any speed
+  is measuring nothing
+- **The total net count does not go down.** Report 통과/실패 before and after
+- **On screen**: a boat appears out at sea, crosses, and stops short of the shore with eight wolves
+  standing on it, and **the next boat comes to a different side**
+
+### Out of scope — **builder does not expand into these**
+
+- **Landing, unloading, walking ashore** — 목~일
+- **Combat of any kind** — no damage, no death, no keep health
+- **Replacing the walking wolf's 46 pictures** — ticket 48's open question, untouched
+- **Fixing the sail size, the smooth hull, the grey sail** — ticket 47 says those are judged on the game
+  screen, after it is in
+- **Random boat timing** — 「일정하게」. ⚠ **Boats DO pile up**: an arrived boat never leaves this round, so by the second interval two sit off different shores. That is wanted, not a defect
+
+---
+
+## ✅ The Mon–Wed half is done — 2026-08-30
+
+**A boat sails in and stops off the shore with eight wolves on it.** First at 5s, then every 30s, taking
+**18 seconds** to cross, arriving on a different beach each time out of a ring of **61**.
+
+**The user, on the wake and the hull's contact with the water**: ***"That's good enough."***
+
+### ⚠ Built this round but NOT yet judged on screen
+
+- **The camera moved to the mouse** — screen-edge pan, right-button drag, wheel to rotate,
+  **Shift+wheel to zoom**. ⚠ **Shift+wheel was my choice, not the user's.**
+  **How to see it**: launch, press 시작하기, push the cursor into any screen edge. Then drag with the right
+  button over the ISLAND — **that used to do nothing at all and put a walk order in instead.**
+- **WASD, Q/E and R/F all still work.** Nobody asked for them to be removed.
+
+### ⚠⚠ What the Thu–Sun half still has to build, and it is more than it sounds
+
+**There is no beast in this game.** `boat_riders` is an integer and the eight wolves on a deck are drawn
+from it. **No enemy column, no landing, no damage, no death, no keep health.**
+⇒ The three unanswered questions above are still unanswered and still block it.

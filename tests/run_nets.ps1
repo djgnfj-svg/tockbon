@@ -122,6 +122,51 @@ function Get-Noise([string]$stdout, [string]$stderr) {
     return ,$noise
 }
 
+# **WHICH FUNCTIONS THE ROUND ABANDONED, read off the same stderr `[침묵사]` already parses.**
+#
+# **GDScript 4.7 has no try/catch, and a runtime error abandons ONLY the function it lands in.** The
+#  caller resumes on its next line and receives `null` — through `await` too — and the process still
+#  exits 0. So a death has two completely different costs depending on where it lands, and **the summary
+#  cannot tell them apart**:
+#   · in `run()` itself, every check below it is abandoned (net_shell lost 17 that way, twice)
+#   · in a helper one frame down, `run()` carries on and only that helper's own rows are lost
+#  **The runner's `t.done()` sentinel catches the first shape and CANNOT catch the second** — `run()`
+#  genuinely finished. This function is the only thing that can see it, and it needs nothing from the nets.
+#
+# ⚠ **Only `SCRIPT ERROR` blocks.** `push_error` prints `USER ERROR` and does NOT abandon anything — it
+#  is a log line, and a net that declared it with `expect_error` is behaving exactly as designed.
+# ⚠ **Amnesty is deliberately NOT applied here.** `expect_error` forgives a bark; it cannot forgive a
+#  function that stopped running, and a declared runtime error still costs every row underneath it.
+#
+# ⚠⚠ **THIS MARKS THE COUNT AND DOES NOT TURN THE NET RED, AND THAT IS A CHOICE RATHER THAN AN
+#  OVERSIGHT.** Today every net it fires on is already red through `[침묵사]`, because an undeclared
+#  bark is itself a failure here — so the two look the same and nothing is lost. **The case where they
+#  come apart is a `SCRIPT ERROR` a net DECLARED with `expect_error`**: the bark is forgiven, the net
+#  stays green, and it prints 「통과 N (불완전)」 with an exit code of 0. **A net sitting there
+#  green-and-incomplete is allowed**, and this comment is the record that somebody looked at it and
+#  decided so — reddening it was not asked for and was not invented here. If that ever becomes the
+#  wrong answer, the change is one `-or $abandoned.Count -gt 0` on `$bad` below.
+function Get-Abandoned([string]$stderr) {
+    $out = @()
+    $inScript = $false
+    foreach ($line in ($stderr -split "`r?`n")) {
+        $t = $line.Trim()
+        if ($t -eq "") { continue }
+        if ($t -match '^(USER )?SCRIPT ERROR:') { $inScript = $true; continue }
+        if ($t -match '^(ERROR|WARNING|USER ERROR|USER WARNING):') { $inScript = $false; continue }
+        # The first `at:` after the header names the frame the error actually landed in. The backtrace
+        # lines below it repeat the same frame and then its callers, which is not what was abandoned.
+        if ($inScript -and $t -match '^at:\s+(.+?)\s+\(res://(.+?):(\d+)\)') {
+            $fn = $Matches[1]
+            $file = Split-Path -Leaf $Matches[2]
+            $entry = $fn + " (" + $file + " " + $Matches[3] + ")"
+            if ($out -notcontains $entry) { $out += $entry }
+            $inScript = $false
+        }
+    }
+    return ,$out
+}
+
 # -- The net list. **The folder is scanned — it is never a hand-maintained list**, because a list someone forgets
 #    to add to is a net that silently stops running.
 $netFiles = Get-ChildItem -Path (Join-Path $root "tests\nets") -Filter "net_*.gd" | Sort-Object Name
@@ -378,6 +423,12 @@ foreach ($j in ($jobs | Sort-Object Net)) {
     foreach ($l in ($stderr -split "`r?`n")) { if ($l.Trim() -match '^x\s') { $fail++ } }
 
     $noise = Get-Noise $stdout $stderr
+    $abandoned = Get-Abandoned $stderr
+    # **The round is INCOMPLETE when either detector fires**, and the two see different halves: the
+    #  sentinel sees a `run()` that never reached its last line, `Get-Abandoned` sees any function that
+    #  stopped early. Neither is a count of failures — it is a statement that the count cannot be read.
+    $incomplete = $abandoned.Count -gt 0
+    foreach ($l in ($stdout -split "`r?`n")) { if ($l -match '끝까지 못 갔다') { $incomplete = $true } }
     # `$j.TimedOut` is read FIRST and on its own: a killed process's exit code is not dependable, and its
     #  stdout can carry a clean `[net] N passed` flushed before whatever loop it later hung in.
     $timedOut = [bool]$j.PSObject.Properties['TimedOut'] -and $j.TimedOut
@@ -410,9 +461,9 @@ foreach ($j in ($jobs | Sort-Object Net)) {
 
     if ($bad) {
         $exitCode = 1
-        $lines += [PSCustomObject]@{ Net = $j.Net; Pass = $pass; Bad = $true; Fails = $failLines; Noise = $noise; Code = $j.Proc.ExitCode; Sec = $j.Sec; Out = $j.Out }
+        $lines += [PSCustomObject]@{ Net = $j.Net; Pass = $pass; Bad = $true; Fails = $failLines; Noise = $noise; Code = $j.Proc.ExitCode; Sec = $j.Sec; Out = $j.Out; Abandoned = $abandoned; Incomplete = $incomplete }
     } else {
-        $lines += [PSCustomObject]@{ Net = $j.Net; Pass = $pass; Bad = $false; Fails = @(); Noise = @(); Code = 0; Sec = $j.Sec; Out = $j.Out }
+        $lines += [PSCustomObject]@{ Net = $j.Net; Pass = $pass; Bad = $false; Fails = @(); Noise = @(); Code = 0; Sec = $j.Sec; Out = $j.Out; Abandoned = $abandoned; Incomplete = $incomplete }
     }
 }
 
@@ -422,9 +473,18 @@ foreach ($l in $lines) { $timings[$l.Net] = $l.Sec }
 try { ($timings | ConvertTo-Json) | Out-File -FilePath $timingFile -Encoding utf8 -Force } catch {}
 
 Write-Host ""
+# **THE MARK GOES ON THE NUMBER AND NOWHERE ELSE.** The whole failure this exists for is that a partial
+#  count reads exactly like a whole one — 「통과 56」 from a net that abandoned 17 checks is the same six
+#  characters as 「통과 56」 from a net that ran everything. A warning printed further down is read after
+#  the number has already been believed.
+$incompleteNets = 0
 foreach ($l in ($lines | Sort-Object Sec -Descending)) {
+    $mark = ""
+    if ($l.Incomplete) { $mark = " (불완전)"; $incompleteNets++ }
     if ($l.Bad) {
-        Write-Host ("  {0,-14} 통과 {1,5}   {2,6:N1}s   [실패]" -f $l.Net, $l.Pass, $l.Sec) -ForegroundColor Red
+        Write-Host ("  {0,-14} 통과 {1,5}{2}   {3,6:N1}s   [실패]" -f $l.Net, $l.Pass, $mark, $l.Sec) -ForegroundColor Red
+    } elseif ($l.Incomplete) {
+        Write-Host ("  {0,-14} 통과 {1,5}{2}   {3,6:N1}s" -f $l.Net, $l.Pass, $mark, $l.Sec) -ForegroundColor Yellow
     } else {
         Write-Host ("  {0,-14} 통과 {1,5}   {2,6:N1}s" -f $l.Net, $l.Pass, $l.Sec) -ForegroundColor DarkGray
     }
@@ -432,10 +492,16 @@ foreach ($l in ($lines | Sort-Object Sec -Descending)) {
 
 # Only the failing nets, and only their failure lines. If the full text is needed, the output file path is printed.
 foreach ($l in $lines) {
-    if (-not $l.Bad) { continue }
+    # ⚠ **An abandoned function prints even on a net the round calls clean.** That is the case the
+    #  sentinel cannot reach: `run()` finished, the exit code is 0, and rows inside a helper never ran.
+    if (-not $l.Bad -and $l.Abandoned.Count -eq 0) { continue }
     Write-Host ""
     Write-Host "───── net_$($l.Net) (종료 코드 $($l.Code)) ─────" -ForegroundColor Red
     foreach ($f in $l.Fails) { Write-Host "  $f" -ForegroundColor Red }
+    if ($l.Abandoned.Count -gt 0) {
+        Write-Host ("[중단] 함수 {0}개가 중간에 버려졌다 — 그 아래 검사는 안 돌았고, 위의 통과 수는 잰 것의 일부다." -f $l.Abandoned.Count) -ForegroundColor Yellow
+        foreach ($a in $l.Abandoned) { Write-Host "  | $a" -ForegroundColor Yellow }
+    }
     Write-Host "  전문: $($l.Out)" -ForegroundColor DarkGray
     if ($l.Noise.Count -gt 0) {
         Write-Host "[침묵사] stderr에 선언되지 않은 출력이 $($l.Noise.Count)줄 있다." -ForegroundColor Red
@@ -447,6 +513,9 @@ foreach ($l in $lines) {
 
 Write-Host ""
 Write-Host ("[그물] 통과 {0}개 · 실패 {1}개 · {2}개 그물 · {3:N1}s" -f $totalPass, $totalFail, $nets.Count, $sw.Elapsed.TotalSeconds)
+if ($incompleteNets -gt 0) {
+    Write-Host ("[불완전] 그물 {0}개가 끝까지 못 갔다 — 이 라운드의 통과 수는 잰 것의 일부다." -f $incompleteNets) -ForegroundColor Yellow
+}
 Write-Host ("[지문] src·tests·docs {0} — 두 라운드의 지문이 다르면 같은 나무를 잰 것이 아니다" -f $fingerprint)
 
 # If the source changed while it was running, **do not trust the result.** The why is in the comment on the function above.

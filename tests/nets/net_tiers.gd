@@ -186,6 +186,10 @@ func run(t) -> void:
 
 
 # == the datum ========================================================================================
+	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
+	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
+	t.done()
+
 
 ## ⚠⚠ **THE REGRESSION GUARD FOR THE WHOLE REPO, AND IT IS ONE LINE OF CODE.** Every fixture in every
 ## other net calls `load_rows(rows)` with no second argument. If the default meant anything but flat,

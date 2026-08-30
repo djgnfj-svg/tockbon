@@ -131,6 +131,11 @@ static func tiers() -> Array:
 ## board comes up flat, draws, plays, and says nothing.
 static func load_into(grid: Grid) -> void:
 	grid.load_rows(rows(), tiers())
+	# ⚠⚠ **THE DRAWN SHORE GOES IN WITH THE BOARD.** `load_rows` builds the 조각 tables and knows nothing
+	# about where the mesh was actually cut; **the boats stop against the outline, not against the
+	# 조각**, so the rule needs both and this is the one place that has both. ⚠ Set AFTER `load_rows`,
+	# which does not clear it — see `Grid.coast`.
+	grid.coast = coast()
 
 
 ## ⚠⚠ **THE ISLAND'S TIME LIMIT WAS DELETED 2026-08-27.** The loss it fed died on 2026-08-24 and the

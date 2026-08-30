@@ -49,6 +49,10 @@ func run(t) -> void:
 		var fv: FieldView = raw
 		fv.free()
 	_created = []
+	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
+	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
+	t.done()
+
 
 
 func _fv() -> FieldView:
@@ -174,13 +178,30 @@ func _setup_on_the_real_island(t) -> void:
 	t.ok(absf(fv.zoom - Look.ZOOM_MIN) > 0.05,
 		"그리고 이 줌은 48x32 가 걸리는 바닥이 아니다 — 상수를 읽었다면 둘이 같았다")
 
-	# ⚠ **The island is SMALLER than the view at its opening zoom, so pushing east moves nothing.** That
-	# is the clamp's own centring rule read from the far side, and it is the half that replaces the long
-	# map's 3200.00 stop: on a map narrower than the screen there is no stop to reach, only a middle.
+	# ⚠⚠ **THIS ROW SAID THE OPPOSITE UNTIL 2026-08-30 AND THE RULE IT ASSERTED IS DELETED** (티켓 41).
+	# It read 「동쪽 끝까지 밀어도 cam_px.x 가 그대로다 — 화면보다 좁은 섬은 가운데에 묶인다」, which was
+	# true of a clamp bounded by the island: every island is narrower than its own opening view, so the
+	# camera could not move at all. **Nothing tells the player a boat is coming any more** (the user:
+	# 「안 알아채는 게 맞겠다 ... 마우스 돌리다가 보이면 그때 가는 걸로」), so looking out to sea IS the
+	# mechanism and a pinned camera has no way to do it. See `Look.CAM_ROAM_TILES`.
+	#
+	# ⚠ **A property and not a hand literal, on purpose.** Every literal in this function is a 26 x 20
+	# number and the shipped board is not that size any more — those rows are 티켓 15's to re-measure.
+	# **A stop derived from the constant is true at whatever size the board settles on**, and the same
+	# stop IS pinned by hand one function down, on the 48 x 32 fixture this file controls.
+	var before_pan := fv.cam_px.x
 	fv.pan_by(Vector2(-50000.0, 0.0))
-	t.ok(absf(fv.cam_px.x - (-208.0)) < 0.1,
-		"동쪽 끝까지 밀어도 cam_px.x 가 -208.00 그대로다 — 화면보다 좁은 섬은 가운데에 묶인다 (얻은 값 %.2f)"
-			% fv.cam_px.x)
+	t.ok(fv.cam_px.x > before_pan + 1.0,
+		"동쪽으로 밀면 카메라가 실제로 간다 — 섬에 묶여 있지 않다 (%.2f → %.2f)"
+			% [before_pan, fv.cam_px.x])
+	var at_edge := fv.cam_px.x
+	fv.pan_by(Vector2(-50000.0, 0.0))
+	t.ok(absf(fv.cam_px.x - at_edge) < 0.001,
+		"그리고 거기서 멈춘다 — 바다로 끝없이 나가지는 않는다 (%.2f)" % fv.cam_px.x)
+	var roam := Look.CAM_ROAM_TILES * Look.TILE_PX
+	var map_w := float(fv._map_tiles().x) * Look.TILE_PX
+	t.ok(fv._ground_centre_px().x <= map_w + roam + 0.1,
+		"멈춘 자리가 섬 + 바다 테두리 %d조각 안이다" % int(Look.CAM_ROAM_TILES))
 	fv.battle = null
 
 
@@ -358,11 +379,19 @@ func _zoom_stops_at_both_ends(t) -> void:
 
 
 ## Pushed from far outside at a TURNED yaw, the clamp brings the ground point at the middle of the
-## screen back INSIDE the map — the addendum's rule, read straight off `_ground_centre_px()`.
+## screen back INSIDE the bound — the addendum's rule, read straight off `_ground_centre_px()`.
 ## ⚠ ONE turned yaw and not a sweep, deliberately (verify-read D): `_clamp_cam` never reads the yaw,
 ## so five yaws were five copies of the same measurement wearing five counts.
+##
+## ⚠⚠ **THE BOUND IS THE ISLAND PLUS `Look.CAM_ROAM_TILES` OF SEA AND IT USED TO BE THE ISLAND**
+## (2026-08-30, 티켓 41). The rectangle below was `Rect2(0, 0, 1920, 1280)` — the 48 x 32 board itself.
+## **Nothing about the rule changed; what it is bounded BY did**: the camera has to be able to go out
+## over the water, because finding a boat is the player's job and there is no arrow (the user: 「안
+## 알아채는 게 맞겠다 ... 마우스 돌리다가 보이면 그때 가는 걸로」). ⚠ **It is built from the constant
+## and not typed**, so the day the ring moves this row follows it instead of going quietly wrong.
 func _the_clamp_holds_at_every_yaw(t) -> void:
-	var map := Rect2(0.0, 0.0, 1920.0, 1280.0)
+	var roam := Look.CAM_ROAM_TILES * Look.TILE_PX
+	var map := Rect2(-roam, -roam, 1920.0 + roam * 2.0, 1280.0 + roam * 2.0)
 	var fv := _fv()
 	fv.zoom = 0.9
 	fv.cam_yaw_deg = 45.0
@@ -371,7 +400,7 @@ func _the_clamp_holds_at_every_yaw(t) -> void:
 	t.ok(fv.cam_px != Vector2(9999.0, 9999.0),
 		"돌린 yaw 에서도 클램프가 실제로 카메라를 옮겼다 (바닥 — 안 움직이는 클램프는 여기서 문다)")
 	t.ok(map.has_point(fv._ground_centre_px()),
-		"그리고 화면 한가운데 땅점이 지도 안으로 돌아온다 — 모서리가 아니라 중심을 묶는다")
+		"그리고 화면 한가운데 땅점이 섬 + 바다 테두리 안으로 돌아온다 — 모서리가 아니라 중심을 묶는다")
 
 	# ⚠ The named mutation: delete the clamp. `pan_by` always calls it, so its absence is simulated
 	# by writing `cam_px` directly — the centre then really is outside the map.
@@ -382,24 +411,42 @@ func _the_clamp_holds_at_every_yaw(t) -> void:
 		"자가 점검 — 클램프를 안 걸면 중심이 실제로 지도 밖이다")
 
 
-## The stops, as hand literals at zoom 1.0 on 48 x 32: visible (1280, 1120.12), so the centre may
-## reach x 1920 - 640 = 1280 and y 1280 - 560.06 = 719.94 — cam_px stops at **640.00** east and
-## **159.88** south. 159.88 is `1280 - 720/sin(40°)`, the pitch division reaching the clamp.
+## The stops, as hand literals at zoom 1.0 on 48 x 32: visible (1280, 1120.12), and the bound is the
+## board plus `Look.CAM_ROAM_TILES` = 20 조각 = **800 px** of sea on every side.
+##
+## ⚠⚠ **RE-DERIVED 2026-08-30 WHEN THE CLAMP OPENED** (티켓 41). It read 640.00 east, 159.88 south and
+## (0, 0) at the far corner, off a bound that was the board itself. **The rule is the same rule** —
+## the ground point at the MIDDLE of the screen is what is bounded — and only its rectangle moved.
+##
+## East: the centre may reach `1920 + 800 - 640` = 2080, so `cam_px.x` stops at **1440.00**.
+## South: `1280 + 800 - 560.06` = 1519.94, so `cam_px.y` stops at **959.88**.
+## The far corner: the centre may fall to `-800 + 640` = -160 and `-800 + 560.06` = -239.94, so
+## `cam_px` lands at exactly **(-800, -800)** — one roam ring past the board's own origin on both axes.
+##
+## ⚠ **560.06 is `720 / sin(40°) / 2` and the pitch division is what puts it there.** Without the
+## division the south stop would be `2080 - 360 - 360` = 1360; with `cos` in the sine's place, 1140.06,
+## which is where this row sat while that defect shipped.
 func _the_clamp_stops_at_hand_literals(t) -> void:
 	var fv := _fv()
 	fv.zoom = 1.0
 	fv.cam_px = Vector2(300.0, 100.0)
 	fv.pan_by(Vector2(-50000.0, 0.0))
-	t.ok(absf(fv.cam_px.x - 640.0) < 0.1, "동쪽 끝에서 cam_px.x 가 640.00 이다 (%.2f)" % fv.cam_px.x)
+	t.ok(absf(fv.cam_px.x - 1440.0) < 0.1, "동쪽 끝에서 cam_px.x 가 1440.00 이다 (%.2f)" % fv.cam_px.x)
 	fv.pan_by(Vector2(0.0, -50000.0))
-	t.ok(absf(fv.cam_px.y - 159.88) < 0.1, "남쪽 끝에서 cam_px.y 가 159.88 이다 (%.2f)" % fv.cam_px.y)
-	# ⚠ Without the pitch division the south stop would be 1280 - 720 = 560 — 400 px off the literal;
-	# with `cos` in the sine's place, 340.11, which is where this row sat while the defect shipped.
-	t.ok(absf(159.88 - 560.0) > 1.0, "자가 점검 — 나눗셈이 빠지면 남쪽 끝이 560 으로 밀린다는 뜻이다")
-	t.ok(absf(159.88 - 340.11) > 1.0, "자가 점검 — cos 로 나누면 340.11 이 된다 (실제로 그랬다)")
+	t.ok(absf(fv.cam_px.y - 959.88) < 0.1, "남쪽 끝에서 cam_px.y 가 959.88 이다 (%.2f)" % fv.cam_px.y)
+	t.ok(absf(959.88 - 1360.0) > 1.0, "자가 점검 — 나눗셈이 빠지면 남쪽 끝이 1360 으로 밀린다는 뜻이다")
+	t.ok(absf(959.88 - 1140.06) > 1.0, "자가 점검 — cos 로 나누면 1140.06 이 된다 (실제로 그랬다)")
 	fv.pan_by(Vector2(50000.0, 50000.0))
-	t.ok(absf(fv.cam_px.x - 0.0) < 0.1 and absf(fv.cam_px.y - 0.0) < 0.1,
-		"반대쪽 끝은 (0, 0) 이다 — 양끝이 다 잰 값이다")
+	t.ok(absf(fv.cam_px.x - (-800.0)) < 0.1 and absf(fv.cam_px.y - (-800.0)) < 0.1,
+		"반대쪽 끝은 (-800, -800) 이다 — 판 밖으로 딱 테두리 하나만큼이다 (%.2f, %.2f)"
+			% [fv.cam_px.x, fv.cam_px.y])
+
+	# ⚠⚠ **THE STOP IS A STOP AND NOT A DRIFT.** Pushing again from the stop must change nothing —
+	# without this the row above is equally true of a camera that is still travelling and merely
+	# happened to be at that number on the frame it was read.
+	var held := fv.cam_px
+	fv.pan_by(Vector2(50000.0, 50000.0))
+	t.ok(fv.cam_px.distance_to(held) < 0.001, "거기서 더 밀어도 안 움직인다")
 
 
 ## 「돌려도 판이 안 흔들리나」, in numbers: Q/E and R/F hold the ground point at the middle of the

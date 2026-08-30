@@ -19,6 +19,10 @@ func run(t) -> void:
 
 
 # -- R1 --------------------------------------------------------------------------------------------
+	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
+	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
+	t.done()
+
 ## ⚠⚠ **THE SLOTS ARE RUN STATE NOW AND THIS ROW MOVED WITH THEM.** `Rules.SUMMON_SLOTS` was a
 ## CONSTANT table saying 「칸 s 는 영원히 종 t 에 묶여 있다」, and that sentence stopped being true the
 ## day a card could fill a slot — a constant holding a per-run fact is a shape this repo has paid for.

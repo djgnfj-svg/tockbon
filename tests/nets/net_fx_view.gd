@@ -36,6 +36,21 @@ var _created: Array = []
 
 
 func run(t) -> void:
+	# ⚠⚠ **THE BOAT FAMILY RUNS FIRST, AND THAT IS A MEASUREMENT AND NOT A PREFERENCE** (2026-08-30).
+	# `_the_bite_rides_the_blow_that_lunges` currently dies on `_body["s0"]` — the fixture's ashore
+	# soldier has no body entry — and **a row that dies abandons everything under it**, so on the round this
+	# was written the five boat rows below it were not being measured at all and the file still read
+	# 59 green. **The order of independent rows carries no meaning; the bite row still reddens where it
+	# is**, and nothing here is hidden by moving the boats above it.
+	_every_hull_stands_on_its_own_boat(t)
+	_the_hull_is_a_committed_mesh_pointing_where_it_sails(t)
+	_the_sea_moves_the_hull_and_the_sim_does_not(t)
+	_the_deck_carries_eight_riders(t)
+	_the_rider_faces_the_screen_and_not_the_compass(t)
+	_the_rider_stands_on_the_plank_and_not_on_its_frame(t)
+	_the_footing_survives_the_picture_changing(t)
+	_every_taken_seat_carries_a_disc_that_rides_the_hull(t)
+	_the_disc_is_wider_than_the_wolf_standing_on_it(t)
 	_the_hills_never_swallow_the_tier(t)
 	_the_first_island_opens_with_room_around_it(t)
 	_a_body_lays_one_shadow_disc(t)
@@ -47,6 +62,10 @@ func run(t) -> void:
 		var fv: FieldView = raw
 		fv.free()
 	_created = []
+	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
+	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
+	t.done()
+
 
 
 
@@ -467,6 +486,506 @@ func _the_bite_rides_the_blow_that_lunges(t) -> void:
 
 ## The pooled BODY sprite standing nearest tile point `at`. Matched by position rather than by index
 ## in the pool, so the row still names the right body if the draw order is ever changed.
+# == the beasts' boat, on screen ======================================================================
+## **티켓 41's view half.** The sim's boat is a `Vector2` and a beach 조각; everything below is what the
+## eye is given on top of that, and none of it is measurable at the `sim` seam — `net_boats` drives that
+## half and is deliberately tree-free.
+##
+## ⚠ **Measured on the two surfaces `CONTEXT.md` names for this seam**: the pooled `Sprite3D` fields the
+## engine consumes, and **the committed surface count** — a hull whose mesh has zero surfaces is a node
+## in the right place drawing nothing, and every transform check about it stays green.
+
+
+## **Every hull is drawn where its OWN boat is, and every rider on the hull it belongs to.**
+##
+## ⚠⚠ **NOTHING IN THIS FILE READ A HULL'S x OR z UNTIL THIS ROW, AND THREE MUTATIONS PROVED IT.** Run
+## against the suite before it existed, all three came back fully green: **every hull parked at the
+## world origin**, **riders placed from their bare deck offsets with the hull ignored**, and **only the
+## first boat ever drawn**. A picture can be entirely detached from the sim and still satisfy a surface
+## count, a bow angle and a bob.
+##
+## ⚠⚠ **TWO BOATS, BECAUSE ONE CANNOT SEE ANY OF IT.** With a single hull 「drawn at the boat」 and
+## 「drawn at the only place there is」 are the same sentence, and 「only the first is drawn」 is
+## unfalsifiable. The acceptance line 티켓 41 carries — 「the next boat comes to a different side」 — is
+## a claim about the SCREEN and this is the only row that measures it there.
+##
+## ⚠ **The expected point goes through `Look.tile_point_px`**, the same conversion every body uses, so
+## a 조각 centre is half a 조각 along both axes and this row cannot silently accept a corner.
+func _every_hull_stands_on_its_own_boat(t) -> void:
+	var pack := _boat_view(Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC)
+	var fv: FieldView = pack["fv"]
+	var b: Battle = pack["b"]
+	t.eq(b.boat_pos.size(), 2, "sim 에 배가 둘 떠 있다 (자가 점검 — 하나면 아래가 전부 공허하다)")
+	t.eq(fv._boats_used, 2, "선체도 둘 쓰였다 — 첫 배만 그리는 게 아니다")
+
+	var worst := 0.0
+	var seen: Array = []
+	for i in b.boat_pos.size():
+		var want := Look.tile_point_px(b.boat_pos[i] as Vector2) / Look.TILE_PX
+		var hull: Node3D = fv._boats[i]
+		var got := Vector2(hull.position.x, hull.position.z)
+		worst = maxf(worst, got.distance_to(want))
+		seen.append(got)
+	t.ok(worst < 0.001,
+		"선체 둘 다 제 배가 선 자리에 그려져 있다 (제일 어긋난 거리 %.6f 조각)" % worst)
+
+	# The self-check that makes the row above a claim: the two boats are NOT in the same place, so a
+	# drawer that parked every hull on one point — the origin included — has to fail it.
+	var apart := (seen[0] as Vector2).distance_to(seen[1] as Vector2)
+	t.ok(apart > 1.0, "그리고 둘이 %.1f 조각 떨어져 그려진다 — 한 점에 겹쳐 있지 않다" % apart)
+	t.ok((seen[0] as Vector2).length() > 1.0 and (seen[1] as Vector2).length() > 1.0,
+		"자가 점검 — 둘 다 원점이 아니다: 전부 (0,0) 에 그려도 위가 문다")
+
+	# **Every rider belongs to a hull.** ⚠ Assigned by nearest hull rather than by index, because the
+	# sprite pool hands them out in one flat run — a rider placed from its bare deck offset with the
+	# hull ignored lands near the origin and is counted against neither.
+	var count := [0, 0]
+	var stray := 0
+	var reach := Rules.BOAT_HULL_HALF_TILES + 1.0
+	for k in fv._sprites_used:
+		var sp: Sprite3D = fv._sprites[k]
+		if not fv._tex_rider.has(sp.texture):
+			continue
+		var at := Vector2(sp.position.x, sp.position.z)
+		var best := -1
+		var best_d := reach
+		for i in seen.size():
+			var d: float = at.distance_to(seen[i] as Vector2)
+			if d < best_d:
+				best_d = d
+				best = i
+		if best < 0:
+			stray += 1
+		else:
+			count[best] += 1
+	t.eq(stray, 0, "갑판 늑대가 전부 어느 한 선체 옆에 서 있다 — 배와 상관없는 자리에 선 것이 없다")
+	t.eq(count[0], Rules.BOAT_CAPACITY, "첫 배에 여덟")
+	t.eq(count[1], Rules.BOAT_CAPACITY, "둘째 배에도 여덟 — 둘째 배의 갑판도 실제로 그려진다")
+
+
+## **The hull is a real committed mesh, and its bow points where it is sailing.**
+##
+## ⚠⚠ **THE SURFACE COUNT IS HALF THE ROW AND NOT A SELF-CHECK.** `boat.glb` had never been imported by
+## Godot before this ticket — no `.import` sat beside it — so `load(...) as PackedScene` coming back
+## null is a live failure mode, and it produces a frame with no hull, no error, and a pool that is
+## simply empty. **Position and rotation cannot see it; a surface count can.**
+##
+## ⚠⚠ **THE YAW IS READ OFF THE BASIS AND NOT OFF `rotation.y`, DELIBERATELY.** The roll is applied with
+## `rotate_object_local` AFTER the yaw, so the composed Euler's y is no longer the heading. **The model's
+## bow is its local +X** (measured off the file: `boat_stem` at x = +2.30, `boat_tail` at −2.26), and a
+## roll about that same axis cannot move it — so `basis.x` IS the heading, exactly, and comparing it
+## needs no second copy of the `atan2` the view runs.
+func _the_hull_is_a_committed_mesh_pointing_where_it_sails(t) -> void:
+	var pack := _boat_view()
+	var fv: FieldView = pack["fv"]
+	var b: Battle = pack["b"]
+	t.eq(b.boat_pos.size(), 1, "판에 배가 한 척 떴다 (자가 점검 — 없으면 아래가 전부 공허하다)")
+	t.eq(fv._boats_used, 1, "그 배마다 선체 노드가 하나씩 쓰였다")
+	t.eq(fv._boats.size(), 1, "그리고 풀에도 하나뿐이다 — 프레임마다 새로 만들지 않는다")
+
+	var hull: Node3D = fv._boats[0]
+	t.ok(hull.visible, "선체가 보이는 상태다")
+	t.ok(_surfaces_of(hull) > 0,
+		"선체 메시가 면을 %d 개 올렸다 — 노드만 있고 그릴 것이 없는 게 아니다" % _surfaces_of(hull))
+
+	var beach := int(b.boat_beach[0])
+	var target := Vector2(beach % b.grid.w, beach / b.grid.w)
+	var head := (target - (b.boat_pos[0] as Vector2)).normalized()
+	var bow := hull.transform.basis.x
+	t.ok(absf(bow.x - head.x) < 0.01 and absf(bow.z - head.y) < 0.01,
+		"뱃머리(%.3f, %.3f)가 가는 쪽(%.3f, %.3f)을 본다" % [bow.x, bow.z, head.x, head.y])
+
+	# ⚠⚠ **THE SAME HULL AIMED A SECOND WAY, AND WITHOUT IT THE ROW ABOVE CAN BE VACUOUS.** A fixture
+	# whose first beach happens to lie due east has a heading of exactly the model's own +X, and a hull
+	# that was never rotated at all passes — measured, on this arena. **Re-aiming is a view-side read**
+	# (nothing in `sim` decides a bow), so moving the boat and painting again asks the question the
+	# fixture could not.
+	b.boat_pos[0] = target + Vector2(-3.0, -4.0)
+	fv._process(0.0)
+	var again := hull.transform.basis.x
+	t.ok(absf(again.x - 0.6) < 0.01 and absf(again.z - 0.8) < 0.01,
+		"다른 쪽에서 겨누면 뱃머리도 그쪽(0.600, 0.800)을 따라 돈다 (%.3f, %.3f)" % [again.x, again.z])
+	t.ok(absf(again.x - bow.x) > 0.01 or absf(again.z - bow.z) > 0.01,
+		"자가 점검 — 두 각도가 실제로 다르다: 안 돌리는 선체는 둘 중 하나에 걸린다")
+
+	# Before the first boat's clock there is nothing to draw, and the pool says so.
+	var quiet := _boat_view(0.0)
+	t.eq((quiet["fv"] as FieldView)._boats_used, 0, "첫 시각 전에는 선체를 하나도 안 쓴다")
+
+
+## **The bob and the roll are the SCREEN's, and they move while the sim stands still.**
+##
+## ⚠⚠ **THE SIM IS NOT STEPPED IN THIS ROW AND THAT IS THE WHOLE MEASUREMENT.** Only `_process` is
+## called, so `boat_pos` cannot change — anything that moves is the view's own clock. A bob written into
+## `Battle` would pass a 「the boat goes up and down」 check just as well and would put a second clock
+## under the game, which is the seam every defect worth the name has come out of here.
+##
+## ⚠ **Bounded at BOTH ends.** Amplitude alone is 「it moved」, which a hull sliding away forever also
+## satisfies; the band is what says it is a bob.
+func _the_sea_moves_the_hull_and_the_sim_does_not(t) -> void:
+	var pack := _boat_view()
+	var fv: FieldView = pack["fv"]
+	var b: Battle = pack["b"]
+	var hull: Node3D = fv._boats[0]
+	var froze: Vector2 = b.boat_pos[0]
+
+	var rest := Look.SEA_Y_TILES + Look.BOAT_DRAFT_TILES
+	var lo := 9999.0
+	var hi := -9999.0
+	var roll_lo := 9999.0
+	var roll_hi := -9999.0
+	var out_of_band := 0
+	var over_roll := 0
+	# Seven samples over 3.0 s: `BOAT_BOB_SEC` is 2.2 and `BOAT_ROLL_SEC` 3.1, so this covers more than
+	# one whole bob and very nearly one whole roll — a window shorter than the slower period could
+	# catch a monotone slide and read it as motion.
+	for _k in 7:
+		fv._process(0.5)
+		var y := hull.position.y
+		lo = minf(lo, y)
+		hi = maxf(hi, y)
+		if absf(y - rest) > Look.BOAT_BOB_TILES + 0.0001:
+			out_of_band += 1
+		var lean := rad_to_deg(hull.transform.basis.y.angle_to(Vector3.UP))
+		roll_lo = minf(roll_lo, lean)
+		roll_hi = maxf(roll_hi, lean)
+		if lean > Look.BOAT_ROLL_DEG + 0.01:
+			over_roll += 1
+
+	t.ok(hi - lo > Look.BOAT_BOB_TILES,
+		"선체가 %.4f조각 오르내렸다 — 흔들림이 실제로 움직인다" % (hi - lo))
+	t.eq(out_of_band, 0, "그리고 %.3f조각 띠를 한 번도 안 벗어났다 — 떠내려가는 게 아니라 흔들리는 것이다"
+		% Look.BOAT_BOB_TILES)
+	t.ok(roll_hi - roll_lo > Look.BOAT_ROLL_DEG * 0.5,
+		"옆으로도 %.2f도 기울었다 폈다 한다" % (roll_hi - roll_lo))
+	t.eq(over_roll, 0, "그 기울기가 %.1f도를 안 넘는다" % Look.BOAT_ROLL_DEG)
+
+	t.ok((b.boat_pos[0] as Vector2).distance_to(froze) <= 0.0,
+		"자가 점검 — 그동안 sim 의 배는 한 조각도 안 움직였다: 위가 재는 것은 화면의 시계뿐이다")
+
+
+## **Eight riders stand on the deck, and they stand ON it.**
+##
+## ⚠ **Counted off the pooled `Sprite3D` textures**, which is the seam's own surface — a rider drawn by
+## some other path would not be one of these, and a rider counted from `boat_riders` would be counting
+## the sim twice.
+func _the_deck_carries_eight_riders(t) -> void:
+	var pack := _boat_view()
+	var fv: FieldView = pack["fv"]
+	var hull: Node3D = fv._boats[0]
+
+	var riders := 0
+	var below_deck := 0
+	for k in fv._sprites_used:
+		var sp: Sprite3D = fv._sprites[k]
+		if not fv._tex_rider.has(sp.texture):
+			continue
+		riders += 1
+		if sp.position.y <= hull.position.y:
+			below_deck += 1
+	t.eq(riders, Rules.BOAT_CAPACITY, "갑판에 여덟이 서 있다")
+	t.eq(below_deck, 0, "여덟 다 선체보다 위다 — 갑판을 뚫고 있지 않다")
+	t.eq(Look.BOAT_DECK_SLOTS.size(), Rules.BOAT_CAPACITY, "자리 표가 여덟 줄이다 (자가 점검)")
+
+
+## **Which of the four `wolf_h` pictures a rider wears is a SCREEN direction, not a compass one.**
+##
+## ⚠⚠ **THE BOARD TURNS, AND THAT IS THE WHOLE ROW.** A picker written against world north puts a wolf
+## facing the wrong way the moment the player presses the turn key — and nothing else on screen moves,
+## so it reads as the wolves spinning for no reason. **The same heading is asked twice, at two camera
+## yaws, and it must answer two different pictures.**
+func _the_rider_faces_the_screen_and_not_the_compass(t) -> void:
+	var pack := _boat_view()
+	var fv: FieldView = pack["fv"]
+	fv.cam_yaw_deg = 0.0
+	# `Look.BOAT_RIDER_TEX` order: screen-down, screen-up, screen-right, screen-left.
+	var south: Texture2D = fv._tex_rider[0]
+	var north: Texture2D = fv._tex_rider[1]
+	var east: Texture2D = fv._tex_rider[2]
+	var west: Texture2D = fv._tex_rider[3]
+	t.ok(south != north and east != west and south != east,
+		"네 그림이 서로 다른 파일이다 (자가 점검)")
+
+	t.ok(fv._boat_rider_tex(Vector2(0.0, 1.0)) == south, "화면 아래로 가면 이쪽을 본 그림이다")
+	t.ok(fv._boat_rider_tex(Vector2(0.0, -1.0)) == north, "화면 위로 가면 등을 보인다")
+	t.ok(fv._boat_rider_tex(Vector2(1.0, 0.0)) == east, "화면 오른쪽으로 가면 오른쪽 그림이다")
+	t.ok(fv._boat_rider_tex(Vector2(-1.0, 0.0)) == west, "왼쪽도 마찬가지다")
+
+	fv.cam_yaw_deg = 90.0
+	t.ok(fv._boat_rider_tex(Vector2(0.0, 1.0)) == east,
+		"판을 90도 돌리면 같은 방향이 오른쪽 그림이 된다 — 나침반이 아니라 화면 기준이다")
+
+
+## **The wolf stands on the plank. Its 92 x 92 FRAME does not.**
+##
+## ⚠⚠ **THE PADDING IS RE-MEASURED HERE, OFF THE PNG'S OWN ALPHA, AND NOT ASKED OF `_foot_rider`.**
+## Reading the view's own answer back at it is the shape where a check and the code it checks share one
+## blind spot — five of those went green in one day. **The net scans the image itself**, so a footing
+## computed from the wrong rows fails here even though the view is perfectly self-consistent.
+##
+## ⚠ **Both halves are asserted.** That the ink sits on the seat is the claim; that the FRAME sits
+## BELOW the seat, by exactly the padding, is what makes it a different sentence from the old code —
+## without the second half, a view that never changed at all would have to be caught by arithmetic
+## alone, and 0.16 조각 is small enough to be lost in a loose tolerance.
+func _the_rider_stands_on_the_plank_and_not_on_its_frame(t) -> void:
+	var pack := _boat_view()
+	var fv: FieldView = pack["fv"]
+	var hull: Node3D = fv._boats[0]
+
+	var worst_ink := 0.0
+	var least_frame_drop := 1e9
+	var seen := 0
+	for k in fv._sprites_used:
+		var sp: Sprite3D = fv._sprites[k]
+		if not fv._tex_rider.has(sp.texture):
+			continue
+		var slot := hull.transform * (Look.BOAT_DECK_SLOTS[seen] as Vector3)
+		var tall := float(sp.texture.get_height()) * sp.scale.y / Look.TILE_PX
+		var pad := _ink_pad_below(sp.texture)
+		var frame_bottom := sp.position.y - tall * 0.5
+		var ink_bottom := frame_bottom + pad * tall
+		worst_ink = maxf(worst_ink, absf(ink_bottom - slot.y))
+		least_frame_drop = minf(least_frame_drop, slot.y - frame_bottom)
+		seen += 1
+	t.eq(seen, Rules.BOAT_CAPACITY, "여덟이 다 그려져 있다 (자가 점검 — 0이면 아래가 전부 공허하다)")
+	t.ok(worst_ink < 0.0005,
+		"늑대의 발이 제 판자 위에 정확히 서 있다 (제일 어긋난 높이 %.6f 조각)" % worst_ink)
+	# The padding under the widest picture is 25 rows of 92; at the drawn size that is 0.16 조각. This
+	# floor is deliberately well under it and well over zero — what it forbids is「the frame is the
+	# feet」, which puts this at exactly 0.
+	t.ok(least_frame_drop > 0.05,
+		"그리고 그림틀의 아래끝은 판자보다 %.4f 조각 아래다 — 판자에 세운 것은 틀이 아니라 짐승이다"
+			% least_frame_drop)
+
+
+## **The picture changes when the board turns, and the wolf does not rise or sink.**
+##
+## ⚠⚠ **THIS IS THE ROW A SINGLE PADDING CONSTANT DIES ON.** The four files carry 11, 23, 25 and 25
+## empty rows under the animal — one number cannot foot all four, and with one number the deck's whole
+## crew steps up and down as the player turns the camera, which is the sort of thing that gets blamed
+## on the bob.
+## ⚠ **The camera's yaw is what is turned, not the boat's heading** — the seat positions come out of
+## the hull's transform and do not move, so anything that shifts is the picture's doing and nothing
+## else's.
+func _the_footing_survives_the_picture_changing(t) -> void:
+	var pack := _boat_view()
+	var fv: FieldView = pack["fv"]
+	var hull: Node3D = fv._boats[0]
+
+	fv.cam_yaw_deg = 0.0
+	fv._process(0.0)
+	var first := _rider_feet(fv, hull)
+	fv.cam_yaw_deg = 90.0
+	fv._process(0.0)
+	var turned := _rider_feet(fv, hull)
+
+	t.ok(first["tex"] != turned["tex"],
+		"판을 돌리자 다른 그림을 입었다 (자가 점검 — 같은 그림이면 아래가 공허하다)")
+	t.ok(absf(float(first["pad"]) - float(turned["pad"])) > 0.05,
+		"그 두 그림의 아래 여백이 서로 %.3f 만큼 다르다 (자가 점검 — 같으면 한 상수로도 통과한다)"
+			% absf(float(first["pad"]) - float(turned["pad"])))
+	t.ok(float(first["worst"]) < 0.0005 and float(turned["worst"]) < 0.0005,
+		"그런데 발 높이는 두 그림 다 판자 위 그대로다 (%.6f · %.6f 조각)"
+			% [float(first["worst"]), float(turned["worst"])])
+
+
+## **Every seat that is taken carries a disc, it is committed geometry, and it goes where the hull
+## goes.**
+##
+## ⚠⚠ **THE SURFACE COUNT IS HALF THE ROW.** A disc whose vertices were built and never committed
+## leaves a `MeshInstance3D` that draws nothing, with no error and nothing else to see — the same hole
+## `_the_hull_is_a_committed_mesh_pointing_where_it_sails` was written for.
+## ⚠⚠ **AND THE WORLD POINT IS WALKED UP THE PARENTS, NOT ASKED OF `hull.transform` BY THE NET.** The
+## claim is「the shadow is under the wolf while the boat bobs and rolls」, and a disc hung off `_world`
+## with the hull's transform applied by hand would satisfy any check that applied the same transform
+## by hand. Walking the actual parent chain is the only version that can tell the two apart.
+## ⚠ **An empty seat is measured too**, by cutting the boat's crew to three: a drawer that lights all
+## eight discs whatever the count leaves a shadow lying on a bare plank.
+func _every_taken_seat_carries_a_disc_that_rides_the_hull(t) -> void:
+	var pack := _boat_view()
+	var fv: FieldView = pack["fv"]
+	var b: Battle = pack["b"]
+	var hull: Node3D = fv._boats[0]
+
+	var holder := hull.get_node_or_null(NodePath(FieldView.DECK_SHADOWS))
+	t.ok(holder != null, "선체가 제 갑판 그림자를 들고 있다")
+	if holder == null:
+		return
+	t.eq(holder.get_child_count(), Look.BOAT_DECK_SLOTS.size(), "자리마다 원판이 하나씩이다")
+
+	var surfaces := 0
+	var verts := 0
+	var lit := 0
+	var worst_slot := 0.0
+	for k in holder.get_child_count():
+		var disc := holder.get_child(k) as MeshInstance3D
+		var mesh := disc.mesh
+		if mesh != null:
+			surfaces += mesh.get_surface_count()
+			if mesh.get_surface_count() > 0:
+				verts += (mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+		if disc.visible:
+			lit += 1
+		var want := (Look.BOAT_DECK_SLOTS[k] as Vector3) + Vector3(0.0, Look.BOAT_RIDER_SHADOW_LIFT_TILES, 0.0)
+		worst_slot = maxf(worst_slot, disc.position.distance_to(want))
+	t.eq(surfaces, Look.BOAT_DECK_SLOTS.size(), "여덟 다 실제로 커밋된 면을 하나씩 들고 있다")
+	t.eq(verts, Look.BOAT_DECK_SLOTS.size() * Look.BOAT_RIDER_SHADOW_SEGS * 3,
+		"그 면들이 부채꼴 %d 조각짜리 원판이다" % Look.BOAT_RIDER_SHADOW_SEGS)
+	t.eq(lit, Rules.BOAT_CAPACITY, "여덟이 다 타 있으니 원판도 여덟 다 켜져 있다")
+	t.ok(worst_slot < 0.0005, "원판이 제 자리 바로 위에 놓여 있다 (제일 어긋난 거리 %.6f 조각)" % worst_slot)
+
+	# **The disc rides the hull.** Two view clocks apart, the world point under a rider and the rider
+	# itself must have moved by the SAME amount — the bob and the roll live in the hull's transform and
+	# nothing else re-applies them.
+	var rider0 := _first_rider(fv)
+	var disc0 := _world_point(holder.get_child(0) as Node3D, fv._world)
+	var was_rider := rider0.position
+	fv._process(0.7)
+	var moved_rider := _first_rider(fv).position - was_rider
+	var moved_disc := _world_point(holder.get_child(0) as Node3D, fv._world) - disc0
+	t.ok(moved_disc.length() > 0.0005,
+		"한 프레임 뒤 원판이 %.5f 조각 움직였다 — 배와 같이 흔들린다 (자가 점검)" % moved_disc.length())
+	t.ok((moved_rider - moved_disc).length() < 0.0005,
+		"그리고 그 움직임이 위에 선 늑대의 것과 같다 — 그림자가 몸 밑에 붙어 있다 (차이 %.6f 조각)"
+			% (moved_rider - moved_disc).length())
+
+	# **An empty seat has no shadow.** ⚠ Written into the sim's own count, so the drawer has to read it.
+	var crew := b.boat_riders
+	crew[0] = 3
+	b.boat_riders = crew
+	fv._process(0.0)
+	var lit_now := 0
+	for k in holder.get_child_count():
+		if (holder.get_child(k) as Node3D).visible:
+			lit_now += 1
+	t.eq(lit_now, 3, "셋만 남기자 원판도 셋만 켜져 있다 — 빈 판자에 그림자가 안 남는다")
+
+
+## **The disc is wider than the animal standing on it, and it is not black.**
+##
+## ⚠⚠ **`how-nets-lie`'s 「a shadow the size of its caster is not a shadow」, as a check.** Measured
+## twice on two subjects an hour apart: a disc sized from its caster's own footprint puts nearly all of
+## itself underneath the caster and shows nothing. **The width the animal actually covers is measured
+## here off the PNG's alpha and the drawn scale**, not taken from a constant, so a ratio that quietly
+## fell under it reddens.
+## ⚠ **Size and strength are one decision**, which is the second half of that entry: this disc covers
+## about thirteen times the ground disc's area, so its alpha is held at or above the ground's and under
+## the 0.45 `COL_BODY_SHADOW` names as the point a disc reads as a hole.
+func _the_disc_is_wider_than_the_wolf_standing_on_it(t) -> void:
+	var pack := _boat_view()
+	var fv: FieldView = pack["fv"]
+	var rider := _first_rider(fv)
+	var ink_w := _ink_width_frac(rider.texture) * float(rider.texture.get_width()) * rider.scale.x / Look.TILE_PX
+	var across := Look.boat_rider_shadow_r_tiles() * 2.0
+	t.ok(ink_w > 0.1, "갑판 늑대가 %.3f 조각 폭으로 그려져 있다 (자가 점검)" % ink_w)
+	t.ok(across >= ink_w,
+		"원판이 %.3f 조각 폭이다 — 그 위에 선 짐승(%.3f)보다 좁지 않다" % [across, ink_w])
+	t.ok(Look.COL_BOAT_RIDER_SHADOW.a >= Look.COL_BODY_SHADOW.a,
+		"땅바닥 원판보다 옅지 않다 (%.2f >= %.2f)" % [Look.COL_BOAT_RIDER_SHADOW.a, Look.COL_BODY_SHADOW.a])
+	t.ok(Look.COL_BOAT_RIDER_SHADOW.a <= 0.45,
+		"그러고도 0.45 아래다 — 구멍으로 읽히지 않는다 (%.2f)" % Look.COL_BOAT_RIDER_SHADOW.a)
+
+
+# == the boat's fixture ================================================================================
+
+## An arena with one boat on it, painted once. `secs` is how long the sim is driven before the frame —
+## the default is `Rules.BOAT_FIRST_SEC`, which is the sub-step the first hull is born on.
+##
+## ⚠ **`_process` is called ONCE here and the rows that want motion call it again themselves.** A
+## fixture that pumped its own frames would hand every row a different view clock.
+func _boat_view(secs: float = -1.0) -> Dictionary:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([]), [])
+	b.step(Rules.BOAT_FIRST_SEC if secs < 0.0 else secs)
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	return {"fv": fv, "b": b}
+
+
+## **How much of a rider picture's own height is empty BELOW the animal, as a fraction.**
+##
+## ⚠⚠ **THE NET SCANS THE PNG ITSELF AND DOES NOT ASK THE VIEW.** `field_view._foot_rider` holds the
+## same quantity; reading it back would make every footing row a tautology, which is exactly the shape
+## that put five green checks over five real defects in one day.
+func _ink_pad_below(pic: Texture2D) -> float:
+	var img := pic.get_image()
+	var h := img.get_height()
+	var last := -1
+	for y in h:
+		for x in img.get_width():
+			if img.get_pixel(x, y).a > 0.0:
+				last = y
+				break
+	return 0.0 if last < 0 else float(h - 1 - last) / float(h)
+
+
+## **How much of a rider picture's own width the animal covers, as a fraction.**
+func _ink_width_frac(pic: Texture2D) -> float:
+	var img := pic.get_image()
+	var w := img.get_width()
+	var lo := w
+	var hi := -1
+	for x in w:
+		for y in img.get_height():
+			if img.get_pixel(x, y).a > 0.0:
+				lo = mini(lo, x)
+				hi = maxi(hi, x)
+				break
+	return 0.0 if hi < 0 else float(hi - lo + 1) / float(w)
+
+
+## The worst gap between a rider's drawn feet and its own seat, plus which picture the deck is wearing.
+func _rider_feet(fv: FieldView, hull: Node3D) -> Dictionary:
+	var worst := 0.0
+	var seat := 0
+	var pic: Texture2D = null
+	for k in fv._sprites_used:
+		var sp: Sprite3D = fv._sprites[k]
+		if not fv._tex_rider.has(sp.texture):
+			continue
+		pic = sp.texture
+		var slot := hull.transform * (Look.BOAT_DECK_SLOTS[seat] as Vector3)
+		var tall := float(sp.texture.get_height()) * sp.scale.y / Look.TILE_PX
+		worst = maxf(worst, absf(sp.position.y - tall * 0.5 + _ink_pad_below(sp.texture) * tall - slot.y))
+		seat += 1
+	return {"worst": worst, "tex": pic, "pad": 0.0 if pic == null else _ink_pad_below(pic)}
+
+
+func _first_rider(fv: FieldView) -> Sprite3D:
+	for k in fv._sprites_used:
+		var sp: Sprite3D = fv._sprites[k]
+		if fv._tex_rider.has(sp.texture):
+			return sp
+	return null
+
+
+## **A node's point in `stop`'s space, walked up the real parent chain.**
+##
+## ⚠ **`global_transform` is not used on purpose** — a `FieldView` built by a net is not in the tree,
+## and asking for one there errors and hands back identity, which is the trap `_paint_riders` already
+## carries a note about. Walking the chain answers the same in both worlds.
+func _world_point(n: Node3D, stop: Node3D) -> Vector3:
+	var at := n.position
+	var up := n.get_parent()
+	while up != null and up != stop and up is Node3D:
+		at = (up as Node3D).transform * at
+		up = up.get_parent()
+	return at
+
+
+## Every surface committed by every mesh under `n`. **Zero is the failure this exists to catch**: a
+## scene that failed to load leaves no node at all, and a node whose mesh has no surface draws nothing.
+func _surfaces_of(n: Node) -> int:
+	var total := 0
+	if n is MeshInstance3D:
+		var m := (n as MeshInstance3D).mesh
+		if m != null:
+			total += m.get_surface_count()
+	for c in n.get_children():
+		total += _surfaces_of(c)
+	return total
+
+
 func _sprite_nearest(fv: FieldView, at: Vector2) -> Sprite3D:
 	var want := Vector2(at.x, at.y)
 	var best: Sprite3D = null

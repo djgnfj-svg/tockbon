@@ -1,5 +1,5 @@
 Type: grilling
-Status: parked
+Status: resolved
 
 # 열린 바다는 무엇으로 채우나
 
@@ -87,3 +87,39 @@ time it stands because nothing better was found, not because flat won a comparis
 
 **항해가 들어오는 날**, 또는 사용자가 바다에 욕심이 생기는 날. ⚠ **12 월 데모가 이것에 걸려 있지
 않다** — 이번 주의 끝나는 조건은 섬이고 바다가 아니다.
+
+---
+
+## Answer — **2026-08-30. It was asked a second time and this time something won**
+
+⚠⚠ **The 2026-08-29 round rejected all ten** — five patterns, five lightings — **because nothing beat
+flat**, and it was parked. **Two things changed and they are why the answer came out different:**
+
+1. **The first round judged EMPTY water.** There was no boat and no wake in any of the ten frames.
+2. **The camera now roams 20 조각 out over open water**, so open sea is looked at for much longer.
+
+**Five new candidates were built with a boat crossing in every frame** (`prototypes/sea/06-fleck` ·
+`07-near` · `08-drift` · `09-rim`, plus `10-grain` as a **control** — the rejected fine-grain pattern
+kept in the sheet so the others could not win merely by being quiet). **The user picked `06-fleck`**
+from the running lab: countable objects scattered on the water, drifting as one current.
+
+***"Put it in weakly."*** ⇒ shipped at `WATER_FLECK_AMT` **0.09** against the prototype's **0.11**.
+**Only the strength dial moved**; count, size, colour and current are the candidate's own values.
+
+⚠ **What it cannot do, and this was known when it was chosen**: it says nothing about the water
+BETWEEN the flecks. **98% of the sea is unchanged.** If the sea still reads as empty, this is not the
+thing that will fix it.
+⚠ **The flat sea and the 해안선 were not reopened** — every candidate carried both byte for byte.
+
+## ⚠ Chosen in the lab, NOT yet judged in the game
+
+**The user picked it from `prototypes/sea/open_lab.gd`, not from the running game.** The game was
+launched with it in and the session moved on to another subject before they said anything about it.
+**Silence is a row, not a pass.**
+
+**How to see it**: launch the game, press 시작하기, then **push the cursor to the screen edge and travel out
+over open water** — the flecks are easiest to judge away from the island, because with land in frame the
+eye goes to the land. **What should look different**: a scatter of small countable marks drifting as one
+current, where before there was flat colour.
+⚠ **It is deliberately weaker than the candidate** — 0.09 against 0.11 — and the candidate itself only
+moved 1–2% of the frame. **If nothing looks different, that is the expected failure and it is one line.**

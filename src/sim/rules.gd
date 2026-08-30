@@ -416,3 +416,153 @@ static func speed_mul_of(slot: int) -> float:
 ##
 ## ⚠ The exemption in particular must NOT be restored by anyone reading the 97 / 83 / 94 column of
 ## 2.1's table as an improvement: it was a Chebyshev 1, which is what let a boat land one tile INLAND.
+
+
+# --- The beasts' boats -----------------------------------------------------------------------------
+## ⚠⚠ **THE BOATS ARE THE BEASTS' NOW, AND NONE OF THIS IS THE OLD PLAYER-SIDE CROSSING COMING BACK.**
+## The player placed a boat and spent a body on it until 2026-08-28; **nobody places one any more** —
+## the user, 티켓 41: 「아무도 안 놓는다. 배가 스스로 온다」. What `battle.gd`'s deletion block records
+## about `send` and `summon` is a record of a gesture, not of these numbers.
+##
+## ⚠ **The crossing is the whole gap between the island opening and the first blow**, which is why the
+## distance and the speed are rules and not presentation: they decide WHEN something arrives.
+## The bob, the roll and the deck offsets are the screen's and live in `look.gd`.
+
+## When the first boat of an island is born, in seconds of simulated time. Long enough to see the
+## island empty, short enough that the launch itself is on screen.
+const BOAT_FIRST_SEC := 5.0
+## And every one after it. **「일정하게」** — random timing is a later round's, so this is one number
+## and not a band.
+const BOAT_INTERVAL_SEC := 30.0
+## 조각 per second.
+##
+## ⚠⚠ **1.2 IS CHOSEN AND NOT MEASURED, AND 4.0 — WHICH WAS MEASURED — IS DELIBERATELY OVERRIDDEN.**
+## The 4.0 in 티켓 41's 「이미 재어 둔 것」 table was measured for the deleted PLAYER-side boat, at a
+## framing where the camera did not move. **Nothing about this number has been played yet.**
+##
+## ⚠⚠ **THE PLAYER IS NOT TOLD A BOAT IS COMING** (2026-08-30, the user: 「안 알아채는 게 맞겠다 ...
+## 마우스 돌리다가 보이면 그때 가는 걸로」). There is no arrow and no alarm, so **the crossing has to
+## last long enough that a player panning the camera can still find it in time** — that is the whole of
+## what this number buys. At `BOAT_START_DIST_TILES` it is 22 조각, so 1.2 makes the crossing **18.3
+## seconds**. **The reference is Bad North**, where a boat takes about thirty seconds to arrive and the
+## camera is the player's with nothing pointing at it.
+const BOAT_SPEED_TILES := 1.2
+## How far out to sea a boat is born, measured from the CENTRE of the 조각 it is aimed at.
+##
+## ⚠⚠ **IT IS OFF SCREEN AT THE OPENING FRAME AND THAT IS NOW THE DESIGN, NOT A DEFECT** (2026-08-30).
+## `FieldView.setup` frames the 30 x 26 island at 42.0 x 36.75 조각 of visible ground — about 6 조각 of
+## sea on a side — so a hull born 24 조각 out is outside it. **The camera was pulled back to fix that
+## and the pull-back was reverted**, because the user cut the arrow and the alarm: 「안 알아채는 게
+## 맞겠다 ... 마우스 돌리다가 보이면 그때 가는 걸로」. **Finding the boat is the player's job and the
+## camera is how they do it** — see `Look.CAM_ROAM_TILES`, which is what lets them look out there.
+## ⚠ **Do not shrink this to bring the boat into the opening frame.** That is the change the design
+## just refused, and it also deletes the room the pan exists to cross.
+const BOAT_START_DIST_TILES := 24.0
+## **How long the hull is, from its origin to its bow, in 조각.** Measured off `assets/props/boat.glb`:
+## the mesh runs x from -2.60 to +2.60 with the origin dead centre, so the bow is **2.60 조각** out.
+##
+## ⚠⚠ **IT IS A RULE AND NOT A PICTURE, BECAUSE IT DECIDES WHERE A BOAT STOPS.** Everything else about
+## the hull — its colours, its sail, its bob — is `look.gd`'s. This one number is where the sim has to
+## stop it, so it lives with the stopping rule. ⚠ **`net_boats` reads it back off the mesh's own AABB**,
+## which is what stops it being a second copy of the model.
+const BOAT_HULL_HALF_TILES := 2.6
+
+## **How wide the hull is at its widest, in 조각.** Measured off `assets/props/boat.glb`: the rim runs z
+## from -1.005 to +1.005, so the beam is **2.01 조각** and the half-beam is 1.005.
+##
+## ⚠⚠ **IT EXISTS BECAUSE A BOAT IS NOT A POINT AND FOUR ARRIVALS IN FIVE PROVED IT** (2026-08-30, seen
+## on screen at the five worst beaches). A stop that clears the shore along the hull's own centre line
+## still puts the forward SHOULDER on the grass: **on a diagonal lying against a straight coast the
+## shoulder reaches land before the tip does**, which is why the diagonal approaches overlapped while
+## the eight straight ones looked clean. ⚠ **The one that only grazed met an OUTER corner tip-first** —
+## the shape of the shore decides which part of the hull arrives first, and only a footprint sees that.
+## ⚠ `net_boats` reads it back off the mesh's own box, like the half-length.
+const BOAT_HULL_BEAM_TILES := 2.01
+
+## **How much open water is left between the hull and the shore, in 조각.**
+##
+## ⚠⚠ **THE STANDOFF WAS A FLAT 2.0 AND EVERY BOAT PARKED ON THE GRASS** (2026-08-30, measured on the
+## running game). 2.0 is LESS than the hull's own half-length, so the bow reached `2.60 - 2.00` =
+## **0.60 조각 inland on every beach**, worst on a diagonal approach where about a third of the hull
+## stood on the turf. **The number was smaller than the boat.**
+##
+## ⚠ **A gap and not a bigger flat number.** The standoff has to move whenever the hull's length does,
+## and a second magic number would be right until the next export — `BOAT_STANDOFF_TILES` below is the
+## sum, and `net_boats` refuses any standoff under the half-length.
+const BOAT_BEACH_GAP_TILES := 0.6
+
+## And how far short of the beach 조각 the hull comes to rest. **The user's line is 「배가 서는 자리는
+## 해안에서 거리를 두고 ... 배가 가는 게 중요하니까」** — a hull that ends up hugging the shore deletes
+## the crossing, which is the thing worth watching.
+## ⚠ **Derived, so it cannot fall under the boat's own length again.** See the two above.
+const BOAT_STANDOFF_TILES := BOAT_HULL_HALF_TILES + BOAT_BEACH_GAP_TILES
+## How many ride one boat. ⚠ **Decided, not tuned** (티켓 41: 「한 배에 몇 — 여덟」). Four benches, two
+## each, and `Look.BOAT_DECK_SLOTS` is what puts them on the deck.
+const BOAT_CAPACITY := 8
+
+## **How far round the beach ring the next boat comes, as a fraction of a full turn.**
+##
+## ⚠⚠ **IT EXISTS SO CONSECUTIVE BOATS ARRIVE ON DIFFERENT SIDES, AND AN ORDER ALONE CANNOT DO THAT.**
+## Over a list in 조각-NUMBER order — row by row, north edge first — a stride walks that many rows down
+## the same coast and settles onto a handful of fixed beaches: measured on the 92-조각 coast,
+## `37 x 5 = 185 = 1 (mod 92)`, so boat *k* and boat *k+5* came to 조각 ONE APART and after two and a
+## half minutes it was five permanent beaches. **`Grid.beach_ring` sorts by ANGLE about the island's
+## middle**, and only then does a stride mean 「go round to the other side」.
+##
+## ⚠ **0.42 of a turn is about 151 degrees** — far enough that the player has to turn round, near
+## enough to a half turn that it is not the same two beaches alternating.
+const BOAT_BEACH_TURN := 0.42
+
+
+## **The stride to walk `Grid.beach_ring` with, for a ring of this many 조각.**
+##
+## ⚠⚠ **DERIVED AND NOT WRITTEN DOWN, BECAUSE A WRITTEN ONE IS ONLY EVER RIGHT FOR ONE ISLAND.** The
+## stride and the ring's size **must be coprime** or the spread collapses onto `size / gcd` beaches —
+## every boat for the rest of the island arriving at one of them, with the crossing, the timing and
+## every other check about boats still green. **This has already happened twice**: 37 was chosen
+## against a ring of 88, and the ring became 74 (`74 = 2 x 37`, two beaches for a whole island); 31 was
+## chosen against 74, and the ring became something else again the moment
+## `BOAT_START_DIST_TILES` moved — the ring's size depends on it, see `Grid.beach_ring`.
+##
+## ⚠ **`BOAT_BEACH_TURN` reproduces both hand-picked values and that is what fixes it at 0.42**:
+## `round(88 * 0.42)` is **37** and `round(74 * 0.42)` is **31**. The fraction was chosen to, and
+## `net_boats` pins both.
+##
+## ⚠ **The search walks outward from that target, PLUS before MINUS**, so two runs from identical state
+## never disagree. It always terminates: `gcd(1, n)` is 1 for every n, so 1 is always reachable.
+##
+## ⚠⚠ **RINGS OF 3, 4 AND 6 COLLAPSE TO `size - 1`, WHICH IS -1 AND SENDS THE NEXT BOAT ONE BEACH
+## BACKWARDS** — the adjacency this whole constant exists to prevent. **It is written down and NOT coded
+## around.** Swept exhaustively over sizes 0..2000: every other size is coprime, in range, and
+## terminates; those three are the only ones, and **this island cannot reach them** — a board with three
+## beaches is not a board this game opens. **A special case for an unreachable input is a branch nobody
+## can test**, and this repo already carries the argument against those.
+## ⚠ 0, 1, 2 and negatives are safe by the callers rather than by luck: `Battle` returns early on an
+## empty ring and takes the result modulo the ring's own size.
+static func beach_stride_for(ring_size: int) -> int:
+	# A ring of one or two has nothing to spread over, and 1 is coprime with both.
+	if ring_size <= 2:
+		return 1
+	var want := int(round(float(ring_size) * BOAT_BEACH_TURN))
+	for k in ring_size:
+		var plus := want + k
+		if plus >= 1 and plus < ring_size and _coprime(plus, ring_size):
+			return plus
+		# ⚠ `k > 0`, so the target itself is not tried twice — harmless, but it would make the
+		# 「plus before minus」 tie-break read as though it had an exception in it.
+		var minus := want - k
+		if k > 0 and minus >= 1 and minus < ring_size and _coprime(minus, ring_size):
+			return minus
+	return 1
+
+
+## Whether `a` and `b` share no factor. **Euclid, and no library call**: GDScript has no `gcd`, and a
+## hand-rolled one written at each call site is the second copy this repo keeps paying for.
+static func _coprime(a: int, b: int) -> bool:
+	var x := absi(a)
+	var y := absi(b)
+	while y != 0:
+		var r := x % y
+		x = y
+		y = r
+	return x == 1

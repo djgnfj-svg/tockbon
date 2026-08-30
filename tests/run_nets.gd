@@ -39,6 +39,15 @@ const NETS_DIR := "res://tests/nets"
 
 var _pass := 0
 var _fail := 0
+## **Set by `t.done()`, which is the last line of every net's `run()`.** Cleared before each net.
+##
+## ⚠⚠ **IT EXISTS BECAUSE THE ZERO-CHECK DETECTOR BELOW CANNOT SEE A NET THAT DIES HALF WAY**, and its
+## comment claimed for months that it could. **GDScript 4.7 has no try/catch and a runtime error
+## abandons only the function it lands in** — the caller resumes on its next line, receives `null`, and
+## the process still exits 0. So a net that asserted 56 rows and then threw inside `run()` moved the
+## counter by 56, the equality never held, and the round printed 「통과 56」 in the same shape a healthy
+## net prints. **Measured: 70 checks across the suite had never executed behind a reported 752.**
+var _reached_end := false
 var _failures: Array[String] = []
 var _current := ""
 
@@ -87,20 +96,28 @@ func _run_net(path: String, nm: String) -> void:
 		_note_fail(nm, "run(t) 메서드가 없다")
 		return
 	_current = nm
-	# **The general form of the hole `net_frame_runner.gd`'s own inversion found.** That inversion happened
-	# to be a severed `await`, but the same "0 passed, exit code 0" shape follows from an early `return`, an
-	# uncaught runtime error mid-`run()`, or a loop whose condition is false from the first check — CLAUDE.md
-	# already names all three as separate traps; this one line catches every one of them at once, because
-	# none of them leave a trace anywhere except "nothing got asserted". Snapshotting the counters instead of
-	# a hand-kept "expected checks per net" table is the point: a real per-net registry needs updating every
-	# time a check is added or removed, and CLAUDE.md already rejects that shape for the net list itself
-	# (folders are scanned, never hand-registered) — this does the equivalent for check counts, for free.
+	# **The general form of the hole `net_frame_runner.gd`'s own inversion found**, which was a severed
+	# `await`. Snapshotting the counters instead of a hand-kept "expected checks per net" table is the
+	# point: a real per-net registry needs updating every time a check is added or removed, and CLAUDE.md
+	# already rejects that shape for the net list itself (folders are scanned, never hand-registered).
+	#
+	# ⚠⚠ **THIS LINE CATCHES ONE SHAPE AND ITS COMMENT CLAIMED THREE.** It said it also caught 「an early
+	# return, an uncaught runtime error mid-`run()`, or a loop false from the first check」 — **and it does
+	# not.** All three of those can happen AFTER some checks have run, and then the counter has moved and
+	# the equality below is simply false. **That overclaim is why nobody looked again for two years' worth
+	# of recurrences**: `net_shell` asserted 56 rows and then threw, and this detector stayed silent.
+	# ⇒ **`_reached_end` is the half that was missing**, and it is checked beside this one.
 	var checks_before := _pass + _fail
+	_reached_end = false
 	var t0 := Time.get_ticks_msec()
 	print("\n- %s" % nm)
 	await net.run(self)
 	if _pass + _fail == checks_before:
 		_note_fail(nm, "검사를 0개 돌렸다 (run()이 끝까지 갔는지부터 의심하라)")
+	elif not _reached_end:
+		# ⚠ **`elif`, so one cause prints one failure.** A net that dies before its first check trips both
+		# and the zero-check line is the more specific thing to read.
+		_note_fail(nm, "run() 이 끝까지 못 갔다 — 위의 통과 수는 잰 것의 일부다")
 	print("  (%dms)" % (Time.get_ticks_msec() - t0))
 
 
@@ -143,6 +160,17 @@ func _note_fail(net: String, label: String) -> void:
 	_fail += 1
 	_failures.append("%s: %s" % [net, label])
 	printerr("  x %s: %s" % [net, label])
+
+
+## **The last line of every net's `run()`, and the only thing that proves the round reached it.**
+##
+## ⚠⚠ **A FLAG AND NOT `run()`'s RETURN VALUE, DELIBERATELY.** Returning a bool would work — an abandoned
+## function hands its caller `null`, through `await` too, and that was measured. **But a flag is greppable
+## in the net's own text**: `t.done()` is one line anyone can see at the foot of a `run()`, and it does not
+## depend on twelve files keeping a return type nobody reads. ⚠ **It goes AFTER the cleanup**, so a net
+## that frees nodes at the end is covered by it too.
+func done() -> void:
+	_reached_end = true
 
 
 ## The door that keeps a net which barks on purpose from being caught by its own bark.

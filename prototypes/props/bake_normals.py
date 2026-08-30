@@ -8,10 +8,14 @@
 # nearest transparent pixel, so a crown made of five leaf clumps inflates into five domes rather than
 # one -- which is what the Bad North reference shows.
 #
-#   python prototypes/props/bake_normals.py
+#   python prototypes/props/bake_normals.py [folder]
 #
-# Writes `<name>_n.png` beside every `<n>-*.png` in this folder.
+# Writes `<name>_n.png` beside every `.png` in the folder named, or in this one when none is named.
+# WARNING **The folder is an argument so there is only ever ONE bake.** A second copy of this file
+# pointed at the beasts would drift from this one on the day `BULGE` is retuned, and nothing would
+# say which of the two a given `_n.png` came out of.
 import os
+import sys
 import numpy as np
 from PIL import Image
 from scipy.ndimage import distance_transform_edt, gaussian_filter
@@ -51,6 +55,7 @@ def bake(path: str) -> None:
     print("baked", os.path.basename(path[:-4] + "_n.png"))
 
 
-for f in sorted(os.listdir(HERE)):
+WHERE = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else HERE
+for f in sorted(os.listdir(WHERE)):
     if f.endswith(".png") and not f.endswith("_n.png") and not f.endswith("_sheet.png"):
-        bake(os.path.join(HERE, f))
+        bake(os.path.join(WHERE, f))

@@ -1,5 +1,10 @@
 # sea — what the OPEN water is made of
 
+⚠⚠ **THERE ARE TWO ROUNDS IN THIS FOLDER.** `01-crests` .. `05-paper` are the 2026-08-29 round, shot
+by `island_lab.gd`, and **every one of them was turned down**. `06-fleck` .. `10-grain` are the
+2026-08-30 round, shot by `open_lab.gd`, and they are asking the question again **with a boat in the
+frame**. The second round's own head is at the bottom of this file.
+
 ## The question
 
 > **The open sea — everything outside the white border — is a single flat colour, and nobody chose it.**
@@ -66,3 +71,83 @@ same under `out/far/`). One picture cannot answer 「움직이나」.
 one function, `vec3 open_sea(vec2 p, float d, float t, vec2 sxy)` — and the script wraps the shipped
 shader round it. **The border is therefore byte-identical in all six pictures by construction**, and
 re-splices itself the day `src/view/water.gdshader` changes.
+
+---
+
+# The second round — 2026-08-30, and a boat is in it
+
+## The question
+
+> **「배가 건너다니는 열린 바다가 비어 보이지 않으려면 무엇이 있어야 하나」**
+> — *what has to be in the open sea so it does not read as empty while a boat crosses it?*
+
+The user, watching the wake lab: **「물이 좀 너무 없긴하다 뭔가」**.
+
+## ⚠⚠ Why this is being asked twice, and what the ten above do NOT have to prove again
+
+**On 2026-08-29 ten mechanisms went in front of the user and every one was turned down** — five here
+and five in `prototypes/wave/`. Not because a winner lost: **because nothing beat flat**. 「나중에
+해야할껄로 정리」. **Rebuilding those ten is a wasted round.** `open_lab.gd`'s `SKIP` keeps them out of
+this sheet and their `NOTES.md` files are the record.
+
+**Two things are different now and they are the entire reason for a second asking:**
+
+1. ⚠⚠ **That round judged EMPTY water.** No boat and no wake in any of the ten frames. **Every
+   candidate here is judged with a hull crossing and its trail behind it** — and it may be that the
+   sea does not need filling so much as it needs something to be relative to.
+2. **The camera now roams `Look.CAM_ROAM_TILES` = 20 조각 out over open water**, and the emptiness is
+   worst out there. **The old round never looked.**
+
+⚠ **The flat sea has been confirmed three times and is not reopened. The 해안선 is not on the table
+either.** Every candidate carries both byte for byte — see «How each one is built» above; the same
+`build.py` splices this round.
+
+## How to run it
+
+```
+Godot_v4.7.1-stable_win64.exe --path . -s prototypes/sea/open_lab.gd
+Godot_v4.7.1-stable_win64.exe --path . -s prototypes/sea/open_lab.gd -- shoot
+```
+
+**0 is the sea as it ships · 1.. are the candidates · LEFT/RIGHT step · TAB steps the three frames ·
+ESC quits.** ⚠ **Never `--headless`** — every PNG comes out black with no error.
+
+## The three frames — `out/open2/<name>_<frame>.png`
+
+| | what it is |
+|---|---|
+| `open` | **the island's opening framing**, 42 조각 of visible ground, and no boat. The baseline |
+| `out` | ⚠⚠ **the camera at the far corner of its roam** — the middle of the screen 14.0 조각 across and 14.6 down, which is as far as `_clamp_cam` allows. The island falls into one quarter and open water fills the rest. **This is the frame the round exists for** |
+| `cross` | **a hull mid-crossing with its trail**, at the opening framing |
+
+⚠ **The hull, its speed, its three contact marks and its trail are the GAME's** — `Rules.BOAT_SPEED_TILES`
+1.2 and section 7 of `look.gd`, driven through `field_view._paint_wake`'s own slot rule. **Not the wake
+lab's 4.0**, which `look.gd` records as a stale copy that made the judged trail three times too long.
+
+## ⚠⚠ What makes the 해안선 a control and not a second variable
+
+**`Engine.time_scale` is zero while shooting.** The shipped border rides `TIME`, which cannot be pinned
+from outside without editing the shipped shader — and editing it is disqualifying. **Measured before
+that line existed: 0.6% of the `open` frame moved by more than 40 of 255 between two candidates, every
+one of those pixels at the coast.** With the clock stopped the coast is byte-identical between pictures
+and **no candidate moves any pixel by more than 32 of 255.** Each candidate's own animation reads
+`lab_t`, a uniform this lab writes, for the same reason.
+
+## Where each one takes the open water from
+
+| | Where it comes from | `open` | `out` | `cross` |
+|---|---|---|---|---|
+| `shipped` | **nowhere** — one flat colour. **The control every candidate has to beat** | — | — | — |
+| `06-fleck` | **discrete objects you can count**, drifting as one current | 1.0% | 1.9% | 1.0% |
+| `07-near` | **the island and the hulls, and nowhere else** | 22.6% | 21.7% | 29.9% |
+| `08-drift` | **a swell train** — three wavefronts travelling one way | 80.9% | 91.1% | 80.2% |
+| `09-rim` | **how far out from the island it is** — the sea has an edge | 62.6% | 79.3% | 61.8% |
+| `10-grain` | **a fine noise field everywhere.** ⚠ **THE CONTROL for 「무늬」, not a candidate** | 44.0% | 50.1% | 43.6% |
+
+**The percentage is how much of the frame the candidate moved off `shipped`** — a measurement that it
+does something, not that it does something good. **Each folder's `NOTES.md` carries the three lines:
+what it buys, what it costs, and what it CANNOT do.** ⚠ The third is the one that decides.
+
+⚠⚠ **`08-drift` CANNOT BE JUDGED FROM THE SHEET AND ITS `NOTES.md` SAYS SO.** A still of a travelling
+swell is two soft bands; everything it is for happens in the next second. **That row is run in the live
+lab or it is being judged on the wrong evidence.**

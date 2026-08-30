@@ -319,6 +319,10 @@ func run(t) -> void:
 
 
 # -- the spawn letters ------------------------------------------------------------------------------
+	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
+	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
+	t.done()
+
 
 ## **The net that says the side swap actually happened.** The four beasts are the enemy's rows and the
 ## player is one swordsman who is never written on a board at all; a spawn letter bound to a PLAYER row

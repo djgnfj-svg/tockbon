@@ -85,6 +85,10 @@ func run(t) -> void:
 
 
 # -- geometry: can it be aimed at ------------------------------------------------------------------
+	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
+	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
+	t.done()
+
 
 func _geometry_is_readable(t) -> void:
 	var view := TitleView.new()

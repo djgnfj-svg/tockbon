@@ -347,6 +347,67 @@ const SEA_DROP_TILES := 0.03
 ## island this is the number that has to come down with it.
 const SEA_Y_TILES := 0.075
 
+## **How far past the island the camera may travel, on every side, in tiles.**
+##
+## ⚠⚠ **BEFORE THIS THE CAMERA COULD NOT LEAVE THE ISLAND AT ALL.** `_clamp_cam` centred any axis whose
+## board was narrower than the visible ground, and every island is, so **panning did nothing** — a drag
+## snapped straight back to the middle and `net_shell` had a row saying so.
+##
+## ⚠⚠ **IT IS THERE BECAUSE NOTHING TELLS THE PLAYER A BOAT IS COMING** (2026-08-30, the user: 「안
+## 알아채는 게 맞겠다 ... 마우스 돌리다가 보이면 그때 가는 걸로」). There is no arrow and no alarm;
+## **looking out to sea IS the mechanism**, and a camera pinned to the island has no way to do it.
+## ⚠ **20 is bigger than `Rules.BOAT_START_DIST_TILES` is not required and is not the argument** — a
+## hull is meant to be findable, not framed. What it does have to be is far enough that a player who
+## pans has somewhere to pan TO.
+const CAM_ROAM_TILES := 20.0
+
+## **How far the mouse must travel with the button down before a press becomes a pan, in screen px.**
+##
+## ⚠⚠ **WITHOUT IT A DRAG OVER THE ISLAND MOVED THE CAMERA NOWHERE — most of the opening screen**
+## (2026-08-30, measured with a negative control: the same ten-step drag moved the camera **0.0 px**
+## starting on land and **315.0 px** starting on water, and the two land frames were pixel-identical).
+## The press was eaten by the walk order, so `_panning` never turned on and it read as a broken mouse.
+##
+## ⚠ **It takes nothing away.** A press that releases without travelling is still a walk order; only a
+## press that MOVES becomes a look-around. ⚠ **Small on purpose**: a threshold big enough to be
+## comfortable is a threshold that swallows short drags, and a hand that moves 6 px was never clicking.
+const DRAG_PAN_THRESHOLD_PX := 6.0
+
+## How fast a held pan key moves the view, in SCREEN px per second.
+## ⚠ **Screen px and not 조각**, so it goes through the same `pan_by` a mouse drag does — one path to
+## the camera, and a key and a drag cannot end up disagreeing about which way is right.
+const CAM_PAN_KEY_PX_PER_SEC := 900.0
+
+## **How deep the edge band reaches in from each side of the window, in screen px.** The pointer
+## inside it pans the camera for as long as it stays there.
+##
+## ⚠⚠ **THE EDGE IS THE PRIMARY WAY THE CAMERA TRAVELS NOW** (2026-08-30, the user: 「wasd 보다는
+## 마우스가 끝으로 가면 자동으로 이동이 맞을듯」). WASD is not deleted — it was working and nobody
+## asked for it to go — but it is no longer the hand that goes looking for a boat.
+##
+## ⚠ **NOT MEASURED ON A SCREEN. Nobody has looked at this number yet.** Both ends bite: too wide and
+## the band covers ground a body is ordered onto, too narrow and the pointer has to be parked on the
+## last few pixels of glass, which is the version of this control every review complains about.
+const CAM_EDGE_PAN_BAND_PX := 28.0
+
+## **How fast the edge pans at full depth, in SCREEN px per second** — the same units and the same
+## `pan_by` the keys and the drag already go through, so no third idea of which way is right can grow.
+##
+## ⚠⚠ **DELIBERATELY THE KEYS' OWN SPEED, AND THE LINK IS ONE EDIT TO BREAK.** Two independent
+## literals for 「how fast does the camera travel」 drift apart the first time either one is tuned, and
+## the edge has not been judged on a screen yet. **When somebody looks at it, this becomes its own
+## number** — the name is already here so nothing else has to move that day.
+const CAM_EDGE_PAN_PX_PER_SEC := CAM_PAN_KEY_PX_PER_SEC
+
+## **How fast the edge pans at the band's INNER lip, as a fraction of the top speed.** It ramps
+## linearly from here at the lip to the full speed at the window's own edge. ⚠ **1.0 is a flat band
+## with no ramp at all** — that is what this constant answers 「does it ramp」 with, rather than a
+## second flag that could disagree with it.
+##
+## ⚠ **Without a ramp the whole band is a switch**: brushing the lip is already top speed, so the
+## band's width buys nothing and the camera jumps the moment the pointer drifts.
+const CAM_EDGE_PAN_LIP_FACTOR := 0.30
+
 ## How far one key press turns the board. **The board turning is the hand moving during a fight**, and
 ## that is 티켓 07's whole question — this is the knob that lets it be answered by trying it.
 const CAM_YAW_STEP_DEG := 15.0
@@ -416,6 +477,16 @@ const ZOOM_STEP := 1.15
 ## `SURVEY_MARGIN` is how much wider than the island the opening view is. Below 1.0 the island is cut
 ## off; at exactly 1.0 it touches all four edges and `_clamp_cam` has a zero-length range to centre
 ## into, which is the failure `ZOOM_MIN`'s own paragraph records at 0.5625. 1.15 leaves a shore.
+##
+## ⚠⚠ **MEASURED AND UNRESOLVED: THE BOATS DO NOT FIT IN THIS FRAME** (2026-08-30, 티켓 41). At 1.40 the
+## shipped 30 x 26 island opens at 42.0 x 36.75 조각 of visible ground — **about 6 조각 of sea on a
+## side** — and a hull born `Rules.BOAT_START_DIST_TILES` out is off screen for **every one of the
+## island's coastal 조각**, with roughly half of every crossing happening where nobody can see it.
+## ⚠ **It was replaced by an additive ring of 12 조각 for one round and put back.** The framing, the
+## boat's speed and its start distance are three halves of one picture, and that picture is being
+## prototyped side by side rather than argued about — see `Rules.BOAT_SPEED_TILES`. **An additive ring
+## and this multiplier are alternatives, not partners**: two margins compound, and 12 조각 on top of
+## 1.40 drove every island onto `ZOOM_MIN`, where a survey cannot be told from a constant.
 const SURVEY_MARGIN := 1.40
 ## ⚠⚠ **RAISED 1.15 -> 1.40** (2026-08-25, the user: 「처음 시작할떄 가메라 좀더 뒤에서 시작할 수
 ## 있게해줘」). **This is the margin term and nothing else moved** — `ZOOM_MIN`, `ZOOM_MAX` and the
@@ -1125,6 +1196,240 @@ const WATER_CALM := 0.25
 const WATER_CALM_SCALE := 0.38
 const WATER_CALM_SPEED := 0.035
 
+## ⚠⚠ ==============================================================================================
+## **먼 바다 — the open water outside the border, and until 2026-08-30 nobody had ever chosen it.**
+##
+## The flat sea was confirmed three times and each of those was about the RIM. **What the sea is made
+## of away from any rock was arrived at by subtraction and never judged**, and the user watching a boat
+## cross it said 「물이 좀 너무 없긴하다 뭔가」 — *"there is a bit too little water to it, somehow."*
+## **Five mechanisms were built side by side with a hull crossing in frame and the user chose the one
+## that puts countable objects on the water** (`prototypes/sea/06-fleck`), then: 「약하게 넣어주면될듯」
+## — *"weakly is probably how to put it in."*
+##
+## ⚠⚠ **`WATER_FLECK_AMT` IS THE ONE DIAL 「약하게」 MOVED, AND IT IS THE ONE TO MOVE AGAIN.** How many
+## there are, how big they are and how bright they are are three separate requests, and the candidate's
+## own answer to the first two is what the user looked at. **Everything below except the strength is
+## `06-fleck`'s value carried across unchanged** — three dials turned down at once and 「a bit stronger」
+## has no single line to change.
+##
+## ⚠ **The candidate was judged at 0.11.** This ships at 0.09, because the thing the user approved
+## already moves about 1% of the frame near the island and 2% out at sea, and 「약하게」 on top of that
+## is a step and not a halving. **The screen has not judged 0.09.**
+##
+## ⚠ **What this mechanism cannot do was known when it was chosen**: it says nothing about the water
+## BETWEEN the objects, so about 98% of the sea is still the flat colour it was.
+
+## **The colour of one object on the water.** ⚠ Not `COL_WATER_FOAM` — the border's white is what the
+## coast and every hull mark are drawn in, and a fleck reading as bright as a breaking wave was never
+## the request.
+const COL_WATER_FLECK := Color(0.855, 0.905, 0.930)
+## **조각 per lattice cell** — one object's worth of room. At 7.0 about sixteen cells fall in frame.
+## ⚠ **This and `WATER_FLECK_R_MAX` fight**: 「more of them」 and 「bigger」 are not the same request.
+const WATER_FLECK_CELL := 7.0
+## **What fraction of cells carry one**, and it is what keeps the lattice invisible: at 0.55 nearly half
+## of them are bare water. ⚠⚠ **At 1.0 it IS a grid**, and that is the failure to watch for.
+const WATER_FLECK_FILL := 0.55
+## **How big one is, in 조각** — smallest to largest — and where its soft edge starts as a fraction of
+## its own radius. ⚠ In 조각 and not in cells, so the size on screen does not move when the count does.
+const WATER_FLECK_R_MIN := 0.35
+const WATER_FLECK_R_MAX := 1.10
+const WATER_FLECK_HARD := 0.25
+## **How far toward `COL_WATER_FLECK` the water goes at the middle of one.** See the head of this
+## section: **this is the strength, and it is the only dial 「약하게」 touched.**
+const WATER_FLECK_AMT := 0.09
+## **The whole scatter drifts as one body of water**, in 조각 per second. ⚠ Slow on purpose — these are
+## what a crossing hull is measured against, so they have to read as standing still while it passes.
+const WATER_FLECK_CURRENT := Vector2(-0.055, -0.030)
+
+# ⚠⚠ ==============================================================================================
+# **선체가 물에 닿는 자리 — the trail behind a hull and the mark round it, AND THEY ARE ONE SHAPE.**
+#
+# **The stern half was chosen by eye out of nine candidates** (2026-08-30, the user: 「상대배는 7번
+# 내배는 5번이 좋을듯 한데」 — *"the enemy boats want number 7 and mine number 5, I think"*). **Number
+# seven is one fading line down the track**: no V, no crests, nothing to get wrong, and it is the only
+# version whose meaning survives being drawn one pixel wide. The other eight went with the lab.
+#
+# ⚠⚠ **THE ONE LINE IS NOW TWO, ONE OFF EACH SIDE** (2026-08-30, the user watching it run: 「배
+# 옆면에서 나오는것처럼 해줄 수 있나?」 — *"can you make it look like it comes off the boat's sides?"*).
+# **Every remembered point already carried its own heading, so a point knows where the hull's two sides
+# were** and the change is where a stroke is stamped, not what a stroke is. **It is still number seven**
+# — the same width, the same fade, no crests and no envelope — and `WAKE_SIDE_CLOSE` is the only dial
+# it added. ⚠ **It is NOT number five**: the arms are a Kelvin envelope that opens astern, and these
+# two close.
+#
+# ⚠⚠ **ONE WAKE, AND EVERY BOAT GETS IT** (2026-08-30, the user: 「내배를 다르게 하는건 추후로
+# 미루자」 — *"let us put off making my own boat different"*). **Number five — `04b-arms`, the two
+# 19.47° Kelvin arms without the transverse crests — was chosen for the PLAYER'S OWN boat and is
+# deferred**; the player has no boat until week 10. **Nothing below builds it, and there is no boat
+# kind, no wake style and no branch anywhere in this** — a distinction that is not being made gets no
+# structure. ⚠ **This is the whole record of that choice.**
+#
+# **What reviving it costs, measured against what stands rather than guessed**: the history already
+# carries everything the V needs — **every remembered point keeps its own heading** — and it is the
+# same shader, the same array and the same loop. **What is NOT there is the envelope itself**: an arm
+# is the run of the points where the rings a moving hull throws off are tangent, and that is about a
+# dozen lines in `water.gdshader` plus the arms' own dials. **A dial change on top of those lines, and
+# not a rebuild.** The lab that shot it is in `prototypes/wake/`.
+#
+# **The bow half is new and NOBODY HAS LOOKED AT IT.** What the screen found was that the hull reads as
+# **a cut-out sticker laid on the sea** — its outline simply ends and flat blue begins, which is why
+# lowering the draft did not read. Three marks answer it, and **they are the coast's own three**: a
+# dark gap between two whites with the outer one broken, pointed at a hull instead of at rock.
+# **`WATER_LINE_HARD`, `COL_WATER_FOAM` and the drifting gate that cuts the outer white are read where
+# they stand rather than copied**, so retuning the coast carries this with it.
+# ⚠⚠ **EVERY `HULL_` NUMBER BELOW IS A FIRST VALUE, SET BY RATIO AND NOT BY EYE.**
+# ==============================================================================================
+
+## **How many hulls the water can mark at once, and how many slots each one's block holds.**
+##
+## ⚠⚠ **THIS IS THE MECHANISM'S CEILING AND IT IS WRITTEN TWICE** — here, and as a `const int` at the
+## top of `water.gdshader`, because a GLSL array's length is a compile-time number and cannot be
+## handed in as a uniform. **`net_wake` reads that file's own text and compares the two**, so they go
+## red rather than drift.
+##
+## ⚠⚠ **BOATS PILE UP AND NOTHING EVER REMOVES ONE.** One lands every `Rules.BOAT_INTERVAL_SEC` and
+## stays there, so this count is how long an island can run before a hull gets no marks at all: at
+## twelve, **the thirteenth landing is drawn with dry water round it** — drawn, not dropped.
+const WAKE_HULLS := 12
+## ⚠ **Slot 0 is where the hull is NOW and the other seven are where it has been.** Both marks come
+## out of one block because they are one shape — see the head of this section.
+const WAKE_SLOTS := 8
+
+## **How long a mark on the water lives, in seconds** — the whole length of the trail.
+##
+## ⚠⚠ **4.0 IS THE NUMBER THAT WAS CHOSEN AND THE LAB SAILED ITS BOAT AT 4.0 조각/s, WHILE THE GAME
+## SAILS AT `Rules.BOAT_SPEED_TILES` = 1.2.** The lab copied that speed out of `Rules` by hand and the
+## copy went stale. **So the trail the user judged was about 16 조각 long and the same 4.0 seconds
+## draw 4.8 조각 here**, against a hull 5.2 조각 long. **The dial is left exactly where it was chosen**
+## rather than scaled by whoever noticed: it is a value for the screen to judge again, not one for
+## this file to guess at.
+const WAKE_LIFE_SEC := 4.0
+
+## **The trail's stroke HALF-width in 조각, and where its soft edge starts** as a fraction of that
+## width — 1.0 is a hard edge, 0.0 fades the whole way in.
+## ⚠ **`WAKE_HARD` is NOT `WATER_LINE_HARD`.** The coast's 0.85 is a hard stroke standing on rock;
+## this is a soft one on open water, and one number for both would thin the trail to a wire.
+const WAKE_W_TILES := 0.16
+const WAKE_HARD := 0.35
+
+## **What fraction of its starting offset a side still stands off by once it is a whole life old.**
+##
+## ⚠⚠ **THE ONE DIAL OF THE SIDES, AND THE WIDTH IS NOT IN IT.** Where a side STARTS is the hull's own
+## half-beam **at the transom, where the trail leaves it** — the shader's `wake_arm` asks `hull_taper`
+## for that — so the trail follows a re-export of the model and there is no width here to drift from
+## it. **This says only how fast the two close behind.**
+## ⚠⚠ **AT 1.0 THEY NEVER CLOSE AND THE TRAIL READS AS A ROAD**, two rails running off astern. That
+## is the failure this number exists to keep away from, and it is why nothing here may reach 1.0.
+## ⚠⚠ **0.15 WAS SET AGAINST AN OFFSET THREE TIMES THE ONE IT NOW SCALES AND IT HAS NOT BEEN RE-SET**
+## (2026-08-30). It was chosen when a side started at the full half-beam 1.005: the pair opened 2.01
+## 조각 and closed to 0.30, about the 0.32 조각 a stroke is wide. **Started at the transom's own
+## half-beam 0.336 the pair opens 0.67 조각 and closes to 0.10** — a third of a stroke — so the two
+## merge into one line about three fifths of the way down a 4.8 조각 trail. ⚠ **Left where it stands
+## on purpose**: it is a value for the screen to judge, and 0.48 is what would hold the old ratio.
+const WAKE_SIDE_CLOSE := 0.15
+
+## **How opaque the trail is.** ⚠ **The candidate's `alpha` 0.85 times its `centre_amt` 1.0, as one
+## number**: with the arms and the crests off there is a single mark left for the two to multiply
+## into, and two dials owning one brightness is two places to look when it is wrong.
+const WAKE_ALPHA := 0.85
+
+## The noise that breaks the white up, so the trail is not a clean stroke.
+const WAKE_FROTH_SCALE := 2.2
+const WAKE_FROTH_AMT := 0.35
+
+## **How far INSIDE the transom the trail is born, in 조각.**
+##
+## ⚠⚠ **AN INSET AND NOT A POSITION.** The hull's own half-length is `Rules.BOAT_HULL_HALF_TILES` and
+## it moves whenever the model is re-exported; a second copy of「how long the boat is」 would be right
+## until the next export. See `wake_stern_tiles`.
+## ⚠ **The trail is anchored at the transom and not at the hull's middle, and the difference is most
+## of the picture**: anchored amidships, the first 2.6 조각 of it lie under an opaque hull and only
+## about 2.2 조각 of trail ever reach open water.
+const WAKE_STERN_INSET_TILES := 0.15
+
+## **How far a hull has to have moved for the water to call it moving, in 조각.**
+##
+## ⚠⚠ **AN ARRIVED BOAT SITS OFF ITS BEACH FOR THE REST OF THE ISLAND**, and a trail whose newest
+## point is re-stamped every frame is forever nought seconds old: it collapses to **a full-strength
+## blob the width of the stroke, welded to the transom, that never goes out** — one per landing, and
+## they pile up. `FieldView._wake_stamp` freezes the stamp at the last moment the hull actually moved.
+##
+## ⚠ **A storage band and not a dial.** A `PackedVector4Array` holds 32-bit floats, so a stored
+## coordinate differs from the one that was written in about its seventh digit; one frame of real
+## motion is `Rules.BOAT_SPEED_TILES` over a sixtieth of a second, which is two hundred times this
+## either way. **There is nothing here to tune.**
+const WAKE_STILL_TILES := 1.0e-4
+
+## **1. The hull's shadow in the water it displaces — the one mark that says 「in」 rather than 「on」,
+## and it does most of the work alone.** How wide it is at the widest part of the beam, in 조각, and
+## how much wider it gets toward the bow.
+## ⚠ **It thins to nothing at the bow and at the stern** because its width follows the beam's own
+## profile; the bow emphasis rides on top of that, so the mark is heaviest forward of amidships.
+const HULL_SHADOW_W_TILES := 0.30
+const HULL_SHADOW_BOW := 0.35
+## How much darker and how much cooler than the open sea that shadow is, and how hard it lands.
+## ⚠ **Read through `hull_shadow_colour` and never written out as a `Color`** — a literal here would
+## be a second copy of the sea's own hue, and the day `COL_WATER` moves one of the two is wrong.
+const HULL_SHADOW_DIM := 0.62
+const HULL_SHADOW_COOL := 1.18
+const HULL_SHADOW_ALPHA := 0.85
+
+## **2. The thin bright lip standing ON the planking** — how far out from the hull's own outline it
+## reaches in 조각, how strong it is, and how much brighter it is at the bow.
+##
+## ⚠⚠ **`HULL_BREAK_AT_TILES` STOOD HERE AND IT IS DELETED** (2026-08-30, the user on a photographed
+## arrival: 「이렇게 띄워져 있는부분 없이 왔으면 좋겠음」 — *"I would like it to come in without this
+## floating-off part"*). It held the white 0.10 조각 clear of the shadow's edge, which put its inner
+## edge **0.35–0.47 조각 off the planking with plain sea between** — twelve to fifteen pixels at the
+## zoom an island opens at, and up to thirty-two at the bow at full zoom. **That gap was the floating
+## part.** The shore's own vocabulary is two whites with dark water between them and it was reused
+## here on purpose; ⚠⚠ **it is right for rock and wrong for a hull** — the island is large enough that
+## the band reads as water and a boat is not.
+## ⚠ **0.07 IS THE SAME INK MOVED, NOT A NEW WEIGHT.** It was a half-width about a standoff, so the
+## stroke was 0.07 조각 across; as a lip anchored on the outline the whole 0.07 reaches outward.
+## ⚠⚠ **It is cut by the coast's own drifting gate**, which is what makes it a hairline that is
+## uneven and interrupted rather than a clean ring round the hull. **`WATER_CUT_*` owns where a white
+## is missing**, on the rock and here both.
+const HULL_BREAK_W_TILES := 0.07
+const HULL_BREAK_AMT := 0.85
+const HULL_BREAK_BOW := 0.80
+
+## **3. The shallow-looking halo** — how far the sea's colour lifts round the hull in 조각, how much
+## it lifts, and how much further it reaches astern than forward.
+## ⚠⚠ **The aft reach is what joins this to the trail.** The contact is the bow half of one shape and
+## the wake is the stern half; at 0 they become two marks that happen to touch.
+const HULL_HALO_TILES := 1.00
+const HULL_HALO_AMT := 0.12
+const HULL_HALO_AFT := 1.60
+
+
+## **The colour of the hull's shadow in the water**: the open sea, darker and a little cooler.
+##
+## ⚠ **A function and not a `Color` literal.** Written out it would be a second copy of the sea's own
+## hue and the day `COL_WATER` moves one of the two is wrong. **Cooler means the blue is dimmed less
+## than the other two**, which is what makes it read as water in shadow rather than as grey paint.
+static func hull_shadow_colour() -> Color:
+	return Color(COL_WATER.r * HULL_SHADOW_DIM,
+			COL_WATER.g * HULL_SHADOW_DIM,
+			minf(1.0, COL_WATER.b * HULL_SHADOW_DIM * HULL_SHADOW_COOL),
+			HULL_SHADOW_ALPHA)
+
+
+## **Seconds between two remembered points of a trail.**
+##
+## ⚠⚠ **`WAKE_SLOTS - 2` AND NOT `- 1`, AND THE DIFFERENCE IS HOW THE TAIL ENDS.** Slot 0 is where the
+## hull is now and the other `WAKE_SLOTS - 1` are remembered points, so they span `WAKE_SLOTS - 2`
+## gaps. **The oldest of them has to be at least `WAKE_LIFE_SEC` old**, or the trail runs out of slots
+## while it is still visible and stops on a step instead of fading out.
+static func wake_every_sec() -> float:
+	return WAKE_LIFE_SEC / float(maxi(WAKE_SLOTS - 2, 1))
+
+
+## **Where a trail is born, in 조각 along the hull's heading.** Negative — it is the transom.
+## ⚠ Derived, so `Rules` stays the one owner of how long the boat is. See `WAKE_STERN_INSET_TILES`.
+static func wake_stern_tiles() -> float:
+	return -(Rules.BOAT_HULL_HALF_TILES - WAKE_STERN_INSET_TILES)
+
 # HUD and panel.
 const COL_HUD_TEXT := Color(0.918, 0.937, 0.961)
 const COL_BUTTON := Color(0.239, 0.341, 0.459)
@@ -1798,3 +2103,157 @@ static func hover_lit(col: Color, k: float) -> Color:
 static func press_dipped(col: Color, k: float) -> Color:
 	return col.darkened(PRESS_DOWN_DIM * clampf(k, 0.0, 1.0))
 
+
+
+# --- The beasts' boat, on screen -------------------------------------------------------------------
+## ⚠⚠ **NONE OF THIS CHANGES WHAT HAPPENS.** The sim's boat has a flat position and a heading; the bob,
+## the roll and the deck are what the eye is given on top of it. `Rules` holds when a boat comes, how
+## fast and how far — **a net driving the sim must not be able to see anything in this block.**
+
+## ⚠ **`BOAT_SCENE` STOOD HERE AND IT MOVED TO `field_view.gd`** (2026-08-30), beside the island, the
+## buildings and the scatter. Three scene paths already live there and one exception is worse than the
+## rule; **this file keeps every number the hull is DRAWN with, and that file keeps what is loaded.**
+
+## How far the hull rises and falls, in tiles, and how long one full bob takes.
+## ⚠ **Small on purpose**: the boat is 5.2 tiles long, and a rise a reader can measure against that
+## length reads as a toy on a spring rather than as a hull on water.
+const BOAT_BOB_TILES := 0.06
+const BOAT_BOB_SEC := 2.2
+## How far it leans side to side, about its own length. ⚠ **The period is deliberately NOT a multiple
+## of the bob's** — two motions on the same clock read as one motion, which is the thing that makes a
+## hull look keyframed.
+const BOAT_ROLL_DEG := 3.0
+const BOAT_ROLL_SEC := 3.1
+
+## How far along its own bob each successive hull starts, in radians.
+##
+## ⚠⚠ **IT WAS `float(i)` BAKED INTO `field_view` AND IT IS A LOOK VALUE LIKE ANY OTHER.** Two boats
+## sitting off the same island on a shared phase rise and fall as ONE object, which reads as a sprite
+## sheet rather than as two hulls on water. **At 0 they are back in lockstep**, which is what makes
+## this the knob a candidate sheet varies rather than a constant nobody can find.
+const BOAT_BOB_PHASE_PER_HULL := 1.0
+
+## How deep the hull sits relative to the open sea's own surface, in tiles. **Added to `SEA_Y_TILES`**,
+## so raising the water carries the boat with it and only the difference lives here.
+##
+## ⚠⚠ **IT WAS 0 AND THE WHOLE BOAT SAT ON TOP OF THE WATER** (2026-08-30, measured on the running
+## game). **The model's origin is its KEEL** — `boat.glb`'s hull runs y from 0.00 to 0.62 — so at 0 the
+## entire hull stood above the surface and the boat read as resting ON the sea rather than in it.
+##
+## ⚠ **Negative, and bounded at both ends.** At -0.20 the keel is 0.20 under and about a third of the
+## 0.62-deep hull is submerged. **Too little and it floats again; too much and the benches go under** —
+## the lowest seat in `BOAT_DECK_SLOTS` sits 0.4375 up, and the bob moves the whole hull
+## `BOAT_BOB_TILES` either way. `net_boats` holds both ends against those two constants.
+const BOAT_DRAFT_TILES := -0.20
+
+## **The eight places a rider stands, in the hull's own local space, in tiles.**
+##
+## ⚠⚠ **READ OFF THE MESH, ONE BENCH AT A TIME.** `boat_bench_0..3` sit at local x = −1.55, −0.55,
+## +0.45, +1.45 with their tops at y = 0.4375 (0.41 plus half of the 0.055 they are scaled to), and each
+## bench is a unit cube scaled along z by 0.582 / 0.813 / 0.820 / 0.622 — so the two seats on a bench are
+## at a quarter of that scale either side of its middle. **A single shared z would put the fore and aft
+## pairs off the ends of their own planks**, which is exactly the sort of thing that reads as「the wolves
+## are floating」 and gets blamed on the sprite.
+##
+## ⚠ `const X := PackedVector3Array([...])` is a parse error on 4.7 — see `Rules.UNITS` — so this is a
+## plain const Array and its reader casts.
+const BOAT_DECK_SLOTS := [
+	Vector3(-1.55, 0.4375, -0.146), Vector3(-1.55, 0.4375, 0.146),
+	Vector3(-0.55, 0.4375, -0.203), Vector3(-0.55, 0.4375, 0.203),
+	Vector3(0.45, 0.4375, -0.205), Vector3(0.45, 0.4375, 0.205),
+	Vector3(1.45, 0.4375, -0.155), Vector3(1.45, 0.4375, 0.155),
+]
+
+## **The rider seen from four sides — screen-down, screen-up, screen-right, screen-left, in that
+## order.** ⚠ **The order IS the meaning**: `field_view._boat_rider_tex` indexes this and does not
+## branch, so re-ordering these four rows turns every wolf on every deck around at once.
+##
+## ⚠ **A different set of pictures from `BEAST_WOLF_R` / `_L`.** The walking wolf is drawn from the side
+## and flipped for the other way, and a boat comes toward the camera as often as across it. **The file
+## names are compass words and what they are used as is SCREEN directions** — the heading is measured
+## against the camera's own yaw, and the camera turns.
+const BOAT_RIDER_TEX := [
+	"res://assets/beast/wolf_h/south.png",
+	"res://assets/beast/wolf_h/north.png",
+	"res://assets/beast/wolf_h/east.png",
+	"res://assets/beast/wolf_h/west.png",
+]
+
+## The rider's picture width as a multiple of a wolf's body radius. ⚠ **Its own number and not
+## `BEAST_SPRITE_W_RATIO`**: these four are drawn square (92 x 92) where the walking wolf is wide and
+## flat, so the side-on ratio would stand a rider on a deck half again as tall as one on the ground.
+##
+## ⚠⚠ **RAISED 2.4 -> 4.0** (2026-08-30, measured on the running game). At 2.4 a deck wolf drew about
+## **an eighth of a 조각** and was simply not visible at the opening framing — the swordsman beside it
+## is three times the size and does read. **3x only reaches the swordsman's floor**, and a rider needs
+## more than that: it is a dark figure on a pale deck on an object that is bobbing, not a body standing
+## still on flat grass.
+## ⚠⚠ **AND AGAIN 4.0 -> 6.0** (2026-08-30, measured on the running game). **4x cleared 「invisible」 and
+## not 「identifiable」**: eight distinct marks in four pairs, countable, none merging — and they read as
+## generic dark animals rather than as wolves. At 6x each is near **0.6 조각** against the benches' 1.0
+## 조각 spacing, so about 0.4 조각 of gap survives between the columns.
+## ⚠⚠ **THE CEILING IS SEAT-TO-SEAT AND NOT BENCH-TO-BENCH, AND 6x HAS ALREADY REACHED IT**
+## (2026-08-30, measured on the running game; this reverses what was written here twice). The binding
+## distance is **the two riders sharing ONE bench**, not the 1.0 조각 between benches: the seats sit a
+## quarter of a plank either side of its middle, so they are about 0.3 조각 apart. **At 6x the two on a
+## bench overlap and the deck reads as four PAIRS rather than eight figures.**
+## ⇒ **6x is where it stops.** The 「about 8x」 and the 「~10.1x headroom」 written here before were both
+## measured against the wrong spacing and neither is real for the thing that matters.
+## ⚠ `net_boats` pins this value, so raising it goes red rather than being noticed on a later screen.
+##
+## ⚠⚠ **AND THE NUMBER SIZES THE FRAME, NOT THE WOLF** (2026-08-30, measured off the four files). The
+## four pictures are 92 x 92 and the wolf inside one fills **22% to 73% of that width** — against
+## `wolf_r.png`, which is 82% filled and is what every other ratio in this file was chosen over. So
+## 6 radii buys 0.594 조각 of FRAME and **0.426 조각 of side-on wolf, 0.129 조각 of head-on wolf**. The
+## seat-to-seat ceiling above was reached by the side-on picture; the head-on one has never been near
+## it. **Nothing here is retuned for that** — the ratio is pinned and this note is what stops the next
+## reader taking 6 for the size of the animal.
+const BOAT_RIDER_W_RATIO := 6.0
+
+
+## **The disc laid on the plank under a rider, as a fraction of the gap between the two riders sharing
+## the tightest bench.** ⚠ **Anchored to that gap and not typed as a length**: it is the one distance
+## on the deck that says how much room a rider has, so moving a seat in `BOAT_DECK_SLOTS` moves the
+## shadow with it instead of leaving a number here that used to be right.
+##
+## ⚠⚠ **0.75 PUTS THE DISC WIDER THAN THE WOLF IS, AND THAT IS THE WHOLE POINT** — see
+## `how-nets-lie`'s 「a shadow the size of its caster is not a shadow」, measured twice on two subjects.
+## The tightest gap is 0.292 조각, so the disc is 0.219 조각 across the radius: **0.438 조각 wide against
+## the widest rider's own 0.426 조각 of ink.** Under 0.5 it would sit entirely beneath the animal and
+## show nothing at all, which is exactly the failure that entry records.
+## ⚠ **The two discs on one bench therefore overlap**, in the same measure the two wolves above them
+## already do — see `BOAT_RIDER_W_RATIO`.
+const BOAT_RIDER_SHADOW_SEAT_RATIO := 0.75
+
+## How far the disc floats above the plank it lies on. ⚠ **Only enough to lose the z-fight** — at the
+## board's 40° tilt this is a fifth of a screen pixel, so it cannot read as the shadow hovering.
+const BOAT_RIDER_SHADOW_LIFT_TILES := 0.004
+
+## Segments in the disc. ⚠ **The disc is about 13 screen px across at the opening framing**, so past
+## about sixteen the extra triangles land inside one pixel.
+const BOAT_RIDER_SHADOW_SEGS := 16
+
+## ⚠⚠ **SIZE AND STRENGTH ARE ONE DECISION** (`how-nets-lie`, same entry). This disc covers about
+## **13 times** the area of `COL_BODY_SHADOW`'s disc on the ground, so it is carried a little stronger
+## rather than left at the ground's alpha and spread thin.
+## ⚠ **It lands on planking that is already dark** — `boat.glb`'s deck albedo is 0.246 luminance and
+## the hull's is 0.069, and the gunwale casts a real shadow across some of it — so **this is one flat
+## alpha over a surface whose brightness varies**, and where the gunwale's own shadow already falls the
+## two darken together. **Nothing compensates for that**; it is a thing for eyes.
+## ⚠ Alpha stays under the 0.45 `COL_BODY_SHADOW` names as the point a disc reads as a hole.
+const COL_BOAT_RIDER_SHADOW := Color(0.05, 0.06, 0.10, 0.34)
+
+
+## **The radius of a rider's shadow disc, in 조각** — read off `BOAT_DECK_SLOTS` so the seat table is
+## the only place the deck's spacing is written down.
+##
+## ⚠ **The TIGHTEST bench and not each bench's own.** The benches are different lengths, so a disc
+## sized per bench would make the wolves at the ends look like different animals from the ones
+## amidships — the animal is one size and its shadow is one size.
+static func boat_rider_shadow_r_tiles() -> float:
+	var gap := 1e9
+	for k in range(0, BOAT_DECK_SLOTS.size(), 2):
+		var a := BOAT_DECK_SLOTS[k] as Vector3
+		var b := BOAT_DECK_SLOTS[k + 1] as Vector3
+		gap = minf(gap, absf(b.z - a.z))
+	return gap * BOAT_RIDER_SHADOW_SEAT_RATIO

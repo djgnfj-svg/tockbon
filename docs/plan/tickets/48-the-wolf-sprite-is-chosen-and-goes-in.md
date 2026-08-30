@@ -1,5 +1,5 @@
 Type: task
-Status: open
+Status: resolved
 
 # 늑대 판떼기가 정해졌고 게임에 들어간다 — **H**
 
@@ -45,3 +45,39 @@ Status: open
 
 **픽셀랩이 이 캐릭터에 바로 붙여 주는 것**: `bark` · `walk-4/6/8-frames` · `running-4/6/8-frames` ·
 `sneaking` · `idle` · `fast-walk`. ⚠ **무는 동작은 목록에 없다** — 따로 만들어야 한다.
+
+---
+
+## Answer — **2026-08-30. H is in the game, standing on the deck**
+
+**Eight wolves ride each boat, drawn from `wolf_h`'s four facings**, picked by the boat's heading
+against the camera's yaw. They sit on the benches, they bob and roll with the hull, and each has a
+shadow disc under it.
+
+## ⚠⚠ Three things the screen taught, and one of them corrects this ticket
+
+**This ticket said the swordsman has no body picture, only two weapons. That is wrong** —
+`sword_r.png` / `sword_l.png` are full body-with-sword drawings. The bodiless ones are
+`bow`/`spear`/`shield`, leftovers from a second-weapon idea dropped 2026-08-27, wired to nothing.
+
+**「6× the sprite」 does not mean 6× the wolf.** The four `wolf_h` images fill only **22–73% of their
+92×92 frame**, with 11–25 empty rows at the bottom; the walking `wolf_r.png` fills 82% with none. So
+the ratio scales the FRAME. The real animal is **0.426 조각 side-on and 0.129 조각 head-on**.
+⚠ **And they floated** — the empty rows put their feet 0.161 조각 above the plank, **by a different
+amount per picture**, so the deck rose and fell as the boat turned. **They now stand on their ink.**
+
+**Sized by eye at 4× then 6×.** 4× cleared 「invisible」; **6× cleared 「identifiable」** — body, four
+legs, muzzle, upright tail. ⚠ **6× is the ceiling and the earlier numbers were wrong**: two rounds
+wrote 「about 8×」 and 「10.1× of headroom」, both measured against the 1.0 조각 BETWEEN benches. **The
+binding gap is the two seats ON one bench, 0.292 조각**, and 6× has already reached it — eight wolves
+now read as **four pairs**, not eight countable figures.
+
+## ⚠ What this ticket asked and still has no answer
+
+**Its three open questions were not settled and are not settled by this.** They move to a new ticket:
+whether the 46 walking frames are replaced by H, when animation gets attached, and whether the
+swordsman is re-drawn.
+
+**Normal maps were baked** (`north_n` · `south_n` · `east_n` · `west_n`, free, from
+`prototypes/props/bake_normals.py`) **and are NOT wired.** ⚠ **Head-on wolves are 5 screen pixels
+wide and a normal map has nowhere to put a gradient in 5 pixels.** Side-on is 17.
