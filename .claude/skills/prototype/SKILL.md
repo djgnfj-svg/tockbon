@@ -45,17 +45,23 @@ candidates, forty dials moved, and the user's answer was ***"아니그냥 어떻
    skipped.**
 3. **Choose three to five mechanisms that fail differently.** Two that break under the same condition
    are one prototype photographed twice.
-4. **Build each as a throwaway under `.prototypes/<subject>/<NN-name>/`** — one folder per subject, one
+4. ⚠⚠ **Read `.prototypes/README.md` BEFORE writing a runner.** Ten lab runners already
+   exist and they total 4,106 lines; a new subject is a **copy of the nearest one** with its candidate
+   list swapped, and that file's table says which one to copy for which question. It also carries the
+   four traps that have each cost a round — `--headless` returns black PNGs, this folder is not
+   imported by Godot, the shipped shader is spliced rather than copied, and the round ends at a sheet
+   rather than at `out/`.
+5. **Build each as a throwaway under `.prototypes/<subject>/<NN-name>/`** — one folder per subject, one
    folder per version inside it, numbered in the order they were built. ⚠ **Never in `src/`**: the folder
    rule there is what lets a net drive the game headless, and a throwaway is not going to obey it.
    ⚠ **A prototype that has to be clean is not one** — the point is to reach a picture in an hour, not
    to ship. **Each version folder carries a `NOTES.md` with the three lines below**, so the picture and
    the reason never separate. The winner is rebuilt properly afterwards; the losers are deleted.
-5. **Photograph all of them from one camera, one instant, one sheet.** ⚠ **Take anything not being
+6. **Photograph all of them from one camera, one instant, one sheet.** ⚠ **Take anything not being
    judged out of the frame**, or every picture shares a house and a swordsman and the eye lands on those.
    ⚠ **Never `--headless`**: there is no swapchain to read a frame back from and every PNG comes out
    black with no error.
-6. **Report each one as three lines: what it buys · what it costs · what it CANNOT do.** The third line
+7. **Report each one as three lines: what it buys · what it costs · what it CANNOT do.** The third line
    is the one that decides, and it is the one that is always missing.
 7. ⚠⚠ **THE JUDGING ROUND: A REMARK ON THE SHEET IS A QUESTION, NOT A WORK ORDER.** The user looking at
    candidates writes in fragments — 「둥글게」, 「호버도」, 「칸만」. **Collect them, put them back as
