@@ -14,19 +14,18 @@ user says it is wrong. ⚠ **Where a word in it disagrees with `src/`, the code 
 **say so out loud** rather than quietly picking one.
 
 
-## ⚠⚠ **THIS WEEK IS THE MAP. NOTHING ELSE.** (2026-08-26, the user)
+## ⚠⚠ **The ground the game is played on**
 
-***"Getting the map right is enough for this week. Focus on that."*** **Every round this week is about
-the ground the game is played on** — not the bodies, not the beasts landing, not the nets, not the
-cleanup. **If a reply raises anything else it is off-task**: ***"You are asking about way too much."***
+**What this week is doing is read out of `docs/roadmap.md`, never out of this file.**
 
 ⚠ **The bar is Bad North.** **The island HAS a second storey and a stair, and they passed by eye.**
 ⇒ **Do not delete them.**
 
 ⚠⚠ **How a storey is measured** (2026-08-26, the user): **one notch is half a tile · a storey is two
 notches · a stair is one notch.** Ground is level 0, the stair 1, the second storey 2 — and a body may
-cross **one** notch, which is what makes the stair the only way up. **A third storey is levels 3 and 4
-and costs no rule change; nothing has been raised that high yet.**
+cross **one** notch, which is what makes the stair the only way up. ⚠⚠ **There is NO third storey**
+(2026-08-29, the user: *"Design change: no third storey."*). **Two storeys is the ceiling** — level 2 is
+as high as the island goes, and levels 3 and 4 are not a thing to build toward.
 
 ⚠⚠ **Read ticket 01 — what one piece is — BEFORE opening Blender.** Skipping it cost a round: a live
 rule (**corners are not cut at 45°, they are slightly tilted**) got trampled.
@@ -116,6 +115,12 @@ the eye."*** **The failure is density, not length.**
 **Grilling is a skill now and nothing else** — `grilling`, invoked when the user is **choosing a
 direction or brainstorming**, or asks for it by name. **The shape a question is printed in lives there.**
 
+# Running the game
+
+**"게임 켜줘" means: start `Godot_v4.7.1-stable_win64.exe` in this folder with `--path` at this
+folder, and nothing else.** ⚠ **`play.bat` did not raise a window** (2026-08-29) — call the engine
+directly. ⚠ **Never the 4.6.1 in the user's `~/bin`**: the nets run on the 4.7.1 sitting here.
+
 # Nothing pretends to work
 
 **Code that pretends to work is worse than code that doesn't, and a green that measures less than its
@@ -136,12 +141,13 @@ probe. **The test is whether the PLAYER is meant to look at it.**
 
 # The docs
 
-**`docs/` is three folders and three loose files.** **Open a folder's README, not the folder.**
+**`docs/` is three folders and four loose files.** **Open a folder's README, not the folder.**
 
 | Path | What it holds |
 |---|---|
 | `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **Nearly empty, and that is a defect** — there is no GDD. When one is written it is **one page**. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
-| `docs/plan/` | **The only map.** **`roadmap.md` is what is being done** — **one dated row per week, each carrying a status mark**, plus the chunk table; **`log.md` is why it came out that way, and every quotation lives there**; **`tickets/NN-name.md`** are the work. **Status is a `Status:` line inside the file — files never move between folders.** The chain: `compass` → `grilling` (which settles what a stretch actually builds, sending `research` outside when it needs an outside fact) → `build-loop` → `wrap-up`, with `roadmap` checking it. ⚠⚠ **Only `wrap-up` writes to these files, and only after the conversation is finished** |
+| `docs/roadmap.md` | **The only map, and it sits at the top of `docs/`** (moved 2026-08-30) — **what is being done** — **one dated row per week, each carrying a status mark**, plus the chunk table |
+| `docs/plan/` | **`log.md` is why it came out that way, and every quotation lives there**; **`tickets/NN-name.md`** are the work. **Status is a `Status:` line inside the file — files never move between folders.** The chain: `compass` → `grilling` (which settles what a stretch actually builds, sending `research` outside when it needs an outside fact) → `build-loop` → `wrap-up`, with `roadmap` checking it. ⚠⚠ **Only `wrap-up` writes to these files, and only after the conversation is finished** |
 | `docs/reference/` | **What came in from outside**: the screenshots a decision was made from, and the notes `research` leaves when a search took real work. All `YYYY-MM-DD-what-it-is`. ⚠⚠ **A ticket keeps the conclusion; the material stays here** — and `wrap-up` asks before deleting a shot |
 | `lessons-from-two-dead-games` | **What the two games that died actually measured** |
 | `how-nets-lie` | **Every green measured to be false.** Read it before writing a check and before believing a green round |
