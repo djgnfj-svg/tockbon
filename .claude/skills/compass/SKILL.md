@@ -9,7 +9,7 @@ description: Say where the work stands — this week's goal, then every open tic
 
 ## Read exactly three
 
-1. **The roadmap** — `docs/plan/roadmap.md`. It holds **this week's chunk** and the bar that
+1. **The roadmap** — `docs/roadmap.md`. It holds **this week's chunk** and the bar that
    closes it. This is the only place the week is stated.
 2. **Every ticket** — `docs/plan/tickets/*.md`. Each carries a `Status:` line
    (`open` · `claimed` · `resolved`) and may carry `Blocked by: NN, NN`.

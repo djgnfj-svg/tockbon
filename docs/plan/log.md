@@ -13,7 +13,7 @@
 출처로 삼지 마라.** 뒤집힌 과정은 아래 「왜 뒤집혔나」 절에 사용자의 말 그대로 남아 있다.
 
 ⚠⚠ **2026-08-27 에 이 파일에서 「무엇을 할 것인가」가 떨어져 나갔다.** 주간 목표는 이제
-[roadmap.md](roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
+[roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
 ## ⏳ **Four ways for the 판 to merge at a distance — 2026-08-29**
@@ -1445,3 +1445,78 @@ seven rules**, so pushing all seven plus the boats into one week makes a defect 
 (the map said 79 red; the run said **통과 629 · 실패 59 · 11 nets**), and **the map claimed the range of
 red was three nets when it is seven of eleven.** Tickets 29 and 30 printed as done on the map while
 their own `Status:` said open, and tickets 36 and 37 existed on no row at all.
+
+## ✅✅ **디펜스가 주로 정해졌고, 배와 늘대가 생겼다 — 2026-08-30 저녁**
+
+### The fork the whole evening turned on
+
+**The user laid two shapes side by side and asked which comes first:**
+
+> ***"Is it a defence game? One: recruit soldiers, sail out and bring resources back, raise the
+> soldier build tech, and set off to kill a particular boss. Or two: just block what comes, roguelike,
+> upgrading soldiers and adding soldier types, and kill the boss. And I think two is much easier to
+> build. Easier to make fun. The exploration-first one would probably take a long development
+> period."***
+
+⇒ **Defence is the main line. Settled.** ⚠ **Exploration is NOT cut** — it stays at weeks 10 and 11, and
+the user gave it its own tension: **you sail out for good materials while waves keep hitting the base,
+so you are forced back.** That is the sentence chunk 7 has carried all along.
+
+### ⚠ What I got wrong, twice, and the user corrected both
+
+1. **I wrote that multiplayer was "parked" as a decision.** It was not — ***"the 'let us do single player
+   for now' was me thinking out loud, I am still weighing multiplayer."***
+2. **I wrote that the user wanted to "recruit soldiers".** ***"I never said recruit."***
+
+⚠⚠ **Both were me tightening a musing into a decision.** The rule this pays for: **a thing said while
+thinking aloud is not an answer**, and the log is where that difference has to survive.
+
+### The loop, as it now stands
+
+- **A boat comes on a fixed interval and lands beasts.** Random timing comes later.
+- **Move the squads and block them.** Between waves there is a gap — that is when you build.
+- **Nine to a squad, three squads.** Gathering is NOT one of the three.
+- **Recruit at the keep**; a training yard comes later.
+- **A boss at ten minutes and the clock is HIDDEN.**
+- **Bosses are many** — some come to you, some you go to. **The ones you go to are optional.**
+- **Killing a boss opens the next things.** **The final boss is the ending, and there is no final boss
+  yet, so the game has no ending today.**
+- **The keep burns and you lose. Nothing carries over.**
+- ⚠ **A soldier who dies REVIVES at the keep after a delay** — which overturns 「죽으면 영영 죽는다」.
+
+### ⚠⚠ The user cut two things I had proposed keeping
+
+- **Item rarity is gone.** ***"No rarity needed."*** The upgrade axis is **soldier COUNT** — it shows on
+  screen without a number.
+- **All thirteen item pictures deleted, to be remade.** With them went 186 lines of dead tombstone in
+  `rules.gd` (605 → 419) — equipment, rarity, tags, statuses, cards, the shove, the pack rule, the
+  summon band, node rewards. ⚠ **The nets did not move: 통과 629 · 실패 59 before and after**, which
+  is the measurement that they were reachable by nobody.
+
+### The boat got built and it passed
+
+**Blender, one round, 138 faces — 5.2 by 1.9 tiles, four benches for eight.** The user: ***"you made
+that really well."*** ⚠ **Ticket 01's rules were read first and they held**: no 45° chamfer, detail on
+the edge rather than the face, flat shading, `Standard` view transform.
+
+### The wolf was chosen — and what was chosen is not what I varied
+
+**Eight wolves, one identical description, style varied across four axes.** The user picked **H**.
+⚠⚠ **H differs from B by SIZE ALONE** — same shading, same outline, same view, same skeleton.
+**So the axis that decided it was resolution, and seven of the eight were answering a question nobody
+was asking.**
+
+### ⚠⚠ And that is what earned a new skill
+
+> ***"You should have settled with me in text how to make it first. Tokens are not infinite. From now
+> on when I ask for images, update a skill so you can grill me about them. You cannot keep burning
+> tokens on your own — it costs money."***
+
+⇒ **티켓 49.** The user also ruled out folding it into `prototype`: ***"that one is for things you
+build to look at — different grain."*** **The recommended name is `commission`.**
+
+### ⚠ The user was on a phone and could not see any of it
+
+**The eight candidates went out as a published page instead**, with the island's real turf, rock, shore
+and water colours behind the sprites. ⚠ **Judging a sprite on white is judging it on ground it will
+never stand on.**

@@ -43,7 +43,7 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 |---|---|
 | **`wrap-up`** | **Closes the session** — repairs the docs that drifted, writes the new tickets, clears the loose images, runs the nets, commits. **Stops at the commit** |
 | **`naming`** | **Settles what a thing is CALLED** and writes it into `CONTEXT.md`, so the next round can say it in one word |
-| **`roadmap`** | **Checks the big picture** against the commits — drift, gaps, what December still owes. ⚠ **Reports only; never edits the map** |
+| **`roadmap`** | **Checks the big picture** against the commits — drift, gaps, what December still owes — **then lays the weeks out again, one thing per week.** ⚠ **Never edits a file; `wrap-up` writes what it settles.** ⚠⚠ **Slicing a week is the user's call** |
 
 ## The rest of the chain
 
