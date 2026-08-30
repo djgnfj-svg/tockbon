@@ -70,3 +70,10 @@ tools/shot/loop_*.png.import
 #  committed twice before anyone noticed. The engine regenerates them on the next import.
 tools/blender/*.png
 tools/blender/*.png.import
+
+# 프로토타입의 임포트 짝 — **전부 죽은 파일이다.** 폴더에 점이 붙은 뒤로 고도는 여기를 임포트하지
+# 않는다 (2026-08-30, 새 png 를 넣고 `--import` 를 돌려 짝이 안 생기는 것을 확인했다). 랩들은
+# 원래부터 `Image.load` 와 절대경로로 그림과 `.glb` 를 직접 읽는다 — 「던져버릴 폴더엔 `.import`
+# 짝이 없고, 편집기 밖에서 맨 png 에 `load()` 는 실패한다」고 랩 주석이 먼저 적어 두었다.
+# ⚠ 루트의 png/짝 규칙과 반대 방향이다. 저기는 짝만 남는 게 문제였고, 여기는 짝이 아예 안 쓰인다.
+.prototypes/**/*.import
