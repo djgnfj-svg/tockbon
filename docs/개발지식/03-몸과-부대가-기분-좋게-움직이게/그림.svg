@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 430" width="780" height="430" font-family="'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif">
+<rect width="780" height="430" fill="#f7f5f0"/>
+<text x="390" y="32" text-anchor="middle" font-size="18" font-weight="700" fill="#22201c">부대 게임에서 제일 먼저 티 나는 것 — 도착 자리</text>
+<text x="390" y="53" text-anchor="middle" font-size="12.5" fill="#6b665c">아홉을 한 조각으로 보냈을 때, 위에서 본 그림</text>
+<rect x="24" y="70" width="352" height="292" fill="#fff" stroke="#d8d2c6" stroke-width="1.5" rx="6"/>
+<text x="200" y="95" text-anchor="middle" font-size="14.5" font-weight="700" fill="#a33a2a">자리를 안 나누면 — 지금 이 게임</text>
+<line x1="95" y1="110" x2="95" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="95" y1="110" x2="305" y2="110" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="125" y1="110" x2="125" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="95" y1="140" x2="305" y2="140" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="155" y1="110" x2="155" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="95" y1="170" x2="305" y2="170" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="185" y1="110" x2="185" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="95" y1="200" x2="305" y2="200" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="215" y1="110" x2="215" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="95" y1="230" x2="305" y2="230" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="245" y1="110" x2="245" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="95" y1="260" x2="305" y2="260" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="275" y1="110" x2="275" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="95" y1="290" x2="305" y2="290" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="305" y1="110" x2="305" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="95" y1="320" x2="305" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<rect x="185" y="200" width="30" height="30" fill="#f3d9d2" stroke="#c0392b" stroke-width="1.6"/>
+<circle cx="205.5" cy="215.0" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="204.2" cy="218.5" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="201.0" cy="220.4" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="197.2" cy="219.8" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="194.8" cy="216.9" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="194.8" cy="213.1" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="197.2" cy="210.2" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="201.0" cy="209.6" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="204.2" cy="211.5" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<text x="200" y="252" text-anchor="middle" font-size="12" font-weight="700" fill="#c0392b">아홉이 한 조각에</text>
+<text x="200" y="342" text-anchor="middle" font-size="12.5" fill="#5a554c">부대가 아니라 하나로 보인다</text>
+<rect x="404" y="70" width="352" height="292" fill="#fff" stroke="#d8d2c6" stroke-width="1.5" rx="6"/>
+<text x="580" y="95" text-anchor="middle" font-size="14.5" font-weight="700" fill="#2f6b46">자리를 나눠 가지면 — 기법 11 번</text>
+<line x1="475" y1="110" x2="475" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="475" y1="110" x2="685" y2="110" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="505" y1="110" x2="505" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="475" y1="140" x2="685" y2="140" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="535" y1="110" x2="535" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="475" y1="170" x2="685" y2="170" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="565" y1="110" x2="565" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="475" y1="200" x2="685" y2="200" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="595" y1="110" x2="595" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="475" y1="230" x2="685" y2="230" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="625" y1="110" x2="625" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="475" y1="260" x2="685" y2="260" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="655" y1="110" x2="655" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="475" y1="290" x2="685" y2="290" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="685" y1="110" x2="685" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<line x1="475" y1="320" x2="685" y2="320" stroke="#e6e0d3" stroke-width="1"/>
+<rect x="565" y="200" width="30" height="30" fill="#e0efe4" stroke="#2f6b46" stroke-width="1.6" stroke-dasharray="4 3"/>
+<circle cx="550.0" cy="185.0" r="12" fill="none" stroke="#b9cfc0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="550.0" cy="185.0" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="580.0" cy="185.0" r="12" fill="none" stroke="#b9cfc0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="580.0" cy="185.0" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="610.0" cy="185.0" r="12" fill="none" stroke="#b9cfc0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="610.0" cy="185.0" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="550.0" cy="215.0" r="12" fill="none" stroke="#b9cfc0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="550.0" cy="215.0" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="580.0" cy="215.0" r="12" fill="none" stroke="#b9cfc0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="580.0" cy="215.0" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="610.0" cy="215.0" r="12" fill="none" stroke="#b9cfc0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="610.0" cy="215.0" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="550.0" cy="245.0" r="12" fill="none" stroke="#b9cfc0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="550.0" cy="245.0" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="580.0" cy="245.0" r="12" fill="none" stroke="#b9cfc0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="580.0" cy="245.0" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<circle cx="610.0" cy="245.0" r="12" fill="none" stroke="#b9cfc0" stroke-width="1.2" stroke-dasharray="3 3"/>
+<circle cx="610.0" cy="245.0" r="8.0" fill="#3b6b8f" opacity="0.85"/>
+<text x="580" y="282" text-anchor="middle" font-size="12" font-weight="700" fill="#2f6b46">한 명에 한 자리</text>
+<text x="580" y="342" text-anchor="middle" font-size="12.5" fill="#5a554c">아홉이 보이고, 어디까지가 이 부대인지 보인다</text>
+<text x="390" y="388" text-anchor="middle" font-size="13" fill="#22201c">⚠ 「한 칸에 아홉」이라고 정했는데 화면에는 열둘이 선다 — 그 답이 자리 수를 정한다</text>
+<text x="390" y="410" text-anchor="middle" font-size="12" fill="#8b8578">⚠ 자리를 나눠도 19 번(도착 여유)이 없으면 몸이 제자리에서 떤다.</text>
+</svg>
