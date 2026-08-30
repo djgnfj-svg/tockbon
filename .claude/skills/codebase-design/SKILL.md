@@ -70,26 +70,24 @@ Good interfaces make testing natural:
 
 1. **Accept dependencies, don't create them.**
 
-   ```typescript
-   // Testable
-   function processOrder(order, paymentGateway) {}
+   ```gdscript
+   # Testable — and deterministic, which this repo requires
+   func resolve(fight: Fight, rng: RandomNumberGenerator) -> void:
 
-   // Hard to test
-   function processOrder(order) {
-     const gateway = new StripeGateway();
-   }
+   # Hard to test — the seed is unreachable, so the same input gives two answers
+   func resolve(fight: Fight) -> void:
+       var rng := RandomNumberGenerator.new()
    ```
 
 2. **Return results, don't produce side effects.**
 
-   ```typescript
-   // Testable
-   function calculateDiscount(cart): Discount {}
+   ```gdscript
+   # Testable — the net asserts the number without a body existing
+   func damage_for(attacker: Unit, target: Unit) -> int:
 
-   // Hard to test
-   function applyDiscount(cart): void {
-     cart.total -= discount;
-   }
+   # Hard to test — you have to build the whole fight to read one number
+   func strike(attacker: Unit, target: Unit) -> void:
+       target.hp -= ...
    ```
 
 3. **Small surface area.** Fewer methods = fewer tests needed. Fewer params = simpler test setup.
@@ -105,7 +103,7 @@ Good interfaces make testing natural:
 ## Rejected framings
 
 - **Depth as ratio of implementation-lines to interface-lines** (Ousterhout): rewards padding the implementation. We use depth-as-leverage instead.
-- **"Interface" as the TypeScript `interface` keyword or a class's public methods**: too narrow: interface here includes every fact a caller must know.
+- **"Interface" as a class's public methods**: too narrow: interface here includes every fact a caller must know.
 - **"Boundary"**: overloaded with DDD's bounded context. Say **seam** or **interface**.
 
 ## Going deeper

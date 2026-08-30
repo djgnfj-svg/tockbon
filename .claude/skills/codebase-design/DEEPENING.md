@@ -10,19 +10,21 @@ When assessing a candidate for deepening, classify its dependencies. The categor
 
 Pure computation, in-memory state, no I/O. Always deepenable: merge the modules and test through the new interface directly. No adapter needed.
 
+⚠⚠ **In this repo that is `src/sim/`, and it is most of the game.** The folder rule — no `Node`, no
+tree, constructible with `.new()` — exists so this category stays the big one.
+
 ### 2. Local-substitutable
 
-Dependencies that have local test stand-ins (PGLite for Postgres, in-memory filesystem). Deepenable if the stand-in exists. The deepened module is tested with the stand-in running in the test suite. The seam is internal; no port at the module's external interface.
+Dependencies with a local stand-in. **Here that is the engine itself**: a view needs the tree, and the
+tree can be stood up headless. Deepenable, and tested with the stand-in running. The seam is internal;
+no port at the module's external interface.
 
-### 3. Remote but owned (Ports & Adapters)
+### 3. True external
 
-Your own services across a network boundary (microservices, internal APIs). Define a **port** (interface) at the seam. The deep module owns the logic; the transport is injected as an **adapter**. Tests use an in-memory adapter. Production uses an HTTP/gRPC/queue adapter.
-
-Recommendation shape: *"Define a port at the seam, implement an HTTP adapter for production and an in-memory adapter for testing, so the logic sits in one deep module even though it's deployed across a network."*
-
-### 4. True external (Mock)
-
-Third-party services (Stripe, Twilio, etc.) you don't control. The deepened module takes the external dependency as an injected port; tests provide a mock adapter.
+⚠⚠ **The game has no network boundary and no third-party service** — the user settled 2026-08-30 that
+it is single-player and stays deterministic. **What is genuinely outside is the art pipeline**: Blender,
+the local ComfyUI, pixellab. **None of them run while the game runs** — they bake a file and the game
+loads it. ⇒ **The seam is the file on disk, not a port**, and nothing needs mocking.
 
 ## Seam discipline
 

@@ -38,9 +38,10 @@ unique.** Attention thins across the excess. `wrap-up` hit 129 lines and was cut
 ⚠ **`writing-for-agents` is the full standard**; the four lines above are what this repo keeps getting
 wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on their own, and it stays that way.
 
-## The user's four
+## The user's three
 
 **These are the ones they said they actually use** (2026-08-27).
+⚠ **It was four until 2026-08-29** — the fourth was `press`, and it went out that day. The row was pulled and this heading was not, so it read "four" over a table of three until 2026-08-30.
 
 | Skill | What it does |
 |---|---|

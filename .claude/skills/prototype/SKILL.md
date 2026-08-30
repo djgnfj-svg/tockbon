@@ -45,8 +45,8 @@ candidates, forty dials moved, and the user's answer was ***"아니그냥 어떻
    skipped.**
 3. **Choose three to five mechanisms that fail differently.** Two that break under the same condition
    are one prototype photographed twice.
-4. ⚠⚠ **Read `.prototypes/README.md` BEFORE writing a runner.** Ten lab runners already
-   exist and they total 4,106 lines; a new subject is a **copy of the nearest one** with its candidate
+4. ⚠⚠ **Read `.prototypes/README.md` BEFORE writing a runner.** Fourteen lab entry points already
+   exist and they total 4,551 lines; a new subject is a **copy of the nearest one** with its candidate
    list swapped, and that file's table says which one to copy for which question. It also carries the
    four traps that have each cost a round — `--headless` returns black PNGs, this folder is not
    imported by Godot, the shipped shader is spliced rather than copied, and the round ends at a sheet
@@ -63,7 +63,7 @@ candidates, forty dials moved, and the user's answer was ***"아니그냥 어떻
    black with no error.
 7. **Report each one as three lines: what it buys · what it costs · what it CANNOT do.** The third line
    is the one that decides, and it is the one that is always missing.
-7. ⚠⚠ **THE JUDGING ROUND: A REMARK ON THE SHEET IS A QUESTION, NOT A WORK ORDER.** The user looking at
+8. ⚠⚠ **THE JUDGING ROUND: A REMARK ON THE SHEET IS A QUESTION, NOT A WORK ORDER.** The user looking at
    candidates writes in fragments — 「둥글게」, 「호버도」, 「칸만」. **Collect them, put them back as
    questions, and change nothing until they are answered.** ⚠ **Measured 2026-08-29**: four fragments
    in a row were turned straight into four edits, and the third contradicted the first

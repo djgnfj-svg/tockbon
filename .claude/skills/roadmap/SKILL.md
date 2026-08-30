@@ -65,7 +65,7 @@ row; **a scope call, an ordering, or an acceptance bar does not.**
 
 **The core fun line lives at the top of `docs/roadmap.md`.** A week that does not move it is a
 week to say so about. ⚠⚠ **The second dead game shipped 3541 green checks and was not fun** — the cause
-was one decision that cost nothing to make. **Read `docs/lessons-from-two-dead-games` before arguing
+was one decision that cost nothing to make. **Read `docs/lessons-from-two-dead-games.md` before arguing
 a week is worth its place.**
 
 ## Answer

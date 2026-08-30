@@ -7,13 +7,9 @@ description: Diagnosis loop for hard bugs and performance regressions. Use when 
 
 A discipline for hard bugs. Skip phases only when explicitly justified.
 
-When exploring the codebase, read `CONTEXT.md` (if it exists) to get a clear mental model of the relevant modules, and check ADRs in the area you're touching.
+Read `CONTEXT.md` first for the modules and the agreed seams. ⚠ **There is no `docs/adr/` here** — what was decided and what was reversed live in `docs/plan/log.md`, and **every green already measured false lives in `docs/how-nets-lie.md`.** Read that one before believing any loop you build.
 
-## Redact
-
-This skill has you show commands, outputs and captured artifacts. **Redact every secret first**: write `<REDACTED>` in its place. Build loops against env vars, so the credential stays in the environment rather than in what you show. Captured artifacts carry auth headers: quote only the lines that carry the signal.
-
-If the redacted output is not enough to diagnose the bug, say so and ask the user.
+⚠ **Redact every secret out of anything you paste** — write `<REDACTED>` in its place.
 
 ## Phase 1: Build a feedback loop
 
@@ -23,18 +19,34 @@ Spend disproportionate effort here. **Be aggressive. Be creative. Refuse to give
 
 ### Ways to construct one, in roughly this order
 
-1. **Failing test** at whatever seam reaches the bug: unit, integration, e2e.
-2. **Curl / HTTP script** against a running dev server.
-3. **CLI invocation** with a fixture input, diffing stdout against a known-good snapshot.
-4. **Headless browser script** (Playwright / Puppeteer) that drives the UI and asserts on DOM/console/network.
-5. **Replay a captured trace.** Save a real network request / payload / event log to disk; replay it through the code path in isolation.
-6. **Throwaway harness.** Spin up a minimal subset of the system (one service, mocked deps) that exercises the bug code path with a single function call.
-7. **Property / fuzz loop.** If the bug is "sometimes wrong output", run 1000 random inputs and look for the failure mode.
-8. **Bisection harness.** If the bug appeared between two known states (commit, dataset, version), automate "boot at state X, check, repeat" so you can `git bisect run` it.
-9. **Differential loop.** Run the same input through old-version vs new-version (or two configs) and diff outputs.
-10. **HITL bash script.** Last resort. If a human must click, drive _them_ with `scripts/hitl-loop.template.sh` so the loop is still structured. Captured output feeds back to you.
+**This is a Godot game driven from PowerShell. There is no dev server, no browser and no HTTP** — every
+loop below is the engine, run headless, or the game with the user in front of it.
 
-Build the right feedback loop, and the bug is 90% fixed.
+1. **A net** at a seam the glossary already agrees on — `tests/nets/`, run by `tests/run_nets.ps1`.
+   ⚠ **No net is written at a seam `CONTEXT.md` does not name**; needing a new one is the user's call.
+2. **A throwaway `--headless --script` runner** that builds the `sim` objects with `.new()` and asserts
+   the symptom. **`src/sim/` is constructible without the tree, which is what makes this cheap.**
+3. **A throwaway under `.prototypes/<subject>/`.** ⚠ **Ten runners already exist there** — copy the
+   nearest one rather than writing a runner from scratch; `.prototypes/README.md` says which.
+4. **A photograph**, and only when the pixels ARE the symptom — `tools/shot/`.
+   ⚠ **Never `--headless` for this**: there is no swapchain, every PNG comes back black, and no error is raised.
+5. **Replay a fixed input.** The sim is deterministic: pin the seed and the input list, and the same run
+   comes back every time.
+6. **Fuzz the seed.** For "sometimes wrong", drive a thousand seeds through the sim headless and collect
+   the ones that fail.
+7. **`git bisect run`**, when the bug appeared between two known-good commits.
+8. **Differential.** The same input through two commits, or two values of one constant in
+   `src/sim/rules.gd`, diffed.
+9. **The user, in front of the running game.** ⚠ **Last resort, and it costs a round.** Say exactly what
+   they should do and exactly what to look at.
+
+⚠⚠ **The traps that have each cost a round are written down, not here** — `docs/how-nets-lie.md` holds
+them: **mouse clicks pushed headless fail silently** (the window is 64×64 and the transform eats them),
+and **`--headless --script` does not re-import**, so a brand-new `class_name` file is invisible. Read it
+before you conclude the loop is telling you the truth.
+
+⚠⚠ **The most common failure in this repo is wrong with no error.** `run_nets.ps1` treats anything on
+stderr as a failure for that reason — a loop that only checks "it did not crash" measures nothing here.
 
 ### Tighten the loop
 
@@ -52,16 +64,16 @@ The goal is not a clean repro but a **higher reproduction rate**. Loop the trigg
 
 ### When you genuinely cannot build a loop
 
-Stop and say so explicitly. List what you tried. Ask the user for: (a) access to whatever environment reproduces it, (b) a redacted captured artifact (HAR file, log dump, core dump, screen recording with timestamps), or (c) permission to add temporary production instrumentation. Do **not** proceed to hypothesise without a loop.
+Stop and say so explicitly. List what you tried. Ask the user for: **(a) the exact steps that make it happen** in the running game, **(b) a screenshot or a recording of the moment**, or **(c) what the game printed** — `push_error` does not stop the game, so the bark is often sitting in the output nobody read. Do **not** proceed to hypothesise without a loop.
 
 ### Completion criterion: a tight loop that goes red
 
-Phase 1 is done when the loop is **tight** and **red-capable**: you can name **one command** (a script path, a test invocation, a curl) that you have **already run at least once** (show the invocation and its output, redacted), and that is:
+Phase 1 is done when the loop is **tight** and **red-capable**: you can name **one command** (a net, a `--headless --script` runner, a shot script) that you have **already run at least once** (show the invocation and its output, redacted), and that is:
 
 - [ ] **Red-capable**: it drives the actual bug code path and asserts the **user's exact symptom**, so it can go red on this bug and green once fixed. Not "runs without erroring"; it must be able to _catch this specific bug_.
 - [ ] **Deterministic**: same verdict every run (flaky bugs: a pinned, high reproduction rate, per above).
 - [ ] **Fast**: seconds, not minutes.
-- [ ] **Agent-runnable**: you can run it unattended; a human in the loop only via `scripts/hitl-loop.template.sh`.
+- [ ] **Agent-runnable**: you can run it unattended. ⚠ **A loop that needs the user to launch the game and look is not one** — it is the last resort above, and it costs a round.
 
 If you catch yourself reading code to build a theory before this command exists, **stop: jumping straight to a hypothesis is the exact failure this skill prevents.** No red-capable command, no Phase 2.
 
@@ -103,13 +115,15 @@ Each probe must map to a specific prediction from Phase 3. **Change one variable
 
 Tool preference:
 
-1. **Debugger / REPL inspection** if the env supports it. One breakpoint beats ten logs.
+1. **A breakpoint**, when the bug is reachable in the editor. ⚠ **Headless has none** — there the probe is a print, and one print at the right boundary beats ten.
 2. **Targeted logs** at the boundaries that distinguish hypotheses.
 3. Never "log everything and grep".
 
 **Tag every debug log** with a unique prefix, e.g. `[DEBUG-a4f2]`. Cleanup at the end becomes a single grep. Untagged logs survive; tagged logs die.
 
-**Perf branch.** For performance regressions, logs are usually wrong. Instead: establish a baseline measurement (timing harness, `performance.now()`, profiler, query plan), then bisect. Measure first, fix second.
+**Perf branch.** For performance regressions, logs are usually wrong. Instead: establish a baseline (`Time.get_ticks_usec()` around the suspect, or Godot's own profiler), then bisect. Measure first, fix second.
+
+⚠⚠ **Stop measuring the moment the user is waiting on you** (2026-08-30): four probes were run to find the cause of a stall and the user cut it off. **Say the one number you have and ask**, rather than widening the measurement.
 
 ## Phase 5: Fix + regression test
 
@@ -135,4 +149,4 @@ Required before declaring done:
 - [ ] Regression test passes (or absence of seam is documented)
 - [ ] All `[DEBUG-...]` instrumentation removed (`grep` the prefix)
 - [ ] Throwaway prototypes deleted (or moved to a clearly-marked debug location)
-- [ ] The hypothesis that turned out correct is stated in the commit / PR message, so the next debugger learns
+- [ ] The hypothesis that turned out correct is stated in the commit message, and — when a ticket owns this spot — in that ticket, so the next round learns
