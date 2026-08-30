@@ -70,6 +70,35 @@ and **about 480 did not survive.** What lived measured **input → state**; what
 ⚠⚠ **No check is written at a seam that is not agreed**, and the agreed three live in the glossary.
 If the work needs a new seam, that is the user's call — stop and ask.
 
+### ⚠⚠ Split it — **this rule moved here out of `CLAUDE.md` on 2026-08-30**
+
+***"From now on, whatever can be split should be split and run in parallel by itself."*** ⚠ **Work that
+touches the SAME file is not split** — three agents in `field_view.gd` voided the measurement three times
+and cost two rounds. **Blender work and code work never collide.**
+
+**Where the round actually goes slow is the nets** (2026-08-30, the user: *"the round-trip is long, so
+split the net writing, write them fast and review them fast"*).
+
+- **Nets are separate files, so writing several IS splittable** — one agent per net, spawned at once,
+  and **every result read in one pass**, never one at a time
+- ⚠⚠ **They all measure ONE source.** While builder is still editing `src/`, every net aims at a moving
+  target and the runner's fingerprint line is what catches it. ⇒ **Split the nets after builder stops**,
+  or across files builder is not in
+
+### ⚠⚠ Four questions before a net is written — **or it grows to 790 lines**
+
+**Measured 2026-08-30**: 15 nets, **11,845 lines, 790 on average.** **The whole suite runs in 14 seconds**
+— ⇒ **writing is what costs the round, never running.**
+
+| | |
+|---|---|
+| **Does it go red on THIS defect?** | ⚠⚠ **The one nobody asks, and the reason nets grow** — not knowing what it catches means writing everything |
+| **Same verdict every run?** | Pin the seed and the input list |
+| **Seconds, not minutes?** | A net past 120s is killed and reported red |
+| **Runs with nobody watching?** | A check that needs the user to look is not a net |
+
+⚠ **This is `diagnosing-bugs`' Phase 1 bar applied to nets**; that skill holds the long form.
+
 Spawn `builder`. It writes what the plan says, runs the nets, reports red/green, and **stops**. It does
 not declare anything done.
 

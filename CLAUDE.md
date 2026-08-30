@@ -113,12 +113,6 @@ not `play.bat`, not the other Godot in `~/bin`.
 **Code that pretends to work is worse than code that doesn't, and a green that measures less than its
 label says is worse than a red. If you can't do it, say you can't.**
 
-# ⚠⚠ **Work that does not share files is split and run at once** (2026-08-30, the user)
-
-***"From now on, whatever can be split should be split and run in parallel by itself."***
-⚠ **Work that touches the SAME file is not split** — three agents in `field_view.gd` on 2026-08-30
-voided the measurement three times and cost two rounds. **Blender work and code work never collide.**
-
 # ⚠⚠ **Anything the player LOOKS at is MADE, never typed** (2026-08-28, the user)
 
 ***"UI나 이런것들 코드가 아니라 항상 제대로 만들라고 ... pixellab이나 블랜더 MCP 사용하라고"***
