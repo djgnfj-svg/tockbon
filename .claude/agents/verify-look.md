@@ -10,7 +10,7 @@ model: opus
 
 ## Acceptance criteria
 
-The `## Screen` section of the claimed ticket — `docs/plan/tickets/<NN>-<이름>.md` — "what does the user see that tells them this happened".
+The `## Screen` section of the claimed ticket — `docs/roadmap/task-NN-<name>/MM-<name>/NN-MM.ticket.md` — "what does the user see that tells them this happened".
 
 If that section is empty you cannot judge. Report that, and stop.
 

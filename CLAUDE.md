@@ -14,7 +14,7 @@ rather than quietly picking one.
 
 ## ⚠⚠ **The ground the game is played on**
 
-**What this week is doing is read out of `docs/roadmap.md`, never out of this file.**
+**What this week is doing is read out of `docs/roadmap/README.md`, never out of this file.**
 
 ⚠ **The bar is Bad North.** **The island HAS a second storey and a stair, and they passed by eye.**
 ⇒ **Do not delete them.**
@@ -34,7 +34,7 @@ demo."*) · **roguelike** · **funding after it** · **raiding other islands is 
 ⚠ **What DEMO returns**: saves, an options screen, sound, a store page and its builds, and language stop
 being December's problem. None were built, so nothing is lost.
 
-**The code runs and the game launches.** ⚠⚠ **What is being made is read out of `docs/plan/` and the
+**The code runs and the game launches.** ⚠⚠ **What is being made is read out of `docs/roadmap/` and the
 roadmap, and there is no third place.** **Do not go looking for one, and do not cite one.**
 
 ⚠⚠ **`main` is not the whole repo.** Two sessions collided on it once and one rebuilt the docs around a
@@ -133,8 +133,7 @@ probe. **The test is whether the PLAYER is meant to look at it.**
 | Path | What it holds |
 |---|---|
 | `docs/design/` | **What is being made, and the forks that were rejected.** ⚠ **Sixteen fork docs and NO GDD, which is the defect** — the folder is not thin, the one page that says what the game is has never been written. When it is, it is **one page**. A fork doc opens with a `Status:` line and **a reversal is written onto it, never by deleting it** |
-| `docs/roadmap.md` | **The only map, and it sits at the top of `docs/`** (moved 2026-08-30) — **what is being done** — **one dated row per week, each carrying a status mark**, plus the chunk table |
-| `docs/plan/` | **`log.md` is why it came out that way, and every quotation lives there**; **`tickets/NN-name.md`** are the work. **Status is a `Status:` line inside the file — files never move between folders.** The chain: `compass` → `grilling` (which settles what a stretch actually builds, sending `research` outside when it needs an outside fact) → `build-loop` → `wrap-up`, with `roadmap` checking it. ⚠⚠ **Only `wrap-up` writes to these files, and only after the conversation is finished** |
+| `docs/roadmap/` | **The only map and the work under it**, at the top of `docs/` (the folder took over from `docs/plan/` on 2026-08-31). **`README.md` IS the map** — what is being done, one row per task with a status mark, plus the chunk table. **`log.md` is why it came out that way, and every quotation lives there.** **`task-NN-name/`** is one task — its `NN.task.md` says what is on screen when it ends, and the **`MM-name/`** folders beside it are its tickets, each holding a `NN-MM.ticket.md` and whatever that ticket produced, **one day each**, numbered from `01` inside that task. ⚠⚠ **Task folders sit directly here; there is no `tasks/` layer.** ⚠⚠ **A description file is named after its own number, never `TASK.md` or `TICKET.md`** — otherwise every open tab carries the same name and none can be told apart, and the number and the name are repeated inside the file so they never come apart. **Status is a `Status:` line inside the file — files never move between folders.** The chain: `compass` → `grilling` (which settles what a stretch actually builds, sending `research` outside when it needs an outside fact) → `build-loop` → `wrap-up`, with `roadmap` checking it. ⚠⚠ **Only `wrap-up` writes to these files, and only after the conversation is finished** |
 | `docs/reference/` | **What came in from outside**: the screenshots a decision was made from, and the notes `research` leaves when a search took real work. All `YYYY-MM-DD-what-it-is`. ⚠⚠ **A ticket keeps the conclusion; the material stays here** — and `wrap-up` asks before deleting a shot |
 | `lessons-from-two-dead-games` | **What the two games that died actually measured** |
 | `how-nets-lie` | **Every green measured to be false.** Read it before writing a check and before believing a green round |

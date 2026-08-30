@@ -18,7 +18,7 @@ is a name nothing can see.**
 ⚠⚠ **`domain-modeling` was folded into this skill on 2026-08-29** (the user: *"merge the two and call it
 naming"*). They wrote the same file and asked the same question, and one was this repo's own while the
 other was imported. **What came across is the during-the-session half below.** What did not: **ADRs**
-(this repo has no `docs/adr/`; a decision goes to `docs/plan/log.md`, and only `wrap-up` writes there)
+(this repo has no `docs/adr/`; a decision goes to `docs/roadmap/log.md`, and only `wrap-up` writes there)
 and **multi-context maps** (there is one context).
 
 ## ⚠⚠ Anything this skill PRINTS goes through `listup` (2026-08-29, the user)
@@ -57,7 +57,7 @@ being used.
   agreed in chat and written down an hour later is the one that gets lost
 
 ⚠⚠ **`CONTEXT.md` holds no implementation details.** Not a spec, not a scratch pad, not a place for
-decisions. **A glossary and nothing else** — the decisions live in `docs/plan/log.md`.
+decisions. **A glossary and nothing else** — the decisions live in `docs/roadmap/log.md`.
 ⚠ **Only terms this project actually coined belong.** A general programming concept the project happens
 to use is not a row here.
 

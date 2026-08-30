@@ -8,7 +8,7 @@ so it is played with **nothing unlocked at all**. **The first run has to be wort
 that condition is the live part of this doc, and it has never been measured.
 ⚠ It was decided for the open-field cell game, which no longer exists. **The design it pointed at,
 `cell-army-gdd`, is gone too** — deleted with the cell game, kept only in commit `62ff57d`, and **not
-revived.** There is no GDD; what is being made is read out of `docs/plan/`.
+revived.** There is no GDD; what is being made is read out of `docs/roadmap/`.
 
 ## What was decided
 
