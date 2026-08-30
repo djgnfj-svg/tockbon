@@ -697,17 +697,6 @@ const COL_ENEMY := Color(1.0, 0.420, 0.361)
 ## killed them: 「위에 노드만 살짝 얹은 느낌이어서 너무 별로」·「너무 흰색이 너무 잘 보여」.
 ## ⚠ **What survives below shapes the HOVER's mask**, which is still drawn at runtime.
 
-## **How many tiles across one BLOCK is** — the unit the island is built in, and nothing else.
-##
-## ⚠⚠ **THE 판 STOPPED USING THIS ON 2026-08-29** (the user: 「판이 조각단위로 뜨고 그것으로 이동할 수
-## 있는게 좋을 것 같아」). It used to be the 판's own size: `field_view._wash_cells` numbered mats by
-## 2x2 piece and the bake stamped one 판 per piece. **Both are per 조각 now.** ⚠ The rejection this
-## constant was written on is the one that got reversed — one mat per tile was on screen once and the
-## word then was 「너무 많으」.
-## ⚠ **Still true, and still the island's unit**: the bake lays the whole island down as 2x2 blocks and
-## a raised block is always a whole block, starting at tile 0.
-const WASH_BLOCK_TILES := 2
-
 ## ⚠ **`SUMMON_RING_W_TILES` went with the boats** (2026-08-29), and `SUMMON_RING_SEGMENTS` before it.
 ## The width bound is the fact worth keeping: under about 0.2 tiles a ring disappears at `ZOOM_MIN`,
 ## and over about 0.8 it stops being a line and becomes the band it existed to replace.
@@ -724,62 +713,6 @@ const WASH_BLOCK_TILES := 2
 # `WATER_FIELD_SUBDIV` — the new shader reads the same baked field, so those three did not park.
 # ==============================================================================================
 
-## How wide one swell is (in tiles, inverted) and how fast it travels. Slow — a fast sea reads as a
-## flowing river, and this one is meant to sit still enough to plan on.
-## ⚠⚠ **Chosen by eye from six candidates rendered side by side** (2026-08-26). The user: 「적당히만
-## 다르면 될 듯」 — the two that changed the sea's COLOUR or its contrast hardest were rejected for being
-## too far from what was there; this one is bigger, slower swell and nothing else.
-const WATER_WAVE_SCALE := 0.14
-const WATER_WAVE_SPEED := 0.13
-## ⚠⚠ **How far apart the two sea tones are pushed at the crest** (2026-08-26, the user: ***"물 자체가
-## 임팩트가 있는 건가?"***). The shader was written deliberately quiet on the reasoning that the sea is
-## the background bodies are read against, and quiet turned out to mean invisible — the surface read as
-## one flat colour. This lifts the crest away from the trough beyond the two constants above, which are
-## still only a few percent apart.
-const WATER_CONTRAST := 2.6
-
-## --- the ripple the light catches ------------------------------------------------------------------
-## ⚠⚠ **What a shop-bought water shader would call its normal map.** Three sine waves gave the sea a
-## shape but no surface: the swell was visible and the water between the crests was a flat colour, and
-## that is what read as "just code" (2026-08-26, the user: ***"물 자체가 임팩트가 있는 건가?"***).
-## Sea of Thieves solves it with four scrolling noise maps; this is the same idea evaluated instead of
-## sampled, which costs a little more and owes nothing to an asset store.
-## How many ripples per tile. Above about 3.5 they fall under a pixel at ZOOM_MIN and turn to noise.
-## ⚠⚠ **THE WHOLE RIPPLE SET WAS RETUNED 2026-08-28** (the user: 「물주름도 한번 개편해줘」). Finer,
-## slower, weaker and less chopped: the old set drew a busy crosshatch that competed with the island
-## for the eye, on a screen whose subject is the ground. **Five numbers moved together and they only
-## make sense together** — scale 1.9 -> 2.6, speed 0.14 -> 0.10, strength 4.2 -> 2.6, stretch 0.34 ->
-## 0.24, chop 2.6 -> 1.6.
-## ⚠ **티켓 05 asks how broken the ripples should be and it is the USER's pick, not this file's.** This
-## is a candidate to look at, not the answer to that ticket.
-const WATER_RIPPLE_SCALE := 2.6
-## How fast the two noise layers drift apart. Slow: a ripple that races reads as rain, not as sea.
-const WATER_RIPPLE_SPEED := 0.10
-## How hard the ripple bends the surface normal. ⚠ **This is the whole dial between "glassy" and
-## "choppy"** — at 0 the sea is the old flat colour and at 4 it boils.
-## ✅ **Raised to what the approved screenshots were actually rendered with** (2026-08-26). ⚠ The sheets
-## the user picked from were shot at this value, not at the 1.6 that was in this file — shipping the
-## older number would mean the game never looked like the picture that was approved.
-## ⚠ **2.6 → 1.4 on 2026-08-28** (the user: 「물주름좀 줄여도 될듯 좀더 리얼한 물을 원함」).
-const WATER_RIPPLE_STRENGTH := 1.4
-## ⚠ **How far from the camera the ripple fades out, in world units.** Detail finer than a pixel is not
-## detail, it is fizz — and the far sea is exactly where a repeating pattern gets spotted
-## (2026-08-26, the user: 「줌을 뒤로 땡겼을 때 바다에 패턴이 보이는 문제가 있음」).
-const WATER_RIPPLE_FADE := 46.0
-## ⚠ **Which way the wind runs.** Ripples are long ACROSS the wind and short along it; without a
-## direction the noise is round, and round noise on water reads as fog or as marble.
-const WATER_RIPPLE_WIND_DEG := 24.0
-## How far they are drawn out along that wind. 1.0 is round; under about 0.5 they become streaks.
-const WATER_RIPPLE_STRETCH := 0.24
-## How hard the streaks are chopped into lengths. 0 leaves them running the whole sea; above about 3
-## they stop being streaks and become speckle.
-## ✅ **Looked at 2026-08-28 and the dial turned out not to matter.** Seven candidates went up side by
-## side and **the four that only moved this and its neighbours were indistinguishable** — the ripple bent
-## the surface normal and nothing else, so every setting came out as the same haze. **What the user
-## picked is `WATER_RIPPLE_CRISP` below, which draws the crests instead**, and this number is now only
-## the shape of the noise underneath it. ⚠ **The lesson is not about this constant**: a candidate sheet
-## was rendered twice on an axis nobody had checked could change the picture.
-const WATER_RIPPLE_CHOP := 1.6
 ## ⚠⚠ **How hard the ripple is DRAWN rather than lit.** Every dial above bends the surface normal and
 ## leaves the light to reveal it; on a board of flat cartoon blocks that comes out as an airbrushed
 ## haze, which is what a sheet of seven candidates measured (2026-08-28). This lays the crests into the
@@ -790,25 +723,6 @@ const WATER_RIPPLE_CHOP := 1.6
 ## ⚠ **0.70 → 0.30 on 2026-08-28**, same line. The drawn crests are the loudest half of the ripple:
 ## the bent normal is light finding the water, and this is a white line painted on it.
 const WATER_RIPPLE_CRISP := 0.30
-## Where along the ripple a drawn line begins, read against the crest mask and not against the ripple
-## itself. ⚠⚠ **Measured, not guessed** (2026-08-28): the mask averages about 0.5, so this picks roughly
-## the top fifth of the crests. Two earlier attempts drew nothing at all — 0.62 against the ripple value,
-## whose average is 0.33 — and a candidate that renders identically to the one it is compared against is
-## the failure this file exists to stop.
-const WATER_RIPPLE_CRISP_EDGE := 0.58
-## ⚠⚠ **How unevenly those lines are spread across the sea, and the user asked for this in the same
-## breath as picking it** (2026-08-28: 「계속 막 뭐랄까 일관적이면 안 되고 랜덤해야함 넓게」). An even
-## field of crests is a texture rather than a sea. At 0 every stretch of water works equally; at 1 the
-## quiet stretches go bare.
-const WATER_RIPPLE_CRISP_PATCH := 0.85
-## How wide one such stretch is, in inverted tiles — about 12 tiles across at 0.08. ⚠ **Wide is the
-## point**: at anything near the ripple's own scale this and the chop only make speckle together.
-## ⚠⚠ **There is a CEILING on wide, and it was measured** (2026-08-28). At 0.04 a stretch is 25 tiles,
-## which is most of what the camera holds — so the whole screen falls inside one stretch and the sea is
-## either all working or all quiet, which is the evenness this was added to break. **Several stretches
-## have to fit in frame or there is nothing to be uneven against.**
-const WATER_RIPPLE_CRISP_PATCH_SCALE := 0.08
-
 ## --- the wash where the sea meets the land ---------------------------------------------------------
 ## ⚠⚠ **The shoreline is drawn BY THE SEA, and that is the second answer to a question that failed
 ## once.** A bright ring was built as a mesh laid on the water and it read as a white plate: an object
@@ -854,19 +768,6 @@ const COL_WATER_SHALLOW := Color(0.560, 0.700, 0.690)
 ## How wide that stretch is, in tiles. **Several times the foam's reach**: the foam is the last hand's
 ## width of water and this is the approach to it.
 const WATER_SHALLOW_TILES := 3.2
-## ⚠⚠ **How strongly the shallows show — and the reason this constant is new is that they were NEVER
-## DRAWN** (found 2026-08-28). `COL_WATER_SHALLOW` was chosen on 2026-08-26, handed to the shader, and
-## commented in three places; `shallow.rgb` appears nowhere in the shader's entire history. **Everything
-## about the feature existed except the line that paints it.** The width above was doing one real job —
-## steepening the ripple near the shore — which is why nobody noticed the colour was missing.
-## ⚠ Kept well under 1: the shallows are the approach to the shore, not a second shore.
-## ⚠⚠ **BACK TO 0 the same day it was first drawn** (2026-08-28, the user: 「물가하고 거품만 계산하면
-## 됐든」, then on seeing it: the island wore a soft halo instead of a thin line). At 0.55 the shallows
-## are a wide pale glow round the whole coast, and it competes with the one thing the user actually
-## asked for — a thin line on the outline that breathes. **0 is what every screen the user has judged so
-## far looked like**, because the colour was never painted until today.
-## ⚠ The width above still does its other job at any strength: it steepens the ripple near the shore.
-const WATER_SHALLOW_STRENGTH := 0.0
 ## How far out the foam reaches at its widest, in TILES. Under about 0.2 it is a line rather than a
 ## wash; over about 1.2 it stops looking like a shore and starts looking like shallow sea.
 ## ⚠⚠ **How far out the travelling wave LINES live, in tiles** (2026-08-26). The shore used to be one
@@ -880,26 +781,6 @@ const WATER_SHALLOW_STRENGTH := 0.0
 ## ⚠ **`shore-not-rings`: 3.4 → 1.8.** Reach came back in with the ring count.
 ## ⚠ **1.8 → 1.0 on 2026-08-28** (the user: 「거품도 너무 멀리서 와서 별로긴하다 조금씩만 있으면되고」).
 const WATER_FOAM_TILES := 1.0
-## How fast a line travels in, in cycles per second. **Slow**: a shore washes about once every three
-## seconds, and faster reads as a flicker.
-const WATER_FOAM_SPEED := 0.28
-## How many lines are inside that reach at once. Above about 4 they crowd into stripes.
-## ⚠⚠ **`bad-north-foam`: 1.2 → 2.6.** One and a bit bands is one ring. The reference frames have two
-## or three, evenly spaced, and that count IS the look.
-## ⚠⚠ **`shore-not-rings`: 2.6 → 1.0, ONE ROUND AFTER GOING 1.2 → 2.6.** The three rings were built on a
-## misreading of the same pictures. **One band, and faint.**
-const WATER_FOAM_BANDS := 1.0
-## How thin each line is. It is an exponent on a cosine: 1 is a soft gradient, 8 is a hard edge.
-## ✅ **Chosen by eye from four thicknesses** (2026-08-26, the user: 「3번이 적당하네」). ⚠ **A high
-## exponent is the CHEAP way to a thin line** — it costs one `pow` and no extra sampling — but it also
-## means the line's width is not a distance anybody can read off this number. If the shore ever has to
-## be a measured width, this is the wrong dial.
-## ⚠⚠ **Softened 2026-08-28 from 26.** At 26 a line was a wire — under a pixel wide at this camera and
-## invisible at anything but a close zoom.
-## ⚠ **`bad-north-foam`: 16 → 18.** Barely moved, and it is recorded because two rounds were spent
-## taking it DOWN to 6 chasing 「부드럽게」 — which produced soft slabs. **The reference rings are thin,
-## and a high exponent is what makes them thin.**
-const WATER_FOAM_SHARP := 18.0
 ## ⚠⚠ **How far the phase drifts ALONG the coast, in radians — the thing that stops the lines being
 ## concentric.** At 0 every stretch of shore crests at the same instant, which is the defect this
 ## replaced. Near π the two sides of a headland are in opposite phase.
@@ -933,33 +814,6 @@ const WATER_FOAM_BREAK_SCALE := 0.35
 ## A step and not a jump: the two before it were 0.06 → 0.22, and this is the first time the band has
 ## been in the right neighbourhood to be nudged rather than moved.
 const WATER_FOAM_LIP_TILES := 0.25
-## ⚠⚠ **How hard that lip's outer edge is, and 0 is the fade it was born with.** The band was
-## `1 - smoothstep(0, w, d)`, which starts dying the instant it leaves the rock — so what stood at the
-## coast was a soft halo, and an island wearing a soft halo reads as glowing rather than as wet. At 1
-## the band holds its full strength almost to its edge and then stops.
-const WATER_FOAM_LIP_HARD := 0.0
-## ⚠⚠ **How opaque the lip is where it is strongest, and it was a literal `0.85` in the shader.** The
-## user asked for the line to be **얇고 투명하고 조금 티가 나게** (2026-08-28) — noticed, not announced.
-## At 0.85 it was very nearly the foam's own white and read as a sticker cut round the island.
-## ⚠ **0.28 → 0.26 with the colour change of 2026-08-28**: the tone carries the softening now, and
-## the opacity came down only enough to keep the wash under the permanent line rather than over it.
-## ⚠ **`shore-not-rings`: 0.26 → 0.34.** It is the shore's whole appearance now rather than a wash
-## under a line, so it carries the strength the travelling foam gave up.
-const WATER_FOAM_LIP_ALPHA := 0.34
-## ⚠⚠ **How opaque the travelling lines are at their strongest, and it was a literal `0.95` in the
-## shader** — the foam colour very nearly undiluted. **In the reference picture the user supplied
-## (`docs/reference/2026-08-27-bad-north-two-storey-island.png`) the surf is barely lighter than the sea
-## it lies on**, which is most of why it reads as water and this read as a stroke.
-## ✅ **Cut on 2026-08-28** (the user: 「조금 과하긴 해 저 거품이」 and then 「거품은 조금만 있어도 될 거
-## 같아, 얇게」). **Fewer lines and thinner ones, not fainter ones** — the reach and the count came down
-## with it, and the opacity went back UP a little: a line too faint to see is not a thin line, it is a
-## missing one.
-## ⚠ **0.40 → 0.36 with the colour change of 2026-08-28.** Same reason as the lip's: the sea-toned
-## foam is quieter on its own, so this only had to come off the top.
-## ⚠ **`bad-north-foam`: 0.36 → 0.42.** Up, not down: there are three rings now instead of one and each
-## has to read on its own.
-## ⚠ **`shore-not-rings`: 0.42 → 0.15.** 「거품도 엄청적어」 is this number.
-const WATER_FOAM_ALPHA := 0.15
 ## ⚠⚠ **How much the lip's width swings — and a still lip is the reason it read as a sticker no matter
 ## how thin it got** (2026-08-28, the user: 「물가가 유동적으로 움직여야 좀 제대로 보이고, 얇아졌다가
 ## 약간 두꺼워졌다가 떨어져 나갔다가 하는 게 중요할 듯」). **Thinner and fainter were both tried first and
@@ -972,91 +826,6 @@ const WATER_FOAM_ALPHA := 0.15
 ## changing along the coast** — thick through a bay, thin off a point — so the swing goes up now that
 ## the band is wide enough for a swing to be visible in it.
 const WATER_FOAM_LIP_WOB := 0.80
-## How long a stretch of coast shares one width, in inverted tiles — about 4 tiles at 0.25 — and how fast
-## that width changes. ⚠ **Slow.** A line that flickers reads as a fault, not as a shore.
-const WATER_FOAM_LIP_WOB_SCALE := 0.25
-const WATER_FOAM_LIP_WOB_SPEED := 0.11
-## ⚠⚠ **How strongly the shore lets a line GO** (2026-08-28, the user: 「가끔씩 두 줄이 되기도 하면 좋을
-## 거 같은데 ... 멀어지면서 사라지는 거 있잖아. 진짜인 것처럼」). Once a cycle, over patches of coast, the
-## line separates from the rock and travels seaward, fading as it goes. **The two lines are the same
-## line at two ages**, which is what backwash actually looks like.
-## ⚠ **`shore-not-rings`: 0.85 → 0.45.** The peel is the one faint line the reference frames have out
-## in the water, so it stays — but it was strong enough to be a second shoreline.
-const WATER_FOAM_LIP_PEEL := 0.45
-## How far a peeled line gets before it is gone, in tiles. ⚠ Short: past about a tile it is out in open
-## water and reads as a stray mark rather than as water leaving a shore.
-const WATER_FOAM_LIP_PEEL_TILES := 0.75
-## ⚠⚠ **The hairline that is always there, in tiles** (2026-08-28, the user: 「해안선에 붙어있는 라인은
-## 꼭 있어야 돼 ... 진짜 얇게 하나는 꼭 유지됐음 좋겠어」). The swash and the peel can both take a stretch
-## of shore down to nothing, and on the frames where they did the coast had no edge at all. **This much
-## is drawn no matter what they are doing.**
-## ⚠⚠ **It is a LINE and it is drawn on its own** — flat across its width, hard at its outer edge, and
-## carrying its own opacity below. The first attempt folded it into the soft wash and what came out was
-## a permanent glow, which is not what was asked for: 「딱붙어있는 얇은선이 필요하다는건디」.
-## ⚠⚠ **THERE IS A FLOOR AND IT IS MEASURED: below about 0.04 the line breaks into dots.** At 0.030 the
-## band is thinner than the shore's own curvature across one screen pixel and the line came out dashed —
-## a defect, not a thinner line. **0.045 is just above that, and the way to go thinner is a finer field,
-## not a smaller number here.**
-## ⚠⚠ **RAISED 2026-08-28 FROM 0.045, AND THE FLOOR ABOVE IS A TEXEL FLOOR** (the user: 「지금
-## 사진보면 떨어져있음」). The 「분질로 깨진다」 measured at 0.030 was never about the number:
-## `WATER_FIELD_SUBDIV` is 16, so **one texel is 0.0625 of a tile** and a line thinner than that is
-## asking the field for detail it does not carry — the distance between texel centres is interpolated
-## straight, so the band's width wanders texel to texel and the line comes out dashed. **0.045 was
-## SUB-TEXEL and only looked continuous because the warp was smearing it**; welding it to the true
-## shore is what exposed the dots. ⇒ **Just over one texel.** ⚠ **The way to go thinner is a finer
-## field, not a smaller number here** — that was already written and it is now measured.
-## ⚠⚠ **BACK TO 0.045 ONCE THE FIELD WAS SIGNED, AND THE TEXEL FLOOR WAS NEVER THE REAL FLOOR.**
-## It went to 0.08 an hour earlier to escape a dashed line, on the reasoning that one texel is 0.0625
-## of a tile and a thinner band is asking the field for detail it does not carry. **That was measuring
-## the wrong thing.** The dashes came from the field being UNSIGNED: absolute distance has a CREASE at
-## the coastline, and a band straddling that crease samples a value that folds back on itself, so its
-## width wandered texel to texel. A signed field is smooth straight through zero — the interpolation
-## has nothing to fold — and 0.045 comes out as a clean line at the same resolution.
-## ⚠ **0.08 also broke what it was widened for**: at 0.08 the hairline was WIDER than the swash that is
-## supposed to swing outside it (`WATER_FOAM_LIP_TILES` 0.06), so the shore's movement was drawn
-## entirely inside a band that never moves, and the coast read as painted on.
-const WATER_FOAM_LIP_MIN_TILES := 0.045
-## ⚠ **Its own opacity, well above the wash's.** The wash is faint on purpose so it does not read as a
-## stroke; this one is meant to be seen, and it cannot borrow an opacity chosen to hide something.
-## ✅ **Picked by eye from four** (2026-08-28). At 0.60 it reads as a marker pen round the island, which
-## is the 「그냥 흰색 선」 this whole round has been walking away from.
-## ⚠ **Held at 0.30 through the colour change of 2026-08-28, and NOT dropped with the others.** This
-## is the hairline that has to be there on every frame; the tone is what stopped it reading as white,
-## and taking its opacity down as well is how a permanent line becomes an intermittent one.
-const WATER_FOAM_LIP_EDGE_ALPHA := 0.30
-## ⚠⚠ **Where inside its reach the travelling lines live, as fractions of `WATER_FOAM_TILES`.** These
-## two were literals in the shader and they are the reason the lines could barely be found: 0.18 and
-## 0.35 of a 2.6-tile reach put every line between 0.47 and 0.91 tiles off the coast, a ring one third
-## of a tile thick. **The lines were drawn across the whole reach and then faded out over nearly all of
-## it.** `IN` is how quickly they come up out of the shore, `OUT` is where they start dying toward the
-## open sea.
-const WATER_FOAM_FADE_IN := 0.05
-## ⚠ **`bad-north-foam`: 0.70 → 0.90**, so the outermost ring survives to the edge of its reach
-## instead of being faded out over the last third of it.
-const WATER_FOAM_FADE_OUT := 0.90
-## ⚠⚠ **How wide a stretch of coast the gate can switch off, in inverted tiles — about 2 tiles at 0.5.**
-## The gate exists so a coast has surf here and flat water twenty metres along; it was sampled at
-## `WATER_FOAM_BREAK_SCALE * 0.55`, which is a feature about **eight tiles** wide. **The island is
-## sixteen tiles across**, so the gate held two features and turned the lines off down the entire west
-## and south coast — found 2026-08-28 by painting the foam red, which showed surf living only off the
-## north-east arm. **A gate as big as the thing it gates is not a gate, it is a switch.**
-const WATER_FOAM_GATE_SCALE := 0.5
-## ⚠ **How much surf a switched-off stretch keeps.** 0 empties it completely, which is what made the bare
-## coast above so total. A floor leaves the quiet stretches quiet without leaving them dead.
-## ⚠ **Raised 2026-08-28**: with the phase break turned back down, the gate is the only thing left that
-## could tear the coast into working and dead stretches, and the user asked for clean.
-## ⚠ **`bad-north-foam`: 0.55 → 0.92.** A ring that is switched off down one stretch of coast is a
-## broken ring, and the reference frames close all the way round.
-const WATER_FOAM_GATE_FLOOR := 0.92
-## ⚠⚠ **How hard the sheltered coast is spared.** Waves arrive FROM somewhere — the shore facing into
-## the wind takes them and the lee shore is nearly flat. A ring of identical surf all the way round is
-## what says nothing is actually arriving. Shares the ripple's wind direction on purpose: one weather.
-## ✅ **Chosen by eye from four** (2026-08-26): all-round · gentle · this · strong. The user: 「3번이
-## 맞긴 한데」.
-## ⚠⚠ **`bad-north-foam`: 2.4 → 0.6**, and this one was CHOSEN by eye from four on 2026-08-26. It is
-## being walked back on new evidence, not on argument: the reference frames have the rings closing
-## round the whole island, so a sheltered coast cannot be nearly bare.
-const WATER_FOAM_LEE := 0.6
 ## ⚠⚠ **How far outside the tile grid the mesh's real waterline sits, in tiles** (found 2026-08-28, the
 ## user: 「지금 굴곡에 안 맞춰져 있는 게 보이고」). **The bake exports the square tile outline as the
 ## coast**, and the mesh's shore is a skirt hung outward and down from that boundary — `SKIRT = 0.46` in
@@ -1091,20 +860,6 @@ const WATER_FOAM_LEE := 0.6
 ## nothing left to shift. ⚠ **Left as a dial rather than deleted**: it is still the one number that
 ## re-aligns the water to the land if the bake's shore ever moves again.
 const WATER_SHORE_OFFSET_TILES := 0.0
-## ⚠⚠ **How far the shore's sample point is dragged about before the distance is read, in tiles — and
-## this is the answer to 「너무 그래픽적」** (2026-08-28, the user: 「이게 뭔가 흐름처럼 곡선이어야 되는데
-## 이게 전혀 그런 게 없으니까」). **A band at a fixed distance from a line is that line's parallel offset**
-## — no amount of softening, thinning or width-swinging changes that, because the SHAPE is still the
-## island's outline scaled out. Warping where the distance is measured from is what breaks it, and it is
-## the standard technique rather than one invented here.
-## ⚠ Bigger than the lip's own width on purpose: below about 0.2 the band still traces the outline.
-## ⚠⚠ **`bad-north-foam`: 0.35 → 0.08.** Same reversal as `WATER_FOAM_BREAK`: this was the answer to
-## 「너무 그래픽적」 and the reference frames are exactly that — clean offset rings. Left at a trace so
-## the outermost ring is not a perfect scaled copy of the outline.
-const WATER_SHORE_WARP_TILES := 0.08
-## How wide a bend is, in inverted tiles — about 3 tiles at 0.33 — and how fast the bends travel.
-const WATER_SHORE_WARP_SCALE := 0.33
-const WATER_SHORE_WARP_SPEED := 0.06
 ## ⚠⚠ **This was briefly narrowed to 2.6 to buy precision and then put back, because the precision
 ## problem was somewhere else** (2026-08-28). The field was eight-bit — one level every `span/255`, or
 ## 0.0157 of a tile at 4.0, against a lip 0.06 wide — and the field is a float texture now, so the span
@@ -2254,7 +2009,6 @@ static func hover_lit(col: Color, k: float) -> Color:
 ## The same colour dipped by the press, `k` in 0..1.
 static func press_dipped(col: Color, k: float) -> Color:
 	return col.darkened(PRESS_DOWN_DIM * clampf(k, 0.0, 1.0))
-
 
 
 # --- The beasts' boat, on screen -------------------------------------------------------------------

@@ -50,7 +50,6 @@ const UNREACHABLE := 1 << 30
 const BARE_LAND_CHARS := "./"
 ## `~` water, `H` harbour — a water tile a boat may sail from and return to.
 const WATER_CHARS := "~H"
-const HARBOUR_CHAR := "H"
 
 ## **The TIER legend — a second board of the same size as the terrain one, and not new terrain
 ## letters.** 티켓 19, decision 2: a "high ground" letter would need a high twin of every letter that

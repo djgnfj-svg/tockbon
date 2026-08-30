@@ -629,16 +629,6 @@ func order_walk(soldier_id: int, tile: int) -> bool:
 	return true
 
 
-## Every body the player has sent somewhere, as `[soldier_id, ...]`. For the picture and for a net.
-func ordered_ids() -> Array:
-	var out := []
-	for i in soldier_order.size():
-		if int(soldier_order[i]) >= 0:
-			out.append(i)
-	return out
-
-
-
 ## Soldiers standing on the island right now. The view draws these and nothing else on the ground.
 func ashore_ids() -> Array:
 	var out := []
