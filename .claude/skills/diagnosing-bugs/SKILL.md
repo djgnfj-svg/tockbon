@@ -7,7 +7,7 @@ description: Diagnosis loop for hard bugs and performance regressions. Use when 
 
 A discipline for hard bugs. Skip phases only when explicitly justified.
 
-Read `CONTEXT.md` first for the modules and the agreed seams. ⚠ **There is no `docs/adr/` here** — what was decided and what was reversed live in `docs/plan/log.md`, and **every green already measured false lives in `docs/how-nets-lie.md`.** Read that one before believing any loop you build.
+Read `CONTEXT.md` first for the modules and the agreed seams. ⚠ **There is no `docs/adr/` here** — what was decided and what was reversed live in `docs/roadmap/log.md`, and **every green already measured false lives in `docs/how-nets-lie.md`.** Read that one before believing any loop you build.
 
 ⚠ **Redact every secret out of anything you paste** — write `<REDACTED>` in its place.
 

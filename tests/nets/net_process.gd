@@ -2,13 +2,13 @@ extends RefCounted
 ## The process shape, forced — **rewritten 2026-08-22 when the process changed underneath it.**
 ##
 ## It used to scan `docs/plans/{2.active,3.done}` for a round log and a "were the open questions sent"
-## line. **That folder is gone**: plans moved to `docs/plan/`, which holds the decision log and the
-## tickets, and status is a line inside a file instead of the folder the file sits in.
+## line. **That folder is gone**: planning became `docs/plan/` and then `docs/roadmap/` on 2026-08-31,
+## which holds the map, the decision log and the task folders, and status is a line inside a file.
 ## ⚠ **`wayfinder` was named here as the skill that kept the map and it was deleted on 2026-08-27** —
 ## no skill owns the map now, and only `wrap-up` writes to any of these files.
 ##
 ## ⚠ **What a green here means TODAY, stated up front so nobody reads more into it.**
-## The tree half walks `docs/plan/` and checks whatever it finds, and **the label carries how much was
+## The tree half walks `docs/roadmap/` and checks whatever it finds, and **the label carries how much was
 ## actually walked — read the count in it, not the colour.** What carries real weight is the scanner
 ## self-checks at the bottom: they drive the same pure functions the tree half uses, so a parser that has
 ## stopped working goes red with or without a map.
@@ -20,9 +20,14 @@ extends RefCounted
 ## Everything is parsed by pure functions taking TEXT, and the synthetic cases at the bottom drive **those
 ## same functions** — not a second copy written to agree with them.
 
-const SCRATCH := "res://docs/plan"
+const SCRATCH := "res://docs/roadmap"
 const MAP_FILE := "log.md"
-const ISSUE_DIR := "tickets"
+## ⚠⚠ **Rewritten 2026-08-31: there is no flat `tickets/` folder any more.** A task is `task-NN-name/`
+## sitting directly under `docs/roadmap/`, its `TASK.md` says what the task is, and the `MM-name.md`
+## files beside it are its tickets — **numbered from `01` inside that task**, so `Blocked by:` is
+## resolved against that task's own files and never across the repo.
+const TASK_PREFIX := "task-"
+const TASK_FILE := "TASK.md"
 
 const TYPES := ["grilling", "research", "prototype", "task"]
 ## ⚠ **`superseded` is the fourth**, added 2026-08-30: 티켓 10 과 27 were kept as tombstones on purpose
@@ -54,11 +59,13 @@ func run(t) -> void:
 ## `지도 0개` knows this line measured nothing; a bare green would have hidden that.
 func _tree(t) -> void:
 	var efforts := _effort_dirs()
+	var task_count := 0
 	var tickets := 0
 	var bad_head: Array[String] = []
 	var bad_field: Array[String] = []
 	var dangling: Array[String] = []
 	var resolved_without_answer: Array[String] = []
+	var task_without_task_file: Array[String] = []
 
 	for effort: String in efforts:
 		var map_text := _read(effort.path_join(MAP_FILE))
@@ -66,26 +73,36 @@ func _tree(t) -> void:
 			if not map_text.contains(want):
 				bad_head.append("%s → %s" % [effort.get_file(), want])
 
-		var files := _issue_files(effort)
-		var numbers := {}
-		for p: String in files:
-			numbers[_leading_number(p.get_file())] = true
-		for p: String in files:
-			tickets += 1
-			var text := _read(p)
-			var name := "%s/%s" % [effort.get_file(), p.get_file()]
-			if not TYPES.has(ticket_field(text, "Type")):
-				bad_field.append(name + " → Type")
-			if not STATES.has(ticket_field(text, "Status")):
-				bad_field.append(name + " → Status")
-			for n: int in blocked_by(text):
-				if not numbers.has(n):
-					dangling.append("%s → %d" % [name, n])
-			if ticket_field(text, "Status") == "resolved" and not text.contains(ANSWER_HEAD):
-				resolved_without_answer.append(name)
+		for task_dir: String in _task_dirs(effort):
+			task_count += 1
+			if not FileAccess.file_exists(task_dir.path_join(TASK_FILE)):
+				task_without_task_file.append(task_dir.get_file())
 
-	var walked := "지도 %d개 · 티켓 %d개" % [efforts.size(), tickets]
+			# ⚠ Built per task, not per repo: `Blocked by: 01` inside task 03 means **03-01**, and the
+			# same `01` inside task 04 is a different file. A repo-wide set would let a dangling
+			# reference pass because some other task happened to own that number.
+			var files := _ticket_files(task_dir)
+			var numbers := {}
+			for p: String in files:
+				numbers[_leading_number(p.get_file())] = true
+			for p: String in files:
+				tickets += 1
+				var text := _read(p)
+				var name := "%s/%s" % [task_dir.get_file(), p.get_file()]
+				if not TYPES.has(ticket_field(text, "Type")):
+					bad_field.append(name + " → Type")
+				if not STATES.has(ticket_field(text, "Status")):
+					bad_field.append(name + " → Status")
+				for n: int in blocked_by(text):
+					if not numbers.has(n):
+						dangling.append("%s → %d" % [name, n])
+				if ticket_field(text, "Status") == "resolved" and not text.contains(ANSWER_HEAD):
+					resolved_without_answer.append(name)
+
+	var walked := "지도 %d개 · 태스크 %d개 · 티켓 %d개" % [efforts.size(), task_count, tickets]
 	t.ok(bad_head.is_empty(), "%s — 지도가 요구된 절을 다 갖고 있다 %s" % [walked, str(bad_head)])
+	t.ok(task_without_task_file.is_empty(),
+		"%s — 태스크 폴더는 TASK.md 를 들고 있다 %s" % [walked, str(task_without_task_file)])
 	t.ok(bad_field.is_empty(), "%s — 모든 티켓이 Type 과 Status 를 legal 한 값으로 갖는다 %s" % [walked, str(bad_field)])
 	t.ok(dangling.is_empty(), "%s — Blocked by 가 실재하는 티켓만 가리킨다 %s" % [walked, str(dangling)])
 	t.ok(resolved_without_answer.is_empty(), "%s — resolved 인 티켓은 답을 들고 있다 %s" % [walked, str(resolved_without_answer)])
@@ -173,9 +190,9 @@ func _scanner_self_checks(t) -> void:
 
 
 # -- io ---------------------------------------------------------------------------------------------------
-## ⚠⚠ **Rewritten 2026-08-27: planning is ONE folder now, not one folder per effort.** `docs/plan/` holds
-## the log, the roadmap and `tickets/` directly — there is nothing to enumerate. **The old version walked
-## subdirectories and would have found zero here, going green while measuring nothing.**
+## ⚠⚠ **Rewritten 2026-08-27: planning is ONE folder now, not one folder per effort.** `docs/roadmap/`
+## holds the map, the log and the task folders directly — there is nothing to enumerate. **The old
+## version walked subdirectories and would have found zero here, going green while measuring nothing.**
 func _effort_dirs() -> Array[String]:
 	var out: Array[String] = []
 	if FileAccess.file_exists(SCRATCH.path_join(MAP_FILE)):
@@ -183,15 +200,32 @@ func _effort_dirs() -> Array[String]:
 	return out
 
 
-func _issue_files(effort: String) -> Array[String]:
+## Every `task-NN-name/` sitting directly under the map's folder. ⚠ **A folder that does not open with
+## `task-` is not a task** — the map's own `README.md` and `log.md` are files, not folders, and nothing
+## else is expected here.
+func _task_dirs(effort: String) -> Array[String]:
 	var out: Array[String] = []
-	var dir_path := effort.path_join(ISSUE_DIR)
-	var d := DirAccess.open(dir_path)
+	var d := DirAccess.open(effort)
+	if d == null:
+		return out
+	for sub: String in d.get_directories():
+		if sub.begins_with(TASK_PREFIX):
+			out.append(effort.path_join(sub))
+	out.sort()
+	return out
+
+
+## ⚠ `TASK.md` is the task's own description, not a ticket, so it is excluded — counting it would make
+## every task look like it carried one more day than it does.
+func _ticket_files(task_dir: String) -> Array[String]:
+	var out: Array[String] = []
+	var d := DirAccess.open(task_dir)
 	if d == null:
 		return out
 	for f: String in d.get_files():
-		if f.ends_with(".md") and f != "README.md":
-			out.append(dir_path.path_join(f))
+		if f.ends_with(".md") and f != TASK_FILE and f != "README.md":
+			out.append(task_dir.path_join(f))
+	out.sort()
 	return out
 
 

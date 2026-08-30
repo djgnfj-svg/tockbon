@@ -35,7 +35,7 @@ none of which changed anything.
    to measure. **"Probably fine" is the shape it hides in.**
 3. **It depends on something that is not built.** Check `src/` rather than the docs — the docs in this
    repo have been a commit behind more than once.
-4. ⚠⚠ **It re-opens something already decided.** `docs/plan/log.md` holds every reversal in the user's own
+4. ⚠⚠ **It re-opens something already decided.** `docs/roadmap/log.md` holds every reversal in the user's own
    words, and `docs/design/` holds the forks. **A decision that already went the other way is the most
    expensive finding you can bring**, because it costs a whole round to re-litigate.
 5. **The scope grew quietly.** The ticket says one thing and the plan under it does three.

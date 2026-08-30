@@ -16,9 +16,9 @@ being written**. Balance, fun, and polish are judged by playing, not by reading 
 
 | Layer | What it is | Where it lives |
 |---|---|---|
-| **The roadmap** | **The whole way to the December demo, on one page.** The tasks fall out of it | `docs/roadmap.md` |
-| **A task** | **One numbered folder.** `TASK.md` says what is on screen when it ends; the tickets that build it sit beside it | `docs/plan/tasks/NN-<english-slug>/TASK.md` |
-| **A ticket** | **One day of work**, numbered from `01` inside its own task | `docs/plan/tasks/NN-<task>/MM-<english-slug>.md` |
+| **The roadmap** | **The whole way to the December demo, on one page.** The tasks fall out of it | `docs/roadmap/README.md` |
+| **A task** | **One numbered folder.** `TASK.md` says what is on screen when it ends; the tickets that build it sit beside it | `docs/roadmap/task-NN-<english-slug>/TASK.md` |
+| **A ticket** | **One day of work**, numbered from `01` inside its own task | `docs/roadmap/task-NN-<slug>/MM-<english-slug>.md` |
 
 **A ticket's number is unique inside its task, never across the repo.** Task `03`'s second ticket is
 **03-02**, and task `04` has its own `02`.
@@ -27,16 +27,17 @@ being written**. Balance, fun, and polish are judged by playing, not by reading 
 too big to keep quality inside it.** ⇒ **A ticket that cannot be finished in a day is two tickets**,
 and cutting it is the user's call, not yours.
 
-⚠⚠ **The flat ticket folder is dead.** Forty-five files sat in `docs/plan/tickets/` and were all deleted
-2026-08-30 (the user: *"deleting them all would be fine"*), and **the roadmap's ticket-number column is
-dead references.** Read tasks; never cite that folder.
+⚠⚠ **`docs/plan/` and its flat `tickets/` folder are both gone.** Forty-five ticket files were deleted
+2026-08-30 (the user: *"deleting them all would be fine"*), the folder became `docs/roadmap/` on
+2026-08-31, and **the map's ticket-number column is dead references.** ⚠ **Task folders sit directly
+under `docs/roadmap/` — there is no `tasks/` layer.**
 
 ## Read
 
-1. **The roadmap** — `docs/roadmap.md`. Every row, every chunk, its bar, its tasks, its order.
-2. **Every task** — `docs/plan/tasks/*/TASK.md` and every ticket inside it, `Status:` line included.
+1. **The roadmap** — `docs/roadmap/README.md`. Every row, every chunk, its bar, its tasks, its order.
+2. **Every task** — `docs/roadmap/task-*/TASK.md` and every ticket inside it, `Status:` line included.
    ⚠ **Where a task folder holds no ticket yet, say so** — an empty task is a measurement, not a fault.
-3. **The decision log and the commits** — `docs/plan/log.md` and
+3. **The decision log and the commits** — `docs/roadmap/log.md` and
    `git log --oneline --since=<the log's last dated row>`.
 4. **The nets, run once** — `powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1`.
    ⚠⚠ **The map's net counts go stale faster than anything else on it** — measured 2026-08-30, the map
@@ -85,7 +86,7 @@ row; **a scope call, an ordering, or an acceptance bar does not.**
 
 ## ⚠ Every task is judged against one line
 
-**The core fun line lives at the top of `docs/roadmap.md`.** A task that does not move it is a task to
+**The core fun line lives at the top of `docs/roadmap/README.md`.** A task that does not move it is a task to
 say so about. ⚠⚠ **The second dead game shipped 3541 green checks and was not fun** — the cause was one
 decision that cost nothing to make. **Read `docs/lessons-from-two-dead-games.md` before arguing a task
 is worth its place.**

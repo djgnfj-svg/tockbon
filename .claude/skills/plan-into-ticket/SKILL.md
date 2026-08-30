@@ -48,7 +48,7 @@ Learn what already exists and what has to be touched. Use the project's glossary
 | | Where |
 |---|---|
 | **What already stands** at this spot — in `src/`, the tools, the docs | **Name it, so nobody builds it twice** |
-| **What already died** here — deleted or reversed | `docs/plan/log.md`, `git log`. **Reviving a dead thing costs a round** |
+| **What already died** here — deleted or reversed | `docs/roadmap/log.md`, `git log`. **Reviving a dead thing costs a round** |
 | **Which net measures it**, and is it green right now | `tests/nets/`, `tests/run_nets.ps1` |
 | **Which green went false here** | `docs/how-nets-lie.md`, searched for this spot |
 
