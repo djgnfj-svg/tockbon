@@ -1,5 +1,27 @@
 # `tree`
 
+## ✅✅ **THE TREE IS 3D, AND SIX OF THEM ARE IN THE GAME** (2026-08-31, the user: 「the ore is
+## number 2; shall we pull the tree properly in 3D?」)
+
+**`blend/props.blend` holds `tree_pine` · `tree_oak` · `tree_cluster` · `tree_bare` ·
+`tree_umbrella` · `tree_young`, plus `stump`** — all meshes, 38 to 94 vertices, 1.0 to 2.2 조각 tall.
+**Sixteen of them are planted on the island** and two stumps stand where somebody has been cutting.
+
+**Why 3D won**, measured the round before by standing the same tree both ways on the same row:
+
+| | flat | mesh |
+|---|---|---|
+| on-screen height, 삼단 | **108 px** | **133 px** — the upright card is foreshortened by the 40° camera |
+| near-black pixels (the engine's outline) | **0** | **546** — a rim is a swollen inside-out copy, and a card has nothing to swell |
+
+⇒ and the deciding one, which is not a measurement: **the tree is going to be hit and felled.**
+Falling is a rotation. A mesh rotates; a card would need a second picture of a fallen tree, a third of
+the stump, and both would have to be right at every camera yaw. **`stump` exists for that day.**
+
+⚠ **The 2D prop path in `field_view` was NOT deleted.** The bush is still undecided and still uses it.
+
+---
+
 ## ⚠⚠ **ALL EIGHT GENERATED TREES WERE REJECTED** (2026-08-31, the user)
 
 > ***"The tree is horrible. It is AI itself — far too realistic, sort of... it probably does not even

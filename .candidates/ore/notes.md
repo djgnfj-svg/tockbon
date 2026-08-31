@@ -3,7 +3,22 @@
 **Nothing chosen yet — TWELVE shapes now** (2026-08-31, the user, after the first six: 「철광석은 좀더
 뽑아보자」).
 
-## ⚠⚠ **`o8` IS THE DIRECTION** (2026-08-31, the user: 「철광석 o8을 조금만 더 변경해줄래? 저부분이
+## ✅✅ **`o8b_band` WON** (2026-08-31, the user: 「철광석 2번」 — the second on the o8 variant sheet)
+
+**It is installed.** `blend/props.blend`'s `ore` is the boulder with grey below and above and a band
+of ore round its waist, and one of it stands on the island at 조각 (18, 11).
+
+⚠⚠ **THE 철광석 KEEPS A CLEAR RING OF THREE 조각, AND THAT IS A RULE NOW.** The first planting put a
+tree two 조각 in front of it: at a 40° pitch the ore drew directly on the tree's crown and read as a
+grey lump growing out of the canopy. **It is the only ore on the island and it is a place a squad gets
+sent to** — anything tall between it and the camera hides the one thing that has to be found.
+
+⚠ **The colour was fixed in the same edit** — see the measurement below. The band renders as rust now
+instead of clipping to peach, and the grey renders as grey instead of white.
+
+---
+
+## ⚠⚠ **`o8` WAS THE DIRECTION** (2026-08-31, the user: 「철광석 o8을 조금만 더 변경해줄래? 저부분이
 ## 마음에 들긴함」)
 
 **o8 is the one where the ORE is the mass and the grey is only a crust** — the inverse of every other
