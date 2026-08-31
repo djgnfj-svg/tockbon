@@ -410,8 +410,10 @@ func _process(delta: float) -> void:
 	_fx_flush()
 	# ⚠ **Outside the buffer.** A picture prop writes nothing into the fx buffers — it is a standing
 	# node, not a per-frame draw — and the only reason it is touched at all is the camera's pitch.
-	_paint_flat_props()
+	# ⚠ **The wind's clock is aged FIRST.** The cards read it as a uniform, so painting them before
+	# it ticks hands every card the frame before the one the meshes are already standing in.
 	_paint_sway(delta)
+	_paint_flat_props()
 
 
 # --- the camera: still one transform, still in one place -------------------------------------------
@@ -718,6 +720,8 @@ const PROPS_SCENE := "res://assets/props/props.glb"
 ## named exactly as the kind is named in `island.json`. **A kind found in `props.glb` never reaches
 ## here** — the mesh wins, so moving a tree from 3D to 2D is deleting it from the `.blend`.
 const FLAT_PROP_DIR := "res://assets/props/flat/"
+## **The card's own shader** — it turns itself, bends itself in the wind and draws its own ink.
+const PROP_CARD_SHADER := "res://src/view/prop_card.gdshader"
 ## **The beasts' hull, as one object Blender made.** ⚠ **Loaded, never built** (`CLAUDE.md`: what the
 ## player looks at is made in a tool). It arrives at its authored size and nothing scales it — 티켓 47
 ## says the hull, the sail and their proportions are judged on the game screen, after it is in.
@@ -740,9 +744,10 @@ var _props: Node3D = null
 ## **The picture props, and the two numbers `_paint_flat_props` needs to redraw them.**
 ## ⚠ **Three parallel arrays and they are built in one place** — `_put_flat_prop` appends to all three
 ## and `_rebuild_props` clears all three. Nothing else may append to one of them.
-var _flat_props: Array[Sprite3D] = []
-var _flat_base: Array[float] = []
-var _flat_foot: Array[float] = []
+## **The picture props, two draws each — the ink first and the card over it.**
+## ⚠ Filled in one place (`_put_flat_prop`) and cleared in one place (`_rebuild_props`).
+var _flat_props: Array = []
+var _card_shader: Shader = null
 ## **The plants that lean, and what they lean off.** ⚠ Four parallel arrays filled in one place
 ## (`_maybe_sway`) and cleared in one place (`_rebuild_props`). Nothing else may append to one.
 var _sway_nodes: Array[Node3D] = []
@@ -1220,8 +1225,6 @@ func _rebuild_props() -> void:
 	_props = Node3D.new()
 	_world.add_child(_props)
 	_flat_props.clear()
-	_flat_base.clear()
-	_flat_foot.clear()
 	_sway_nodes.clear()
 	_sway_base.clear()
 	_sway_amp.clear()
@@ -1254,8 +1257,9 @@ func _rebuild_props() -> void:
 	# that way), so an engine outline on top of them is a second rim on a 64 px picture — and 1.10 was
 	# measured to eat a 21 px wolf whole.
 	_outline(_props)
-	for s in _flat_props:
-		_props.add_child(s)
+	for pair in _flat_props:
+		for mi in pair:
+			_props.add_child(mi)
 	lib.free()
 
 
@@ -1328,46 +1332,69 @@ func _put_flat_prop(kind: String, foot: Vector3, sc: float) -> void:
 	var pic := load(path) as Texture2D
 	if pic == null:
 		return
-	var s := Sprite3D.new()
-	s.texture = pic
-	s.centered = true
-	# 개발지식 01 기법 1. **The same billboard the bodies use** — upright in the WORLD and turning only
-	# about Y, so a tree does not lie down when the camera tilts.
-	s.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	# 기법 16 is OFF here for the reason it is off for the bodies: a billboard's normal faces the
-	# camera, so the sun hits it dead on and washes the picture out.
-	s.shaded = false
-	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-	# ⚠⚠ **`pixel_size` IS THE WHOLE CONVERSION AND FORGETTING IT MAKES A SLIVER.** At
-	# `Look.SPRITE_PIXEL_SIZE` (1 / `TILE_PX`) one texture pixel is one world px, so a 64 px picture
-	# at scale 1.0 stands **1.6 조각** tall with no arithmetic at all. The first cut divided by
-	# `TILE_PX` by hand as well and every tree came out 1/40th of its size — a white splinter.
-	s.pixel_size = Look.SPRITE_PIXEL_SIZE
+	# ⚠⚠ **A `Sprite3D` STOOD HERE AND IT COULD NOT MOVE** (2026-08-31). `BILLBOARD_FIXED_Y` rebuilds
+	# the node's basis every frame and throws its rotation away — measured at **0.00 px of sway while
+	# the mesh beside it travelled 5.8** — and a `Sprite3D` also wears no outline, measured at **0
+	# near-black pixels against the mesh's 306**. **Both are cured by owning the quad**: the card
+	# below turns itself, bends itself, and draws its own ink, which is the package Bad North's
+	# billboards actually ship with.
+	# ⚠ **One texture pixel is one world px** at `Look.SPRITE_PIXEL_SIZE` (1 / `TILE_PX`), so a 64 px
+	# picture at scale 1.0 stands **1.6 조각** tall. That rule did not change with the mechanism.
 	var base := Look.PROP_PIC_SCALE * sc
+	var wide := float(pic.get_width()) * base * Look.SPRITE_PIXEL_SIZE
 	var tall := float(pic.get_height()) * base * Look.SPRITE_PIXEL_SIZE
-	s.position = Vector3(foot.x, foot.y + Look.PROP_PIC_LIFT_PX / Look.TILE_PX + tall * 0.5, foot.z)
-	_flat_props.append(s)
-	_flat_base.append(base)
-	_flat_foot.append(foot.y)
+	var quad := QuadMesh.new()
+	quad.size = Vector2(wide, tall)
+	# ⚠ **Offset up by half, so the quad's FOOT is its origin.** The shader's stretch and its wind
+	# weight both measure from y = 0, and a centred quad would lift off the ground as either grew.
+	quad.center_offset = Vector3(0.0, tall * 0.5, 0.0)
+	if _card_shader == null:
+		_card_shader = load(PROP_CARD_SHADER) as Shader
+	var pair: Array[MeshInstance3D] = []
+	# ⚠⚠ **The ink is a SEPARATE DRAW and it goes first.** It is not a `next_pass`: a next pass is
+	# ordered by material properties and distance rather than by request, and the ink has to be the
+	# one behind. **Two nodes, and the shader's own `back_push` keeps them apart in depth.**
+	for is_ink in [true, false]:
+		var mat := ShaderMaterial.new()
+		mat.shader = _card_shader
+		mat.set_shader_parameter("card", pic)
+		mat.set_shader_parameter("silhouette", is_ink)
+		mat.set_shader_parameter("ink", Look.COL_OUTLINE)
+		mat.set_shader_parameter("wind_dir", Vector2(
+			cos(deg_to_rad(Look.PROP_SWAY_WIND_DEG)), sin(deg_to_rad(Look.PROP_SWAY_WIND_DEG))))
+		mat.set_shader_parameter("wind_strength", Look.PROP_CARD_WIND_STRENGTH)
+		mat.set_shader_parameter("wind_speed", Look.PROP_CARD_WIND_SPEED)
+		var mi := MeshInstance3D.new()
+		mi.mesh = quad
+		mi.material_override = mat
+		mi.position = Vector3(foot.x, foot.y + Look.PROP_PIC_LIFT_PX / Look.TILE_PX, foot.z)
+		# **No shadow, on purpose.** A card's shadow is the shadow of a plane that keeps turning.
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# ⚠ **The wind pushes the top out past the quad's own bounds.** Without a margin the card
+		# pops out of existence near the screen edge — the stale-AABB trap the reference note names.
+		mi.extra_cull_margin = tall
+		pair.append(mi)
+	_flat_props.append(pair)
 
 
-## **Pays the pitch back to every picture prop, once a frame.**
+## **Hands every card the wind's clock and the camera's pitch, once a frame.**
 ##
-## ⚠⚠ **A body gets this inside `_billboard_scale` and a prop cannot**, because a prop is built once and
-## a body is rebuilt every frame. Without this line a tree shortens as the camera tilts down while the
-## swordsman beside it does not, and **two things drawn the same way disagreeing on screen is worse
-## than both being wrong** — see `_pitch_stretch` for what the stretch is paying for.
-## ⚠ **The Y position is re-derived from the same stretch**, or a taller tree floats: the sprite is
-## centred, so half of whatever height the stretch adds has to come back off the middle.
+## ⚠⚠ **A body gets the pitch stretch inside `_billboard_scale` and a card cannot**, because the card
+## rebuilds its own basis in the vertex shader and throws the node's scale away with it. It arrives as
+## a uniform instead. Without it a card shortens as the camera tilts while the swordsman beside it
+## does not, and **two things drawn the same way disagreeing on screen is worse than both being wrong.**
+## ⚠ **The same clock the meshes lean off**, so a card and a bush do not blow different weather.
 func _paint_flat_props() -> void:
+	if _flat_props.is_empty():
+		return
 	var k := _pitch_stretch()
-	for i in _flat_props.size():
-		var s := _flat_props[i]
-		var base: float = _flat_base[i]
-		s.scale = Vector3(base, base * k, 1.0)
-		var tall := float(s.texture.get_height()) * base * k * Look.SPRITE_PIXEL_SIZE
-		s.position.y = _flat_foot[i] + Look.PROP_PIC_LIFT_PX / Look.TILE_PX + tall * 0.5
+	for pair in _flat_props:
+		for mi in pair:
+			var mat := mi.material_override as ShaderMaterial
+			if mat == null:
+				continue
+			mat.set_shader_parameter("stretch", k)
+			mat.set_shader_parameter("wind_t", _sway_clock)
 
 
 ## --- the drawn blob is GONE -------------------------------------------------------------------------

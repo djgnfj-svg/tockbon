@@ -292,6 +292,19 @@ const PROP_SWAY_WIND_DEG := 35.0
 const PROP_SWAY_GUST := 0.30
 const PROP_SWAY_GUST_HZ := 0.071
 
+## --- and the same wind, for a prop drawn as a CARD -------------------------------------------------
+##
+## ⚠⚠ **A card bends, a mesh leans, and the two need different numbers.** The mesh turns about its
+## base, so its number is an angle; the card displaces its top vertices sideways in world units,
+## weighted to zero at the roots. **They read off one clock so a card and a bush never blow different
+## weather** — see `field_view._paint_flat_props`.
+
+## How far the top of a card is pushed, in 조각, at full weight.
+const PROP_CARD_WIND_STRENGTH := 0.075
+## Radians a second inside the card's own two-sine wave. ⚠ **Not `PROP_SWAY_HZ`** — that one counts
+## whole cycles because the mesh's wave is a triangle; this one is fed to `sin` directly.
+const PROP_CARD_WIND_SPEED := 2.1
+
 
 ## --- a prop drawn as a PICTURE rather than a mesh --------------------------------------------------
 ##
