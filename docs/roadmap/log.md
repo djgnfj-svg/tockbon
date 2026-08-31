@@ -1761,3 +1761,19 @@ indentation, no empty block · no doc path or line number in `tools/` (which `ne
 - **The lab scripts live under `tools/lab/` with ASCII names rather than beside their Korean docs.**
   `run_nets.ps1`'s own header records that PowerShell 5.1 mangles Korean, and **a lab that will not
   launch is worth less than one that sits in the tidy folder.**
+
+### ⚠⚠ And the wrap-up itself was the thing that got skipped
+
+> ***"A wrap-up is something you always do, and you were not doing it — from now on, do it."***
+
+**The session committed five times and never opened the map or this file.** ⚠ **`wrap-up` was never
+invoked** — it was run from memory of having read it earlier that same session, and **step 2's roadmap
+half fell out of the round entirely.**
+
+⚠ **Why it felt done**: the round touched no `src/`, so 「repair the docs」 read as already satisfied.
+**What was actually stale was the map** — its opening section still said 「the next session opens here」
+from the previous night, its net count said **59 against a measured 63**, and the roadmap conversation
+had been abandoned half-way **with two questions open and nothing written down.**
+
+⇒ **`wrap-up` now names the two files that are opened every session whatever the round built**, and
+says that a round which decided nothing still writes both.

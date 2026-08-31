@@ -11,11 +11,33 @@ file; the next session believes all of it.
 ⚠⚠ **Two things only: repair what drifted, then commit.** Anything that is not a document gone wrong is
 not this skill's business.
 
+⚠⚠ **Run this skill, do not remember it.** It was run from memory once and **step 2's roadmap half fell
+out of the round entirely** — the steps below are short precisely so there is no reason to skip loading them.
+
 ## 1. List what actually finished
 
 Built, fixed, deleted, decided. **"Almost done" is not done.** Do not mix done and not-done.
 
 ## 2. Repair the docs
+
+⚠⚠ **THE MAP AND THE LOG ARE WRITTEN EVERY SESSION, WITH NO EXCEPTION** (2026-08-31, the user: *"a
+wrap-up is something you always do, and you were not doing it — from now on, do it"*).
+
+**The failure this pays for, measured the same day**: a round built a docs folder and three labs,
+touched no `src/`, and **「repair the docs」 read as already-done.** What was actually stale was
+`docs/roadmap/README.md` — its opening section still said 「the next session opens here」 from the
+previous night, its net counts were **59 against a measured 63**, and a roadmap conversation had been
+**abandoned half-way with two questions open and nothing written down.**
+
+⇒ **Two files are opened by name every time, whatever the round built:**
+
+| File | What goes in, every session |
+|---|---|
+| **`docs/roadmap/README.md`** | What this session changed about the plan · **what is still the user's to answer** · any number that went stale |
+| **`docs/roadmap/log.md`** | What happened and why, with the user's own words translated and kept |
+
+⚠ **A round that decided nothing still writes both** — 「nothing was decided, and here is what is still
+open」 is exactly what the next session needs. **A map left mid-conversation is drift, not a pause.**
 
 - **Ticket `Status:`** — is a finished ticket still `claimed`
 - **The roadmap's status column** — **flip every row that finished to ✅.** A row left unflipped is how
