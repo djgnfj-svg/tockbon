@@ -1304,15 +1304,27 @@ const COL_SLOT_OFF := Color(0.420, 0.420, 0.440)
 const BODY_RADIUS_RATIO := [0.245, 0.22, 0.31, 0.174, 0.342]
 
 
-## **The wolf, seen from four sides — H, the picture the user chose** (티켓 48). Screen-right,
-## screen-left, screen-down (coming at the camera), screen-up (going away).
+## **The wolf, seen from four sides.** Screen-right, screen-left, screen-down (coming at the camera),
+## screen-up (going away).
+##
+## ⚠⚠ **THE ANIMAL IN THESE FOUR FILES CHANGED ON 2026-08-31 AND THE FOLDER NAME DID NOT.** It is no
+## longer H — it is **g5**, a grey wolf with a pale belly, flat colour and no fur strands, chosen off a
+## sheet of seven standing one at a time on the island (the user: 「go with g5 for now」). **`wolf_h/`
+## now means「the wolf's four facings」and nothing more**; renaming the folder would rewrite four
+## constants, a net and two comments to say the same thing.
+## ⚠⚠ **AND THE GENERATOR'S COMPASS WORDS ARE NOT THESE ONES.** g5 was drawn once, in profile, and
+## rotated; **the rotation's `south` is this file's `east`, and its `south-west` is this file's
+## `south`.** The mapping was made by LOOKING at the eight pictures — taking the names at face value
+## puts two rear views on the board.
 ##
 ## ⚠⚠ **THE FILE NAMES ARE COMPASS WORDS AND WHAT THEY ARE USED AS IS SCREEN DIRECTIONS.** The board
 ## turns, so a picker written against world north would spin every wolf the moment the player presses
 ## the turn key with nothing else on screen moving. **The heading is measured against the camera's own
 ## two ground axes** — `field_view._facing_index`.
-## ⚠ **`wolf_h/` also carries `*_n.png` normal maps and NOTHING READS THEM** (티켓 50). Bodies are
-## drawn unshaded, and a head-on wolf is a few screen px wide — there is nowhere to put a gradient.
+## ⚠⚠ **THE FOUR `*_n.png` NORMAL MAPS ARE DELETED** (2026-08-31). They were H's, nothing ever read
+## them (티켓 50), and they would have been four pictures of an animal that is no longer in the game.
+## **Bodies are drawn unshaded** and a head-on wolf is a few screen px wide — there is nowhere to put
+## a gradient, so they are not re-made for g5 either.
 const BEAST_WOLF_H_R := "res://assets/beast/wolf_h/east.png"
 const BEAST_WOLF_H_L := "res://assets/beast/wolf_h/west.png"
 const BEAST_WOLF_H_D := "res://assets/beast/wolf_h/south.png"
@@ -1418,7 +1430,14 @@ const BEAST_FRAME_SEC := 0.12
 ## anyone makes off this table has to include that.
 const BEAST_TEX := [
 	[[HUMAN_SWORD_R, HUMAN_SWORD_L], NO_ANIM_FRAMES, 1.0],
-	[[BEAST_WOLF_H_R, BEAST_WOLF_H_L, BEAST_WOLF_H_D, BEAST_WOLF_H_U], NO_ANIM_FRAMES, 1.70],
+	# ⚠⚠ **2.60, RAISED FROM 1.70 FOR THE 64 px PULL** (2026-08-31, the user: 「it is too small, and the
+	# picture has to be much bigger — big enough to tell from a distance that these really are wolves.
+	# Thick and big」). **The base frame is 24.6 px**, so this number IS the frame in 조각: 1.70 gave a
+	# 41.9 px frame and 2.60 gives 64.0. ⚠ **64 is not a taste, it is the candidate's own canvas** — the
+	# new wolves are drawn at 64 and a 64 px frame makes one texture pixel exactly one screen pixel at
+	# the opening zoom, which is what stopped them breaking up. **Re-pull at a different canvas and this
+	# number moves with it.**
+	[[BEAST_WOLF_H_R, BEAST_WOLF_H_L, BEAST_WOLF_H_D, BEAST_WOLF_H_U], NO_ANIM_FRAMES, 2.60],
 	[[BEAST_BEAR_R, BEAST_BEAR_L], NO_ANIM_FRAMES, 1.0],
 	[[BEAST_CROW_R, BEAST_CROW_L], NO_ANIM_FRAMES, 1.0],
 	[[], NO_ANIM_FRAMES, 1.0],

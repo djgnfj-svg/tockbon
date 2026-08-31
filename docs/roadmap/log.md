@@ -2002,3 +2002,123 @@ so a body on a stair can hit the plateau, and 26 of 162 fights were lost when it
 ⚠ **One net went red mid-session and it was mine**: `net_citations` caught a doc path written into a
 `builds.gd` comment — the repo forbids pathing a doc rather than naming it. Named instead, and the
 count returned. **The remaining 61 are pre-existing.**
+
+## ✅ **The wolf was re-chosen, and the reason nothing looked right was measured — 2026-08-31 night**
+
+### What the user actually said, and it was not about the wolf
+
+> ***"The wolf that is there now is not really the wolf I want."***
+
+Four proportion candidates were pulled first — a shorter body, a hyena, a boar, a wolf reared onto its
+hind legs — on the theory that a low quadruped cannot be made bigger without being made longer.
+**Three of the four measured identical to the wolf already in the game**: at a shared 30 px ink width
+they stood 21, 18 and 20 px tall against the shipped wolf's 20. **The quadruped templates hold the
+proportion whatever the prompt says.** Only the reared one moved, to 62 px — and it had stopped being a
+wolf.
+
+> ***"What did you pull? Did you pull a werewolf? They are all bad. All of them. And just show it as
+> photos. Big. Big. Let us not pull werewolves. Right now. It is horrible. Because this art style is
+> not settled, everything just comes out horrible."***
+
+⚠⚠ **The user was right and it was checkable.** The five bodies standing in the game were photographed
+side by side at equal height: **the swordsman is a chibi with no outline, the bear and the bull are
+faceted low-poly renders, the crow is nearly photographic, and the wolf is outlined pixel art.**
+**Five bodies, five styles.** ⇒ **Nothing new could match, because there was nothing to match.**
+
+### Why the pixels broke, and it was arithmetic
+
+> ***"Why does it break up like this? ... Does some more technique have to go in? Should the pixels be
+> bigger, or should I zoom in more? Or is there another technique?"***
+
+**The wolf's picture was 66 px of ink and the game drew it 30 px wide** — 45%, with `TEXTURE_FILTER_
+NEAREST`, so **36 of every 66 columns were thrown away rather than blended.** A one-pixel leg either
+vanished or doubled. **Zooming is not available**: the opening framing already sits at `ZOOM_MAX`, and
+zooming out to `ZOOM_MIN` discards 53 of 66.
+
+⇒ **Pull at the size it is drawn at.** The round after that was pulled at 64 px onto a 64 px frame —
+**one texture pixel to one screen pixel** — and the breaking stopped.
+
+### The two numbers that had to move
+
+> ***"It is too small. And the picture has to be much, much bigger. So that you can tell from far away
+> that these really are wolves. Thick and big."***
+
+**`BEAST_TEX`'s wolf draw column, 1.70 → 2.60.** The base frame is 24.6 px, so this number IS the frame:
+1.70 gave 41.9 px and 2.60 gives 64.0. **Screen size went 30 px to 53-64 px.**
+
+> ***"And why is it so small when it is on the boat? It has to go big on the boat too. Why are the boat
+> and this a different size. The size is the same. On the boat and on the island."***
+
+**The deck was on its own formula and did not read the wolf's draw column at all** — `radius x 2.70`
+against the island's `radius x 3.5 x 0.80 x 2.60`, so **a rider was 37% of the same animal ashore.**
+`_paint_riders` now takes the island's own expression.
+⚠⚠ **This is the exact coupling 2026-08-30 broke on purpose, and it broke for a reason that came
+straight back: eight riders at island size bury the hull.** The picture is in `.prototypes/wolves/`.
+⇒ **The next answer is the bench layout or the hull, not a second size rule** — one animal reading two
+sizes is what the user looked at and rejected.
+
+### ⚠⚠ A check that caught nothing, and the round nearly believed it
+
+> ***"The fur is too realistic ... it is a structure where realistic fur basically cannot survive. And
+> there must be no ground. Some of them keep bringing the ground back. Coming out a bit simpler is
+> good."***
+
+Three of twelve candidates came back with dirt or a painted shadow welded under the paws. A check was
+written for it that **measured the widest opaque run in the bottom four rows — and called all three
+known-dirty candidates clean.** It was run against them only because a fixture was built; **without
+that fixture eight fresh pulls would have been reported as verified.**
+
+**The bottom rows are the wrong place**: a painted ground patch is a slanted quad, so its last row is a
+narrow corner, exactly like a paw. Profiling the six fixture images band by band put the separation at
+**the seventh of eight bands, the height of the shins** — one unbroken bar there, against legs with
+gaps between them:
+
+| | seventh band, as a fraction of ink width |
+|---|---|
+| **known dirty** | **84% · 57% · 59%** |
+| **known clean** | **25% · 16% · 18%** |
+
+At 40% it separates all six, and it then caught one of eight in the grey round.
+⚠ **Six images set that threshold. It is a screen, not a proof.**
+
+### What was chosen
+
+> ***"Go with g5 for now and wrap up."***
+
+**g5 — a grey wolf with a pale belly, flat colour, no fur strands, 64 px.** It was chosen off a sheet of
+seven standing one at a time on the island's own slope, one photograph each, same camera, same instant.
+
+⚠ **It is one facing.** The row the game reads wants four distinct pictures and a net enforces that, so
+the chosen side view was rotated into eight directions rather than copied four times.
+
+### It went into the game, and the game changed its colour
+
+**The rotation kept the animal.** g5 and the installed `east.png` were laid side by side at 8x and are
+the same drawing — **the v3 reference rotation did not redraw it**, which is the thing that had to be
+checked before four files were written into `assets/`.
+
+⚠ **The generator's compass words are not the game's.** `wolf_h/`'s names mean screen-right,
+screen-left, coming-at-the-camera and going-away. The pictures had to be LOOKED at: the generator's
+**south** is the right profile, its **south-west** is the head-on, its **north-east** is the rear.
+**Taking east and north on their names would have put two rear views on the board.**
+
+⚠⚠ **AND THE WOLF IS NOT GREY ON SCREEN.** Every enemy body is multiplied by
+`beast_tint(COL_ENEMY)` — white lerped 45% toward `#FF6B5C`, so the sprite is drawn through a salmon
+`#FFBCB6`. **A grey wolf comes out mauve-brown.** This is not new and nothing here changed it; it is
+simply the first time the animal underneath was grey enough for it to show. **Whether the team tint
+stays is the user's call and no ticket holds it.**
+
+### What is still open
+
+- **No walk and no bite.** The wolf still slides.
+- **The palette is two thirds measured.** The written-down colours are exact (outline `#1D1814`, sea
+  `#6E96A8`, shallow `#8FB2B0`, foam `#E6F0F2`, fleck `#DAE7ED`, sky `#0E0E13`); the lit meshes were
+  read off a real frame (sea `#6890A8` at 77% of the glass, island `#E8D870` family at 16%, cliff
+  `#F8F8F8`, shade `#485028`, hull `#F8E0A8`). ⚠ **The island's green came back as seven near-identical
+  yellows — that is a gradient, not seven decisions, and it collapses to one.** **The body row is
+  deliberately empty**: a body palette taken from art that has been rejected would set the mess in
+  stone.
+- **A pale belly asked for as white comes back apricot.**
+- **Eight riders bury the boat.**
+
+**Pixellab: 72 generations plus one rotation.**

@@ -1906,9 +1906,15 @@ func _paint_riders(hull: Node3D, i: int, head: Vector2) -> void:
 	if pic == null:
 		return
 	var riders := int(battle.boat_riders[i])
-	# ⚠ **`BODY_SPRITE_SCALE` is NOT a factor here since 2026-08-30** — it is folded into
-	# `BOAT_RIDER_W_RATIO`, so retuning how big a body reads on the ISLAND cannot resize the deck.
-	var wide := Look.body_radius_of(Rules.WOLF) * Look.BOAT_RIDER_W_RATIO
+	# ⚠⚠ **THE DECK IS BACK ON THE ISLAND'S OWN WIDTH** (2026-08-31, the user at the sheet: 「why is it
+	# so small when it is on the boat? It has to go big on the boat too. Why are the boat and this a
+	# different size. The size is the same. On the boat and on the island」). **This is the exact
+	# coupling 2026-08-30 broke on purpose**, and the reason it broke is written under
+	# `BOAT_RIDER_W_RATIO`: the riders overflowed their benches. ⇒ **If they overflow again, the answer
+	# is the bench layout or the hull, not a second size rule** — one animal reading two sizes is what
+	# the user is looking at and rejecting.
+	var wide := Look.body_radius_of(Rules.WOLF) * Look.BEAST_SPRITE_W_RATIO \
+			* Look.BODY_SPRITE_SCALE * Look.beast_draw_scale(Rules.WOLF)
 	var shadows := hull.get_node_or_null(NodePath(DECK_SHADOWS))
 	# ⚠ **The deck is what limits it, not the count.** A boat carrying more than there are benches puts
 	# the extras nowhere rather than stacking two on one seat.
