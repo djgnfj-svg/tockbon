@@ -450,6 +450,7 @@ func _move_shoot_step() -> bool:
 				_save("settled", "near")
 				print("[lab] settled near — 목적지 블록에 %d / %d" % [_in_goal(), NINE])
 				_report_seats()
+				_report_drawn("걸어온")
 			41:
 				# ⚠⚠ **THE SAME NINE WITH EVERY STRIDE PUT BACK TO REST.** Nothing else changes — same
 				# seats, same camera, same frame — so whatever differs between `settled_near` and
@@ -477,10 +478,13 @@ func _move_shoot_step() -> bool:
 				# difference left between this and `settled_rest` is the walk and nothing else.
 				_moving = false
 				block_low = _block_low_of(_goal_block)
-				_apply(1, 0)
+				# ⚠ **The version the user actually chose, by name and not by index.** It was `_apply(1)`
+				# — `02-grid` — which is the same seat set but is not the thing being asked about.
+				_apply(maxi(_names.find("06-ranks-wide"), 0), 0)
 			50:
 				_save("fresh", "near")
 				print("[lab] fresh near — 같은 블록에 손으로 세운 아홉")
+				_report_drawn("손으로 세운")
 			51:
 				return true
 		_tail += 1
@@ -539,6 +543,47 @@ func _report_seats() -> void:
 			var sq: Vector2 = field._gait_squash(key)
 			w.append("%.2f" % sq.x)
 	print("[lab] 몸마다 걸음 찌그러짐(가로) %s — 서 있던 몸은 전부 1.00 이다" % str(w))
+	# ⚠⚠ **THE ONLY HONEST COMPARISON IS AGAINST THE VERSION'S OWN `seats()`.** `_report_seats` above
+	# measures the walked nine against the lattice **this file** computed, which is the same arithmetic
+	# `_seat_plan` used — so it answers 0.000 by construction and proves nothing. **The question is
+	# whether that lattice is the one `06-ranks-wide` hands out**, and only the version can say.
+	var scr: GDScript = load("%s/06-ranks-wide/scene.gd" % DIR)
+	var mine := []
+	for raw_id in bat.ashore_ids():
+		var p: Vector2 = bat.soldier_pos[int(raw_id)]
+		mine.append("(%.2f, %.2f)" % [p.x, p.y])
+	mine.sort()
+	var theirs := []
+	for p in scr.seats(centre, face):
+		theirs.append("(%.2f, %.2f)" % [(p as Vector2).x, (p as Vector2).y])
+	theirs.sort()
+	print("[lab] 걸어와 앉은 자리 %s" % str(mine))
+	print("[lab] 6번이 주는 자리 %s" % str(theirs))
+	print("[lab] 두 벌이 같은가: %s" % str(mine == theirs))
+
+
+## **How tall each of the nine is actually DRAWN, and how far its head sits above the ground.**
+##
+## ⚠⚠ **THIS IS THE MEASUREMENT THE POSITION CHECK COULD NOT MAKE.** Nine bodies on nine identical
+## seats still do not look like a grid if they are nine different heights — **the head is what the eye
+## lines a row up by**, and it is the top of a sprite whose height is the gait's to change.
+func _report_drawn(what: String) -> void:
+	var tops := []
+	var spread := 0.0
+	var lo := INF
+	var hi := -INF
+	for k in field._sprites_used:
+		var s: Sprite3D = field._sprites[k]
+		if s.texture == null or not s.visible:
+			continue
+		var tall := float(s.texture.get_height()) * s.scale.y / Look.TILE_PX
+		var top := s.position.y + tall * 0.5
+		tops.append("%.3f" % top)
+		lo = minf(lo, top)
+		hi = maxf(hi, top)
+	spread = hi - lo
+	print("[lab] %s 아홉의 머리 높이 %s" % [what, str(tops)])
+	print("[lab] %s 머리 높이가 벌어진 폭 %.3f 조각" % [what, spread])
 
 
 ## How many of the nine are standing in the 블록 they were sent to.
