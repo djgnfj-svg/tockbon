@@ -1,7 +1,42 @@
-# tools/blender — the island is built by code, and this folder is that code
+# tools/blender — the scripts that FIRST build a mesh, and `blend/` is where it lives afterwards
 
-**Every mesh in this game is generated.** No `.blend` exists, no script imports one, and nothing was
-carved by hand — checked 2026-08-27. ⚠ **Do not tell the user a shape came out of Blender by hand.**
+## ⚠⚠ **THE `.blend` IS THE ORIGINAL. THIS FOLDER IS NOT.** (2026-08-31, the user)
+
+> ***"We have to work while saving the Blender original files too. It makes no sense. I have told you
+> not to use the tool dozens of times. You have always ignored it and kept this going. It cannot keep
+> going like this. You make a model and use it WITH an original file present — you leaving it as code
+> on your own is completely unreasonable."***
+
+**Every mesh now has a `.blend` in `blend/` and that file is the source of truth.** `boat.blend`,
+`island.blend`, `buildings.blend`, `props.blend`, `boat_small.blend` were all saved 2026-08-31 out of
+the very scripts below, so the two agree today and the `.blend` is the one that carries on.
+
+⚠⚠ **THIS PAGE SAID THE OPPOSITE FOR FIVE DAYS AND THAT LINE IS WHY THE INSTRUCTION KEPT BEING
+IGNORED.** It read *"Every mesh in this game is generated. No `.blend` exists"*, so every session that
+opened it re-derived the same wrong behaviour from the doc rather than from the user. **A rule the user
+has overturned is deleted from the page, not argued with in it.**
+
+### What this changes about how a shape is edited
+
+| | Before | **Now** |
+|---|---|---|
+| **Change a boat's length** | edit a number in `boat_build.py`, re-run it | **open `blend/boat.blend` and move it** |
+| **Who can do it** | ⚠ only a session with the MCP | **the user, with a mouse** |
+| **What is exported** | the script exports on its way past | **export the `.glb` out of the `.blend`** |
+
+⚠⚠ **THE COST THE USER NAMED, IN THEIR WORDS**: *"if I can't touch it with a mouse that's a disaster —
+are you going to do it all? You can't do it all, and in the end I'll be the one touching the detail."*
+**A mesh only a script can change is a mesh only the model can change**, and the detail work is the
+user's.
+
+⚠ **The scripts are kept and are still true.** They are how each of these was first built and they hold
+the measured reasons for the numbers — the sheer's planarity argument, the collinear stations, the
+winding rules. **Read them to understand a shape. Do not re-run one to edit a shape**, because that
+overwrites whatever the user did by hand in the `.blend`.
+
+⚠ **One mesh genuinely still needs its script: the island.** `island_build.py` writes `island.json`
+beside the mesh — the passability, the levels, the harbours and the coast the game reads — and no
+`.blend` carries that. **Say this rather than quietly regenerating.**
 
 ⚠⚠ **This folder used to be an agent's** (`sculpt`, 2026-08-27 to 2026-08-29). **The main session does
 Blender work again** — the agent did the work and twice sent back no result, so it was measured by hand

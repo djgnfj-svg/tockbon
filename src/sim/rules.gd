@@ -519,13 +519,22 @@ const BOAT_SPEED_TILES := 1.2
 ## just refused, and it also deletes the room the pan exists to cross.
 const BOAT_START_DIST_TILES := 24.0
 ## **How long the hull is, from its origin to its bow, in 조각.** Measured off `assets/props/boat.glb`:
-## the mesh runs x from -2.60 to +2.60 with the origin dead centre, so the bow is **2.60 조각** out.
+## the mesh runs x from -2.10 to +2.10 with the origin dead centre, so the bow is **2.10 조각** out.
 ##
 ## ⚠⚠ **IT IS A RULE AND NOT A PICTURE, BECAUSE IT DECIDES WHERE A BOAT STOPS.** Everything else about
 ## the hull — its colours, its sail, its bob — is `look.gd`'s. This one number is where the sim has to
 ## stop it, so it lives with the stopping rule. ⚠ **`net_boats` reads it back off the mesh's own AABB**,
 ## which is what stops it being a second copy of the model.
-const BOAT_HULL_HALF_TILES := 2.6
+##
+## ⚠⚠ **2.6 -> 2.1 (2026-08-31), and the MESH moved first** (the user at the screen: 「the boat is too
+## big, cut the useless part of it right down and make the monsters stand out」). **The benches span
+## 3.00 조각 and the hull was 5.20** — the other 2.20 was bow and stern carrying nobody. **Nothing that
+## carries a wolf moved**: `Look.BOAT_DECK_SLOTS` is byte-for-byte what it was.
+## ⚠ **The beam did NOT move** — 2.01 조각 still, so a boat that fitted a beach on its width still does.
+## ⚠⚠ **THE STANDOFF SHRANK WITH IT.** `BOAT_STANDOFF_TILES` is this plus the beach gap, so every boat
+## now stops **half a 조각 closer to the sand** than it did. That is a change to where eight wolves are
+## put down, not just to how the hull looks, and it is the half of this edit worth watching on screen.
+const BOAT_HULL_HALF_TILES := 2.1
 
 ## **How wide the hull is at its widest, in 조각.** Measured off `assets/props/boat.glb`: the rim runs z
 ## from -1.005 to +1.005, so the beam is **2.01 조각** and the half-beam is 1.005.

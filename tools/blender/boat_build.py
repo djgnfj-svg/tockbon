@@ -60,13 +60,35 @@ SAIL = (0.945, 0.915, 0.835)   # 0.916
 # ⚠ **The midbody run is exactly parallel** — S2 and S3 share a half-beam, so 2.20 조각 of the side is
 # one flat rectangle. That is where the hard-chine read comes from, and it is WHERE the stations sit
 # rather than how many there are.
+# WARNING **CUT 5.20 -> 4.20 조각 LONG AND THE SHEER DROPPED 0.710 -> 0.560 AMIDSHIPS** (2026-08-31,
+# the user at the screen: 「the boat's left and right sides are too big and too high, lower them so the
+# wolf shows more. Cut the useless part of the boat right down and make the monsters stand out」).
+#
+# **What was measured before the cut, and it is what the two numbers come from:**
+#  · **The benches span x -1.55 to 1.45 — 3.00 조각 — and the hull was 5.20.** The other **2.20 조각 was
+#    bow and stern with nobody on them**: 1.15 forward of the front bench and 1.05 aft of the back one.
+#    ⇒ **The stem and the transom came in to +/-2.10**, which leaves 0.65 at each end. Nothing that
+#    carries a wolf moved, and `BENCHES` is untouched.
+#  · **The gunwale stood 0.273 조각 above the seat amidships** (sheer 0.710, seat top 0.4375) and 0.311
+#    at the forward bench. A wolf's ink is about 0.5 조각 tall, so **the side hid roughly half of it.**
+#    ⇒ **0.560 amidships puts the freeboard at 0.123** — the wolf clears the rail by about three
+#    quarters of its height instead of half.
+#
+# ⚠⚠ **THE RISING SHEER IS KEPT, JUST SHORTER.** It was 0.310 proud of midships at the stem and 0.220 at
+# the transom; it is now 0.260 and 0.160. **A flat sheer reads as a box, not a boat** — the rise is what
+# the planarity argument above is protecting and it is not what was making the sides tall.
+#
+# ⚠ **COLLINEARITY WAS RECOMPUTED, NOT ASSUMED.** S1 sits on the new S0-S2 line and S4 on the new
+# S3-S5 line, both re-solved for the moved ends — the two flat panels the comment above depends on.
+# ⚠ **`Rules.BOAT_HULL_HALF_TILES` must move 2.6 -> 2.1 with this.** The sim measures its standoff, its
+# wake and its arrival off that number, and a hull shorter than the constant beaches short of the sand.
 STATIONS = [
-    (2.600, 0.070, 1.020),   # S0 the stem face
-    (1.880, 0.519, 0.795),   # S1 on the S0-S2 line
-    (1.100, 1.005, 0.710),   # S2 full beam
-    (-1.100, 1.005, 0.710),  # S3 full beam -- S2..S3 is the parallel run
-    (-2.180, 0.627, 0.780),  # S4 on the S3-S5 line
-    (-2.600, 0.480, 0.930),  # S5 the transom
+    (2.100, 0.070, 0.820),   # S0 the stem face
+    (1.700, 0.444, 0.716),   # S1 on the S0-S2 line
+    (1.100, 1.005, 0.560),   # S2 full beam
+    (-1.100, 1.005, 0.560),  # S3 full beam -- S2..S3 is the parallel run
+    (-1.780, 0.648, 0.669),  # S4 on the S3-S5 line
+    (-2.100, 0.480, 0.720),  # S5 the transom
 ]
 
 # --- the rings ------------------------------------------------------------------------------------------
@@ -130,13 +152,26 @@ SAIL_THICK = 0.025
 # ⚠⚠ **BOTH ARE `BENCH`, NOT `RIM`.** The small boat measured this: a post painted the gunwale's own
 # colour reads as a NOTCH CUT INTO the gunwale, which is the opposite of telling the two ends apart, and
 # telling the ends apart is the only reason either of them exists.
-STEM = (2.160, 2.440, 0.290, 1.520, 0.135, 0.048)
-TAIL = (-2.220, -2.400, 0.290, 1.150, 0.150, 0.085)
+#
+# ⚠⚠ **THESE TWO POSTS SET THE BOAT'S LENGTH, NOT THE HULL, AND THAT IS WHY THE FIRST CUT DID NOTHING**
+# (2026-08-31). `STATIONS` was pulled in to +/-2.10 and `assert_box` still reported **[-2.5500 2.5750]**:
+# the stem's top centre 2.440 plus its own half-x 0.135 is 2.575, and the tail's -2.400 minus 0.150 is
+# -2.550. **The hull was already shorter than the box the whole time.**
+# ⇒ **Both were shifted the same 0.500 the hull moved**, so the rake and the gap to the planking are
+# what they were. **Shortening this boat means moving three things, and the box guard is what says so.**
+#
+# ⚠ **Their tops came down with the sheer** — the stem stood 1.520 against a 0.710 sheer, more than
+# twice the side it grows out of, and it read as mast-like clutter at the bow rather than as a stem.
+# **1.150 keeps it the tallest thing forward of the mast without being a second mast.**
+STEM = (1.660, 1.940, 0.290, 1.150, 0.135, 0.048)
+TAIL = (-1.720, -1.900, 0.290, 0.920, 0.150, 0.085)
 
-# **What the box has to come out as.** ⚠ `Rules.BOAT_HULL_HALF_TILES` (2.6) and `BOAT_HULL_BEAM_TILES`
-# (2.01) are that box read back, and 61 beaches are placed off the standoff built on them.
-BOX_LO = (-2.600, -1.005, 0.0)
-BOX_HI = (2.600, 1.005, MAST_TOP)
+# **What the box has to come out as.** ⚠ `Rules.BOAT_HULL_HALF_TILES` (2.1 since 2026-08-31) and
+# `BOAT_HULL_BEAM_TILES` (2.01) are that box read back, and 61 beaches are placed off the standoff
+# built on them. ⚠⚠ **CHANGE THIS AND `rules.gd` IN THE SAME EDIT** — the sim beaches the boat at a
+# standoff computed from the constant, so a hull shorter than the constant stops short of the sand.
+BOX_LO = (-2.100, -1.005, 0.0)
+BOX_HI = (2.100, 1.005, MAST_TOP)
 
 
 def to_lin(c):
