@@ -26,9 +26,17 @@ const DIR := "res://.prototypes/nine"
 const OUT := "res://.prototypes/nine/out/%s_%s.png"
 ## How many bodies stand in the 블록.
 const NINE := 9
-## The two body sizes every version is photographed at. **1.0 is exactly what the game ships today**,
-## so one of the ten pictures is always the control.
+## The body sizes SPACE steps through in the watched run. **1.0 is exactly what the game ships.**
+## ⚠ **The shoot no longer sweeps these** — see `FACES`.
 const SCALES := [1.0, 1.25]
+## ⚠⚠ **THE SHOOT SWEEPS FACINGS, AND IT SWEPT BODY SIZES UNTIL 2026-08-31.** The size question was
+## answered by the first sheet; **the live one is 「what does 「it turns」 mean」** (the user, on seeing
+## it: 「What is this turning? Tell me about the turning first」), and a facing is the only thing that
+## can answer it in a still picture. ⚠ **A version that ignores the facing is photographed twice
+## identically, and that identity is itself the result** — it is what「doesn't turn」looks like.
+const FACES := [Vector2(0, 1), Vector2(1, 0)]
+## What each facing is called in a file name. Same length as `FACES`.
+const FACE_NAMES := ["south", "east"]
 ## Wheel notches for the shot. The nine have to fill the frame or the sheet is a picture of an island.
 const NEAR_NOTCHES := 9
 
@@ -267,8 +275,10 @@ func _show(k: int) -> void:
 	_apply(posmod(k, _names.size()), maxi(SCALES.find(_scale), 0))
 	if _label != null:
 		var scr: GDScript = load("%s/%s/scene.gd" % [DIR, str(_names[_i])])
-		_label.text = "%d/%d  %s — %s   (몸 크기 x%.2f)\n1..%d pick · LEFT/RIGHT step · SPACE size · Q/E turn · wheel zoom · ESC quit" % [
-			_i + 1, _names.size(), str(_names[_i]), scr.title(), _scale, _names.size()]
+		var fi := maxi(FACES.find(face), 0)
+		_label.text = "%d/%d  %s — %s\n몸 크기 x%.2f · 부대가 보는 쪽 %s\n1..%d 고르기 · ←→ 넘기기 · SPACE 크기 · T 보는 쪽 · Q/E 화면 돌리기 · ESC" % [
+			_i + 1, _names.size(), str(_names[_i]), scr.title(), _scale,
+			str(FACE_NAMES[fi]), _names.size()]
 
 
 # --- the shots -----------------------------------------------------------------------------------
@@ -276,18 +286,19 @@ func _show(k: int) -> void:
 func _shoot_step() -> bool:
 	var per := 2
 	var n: int = _shot / per
-	var total: int = _names.size() * SCALES.size()
+	var total: int = _names.size() * FACES.size()
 	if n >= total:
 		return true
-	var k: int = n / SCALES.size()
-	var si: int = n % SCALES.size()
+	var k: int = n / FACES.size()
+	var fi: int = n % FACES.size()
 	match _shot % per:
 		0:
-			_apply(k, si)
+			face = FACES[fi]
+			_apply(k, 0)
 		1:
 			# ⚠ **Apply on one step, SHOOT on the next.** `get_texture()` hands back the frame already
 			# drawn, so doing both in one step files every picture under the previous seat plan.
-			_save(str(_names[k]), "x%d" % int(float(SCALES[si]) * 100.0))
+			_save(str(_names[k]), str(FACE_NAMES[fi]))
 	_shot += 1
 	return false
 
@@ -334,5 +345,11 @@ func _watch() -> bool:
 		_show(_i - 1)
 	if _tap(KEY_SPACE):
 		_scale = float(SCALES[(maxi(SCALES.find(_scale), 0) + 1) % SCALES.size()])
+		_show(_i)
+	# ⚠ **T turns what the NINE are looking at, and Q/E turn the CAMERA.** They are two different
+	# turnings and the whole subject of this round is telling them apart, so they are on separate keys.
+	if _tap(KEY_T):
+		var at := FACES.find(face)
+		face = FACES[(maxi(at, 0) + 1) % FACES.size()]
 		_show(_i)
 	return false

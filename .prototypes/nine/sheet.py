@@ -26,11 +26,17 @@ DIM = (150, 152, 158)
 # statement of what a version buys and cannot do lives in its own `NOTES.md`, which is the one place.
 WHAT = {
     "01-now": "조각이 자리를 갖는다 (지금 것)",
-    "02-grid": "블록 3x3 격자",
-    "03-ranks": "보는 쪽을 향한 3열",
+    "02-grid": "블록 3x3 격자 — 안 돈다",
+    "03-ranks": "보는 쪽 3열 — 앞뒤가 좁다",
     "04-stagger": "줄마다 엇갈린 벌집",
     "05-spiral": "해바라기 나선",
+    "06-ranks-wide": "보는 쪽 3열 — 앞뒤도 어깨만큼",
 }
+
+# The rows of the sheet, in order. ⚠ **These are the lab's `FACE_NAMES`** — a name that is not in this
+# list is not laid out at all, which is what keeps a stale shot out of the sheet.
+ROWS = ["south", "east"]
+ROW_LABEL = {"south": "남쪽을 본다", "east": "동쪽을 본다"}
 
 
 def _font(size):
@@ -44,15 +50,15 @@ def _font(size):
 
 def main():
     shots = {}
-    for f in sorted(glob.glob(os.path.join(OUT, "*_x*.png"))):
-        m = re.match(r"(.+)_x(\d+)\.png$", os.path.basename(f))
+    for f in sorted(glob.glob(os.path.join(OUT, "*_*.png"))):
+        m = re.match(r"(.+)_(%s)\.png$" % "|".join(ROWS), os.path.basename(f))
         if m:
-            shots.setdefault(m.group(1), {})[int(m.group(2))] = f
+            shots.setdefault(m.group(1), {})[m.group(2)] = f
     if not shots:
         raise SystemExit("no shots in %s — run the lab with `-- shoot` first" % OUT)
 
     names = sorted(shots)
-    sizes = sorted({s for v in shots.values() for s in v})
+    sizes = [r for r in ROWS if any(r in v for v in shots.values())]
     w, h = Image.open(shots[names[0]][sizes[0]]).size
 
     sheet_w = COL_LABEL + len(names) * (w + PAD) + PAD
@@ -61,7 +67,8 @@ def main():
     d = ImageDraw.Draw(sheet)
     big, small = _font(20), _font(16)
 
-    d.text((PAD, 11), "한 블록(칸)에 아홉 — 어떻게 세울 것인가", font=big, fill=INK)
+    d.text((PAD, 11), "한 블록(칸)에 아홉 — 「돈다」가 무엇인가 (같은 아홉, 보는 쪽만 바꿈)",
+           font=big, fill=INK)
 
     for ci, name in enumerate(names):
         x = COL_LABEL + ci * (w + PAD) + PAD
@@ -72,7 +79,7 @@ def main():
 
     for ri, size in enumerate(sizes):
         y = HEAD + ri * (h + PAD) + PAD
-        d.text((PAD, y + h // 2 - 10), "몸 x%.2f" % (size / 100.0), font=small, fill=INK)
+        d.text((PAD, y + h // 2 - 10), ROW_LABEL.get(size, size), font=small, fill=INK)
 
     sheet.save(SHEET)
     print("[sheet] %s  %dx%d" % (SHEET, sheet_w, sheet_h))

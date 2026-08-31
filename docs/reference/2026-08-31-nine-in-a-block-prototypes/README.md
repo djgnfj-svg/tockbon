@@ -6,7 +6,10 @@ as possible while still reading as nine men?
 **Where it came from** (the user, 2026-08-31): *「Could you make the soldiers bigger and have them look
 clean? I think nine soldiers is the maximum. … I don't know how to work out whether that fits.」*
 
+**Two sheets, in the order they were made.**
 `sheet.png` — five arrangements across, two body sizes down (x1.00 is exactly what the game ships).
+`sheet-facing.png` — six across, the same nine facing south then east. **The second one exists because
+of the question the first one raised**, and both are kept: the size answer lives only in the first.
 
 | | The seat belongs to | What it buys | What it CANNOT do |
 |---|---|---|---|
@@ -15,6 +18,24 @@ clean? I think nine soldiers is the maximum. … I don't know how to work out wh
 | **03-ranks** | the squad, facing | the picture says where they look | say what happens when two squads share a 블록 |
 | **04-stagger** | the 블록, rows nested | shallower, which is the axis that hides bodies | present a front |
 | **05-spiral** | the 블록, golden angle | reads as men, not furniture | hold a shape — no row, no flank |
+
+## The judging round, and what it measured
+
+**The user, on the sheet**: *「It looks like 2 or 3. … What is this turning? Tell me about the turning
+first.」* ⇒ the sheet was re-shot: **the same nine at two FACINGS instead of two body sizes**, and
+`06-ranks-wide` was added — `02-grid`'s square spacing with `03-ranks`' turning.
+
+⚠⚠ **A FORMATION CAN ONLY BE SEEN TO TURN IF ITS TWO PITCHES DIFFER.** Measured, not argued: at south
+and at east, `06-ranks-wide` is the same picture as `02-grid` to within the idle sway (≈5,000 changed
+pixels against a ≈6,000 noise floor), while `03-ranks` differs from `02-grid` by ≈10,500. **A square
+3x3 rotated a quarter turn maps onto itself.** ⇒ **「02's look」 and 「it turns」 cannot both be had.**
+
+**What the user said the nine should FEEL like** (2026-08-31): *「Moving them all at once would work
+too, of course, but really it should feel like they go one after another, streaming along — a bit like
+a fluid? Because they can't all move at the same time.」*
+⚠ **That is not decided by anything on this sheet.** Every version here is a plan for where a body
+STANDS; the streaming is how a body TRAVELS between two of those places, and it belongs to the
+movement work — week 3, 「부대를 쪼개고 합치고 명령한다」.
 
 ⚠ **The material is `.prototypes/nine/`** and each version's three lines live in its own `NOTES.md`.
 **The losers are deleted once one has won.**
