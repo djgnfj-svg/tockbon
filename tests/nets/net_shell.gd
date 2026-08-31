@@ -558,9 +558,172 @@ func run(t) -> void:
 	# **All of it went with the verdict.** ⚠ **The hole it leaves is real and is written down rather
 	# than papered over: nothing returns to the title any more.** The title opens a run and a run has
 	# no end — see `game.gd`, where `_click_panel` used to be.
+	_the_route_points_are_in_soldier_pos_units(t, game)
+	_a_full_hand_moves_instead_of_picking(t, game, fs)
+	_the_picked_body_wears_a_rim(t, game, fs)
+
 	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
 	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
 	t.done()
+
+
+## **The 이동선's points are in `soldier_pos`'s own units, corner-anchored** (2026-08-31, the user at
+## the screen: 「지금은 블록 가운데서 오는듯한데?」).
+##
+## ⚠⚠ **THE FIRST POINT AND THE REST DISAGREED BY HALF A 조각 AND NOTHING WENT RED.** The first point
+## is a real `soldier_pos`; the rest were built with a `+ 0.5` baked in, and the view then multiplied
+## the lot by `TILE_PX` — so the line left from half a 조각 up and to the left of the body walking it.
+## **Every check about the route stayed green** because they all asked 「which 조각」 and never 「where in
+## world px」. ⇒ these rows compare the two ends against each other in the one unit both must share.
+func _the_route_points_are_in_soldier_pos_units(t, game) -> void:
+	var b: Battle = game.battle
+	if b == null:
+		return
+	var ashore := b.ashore_ids()
+	if ashore.is_empty():
+		return
+	var who := int(ashore[0])
+	game.hand.pick(b, who)
+	# ⚠ **A destination far enough to have a middle point.** A two-point line cannot show the
+	# disagreement — both ends are special cases.
+	var far := -1
+	var reach: PackedInt32Array = game.hand.reach
+	for k in reach.size():
+		var cand := int(reach[k])
+		var p := Vector2(float(cand % b.grid.w), float(cand / b.grid.w))
+		if p.distance_to(b.soldier_pos[who]) >= 4.0:
+			far = cand
+			break
+	t.ok(far >= 0, "자가 점검 — 네 조각 넘게 떨어진 갈 수 있는 자리가 있다")
+	if far < 0:
+		return
+	var pts_all: Array = game.hand.route_points(b, far)
+	t.eq(pts_all.size(), 1, "쥔 몸 하나에 선 하나다")
+	var pts: PackedVector2Array = pts_all[0]
+	t.ok(pts.size() >= 3, "그 선은 점 셋 이상이다 (가운데가 있어야 단위가 드러난다)")
+	if pts.size() < 3:
+		return
+	t.eq(pts[0], b.soldier_pos[who] as Vector2,
+		"첫 점이 몸의 자리 그대로다 — 반 조각도 안 옮긴다")
+	# ⚠ **Every later point is a 조각 index as a whole number**, in the same frame as the first. A
+	# `+ 0.5` anywhere in the chain shows up here as a fraction.
+	var fractional := 0
+	for k in range(1, pts.size()):
+		var q := pts[k]
+		if not is_equal_approx(q.x, floor(q.x)) or not is_equal_approx(q.y, floor(q.y)):
+			fractional += 1
+	t.eq(fractional, 0, "뒤의 점도 전부 조각 눈금 위에 있다 — 반 조각이 섞여 있지 않다")
+	var last := pts[pts.size() - 1]
+	t.eq(int(last.y) * b.grid.w + int(last.x), far, "마지막 점이 명령할 그 조각이다")
+	game.hand.clear()
+
+
+## **A hand that is holding somebody MOVES, and a body standing on the destination does not intercept
+## the press** (2026-08-31, the user at the screen: 「이게 조각에 옮길 수가 있잖아? 같은 조각으로? 그때
+## 살짝 불편하네? 이게 esc를 하지 않는 이상 이동 우선으로 해줘야할듯한데」).
+##
+## ⚠⚠ **THIS IS THE ONE ROW THE OLD ORDER PASSED AND THE SCREEN FAILED.** Until this day the press
+## asked 「is there a body here」 first, and every check stayed green: picking worked, ordering worked,
+## the reach lit. **What nothing measured is the two of them meeting** — pressing a 조각 that is BOTH a
+## destination and somebody's spot — and that is the only case where the priority is visible at all.
+## ⇒ the destination is deliberately chosen to be another body's own 조각.
+##
+## ⚠ **Everything is taken off the board rather than typed.** Which 조각 a body stands on moves with the
+## island, and a literal here would be measuring a fixture instead of the rule.
+func _a_full_hand_moves_instead_of_picking(t, game, fs: FieldView) -> void:
+	var b: Battle = game.battle
+	if b == null:
+		return
+	var ashore := b.ashore_ids()
+	t.ok(ashore.size() >= 2, "자가 점검 — 섬에 몸이 둘 이상이다 (하나면 이 규칙이 안 보인다)")
+	if ashore.size() < 2:
+		return
+	var mover := int(ashore[0])
+	game.hand.pick(b, mover)
+	var mine: Vector2 = b.soldier_pos[mover]
+	var my_tile := int(floor(mine.y)) * b.grid.w + int(floor(mine.x))
+	var target := -1
+	var at := Vector2.ZERO
+	for k in range(1, ashore.size()):
+		var p: Vector2 = b.soldier_pos[int(ashore[k])]
+		var tx := int(floor(p.x))
+		var ty := int(floor(p.y))
+		var tile := ty * b.grid.w + tx
+		# ⚠ **Somebody else's 조각 and not the mover's own.** Ordering a body onto the 조각 he already
+		# stands on is legal and would pass this row while measuring nothing.
+		if tile == my_tile or not game.hand.can_reach(tile):
+			continue
+		var scr := fs.tile_to_screen_px(tx, ty)
+		# ⚠ The round trip is the self-check: a point that resolves elsewhere would order elsewhere.
+		if game._tile_at(scr) != tile:
+			continue
+		target = tile
+		at = scr
+		break
+	t.ok(target >= 0, "자가 점검 — 다른 몸이 선 조각 중 화면에서 겨눌 수 있고 갈 수 있는 것이 있다")
+	if target < 0:
+		return
+	b.soldier_order[mover] = -1
+	game._unhandled_input(_press(at))
+	game._unhandled_input(_release(at))
+	t.eq(int(b.soldier_order[mover]), target,
+		"몸이 선 조각을 눌러도 쥔 몸이 거기로 간다 — 그 자리의 몸이 대신 골라지지 않는다")
+	t.ok(game.hand.is_empty(), "그리고 명령이었으므로 손을 놓는다 — 새로 고른 게 아니다")
+
+
+## **The white rim on the body the hand is holding** (2026-08-31, the user: 「캐릭터 눌렀을때 살짝 내가
+## 누른 캐릭에 흰색 테두리 ... 내가 누른 캐릭이 티가 나야할듯함」).
+##
+## ⚠⚠ **THE POOLED NODE STATE IS THE AGREED VIEW SEAM** (`CONTEXT.md`) — `visible`, `texture` and
+## `scale` are three of the fields the engine consumes. **A rim is not measurable from `Hand`**: the
+## defect this guards is a shell that picks somebody the view never marks, and both sides read green
+## when only the sim is asked.
+##
+## ⚠⚠ **IT RUNS LAST AND THAT IS NOT TIDINESS.** `_paint_bodies` fills the boat pool as well as the
+## body pool, and one row above reads `_boats_used` to say 「before the first boat there is nothing to
+## draw」. Called from the middle of the file this function turned that row red — **measured, and it is
+## why the fixture's paint state is left alone until every other row has had it.**
+func _the_picked_body_wears_a_rim(t, game, fs: FieldView) -> void:
+	var b: Battle = game.battle
+	if b == null:
+		return
+	var ashore := b.ashore_ids()
+	t.ok(not ashore.is_empty(), "자가 점검 — 테두리를 씌울 몸이 섬에 있다")
+	if ashore.is_empty():
+		return
+	# ⚠ **Picked through the sim and not by aiming a press.** Where a body happens to be on screen is
+	# another function's subject; this one is about what the view does once somebody IS picked.
+	game.hand.pick(b, int(ashore[0]))
+	game.field_view.set_picked(game.hand.ids)
+	fs._paint_bodies()
+	var rims := 0
+	for k in fs._rims_used:
+		if fs._rims[k].visible:
+			rims += 1
+	t.eq(rims, 1, "고른 몸 하나에만 흰 테두리가 선다")
+	var rim_tex_ok := false
+	if fs._rims_used > 0:
+		var rim: Sprite3D = fs._rims[0]
+		for raw_s in _body_sprites(fs):
+			var body_s: Sprite3D = raw_s
+			if body_s.texture != rim.texture:
+				continue
+			# ⚠ **The two scales are compared rather than a number typed.** The rim is the body's own
+			# picture grown, so the growth constant may move and this row still measures it.
+			if is_equal_approx(rim.scale.x, body_s.scale.x * Look.PICK_OUTLINE_GROW):
+				rim_tex_ok = true
+				break
+	t.ok(rim_tex_ok, "그 테두리는 그 몸의 그림을 그대로 키운 것이다 — 다른 그림이 아니다")
+
+	# -- and ESC takes it off -------------------------------------------------------------------------
+	game._unhandled_input(_key(KEY_ESCAPE))
+	t.ok(game.hand.is_empty(), "ESC 를 누르면 선택이 풀린다")
+	fs._paint_bodies()
+	var rims_after := 0
+	for k in fs._rims_used:
+		if fs._rims[k].visible:
+			rims_after += 1
+	t.eq(rims_after, 0, "그러면 흰 테두리도 같이 없어진다")
 
 
 
@@ -631,14 +794,64 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 	game._unhandled_input(_press(click_at))
 	game._unhandled_input(_release(click_at))
 	t.eq(fs.cam_px, held, "제자리에서 누르고 떼면 카메라는 안 움직인다")
+	# ⚠⚠ **A PRESS ON A BODY PICKS IT AND ORDERS NOBODY, AND THAT IS THE 2026-08-31 REVERSAL** (the
+	# user: 「tab 없이 그냥 캐릭터를 누르면 이동할 수 있는 칸들이 뜨고 눌러서 이동하는거임」). This row
+	# asserted the opposite until that day — one press, one walk, nearest body answers — and the old
+	# row is rewritten rather than kept beside this one: two rows asserting opposite gestures is not a
+	# record, it is one of them lying.
 	var ordered2 := 0
 	for i in b.soldier_order.size():
 		if int(b.soldier_order[i]) >= 0:
 			ordered2 += 1
-	t.ok(ordered2 > 0, "그런데 몸 하나가 그 조각으로 간다 — 누름은 여전히 명령이다")
+	t.eq(ordered2, 0, "몸을 누른 것은 아직 명령이 아니다 — 고른 것이다")
+	t.eq(game.hand.ids.size(), 1, "그리고 손이 그 몸 하나를 쥐고 있다")
+	t.ok(game.hand.reach.size() > 1, "갈 수 있는 자리가 깔렸다 (%d 조각)" % game.hand.reach.size())
+	t.ok(game.hand.can_reach(body_tile), "선 자리도 그중 하나다 — 제자리는 늘 설 수 있는 자리다")
 
-	# ⚠ **The self-check that keeps the pair honest**: the press point really is a 조각 a body can be
-	# sent to. On water both rows above would be satisfied by a shell that does nothing at all.
+	# -- and the SECOND press, on a lit 조각, is the walk ---------------------------------------------
+	# ⚠ **The destination is taken from the reach itself and not typed.** A literal 조각 would measure
+	# a board this net does not own, and the island's shape has moved twice already.
+	var dest := -1
+	var dest_at := Vector2.ZERO
+	for k in game.hand.reach.size():
+		var cand := int(game.hand.reach[k])
+		if cand == body_tile:
+			continue
+		var at := fs.tile_to_screen_px(cand % b.grid.w, cand / b.grid.w)
+		# ⚠ **The round trip is the self-check.** A screen point that resolves to a different 조각
+		# would order somebody somewhere else and this pair would still be green.
+		if game._tile_at(at) != cand:
+			continue
+		dest = cand
+		dest_at = at
+		break
+	t.ok(dest >= 0, "자가 점검 — 화면에서 겨눌 수 있는 갈 수 있는 자리가 있다")
+	# ⚠ **The id is taken BEFORE the press.** The order lets go of the hand, so reading it back out of
+	# `hand.ids` afterwards would index an empty list — see the reversal note in `_press_the_island`.
+	var walker := int(game.hand.ids[0]) if not game.hand.is_empty() else -1
+	if dest >= 0 and walker >= 0:
+		game._unhandled_input(_press(dest_at))
+		game._unhandled_input(_release(dest_at))
+		t.eq(int(b.soldier_order[walker]), dest, "불이 들어온 조각을 누르면 그 몸이 거기로 간다")
+		t.eq(fs.cam_px, held, "그리고 명령한 누름도 카메라를 안 움직인다")
+		# ⚠⚠ **THE ROW ABOVE THIS ONE ASSERTED THE OPPOSITE FOR ONE ROUND** (2026-08-31, the user at
+		# the screen: 「이동하면 그러면 그 이동관 관련은 꺼져야지」). It read 「명령한 뒤에도 손은 그
+		# 몸을 놓지 않는다」. **The later word wins and the old row is rewritten, not kept beside it.**
+		t.ok(game.hand.is_empty(), "명령하고 나면 손을 놓는다 — 물어볼 것이 남지 않았다")
+		t.eq(game.hand.reach.size(), 0, "그래서 갈 수 있는 자리도 같이 꺼진다")
+
+	# -- ESC lets go of a hand that is holding somebody ----------------------------------------------
+	# ⚠ **Re-picked first**, because the order above already emptied the hand and a key that clears an
+	# empty hand is a row that passes against a shell with no ESC branch at all.
+	game._unhandled_input(_press(click_at))
+	game._unhandled_input(_release(click_at))
+	t.ok(not game.hand.is_empty(), "자가 점검 — 다시 눌러 몸을 쥐었다")
+	game._unhandled_input(_key(KEY_ESCAPE))
+	t.ok(game.hand.is_empty(), "ESC 를 누르면 선택이 풀린다")
+	t.eq(game.hand.reach.size(), 0, "그리고 켜져 있던 자리도 같이 꺼진다")
+
+	# ⚠ **The self-check that keeps the rows honest**: the press point really is a 조각 a body can be
+	# sent to. On water every row above would be satisfied by a shell that does nothing at all.
 	t.ok(b.grid.passable[body_tile] != 0, "자가 점검 — 누른 자리가 걸을 수 있는 조각이다")
 
 

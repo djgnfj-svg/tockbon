@@ -49,7 +49,31 @@ uniform float merge : hint_range(0.0, 1.0) = 0.0;
 // which 칸 it belongs to. ⚠ **Pushed from the grid, never a literal** -- the island's size changes.
 uniform float board_w = 30.0;
 
+// ⚠⚠ **WHICH 조각 THE PICKED BODIES MAY STAND ON, ONE TEXEL EACH** (2026-08-31, the user: 「캐릭터를
+// 누르면 이동할 수 있는 칸들이 뜨고 눌러서 이동하는거임」). Red is 「stand here」, black is not, and the
+// texel is at `(index % board_w, index / board_w)` — the very same arithmetic the merge below already
+// does, so a lit 판 and the 조각 `Hand.can_reach` admits can never come apart.
+// ⚠ **A texture and not an array uniform.** An island is up to 48x32 조각; a `uniform float[]` big
+// enough is past what a shader may declare, and one that was not would silently clip the board.
+uniform sampler2D reach_tex : filter_nearest, repeat_disable, hint_default_black;
+// 1 while the hand is holding somebody, 0 while it is empty. **This is what replaced needing TAB** —
+// the board no longer has to be revealed for the player to see where a body may go.
+uniform float show_reach : hint_range(0.0, 1.0) = 0.0;
+// What a reachable 판 is worth, and how far it is pulled from the ground's own tone. **Both live in
+// `look.gd`.** ⚠ Kept clear of the hover's own pair so 「where I may go」 and 「the one under the
+// cursor」 stay two readable states rather than one wash.
+uniform float reach_alpha : hint_range(0.0, 1.0) = 0.55;
+uniform float reach_lighten : hint_range(-1.0, 1.0) = 0.30;
+
+// **Whether one 조각 index is in the reach set.** ⚠ `board_w` is the row stride and the texture is
+// exactly the board's size, so no clamping is needed for an index the mesh actually carries.
+float reach_at(float index) {
+	vec2 xy = vec2(mod(index, board_w), floor(index / board_w));
+	return texelFetch(reach_tex, ivec2(int(xy.x), int(xy.y)), 0).r;
+}
+
 varying float v_is_hover;
+varying float v_in_reach;
 varying vec3 v_tone;
 
 void vertex() {
@@ -84,7 +108,22 @@ void vertex() {
 	float on_block = step(abs(floor(mine.x * 0.5) - floor(theirs.x * 0.5))
 						+ abs(floor(mine.y * 0.5) - floor(theirs.y * 0.5)), 0.1);
 	float lit = max(on_cell * (1.0 - merge), on_block * merge) * step(0.0, hover_cell);
-	v_is_hover = lit * step(0.5, show_all);
+	// ⚠⚠ **THE REACH LIGHTS THE SAME 판 THE MERGE IS ALREADY LIGHTING.** Up close a 판 is one 조각 and
+	// its own texel answers; far out the four have closed into one 칸, so the 칸 lights when ANY of its
+	// four 조각 is reachable — the alternative is a merged lump lit a quarter of the way through.
+	vec2 mine_block = floor(mine * 0.5) * 2.0;
+	float block_reach = max(
+		max(reach_at(mine_block.y * board_w + mine_block.x),
+			reach_at(mine_block.y * board_w + mine_block.x + 1.0)),
+		max(reach_at((mine_block.y + 1.0) * board_w + mine_block.x),
+			reach_at((mine_block.y + 1.0) * board_w + mine_block.x + 1.0)));
+	v_in_reach = mix(reach_at(UV.x), block_reach, merge) * show_reach;
+	// ⚠⚠ **THE HOVER IS GATED ON 「IS THIS 판 SHOWING AT ALL」 AND NOT ON TAB ANY MORE.** The rule it
+	// was written for is untouched — 「a hover means 『this one, of these』, and without the rest of the
+	// board on screen there is no 『these』」 — but the reach is now a second, better 「these」: the 판
+	// the picked body may stand on. ⇒ hovering an unreachable 조각 with a body picked lights nothing,
+	// which is the same sentence the old gate made about an unrevealed board.
+	v_is_hover = lit * step(0.5, max(show_all, v_in_reach));
 	v_tone = COLOR.rgb;
 	// ⚠⚠ **THE MERGE IS A REAL DISPLACEMENT AND `UV2` IS WHERE EACH POINT GOES.** The bake stores it
 	// as `0.5 + delta`; **both axes come back straight** -- glTF flips V and Blender's +Y is Godot's
@@ -97,9 +136,13 @@ void vertex() {
 void fragment() {
 	// **Everything here is the reveal key's.** With TAB up the 판 is fully transparent — which is the
 	// state the user asked for: an island with nothing drawn on it.
-	float a = show_all * all_alpha;
+	float a = max(show_all * all_alpha, v_in_reach * reach_alpha);
 	a = max(a, v_is_hover * hover_alpha);
-	float tone = mix(all_lighten, hover_lighten, v_is_hover);
+	// ⚠ **Three states and they are read in the order they were earned**: the resting board, then the
+	// reach laid over it, then the one 조각 under the cursor. A hovered 조각 outside the reach cannot
+	// reach this line at all — `v_is_hover` is already zero for it.
+	float tone = mix(all_lighten, reach_lighten, v_in_reach);
+	tone = mix(tone, hover_lighten, v_is_hover);
 	// ⚠ **Toward white or toward black, never both.** Mixing to a grey midpoint instead would wash a
 	// dark 판 out at exactly the strength where it starts to read.
 	vec3 target = tone >= 0.0 ? vec3(1.0) : vec3(0.0);

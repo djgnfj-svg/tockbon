@@ -441,6 +441,10 @@ func _process(delta: float) -> void:
 	# from inside `_paint_bodies` — it is a per-body fact, and that is the one loop with a body's
 	# centre and radius in hand at the same time.
 	_fx_begin()
+	# ⚠ **Before the bodies and that is the stacking order.** The buffer is one surface drawn in the
+	# order it was filled, so a route laid down first passes UNDER the shadows of the bodies walking
+	# it — which is the way round that reads as a line on the ground rather than over the feet.
+	_paint_move_lines()
 	_paint_bodies()
 	_paint_marks()
 	_fx_flush()
@@ -776,6 +780,42 @@ var _pads_mat: ShaderMaterial = null
 ## Whether the player is holding the reveal key. **Written only by `set_pads_revealed`**, which the
 ## shell calls on the key down and the key up.
 var _pads_revealed := false
+
+## **The reach mask the shader reads, one texel per 조각**, and the image behind it. ⚠ **Both are
+## rebuilt when the BOARD changes size and only then** — a pick rewrites the pixels of the image that
+## is already there, because reallocating a texture on every click is a stall the player feels.
+var _reach_img: Image = null
+var _reach_tex: ImageTexture = null
+
+## Whether the hand is holding anybody. **Drives the shader's `show_reach`**, which is what took over
+## from TAB as the reason a 판 is visible.
+var _reach_on := false
+
+## **Which bodies the hand is holding**, as a set of soldier ids. ⚠ **A set and not one id**, for the
+## same reason `Hand.ids` is a list: the day a 무리 is picked, nine bodies wear the rim and nothing here
+## changes. Written by the shell through `set_picked`.
+var _picked := {}
+
+## The rim sprites, pooled the way the bodies are. ⚠ **Their own pool and not the body pool**, because
+## each one carries a `ShaderMaterial` with that body's picture in it — handing one back out as a plain
+## body would put a white silhouette where a soldier should be.
+## ⚠⚠ **THIS WAS ALSO CALLED `_outlines` UNTIL 2026-09-01**, on a branch where 기법 17's black copies did
+## not exist. Both landed the same day and the name could only mean one of them; **the black copy kept
+## `_outlines` because every body has one, and the rim is a `_rim` because only the picked body has one.**
+var _rims: Array[Sprite3D] = []
+var _rims_used := 0
+const RIM_SHADER := "res://src/view/body_outline.gdshader"
+
+
+## **The 이동선 waiting to be drawn**, one `PackedInt32Array` of 조각 per picked body. Written by the
+## shell on hover, read by `_paint_move_lines` inside the fx pass, and cleared by handing back an
+## empty array. ⚠ **It holds 조각 and not points** — the height each piece is laid at is decided at
+## draw time by `_ground_y_px`, exactly as every other ground mark is.
+var _move_lines: Array = []
+
+## Whose line each entry of `_move_lines` is, in the same order. **Empty is allowed** and means no
+## crowd offset — a line leaving the middle of a 조각 rather than a body's feet.
+var _move_ids := PackedInt32Array()
 var _builds: Node3D = null
 var _props: Node3D = null
 ## **The picture props, and the two numbers `_paint_flat_props` needs to redraw them.**
@@ -857,6 +897,8 @@ func _adopt_the_pads() -> void:
 	mat.set_shader_parameter("all_lighten", Look.PAD_ALL_LIGHTEN)
 	mat.set_shader_parameter("hover_lighten", Look.PAD_HOVER_LIGHTEN)
 	mat.set_shader_parameter("hover_lift", Look.PAD_HOVER_LIFT)
+	mat.set_shader_parameter("reach_alpha", Look.PAD_REACH_ALPHA)
+	mat.set_shader_parameter("reach_lighten", Look.PAD_REACH_LIGHTEN)
 	_pads.material_override = mat
 	# ⚠ **No shadow.** The 판 is a mark on the ground, and a mark that casts one reads as a slab
 	# floating over it — the same argument the summon ring's own material carried.
@@ -872,6 +914,12 @@ func _tell_the_pads() -> void:
 		return
 	_pads_mat.set_shader_parameter("hover_cell", float(_hover_cell))
 	_pads_mat.set_shader_parameter("show_all", 1.0 if _pads_revealed else 0.0)
+	# ⚠⚠ **THE MASK GOES THROUGH HERE TOO AND NOT FROM `set_reach` DIRECTLY.** The 판 is re-adopted
+	# every time the island is rebuilt, and a mask pushed anywhere else would be the one uniform the
+	# new material never received — the reach would go dark on island two with every other mark fine.
+	_pads_mat.set_shader_parameter("show_reach", 1.0 if _reach_on else 0.0)
+	if _reach_tex != null:
+		_pads_mat.set_shader_parameter("reach_tex", _reach_tex)
 	# ⚠⚠ **The merge and the board's width go the same way as the hover**, because the shader needs all
 	# three to answer one question: what lights up. Far out a 칸 is one 판, so the whole 칸 lights.
 	_pads_mat.set_shader_parameter("merge", pad_merge())
@@ -895,6 +943,62 @@ func pad_merge() -> float:
 func set_pads_revealed(on: bool) -> void:
 	_pads_revealed = on
 	_tell_the_pads()
+
+
+## **Lights every 조각 the picked bodies may stand on, and nothing else.** An empty list puts the board
+## back to rest, which is what an empty hand hands in.
+##
+## ⚠⚠ **THIS IS WHAT REPLACED HOLDING TAB** (2026-08-31, the user: 「tab 없이 그냥 캐릭터를 누르면
+## 이동할 수 있는 칸들이 뜨고」). The reveal key still works and still shows the whole board; it is no
+## longer the only way to see where a body may go, and it is no longer required for the hover to light.
+##
+## ⚠ **The set is `Hand.reach` and this does not recompute it.** A second reachability rule living here
+## is exactly the drift `how-nets-lie` names: the picture would light 조각 the order then refuses.
+func set_reach(tiles: PackedInt32Array) -> void:
+	var size := _map_tiles()
+	if _reach_img == null or _reach_img.get_width() != size.x or _reach_img.get_height() != size.y:
+		# ⚠ **`FORMAT_R8` and one channel.** The shader asks a yes/no question and an RGBA8 mask would
+		# be four times the upload for three channels nobody reads.
+		_reach_img = Image.create(size.x, size.y, false, Image.FORMAT_R8)
+		_reach_tex = ImageTexture.create_from_image(_reach_img)
+	_reach_img.fill(Look.COL_REACH_OFF)
+	for k in tiles.size():
+		var t := int(tiles[k])
+		if t < 0:
+			continue
+		var tx := t % size.x
+		var ty := t / size.x
+		if ty >= size.y:
+			continue
+		_reach_img.set_pixel(tx, ty, Look.COL_REACH_ON)
+	_reach_tex.update(_reach_img)
+	_reach_on = not tiles.is_empty()
+	_tell_the_pads()
+
+
+## **The route each picked body would walk**, handed in as 조각 lists. An empty array draws nothing,
+## which is the resting state and the state a press restores.
+##
+## ⚠ **Stored and not drawn here.** Every ground mark in this file is built inside the one fx pass in
+## `_process`, between the buffer opening and its flush — a mark drawn outside it is a mark on a
+## buffer that has already been committed, and it never reaches the screen.
+func set_move_lines(lines: Array, ids: PackedInt32Array = PackedInt32Array()) -> void:
+	_move_lines = lines
+	# ⚠ **The ids are what let the line leave the FEET.** A body is drawn off its 조각's middle by the
+	# crowd offset, and a line that ignored that started from the middle of the 조각 with nobody on it
+	# — 2026-08-31, the user: 「지금은 블록 가운데서 오는듯한데?」.
+	_move_ids = ids
+
+
+## **Puts the white rim on these bodies and takes it off every other** (2026-08-31, the user: 「내가
+## 누른 캐릭이 티가 나야할듯함」). An empty list is the resting state.
+##
+## ⚠ **Ids and not positions.** The rim is drawn inside the body loop from the body's own picture and
+## its own place, so a rim cannot end up a frame behind the body it belongs to.
+func set_picked(ids: PackedInt32Array) -> void:
+	_picked = {}
+	for k in ids.size():
+		_picked[int(ids[k])] = true
 
 
 ## **Puts the standing buildings on the ground.** ⚠ **Nothing is placed by eye**: the kind comes from
@@ -1508,6 +1612,10 @@ func _sprite() -> Sprite3D:
 		var reused := _sprites[_sprites_used]
 		_sprites_used += 1
 		reused.visible = true
+		# ⚠ **The pool is shared and one member may have been something else last frame.** Nothing in
+		# here overrides a material today except the rim, which has its own pool — this line is what
+		# keeps that true if a second one is ever added.
+		reused.material_override = null
 		return reused
 	var s := Sprite3D.new()
 	s.pixel_size = Look.SPRITE_PIXEL_SIZE
@@ -1640,7 +1748,7 @@ func _pitch_stretch() -> float:
 ## one read of the row; the row also says how big this species is drawn, and passing the derived number
 ## while the caller kept the row is how the two would have been read in two places.
 func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id: int, colour: Color,
-		squash: Vector2, tex: Texture2D) -> void:
+		squash: Vector2, tex: Texture2D, outlined: bool = false) -> void:
 	var radius := Look.body_radius_of(type_id)
 	# ⚠⚠ **THE ROW'S INK FRACTION, AND DIVIDING BY IT IS THE WHOLE POINT** (2026-08-31).
 	# `beast_draw_scale` is how wide the ANIMAL is drawn; this turns that into how wide the PICTURE
@@ -1704,6 +1812,12 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 	# ⚠ **기법 26 · 색으로 배경에서 떼기 is not a line here** — it lives inside `Look.beast_tint`, so
 	# there is one place a body's colour is decided and `net_shell` reads the same answer this does.
 	_put_outline(s)
+	# ⚠⚠ **THE RIM IS PLACED FROM THE BODY'S FINISHED POSITION AND SCALE, NOT RE-DERIVED.** Every
+	# correction above it — the foot height, the frame's empty rows, the gait squash, the crowd offset
+	# — would otherwise have to be repeated, and a rim that repeated four of five would sit a little
+	# off its own body in exactly the cases that were hardest to get right.
+	if outlined:
+		_put_pick_outline(s, pic)
 	# ⚠⚠ **THE TOP USED TO BE RETURNED HERE and the halo that read it is deleted** (2026-08-29).
 	# **The rule it carried is the part to keep**: a wolf is 55 x 40 and a caveman 36 x 40, so sized by
 	# WIDTH off the same radius the man stands half again as tall as the animal. ⇒ **Nothing that
@@ -1722,6 +1836,9 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 ## that are not ported yet.
 func _paint_bodies() -> void:
 	_sprites_used = 0
+	# ⚠ **Opened with the body pool and closed by the same `_hide_unused`.** A rim pool opened
+	# anywhere else is a rim left standing over a body that has died.
+	_rims_used = 0
 	if battle == null or army == null or battle.grid == null:
 		# ⚠ **Still called on the empty path**: `_paint_boats` is what hides a pooled hull, so skipping
 		# it here would leave the last island's boats standing on the title screen.
@@ -1740,7 +1857,7 @@ func _paint_bodies() -> void:
 	for raw_id in battle.ashore_ids():
 		var i := int(raw_id)
 		_put_walker("s%d" % i, int(army.type_id[i]), battle.soldier_pos[i], false,
-			_crowd_slot_of(battle.soldier_pos[i], i))
+			_crowd_slot_of(battle.soldier_pos[i], i), _picked.has(i))
 
 	# ⚠⚠ **THE ONE PLACE A BODY THE SIM HAS ALREADY DROPPED IS STILL DRAWN** (2026-08-31). Both lists
 	# above hold the living only — `living_enemy_ids`'s own header says a corpse must not be left on
@@ -1973,7 +2090,8 @@ func _clock_of(b: Dictionary, anim: int) -> float:
 ##
 ## ⚠ **The side reaches the screen as a TINT and never as a different animal** — `Look.body_colour_of`.
 ## The picture comes from the unit row, which is why a 검사 and a 늑대 need no branch here at all.
-func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: int) -> void:
+func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: int,
+		outlined: bool = false) -> void:
 	# ⚠ **The crowd offset is kept apart from the sway** and handed down separately — see `_put_body`,
 	# where the shadow takes one and not the other.
 	var crowd := Look.crowd_offset_px(slot, Rules.TILE_CAPACITY)
@@ -1988,8 +2106,10 @@ func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: i
 	# are different motions — replacing one with the other would drop whichever came second.
 	var gait := _gait_squash(key)
 	var swing := _swing_squash(key)
+	# ⚠ **`outlined` rides along untouched** — whether this body is the one in hand is the shell's
+	# answer, not a thing the view re-derives.
 	_put_body(centre, at, crowd, type_id, lit,
-		Vector2(gait.x * swing.x, gait.y * swing.y), tex)
+		Vector2(gait.x * swing.x, gait.y * swing.y), tex, outlined)
 
 
 ## **How far into its flash a body is**, 1.0 at the instant of the blow and 0.0 once it is spent.
@@ -2028,6 +2148,70 @@ func _hide_unused() -> void:
 	# behind a hidden body is a black silhouette of a dead animal standing on the island.
 	for k in range(_sprites_used, _outlines.size()):
 		_outlines[k].visible = false
+	# ⚠⚠ **THE RIM POOL IS CLOSED BY ITS OWN COUNT AND THE BLACK POOL IS NOT, AND THAT IS NOT AN
+	# INCONSISTENCY.** Every body wears a black copy, so that pool is closed by the body index; only a
+	# body in hand wears a white rim, so this one has to carry its own.
+	for k in range(_rims_used, _rims.size()):
+		_rims[k].visible = false
+
+
+## **The white rim behind one body**, grown from that body's own finished sprite.
+##
+## ⚠⚠ **BEHIND IS ALONG THE CAMERA'S FORWARD AND NOTHING ELSE.** Both quads are billboards standing at
+## the same point, so 「behind」 has no world axis — pushed along +Y the rim would ride up the body's
+## head as the camera pitched, and along +Z it would swing out from behind it as the board turned.
+## ⚠ **Both write depth**, which is what leaves only the rim showing: the body sits in front and its
+## own silhouette fails the test everywhere the two overlap.
+func _put_pick_outline(body: Sprite3D, pic: Texture2D) -> void:
+	if _cam == null:
+		return
+	var rim := _rim_sprite()
+	rim.texture = pic
+	rim.scale = body.scale * Look.PICK_OUTLINE_GROW
+	# ⚠⚠ **ALONG THE RAY FROM THE CAMERA TO THIS BODY, NOT ALONG THE CAMERA'S OWN FORWARD.** Under a
+	# perspective camera the ray is the only direction that holds a thing's screen position exactly;
+	# the forward does it only for something dead centre.
+	# ⚠ **This was NOT what the user saw when they said 「약간 회전하니까 이상한거 같은데?」** — measured
+	# afterwards, the push moves the rim about one screen pixel either way, and what was actually wrong
+	# on that turn was the 이동선 leaving from half a 조각 away. **Written down because the first reading
+	# of that sentence was wrong and the next reader should not re-derive it.**
+	# ⚠ **Both points in the same space.** `_cam` and every body sprite are children of `_world`, so
+	# `position` is what they share; the camera's `global_transform.origin` is a different frame and
+	# mixing the two is a ray that means nothing.
+	var eye := _cam.position
+	var ray := (body.position - eye)
+	if ray.length() > Rules.EPS:
+		rim.position = body.position + ray.normalized() * Look.PICK_OUTLINE_BACK_TILES
+	else:
+		rim.position = body.position
+	var mat: ShaderMaterial = rim.material_override
+	mat.set_shader_parameter("body_tex", pic)
+	mat.set_shader_parameter("line_col", Look.COL_PICK_OUTLINE)
+
+
+## One rim sprite, pooled and hidden but never freed — the same rule `_sprite` keeps.
+##
+## ⚠ **A `ShaderMaterial` PER SPRITE and not one shared.** The picture goes into the material, and a
+## facing or an animation frame is a different picture; one material for all of them would put the
+## last body drawn's silhouette around every rim on screen.
+func _rim_sprite() -> Sprite3D:
+	if _rims_used < _rims.size():
+		var reused := _rims[_rims_used]
+		_rims_used += 1
+		reused.visible = true
+		return reused
+	var s := Sprite3D.new()
+	s.pixel_size = Look.SPRITE_PIXEL_SIZE
+	s.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var mat := ShaderMaterial.new()
+	mat.shader = load(RIM_SHADER)
+	s.material_override = mat
+	_world.add_child(s)
+	_rims.append(s)
+	_rims_used += 1
+	return s
 
 
 # --- the beasts' boats, and the riders standing on them ---------------------------------------------
@@ -3181,6 +3365,13 @@ func _fx_layer() -> MeshInstance3D:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	# ⚠⚠ **THIS IS WHAT PUTS A GROUND MARK IN FRONT OF THE 판, AND IT IS SORT ORDER AND NOT DEPTH**
+	# (measured 2026-08-31). Both this layer and the 판 are transparent and neither writes depth, so
+	# the engine orders them by their AABB — and both AABBs are the whole island, which makes the
+	# ordering arbitrary. **The 판 was winning**: the moment a pick lit the board, the bodies' own
+	# shadows and the 이동선 both disappeared under it. ⚠ **Raising the marks does nothing** — measured
+	# at half a 조각 of lift, still invisible; a priority is the only thing that decides this.
+	mat.render_priority = 1
 	m.material_override = mat
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_world.add_child(m)
@@ -3233,3 +3424,57 @@ func _g_disc(centre: Vector2, radius: float, col: Color) -> void:
 		var a1 := TAU * float(k + 1) / float(segs)
 		_g_tri(centre, centre + Vector2(cos(a0), sin(a0)) * radius,
 			centre + Vector2(cos(a1), sin(a1)) * radius, col)
+
+
+## **Lays every 이동선 on the ground**, one per picked body, plus a dot where each one ends.
+##
+## ⚠ **Nothing here decides where the line goes.** The points arrive from `Hand.route_points` in tile
+## units and this converts them to world px and draws — a view that worked its own route out would be
+## a second copy of the walking rule, which is the defect shape `how-nets-lie` opens with.
+func _paint_move_lines() -> void:
+	if _move_lines.is_empty():
+		return
+	# ⚠⚠ **THE WIDTH IS DIVIDED BY THE ZOOM AND THAT IS THE WHOLE OF 「자연스럽게」 ON THE WHEEL**
+	# (2026-08-31, the user: 「마우스 휠을 내릴 수도 올릴 수도 있는거니까 항상 개발할때 고려해야함 ...
+	# 회전 및 확대 축소때」). A ground mark's world size becomes `size * zoom` on screen, so a fixed
+	# world width is a hairline pulled back and a stripe pushed in. **This is a mark the hand reads, not
+	# a thing in the world** — it holds its width on screen instead.
+	# ⚠ **Clamped at both ends.** Past the far bound the line would be wider than the 조각 it crosses;
+	# past the near one it would thin back to nothing at a zoom nobody uses.
+	var steady: float = clampf(1.0 / maxf(zoom, 0.01), Look.MOVE_LINE_ZOOM_MIN,
+		Look.MOVE_LINE_ZOOM_MAX)
+	for i in _move_lines.size():
+		var pts: PackedVector2Array = _move_lines[i]
+		if pts.size() < 2:
+			continue
+		# ⚠ **Only the FIRST point wears the crowd offset.** The rest are 조각 middles and should be —
+		# the route is a list of 조각 and the body walks through their centres.
+		var from := Look.tile_point_px(pts[0])
+		if i < _move_ids.size():
+			from += Look.crowd_offset_px(_crowd_slot_of(pts[0], int(_move_ids[i])),
+				Rules.TILE_CAPACITY)
+		for k in range(pts.size() - 1):
+			var to := Look.tile_point_px(pts[k + 1])
+			_g_ribbon(from, to, Look.MOVE_LINE_HALF_PX * steady, Look.COL_MOVE_LINE)
+			from = to
+		_g_disc(Look.tile_point_px(pts[pts.size() - 1]), Look.MOVE_LINE_END_PX * steady,
+			Look.COL_MOVE_LINE_END)
+
+
+## **One straight run of the line, CUT INTO PIECES along its length.**
+##
+## ⚠⚠ **THE CUT IS THE WHOLE REASON THIS IS NOT ONE QUAD** — the same reason the header of this
+## section already gives for every ground mark. A run crossing a stair drawn as a single quad becomes
+## a chord across the slope and half the line ends up inside the hill.
+func _g_ribbon(a: Vector2, b: Vector2, half: float, col: Color) -> void:
+	var span := b - a
+	var len_px := span.length()
+	if len_px <= Rules.EPS:
+		return
+	var side := Vector2(-span.y, span.x) / len_px * half
+	var steps := maxi(1, int(ceil(len_px / Look.FX_GROUND_STEP_PX)))
+	for k in steps:
+		var p0 := a + span * (float(k) / float(steps))
+		var p1 := a + span * (float(k + 1) / float(steps))
+		_g_tri(p0 - side, p0 + side, p1 + side, col)
+		_g_tri(p0 - side, p1 + side, p1 - side, col)

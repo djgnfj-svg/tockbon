@@ -290,6 +290,21 @@ func _table() -> Dictionary:
 			# 티켓 34: how far the 판 have merged, worked out from the zoom and pushed to the shader.
 			"pad_merge": 0,
 			"set_pads_revealed": 0,
+			# **The pick's own three** (2026-08-31, the user: 「tab 없이 그냥 캐릭터를 누르면 이동할
+			# 수 있는 칸들이 뜨고 눌러서 이동하는거임」). `set_reach` writes the mask the 판 shader
+			# reads; `set_move_lines` takes the 이동선 in and `_paint_move_lines` lays it on the
+			# ground through `_g_ribbon`. ⚠ **`_paint_move_lines` draws through the fx buffer and
+			# not through `_draw`**, which is why its count here is 0 like every other ground mark.
+			"set_reach": 0,
+			"set_move_lines": 0,
+			"_paint_move_lines": 0,
+			"_g_ribbon": 0,
+			# **The white rim on the picked body** (2026-08-31, the user: 「내가 누른 캐릭이 티가
+			# 나야할듯함」). `set_picked` takes the ids in, `_put_pick_outline` places one rim from the
+			# body's own finished sprite, and `_rim_sprite` is that pool's own `_sprite`.
+			"set_picked": 0,
+			"_put_pick_outline": 0,
+			"_rim_sprite": 0,
 		},
 		# ⚠⚠ **NINE NAMES LEFT THIS FILE IN ONE EDIT AND NOTHING ARRIVED** (2026-08-28). The start
 		# button and the five summon slot boxes were deleted whole (the user: 「게임플레이에서 시작

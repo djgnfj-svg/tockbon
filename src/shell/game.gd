@@ -52,6 +52,12 @@ var run: Run = null
 ## behind the panel, and the loss screen has to keep showing enemies-left to say *why* it was lost.
 var battle: Battle = null
 
+## **What the player has hold of.** ⚠⚠ **The shell owns the object and decides NOTHING about it** —
+## every rule about who may be picked, where they may go and what route they would walk lives in
+## `Hand`, which is in `sim/` and drivable with `.new()`. This file only turns presses into its three
+## verbs. **A selection rule written here would be a rule no net can reach.**
+var hand := Hand.new()
+
 ## ⚠⚠ **`_pan_keys` STOOD HERE AND IT IS DELETED** (2026-08-31, the user: 「wasd 도 지워줘」). It was
 ## the WASD direction held down, written on each key's two edges and spent by `_process` against the
 ## frame's own delta — **held state and never one step per event**, because a key that panned per
@@ -93,11 +99,18 @@ var _press_open := false
 ## only ever be `true`, and a gate that can only be true is not a gate, it is a deleted branch waiting
 ## to be noticed. **What kept the right button from commanding is now the wiring itself.**
 
-## ⚠⚠ **`_pointer_at`, `_pointer_inside` AND `_window_focused` STOOD HERE AND ALL THREE ARE DELETED**
-## (2026-08-31, the user: 「화면 끝에 마우스 뒀을 때 이동되는 로직 ... 그것도 지워줘」). They existed
-## for the edge pan and for nothing else: the last pointer position, and the two flags that stopped
-## the camera sliding while the player alt-tabbed away. **The edge pan is gone, so what read them is
-## gone** — WASD and the left-button drag are what move the camera now.
+## ⚠⚠ **`_pointer_inside` AND `_window_focused` STOOD HERE AND BOTH ARE DELETED**
+## (2026-08-31, the user: 「화면 끝에 마우스 뒀을 때 이동되는 로직 ... 그것도 지워줘」). They were the two
+## flags that stopped the camera sliding while the player alt-tabbed away, and they existed for the
+## edge pan and for nothing else. **The edge pan is gone, so what read them is gone** — the
+## left-button drag and the right-button turn are the whole camera now.
+
+## **Where the pointer was last seen.** ⚠⚠ **IT WENT WITH THE EDGE PAN ON 2026-08-31 AND CAME BACK ON
+## 2026-09-01**, when `pick-then-move` merged onto the branch that had deleted it. It is not the edge
+## pan's field any more: **`_process` rebuilds the 이동선 from it every frame**, because the picked body
+## walks and the board slides under a cursor that never moved. ⚠ **The motion handler is its only
+## writer**, exactly as before.
+var _pointer_at := Vector2.ZERO
 
 ## ⚠⚠ **`_hold_sec` STOOD HERE AND IT IS DELETED** (2026-08-29) with the verdict. It held the last
 ## frame of a finished island on screen before the next `setup()` emptied the view's effect drawers —
@@ -127,6 +140,9 @@ func _open_island() -> void:
 	var opened := run.begin_island()
 	if opened != null:
 		battle = opened
+		# ⚠ **A hand holding bodies from the last island would light a reach built on the last GRID.**
+		# The ids survive an island; the 조각 they were measured against do not.
+		_let_go()
 		# ⚠⚠ **A `battle.commit()` STOOD HERE FOR ONE ROUND AND IT WAS WRONG** (2026-08-28), and the
 		# commit itself is deleted now (2026-08-29) with the fight. **What it cost is worth keeping:**
 		# launched with the commit here, the island was **won before the first frame reached the
@@ -185,6 +201,17 @@ func _process(delta: float) -> void:
 	# sim was not running. **Both sources are gone**, and the drag that replaced them moves the camera
 	# from `_unhandled_input` rather than from the clock, so nothing needs a per-frame call.
 	# ⚠ **`pan_by` still ends in the clamp** — that is the drag's bound too, and it is untouched.
+	# ⚠⚠ **THE 이동선 IS REBUILT EVERY FRAME AND NOT ONLY ON MOTION.** Its first point is the picked
+	# body's OWN position, and that body walks — built once on hover, the line stayed anchored where he
+	# used to be and trailed behind him across the island.
+	# ⚠⚠ **THIS IS WHY `_pointer_at` CAME BACK** (2026-09-01, merging `pick-then-move` onto the branch
+	# that deleted the edge pan). The pan deleted above was its only other reader, and the tombstone
+	# beside it says so — but a still cursor over a walking body is still a changing route, and the
+	# left-button drag moves the board under a still cursor too. **「the pointer has not moved」 never
+	# meant 「the route has not changed」.**
+	# ⚠ **It is cheap**: `Hand.routes` caches the 조각 list per destination, so this re-reads positions
+	# rather than rebuilding a flow field.
+	_show_route(_pointer_at)
 	# ⚠ **No multiplier is handed down any more.** `speed-off-open-landing` deleted the ladder, so the
 	# sim and both views run on the bare frame delta — which is what every duration in `look.gd` was
 	# budgeted against in the first place. `set_time_scale` and `set_speed` are gone rather than being
@@ -250,6 +277,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		if key.keycode == KEY_TAB and not key.echo:
 			field_view.set_pads_revealed(key.pressed)
 			return
+		# ⚠⚠ **ESC LETS GO OF THE HAND** (2026-08-31, the user: 「esc누르면 선택 취소되니?」 — it did
+		# not). ⚠ **Pressed edge only, unlike TAB**: this is one action and not a state held for as
+		# long as a key is, so the release edge has nothing to undo.
+		# ⚠ **It sits above the turn keys** so a press cannot both let go and move the board, and above
+		# the `not key.pressed` return so the branch is reached at all.
+		if key.keycode == KEY_ESCAPE and key.pressed and not key.echo:
+			_let_go()
+			return
 		# ⚠⚠ **THE WASD BRANCH STOOD HERE AND IT IS DELETED** (2026-08-31). It was read on BOTH edges,
 		# like TAB and unlike everything left in this handler, and it sat ABOVE the `not key.pressed`
 		# return for that reason — a held key never told it was released pans forever. **TAB is the
@@ -293,9 +328,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			_turn_from = click.position
 	elif event is InputEventMouseMotion:
 		var motion := event as InputEventMouseMotion
-		# ⚠⚠ **THE POINTER POSITION WAS RECORDED HERE FOR THE EDGE PAN AND THAT LINE IS DELETED**
-		# (2026-08-31). Nothing reads a remembered pointer any more; every handler below works off
-		# the motion in hand.
+		# ⚠⚠ **THE POINTER IS RECORDED HERE, AND THE 이동선 IS ITS ONLY READER NOW.** It was the edge
+		# pan's line and was deleted with it (2026-08-31); it came back on 2026-09-01 for the route,
+		# which `_process` rebuilds every frame because the picked body walks. **It sits above the
+		# turn's early return** so a yaw drag does not leave the route reading a stale cursor.
+		_pointer_at = motion.position
 		# ⚠⚠ **THE YAW DRAG SITS ABOVE EVERYTHING ELSE**, because a turning drag is neither a hover
 		# nor a pan.
 		# ⚠ **Horizontal travel only.** Adding the vertical axis to the tilt here was tried on paper
@@ -316,6 +353,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		# on the ground". **It is set here and not inside the summon branch below** — the plate says
 		# where the cursor is, which is true whether or not a slot is armed.
 		field_view.set_hover_tile(_tile_at(motion.position))
+		# ⚠⚠ **THE 이동선 IS BUILT ON HOVER AND NOT ON PRESS** (2026-08-31, the user: 「이동할때
+		# 이동선이 미리 보였으면 좋겠네」). 미리 means before the press, so the only event that can carry
+		# it is the motion — a line drawn on the press would appear at the same instant the walk does
+		# and would be a picture of a decision already made.
+		_show_route(motion.position)
 		# ⚠ **The summon aim used to sit above the pan and consume every motion while a slot was
 		# armed** (deleted 2026-08-28). With it gone a motion on the field is a pan or it is nothing.
 		# **The threshold, and it is measured from the press point rather than accumulated per motion.**
@@ -374,7 +416,7 @@ func _quit_the_game() -> void:
 ## ⚠ **One rule in them is worth keeping and is written down here rather than lost**: *whether a card
 ## may be taken was asked of the SIM* — `reward_view.is_card_pressable` called the same predicate
 ## `run.take_card` refused on, so the picture could never offer a card the sim would then reject. That
-## is the same discipline `_order_walk_at` keeps today by driving off `battle.order_walk`'s own bool.
+## is the same discipline `_press_the_island` keeps today by driving off the sim's own answer.
 
 
 ## 시작하기: a brand new run. **`Run.restart()` is not called here** — a fresh `Run` is what 시작하기
@@ -466,7 +508,7 @@ func _end_press() -> void:
 	# Only the left press ever reaches `_begin_press`, so `_press_open` is already the answer to
 	# 「was this a press that may command」 — see the tombstone where `_press_orders` stood.
 	if _press_open and not _panning and battle != null:
-		_order_walk_at(_press_at)
+		_press_the_island(_press_at)
 	_press_open = false
 	_panning = false
 
@@ -528,31 +570,94 @@ func _on_tilt_key(key: InputEventKey) -> bool:
 ## **Sends the body under the player's command to the tile that was pressed.** True when somebody was
 ## actually ordered, which is what tells the caller the press was consumed.
 ##
-## ⚠⚠ **It orders the body NEAREST THE PRESS and not「the first one ashore」.** With one body the two
-## are the same sentence and the difference cannot be seen; with two it is the difference between
-## commanding what you are looking at and commanding whatever happens to sit lowest in the roster.
-## **The whole cost of getting it right today is this loop**, and getting it wrong would read as a
-## random body answering the click.
-## ⚠ **This is not a squad.** Squads do not exist (2026-08-27, the user: 「칸단위 부대는 따로 없음
-## 아직」) — when they do, this is the function that grows a selection instead of a nearest-body rule.
-func _order_walk_at(at: Vector2) -> bool:
+## ⚠⚠ **`_order_walk_at` STOOD HERE AND IT IS DELETED** (2026-08-31). It ordered **the body nearest
+## the press**, with no selection at all: one press, one walk, and whichever body happened to be
+## closest answered it. Its own comment named the day it would die — 「when squads exist, this is the
+## function that grows a selection instead of a nearest-body rule」 — and this is that function.
+##
+## **What the press does is decided by whether the hand is holding anybody, and by nothing else**
+## (2026-08-31, the user: 「tab 없이 그냥 캐릭터를 누르면 이동할 수 있는 칸들이 뜨고 눌러서
+## 이동하는거임」, then 「esc를 하지 않는 이상 이동 우선으로 해줘야할듯한데」):
+##
+##  - **empty hand** -> a press on a body picks it, and its reach lights;
+##  - **full hand** -> a press on a lit 조각 is a walk, and a body standing there does not intercept it;
+##  - **full hand, pressed anywhere else** -> nothing. **ESC is the only thing that lets go.**
+##
+## ⚠ **True means the press was consumed**, which is what tells `_end_press` it was not a pan — the
+## same contract `_order_walk_at` had.
+func _press_the_island(at: Vector2) -> bool:
 	if battle == null:
 		return false
 	var tile := _tile_at(at)
-	if tile < 0:
+	# ⚠⚠ **A FULL HAND MOVES; AN EMPTY HAND PICKS. THE BODY TEST CAME FIRST FOR ONE ROUND AND IT IS
+	# REVERSED** (2026-08-31, the user at the screen: 「이게 조각에 옮길 수가 있잖아? 같은 조각으로?
+	# 그때 살짝 불편하네? 이게 esc를 하지 않는 이상 이동 우선으로 해줘야할듯한데」).
+	#
+	# **The old line is kept rather than erased**: it read 「a body first, always」, and its reasoning
+	# was that a picked body must stay re-pickable. **What it did on screen** is what killed it — a
+	# 조각 with somebody standing on it is a 조각 you may want to send another body TO, and the body
+	# test swallowed the press and picked the man already standing there instead. ⇒ **while the hand
+	# holds anybody, a press on a lit 조각 is a walk and nothing else looks at it.**
+	if not hand.is_empty():
+		if tile >= 0 and hand.can_reach(tile):
+			var sent := hand.order(battle, tile)
+			# ⚠⚠ **THE ORDER LETS GO, AND IT KEPT HOLD FOR ONE ROUND** (2026-08-31, the user:
+			# 「이동하면 그러면 그 이동관 관련은 꺼져야지」). The earlier line is kept because this repo
+			# records a flip: **it re-picked the same bodies** so a second command needed no second
+			# pick, reasoning from 「the hand never stops moving」. **What that ignored is that the board
+			# then stays lit with nothing left to decide.**
+			_let_go()
+			return sent > 0
+		# ⚠⚠ **A PRESS THAT CANNOT BE A WALK KEEPS THE HAND, AND ESC IS THE ONLY WAY TO LET GO**
+		# (the user, same sentence: 「esc를 하지 않는 이상」). **The sea used to drop the selection here**
+		# — which meant a hand aimed a little wide lost the body it had, and the player had to pick him
+		# again to try the same order twice.
 		return false
-	var here := Vector2(float(tile % battle.grid.w), float(tile / battle.grid.w))
-	var who := -1
-	var best := INF
-	for raw_id in battle.ashore_ids():
-		var i := int(raw_id)
-		var d: float = (battle.soldier_pos[i] as Vector2).distance_to(here)
-		if d < best:
-			best = d
-			who = i
-	if who < 0:
-		return false
-	return battle.order_walk(who, tile)
+	# **An empty hand picks whoever was pressed**, and that is the only thing an empty hand does.
+	var who := hand.body_at(battle, _point_at(at), Look.PICK_BODY_TILES)
+	if who >= 0:
+		var picked := hand.pick(battle, who)
+		_tell_the_view()
+		return picked
+	return false
+
+
+## **The one place the view is told what the hand is holding.** ⚠ Both halves go together on purpose:
+## a reach pushed without clearing the stale route leaves a line pointing at a 조각 that is no longer
+## lit, which is the picture disagreeing with the rule.
+func _tell_the_view() -> void:
+	field_view.set_reach(hand.reach)
+	# ⚠⚠ **THE RIM GOES WITH THE REACH AND NOT SEPARATELY** (2026-08-31, the user: 「내가 누른 캐릭이
+	# 티가 나야할듯함」). They are two halves of one sentence — 「this body, and these are its places」 —
+	# and a rim pushed from anywhere else could outlive a reach that had already gone dark.
+	field_view.set_picked(hand.ids)
+	field_view.set_move_lines([])
+
+
+## **Drops the selection and puts the board back to rest.**
+func _let_go() -> void:
+	hand.clear()
+	_tell_the_view()
+
+
+## **The 이동선 under the cursor, or nothing.** ⚠ **Nothing is drawn while the hand is empty or the
+## cursor is off the reach** — a route to a 조각 the press would refuse is a line the game will not
+## walk.
+func _show_route(at: Vector2) -> void:
+	if battle == null or hand.is_empty():
+		return
+	var tile := _tile_at(at)
+	if tile < 0 or not hand.can_reach(tile):
+		field_view.set_move_lines([])
+		return
+	field_view.set_move_lines(hand.route_points(battle, tile), hand.ids)
+
+
+## **A screen press in 조각 units, fractions and all.** ⚠ **Not `_tile_at` rounded** — `Hand.body_at`
+## measures a real distance to a body standing off the middle of its 조각, and a rounded point would
+## throw away exactly the part that decides whether the press hit him.
+func _point_at(at: Vector2) -> Vector2:
+	return field_view.screen_to_terrain_px(at) / Look.TILE_PX
 
 
 ## A screen press converted to the tile it landed on, or -1 off the grid — the one function every
@@ -626,4 +731,4 @@ func _on_wheel(at: Vector2, notch: int) -> void:
 #  - `_ring_hit_at` — it undid a placed boat, and there is no boat the player places (2026-08-28);
 #  - `_on_summon_key` / `_slot_of_keycode` / `_arm` / `_disarm` / `_begin_summon` / `_fire_one_summon`
 #    — the whole summon gesture, deleted with the start button it was authored in front of.
-#    ⇒ **`_order_walk_at` is the only hit test a field press gets now.**
+#    ⇒ **`_press_the_island` is the only hit test a field press gets now.**
