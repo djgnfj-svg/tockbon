@@ -764,13 +764,29 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 		dest_at = at
 		break
 	t.ok(dest >= 0, "자가 점검 — 화면에서 겨눌 수 있는 갈 수 있는 자리가 있다")
-	if dest >= 0:
+	# ⚠ **The id is taken BEFORE the press.** The order lets go of the hand, so reading it back out of
+	# `hand.ids` afterwards would index an empty list — see the reversal note in `_press_the_island`.
+	var walker := int(game.hand.ids[0]) if not game.hand.is_empty() else -1
+	if dest >= 0 and walker >= 0:
 		game._unhandled_input(_press(dest_at))
 		game._unhandled_input(_release(dest_at))
-		t.eq(int(b.soldier_order[game.hand.ids[0]]), dest,
-			"불이 들어온 조각을 누르면 그 몸이 거기로 간다")
+		t.eq(int(b.soldier_order[walker]), dest, "불이 들어온 조각을 누르면 그 몸이 거기로 간다")
 		t.eq(fs.cam_px, held, "그리고 명령한 누름도 카메라를 안 움직인다")
-		t.eq(game.hand.ids.size(), 1, "명령한 뒤에도 손은 그 몸을 놓지 않는다")
+		# ⚠⚠ **THE ROW ABOVE THIS ONE ASSERTED THE OPPOSITE FOR ONE ROUND** (2026-08-31, the user at
+		# the screen: 「이동하면 그러면 그 이동관 관련은 꺼져야지」). It read 「명령한 뒤에도 손은 그
+		# 몸을 놓지 않는다」. **The later word wins and the old row is rewritten, not kept beside it.**
+		t.ok(game.hand.is_empty(), "명령하고 나면 손을 놓는다 — 물어볼 것이 남지 않았다")
+		t.eq(game.hand.reach.size(), 0, "그래서 갈 수 있는 자리도 같이 꺼진다")
+
+	# -- ESC lets go of a hand that is holding somebody ----------------------------------------------
+	# ⚠ **Re-picked first**, because the order above already emptied the hand and a key that clears an
+	# empty hand is a row that passes against a shell with no ESC branch at all.
+	game._unhandled_input(_press(click_at))
+	game._unhandled_input(_release(click_at))
+	t.ok(not game.hand.is_empty(), "자가 점검 — 다시 눌러 몸을 쥐었다")
+	game._unhandled_input(_key(KEY_ESCAPE))
+	t.ok(game.hand.is_empty(), "ESC 를 누르면 선택이 풀린다")
+	t.eq(game.hand.reach.size(), 0, "그리고 켜져 있던 자리도 같이 꺼진다")
 
 	# ⚠ **The self-check that keeps the rows honest**: the press point really is a 조각 a body can be
 	# sent to. On water every row above would be satisfied by a shell that does nothing at all.
@@ -1041,6 +1057,18 @@ func _the_edge_of_the_window_pans(t, game, fs: FieldView) -> void:
 	var band_tile: int = game._tile_at(band_pt)
 	for i in b.soldier_order.size():
 		b.soldier_order[i] = -1
+	# ⚠⚠ **THE HAND HAS TO BE HOLDING SOMEBODY OR THE PRESS COMMANDS NOBODY** (2026-08-31). Until that
+	# day one press was one walk and the nearest body answered it; now a press is 「pick · order · let
+	# go」 and an empty hand makes the third of those. **This is not what the rows below measure** —
+	# they measure the band against the ORDER — so the pick is done through the sim rather than by
+	# aiming a second press at a body that may not be on screen.
+	var ashore := b.ashore_ids()
+	t.ok(not ashore.is_empty(), "자가 점검 — 명령할 몸이 섬에 있다")
+	if ashore.is_empty():
+		return
+	game.hand.pick(b, int(ashore[0]))
+	t.ok(game.hand.can_reach(band_tile),
+		"자가 점검 — 그 몸이 띠 안의 그 조각에 설 수 있다 (아니면 아래 줄은 공허하다)")
 	game._unhandled_input(_motion(band_pt, Vector2.ZERO))
 	game._unhandled_input(_press(band_pt))
 	var pressed_at := fs.cam_px

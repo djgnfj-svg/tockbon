@@ -169,6 +169,11 @@ func _process(_delta: float) -> bool:
 					_game.field_view._move_lines.size(), _game.field_view._g_v.size()])
 			_save("3_line")
 		8:
+			# ⚠ **Read the picked id BEFORE the press.** The order lets go of the hand (2026-08-31,
+			# the user: 「이동하면 그러면 그 이동관 관련은 꺼져야지」), so afterwards there is nobody
+			# in it to ask.
+			if not _game.hand.is_empty():
+				_who = int(_game.hand.ids[0])
 			if _has_dest:
 				_game._unhandled_input(_press(_dest_at))
 				_game._unhandled_input(_release(_dest_at))
@@ -183,10 +188,9 @@ func _process(_delta: float) -> bool:
 			# ⚠ **Who was picked, where he is and where he was sent** — the picture alone cannot tell
 			# an ordered body apart from one the sim moved on its own, and both are on screen here.
 			var b: Battle = _game.battle
-			var picked := int(_game.hand.ids[0])
-			print("[shot] picked=%d at=%s order_tile=%d dest_tile=%d"
-				% [picked, b.soldier_pos[picked], int(b.soldier_order[picked]),
-					_game._tile_at(_dest_at)])
+			print("[shot] picked=%d at=%s order_tile=%d dest_tile=%d hand_empty=%s reach=%d"
+				% [_who, b.soldier_pos[_who], int(b.soldier_order[_who]),
+					_game._tile_at(_dest_at), _game.hand.is_empty(), _game.hand.reach.size()])
 			_save("4_walking")
 		11:
 			for _i in 180:

@@ -300,6 +300,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		if key.keycode == KEY_TAB and not key.echo:
 			field_view.set_pads_revealed(key.pressed)
 			return
+		# ⚠⚠ **ESC LETS GO OF THE HAND** (2026-08-31, the user: 「esc누르면 선택 취소되니?」 — it did
+		# not). ⚠ **Pressed edge only, unlike TAB**: this is one action and not a state held for as
+		# long as a key is, so the release edge has nothing to undo.
+		# ⚠ **It sits above the pan and turn keys** so a press cannot both let go and move the camera,
+		# and above the `not key.pressed` return so the branch is reached at all.
+		if key.keycode == KEY_ESCAPE and key.pressed and not key.echo:
+			_let_go()
+			return
 		# ⚠⚠ **READ ON BOTH EDGES, LIKE TAB AND UNLIKE EVERY OTHER KEY HERE**, because a held key that
 		# is never told it was released pans forever. It sits ABOVE the `not key.pressed` return for
 		# exactly that reason — below it, only the press would ever be seen.
@@ -707,13 +715,14 @@ func _press_the_island(at: Vector2) -> bool:
 	# second reachability test here — see the tombstone below.
 	var tile := _tile_at(at)
 	if tile >= 0 and hand.can_reach(tile):
-		var keep := hand.ids.duplicate()
 		var sent := hand.order(battle, tile)
-		# ⚠ **The hand keeps hold after the order** (and the reach is rebuilt from where the bodies
-		# still are, not from where they are going). The user's own rule is that the hand never stops
-		# moving; dropping the selection on every order would make a second command a second pick.
-		hand.pick_many(battle, keep)
-		_tell_the_view()
+		# ⚠⚠ **THE ORDER LETS GO, AND IT KEPT HOLD FOR ONE ROUND** (2026-08-31, the user at the screen:
+		# 「이동하면 그러면 그 이동관 관련은 꺼져야지」). The earlier line is kept rather than erased,
+		# because this repo records a flip: **it re-picked the same bodies** so a second command needed
+		# no second pick, reasoning from 「the hand never stops moving」. **What that ignored is that the
+		# board then stays lit with nothing left to decide** — the reach and the 이동선 are a question
+		# being asked, and once it is answered they are an answer nobody is waiting for.
+		_let_go()
 		return sent > 0
 	# **Everything else lets go** — the sea, a cliff face, a 조각 nobody picked can stand on.
 	_let_go()
