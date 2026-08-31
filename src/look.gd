@@ -241,6 +241,58 @@ const AMBIENT_ENERGY := 0.92
 ## into the box it stands on at some yaws; a hair of lift costs nothing and never does.
 const BODY_LIFT_PX := 1.0
 
+## --- the plants MOVE ------------------------------------------------------------------------------
+##
+## ⚠⚠ **The bush's whole job is that the map is not still** (2026-08-31, the user: 「that bush is just
+## the amount it sways when it moves — the whole intent is to make the map not look monotonous」).
+##
+## **A prop LEANS about its own base; nothing bends.** A bend needs a vertex shader, and a vertex
+## shader has to be written twice here because every prop carries an inverted-hull outline as a
+## `next_pass` — displace the mesh and not the shell and the ink peels off the object. **A lean is one
+## Basis per prop per frame and the outline follows for free**, and at 25 to 55 screen px the two are
+## not told apart. ⚠ **If a tree ever has to bend rather than lean, that is the round to write the
+## shader in, and the shell is the trap.**
+##
+## ⚠⚠ **A PICTURE PROP CANNOT DO THIS AT ALL.** `BILLBOARD_FIXED_Y` has its basis rebuilt every frame
+## and throws the node's rotation away — measured on this repo's own 기법 23, which is inert for
+## exactly that reason. **Swaying is a thing only a mesh can be asked for.**
+
+## **How far a prop leans, in degrees, by kind.** ⚠⚠ **A kind that is not in this table does not move**,
+## and that is the safe way round: a still rock is invisible, a swaying rock is loud. **The tip travels
+## `height * sin(deg)`**, so a tall thing moves further than a short one off the same number — which is
+## what wind does.
+## ⚠⚠ **MEASURED AND RAISED THE SAME ROUND.** The first cut leaned a bush 5° and its tip travelled
+## **1.25 screen px** across a whole cycle — arithmetically a sway and visually nothing. A bush is
+## only 0.62 조각 tall, so the angle has to be large for the tip to move at all. **These numbers are
+## what the screen needed, not what a tree does in a photograph.**
+const PROP_SWAY_DEG_OF := {
+	"bush_mound": 12.0,
+	"bush_two": 12.0,
+	"bush_scrub": 15.0,
+	"bush_thicket": 15.0,
+	"tree_pine": 3.2,
+	"tree_oak": 4.0,
+	"tree_cluster": 4.0,
+	"tree_bare": 4.5,
+	"tree_umbrella": 4.2,
+	"tree_young": 7.0,
+}
+
+## Full cycles a second. ⚠ **Slow on purpose** — the map has to stop being still, not start being busy.
+const PROP_SWAY_HZ := 0.19
+
+## Which way the wind blows, as a compass angle in the ground plane. **One direction for the whole
+## island**: plants that lean independently read as a bug, not as weather.
+const PROP_SWAY_WIND_DEG := 35.0
+
+## How much of the lean comes from a second, slower wave. **Two waves and no random number** — one
+## sine makes every plant a metronome, and this repo does not roll dice at load time.
+## ⚠ **0.45 -> 0.30 the same round.** At 0.45 the slow wave took nearly half the lean and, because it
+## turns once every fourteen seconds, most of the movement was simply gone. **The gust is seasoning.**
+const PROP_SWAY_GUST := 0.30
+const PROP_SWAY_GUST_HZ := 0.071
+
+
 ## --- a prop drawn as a PICTURE rather than a mesh --------------------------------------------------
 ##
 ## ⚠⚠ **The tree and the bush are 2D and the stone, the ore and the buildings are 3D** (2026-08-31,

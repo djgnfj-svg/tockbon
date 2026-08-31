@@ -411,6 +411,7 @@ func _process(delta: float) -> void:
 	# ⚠ **Outside the buffer.** A picture prop writes nothing into the fx buffers — it is a standing
 	# node, not a per-frame draw — and the only reason it is touched at all is the camera's pitch.
 	_paint_flat_props()
+	_paint_sway(delta)
 
 
 # --- the camera: still one transform, still in one place -------------------------------------------
@@ -742,6 +743,14 @@ var _props: Node3D = null
 var _flat_props: Array[Sprite3D] = []
 var _flat_base: Array[float] = []
 var _flat_foot: Array[float] = []
+## **The plants that lean, and what they lean off.** ⚠ Four parallel arrays filled in one place
+## (`_maybe_sway`) and cleared in one place (`_rebuild_props`). Nothing else may append to one.
+var _sway_nodes: Array[Node3D] = []
+var _sway_base: Array[Basis] = []
+var _sway_amp: Array[float] = []
+var _sway_phase: Array[float] = []
+## The wind's own clock. ⚠ **Aged by the bare frame delta**, like every other clock in this file.
+var _sway_clock := 0.0
 
 
 func _rebuild_terrain() -> void:
@@ -1213,6 +1222,10 @@ func _rebuild_props() -> void:
 	_flat_props.clear()
 	_flat_base.clear()
 	_flat_foot.clear()
+	_sway_nodes.clear()
+	_sway_base.clear()
+	_sway_amp.clear()
+	_sway_phase.clear()
 	for row in placed:
 		var d := row as Dictionary
 		var t := int(d["y"]) * battle.grid.w + int(d["x"])
@@ -1229,6 +1242,10 @@ func _rebuild_props() -> void:
 		one.position = foot
 		one.rotation.y = deg_to_rad(float(d.get("yaw", 0.0)))
 		one.scale = Vector3(sc, sc, sc)
+		# ⚠ **After the yaw AND after the scale** — what is remembered is the finished basis, and the
+		# lean is composed onto it every frame. Remember it before either and the prop snaps to
+		# north at full size on the first frame it sways.
+		_maybe_sway(one, str(d["kind"]), t)
 		_props.add_child(one)
 	# ⚠⚠ **BEFORE the pictures are hung, and that is why they are added after this call.** `_outline`
 	# walks `MeshInstance3D` and a `Sprite3D` is not one, so a picture would be skipped anyway — but
@@ -1240,6 +1257,43 @@ func _rebuild_props() -> void:
 	for s in _flat_props:
 		_props.add_child(s)
 	lib.free()
+
+
+## **Enrols a prop in the wind, if its kind is one that moves.**
+##
+## ⚠⚠ **The phase comes from the TILE and never from a random number.** A scatter that rolled dice at
+## load time would sway differently every launch and no screenshot of it would mean anything — the
+## same rule `_rebuild_props`'s own header states about where props go.
+func _maybe_sway(n: Node3D, kind: String, tile: int) -> void:
+	var deg := float(Look.PROP_SWAY_DEG_OF.get(kind, 0.0))
+	if deg <= 0.0:
+		return
+	_sway_nodes.append(n)
+	_sway_base.append(n.basis)
+	_sway_amp.append(deg_to_rad(deg))
+	# **A prime times the tile, wrapped** — neighbours land far apart in phase, so a row of bushes
+	# does not lean as one board.
+	_sway_phase.append(fmod(float(tile) * 2.399963, TAU))
+
+
+## **Leans every plant, once a frame.**
+##
+## ⚠ **Composed onto the remembered basis, never accumulated onto the live one.** Multiplying this
+## frame's tilt into whatever is already there is how a prop walks itself over on its own axis in
+## about four seconds — the drift is invisible per frame and total after a minute.
+func _paint_sway(dt: float) -> void:
+	if _sway_nodes.is_empty():
+		return
+	_sway_clock += dt
+	var wind := deg_to_rad(Look.PROP_SWAY_WIND_DEG)
+	# the lean tips TOWARD the wind, so the turn is about the axis across it
+	var axis := Vector3(-sin(wind), 0.0, cos(wind))
+	var w := TAU * Look.PROP_SWAY_HZ * _sway_clock
+	var g := TAU * Look.PROP_SWAY_GUST_HZ * _sway_clock
+	for i in _sway_nodes.size():
+		var ph: float = _sway_phase[i]
+		var a: float = _sway_amp[i] * lerpf(sin(w + ph), sin(g + ph * 0.37), Look.PROP_SWAY_GUST)
+		_sway_nodes[i].basis = Basis(axis, a) * _sway_base[i]
 
 
 ## **A prop drawn as a picture instead of a mesh** — `assets/props/flat/<kind>.png`.
