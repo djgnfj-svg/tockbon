@@ -24,6 +24,11 @@ table of questions here is what the user cut on 2026-08-30 (*"the five questions
 it will be drawn at, what it stands beside, and which of this game's styles it joins are all readable in
 `src/look.gd` and `assets/`.
 
+⚠⚠ **READ `.candidates/README.md` BEFORE WRITING A PROMPT.** It holds **the four views every body in
+this game is pulled in** — 정면우 · 정면좌 · 후면우 · 후면좌, four DIAGONALS and no side view — with the
+exact phrase for each and the trap that flips them (the animal's own left is the screen's right).
+**Guessing the views instead of reading them is how a set comes back as two pairs of the same picture.**
+
 ⚠ **No folder exists until that line does.**
 
 ## 2. Pull locally, and show them
