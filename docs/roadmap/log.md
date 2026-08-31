@@ -2490,3 +2490,127 @@ is 0.450 — the disc never grew when the animal did.
 **Nothing was chosen about the black wolf.** **The house is still standing and still un-decided.**
 **The facing picker still splits on the bigger axis**, so the four-diagonal rule is true of the folder
 and not yet of the game.
+
+---
+
+## 2026-08-31 · 여섯째 세션 — 섬을 꾸몄다, 그리고 프롭 색이 여태 틀려 있었다
+
+⚠⚠ **`worktree-props-and-ore` 가지에 있고 `main` 에 안 들어갔다.** 그 사이 `main` 이 두 번
+움직였고 **`src/look.gd` 과 `src/view/field_view.gd` 을 양쪽이 다 크게 고쳤다.** 합치는 것은
+사람이 한 번 봐야 한다.
+
+### 무엇을 만들라고 했나
+
+> ***"Right now I want to make the map exactly twice as big, and for now it might be good to make the
+> buildings ahead of time. Since it has to be 3D, let us make the tree, the stone, the iron ore and
+> the buildings in advance — the tree in 2D, the bush in 2D too, and the stone, the iron ore and the
+> buildings in 3D."***
+> ***"I need 시안 for all of them, yes."***
+
+**뽑은 시안은 서른일곱**이다 — 나무 8 · 덤불 9 · 돌 6 · 철광석 6 · 연구대 4 · 포탑 4.
+⚠ **이미 서 있던 건물 다섯은 시안을 안 뽑았다** — 불만이 없는 완성된 모양을 다시 그리는 것은
+재작업이라, 나란히 찍어서 불만을 말할 수 있게만 했다.
+
+### ⚠⚠ 프롭 색이 게임에서 흰색이 된다 — 그리고 아무도 몰랐던 이유
+
+**섬 파일의 프롭 목록이 비어 있었다.** 원본에 소나무·나무·바위·조약돌·덤불 다섯이 있었는데
+**게임이 한 번도 그것을 그린 적이 없다.** 색은 블렌더 창에서 정해지고 거기서 끝났다.
+
+놓고 재 보니 — 알베도 **0.290** 회색이 화면에서 **(237,245,252)**, 거의 흰색이고 알베도보다
+차갑다. 녹슨색 **0.335** 는 빨강이 255 에서 잘려 살구색이 된다. 어둡게 잡은 **0.098** 은
+**(143,147,152)** 로 제대로 앉는다.
+
+⇒ **이 세계의 빛이 선형 알베도를 약 2.9 배 하고 앰비언트가 파랗다. 한 칸이라도 0.31 을 넘으면
+잘린다.** `b_wall` 0.683 인 집 벽이 순백으로 뜨는 것도 같은 원인이다.
+⚠ **`field_view` 에 이 발견의 절반이 이미 있었다** — `COL_BOAT` 의 0.85 갈색이 「흰 사각형으로
+렌더됐다」는 묘비. **물 위의 자국에 대해 쓰였고 아무도 메시로 옮기지 않았다.**
+
+### 나무 — 뽑은 그림 여덟이 물렸고, 깎아서 구웠다
+
+> ***"The tree is horrible. It is AI itself — far too realistic, sort of... it probably does not even
+> need leaves."***
+
+**섬은 네 색 평면 조각인데 뽑은 나무는 전부 잎을 그린 사진 같은 우듬지를 달고 왔다.**
+⇒ **돌과 같은 방식으로 깎아서 그림으로 구웠다.** 잎 그림이 없고 면만 있다.
+
+그리고 사용자가 물었다:
+
+> ***"Hmm, do I have to make it 3D... I am going to bake it low-poly anyway. Just curious. It is going
+> to be hit and felled. That is probably all it is."***
+
+**말로 답하지 않고 둘 다 게임에 세웠다.** 같은 나무가 판때기로 **108 px**, 메시로 **133 px**.
+검은 픽셀은 **0 개 대 546 개**. ⇒ **3D.** 결정적인 것은 재는 값이 아니라 **벤다**는 것이었다 —
+넘어지려면 돌아야 하고, 메시는 그냥 돌면 된다. **그루터기는 그날을 위해 그때 만들었다.**
+
+### 덤불 — 2D 로 갔고, 그러려면 스프라이트를 버려야 했다
+
+> ***"3D is fine, but is it easy to put swaying and things like that in? Vector? That bush is just the
+> amount it sways when it moves — the whole intent is to make the map not look monotonous."***
+> ***"It can be a cruder solution... just apply it in 2D, it is a simple thing."***
+
+⚠⚠ **한 라운드 앞에서 「그림은 못 흔들린다」고 답했는데 그것이 너무 셌다.** 정확히는
+**「노드를 돌려서는 못 흔든다」** — 잰 0.00 px 은 `BILLBOARD_FIXED_Y` 가 노드 회전을 버려서
+나온 값이고, **정점 셰이더로는 판때기도 흔들 수 있다. 배드노스가 바로 그렇게 한다.**
+⚠ **그 사실은 이 저장소의 08-29 조사 노트에 이미 개발자 트윗으로 적혀 있었다.**
+
+**다만 배드노스의 판때기는 묶음으로 굴러간다** — 외곽선이 부풀린 껍질이 아니라 어긋나게 겹친
+어두운 복사본이고, 실시간 그림자가 없다. 개발자 본인:
+
+> ***"Especially if they need to move in the wind. But with billboards i need to fight with clipping
+> and outlines become a lot less clean."***
+
+⇒ `Sprite3D` 를 버리고 **쿼드를 직접 들었다.** `.prototypes/bush/` 에 이미 있던 카드 셰이더를
+`src/view/` 로 올렸다. 흔들림 **0.00 → 4.00 px**, 외곽선 **0 → 257 개**, 메시 대비 키
+**0.60 → 0.96**.
+
+### 흔들림 — 기울이는 것이 문서화된 층이다
+
+**처음 각도로는 꼭대기가 1.25 px 만 움직였다** — 산수로는 흔들림이고 눈으로는 아무것도 아니었다.
+덤불이 0.62 조각뿐이라 각도를 크게 줘야 한다. 5도 → 12도. **파형도 사인에서 부드러운 삼각파로
+바꿨다** — 크라이시스가 그렇게 하고 유니티 잔디는 사인의 네제곱을 쓴다. ⚠ **08-29 노트에 이미
+배드노스 개발자에게 달린 지적이 있었다**: 「덤불 흔들림이 너무 규칙적이다」.
+
+⚠ **구부리지 않고 기울인다.** 구부리려면 정점 셰이더가 필요하고, **고돗의 뒷패스는 정점 변형을
+안 따라와서** 외곽선 껍질에 같은 식을 다시 써야 한다. **기울이는 노드는 제 경계와 제 그림자를
+데리고 간다** — 문서화된 함정 셋 중 둘을 그냥 피한다.
+
+### 고른 것
+
+| | 무엇으로 | 사용자의 말 |
+|---|---|---|
+| **돌** | `r2` — 아홉 면 납작한 덩어리 | 「r2 만 있을듯」 |
+| **철광석** | `o8b` — 허리에 광석 띠 | 「철광석 2번」 |
+| **나무** | 3D 소나무, 기둥 0.80 조각 | 「3번으로」 |
+| **덤불** | 2D 카드 | 「2d로해서 적용만해줘」 |
+
+**나무는 흩뿌리지 않고 한곳에 모았다** — 「촘촘하게 한곳에 몰아줄래? 내가정한애로」.
+서른한 그루, 한 조각 간격, 배율만 0.80~1.14 로 갈랐다. **다양함을 간격이 아니라 크기에서 낸다** —
+한 종을 촘촘히 박으면 키가 다르지 않은 한 우듬지가 뚜껑 하나로 나온다.
+
+### 마지막에 정한 넷
+
+> ***"I would like the iron ore to be off in a more remote place... and I would like the grass to be a
+> bit smaller now, actually. There is no real need for pebbles on the ground either. And the house is
+> too big now."***
+> ***"Could you put the iron ore on one isolated block?"***
+
+**철광석이 외딴 블록으로 갔다.** 이 섬에 그런 블록은 정확히 하나 — 조각 (20..21, 22..23), 
+`net_islands` 가 「땅 284 인데 걸을 수 있는 건 280」이라고 세는 그 넷이다.
+⚠⚠ **거기로는 아무도 못 걸어간다.** 요청받은 배치가 맞고 이것은 실제 결과다.
+
+**돌멩이는 하나도 안 놓는다** (원본에는 그대로 있다) · **풀은 삼분의 일 줄었다** ·
+**집은 0.45 → 0.34** — ⚠ **빈 섬 옆에서 맞던 크기가 숲 옆에서는 안 맞는다.**
+
+### 안 한 것
+
+**맵 2 배.** ⚠⚠ **섬 데이터를 만드는 파일이 없다** — 통행·눈금·항구·윤곽을 담은 파일은 어떤
+원본도 안 들고 있고, 메시와 같이 뽑던 스크립트는 지워졌다. **메시를 늘리면 게임이 아는 땅은
+안 늘어난다.** 넓이 2 배인지 한 변 2 배인지도 안 정해졌다.
+
+**연구대·포탑** — 시안 넷씩 만들었고 사용자가 접었다: 「포탑 연구대는 고민안해 아직 없음」.
+
+### 그물
+
+**`ee9907ab` 에서 통과 1255 · 실패 65.** 세션 내내 이 수를 지켰다. ⚠ 두 번 붉어졌고 둘 다
+이 세션이 만든 것이라 그 자리에서 고쳤다 — `net_draw_leaf` 의 함수 표에 새 함수 넷이 없었던 것,
+그리고 `net_citations` 가 주석에 박은 문서 경로를 잡은 것.
