@@ -108,7 +108,10 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 	# ⚠ **The user's own figure is nine to a 칸**, which is four 조각; three per 조각 admits twelve, and
 	# the overshoot is stated rather than hidden. See that constant.
 	t.eq(Rules.TILE_CAPACITY, 3, "한 조각에 셋이 선다")
-	t.ok(Rules.TILE_CAPACITY * 4 >= 9, "그래서 한 칸(조각 넷)에 아홉이 선다 — 사용자가 말한 수다")
+	t.eq(Rules.BLOCK_CAPACITY, 9, "한 블록(칸)에 아홉이 최대다 — 사용자가 말한 수다")
+	t.eq(Rules.BLOCK_TILES, 2, "블록은 조각 둘 x 둘이다")
+	t.ok(Rules.BLOCK_CAPACITY < Rules.TILE_CAPACITY * Rules.BLOCK_TILES * Rules.BLOCK_TILES,
+		"블록 천장이 조각 천장 넷보다 낮다 — 안 그러면 아무것도 안 막는다")
 
 	# The two rows the whole fight is arithmetic on. ⚠ **Both species, both columns each** — pinning
 	# only the wolf lets the swordsman be retuned with every row below still green.
@@ -340,6 +343,36 @@ func _beasts_pack_a_piece_and_never_overfill_it(t) -> void:
 	t.ok(not g.hold(9999, spot), "그 다음 몸은 거절당한다 — 조각에 천장이 있다")
 	g.release_all(9000)
 	t.ok(g.hold(9999, spot), "한 자리가 비면 바로 들어간다 (대조군 — 아무나 거절하는 게 아니다)")
+
+	# ⚠⚠ **THE 블록 CEILING, DRIVEN** (2026-08-31, the user: 「nine soldiers is the maximum」).
+	# **The tenth body is refused although the 조각 it asks for still has a free slot** — which is the
+	# whole of why the ceiling had to be stated one unit up. A per-조각 check alone stays green all the
+	# way to twelve, and twelve was what stood there yesterday.
+	var gb := _grid(LAND)
+	var b_tiles := [gb.tile_index(2, 2), gb.tile_index(3, 2), gb.tile_index(2, 3), gb.tile_index(3, 3)]
+	var blk := gb.block_of(int(b_tiles[0]))
+	t.ok(blk >= 0, "그 조각이 블록 안에 있다 (자가 점검)")
+	for k in range(1, 4):
+		t.eq(gb.block_of(int(b_tiles[k])), blk, "조각 넷이 한 블록이다 (자가 점검 %d)" % k)
+	# ⚠ **Round-robin and not one 조각 at a time.** Filling one 조각 first would hit the 조각 ceiling
+	# at three and never reach the 블록 ceiling at all — the row would pass measuring the wrong thing.
+	var seated := 0
+	for k in 12:
+		if gb.hold(8000 + k, int(b_tiles[k % 4])):
+			seated += 1
+	t.eq(seated, Rules.BLOCK_CAPACITY, "한 블록에 아홉만 선다 — 열째부터 거절당한다")
+	t.eq(gb.block_hold_count(blk), Rules.BLOCK_CAPACITY, "블록이 아홉으로 꽉 찼다 (자가 점검)")
+	var last := int(b_tiles[3])
+	t.ok(gb.hold_count(last) < Rules.TILE_CAPACITY,
+		"그런데 마지막 조각에는 자리가 남아 있다 — 조각만 봐서는 거절할 근거가 없었다")
+	t.ok(not gb.has_room(last), "그래도 has_room 이 거절한다 — 블록 천장을 같이 본다")
+	t.ok(not gb.can_hold(last, 8500), "새 몸의 입장 검사도 거절한다")
+	# **The control, and it is the row that stops this passing for a grid that refuses everybody.**
+	# ⚠ **A body ALREADY in the 블록 is still admitted** — mid-step it holds two 조각 at once, and a
+	# ceiling that forgot that would freeze a walker on the 조각 it was leaving.
+	t.ok(gb.can_hold(last, 8000), "이미 그 블록에 선 몸은 옆 조각으로 계속 넘어간다")
+	gb.release_all(8000)
+	t.ok(gb.hold(8500, last), "한 몸이 빠지면 바로 새 몸이 들어간다")
 
 	# ⚠ **The instrument's own inversion**: the ids really are disjoint from the soldiers'. A base of 0
 	# would make the row above pass for a 늑대 standing exactly where 검사 0 stands.
