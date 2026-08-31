@@ -1777,3 +1777,17 @@ had been abandoned half-way **with two questions open and nothing written down.*
 
 ⇒ **`wrap-up` now names the two files that are opened every session whatever the round built**, and
 says that a round which decided nothing still writes both.
+
+⇒ **And then `wrap-up` was rewritten from one 「repair the docs」 bullet list into ten numbered steps**,
+because the user's next line named exactly why it had been skippable:
+
+> ***"『repair the docs』 is far too broad. It should go check the ticket, check the task, check whether
+> it is finished — in order, one at a time."***
+
+**Every step now carries a 「done when」 line**, and **steps 2 to 5 are the ticket half that vanished**:
+open every ticket touched · check each against its own `## Done when` · close only the ones that
+passed · then look at the task above them. ⚠ **The rule at the top is the point**: *a ticket is not
+closed because the work happened, it is closed because it was checked.*
+
+⚠ **One word was corrected too.** The picture step said 「센다」, which the user said is not how anyone
+talks — 「몇 장인지 확인한다」.
