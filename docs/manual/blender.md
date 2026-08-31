@@ -47,6 +47,28 @@ returns its stdout; `get_scene_info` lists the scene. Measured 2026-08-31 on **B
 unusable for four days after the user had already fixed it, and a session hand-rolled what the tools
 already did.
 
+## ⚠⚠ Why the originals sit in their OWN folder and not beside the `.glb`
+
+**Godot scans the whole project and tries to import every `.blend` it finds.** Measured 2026-08-31,
+with the five originals in place:
+
+```
+ERROR: Blender path is invalid or not set, check your Editor Settings.
+       Cannot configure blender path in headless mode.
+```
+
+It caught all five, one at a time, and failed on each. **The only way to stop it is `.gdignore`, and
+that marks a WHOLE folder** — so it cannot be used in `assets/props/`, where `boat.glb` has to stay
+importable.
+
+⇒ **`blend/` holds the originals and carries a `.gdignore`.** With that file present the import run is
+silent again. ⚠ **Do not move a `.blend` into `assets/`**, however tidy it looks to have the original
+beside what it exports.
+
+⚠ **There is a third path nobody has taken**: set Blender's executable in Godot's editor settings and
+let Godot import `.blend` directly, with no `.glb` at all. **It was not taken because that path is one
+machine's absolute path** — the same reason this repo already gitignores its MCP config.
+
 ## The four traps, each one measured and each one cost a round
 
 ⚠⚠ **1. Godot serves a CACHED mesh and says nothing.**
