@@ -20,7 +20,7 @@ const SHOT := "res://tools/shot/out/field/flat_%s.png"
 ## 조각 apart, so a 13-조각 view clips the ends — the first cut did and lost two of the eight.
 const AIMS := [
 	["trees", 11.0, 3.4, 17.0, 0.0],
-	["bushes", 12.0, 14.4, 19.0, 0.0],
+	["bushes", 11.0, 15.6, 16.0, 0.0],
 	["trees_near", 7.0, 3.4, 8.0, 0.0],
 	["bushes_near", 8.0, 14.4, 8.0, 0.0],
 	["trees_with_man", 11.0, 8.0, 17.0, 0.0],
