@@ -754,6 +754,10 @@ const OUTLINE_SHADER := "res://src/view/body_outline.gdshader"
 ## empty array. ⚠ **It holds 조각 and not points** — the height each piece is laid at is decided at
 ## draw time by `_ground_y_px`, exactly as every other ground mark is.
 var _move_lines: Array = []
+
+## Whose line each entry of `_move_lines` is, in the same order. **Empty is allowed** and means no
+## crowd offset — a line leaving the middle of a 조각 rather than a body's feet.
+var _move_ids := PackedInt32Array()
 var _builds: Node3D = null
 var _props: Node3D = null
 
@@ -905,8 +909,12 @@ func set_reach(tiles: PackedInt32Array) -> void:
 ## ⚠ **Stored and not drawn here.** Every ground mark in this file is built inside the one fx pass in
 ## `_process`, between the buffer opening and its flush — a mark drawn outside it is a mark on a
 ## buffer that has already been committed, and it never reaches the screen.
-func set_move_lines(lines: Array) -> void:
+func set_move_lines(lines: Array, ids: PackedInt32Array = PackedInt32Array()) -> void:
 	_move_lines = lines
+	# ⚠ **The ids are what let the line leave the FEET.** A body is drawn off its 조각's middle by the
+	# crowd offset, and a line that ignored that started from the middle of the 조각 with nobody on it
+	# — 2026-08-31, the user: 「지금은 블록 가운데서 오는듯한데?」.
+	_move_ids = ids
 
 
 ## **Puts the white rim on these bodies and takes it off every other** (2026-08-31, the user: 「내가
@@ -1796,8 +1804,22 @@ func _put_pick_outline(body: Sprite3D, pic: Texture2D) -> void:
 	var rim := _outline_sprite()
 	rim.texture = pic
 	rim.scale = body.scale * Look.PICK_OUTLINE_GROW
-	var back := -_cam.global_transform.basis.z.normalized() * Look.PICK_OUTLINE_BACK_TILES
-	rim.position = body.position + back
+	# ⚠⚠ **ALONG THE RAY FROM THE CAMERA TO THIS BODY, NOT ALONG THE CAMERA'S OWN FORWARD.** Under a
+	# perspective camera the ray is the only direction that holds a thing's screen position exactly;
+	# the forward does it only for something dead centre.
+	# ⚠ **This was NOT what the user saw when they said 「약간 회전하니까 이상한거 같은데?」** — measured
+	# afterwards, the push moves the rim about one screen pixel either way, and what was actually wrong
+	# on that turn was the 이동선 leaving from half a 조각 away. **Written down because the first reading
+	# of that sentence was wrong and the next reader should not re-derive it.**
+	# ⚠ **Both points in the same space.** `_cam` and every body sprite are children of `_world`, so
+	# `position` is what they share; the camera's `global_transform.origin` is a different frame and
+	# mixing the two is a ray that means nothing.
+	var eye := _cam.position
+	var ray := (body.position - eye)
+	if ray.length() > Rules.EPS:
+		rim.position = body.position + ray.normalized() * Look.PICK_OUTLINE_BACK_TILES
+	else:
+		rim.position = body.position
 	var mat: ShaderMaterial = rim.material_override
 	mat.set_shader_parameter("body_tex", pic)
 	mat.set_shader_parameter("line_col", Look.COL_PICK_OUTLINE)
@@ -2604,14 +2626,31 @@ func _g_disc(centre: Vector2, radius: float, col: Color) -> void:
 func _paint_move_lines() -> void:
 	if _move_lines.is_empty():
 		return
-	for raw in _move_lines:
-		var pts: PackedVector2Array = raw
+	# ⚠⚠ **THE WIDTH IS DIVIDED BY THE ZOOM AND THAT IS THE WHOLE OF 「자연스럽게」 ON THE WHEEL**
+	# (2026-08-31, the user: 「마우스 휠을 내릴 수도 올릴 수도 있는거니까 항상 개발할때 고려해야함 ...
+	# 회전 및 확대 축소때」). A ground mark's world size becomes `size * zoom` on screen, so a fixed
+	# world width is a hairline pulled back and a stripe pushed in. **This is a mark the hand reads, not
+	# a thing in the world** — it holds its width on screen instead.
+	# ⚠ **Clamped at both ends.** Past the far bound the line would be wider than the 조각 it crosses;
+	# past the near one it would thin back to nothing at a zoom nobody uses.
+	var steady: float = clampf(1.0 / maxf(zoom, 0.01), Look.MOVE_LINE_ZOOM_MIN,
+		Look.MOVE_LINE_ZOOM_MAX)
+	for i in _move_lines.size():
+		var pts: PackedVector2Array = _move_lines[i]
 		if pts.size() < 2:
 			continue
+		# ⚠ **Only the FIRST point wears the crowd offset.** The rest are 조각 middles and should be —
+		# the route is a list of 조각 and the body walks through their centres.
+		var from := Look.tile_point_px(pts[0])
+		if i < _move_ids.size():
+			from += Look.crowd_offset_px(_crowd_slot_of(pts[0], int(_move_ids[i])),
+				Rules.TILE_CAPACITY)
 		for k in range(pts.size() - 1):
-			_g_ribbon(pts[k] * Look.TILE_PX, pts[k + 1] * Look.TILE_PX,
-				Look.MOVE_LINE_HALF_PX, Look.COL_MOVE_LINE)
-		_g_disc(pts[pts.size() - 1] * Look.TILE_PX, Look.MOVE_LINE_END_PX, Look.COL_MOVE_LINE_END)
+			var to := Look.tile_point_px(pts[k + 1])
+			_g_ribbon(from, to, Look.MOVE_LINE_HALF_PX * steady, Look.COL_MOVE_LINE)
+			from = to
+		_g_disc(Look.tile_point_px(pts[pts.size() - 1]), Look.MOVE_LINE_END_PX * steady,
+			Look.COL_MOVE_LINE_END)
 
 
 ## **One straight run of the line, CUT INTO PIECES along its length.**

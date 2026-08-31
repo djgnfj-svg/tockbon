@@ -560,12 +560,64 @@ func run(t) -> void:
 	# **All of it went with the verdict.** ⚠ **The hole it leaves is real and is written down rather
 	# than papered over: nothing returns to the title any more.** The title opens a run and a run has
 	# no end — see `game.gd`, where `_click_panel` used to be.
+	_the_route_points_are_in_soldier_pos_units(t, game)
 	_a_full_hand_moves_instead_of_picking(t, game, fs)
 	_the_picked_body_wears_a_rim(t, game, fs)
 
 	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
 	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
 	t.done()
+
+
+## **The 이동선's points are in `soldier_pos`'s own units, corner-anchored** (2026-08-31, the user at
+## the screen: 「지금은 블록 가운데서 오는듯한데?」).
+##
+## ⚠⚠ **THE FIRST POINT AND THE REST DISAGREED BY HALF A 조각 AND NOTHING WENT RED.** The first point
+## is a real `soldier_pos`; the rest were built with a `+ 0.5` baked in, and the view then multiplied
+## the lot by `TILE_PX` — so the line left from half a 조각 up and to the left of the body walking it.
+## **Every check about the route stayed green** because they all asked 「which 조각」 and never 「where in
+## world px」. ⇒ these rows compare the two ends against each other in the one unit both must share.
+func _the_route_points_are_in_soldier_pos_units(t, game) -> void:
+	var b: Battle = game.battle
+	if b == null:
+		return
+	var ashore := b.ashore_ids()
+	if ashore.is_empty():
+		return
+	var who := int(ashore[0])
+	game.hand.pick(b, who)
+	# ⚠ **A destination far enough to have a middle point.** A two-point line cannot show the
+	# disagreement — both ends are special cases.
+	var far := -1
+	var reach: PackedInt32Array = game.hand.reach
+	for k in reach.size():
+		var cand := int(reach[k])
+		var p := Vector2(float(cand % b.grid.w), float(cand / b.grid.w))
+		if p.distance_to(b.soldier_pos[who]) >= 4.0:
+			far = cand
+			break
+	t.ok(far >= 0, "자가 점검 — 네 조각 넘게 떨어진 갈 수 있는 자리가 있다")
+	if far < 0:
+		return
+	var pts_all: Array = game.hand.route_points(b, far)
+	t.eq(pts_all.size(), 1, "쥔 몸 하나에 선 하나다")
+	var pts: PackedVector2Array = pts_all[0]
+	t.ok(pts.size() >= 3, "그 선은 점 셋 이상이다 (가운데가 있어야 단위가 드러난다)")
+	if pts.size() < 3:
+		return
+	t.eq(pts[0], b.soldier_pos[who] as Vector2,
+		"첫 점이 몸의 자리 그대로다 — 반 조각도 안 옮긴다")
+	# ⚠ **Every later point is a 조각 index as a whole number**, in the same frame as the first. A
+	# `+ 0.5` anywhere in the chain shows up here as a fraction.
+	var fractional := 0
+	for k in range(1, pts.size()):
+		var q := pts[k]
+		if not is_equal_approx(q.x, floor(q.x)) or not is_equal_approx(q.y, floor(q.y)):
+			fractional += 1
+	t.eq(fractional, 0, "뒤의 점도 전부 조각 눈금 위에 있다 — 반 조각이 섞여 있지 않다")
+	var last := pts[pts.size() - 1]
+	t.eq(int(last.y) * b.grid.w + int(last.x), far, "마지막 점이 명령할 그 조각이다")
+	game.hand.clear()
 
 
 ## **A hand that is holding somebody MOVES, and a body standing on the destination does not intercept

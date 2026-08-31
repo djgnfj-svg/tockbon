@@ -766,7 +766,7 @@ func _show_route(at: Vector2) -> void:
 	if tile < 0 or not hand.can_reach(tile):
 		field_view.set_move_lines([])
 		return
-	field_view.set_move_lines(hand.route_points(battle, tile))
+	field_view.set_move_lines(hand.route_points(battle, tile), hand.ids)
 
 
 ## **A screen press in 조각 units, fractions and all.** ⚠ **Not `_tile_at` rounded** — `Hand.body_at`

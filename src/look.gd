@@ -1960,10 +1960,12 @@ const PICK_BODY_TILES := 0.8
 ## ⚠⚠ **THE RIM IS THE BODY'S OWN PICTURE DRAWN LARGER BEHIND IT**, so this number is a MULTIPLIER on
 ## the drawn width and the rim therefore thickens with the body as the camera comes in. A rim in fixed
 ## world units would vanish at the far zoom and swallow the body at the near one.
-## ⚠ **The user asked for 「살짝」.** 1.10 puts about one body-pixel of white outside the silhouette at
-## the opening framing; past about 1.2 it stops reading as an outline and starts reading as a ghost
-## standing behind.
-const PICK_OUTLINE_GROW := 1.14
+## ⚠⚠ **1.10 WAS TOO THIN TO SEE AND THAT WAS MEASURED, NOT GUESSED** (2026-08-31). Photographed at
+## 1.10 the rim was there — 1213 near-white pixels around one body — and could not be told from the
+## ground beside it: **white on this island reads badly, because the ground is pale.** ⇒ raised until
+## it reads while still being 「살짝」 (the user's word). Past about 1.4 it stops being an outline and
+## starts being a ghost standing behind.
+const PICK_OUTLINE_GROW := 1.22
 
 ## How far behind the body the rim sits, in 조각, measured along the CAMERA's own forward.
 ##
@@ -1984,6 +1986,16 @@ const MOVE_LINE_END_PX := 7.0
 ## unshaded, so what is written here is what is on screen.
 const COL_MOVE_LINE := Color(1.0, 0.98, 0.86, 0.72)
 const COL_MOVE_LINE_END := Color(1.0, 0.98, 0.86, 0.92)
+
+## **How far the 이동선 is allowed to fight the zoom**, as a multiplier on its own width.
+##
+## ⚠⚠ **THE LINE HOLDS ITS WIDTH ON SCREEN AND THE REST OF THE BOARD DOES NOT** (2026-08-31, the user:
+## 「마우스 휠을 내릴 수도 올릴 수도 있는거니까 항상 개발할때 고려해야함 ... 회전 및 확대 축소때」). It
+## is a mark the HAND reads rather than a thing standing in the world, so it is drawn at `1 / zoom` —
+## and these two stop that from running away. **`ZOOM_MAX` is the far bound**: past it the line would be
+## wider than the 조각 it crosses and stop reading as a route.
+const MOVE_LINE_ZOOM_MIN := 0.7
+const MOVE_LINE_ZOOM_MAX := 2.4
 
 
 ## ⚠⚠ **`FX_SETTLE_FRAMES` WAS DELETED 2026-08-27, AND ITS OWN HEADER PREDICTED IT.** It said "nothing

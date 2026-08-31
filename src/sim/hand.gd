@@ -184,7 +184,11 @@ func routes(battle: Battle, tile: int) -> Array:
 	return out
 
 
-## **The same routes as POINTS in tile units**, one list per picked body, and what the view draws.
+## **The same routes as POINTS in 조각 units**, one list per picked body, and what the view draws.
+##
+## ⚠⚠ **THE UNITS ARE `soldier_pos`'s OWN**, corner-anchored, so a caller turns one into world px with
+## `Look.tile_point_px` exactly as it does for a body. **Anything that half-tiles them here instead
+## puts the line half a 조각 off the bodies walking it.**
 ##
 ## ⚠⚠ **THE FIRST POINT IS THE BODY'S OWN POSITION AND NOT ITS 조각's CENTRE.** Bodies stand three to
 ## a 조각 and off its middle, so a line starting at the centre visibly leaves from beside the feet it
@@ -205,7 +209,14 @@ func route_points(battle: Battle, tile: int) -> Array:
 			var line: PackedInt32Array = lines[k]
 			for j in range(1, line.size()):
 				var t := int(line[j])
-				pts.append(Vector2(float(t % w) + 0.5, float(t / w) + 0.5))
+				# ⚠⚠ **NO `+ 0.5` HERE, AND IT WAS THERE FOR ONE ROUND** (2026-08-31, the user at the
+				# screen: 「지금은 블록 가운데서 오는듯한데?」). These points are in the SAME units
+				# `soldier_pos` is in — a 조각 index, corner-anchored — and the half that turns one into
+				# a centre belongs to `Look.tile_point_px`, which every body and every shadow already
+				# goes through. **Adding it here made the first point (a real `soldier_pos`) and the
+				# rest disagree by half a 조각**, so the line left from beside the body instead of from
+				# under him.
+				pts.append(Vector2(float(t % w), float(t / w)))
 		out.append(pts)
 	return out
 

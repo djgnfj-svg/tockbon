@@ -72,6 +72,21 @@ func _wheel_up() -> InputEventMouseButton:
 	return ev
 
 
+func _wheel_down() -> InputEventMouseButton:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_WHEEL_DOWN
+	ev.pressed = true
+	ev.position = Look.viewport_size_px() * 0.5
+	return ev
+
+
+func _turn_key() -> InputEventKey:
+	var ev := InputEventKey.new()
+	ev.pressed = true
+	ev.keycode = KEY_E
+	return ev
+
+
 func _save(shot_name: String) -> void:
 	root.get_texture().get_image().save_png(ProjectSettings.globalize_path(SHOT % shot_name))
 	print("[shot] %s" % shot_name)
@@ -125,7 +140,10 @@ func _process(_delta: float) -> bool:
 	# hand actually left the pointer, and it overwrites the aim this file set one step earlier. The
 	# first run of this tool photographed an empty island for exactly that reason — the 이동선 was
 	# built, handed to the view, and cleared again by a stray motion before the frame was read back.
-	if _step == 7 and _has_dest:
+	# ⚠ **Held for every step that photographs the line, not just the first.** The camera moves under
+	# a still cursor when the board turns or zooms, so the aim has to be re-sent AND re-derived — the
+	# same screen point is a different 조각 after a turn.
+	if _has_dest and _step >= 7 and _step <= 11:
 		_game._unhandled_input(_motion(_dest_at))
 	_wait += 1
 	if _wait < 6:
@@ -172,34 +190,50 @@ func _process(_delta: float) -> bool:
 					_game.field_view._move_lines.size(), _game.field_view._g_v.size()])
 			_save("3_line")
 		8:
-			# ⚠ **Read the picked id BEFORE the press.** The order lets go of the hand (2026-08-31,
-			# the user: 「이동하면 그러면 그 이동관 관련은 꺼져야지」), so afterwards there is nobody
-			# in it to ask.
+			# **Turn the board and re-aim.** ⚠⚠ **The 이동선 and the rim both have to survive this**
+			# (2026-08-31, the user: 「약간 회전하니까 이상한거 같은데? 회전했을때도 자연스럽게
+			# 해줄래?」).
+			for _i in 3:
+				_game._unhandled_input(_turn_key())
+			_dest_at = _aim_from_reach()
+		9:
+			_save("4_turned")
+		10:
+			# **Pull the camera back.** ⚠ **The wheel goes both ways and the user asked for both to be
+			# considered** (「마우스 휠을 내릴 수도 올릴 수도 있는거니까 항상 개발할때 고려해야함」).
+			for _i in 8:
+				_game._unhandled_input(_wheel_down())
+			_dest_at = _aim_from_reach()
+		11:
+			_save("5_far")
+		12:
+			# ⚠ **Read the picked id BEFORE the press.** The order lets go of the hand, so afterwards
+			# there is nobody in it to ask.
 			if not _game.hand.is_empty():
 				_who = int(_game.hand.ids[0])
 			if _has_dest:
 				_game._unhandled_input(_press(_dest_at))
 				_game._unhandled_input(_release(_dest_at))
-		9:
+		13:
 			# ⚠⚠ **PARK THE CURSOR IN THE MIDDLE BEFORE LETTING TIME RUN.** The shell edge-pans off
 			# `_pointer_at`, and the aim above sits near a border — 180 frames with the pointer left
 			# there panned the camera clean off the island and photographed open sea.
 			_game._unhandled_input(_motion(Look.viewport_size_px() * 0.5))
 			for _i in 60:
 				_game._process(1.0 / 60.0)
-		10:
+		14:
 			# ⚠ **Who was picked, where he is and where he was sent** — the picture alone cannot tell
 			# an ordered body apart from one the sim moved on its own, and both are on screen here.
 			var b: Battle = _game.battle
 			print("[shot] picked=%d at=%s order_tile=%d dest_tile=%d hand_empty=%s reach=%d"
 				% [_who, b.soldier_pos[_who], int(b.soldier_order[_who]),
 					_game._tile_at(_dest_at), _game.hand.is_empty(), _game.hand.reach.size()])
-			_save("4_walking")
-		11:
+			_save("6_walking")
+		15:
 			for _i in 180:
 				_game._process(1.0 / 60.0)
-		12:
-			_save("5_arrived")
+		16:
+			_save("7_arrived")
 		_:
 			print("[shot] picked=%d" % _who)
 			return true
