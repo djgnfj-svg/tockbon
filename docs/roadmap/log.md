@@ -2323,3 +2323,103 @@ re-earns a stride. **A control that is disturbed by being set up measures the di
 **With the same 블록, the same camera, the same nine coordinates, the same stride and the same heading,
 the placed nine and the walked nine still differ by about 9,000 pixels and sit some 25 px apart on
 screen.** ⚠ **The cause was not found and is not guessed at here** (ticket 65).
+
+## ✅ **The hand picks a body, sees where it may go, and sends it — 2026-09-01**
+
+**Week 3's gesture landed a week early, off one conversation and no ticket.** What the island had was
+one press, one walk, and **whichever body happened to be nearest the press answered it**. What it has
+now is a selection.
+
+> ***"When you press a character it gets selected and its information comes up and then it moves — that
+> seems to be what's needed. Do you follow? THAT character is the one that moves. And it only moves
+> when you press TAB."*** — the user
+
+⚠⚠ **THE TAB IN THAT SENTENCE WAS ALREADY IN THE GAME AND IT IS NOT A COMMIT KEY.** It is the reveal
+key — held, it shows the whole 판. **The first reading of the sentence was that a reservation step was
+being asked for**, which would have re-opened a decision the user settled on 2026-08-25 (「the hand
+moves during the fight」, `commit-before-the-fight-not-during`). **It was not.** The user's next
+sentence closed it:
+
+> ***"Without tab — you just press a character and the 칸 it can move to light up, and you press one to
+> move. And I'd like the movement line to show beforehand."***
+
+### What was built
+
+| What | Where it lives |
+|---|---|
+| **The hand** — the picked bodies, the 조각 they may stand on, the order, the route | `src/sim/hand.gd`, constructible with `.new()` |
+| **The reach on the 판** | one R8 mask texture the pads shader reads per 조각 |
+| **The 이동선** | the ground fx buffer, built from the same flow field the walk uses |
+| **The white rim** | the body's own picture flooded to one colour and drawn larger behind it |
+
+> ***"Work on it so it's extensible, so what's selected can be a character or a group ... because later
+> a group will be treated as one."*** — the user
+
+⇒ **`Hand.ids` is a list and there is no 「one body」 branch anywhere in the file.** The reach is a
+union, the order is a loop, the preview is one route per body. **The day a 무리 exists, the function
+that changes is `_spread`** — the one that hands out a seat each — and the roadmap has already chosen
+what that shape is (아홉이 서는 모양, 6번).
+
+### Three reversals inside one session, all the user's, all at the screen
+
+> ***"When it moves, then the move-related stuff should turn off."***
+
+**The order let go of the hand.** It had kept hold so that a second command needed no second pick;
+what that ignored is that **the reach and the 이동선 are a question, and once answered they are an
+answer nobody is waiting for.**
+
+> ***"Does ESC cancel the selection?"*** — it did not. It does now, and it is the only thing that does.
+
+> ***"You can move onto a 조각, right? Onto the same 조각? That's a little awkward. Unless I press ESC
+> it should be movement-first."***
+
+**The press asked 「is there a body here」 FIRST, and that is reversed.** A 조각 with somebody standing
+on it is a 조각 you may want to send another body TO — the body test swallowed the press and picked the
+man already standing there. ⇒ **a full hand moves; an empty hand picks.**
+
+### Four things that were wrong and that no check was asking about
+
+⚠⚠ **THE 판 WAS HIDING EVERY GROUND MARK, AND IT IS SORT ORDER AND NOT DEPTH.** Both the 판 and the fx
+decal layer are transparent and neither writes depth, so the engine ordered them by AABB — and both
+AABBs are the whole island. **The moment a pick lit the board, the bodies' own shadows disappeared
+with the 이동선.** Raising the marks did nothing (measured at half a 조각 of lift); a `render_priority`
+is the only thing that decides it.
+
+⚠⚠ **A SHADER THAT WRITES `ALPHA` GOES ON THE TRANSPARENT PATH AND DRAWS NOTHING BEHIND AN OPAQUE
+SPRITE.** The rim rendered nothing while `visible`, `shader`, `texture`, `scale` and `position` were
+all correct. **Discard plus `ALBEDO`, and no `ALPHA` line** — the same kind of thing the bodies are.
+
+⚠⚠ **THE 이동선'S FIRST POINT AND THE REST DISAGREED BY HALF A 조각.** The first is a real
+`soldier_pos`; the rest were built with a `+ 0.5` baked in. **Every check about the route stayed green
+because they all asked 「which 조각」 and never 「where in world px」.** The user is the one who saw it:
+
+> ***"It seems a bit odd when I rotate. Could you make it natural when rotated too? Right now it looks
+> like it comes from the middle of the block."***
+
+⚠ **The first diagnosis of that sentence was wrong.** The rim was blamed, and measured afterwards the
+rim moves about one screen pixel. **What was actually wrong was the line.** The rim was merely too
+thin at 1.10 to be told from the pale ground — 1213 near-white pixels were on screen and unreadable.
+
+⚠⚠ **A GROUND MARK'S WIDTH IN WORLD UNITS IS A HAIRLINE PULLED BACK AND A STRIPE PUSHED IN.**
+
+> ***"The mouse wheel can go down as well as up, so that always has to be considered while developing.
+> Make it more natural — on rotation and on zoom."***
+
+⇒ **the 이동선 is a mark the hand reads, not a thing in the world**, and it holds its width on screen.
+
+### What the nets did and did not do
+
+**They were green through every one of the four.** Picking worked, ordering worked, the reach lit, the
+route was right — *as a list of 조각*. ⇒ **fifteen rows went in at the seams that were empty**: the
+pick's own gesture, the rim as pooled node state, the priority when a 조각 is both a destination and
+somebody's spot, and the route's UNITS.
+
+**1320 checks at the start of the session and 1348 at the end. 66 red at both ends, the same 66** —
+they are the island-size drift this repo already carries and this session touched none of those files.
+
+### What is NOT built
+
+- **The information panel the user's first sentence asked for.** Nothing is drawn on the HUD; the rim
+  is the only thing that says who is picked
+- **The reach is nearly the whole island** — 268 of 284 land 조각. Water, stairs and full 블록 are what
+  drop out, and nothing else does
