@@ -112,7 +112,37 @@ var _tex_anim: Array = _load_beast_anim()
 ## **How far each body picture's opaque ink stands above the bottom of its own frame**, as a fraction
 ## of that frame's height, keyed by the picture. See `_measure_body_feet`. ⚠ **Declared here and not
 ## beside the boats**, because the island needs it for exactly the reason the deck always did.
-var _foot_body: Dictionary = _measure_body_feet(_tex_facing)
+var _foot_body: Dictionary = _measure_body_feet(_tex_facing, _tex_anim)
+## **How much of its own canvas each row's ANIMAL actually fills across**, measured off the standing
+## pictures once at load. **This is what divides the canvas back out of a body's drawn size**, so a
+## strip that needs a wider frame stops changing how big the body reads. See `Look.beast_draw_scale`.
+var _ink_frac: Array = _measure_body_ink(_tex_facing)
+
+## **The two drawn things the marks wear, and the font the number is set in.** Loaded once, beside
+## the body pictures, for the same reason: a `load()` in a drawer is a disk read in a frame.
+var _tex_tooth: Texture2D = load(Look.FX_TOOTH) as Texture2D
+var _tex_slash: Texture2D = load(Look.FX_SLASH) as Texture2D
+var _font_digits: Font = load(Look.FX_DIGIT_FONT) as Font
+
+## **The air layer, rebuilt.** ⚠⚠ **IT WAS DELETED WHOLE ON 2026-08-29** with the twelve effects, and
+## nothing has drawn above the ground since — the ground buffer survived only because a body's shadow
+## goes into it. **These two pools are the smallest thing that brings it back**: billboards for the
+## shards and the arc, `Label3D` for the number.
+## ⚠ **Two pools and not one**, because a number is text and a shard is a texture, and one node type
+## cannot be both. They are opened and closed together, like the bodies and their outlines.
+var _marks: Array[Sprite3D] = []
+var _marks_used := 0
+var _labels: Array[Label3D] = []
+var _labels_used := 0
+## **Everything currently in the air**, aged every frame and dropped when its clock runs out.
+## ⚠⚠ **Geometry is FROZEN on the frame the blow happened** — a mark carries its own position and
+## velocity and never re-reads a body. **A mark that re-read a position would follow a corpse**, which
+## is rule 2 of the five the deleted set paid for.
+var _live: Array = []
+
+## **The answer `_aim_of` gives for a body aiming at nothing.** A sentinel and not a `null`, so the
+## row it sits in stays one flat array of values rather than a array of maybe-Vector2.
+const OFFMAP_AIM := Vector2(-9999.0, -9999.0)
 ## The rounded square, baked once. Every enemy wears it, tinted — the same two marks `_paint_body`
 ## drew by hand (the outline and the centre dot) with nothing filled between them.
 var _tex_body: Texture2D = null
@@ -326,6 +356,10 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	# **Both drawers are emptied here.** Without it island 2 opens with island 1's explosions still in
 	# flight over bodies that no longer exist, and every id in them means a different unit now.
 	_fx = []
+	# ⚠⚠ **THE AIR IS EMPTIED WHEN A BOARD LOADS, AND `_body` DELIBERATELY IS NOT.** A mark carries its
+	# own frozen position, so one left over from the last island would hang in the air over this one at
+	# a place nothing happened. **The body rows survive because a 검사 carries across islands.**
+	_live = []
 	_body = {}
 	# ⚠ **And the water forgets every hull.** The blocks are indexed by boat number, so island 2's
 	# first boat would otherwise open wearing island 1's first boat's trail.
@@ -396,6 +430,7 @@ func _wash_cells(grid: Grid) -> PackedInt32Array:
 ## multiplier to fold in, and a leaf handed a constant 1.0 is the shape "No fake code" names.
 func _process(delta: float) -> void:
 	_fx_step(delta)
+	_step_marks(delta)
 	# The sea's own clock — the bob and the roll, and nothing else, read it. See `_sea_clock`.
 	_sea_clock += delta
 	# ⚠ **After the tick and not before it.** Every remembered point is stamped with `_sea_clock`,
@@ -407,6 +442,7 @@ func _process(delta: float) -> void:
 	# centre and radius in hand at the same time.
 	_fx_begin()
 	_paint_bodies()
+	_paint_marks()
 	_fx_flush()
 
 
@@ -1423,6 +1459,12 @@ func _pitch_stretch() -> float:
 func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id: int, colour: Color,
 		squash: Vector2, tex: Texture2D) -> void:
 	var radius := Look.body_radius_of(type_id)
+	# ⚠⚠ **THE ROW'S INK FRACTION, AND DIVIDING BY IT IS THE WHOLE POINT** (2026-08-31).
+	# `beast_draw_scale` is how wide the ANIMAL is drawn; this turns that into how wide the PICTURE
+	# around it has to be. **Without the division every strip that needed a wider canvas shrank the
+	# body** — it was paid back by hand twice in one afternoon, 0.65 to 0.78 and 0.85 to 0.956, with
+	# the two halves of each pair sitting in two different files.
+	var frac := _ink_of(type_id)
 	# ⚠⚠ **The shadow goes down FIRST and it is the body's only one** (2026-08-28, the user: 「그림자도
 	# 단순하게 아래 동그라미정도해줘」). It is drawn from here rather than from the two callers because
 	# this is the one place a body's centre and its drawn width are both in hand — putting it in the
@@ -1433,13 +1475,16 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 	# user: 「the wolf ... is so small I can't spot it」 against 「I'd like the character to be about
 	# right」 for the swordsman). One number could not answer both judgements — see `BODY_SPRITE_SCALE`.
 	var wide := (radius * Look.BEAST_SPRITE_W_RATIO if tex != null else radius * 2.0) \
-			* Look.BODY_SPRITE_SCALE * Look.beast_draw_scale(type_id)
+			* Look.BODY_SPRITE_SCALE * Look.beast_draw_scale(type_id) / frac
 	# ⚠⚠ **THE DISC IS A FRACTION OF THE DRAWN PICTURE, NOT OF THE SIM RADIUS** (2026-08-30, the user:
 	# 「the soldiers have no shadow」). It was `radius * BODY_SPRITE_SCALE * 0.62`, and the picture is
 	# `radius * BEAST_SPRITE_W_RATIO(3.5) * BODY_SPRITE_SCALE` across — **so the disc was one fifth of the
 	# body's width and sat entirely hidden underneath it.** The swordsman showed it worst: his picture is
 	# 33x40 where a wolf's is 74x40, so at one drawn WIDTH he stands far taller and buries the disc.
-	_put_ground_shadow(Look.tile_point_px(at_tiles) + crowd_px, wide * 0.5)
+	# ⚠⚠ **`wide * frac` AND NOT `wide`** (2026-08-31) — the disc is a fraction of the ANIMAL,
+	# so a canvas widened by a death pose no longer widens the shadow. See `Look.BODY_SHADOW_OF_INK`.
+	_put_ground_shadow(Look.tile_point_px(at_tiles) + crowd_px,
+		wide * frac * 0.5 * Look.BODY_SHADOW_OF_INK)
 	var s := _sprite()
 	var pic: Texture2D = tex if tex != null else _tex_body
 	s.texture = pic
@@ -1513,6 +1558,19 @@ func _paint_bodies() -> void:
 		var i := int(raw_id)
 		_put_walker("s%d" % i, int(army.type_id[i]), battle.soldier_pos[i], false,
 			_crowd_slot_of(battle.soldier_pos[i], i))
+
+	# ⚠⚠ **THE ONE PLACE A BODY THE SIM HAS ALREADY DROPPED IS STILL DRAWN** (2026-08-31). Both lists
+	# above hold the living only — `living_enemy_ids`'s own header says a corpse must not be left on
+	# screen — and that is still true: **what is drawn here is not a corpse, it is a body in the
+	# middle of falling**, and it stops the frame its death strip runs out.
+	# ⚠ **It reads `last` and never the sim's position**, which is OFFMAP for a dead beast.
+	# ⚠ **No crowd slot.** The 조각 was released the moment the body died, so asking for a slot would
+	# hand a falling body the seat a living one has already taken and stand the two in one place.
+	for key: String in _body:
+		var b: Dictionary = _body[key]
+		if float(b["dying"]) <= 0.0:
+			continue
+		_put_walker(key, int(b["type"]), b["last"], key.begins_with("e"), 0)
 
 	# ⚠ **Inside this function and not beside it.** The riders come out of the same `Sprite3D` pool the
 	# bodies do, and that pool is opened by the `_sprites_used = 0` above and closed by the
@@ -1646,9 +1704,13 @@ func _anim_sec(type_id: int, anim: int) -> float:
 	return float(Look.beast_anim_frames(type_id, anim)) * Look.BEAST_FRAME_SEC
 
 
-## The picture a body wears THIS frame: its bite strip while a bite is running, its walk strip the
-## rest of the time, and **its standing picture whenever the strip it asked for is empty** — which is
-## the whole of how eight species keep working with no frames of their own.
+## The picture a body wears THIS frame: its bite strip while a bite is running, its **walk strip while
+## it is moving and its breath strip while it is not**, and **its standing picture whenever every
+## strip it asked for is empty** — which is the whole of how the species with no art keep working.
+## ⚠⚠ **IT WAS BITE-OR-WALK AND NOTHING ELSE** (until 2026-08-31). A standing body wore the walk,
+## which is why the note below says a standing body keeps cycling its legs — **it does not any more,
+## it breathes**, and `Look.BODY_STILL_SEC` is the line between the two. **The bite became the attack
+## and the flinch and the fall joined it the same day**, which is why the choice is a list now.
 ##
 ## ⚠⚠ **The walk phase is TIME, not distance, and that is the opposite of `_gait_squash` one clock
 ## over.** The squash is a stride and is right to stop dead with the body. The legs are not: phased on
@@ -1656,25 +1718,66 @@ func _anim_sec(type_id: int, anim: int) -> float:
 ## what the user was looking at when he said 「그냥 붙어서 그냥 벌렁벌렁하는 거밖에 없어」. A standing
 ## body keeps cycling its legs and `_idle_offset` is what says it is standing.
 func _body_tex(key: String, type_id: int, head: Vector2) -> Texture2D:
-	var idle := _beast_tex(type_id, head)
+	var stand := _beast_tex(type_id, head)
 	if not _body.has(key):
-		return idle
+		return stand
 	var b: Dictionary = _body[key]
-	var bite := float(b["bite"])
-	var anim := Look.Anim.BITE if bite > 0.0 else Look.Anim.WALK
-	var strip := _anim_strip(type_id, anim, _facing_index(type_id, head))
-	if strip.is_empty():
-		return idle
-	var at := 0
-	if anim == Look.Anim.BITE:
-		# The clock runs DOWN, so `1 - left/whole` is how far in the strip is. Clamped at both ends:
-		# `int()` of exactly 1.0 lands one past the last frame, and the last frame is the one the
-		# mouth is widest in — a bite that never reaches it is a bite nobody sees.
-		at = clampi(int((1.0 - bite / _anim_sec(type_id, anim)) * float(strip.size())),
-			0, strip.size() - 1)
+	var facing := _facing_index(type_id, head)
+	# **The order this body asks in, and it is a LIST rather than a chain of `if`s because the second
+	# choice is what carries a species with only some of its art.** A row with a walk and no breath
+	# keeps walking on the spot when it stands still, which is what it did before the breath existed
+	# and is still better than a held frame.
+	#
+	# ⚠⚠ **DEATH FIRST, THEN HURT, THEN ATTACK, AND THE ORDER IS THE WHOLE OF THE RULE.** A body
+	# that is dying is not interrupted by anything — it has already left the sim. A body being hit
+	# drops the swing it was in the middle of, because **a blow that lands has to be the thing on
+	# screen**; the other way round, a body under fire keeps calmly punching and nothing reads.
+	var order := []
+	if float(b["dying"]) > 0.0:
+		order.append(Look.Anim.DEATH)
+	if float(b["hurt"]) > 0.0:
+		order.append(Look.Anim.HURT)
+	if float(b["attack"]) > 0.0:
+		order.append(Look.Anim.ATTACK)
+	if float(b["still"]) <= Look.BODY_STILL_SEC:
+		order.append_array([Look.Anim.WALK, Look.Anim.IDLE])
 	else:
-		at = int(float(b["walk"]) / Look.BEAST_FRAME_SEC) % strip.size()
-	return strip[at] as Texture2D
+		order.append_array([Look.Anim.IDLE, Look.Anim.WALK])
+	for raw_anim in order:
+		var anim := int(raw_anim)
+		var strip := _anim_strip(type_id, anim, facing)
+		if strip.is_empty():
+			continue
+		var at := 0
+		var left := _clock_of(b, anim)
+		if left >= 0.0:
+			# The clock runs DOWN, so `1 - left/whole` is how far in the strip is. Clamped at both
+			# ends: `int()` of exactly 1.0 lands one past the last frame, and the last frame is the
+			# one the blow is widest in — a swing that never reaches it is a swing nobody sees.
+			at = clampi(int((1.0 - left / _anim_sec(type_id, anim)) * float(strip.size())),
+				0, strip.size() - 1)
+		else:
+			# ⚠ **One clock for the walk AND the breath**, so a body that stops mid-stride picks the
+			# breath up wherever the phase already was. Two clocks is two things to keep wound.
+			at = int(float(b["walk"]) / Look.BEAST_FRAME_SEC) % strip.size()
+		return strip[at] as Texture2D
+	return stand
+
+
+## **Seconds left of the one-shot strip `anim`, or -1 for a strip that loops.** The three one-shots
+## each own a countdown in the body's own dictionary; the walk and the breath share the free-running
+## clock instead. ⚠ **The name of the clock is the name of the strip on purpose** — a lookup table
+## keyed by `Anim` here and a set of literals in `_fx_step` is the pair that drifts.
+func _clock_of(b: Dictionary, anim: int) -> float:
+	match anim:
+		Look.Anim.DEATH:
+			return float(b["dying"])
+		Look.Anim.HURT:
+			return float(b["hurt"])
+		Look.Anim.ATTACK:
+			return float(b["attack"])
+	return -1.0
+
 
 
 ## **One walking body at a 조각 position — a 검사 or a 짐승, and it is deliberately ONE function.**
@@ -1695,7 +1798,22 @@ func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: i
 	# A body faces the way it last walked. `_facing_of` returns RIGHT when it has never moved, so a
 	# body standing still faces right rather than flipping on a zero vector.
 	var tex := _body_tex(key, type_id, _facing_of(key))
-	_put_body(centre, at, crowd, type_id, Look.body_colour_of(is_enemy), _gait_squash(key), tex)
+	# ⚠ **The flash is mixed into the SIDE colour before the tint**, so a flashing body still reads as
+	# whose it is — see `Look.hit_flash_colour`.
+	var lit := Look.hit_flash_colour(Look.body_colour_of(is_enemy), _flash_of(key))
+	# ⚠ **The two squashes MULTIPLY.** A body can be walking into a blow, and the gait and the swing
+	# are different motions — replacing one with the other would drop whichever came second.
+	var gait := _gait_squash(key)
+	var swing := _swing_squash(key)
+	_put_body(centre, at, crowd, type_id, lit,
+		Vector2(gait.x * swing.x, gait.y * swing.y), tex)
+
+
+## **How far into its flash a body is**, 1.0 at the instant of the blow and 0.0 once it is spent.
+func _flash_of(key: String) -> float:
+	if not _body.has(key):
+		return 0.0
+	return float((_body[key] as Dictionary)["flash"]) / Look.HIT_FLASH_SEC
 
 
 ## **Which slot of its own 조각 this body holds, or 0 when the sim does not say.**
@@ -1766,27 +1884,83 @@ var _sea_clock := 0.0
 ## species' padding — silently, because every value in range is plausible.
 ## ⚠ **Measured off the alpha channel, not typed.** A constant would be wrong for three of the wolf's
 ## four pictures however it was chosen.
-static func _measure_body_feet(pool: Array) -> Dictionary:
+## ⚠⚠ **IT TOOK THE STANDING PICTURES ONLY AND THE ANIMATION FRAMES TOOK THE 0.0 FALLBACK**
+## (2026-08-31). Every reader is `_foot_body.get(pic, 0.0)`, so a frame that was never measured is
+## footed at the bottom of its own canvas while the standing picture beside it is footed at the
+## animal — **the body would jump the moment it started walking and drop back when it stopped**, and
+## nothing would have gone red. The strips are walked here for that reason and no other.
+static func _measure_body_feet(pool: Array, strips: Array) -> Dictionary:
 	var out := {}
 	for raw_pics in pool:
 		for pic: Texture2D in (raw_pics as Array):
-			if pic == null or out.has(pic):
+			_foot_one(out, pic)
+	# `[type][facing][anim][frame]`, which is why this is four deep and not two.
+	for raw_type in strips:
+		for raw_facing in (raw_type as Array):
+			for raw_anim in (raw_facing as Array):
+				for pic: Texture2D in (raw_anim as Array):
+					_foot_one(out, pic)
+	return out
+
+
+## **How wide each row's animal is inside its own frame, as a fraction, and the widest facing wins.**
+##
+## ⚠⚠ **ONE NUMBER PER ROW AND NOT ONE PER FACING, AND THE DIFFERENCE IS THE WHOLE ANSWER.** Per
+## facing, every facing would be drawn to the same ink width — **a man seen edge-on would be stretched
+## to the width of a man seen face-on**, which is the opposite of what four pictures are for. Per row,
+## the four keep their proportions to each other and only the frame around them is divided out.
+## ⚠ **The standing pictures only.** A strip is exactly the thing that reaches wider than the animal,
+## so measuring the frames would let a raised arm shrink the whole body for as long as it was raised.
+## ⚠ **1.0 for a row with no picture**, which draws the plain rounded shape and needs no division.
+static func _measure_body_ink(pool: Array) -> Array:
+	var out := []
+	for raw_pics in pool:
+		var widest := 0.0
+		for pic: Texture2D in (raw_pics as Array):
+			if pic == null:
 				continue
 			var img := pic.get_image()
 			if img == null:
 				continue
-			var h := img.get_height()
-			var w := img.get_width()
-			var last := -1
-			for y in h:
-				for x in w:
+			var lo := img.get_width()
+			var hi := -1
+			for x in img.get_width():
+				for y in img.get_height():
 					if img.get_pixel(x, y).a > 0.0:
-						last = y
+						lo = mini(lo, x)
+						hi = maxi(hi, x)
 						break
-			# **A picture with no opaque pixel at all foots at the frame**, which is what the old code
-			# did for every picture — the fallback is the previous behaviour and not a guess.
-			out[pic] = 0.0 if last < 0 else float(h - 1 - last) / float(h)
+			if hi >= lo:
+				widest = maxf(widest, float(hi - lo + 1) / float(img.get_width()))
+		out.append(widest if widest > 0.0 else 1.0)
 	return out
+
+
+## Row `type_id`'s ink fraction, **and never 0** — it is a divisor.
+func _ink_of(type_id: int) -> float:
+	if type_id < 0 or type_id >= _ink_frac.size():
+		return 1.0
+	return maxf(float(_ink_frac[type_id]), 0.01)
+
+
+## One picture's foot, written into `out` and skipped when it is already there.
+static func _foot_one(out: Dictionary, pic: Texture2D) -> void:
+	if pic == null or out.has(pic):
+		return
+	var img := pic.get_image()
+	if img == null:
+		return
+	var h := img.get_height()
+	var w := img.get_width()
+	var last := -1
+	for y in h:
+		for x in w:
+			if img.get_pixel(x, y).a > 0.0:
+				last = y
+				break
+	# **A picture with no opaque pixel at all foots at the frame**, which is what the old code
+	# did for every picture — the fallback is the previous behaviour and not a guess.
+	out[pic] = 0.0 if last < 0 else float(h - 1 - last) / float(h)
 
 
 ## A pooled hull. Null when the scene will not load, and **that is a real state**: `boat.glb` had never
@@ -2243,45 +2417,299 @@ func _facing_of(key: String) -> Vector2:
 	var head: Vector2 = b.get("head", Vector2.RIGHT)
 	return head if head.length_squared() > Rules.EPS else Vector2.RIGHT
 
-## Ages both drawers by one frame and drops what has finished, then walks every body that can be on
-## screen so the gait phase advances by DISTANCE rather than by time.
+## **Where a body is aiming, or `OFFMAP_AIM` for one aiming at nothing.** `targets` is the other
+## side's position column and `here` is the body's own place, which is what the 성채 case needs.
 ##
-## Creating the per-body entries is done HERE and nowhere else. `_drain_events` deliberately refuses
-## to create one: a body with no entry this frame is a body that is not on screen this frame, and
-## flashing a corpse is the one thing item 3 must not do.
+## ⚠ **The 성채 answers with its NEAREST 조각 and not its corner.** A body standing against the far
+## wall would otherwise face across the building at a point nobody is standing on — the same
+## 「a mean is not a place anybody stands」 trap `Battle.keep_gap` records about itself.
+func _aim_of(target: int, targets: Array, here: Vector2) -> Vector2:
+	if target >= 0:
+		if target >= targets.size():
+			return OFFMAP_AIM
+		return targets[target]
+	if target != Battle.TARGET_KEEP or battle == null or battle.grid == null:
+		return OFFMAP_AIM
+	var best := OFFMAP_AIM
+	var best_d := INF
+	for raw_tile in battle.keep_tiles:
+		var tile := int(raw_tile)
+		var at := Vector2(float(tile % battle.grid.w), float(tile / battle.grid.w))
+		var d := here.distance_squared_to(at)
+		if d < best_d:
+			best_d = d
+			best = at
+	return best
+
+
+## **One blow landing, and everything the six do about it.** `from_px`/`to_px` are in TILES.
+##
+## ⚠⚠ **BOTH BODIES HOLD, ONLY THE VICTIM FLASHES AND IS KNOCKED.** A striker that flashed would say
+## it was hit; a striker that was knocked would be thrown backwards by its own swing.
+## ⚠ **Nothing here reads a body's position again.** The shards, the arc and the number are handed
+## the two places once and never look them up — rule 2 of the five the deleted effects paid for.
+## ⚠ **A blow at the 성채 spawns marks and no victim clocks**, because a building has no body row.
+func _land_blow(striker: String, victim: String, from_tiles: Vector2, aim: Vector2,
+		type_id: int) -> void:
+	if _body.has(striker):
+		(_body[striker] as Dictionary)["hold"] = Look.HITSTOP_SEC
+	if _body.has(victim):
+		var v: Dictionary = _body[victim]
+		v["hold"] = Look.HITSTOP_SEC
+		v["flash"] = Look.HIT_FLASH_SEC
+		v["knock"] = Look.KNOCK_SEC
+		var away := aim - from_tiles
+		if away.length_squared() > Rules.EPS:
+			v["knock_dir"] = away.normalized()
+	if aim == OFFMAP_AIM:
+		return
+	_spawn_marks(Look.tile_point_px(from_tiles), Look.tile_point_px(aim),
+		int(round(Rules.damage_of(type_id))))
+
+
+## **The shards, the arc and the number**, all three born at once and never touched again.
+##
+## ⚠⚠ **THE SHARDS LEAVE ALONG THE TANGENT, NOT ALONG THE FACING** — see `Look.SPARK_FAN_DEG`. The
+## contact point sits INSIDE the striker's outline, so a fan opened along the facing puts every shard
+## back inside the animal that threw it.
+## ⚠ **Alternating sides, so five shards are three one way and two the other** rather than a fan that
+## reads as a single spray.
+func _spawn_marks(from_px: Vector2, to_px: Vector2, damage: int) -> void:
+	var gap := to_px - from_px
+	var dir := gap.normalized() if gap.length_squared() > Rules.EPS else Vector2.RIGHT
+	var contact := from_px + gap * 0.5
+	var tangent := Vector2(-dir.y, dir.x)
+	for i in Look.SPARK_COUNT:
+		var spread := (float(i) / maxf(1.0, float(Look.SPARK_COUNT - 1)) - 0.5) \
+				* deg_to_rad(Look.SPARK_FAN_DEG)
+		var side := tangent if i % 2 == 0 else -tangent
+		_live.append({"tex": _tex_tooth, "text": "", "at": contact,
+			"vel": side.rotated(spread) * Look.SPARK_SPEED_PX,
+			"left": Look.SPARK_SEC, "life": Look.SPARK_SEC, "wide": Look.SPARK_PX,
+			"rise": 0.0, "flip": dir.x < 0.0})
+	_live.append({"tex": _tex_slash, "text": "", "at": from_px + gap * Look.SLASH_REACH,
+		"vel": Vector2.ZERO, "left": Look.SLASH_SEC, "life": Look.SLASH_SEC,
+		"wide": Look.SLASH_PX, "rise": 0.0, "flip": dir.x < 0.0})
+	if damage > 0:
+		_live.append({"tex": null, "text": str(damage), "at": to_px, "vel": Vector2.ZERO,
+			"left": Look.DAMAGE_SEC, "life": Look.DAMAGE_SEC, "wide": Look.DAMAGE_FONT_PX,
+			"rise": Look.DAMAGE_RISE_PX, "flip": false})
+
+
+## Ages every mark by a frame and drops what has finished. **Position is integrated, never re-read.**
+func _step_marks(delta: float) -> void:
+	var kept := []
+	for raw in _live:
+		var m: Dictionary = raw
+		m["left"] = float(m["left"]) - delta
+		if float(m["left"]) <= 0.0:
+			continue
+		m["at"] = (m["at"] as Vector2) + (m["vel"] as Vector2) * delta
+		kept.append(m)
+	_live = kept
+
+
+## **Every live mark onto a pooled node.** ⚠ **0 draw calls** — like every other drawer in this file,
+## it fills node fields the engine consumes.
+## ⚠⚠ **THEY ARE BILLBOARDS AND THEY ARE NOT ROTATED.** A shard lying flat on the ground would be
+## drawn under the body that threw it and never seen; a shard rotated on a `BILLBOARD_FIXED_Y` node is
+## a rotation the engine throws away when it rebuilds the basis — **measured on this repo's own bodies
+## (기법 23) and written up in `Look.BODY_LEAN_DEG`.** The arc is flipped instead of turned.
+func _paint_marks() -> void:
+	_marks_used = 0
+	_labels_used = 0
+	for raw in _live:
+		var m: Dictionary = raw
+		var at: Vector2 = m["at"]
+		var fade := clampf(float(m["left"]) / maxf(0.001, float(m["life"])), 0.0, 1.0)
+		var lift := (Look.MARK_LIFT_PX + float(m["rise"]) * (1.0 - fade)) / Look.TILE_PX
+		var spot := Vector3(at.x / Look.TILE_PX, _stand_h(at / Look.TILE_PX) + lift,
+			at.y / Look.TILE_PX)
+		var text: String = m["text"]
+		if text.is_empty():
+			var pic: Texture2D = m["tex"]
+			if pic == null:
+				continue
+			var s := _mark()
+			s.texture = pic
+			s.flip_h = bool(m["flip"])
+			# the same arithmetic `_billboard_scale` does for a body: a Sprite3D drawn at
+			# `SPRITE_PIXEL_SIZE` covers `tex_px * scale` world px, so the scale IS the ratio.
+			# ⚠ **Dividing by `SPRITE_PIXEL_SIZE` here blew every shard up 40x** — photographed.
+			var k := float(m["wide"]) / float(pic.get_width())
+			s.scale = Vector3(k, k, 1.0)
+			s.modulate = Look.mark_fade(fade)
+			s.position = spot
+		else:
+			var l := _label()
+			l.text = text
+			l.modulate = Look.damage_fade(fade)
+			l.position = spot
+	_hide_unused_marks()
+
+
+## A pooled mark billboard. **Born once and reused**, the same discipline the body pool keeps.
+func _mark() -> Sprite3D:
+	if _marks_used < _marks.size():
+		var reused := _marks[_marks_used]
+		_marks_used += 1
+		reused.visible = true
+		return reused
+	var s := Sprite3D.new()
+	s.pixel_size = Look.SPRITE_PIXEL_SIZE
+	s.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	# ⚠⚠ **NOT `ALPHA_CUT_DISCARD`, WHICH THE BODIES USE.** Discard gives a sprite a real depth value
+	# and makes it occlude — and it also throws away every partly transparent pixel, **so a mark that
+	# fades would vanish in one step instead of fading.** A mark is allowed to be sorted rather than
+	# depth-tested; a body is not.
+	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	s.shaded = false
+	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_world.add_child(s)
+	_marks.append(s)
+	return s
+
+
+## A pooled damage number. ⚠ **The font is loaded once, on the first number of the run.**
+func _label() -> Label3D:
+	if _labels_used < _labels.size():
+		var reused := _labels[_labels_used]
+		_labels_used += 1
+		reused.visible = true
+		return reused
+	var l := Label3D.new()
+	l.pixel_size = Look.SPRITE_PIXEL_SIZE
+	l.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	l.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	l.shaded = false
+	l.font_size = int(Look.DAMAGE_FONT_PX)
+	l.outline_size = int(Look.DAMAGE_OUTLINE_PX)
+	l.modulate = Look.COL_DAMAGE
+	l.outline_modulate = Look.COL_DAMAGE_EDGE
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if _font_digits != null:
+		l.font = _font_digits
+	_world.add_child(l)
+	_labels.append(l)
+	return l
+
+
+## Closes both mark pools by their own index, the way the body pool closes its outlines.
+func _hide_unused_marks() -> void:
+	for k in range(_marks_used, _marks.size()):
+		_marks[k].visible = false
+	for k in range(_labels_used, _labels.size()):
+		_labels[k].visible = false
+
+
+## **How far a struck body has been thrown**, in px along the way it was knocked.
+##
+## ⚠⚠ **THE CURVE PEAKS AT 18% AND EASES BACK OVER THE REST**, and that asymmetry is the whole of why
+## this reads as a blow where the deleted lunge read as sliding. See `Look.KNOCK_SNAP`.
+func _knock_offset(key: String) -> Vector2:
+	if not _body.has(key):
+		return Vector2.ZERO
+	var b: Dictionary = _body[key]
+	var left := float(b["knock"])
+	if left <= 0.0:
+		return Vector2.ZERO
+	var t := clampf(1.0 - left / Look.KNOCK_SEC, 0.0, 1.0)
+	var push := sin(PI * pow(t, Look.KNOCK_SNAP))
+	return (b["knock_dir"] as Vector2) * (push * Look.KNOCK_RATIO * float(b["half"]))
+
+
+## Ages every one-shot strip by a frame, then walks every body the SIM knows so the gait advances by
+## DISTANCE and so the three events — **공격 · 피격 · 죽음** — are seen at all.
+##
+## ⚠⚠ **THE SIM HAS NO EVENT LIST AND IS NOT BEING GIVEN ONE.** `battle` carries state: a cooldown,
+## a health, an alive flag. **All three events are read here as a CHANGE in that state between two
+## frames**, which is what keeps `src/sim/` untouched by a question that is entirely about pictures.
+## ⚠ **The cost of that choice is one frame of latency and a seeded first frame** — a body's first
+## frame on screen copies the sim's numbers rather than comparing against zero, or every body would
+## be born mid-flinch.
+##
+## Creating the per-body entries is done HERE and nowhere else, and **an entry is never erased**: a
+## corpse still needs the position it fell at, and a revived 검사 comes back on the row it left.
 func _fx_step(delta: float) -> void:
 	for key: String in _body:
 		var b: Dictionary = _body[key]
-		b["bite"] = maxf(0.0, float(b["bite"]) - delta)
 		# ⚠ **Advanced unconditionally, and NOT inside the `moved` test below.** That test is the gait's
 		# and it is right there; putting the legs under it is the rule 「움직이지 않는 몸은 애니메이션
 		# 하지 않는다」, which is what left a body in melee frozen. This clock never stops.
+		# ⚠⚠ **THE HOLD IS AGED FIRST AND ALONE, AND EVERY OTHER CLOCK IS UNDER IT.** That is the
+		# whole of 히트스톱: a body in the instant of a blow keeps its picture, its knock and its
+		# flash exactly where they are for four frames. **Age one of them anyway and the freeze
+		# becomes a stutter** — the picture holds while the body it belongs to keeps sliding.
+		b["hold"] = maxf(0.0, float(b["hold"]) - delta)
+		if float(b["hold"]) > 0.0:
+			continue
 		b["walk"] = float(b["walk"]) + delta
+		# The three one-shots. ⚠ **A death that reaches 0 takes the body off the screen** — see
+		# `_paint_bodies`, which draws a `_body` row the sim no longer lists only while this is above 0.
+		b["attack"] = maxf(0.0, float(b["attack"]) - delta)
+		b["hurt"] = maxf(0.0, float(b["hurt"]) - delta)
+		b["dying"] = maxf(0.0, float(b["dying"]) - delta)
+		b["flash"] = maxf(0.0, float(b["flash"]) - delta)
+		b["knock"] = maxf(0.0, float(b["knock"]) - delta)
 
 	if battle == null or army == null:
 		return
 
-	# ⚠ **Both sides into one list**, so the gait, the sway and the facing are one clock per body and
-	# not two tables that have to be kept in step.
-	var walkers := []
-	for raw_id in battle.ashore_ids():
-		var i := int(raw_id)
-		walkers.append(["s%d" % i, battle.soldier_pos[i],
-			Look.sprite_half_px(int(army.type_id[i]))])
-	for raw_id in battle.living_enemy_ids():
-		var e := int(raw_id)
-		walkers.append(["e%d" % e, battle.enemy_pos[e],
-			Look.sprite_half_px(int(battle.enemy_type[e]))])
+	# ⚠⚠ **EVERY BODY THE SIM KNOWS, DEAD ONES INCLUDED, and that is the whole reason this is not
+	# `ashore_ids()` and `living_enemy_ids()` any more.** A death has to be seen as a CHANGE; read off
+	# the living lists it is an absence, and an absence is also what a body in reserve looks like.
+	# ⚠ **`enemy_pos` is set to OFFMAP the frame a beast dies**, so the position a corpse falls at can
+	# only come from what this loop stored last frame — `last`.
+	var rows := []
+	for i in battle.soldier_state.size():
+		# ⚠ **The roster and the army are sized together and this does not trust that.** A row without
+		# a type has no picture and no strip lengths, and asking for one faults inside the loop that
+		# every body on screen goes through.
+		if i >= army.type_id.size():
+			break
+		var state := int(battle.soldier_state[i])
+		rows.append(["s%d" % i, state != Battle.SoldierState.DEAD,
+			state == Battle.SoldierState.ASHORE, battle.soldier_pos[i],
+			float(battle.soldier_hp[i]), float(battle.soldier_cool[i]), int(army.type_id[i]),
+			_aim_of(int(battle.soldier_target[i]), battle.enemy_pos, battle.soldier_pos[i]),
+			"e%d" % int(battle.soldier_target[i]) if int(battle.soldier_target[i]) >= 0 else ""])
+	for e in battle.enemy_alive.size():
+		var living := battle.enemy_alive[e] != 0
+		rows.append(["e%d" % e, living, living, battle.enemy_pos[e],
+			float(battle.enemy_hp[e]), float(battle.enemy_cool[e]), int(battle.enemy_type[e]),
+			_aim_of(int(battle.enemy_target[e]), battle.soldier_pos, battle.enemy_pos[e]),
+			"s%d" % int(battle.enemy_target[e]) if int(battle.enemy_target[e]) >= 0 else ""])
 
-	for raw_walker in walkers:
-		var walker: Array = raw_walker
-		var key: String = walker[0]
-		var here: Vector2 = walker[1]
+	for raw_row in rows:
+		var row: Array = raw_row
+		var key: String = row[0]
+		var alive: bool = row[1]
+		var ashore: bool = row[2]
+		var here: Vector2 = row[3]
+		var hp: float = row[4]
+		var cool: float = row[5]
+		var type_id: int = row[6]
+		var aim: Vector2 = row[7]
+		var victim: String = row[8]
 		if not _body.has(key):
+			if not ashore:
+				continue
 			_body[key] = {
-				# Seconds left of a bite, and the strip is read off how far in that is. 0 is "not
-				# biting" and is also what a species with no bite strip is pinned at forever.
-				"bite": 0.0,
+				# Seconds left of the swing, the flinch and the fall. **0 is "not in it"**, and it is
+				# also what a species with no such strip is pinned at forever.
+				"attack": 0.0,
+				"hurt": 0.0,
+				"dying": 0.0,
+				# **히트스톱** — while this is above 0 the body's own clocks do not advance, so its
+				# picture holds. ⚠ **The simulation is not frozen**; see `Look.HITSTOP_SEC`.
+				"hold": 0.0,
+				# **히트 플래시** — seconds left of the wash toward white.
+				"flash": 0.0,
+				# **넉백** — seconds left, and the way it was thrown. ⚠ **Away from the striker**, which
+				# is the whole difference between this and the lunge that was thrown out.
+				"knock": 0.0,
+				"knock_dir": Vector2.RIGHT,
 				# Seconds this body has existed, which is what the walk strip is phased on. ⚠ **The
 				# start is scattered by the key's hash**, the same trick `_idle_offset` uses: a pack
 				# that steps in lockstep reads as one animal rather than as five. One second covers
@@ -2292,12 +2720,61 @@ func _fx_step(delta: float) -> void:
 				"last": here,
 				# How wide this body is DRAWN, so the knock and the sway are sized off the picture and
 				# not off the sim radius. Looked up once — a body's species never changes.
-				"half": float(walker[2]),
+				"half": float(Look.sprite_half_px(type_id)),
 				# Seconds since it last moved. **The gait phases on DISTANCE and so stops dead when a
 				# body stops; this is what carries the other half.**
 				"still": 0.0,
+				# ⚠⚠ **THE THREE THINGS AN EVENT IS READ OUT OF, and they are all LAST FRAME'S.** The
+				# sim keeps no event list at all — it has state and nothing else — so a swing is a
+				# cooldown that went UP, a blow taken is health that went DOWN, and a death is
+				# `alive` going false. **Seeded from this frame**, so a body's first frame on screen
+				# never reads as three events at once.
+				"hp": hp,
+				"cool": cool,
+				"alive": alive,
+				"type": type_id,
 			}
 		var b: Dictionary = _body[key]
+		if type_id != int(b["type"]):
+			b["type"] = type_id
+			b["half"] = float(Look.sprite_half_px(type_id))
+
+		# ⚠ **The cooldown is RESET to the whole period the instant a blow lands** (`battle`'s attack
+		# phase), and it only ever counts down otherwise — so a rise is a swing and there is no other
+		# way for it to rise. **Not `> 0`**: a body whose target dies mid-cooldown keeps a positive
+		# cooldown for a second without swinging again.
+		if cool > float(b["cool"]) + Rules.EPS:
+			b["attack"] = _anim_sec(type_id, Look.Anim.ATTACK)
+			# ⚠⚠ **THE WHOLE OF 타격감 HANGS OFF THIS ONE LINE**, and it is here rather than on the
+			# victim's health drop because **this is the only place both ends of a blow are in hand**.
+			# The victim's own row knows it lost health; it does not know who took it.
+			_land_blow(key, victim, here, aim, type_id)
+		# ⚠ **Health only falls in this game** — there is no heal — so a drop is a blow taken. A
+		# revived body comes back at full and that is a RISE, which is why this is one-sided.
+		if hp < float(b["hp"]) - Rules.EPS:
+			b["hurt"] = _anim_sec(type_id, Look.Anim.HURT)
+			b["attack"] = 0.0
+			# ⚠ **The flinch is triggered by health falling and everything else by the swing landing**,
+			# one frame apart at worst. **Health is the honest signal for「I was hurt」** — it is true
+			# even for damage nothing swung for, and the day something like that exists this line is
+			# already right.
+		# ⚠⚠ **The fall starts where the body was standing, not where the sim says it is.** A beast's
+		# position is OFFMAP by the time this runs.
+		if bool(b["alive"]) and not alive:
+			b["dying"] = _anim_sec(type_id, Look.Anim.DEATH)
+			b["hurt"] = 0.0
+			b["attack"] = 0.0
+			b["still"] = 999.0
+		# ⚠ **A revived body is a NEW life on an old row.** Without this the next death would not be a
+		# change at all and the body would simply vanish.
+		if alive and not bool(b["alive"]):
+			b["dying"] = 0.0
+		b["hp"] = hp
+		b["cool"] = cool
+		b["alive"] = alive
+
+		if not ashore:
+			continue
 		var last: Vector2 = b["last"]
 		var moved := here.distance_to(last)
 		b["still"] = 0.0 if moved > Rules.EPS else float(b["still"]) + delta
@@ -2308,6 +2785,17 @@ func _fx_step(delta: float) -> void:
 			b["gait"] = fposmod(
 				float(b["gait"]) + TAU * moved / Look.GAIT_PERIOD_TILES, TAU)
 			b["head"] = (here - last).normalized()
+		elif aim != OFFMAP_AIM:
+			# ⚠⚠ **A BODY THAT HAS STOPPED FACES WHAT IT IS HITTING** (2026-08-31). Until this
+			# line a body faced the way it last WALKED, and the lunge went that way too — photographed
+			# once with a 검사 throwing himself **away from the wolf he was punching**, because he had
+			# walked up-left and then turned to fight something down-right.
+			# ⚠ **Only while STILL.** A walking body already heads where it is going, and a body
+			# that walks one way while facing another is the sliding animal `_facing_of`'s own header
+			# was written against.
+			var to_aim := aim - here
+			if to_aim.length_squared() > Rules.EPS:
+				b["head"] = to_aim.normalized()
 		b["last"] = here
 
 ## ⚠ **`_drain_events` stood here and it is deleted** (2026-08-29) — see the effects block below.
@@ -2320,7 +2808,81 @@ func _fx_step(delta: float) -> void:
 ## the fight. **The idle sway is not one of them and does not go with them** — 「붙어서 가만히 있으면
 ## 재미가 죽는다」 — so what is left is the sway alone.
 func _body_offset_of(key: String) -> Vector2:
-	return _idle_offset(key)
+	return _idle_offset(key) + _knock_offset(key) + _swing_offset(key)
+
+
+## **How far into its own blow a body is, from 0 at the first frame of the strip to 1 at the last.**
+## −1 for a body that is not swinging, so a caller can tell 「not swinging」 from 「about to start」.
+func _swing_at(key: String) -> float:
+	if not _body.has(key):
+		return -1.0
+	var b: Dictionary = _body[key]
+	var left := float(b["attack"])
+	if left <= 0.0:
+		return -1.0
+	var whole := _anim_sec(int(b["type"]), Look.Anim.ATTACK)
+	if whole <= 0.0:
+		return -1.0
+	return clampf(1.0 - left / whole, 0.0, 1.0)
+
+
+## **Where the body is along its own blow**, in px along the way it is facing.
+##
+## ⚠⚠ **BACK, THEN OUT, THEN STILL, THEN HOME** — and the asymmetry is the whole of why this reads as
+## a blow where 2026-08-31's symmetric lunge read as sliding. See `Look.SWING_WINDUP`.
+## ⚠ **Negative during the wind-up on purpose.** A body that only ever moves toward what it is hitting
+## has no moment where the blow is *coming*, which is the half the user could not see.
+func _swing_offset(key: String) -> Vector2:
+	var t := _swing_at(key)
+	if t < 0.0:
+		return Vector2.ZERO
+	var half := float((_body[key] as Dictionary)["half"])
+	var reach := 0.0
+	var snap_end := Look.SWING_WINDUP + Look.SWING_SNAP
+	var hold_end := snap_end + Look.SWING_HOLD
+	if t < Look.SWING_WINDUP:
+		# easing out, so the pull-back slows as it reaches its furthest point
+		reach = -Look.SWING_BACK * sin(PI * 0.5 * (t / Look.SWING_WINDUP))
+	elif t < snap_end:
+		reach = lerpf(-Look.SWING_BACK, Look.SWING_REACH,
+			(t - Look.SWING_WINDUP) / Look.SWING_SNAP)
+	elif t < hold_end:
+		reach = Look.SWING_REACH
+	else:
+		reach = Look.SWING_REACH * (1.0 - (t - hold_end) / maxf(0.001, 1.0 - hold_end))
+	return _facing_of(key) * (reach * half)
+
+
+## **The stretch a body takes along the blow while it is snapping and holding.** `(1, 1)` otherwise.
+##
+## ⚠ **Wide and short, never tall.** A body drawn taller as it strikes reads as jumping; the same
+## body drawn wider reads as reaching, which is what a blow is.
+func _swing_squash(key: String) -> Vector2:
+	var t := _swing_at(key)
+	if t < 0.0 or t < Look.SWING_WINDUP:
+		return Vector2.ONE
+	var hold_end := Look.SWING_WINDUP + Look.SWING_SNAP + Look.SWING_HOLD
+	if t >= hold_end:
+		return Vector2.ONE
+	return Vector2(1.0 + Look.SWING_STRETCH, 1.0 - Look.SWING_STRETCH)
+
+
+## ⚠⚠ **`_lunge_offset` STOOD HERE FOR ONE AFTERNOON AND THE USER THREW IT OUT** (2026-08-31:
+## 「지금 갑자기 왜다 갔다 하는게 있는데 이런거 말고 너무 별로고」 — *"there's this thing going back and forth
+## now, not this, it's really bad"*). It pushed the body 8.2 px along its heading for the first 0.18 s
+## of a swing and eased it back, sized as a ratio of the drawn half-width.
+##
+## ⚠⚠ **WHAT IT WAS BUILT FOR IS STILL TRUE AND IS STILL UNSOLVED**: at 20.9 px a wolf's jaws
+## opening change its outline by **0 px across four frames**, so the swing does not read from a
+## distance. **The lunge was the wrong answer to a real question**, and the user named the right one
+## in the same breath — 「아그작 하고 한번」, one hard snap, plus something drawn at the moment of
+## contact. **See the reference `2026-08-31-hit-feel-elements`** for the six elements that answer
+## it and what each one costs here.
+## ⚠ **`Look.BODY_LUNGE_SEC` and `BODY_LUNGE_RATIO` went with it.** A constant left behind is a
+## number the next round tunes and nothing reads.
+## ⚠ **What did NOT go with it is `_aim_of`** — a still body facing what it is hitting. That was a
+## defect this found rather than a part of it: a 검사 was photographed throwing himself **away** from
+## the wolf he was punching, because he faced the way he last walked.
 
 
 ## What a body does when it CANNOT move. See `Look.IDLE_AFTER_SEC` for why it exists at all.

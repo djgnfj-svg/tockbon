@@ -2490,3 +2490,110 @@ is 0.450 — the disc never grew when the animal did.
 **Nothing was chosen about the black wolf.** **The house is still standing and still un-decided.**
 **The facing picker still splits on the bigger axis**, so the four-diagonal rule is true of the folder
 and not yet of the game.
+
+
+---
+
+## 2026-08-31 (다섯째) — **the bodies learned to fight, and the generator refused to draw it**
+
+**The round started with 「run the game」 and ended eleven turns later with five animations on two
+bodies, six 타격감 elements, and the air layer back.** ⚠⚠ **No ticket held any of it** — the forty-five
+were deleted on 2026-08-30 and the user drove this one turn by turn.
+
+### What was asked, in order
+
+> ***"Now let us make the animations — walk plus idle."***
+> ***"물기 and 때리기 → just call it 공격, and make 공격 · 피격 · 죽음 with everything they need."***
+> ***"The bite doesn't show at all from a distance. The death does. Make the wolf's attack show."***
+> ***"Ugh, this is really bad ... it should CHOMP once. A red fang-shaped particle, something like
+> that. There's this thing going back and forth now — not this."***
+> ***"I need the words sorted out, I don't really know. Particle and impact."***
+> ***"넉백, 데미지 넘버, 히트 스파크, 히트 플래시, 히트스톱, 슬래시 트레일 — and make it good quality.
+> Make this into a reference called 타격감 요소."***
+> ***"Put them in."***
+> ***"Stretch the animation out — more of a sense of an interval between attacks?"***
+> ***"The animation is too ordinary for an attack. I want it to look more like it is attacking."***
+
+### ⚠⚠ The finding this round is worth remembering for: **the generator will not draw an attack pose**
+
+**Five attempts on the wolf, and every one came back as the animal standing with its mouth open.**
+
+| # | Route | Result |
+|---|---|---|
+| 1 | v3, `snapping its jaws forward` | mouth opens |
+| 2 | v3, `rearing up, front paws lifted high off the ground` | mouth opens |
+| 3 | v3, `pouncing, the whole animal leaving the ground` | mouth opens |
+| 4 | v3, eight frames, the three beats named separately | mouth opens — **7 px of outline on a 64 px animal** |
+| 5 | **img2img over the standing sprite itself**, strength 110 | **stands** |
+
+⚠⚠ **`tools/pixel/README.md` had already measured this exact refusal locally across 22 candidates.**
+**This round proves it is not the local pipeline's limit — it is the generators'.** ⇒ **A body that
+leaves the ground has to come from the ENGINE.**
+
+⚠ **What DID work on the art side was naming the three beats** — 「in the first frames … in the middle
+frames … in the last frames」. It produced a real wind-up for the 검사's arm where a single pose
+description had produced nothing. **The generator gives a sequence, not a pose.**
+
+### The lunge went in and came straight back out
+
+**A body pushed 8.2 px along its heading for the first 0.18 s of a swing, on one symmetric sine.**
+Measured at 39% of the wolf's own width, with the shadow deliberately staying put. **The user threw it
+out on sight**: 「there's this thing going back and forth now — not this」.
+
+⚠⚠ **The replacement is four beats and the asymmetry is the whole difference**: wind-up 30% of the
+strip (moving BACKWARD), snap 8%, hold 17%, recover 45%. **Measured in a real fight: 3.08 px back,
+12.01 px out, 72% of the animal's own width, and a 1.18x stretch on the strike.**
+⚠ **It has not been seen by the user.** That is question A on the map.
+
+### Two defects found by photographing things
+
+- **A 검사 was lunging AWAY from the wolf he was punching.** A body faced 「the way it last walked」, and
+  he had walked up-left before turning to fight something down-right. ⇒ **A still body faces its
+  target now.** The lunge is gone; the fix stayed.
+- **The canvas was deciding how big a body is drawn.** `beast_draw_scale` multiplied the FRAME, so
+  every strip that needed a wider canvas shrank the animal and grew its shadow. It was paid back by
+  hand twice in one afternoon — 0.65→0.78 and 0.85→0.956 — before the division went in. **Both numbers
+  went back down to 0.569 and 0.85 with nothing moving on screen.**
+
+### The word that changed
+
+**「물기」 and 「때리기」 became 「공격」**, on the user's own instruction. `Anim.BITE` became
+`Anim.ATTACK`, and **`HURT` and `DEATH` joined it the same day.** ⚠ `CONTEXT.md` now carries the five
+things a body does, and the reversal row.
+
+### The tempo, and the one sim edit of the round
+
+**The swing went from four frames to eight (0.48 s → 0.96 s), so the periods doubled to leave a gap**:
+늑대 1.0 → 2.0, 검사 1.2 → 2.4. **The damage doubled with them — 2.0 → 4.0 and 2.5 → 5.0 — so damage
+per second did not move at all** (2.0 and 2.083, unchanged to three places).
+
+⚠⚠ **Four `net_fight` assertions reddened on that edit and that is them working.** They were re-pinned
+**with the ratio pinned beside them**, so a future edit that moves one number without the other fails
+even after the literals are updated. ⚠ **곰 · 까마귀 · 사자 were NOT re-timed** — none has attack art
+and none is spawned, and re-timing a fight nobody has seen is tuning blind.
+
+### 데미지 넘버 went in against the game's own grain, on the user's word
+
+**The health bar was deleted 2026-08-28** (「without a health bar」) and **Bad North, this repo's stated
+bar, shows no numbers in combat at all** — 「no real numbers or stats obscure combat」. The user said
+「put them in」 and they are in. **The reason is written next to the constant** so the day it comes back
+out, nobody has to remember why it was there.
+
+### What was made in a tool rather than typed
+
+**The tooth, the slash arc and a pixel font for the digits.** ⚠ **`NotoSansKR-Regular.otf` was not
+usable** — a smooth outline face at 13 px over pixel-art bodies is the one thing that says a number was
+typed. The font is drawn at its own 16 px glyph size and never resampled.
+
+### The nets
+
+**1253 pass · 67 fail at the start, 1257 · 67 at the end.** The four extra passes are the ratio pins
+added to `net_fight`. ⚠ **The 67 were already there** — `fx_view`, `camera` and `tiers` were the same
+three incomplete nets before this session touched anything, measured by stashing the round's changes
+and re-running.
+
+### What is not done
+
+- **The engine swing has not been looked at by the user.**
+- **소리 is still zero**, and it is the one thing every source names first.
+- **곰 · 까마귀 · 사자 have no attack art**, so their rows are on the old tempo.

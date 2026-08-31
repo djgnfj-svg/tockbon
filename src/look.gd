@@ -1429,33 +1429,227 @@ const HUMAN_MAN_L := "res://assets/human/man/left.png"
 const HUMAN_MAN_D := "res://assets/human/man/down.png"
 const HUMAN_MAN_U := "res://assets/human/man/up.png"
 
-## ⚠⚠ **`IDLE` IS NOT A STRIP.** It is the standing picture every row already has and every row
-## without a strip falls back to, which is why it carries no frame count and why the frame table below
-## starts at `WALK`. Making it a one-frame strip would give eight species an animation made of the
-## picture they already wear, and the fallback — the thing that keeps a species with no art working —
-## would stop being visible in the code at all.
-enum Anim { IDLE, WALK, BITE }
+## ⚠⚠ **`IDLE` WAS NOT A STRIP AND IT IS ONE NOW** (2026-08-31). What stood here said the idle is
+## the standing picture every row already wears, that it carries no frame count, and that the frame
+## table below starts at `WALK`. **All three stopped being true when the breathing strips arrived** —
+## the swordsman and the wolf each declare eight idle frames.
+## ⚠ **The fallback those lines were protecting is untouched.** A row that declares 0 idle frames
+## still wears its standing picture through `beast_frame_path`, so the bear, the crow and the lion are
+## drawn by exactly the same call and changed by nothing.
+## ⚠⚠ **`BITE` WAS THE THIRD MEMBER AND IT IS `ATTACK` NOW** (2026-08-31, the user:
+## 「물기 때리기 -> 그냥 공격이라는 것으로」). **A 검사 does not bite.** One word for what every
+## species does when it swings is what lets `_body_tex` stay free of species names.
+## ⚠ **`HURT` and `DEATH` are new with it** — the three the user asked for are 공격 · 피격 · 죽음.
+enum Anim { IDLE, WALK, ATTACK, HURT, DEATH }
 
-## The `<anim>` piece of `<beast>_<anim>_<frame>_<facing>.png`, indexed by `Anim`. `IDLE`'s is empty
-## because an idle picture has no `<anim>` piece — it is `<beast>_<facing>.png` and nothing more.
-const ANIM_NAME := ["", "walk", "bite"]
+## The `<anim>` piece of `<beast>_<anim>_<frame>_<facing>.png`, indexed by `Anim`.
+## ⚠⚠ **`IDLE`'S PIECE WAS THE EMPTY STRING** — an idle picture had no `<anim>` piece because there
+## was only ever one of it. It is `"idle"` now and the files are `<stem>_idle_0.png` upward.
+const ANIM_NAME := ["idle", "walk", "attack", "hurt", "death"]
 
-## Frames per strip, in `Anim` order starting at `WALK`. **A 0 is a row with no strip of that kind.**
-const NO_ANIM_FRAMES := [0, 0]
-## ⚠⚠ **`WOLF_ANIM_FRAMES := [4, 4]` STOOD HERE AND IT IS DELETED** (2026-08-30) with the side-view
-## wolf it counted — see `BEAST_WOLF_H_R` above. **NO ROW DECLARES A STRIP ANY MORE**, so everything
-## below this line runs and finds nothing, which is exactly what it was built to do: a species with no
-## art wears its standing picture through the same call. **The rule it carried, for the day H is given
-## frames**: WALK loops 0-1-2-3; BITE plays 0-1-2-3 once and hands the body back to WALK, because
-## frame 0 of the bite is the only closed mouth and a looped bite leaves the jaw open all fight.
+## Frames per strip, in `Anim` order **starting at `IDLE`**. **A 0 is a row with no strip of that kind.**
+## ⚠⚠ **THIS TABLE STARTED AT `WALK` AND HAD TWO SLOTS** (2026-08-31). The third slot is what lets
+## the idle be a strip, and the `anim - 1` that used to read it is gone with the two-slot shape.
+const NO_ANIM_FRAMES := [0, 0, 0, 0, 0]
+
+## **The two rows that have frames, and they are the only two bodies standing on the island.**
+## ⚠⚠ **`WOLF_ANIM_FRAMES := [4, 4]` STOOD HERE ONCE AND WAS DELETED** (2026-08-30) with the
+## side-view wolf it counted. **This is not that array coming back** — it counts g5, the four-facing
+## animal, on its own canvas, and its bite slot is 0 because the 46 bite frames on disk are the dead
+## animal's. **The rule the deleted note carried still holds**: WALK loops 0-1-2-3; the three
+## one-shots play through once and hand the body back, because frame 0 of the attack is the only
+## closed mouth and a looped swing leaves the jaw open all fight.
+## ⚠⚠ **EIGHT FOR THE BREATH AND FOUR FOR THE WALK IS A LENGTH, NOT A TASTE.** `BEAST_FRAME_SEC` is
+## one rate for every strip, so 0.12 s puts the walk cycle at 0.48 s and the breath at 0.96 s. **A
+## four-frame breath run at the walk's rate is a body panting**, which is the opposite of standing still.
+## **idle · walk · attack · hurt · death**, and every one of them is drawn for both bodies.
+## ⚠⚠ **DEATH IS SIX AND THE OTHER THREE ARE FOUR.** A death plays once and is the last thing a body
+## ever does, so it is the one strip a player has time to read: six frames is 0.72 s of falling. **The
+## hurt is four and that is already long** — 0.48 s against a 1.0 s attack period is a body flinching
+## for half of every exchange, and anything longer buries the walk entirely.
+## ⚠⚠ **THE ATTACK WENT 4 → 8 FRAMES** (2026-08-31, 「애니메이션을 좀더 늘려줘」). **0.48 s to
+## 0.96 s**, and the eight are a real wind-up-strike-recover rather than four frames of the same
+## lunge — the first frames pull back, the middle ones reach, the last settle.
+## ⚠⚠ **`Rules.UNITS` MOVED IN THE SAME EDIT AND THE TWO CANNOT BE SEPARATED.** A 0.96 s swing on a
+## 1.0 s period is a body that never stops swinging; the periods doubled so the gap did too. **Change
+## this number back without changing those and the 텀 disappears.**
+const MAN_ANIM_FRAMES := [8, 4, 8, 4, 6]
+const WOLF_ANIM_FRAMES := [8, 4, 8, 4, 6]
+
+## **How long a body must have held its position before it stops walking and starts breathing.**
+## ⚠ **It is not 0.** `still` is reset to 0 the frame a body moves, so a zero threshold flips the
+## picture on a single held frame and the legs stutter between the two strips at low speed. 0.15 s is
+## nine frames at 60 fps — longer than any pause a walking body takes, shorter than a stop reads as.
+## ⚠⚠ **THIS DOES NOT BRING BACK 「움직이지 않는 몸은 애니메이션하지 않는다」**, which froze a body in melee
+## and is written up in `field_view._fx_step`. **A still body swaps strips; it never stops animating.**
+# ── 타격감 — the six the user named on 2026-08-31 ─────────────────────────────
+## **넉백 · 데미지 넘버 · 히트 스파크 · 히트 플래시 · 히트스톱 · 슬래시 트레일**, and every number below is
+## judged against **one thing**: a 늑대 is drawn **20.9 px** across and a 검사 **26.8 px** tall.
+## **The reference `2026-08-31-hit-feel-elements` holds what each one is and where the numbers came
+## from.** ⚠ **Do not tune these by taste alone** — the page names a shipped value for each.
+
+## **How long both bodies hold their picture at the instant of a blow.** 히트스톱.
+## ⚠⚠ **PER BODY AND NOT THE WHOLE ISLAND, AND THAT IS A DEPARTURE FROM THE TECHNIQUE.** A fighting
+## game freezes the world because two bodies are the world; **here eight beasts and four 검사 trade
+## blows at once**, and a global freeze would stutter without pause. **The two bodies in the exchange
+## hold; everything else keeps running.**
+## ⚠ **0.07 s is four frames at 60 fps**, against the 0.2 s a fighting game uses. **Shorter on
+## purpose**: at this attack period a body is in an exchange most of the time, and a fighting game's
+## value would leave the island visibly juddering.
+## ⚠ **It freezes the body's own clocks, not the simulation.** The sim runs on — which is honest
+## only because a body in contact is standing still; **the day a body is struck while moving, this
+## becomes a body that teleports** when the hold ends.
+const HITSTOP_SEC := 0.07
+
+## **How long the struck body is washed toward white, and how far.** 히트 플래시.
+## ⚠ **0.10 s is the value every engine write-up repeats**, with 0.1-0.3 usable; past that the sprite
+## reads as a differently coloured animal rather than as one that was hit.
+## ⚠⚠ **HALF OF THIS WAS ALREADY BUILT AND NOBODY HAD WIRED A CLOCK TO IT.** `beast_tint`'s own
+## header has said since 2026-08-30 that a body's colour is mixed toward white **so that a hit can pull
+## it further** — 「a flat white modulate could not have done that, multiply can only darken」.
+const HIT_FLASH_SEC := 0.10
+const HIT_FLASH_MIX := 0.85
+
+## **The struck body is thrown away from the striker and eases back.** 넉백.
+## ⚠⚠ **THIS IS THE VICTIM AND NOT THE ATTACKER, AND THE DIFFERENCE IS WHY THE LUNGE WAS THROWN
+## OUT.** An attacker sliding forward reads as sliding — the user, at the screen: 「이런거 말고」.
+## **A body knocked backward reads as a body that was hit**, because nothing it is doing explains it.
+## ⚠ **0.30 of the drawn half-width, against the lunge's 0.55** — a knock that travels as far as a
+## step is a body walking backwards.
+## ⚠⚠ **THE CURVE IS NOT A SINE AND THAT IS THE WHOLE OF HOW IT READS.** It peaks at 18% of the
+## window and eases back over the remaining 82%: **out in one frame, back over eight.** A symmetric
+## curve spends as long going out as coming back, which is exactly what 「왔다 갔다」 was.
+const KNOCK_SEC := 0.14
+const KNOCK_RATIO := 0.30
+const KNOCK_SNAP := 0.4
+
+## **The four beats of a swing, as fractions of the strip, plus how far the body travels on each.**
+##
+## ⚠⚠ **THE GENERATOR WILL NOT DRAW AN ATTACK POSE FOR EITHER BODY, AND THAT IS FIVE MEASURED
+## ATTEMPTS** (2026-08-31): jaws · rearing · pouncing · an eight-frame wind-up sequence · and img2img
+## over the standing sprite itself. **Every one came back as the body standing.** Across the eight
+## frames that shipped, the wolf's outline moves **7 px on a 64 px animal** — the mouth opens and
+## nothing else. The user, looking at it: 「애니메이션이 너무 공격하기 평범해」.
+## ⇒ **The pose is the ENGINE's job now.** The eight drawn frames stay underneath and carry the mouth;
+## these four beats carry the body.
+##
+## ⚠⚠ **THIS IS NOT THE LUNGE THAT WAS THROWN OUT ON THE SAME DAY, AND THE DIFFERENCE IS THE WHOLE
+## POINT.** That one was **one symmetric sine, 0.18 s, no wind-up and no hold** — out and back at the
+## same speed, which is what 「갑자기 왔다 갔다 하는게 있는데 이런거 말고」 was about. **A motion that
+## takes as long to leave as to arrive is a drift, not a blow.** These four beats are the animation
+## principle every source names — **anticipation, action, recovery** — and the numbers below are the
+## asymmetry that separates them:
+##
+##  · **wind-up 30% of the strip** — the body eases BACKWARD, away from what it is about to hit
+##  · **snap 8%** — forward, five frames, the whole distance
+##  · **hold 17%** — at full reach and not moving. ⚠ **`HITSTOP_SEC` lands inside this window**, so the
+##    picture and the position freeze together on the frame of contact
+##  · **recover, the remaining 45%** — drifting home
+##
+## ⚠ **The reach is a ratio of the drawn half-width**, like every other body offset here, so it
+## survives the art changing.
+const SWING_WINDUP := 0.30
+const SWING_SNAP := 0.08
+const SWING_HOLD := 0.17
+const SWING_BACK := 0.18
+const SWING_REACH := 0.70
+
+## **How much the body stretches along the blow as it snaps**, and thins across it.
+## ⚠⚠ **SQUASH AND STRETCH IS THE ONE ANIMATION PRINCIPLE THIS GAME CAN STILL AFFORD.** The others
+## need drawn frames; this one is two numbers on a scale the drawer already computes for the gait.
+## ⚠ **0.18 is 4 px on a 21 px wolf** — read at the size a body is actually drawn, which is the bar
+## every number in this block is held to.
+## ⚠ **It rides on top of `_gait_squash` rather than replacing it**, because a body can be walking
+## into a blow and the two are different motions.
+const SWING_STRETCH := 0.18
+
+## **The shards thrown out of the contact point.** 히트 스파크, and **this is the 파티클 of the six.**
+## ⚠⚠ **THEY LEAVE ALONG THE TANGENT OF THE TWO BODIES, AND THAT WAS MEASURED BEFORE** — effect 2
+## of the twelve deleted in 2026-08-29 carried the same rule and the same reason: **a fan opened along
+## the facing direction lands every shard back inside the striker's own outline**, because the contact
+## point sits deep inside the attacker.
+## ⚠ **Five and not ten.** At 20.9 px the animal is smaller than ten shards would be.
+## ⚠ **The tooth is drawn 9 px wide** — under half the wolf, so a spray of five still reads as
+## debris and not as a second animal.
+const SPARK_COUNT := 5
+const SPARK_SEC := 0.26
+const SPARK_SPEED_PX := 46.0
+const SPARK_FAN_DEG := 62.0
+## ⚠ **6.0 was photographed and it read as noise** (2026-08-31). At 9 px a shard is 43% of the wolf
+## it came out of — still debris, but debris the eye catches at the size a body is actually drawn.
+const SPARK_PX := 9.0
+
+## **The arc drawn across the front of a body as it swings.** 슬래시 트레일.
+## ⚠⚠ **THE 검사 HOLDS NO WEAPON, SO THIS IS THE ARC OF A PUNCH AND NOT OF A BLADE** (2026-08-31).
+## The body the user chose from sixteen candidates carries **no sword, no clothes and no face** — an
+## arc traced by a blade would be an arc traced by nothing. **It is placed on the line between the two
+## bodies instead of on a hand**, which is true for a fist, a jaw and a sword alike.
+## ⚠ **0.16 s is shorter than the swing** (0.48 s): the arc is the first sixth of the strip and gone,
+## because a trail that outlives the motion is a shape hanging in the air.
+const SLASH_SEC := 0.16
+const SLASH_PX := 26.0
+const SLASH_REACH := 0.55
+
+## **The number that floats off a struck body.** 데미지 넘버.
+## ⚠⚠ **THIS ONE PULLS AGAINST THE GAME AND IT WENT IN ANYWAY, ON THE USER'S WORD** (2026-08-31,
+## 「넣어줘」). **The health bar was deleted 2026-08-28** (「체력바 없이」) and **Bad North, this
+## repo's stated bar, shows no numbers in combat at all.** Written down so the day it is pulled back
+## out, the reason it was in is on the page rather than in a memory.
+## ⚠ **16 px is the font's own glyph size**, so a numeral is drawn one texture pixel to one world
+## pixel and never resampled. **13 was tried on paper and dropped**: a pixel font at a size it was not
+## drawn at is the one thing that makes a made font look typed.
+## ⚠ **Rounded to a whole number.** The table's damage is 2.5 and 3.0; 「2.5」 over a 27 px body is
+## three glyphs where one will do.
+## ⚠ **It rises and fades, and it does NOT scale up.** The convention every write-up gives is a pop
+## on arrival for CRITS — this game has none, so a pop here would say something that is not true.
+const DAMAGE_SEC := 0.62
+const DAMAGE_RISE_PX := 22.0
+const DAMAGE_FONT_PX := 16.0
+
+## **How high above the ground a mark floats**, so a shard is not buried in the grass it came from.
+const MARK_LIFT_PX := 14.0
+
+## **The two drawn things the six need**, and both were made in a tool rather than typed — `CLAUDE.md`.
+const FX_TOOTH := "res://assets/fx/tooth.png"
+const FX_SLASH := "res://assets/fx/slash.png"
+## **The pixel font the damage number is set in.** ⚠ **`NotoSansKR-Regular.otf` is NOT this** — it is a
+## smooth outline face for prose, and a smooth 13 px numeral over pixel-art bodies is the one thing
+## that would say the number was typed rather than drawn.
+const FX_DIGIT_FONT := "res://assets/font/tockbon-digits.ttf"
+
+## **The colour a damage number is set in**, and the only place it is written — `net_draw_leaf`
+## reddens on a `Color(` anywhere else in the tree.
+## **How thick the number's outline is.** ⚠ 2 px, because the font is drawn at 16 and a 1 px edge
+## disappears against the island's own yellow at this zoom.
+const DAMAGE_OUTLINE_PX := 2
+
+const COL_DAMAGE := Color(0.98, 0.96, 0.90)
+const COL_DAMAGE_EDGE := Color(0.11, 0.09, 0.08)
+
+const BODY_STILL_SEC := 0.15
+
+## **How wide the disc under a body is, as a multiple of the ANIMAL'S OWN INK.** 1.0 is a disc exactly
+## as wide as the animal standing on it.
+##
+## ⚠⚠ **IT WAS THE DRAWN CANVAS'S HALF-WIDTH AND THAT WAS A TRAP** (2026-08-31). `_put_body` sized
+## the disc off `wide`, which is the whole picture including its empty margin — so **every time a strip
+## forced the canvas wider, the shadow grew and the animal did not.** The wolf's canvas went 64 x 64 to
+## 92 x 66 once the five strips were in — a corpse lies flat and a snapping jaw reaches — so a disc
+## sized off the frame would have ended up 44% wider than the animal standing on it.
+## ⚠ **The man's disc is 12% smaller than it was**, because his standing picture has 35 px of ink on a
+## 40 px canvas and the old number was measuring that margin. **The wolf's does not move at all** — its
+## ink filled its canvas edge to edge.
+const BODY_SHADOW_OF_INK := 1.0
 
 ## How long one frame of any strip is held. **One rate for the whole animal**: 0.12 s puts the walk
 ## cycle at 0.48 s (8 fps, four frames), which at a 49 px body is a stride you can count — the same
-## strip at 60 fps reads as a twitch, and 「연출은 과할 정도로」 cuts that way too. The bite is the same
-## four frames, so it also runs 0.48 s against a ~1.0 s attack period: the jaw is moving for about
-## half the time a body spends in contact, which is the half 「붙어서 가만히 있으면 재미가 죽는다」 is
-## about. **The lunge (`LUNGE_SEC`) is deliberately shorter** — the body snaps out and back inside the
-## first frames while the mouth carries the rest.
+## strip at 60 fps reads as a twitch, and 「연출은 과할 정도로」 cuts that way too. The attack is the same
+## four frames, so it also runs 0.48 s against a ~1.0 s attack period: the body is swinging for about
+## half the time it spends in contact, which is the half 「붙어서 가만히 있으면 재미가 죽는다」 is
+## about. **The lunge (`BODY_LUNGE_SEC`) is deliberately shorter** — the body snaps out and back inside the
+## first frames while the swing carries the rest.
+## ⚠⚠ **ONE RATE MEANS THE DEATH IS 0.72 s AND THE HURT 0.48 s**, both from their own frame counts.
+## A per-strip rate is the second table that has to be kept in step with the first.
 const BEAST_FRAME_SEC := 0.12
 
 ## ⚠⚠ **ONE ROW PER `Rules.UNITS` ROW, AND IT IS THE WHOLE OF HOW A SPECIES IS DRAWN:** the pictures
@@ -1489,13 +1683,14 @@ const BEAST_FRAME_SEC := 0.12
 ## wolf stood short beside a 33 x 40 man, and past about 0.96 the man was a whole 조각 tall again —
 ## which is the picture 2026-08-28's 「집이랑 캐릭터 확 줄여줘」 rejected. **Raising the shared number
 ## could only reach the wolf by breaking the man.**
-## ⚠⚠ **IT MULTIPLIES THE FRAME AND NOT THE ANIMAL, WHICH IS WHY THE WOLF'S NUMBER IS SO LARGE.**
-## Measured off the four files: H's ink fills **72% of its 92 x 92 frame side-on and 24% head-on**,
-## against `wolf_r.png`'s 82% — so at 1.0 the H wolf ashore would be SMALLER ink than the side-view
-## wolf it replaces (17.7 px against 20.3), even though its frame is nearly twice as tall.
-## ⚠ **1.70 is anchored on the swordsman, the one body the user says is about right**: it puts the
-## wolf's side-on ink at 30.1 x 19.6 px against the man's 27.4 x 33.3 — an animal his size, lying
-## lower. **The frame it sits in is 41.9 px, just over one 조각, and almost all of that is empty.**
+## ⚠⚠ **IT MULTIPLIED THE FRAME UNTIL 2026-08-31 AND IT MULTIPLIES THE ANIMAL NOW.** While it was
+## the frame, **a picture with a wide empty margin drew a small animal** — g5's ink fills 72% of its
+## canvas side-on and 24% head-on, so the same number meant two different animals depending on which
+## way it faced, and every canvas change had to be paid back here by hand. **`_put_body` divides by
+## the row's own measured ink fraction**, so this column is now the animal's drawn width and nothing
+## about the frame around it reaches the screen.
+## ⚠ **That is why both numbers went DOWN when the strips went in**: 0.78 to 0.569 and 0.956 to 0.85,
+## with **neither body changing size on screen.** The canvas is divided out instead of multiplied in.
 ## ⚠ **`rules.gd` refuses this column and says so in its own header** — body size changes nothing about
 ## what happens, so it lives here. It sits beside the picture rather than in a fourth parallel array
 ## for the same reason `BODY_RADIUS_RATIO` is not in `UNITS`: **replace the picture and this number
@@ -1518,7 +1713,15 @@ const BEAST_FRAME_SEC := 0.12
 ## because the CANVAS grew. **This column is where that is paid back**, and it is the swordsman's
 ## alone: `BODY_SPRITE_SCALE` sizes every body at once and the wolf was judged at its own value.
 const BEAST_TEX := [
-	[[HUMAN_MAN_R, HUMAN_MAN_L, HUMAN_MAN_D, HUMAN_MAN_U], NO_ANIM_FRAMES, 0.65],
+	# ⚠⚠ **0.569 IS THE INK AND NOT THE CANVAS, AND THE MAN ON SCREEN HAS NOT MOVED** (2026-08-31).
+	# This column was a multiple of the drawn PICTURE, so every strip that forced a wider canvas had to
+	# be paid back here by hand — it went 0.65 to 0.78 for the breath alone, and the attack, the hurt and
+	# the death would each have moved it again. **`_put_body` divides by the row's own measured ink
+	# fraction now**, so the canvas may grow forever and this number never changes.
+	# ⚠ **0.65 x 35/40 = 0.569 is the arithmetic**, and 0.65 on a 40 px canvas with 35 px of ink is
+	# exactly what the user judged at 27 px: 「27이 맞는 듯」. **23 was also called fine** 「23도
+	# 괜찮네」 and is 0.485 under this column's new meaning.
+	[[HUMAN_MAN_R, HUMAN_MAN_L, HUMAN_MAN_D, HUMAN_MAN_U], MAN_ANIM_FRAMES, 0.569],
 	# ⚠⚠ **0.85, CUT FROM 2.60 — THE WOLF IS SMALLER THAN THE MAN NOW** (2026-08-31 night, the user
 	# looking at the two of them side by side for the first time: 「the wolf got too big. Shrink it —
 	# it has to be smaller than the human」). **The base frame is 24.6 px**, so this number IS the frame
@@ -1538,7 +1741,19 @@ const BEAST_TEX := [
 	# **1.00** (0.92 of his height) · **0.70** (0.64) · **0.55** (0.51, the first that is also narrower
 	# than he is). **0.85 is what this file ships**; the rest are written down because the user asked to
 	# see them and may want one instead.
-	[[BEAST_WOLF_H_R, BEAST_WOLF_H_L, BEAST_WOLF_H_D, BEAST_WOLF_H_U], NO_ANIM_FRAMES, 0.85],
+	# ⚠⚠ **0.85 IS BACK, AND IT IS THE NUMBER THE USER CHOSE** (2026-08-31, 「the wolf got too big.
+	# Shrink it — it has to be smaller than the human」). It was raised to 0.956 for one afternoon to pay
+	# back a canvas that went 64 to 72 for the walk, and it is 92 x 66 now that the fight strips are in; **that debt is gone** — this column is a multiple of
+	# the ANIMAL'S INK now and the canvas is divided out in `_put_body`. **g5's ink filled its 64 px
+	# canvas edge to edge when the user judged it, so 0.85 x 64/64 is 0.85.**
+	# ⚠ **The base frame is 24.6 px**, so this number is the animal's ink in 조각: 0.85 gives 20.9 px
+	# against the man's 26.8 — 0.78 of his height and 1.42 of his width, an animal that comes up to his
+	# waist and is longer than he is wide.
+	# ⚠ **Four other sizes were stood on the island in the same frame** and are one edit away:
+	# **1.00** (0.92 of his height) · **0.70** (0.64) · **0.55** (0.51, the first that is also narrower
+	# than he is). **0.85 is what this file ships**; the rest are written down because the user asked to
+	# see them and may want one instead.
+	[[BEAST_WOLF_H_R, BEAST_WOLF_H_L, BEAST_WOLF_H_D, BEAST_WOLF_H_U], WOLF_ANIM_FRAMES, 0.85],
 	[[BEAST_BEAR_R, BEAST_BEAR_L], NO_ANIM_FRAMES, 1.0],
 	[[BEAST_CROW_R, BEAST_CROW_L], NO_ANIM_FRAMES, 1.0],
 	[[], NO_ANIM_FRAMES, 1.0],
@@ -1576,24 +1791,29 @@ static func beast_tex_path(type_id: int, facing: int) -> String:
 	return str((BEAST_TEX[type_id][_TEX_COL_PICS] as Array)[facing])
 
 
-## **How big row `type_id` is drawn, as a multiple of what `BEAST_SPRITE_W_RATIO` gives everything.**
-## 1.0 for an unknown row, so a bad id draws at the shared size rather than vanishing.
+## **How wide row `type_id`'s ANIMAL is drawn, as a multiple of what `BEAST_SPRITE_W_RATIO` gives
+## everything.** 1.0 for an unknown row, so a bad id draws at the shared size rather than vanishing.
+## ⚠⚠ **THE ANIMAL AND NOT THE PICTURE** (2026-08-31) — the caller divides this by the row's measured
+## ink fraction to get the picture's width, so **a wider canvas no longer shrinks the body.**
 static func beast_draw_scale(type_id: int) -> float:
 	if type_id < 0 or type_id >= BEAST_TEX.size():
 		return 1.0
 	return float(BEAST_TEX[type_id][_TEX_COL_DRAW])
 
 
-## How many frames row `type_id`'s `anim` strip holds. **0 for `IDLE`, for an unknown row and for any
-## row that declares no strip** — one answer, so no caller has to know which of the three it hit.
+## How many frames row `type_id`'s `anim` strip holds. **0 for an unknown row and for any row that
+## declares no strip of that kind** — one answer, so no caller has to know which of the two it hit.
+## ⚠⚠ **`IDLE` WAS REFUSED ON THE SECOND LINE OF THIS FUNCTION** (`anim <= Anim.IDLE`, until
+## 2026-08-31). It is a strip like the other two now, and a row with no breath art answers 0 through
+## the same lookup every other row uses rather than through a special case.
 static func beast_anim_frames(type_id: int, anim: int) -> int:
 	if type_id < 0 or type_id >= BEAST_TEX.size():
 		return 0
-	if anim <= Anim.IDLE or anim >= ANIM_NAME.size():
+	if anim < 0 or anim >= ANIM_NAME.size():
 		return 0
 	var row: Array = BEAST_TEX[type_id]
 	var strips: Array = row[_TEX_COL_FRAMES]
-	return int(strips[anim - 1])
+	return int(strips[anim])
 
 
 ## One frame's path, **derived from the standing picture rather than named a second time.** The
@@ -1601,8 +1821,10 @@ static func beast_anim_frames(type_id: int, anim: int) -> int:
 ## so the stem is already on the row; writing the strip out as sixteen more constants would put the
 ## word `wolf` in seventeen places and rot in sixteen of them the day a species is renamed.
 ##
-## Falls back on the standing picture for `IDLE`, for a row with no strip and for a row with no
+## Falls back on the standing picture for a row with no strip of that kind and for a row with no
 ## picture at all, so **a caller never has to ask whether this species is animated.**
+## ⚠ **`IDLE` used to be in that list of fallbacks and is not any more** — a row that declares idle
+## frames gets `<stem>_idle_<n>.png` from here like any other strip.
 ## ⚠ **The facing suffix is read off the standing picture rather than rebuilt from the index.** A
 ## picture that carries none — the four-facing wolf's files are compass words — keeps its whole name as
 ## the stem, so its frames would be `<name>_walk_0.png`. **Nothing declares a strip today**, so no such
@@ -1903,7 +2125,16 @@ const TITLE_TILE_B_FREQ := 0.19
 ## cannot advance something to be doing. The queue is a sim question and it is still open.
 ## ⚠ **A ratio of the drawn half-width** (`Look.sprite_half_px`), so it survives the art changing —
 ## 0.25 puts a wolf's sway at 6.1 px against a 49 px picture. The period is deliberately far from
-## `LUNGE_SEC` (0.18 s) so a sway never reads as a blow.
+## `BODY_LUNGE_SEC` (0.18 s) so a sway never reads as a blow.
+## ⚠⚠ **`BODY_LUNGE_SEC := 0.18` AND `BODY_LUNGE_RATIO := 0.55` STOOD HERE AND BOTH ARE DELETED**
+## (2026-08-31, the user at the screen: 「지금 갑자기 왜다 갔다 하는게 있는데 이런거 말고」). They
+## pushed a swinging body forward along its heading and eased it back — **8.2 px, 39% of the wolf's
+## own drawn width, measured in a real fight** — and it read as the animal sliding rather than
+## striking.
+## ⚠ **The question it was built for is open**: a wolf's jaws change its outline by 0 px at the
+## size it is drawn. The reference `2026-08-31-hit-feel-elements` holds the six answers the user
+## named and what each costs. **Do not re-propose the lunge** — it has been seen and rejected.
+
 const IDLE_AFTER_SEC := 0.5           # long enough that a pause between tiles does not wobble
 const IDLE_SWAY_RATIO := 0.25         # of the drawn half-width: wolf 6.1 px, bear 8.8, squirrel 3.9
 const IDLE_PERIOD_SEC := 1.1
@@ -2026,6 +2257,35 @@ static func sprite_half_px(type_id: int) -> float:
 ## the table was indexed 0..11, so the off-by-one lived in ONE accessor. Spread across callers, one of
 ## them eventually reads its neighbour's gain — and the effect that appears to switch off is the wrong
 ## one, with the round still green and only the screen different.
+
+
+## **A colour with its alpha multiplied by `amount`**, which is the whole of how a mark fades.
+## ⚠ **It lives here because `net_draw_leaf` reddens on a `Color(` written anywhere else in the
+## tree**, and a fade is a colour like any other.
+## **A mark's modulate at `amount` of its life left** — plain white, faded.
+## ⚠⚠ **THE VIEW CANNOT WRITE `Color.WHITE` ITSELF**: `net_draw_leaf` reddens on a `Color.` outside
+## this file, and it is right to — a colour named in a drawer is a colour nobody can find again.
+static func mark_fade(amount: float) -> Color:
+	return fade_of(Color.WHITE, amount)
+
+
+## **A damage number's modulate at `amount` of its life left.**
+static func damage_fade(amount: float) -> Color:
+	return fade_of(COL_DAMAGE, amount)
+
+
+static func fade_of(base: Color, amount: float) -> Color:
+	return Color(base.r, base.g, base.b, base.a * clampf(amount, 0.0, 1.0))
+
+
+## **A body's own colour pulled `amount` of the way to white**, which is what a hit flash is.
+## ⚠ **It is applied BEFORE `beast_tint`, not after.** The tint is what says which side a body is on;
+## washing the tinted colour would make a flashing enemy and a flashing 검사 the same white, and the
+## one frame a body is brightest is the worst frame to lose its side in.
+static func hit_flash_colour(colour: Color, amount: float) -> Color:
+	if amount <= 0.0:
+		return colour
+	return colour.lerp(Color.WHITE, clampf(amount, 0.0, 1.0) * HIT_FLASH_MIX)
 
 
 ## The modulate a body's picture is drawn with: its own side colour mixed `BEAST_TEAM_TINT` of the way

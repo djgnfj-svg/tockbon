@@ -115,12 +115,33 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 
 	# The two rows the whole fight is arithmetic on. ⚠ **Both species, both columns each** — pinning
 	# only the wolf lets the swordsman be retuned with every row below still green.
+	#
+	# ⚠⚠ **ALL FOUR OF THESE MOVED ON 2026-08-31 AND THESE FOUR REDDENED, WHICH IS THEM WORKING.**
+	# The swing became eight frames (0.96 s) so the periods doubled to leave a gap — 「애니메이션을 좀더
+	# 늘려줘 좀더 공격 텀이 있는 느낌?」. **The damage doubled with them on purpose.**
+	# ⚠⚠ **WHAT THE PAIR IS FOR IS PINNED BELOW THEM, AND IT IS THE ROW THAT MATTERS**: damage per
+	# second did NOT move. A future edit that changes one of the four without the other passes the
+	# four `eq`s it edits and fails the two ratios — **which is the only reason a table of literals
+	# is worth having.**
 	t.eq(Rules.hp_of(Rules.WOLF), 14.0, "늑대 체력 14")
-	t.eq(Rules.damage_of(Rules.WOLF), 2.0, "늑대 한 대 2.0")
-	t.eq(Rules.period_of(Rules.WOLF), 1.0, "늑대는 1.0초마다 때린다")
+	t.eq(Rules.damage_of(Rules.WOLF), 4.0, "늑대 한 대 4.0")
+	t.eq(Rules.period_of(Rules.WOLF), 2.0, "늑대는 2.0초마다 때린다")
 	t.eq(Rules.hp_of(Rules.SWORDSMAN), 18.0, "검사 체력 18")
-	t.eq(Rules.damage_of(Rules.SWORDSMAN), 2.5, "검사 한 대 2.5")
-	t.eq(Rules.period_of(Rules.SWORDSMAN), 1.2, "검사는 1.2초마다 때린다")
+	t.eq(Rules.damage_of(Rules.SWORDSMAN), 5.0, "검사 한 대 5.0")
+	t.eq(Rules.period_of(Rules.SWORDSMAN), 2.4, "검사는 2.4초마다 때린다")
+	t.ok(absf(Rules.damage_of(Rules.WOLF) / Rules.period_of(Rules.WOLF) - 2.0) <= 0.001,
+		"늑대의 초당 피해가 2.0 그대로다 — 텀을 늘린 편집이 승패를 안 바꿨다")
+	t.ok(absf(Rules.damage_of(Rules.SWORDSMAN) / Rules.period_of(Rules.SWORDSMAN) - 2.0833) <= 0.001,
+		"검사의 초당 피해가 2.083 그대로다 — 같은 이유로")
+	# ⚠ **The swing must fit inside the period with room left over.** A body whose animation is longer
+	# than its own attack period never stops swinging, and that is the state this edit was made to
+	# leave: 8 frames at `Look.BEAST_FRAME_SEC` is 0.96 s against 2.0 s and 2.4 s.
+	var swing := float(Look.MAN_ANIM_FRAMES[Look.Anim.ATTACK]) * Look.BEAST_FRAME_SEC
+	t.ok(swing < Rules.period_of(Rules.SWORDSMAN) * 0.6,
+		"검사의 휘두름이 제 주기의 절반 남짓이다 — 텀이 남는다 (%.2f초)" % swing)
+	var bite := float(Look.WOLF_ANIM_FRAMES[Look.Anim.ATTACK]) * Look.BEAST_FRAME_SEC
+	t.ok(bite < Rules.period_of(Rules.WOLF) * 0.6,
+		"늑대도 그렇다 (%.2f초)" % bite)
 	t.eq(Rules.range_of(Rules.SWORDSMAN), 0.0, "검이라 사거리 칸은 0 이다 — 검사의 사거리는 보너스가 전부다")
 
 	# ⚠ **The 성채 has to outlast one boat and fall to two**, which is what `KEEP_MAX_HP`'s own comment

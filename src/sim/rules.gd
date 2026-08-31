@@ -244,11 +244,28 @@ const UNITS := [
 	# reach is a row that loses for a reason nobody chose.
 	# ⚠ **`NO_DETECT` because the player's bodies are commanded, not triggered** — the detect column is
 	# what makes a defender stand still until something walks near it.
-	["SWORDSMAN", 18.0, 2.5, 1.2, 0.0, 0.0, 3.2, NO_DETECT, Side.PLAYER, "검사"],
+	# ⚠⚠ **THE PERIOD WENT 1.2 → 2.4 AND THE DAMAGE 2.5 → 5.0 IN THE SAME EDIT** (2026-08-31, the user:
+	# 「애니메이션을 좀더 늘려줘 좀더 공격 텀이 있는 느낌?」 — *"stretch the animation out, more of a
+	# sense of an interval between attacks"*). **The swing became eight frames, 0.96 s**, and at a 1.2 s
+	# period that leaves 0.24 s of gap — a body that is swinging almost continuously, which is the
+	# opposite of what was asked. **A longer motion needs a longer wait or it is not a motion, it is a
+	# state.**
+	# ⚠⚠ **DAMAGE PER SECOND IS UNCHANGED AND THAT IS DELIBERATE**: 2.5/1.2 and 5.0/2.4 are both
+	# 2.083. **Who wins is exactly what it was**; what changed is that a blow is now one event worth
+	# looking at instead of a stream. ⇒ **A fight that gets shorter or longer after this is a bug**,
+	# not a balance change.
+	# ⚠ **2.4 divides cleanly by 2, 3 and 6**, which `SPEED_STEPS` requires of every period here.
+	["SWORDSMAN", 18.0, 5.0, 2.4, 0.0, 0.0, 3.2, NO_DETECT, Side.PLAYER, "검사"],
 	# ⚠⚠ **The beasts crossed sides and their numbers did NOT move.** The wolf is the one row a whole
 	# run has been played on; re-tuning it in the same edit that flips its side would make a later
 	# difference unattributable. **They gained a detect radius** — an enemy has to notice something.
-	["WOLF", 14.0, 2.0, 1.0, 0.0, 0.0, 4.0, 6.0, Side.ENEMY, "늑대"],
+	# ⚠⚠ **1.0 → 2.0 AND 2.0 → 4.0, the same trade the 검사 above took** and for the same reason. DPS
+	# is 2.0 either way.
+	# ⚠⚠ **THE OTHER THREE BEASTS WERE NOT TOUCHED, AND THAT IS A KNOWN INCONSISTENCY.** 곰 · 까마귀 ·
+	# 사자 have no attack art and none of them is spawned today, so re-timing them would be tuning a
+	# fight nobody has seen. **The day one of them walks, its row takes the same doubling** — otherwise
+	# a 곰 swings twice for every one blow of a 늑대 for a reason nobody chose.
+	["WOLF", 14.0, 4.0, 2.0, 0.0, 0.0, 4.0, 6.0, Side.ENEMY, "늑대"],
 	["BEAR", 30.0, 3.5, 1.8, 0.0, 1.5, 2.8, 6.0, Side.ENEMY, "곰"],
 	["CROW", 8.0, 1.5, 1.0, 4.0, 1.0, 4.0, 12.0, Side.ENEMY, "까마귀"],
 	["LION", 140.0, 4.0, 1.5, 0.0, 1.5, 2.5, 2.0, Side.ENEMY, "사자"],

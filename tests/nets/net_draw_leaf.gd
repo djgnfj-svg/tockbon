@@ -153,12 +153,47 @@ func _table() -> Dictionary:
 			# **Where each body picture's ink ends inside its own frame**, so a body stands on the
 			# animal and not on the empty rows under it. An alpha scan, and it strokes nothing.
 			"_measure_body_feet": 0,
+			# The per-picture half of the foot scan, split out when the ANIMATION FRAMES had to be
+			# measured too — the standing pool is two deep and the strips are four, so one loop could
+			# not walk both. An alpha scan like its caller, and it strokes nothing either.
+			"_foot_one": 0,
+			# **How much of its own frame each row's animal fills across**, so a strip that needs a wider
+			# canvas stops shrinking the body. An alpha scan and a divisor — neither strokes anything.
+			"_measure_body_ink": 0,
+			"_ink_of": 0,
 			# The wolf's frame strips. `_body_tex` picks the picture and the other three feed it; not
 			# one of them strokes a canvas, same as the standing lookup they sit beside.
 			"_load_beast_anim": 0,
 			"_anim_strip": 0,
 			"_anim_sec": 0,
 			"_body_tex": 0,
+			# Seconds left of one of the three one-shot strips (공격 · 피격 · 죽음), or -1 for the two that
+			# loop. A read of the body's own dictionary, beside the picker that calls it.
+			"_clock_of": 0,
+			"_aim_of": 0,
+			# ── 타격감, the six the user named 2026-08-31 ──────────────────────────────────
+			# ⚠⚠ **THE AIR LAYER IS BACK AND THESE ARE ITS LEAVES.** Every one of them fills node
+			# fields — two pooled node types, a `Sprite3D` for the shards and the arc and a `Label3D`
+			# for the number — so the `draw_*` column is 0 for the whole block, exactly like the body
+			# pool beside it. **The set that was deleted in 2026-08-29 drew into an `ImmediateMesh`;
+			# this one does not, and that is why it can be listed here at 0 instead of at a count.**
+			# One blow landing: the two holds, the victim's flash and knock, and the three marks.
+			"_land_blow": 0,
+			"_spawn_marks": 0,
+			# The marks' own little simulation — aged and integrated, never re-reading a body.
+			"_step_marks": 0,
+			"_paint_marks": 0,
+			"_mark": 0,
+			"_label": 0,
+			"_hide_unused_marks": 0,
+			# How far a struck body has been thrown, and how bright a struck body is drawn.
+			"_knock_offset": 0,
+			# The blow's own four beats — back, out, still, home — and the stretch that rides on them.
+			# ⚠ **These exist because the generator would not draw the pose**, five attempts measured.
+			"_swing_at": 0,
+			"_swing_offset": 0,
+			"_swing_squash": 0,
+			"_flash_of": 0,
 			"_put_walker": 0,
 			# Which slot of its 조각 a body holds — a read of `Grid`, and it strokes nothing.
 			"_crowd_slot_of": 0,

@@ -1267,8 +1267,13 @@ func _quiet_view() -> Dictionary:
 ## twelve-tile step and a squash nobody asked for.
 func _body_entry(at: Vector2) -> Dictionary:
 	return {"flash": 0.0, "knock": 0.0, "knock_dir": Vector2.RIGHT, "knock_px": 0.0,
-		"lunge": 0.0, "lunge_dir": Vector2.RIGHT, "push": 0.0, "gait": 0.0, "bite": 0.0,
-		"walk": 0.0, "head": Vector2.RIGHT, "last": at, "half": 0.0, "still": 0.0}
+		"lunge": 0.0, "lunge_dir": Vector2.RIGHT, "push": 0.0, "gait": 0.0,
+		"walk": 0.0, "head": Vector2.RIGHT, "last": at, "half": 0.0, "still": 0.0,
+		# ⚠⚠ **`bite` STOOD HERE AND IT IS THREE KEYS NOW** (2026-08-31): the swing, the
+		# flinch and the fall each own a countdown, and `_body_tex` reads all three. **A fixture short
+		# one of them faults inside the picker rather than failing this net's own assertion.**
+		"attack": 0.0, "hurt": 0.0, "dying": 0.0, "hp": 0.0, "cool": 0.0, "alive": true,
+		"type": 0}
 
 
 ## The first pooled body sprite — anything not wearing the one-texel bar texture.
