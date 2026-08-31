@@ -1812,7 +1812,22 @@ const GAIT_PERIOD_TILES := 0.7        # one cycle every 28 px
 ## it, which would have made this item invisible」 — and at 0.1125 four of the five are under 2.0 px.
 ## **The user looked at the screen and called it too much anyway**, which outranks a floor nobody has
 ## re-measured since the bodies, the species table and the camera all changed.
-const GAIT_SQUASH := 0.1125
+## ⚠⚠ **0.1125 -> 0.0, THE GAIT SQUASH IS OFF** (2026-08-31, the user at the screen: 「that springy
+## up-and-down animation — just get rid of it. It will be fine without it. It looks far too strange」).
+## **This is the SECOND time the same motion was cut back and the first cut did not settle it**: it went
+## 0.20 -> 0.1125 the day before, by arithmetic, and the user still called it wrong by eye.
+## ⇒ **The eye outranks the derivation, and the derivation above is kept only to say what was tried.**
+##
+## ⚠ **`_gait_squash` returns `Vector2.ONE` the moment this is zero**, so nothing downstream branches on
+## it and no caller had to move. **The constant stays declared** — `net_draw_leaf` cites it by name, and
+## a species that wants a gait back changes this one number.
+##
+## ⚠⚠ **THE SIDEWAYS IDLE SWAY WAS ALREADY OFF** (2026-08-30, same complaint, different motion), which
+## means **every body-bound motion this file had is now silent**. The cost is the one already written
+## down beside `_idle_offset`: a body that cannot advance has NOTHING moving on it, and
+## 「붙어서 가만히 있으면 재미가 죽는다」 is still an open question — **it is now open for walking bodies
+## too, not just stuck ones.** ⚠ **It is not answered by turning this back on.**
+const GAIT_SQUASH := 0.0
 
 
 ## --- what it costs to lay a flat mark on ground that is no longer flat -------------------------------
