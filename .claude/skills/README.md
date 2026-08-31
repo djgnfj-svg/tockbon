@@ -45,7 +45,7 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 
 | Skill | What it does |
 |---|---|
-| **`wrap-up`** | **Closes the session** — repairs the docs that drifted, writes the new tickets, clears the loose images, runs the nets, commits. **Stops at the commit** |
+| **`wrap-up`** | **Closes the session** — **verifies this session's tickets against their own bar and closes them**, then the task above them, then the map and the log, the loose images, the nets, the commit. **Ten steps in order, and it stops at the commit** |
 | **`naming`** | **Settles what a thing is CALLED** and writes it into `CONTEXT.md`, so the next round can say it in one word |
 | **`roadmap`** | **Checks the big picture** against the commits — drift, gaps, what December still owes — **then lays the weeks out again, one thing per week.** ⚠ **Never edits a file; `wrap-up` writes what it settles.** ⚠⚠ **Slicing a week is the user's call** |
 
