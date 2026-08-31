@@ -1,4 +1,8 @@
-# **Nine bodies in ONE 블록 (칸), placed five different ways, at two body sizes.**
+# **Nine bodies in ONE 블록 (칸), placed six different ways, facing two directions.**
+#
+# ⚠⚠ **THE SIM IS FROZEN WHILE THIS RUNS** — see `_freeze`. The nine are real bodies in a real fight
+# and the fight kept nudging them off the seats the lab had just written, once per frame, which read
+# as every 검사 vibrating in place. **Nothing here is a moving picture; it is nine men standing still.**
 #
 # ⚠⚠ **This lab drives the REAL game**, the way `.prototypes/pads/lab.gd` does: the nine stand on the
 # ground the game ships, under its own camera, sun and sea, and **they are drawn by `FieldView`'s own
@@ -37,11 +41,19 @@ const SCALES := [1.0, 1.25]
 const FACES := [Vector2(0, 1), Vector2(1, 0)]
 ## What each facing is called in a file name. Same length as `FACES`.
 const FACE_NAMES := ["south", "east"]
+## ⚠⚠ **`-- still` PHOTOGRAPHS ONE VERSION TWICE, FOUR FRAMES APART, AND CHANGES NOTHING BETWEEN.**
+## It exists to answer 「do they stand still?」 with a number instead of with a claim: **two frames of a
+## frozen board must differ only by the idle sway.** It was written the day the nine vibrated.
+const STILL_GAP := 4
 ## Wheel notches for the shot. The nine have to fill the frame or the sheet is a picture of an island.
 const NEAR_NOTCHES := 9
 
 var game: Game = null
 var field: FieldView = null
+## ⚠⚠ **THE LAB'S OWN HANDLE ON THE FIGHT, BECAUSE `game.battle` IS NULLED ON PURPOSE.** See
+## `_freeze`: `Game._process` returns early on a null battle, which is how the sim is stopped without
+## stopping the drawing — `FieldView` keeps its own reference and keeps painting.
+var bat: Battle = null
 var grid: Grid = null
 ## The 블록 the nine stand in, as its low corner in 조각.
 var block_low := Vector2i.ZERO
@@ -55,6 +67,7 @@ var _scale := 1.0
 var _i := 0
 var _booted := false
 var _shooting := false
+var _still := false
 var _wait := 0
 var _boot := 0
 var _shot := 0
@@ -66,7 +79,9 @@ func _initialize() -> void:
 	root.size = Vector2i(int(Look.VIEWPORT_W_PX), int(Look.VIEWPORT_H_PX))
 	game = Game.new()
 	root.add_child(game)
-	_shooting = OS.get_cmdline_args().has("shoot") or OS.get_cmdline_user_args().has("shoot")
+	var argv := OS.get_cmdline_args() + OS.get_cmdline_user_args()
+	_still = argv.has("still")
+	_shooting = argv.has("shoot") or _still
 
 
 func _process(_delta: float) -> bool:
@@ -113,9 +128,11 @@ func _boot_step() -> bool:
 			_make_nine()
 			_frame_camera()
 			_booted = true
-			print("[lab] block_low=%s centre=%s ashore=%d roster=%d pos0=%s cam=%s zoom=%f" % [
-				str(block_low), str(_block_centre()), game.battle.ashore_ids().size(),
-				game.run.army.type_id.size(), str(game.battle.soldier_pos[0]),
+			# ⚠ **`bat` and not `game.battle`** — `_make_nine` has already frozen the sim by nulling the
+			# shell's handle, and this line dereferenced it for one edit.
+			print("[lab] block_low=%s centre=%s ashore=%d roster=%d frozen=%s cam=%s zoom=%f" % [
+				str(block_low), str(_block_centre()), bat.ashore_ids().size(),
+				game.run.army.type_id.size(), str(game.battle == null),
 				str(field.cam_px), field.zoom])
 			if not _shooting:
 				_label = Label.new()
@@ -216,6 +233,23 @@ func _make_nine() -> void:
 	# photographed wearing `01-now`'s ring on top of its own arrangement.
 	for i in NINE:
 		grid.release_all(i)
+	_freeze()
+
+
+## **Stops the fight without stopping the picture.**
+##
+## ⚠⚠ **THE NINE VIBRATED ON SCREEN UNTIL THIS WENT IN** (2026-08-31, the user, watching the lab:
+## 「the character's frames keep jittering back and forth — it's horrible」). The lab wrote the seats
+## at the top of the frame, `Battle.step` then nudged every body off them, and the view drew the
+## nudged position — **so each body was pulled back and pushed off again once per frame**, and the
+## facing flipped with it because a body faces the way it last moved.
+##
+## ⚠ **`game.battle = null` and not a flag**: `Game._process` returns early on a null battle, which is
+## the whole of the sim's clock, while `FieldView` holds its own reference and keeps painting. **There
+## is no other way to stop the step from outside** — nothing else gates it.
+func _freeze() -> void:
+	bat = game.battle
+	game.battle = null
 
 
 ## Points the camera at the middle of the 블록 and zooms in until the nine fill the frame.
@@ -251,7 +285,7 @@ func _apply(k: int, scale_i: int) -> void:
 ## fx buffer from the body's radius, and at 1.25 it sits a quarter narrow. **The disc is not what this
 ## sheet is about; say it out loud rather than let it be read as a result.**
 func _restand() -> void:
-	var b := game.battle
+	var b := bat
 	if b == null or _seats.is_empty():
 		return
 	for i in mini(NINE, b.soldier_pos.size()):
@@ -284,6 +318,8 @@ func _show(k: int) -> void:
 # --- the shots -----------------------------------------------------------------------------------
 
 func _shoot_step() -> bool:
+	if _still:
+		return _still_step()
 	var per := 2
 	var n: int = _shot / per
 	var total: int = _names.size() * FACES.size()
@@ -312,6 +348,22 @@ const CROP := Vector2i(500, 440)
 const CROP_RISE := 90
 
 
+## One version, photographed twice `STILL_GAP` shoot-steps apart with nothing changed in between.
+## **The pair is the instrument** — a still board differs only by the sway, a vibrating one does not.
+func _still_step() -> bool:
+	match _shot:
+		0:
+			_apply(1, 0)      # 02-grid, the version being taken forward
+		1:
+			_save(str(_names[1]), "still-a")
+		STILL_GAP:
+			_save(str(_names[1]), "still-b")
+		STILL_GAP + 1:
+			return true
+	_shot += 1
+	return false
+
+
 func _save(name: String, which: String) -> void:
 	var img := root.get_texture().get_image()
 	var p := (field.tile_to_screen_px(block_low.x, block_low.y)
@@ -321,7 +373,7 @@ func _save(name: String, which: String) -> void:
 	img.get_region(Rect2i(x, y, CROP.x, CROP.y)).save_png(
 		ProjectSettings.globalize_path(OUT % [name, which]))
 	print("[lab] %s %s  sprites=%d ashore=%d" % [name, which,
-		field._sprites_used, game.battle.ashore_ids().size()])
+		field._sprites_used, bat.ashore_ids().size()])
 
 
 # --- the watched run -----------------------------------------------------------------------------

@@ -25,10 +25,17 @@ of the question the first one raised**, and both are kept: the size answer lives
 first.」* ⇒ the sheet was re-shot: **the same nine at two FACINGS instead of two body sizes**, and
 `06-ranks-wide` was added — `02-grid`'s square spacing with `03-ranks`' turning.
 
-⚠⚠ **A FORMATION CAN ONLY BE SEEN TO TURN IF ITS TWO PITCHES DIFFER.** Measured, not argued: at south
-and at east, `06-ranks-wide` is the same picture as `02-grid` to within the idle sway (≈5,000 changed
-pixels against a ≈6,000 noise floor), while `03-ranks` differs from `02-grid` by ≈10,500. **A square
-3x3 rotated a quarter turn maps onto itself.** ⇒ **「02's look」 and 「it turns」 cannot both be had.**
+⚠⚠ **A FORMATION CAN ONLY BE SEEN TO TURN IF ITS TWO PITCHES DIFFER.** Measured with `seat_probe.gd`:
+**`06-ranks-wide`'s nine seats do not move between south and east, and they are the same nine points as
+`02-grid`'s**, while `03-ranks`' seats do move. A square 3x3 rotated a quarter turn maps onto itself.
+⇒ **「02's look」 and 「it turns」 cannot both be had.**
+
+⚠⚠ **THE SAME CLAIM WAS MADE FIRST OFF A PIXEL DIFFERENCE AND THAT INSTRUMENT WAS BROKEN TWICE OVER.**
+The lab wrote the seats and `Battle.step` nudged the bodies off them before the view drew, so **every
+검사 vibrated once per frame** (the user, watching it: 「the character's frames keep jittering back
+and forth — it's horrible」) and any two frames differed by ~6,000 pixels. And even on a frozen board a
+screenshot carries each body's own idle-sway phase, so **moving a body to a different seat changes the
+picture while the seats stay identical.** The conclusion survived; the evidence did not.
 
 **What the user said the nine should FEEL like** (2026-08-31): *「Moving them all at once would work
 too, of course, but really it should feel like they go one after another, streaming along — a bit like
