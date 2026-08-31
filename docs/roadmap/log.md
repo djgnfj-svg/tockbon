@@ -1654,3 +1654,110 @@ spit and the satellite island. Ticket **53**.
 
 **629 통과 / 59 ᄉᡴ패 → 1048 / 63.** ⚠ **The four extra reds are not new failures — they are old ones that
 became visible** when the abandoned checks started running. **No red in this session was caused by it.**
+
+## ⚠⚠ **A roadmap round that got rolled back, and a knowledge folder that got built instead — 2026-08-31**
+
+**The session was asked for two things: this week's roadmap, and a 개발지식 folder.** ⚠ **The first was
+done wrong, thrown away, and is still open. The second shipped.**
+
+### The roadmap was written alone and the user stopped it
+
+**Task folders `task-01` and `task-02` were created with fourteen tickets in them, and the map was
+edited to match.** Every row traced to a line already on the map — but **the cut, the ordering, and
+which task each row went to were all the model's.**
+
+> ***"Isn't the roadmap something you're supposed to make by consulting me?"***
+
+⇒ **All fourteen tickets and the map edits were reverted the same session** (commit `a1fecec`).
+⚠⚠ **This is the SAME failure the map already records from 2026-08-30** — *"the tickets have too much
+detail in them, you deciding details on your own must never happen"* — **and it recurred the very next
+day.** The rule was read and the round was run against it anyway.
+
+### What the roadmap round did settle, and what it did not
+
+**Two questions were put to the user and NEITHER has been answered:**
+
+1. **Is this week 2 주 닫기 only, or does 3 주 (부대) get pulled forward?**
+2. **What stops the keep burning from level ground?**
+
+⚠ **A third thing was measured and is worth keeping**: the keep is **already on the second storey** —
+it sits at `(10,12)` as a 2x2 on a **plateau finger only two 조각 wide**, so **all four of its 조각 are
+cliff edge.** A beast standing at level 0 one 조각 away is 1.0 from the keep in plan view, and
+**`keep_gap` measures on the flat, ignoring height** — so a wolf's 1.75 reach lands. ⇒ **The fix is not
+`REACH_BONUS`**, and `rules.gd`'s own comment already says so: *"a storey-aware refusal belongs where
+the height is already known."*
+
+⚠ **A count the model got wrong out loud and corrected**: it called the week 「empty」 because the two
+headline features were built. **Eleven things are still open on week 2**, which at a day each is more
+than the week holds.
+
+### ✅ 물결 꼬리 (old ticket 55) closed without a line of code
+
+> ***"The wake is already fine, no need to touch it — mark the ticket done."***
+
+**The value was NOT changed.** The lab drove the boat at 4.0 조각/s and the game runs 1.2, so the
+approved 16-조각 trail draws 4.8 — **and the user looked at 4.8 on screen and kept it.**
+
+### `docs/개발지식/` — **the folder is Korean, and that is a second exception to the language rule**
+
+> ***"That folder is in Korean and easy for me to read."***
+
+⚠⚠ **`CLAUDE.md` says every document is English with the GDD as the one exception.** This folder is a
+second one and **`CLAUDE.md` has not been told** — only the user edits that file, so it is a TODO line.
+
+### What the folder holds, and what it deliberately does not
+
+**Three topics, eighty techniques, three diagrams, three labs.**
+
+| | Topic | 기법 | Switches |
+|---|---|---|---|
+| **01** | 2D 판때기를 3D 에 넣을 때 어색하지 않게 하는 법 | 28 | 16 |
+| **02** | 때리고 맞을 때 뭔가 일어난 것처럼 보이게 하는 법 | 26 | 15 |
+| **03** | 몸과 부대가 기분 좋게 움직이게 하는 법 | 26 | 13 |
+
+**The shape was the user's, stated twice and restated until it was read back correctly:**
+
+> ***"Since this is my first time making a game, I don't know what techniques exist. Organise the
+> techniques."*** · ***"If there are four techniques there's each one alone, the pairs, the triples,
+> all four — and Godot source I can launch and look at."***
+
+⇒ **The key arithmetic, and it is why the labs are cheap**: **code grows with the NUMBER of techniques,
+not with the combinations.** Sixteen switches is sixteen blocks of code and 65536 screens.
+
+### ⚠⚠ Two things the model started building and was told to stop
+
+1. **A python script that measures non-planar quads out of a `.glb`.** It ran, and its answer on
+   `island.glb` was **nonsense — 23881 pairs at 180°**, because that mesh is welded rather than split
+   per face. ⚠ **The method only holds on a per-face-split export** (the buildings are: `keep` is 48
+   positions for 24 triangles). ⇒ **Deleted with the rest.** The user: *"you're writing python code
+   directly. That's not it — organise the techniques."*
+2. **Six thin topic docs written from `log.md` and the net runner's comments.** ⇒ **Deleted the same
+   session**; three deep ones replaced them.
+
+### ⚠ What no source covers, and was written from practice instead
+
+**Each topic carries one section that search does not return.** The most valuable is **02's 「여덟이
+한꺼번에 때릴 때」**: every game-feel talk is about **one attacker hitting once**, and this game lands
+**eight wolves off one boat.** Turn on the eighteen techniques as written and the screen has a seizure.
+⇒ Effect capping, sound-voice limiting, pitch jitter, and 「the killing blow only」.
+
+**03's equivalent is 「the three that look like bugs」** — arrival tolerance, a standing body not being
+shoved, and push ordering. **Without them the algorithm is right and the bodies shake in place.**
+
+### The labs, and what is honestly unknown about them
+
+**`tools/lab/` — three `SceneTree` scripts, one shared stage, nine placeholder PNGs written by a
+dependency-free python encoder.** ⚠ **Not verified on screen: this session ran where there is no Godot.**
+
+**What WAS checked statically**: every `Look` constant exists · every local call is defined · no space
+indentation, no empty block · no doc path or line number in `tools/` (which `net_citations` scans).
+**And `net_citations` compiles every `.gd` under `tools/`, so a syntax error goes red on the next run.**
+
+⚠⚠ **Two design calls made because the engine's behaviour could not be tested here**:
+
+- **Labs 02 and 03 do not billboard.** Godot's billboard rebuilds the model matrix and **can discard the
+  node's rotation and scale** — which would make the lean and squash switches show nothing. They face
+  the camera by hand instead. **Lab 01 keeps real billboard because that IS its subject.**
+- **The lab scripts live under `tools/lab/` with ASCII names rather than beside their Korean docs.**
+  `run_nets.ps1`'s own header records that PowerShell 5.1 mangles Korean, and **a lab that will not
+  launch is worth less than one that sits in the tidy folder.**
