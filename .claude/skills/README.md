@@ -1,4 +1,4 @@
-# .claude/skills — 15 skills, and **every one of them fires on its own**
+# .claude/skills — 16 skills, and **every one of them fires on its own**
 
 ⚠⚠ **Nothing here has to be typed as a slash command** (2026-08-27, the user: *"having to type them
 myself is far too much bother — I would rather just say it"*). **Re-count instead of trusting this
@@ -61,6 +61,7 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 | **`prototype`** | Builds one thing **three or more genuinely different ways** and puts them side by side, so a look is chosen by seeing rather than by argument. ⚠ **Called `spike` until 2026-08-29** — renamed to the word the user actually says |
 | **`listup`** | **Names what is actually at one spot, one line each, grouped by kind.** ⚠ **It judges nothing** |
 | **`commission`** | **시안** — pulls candidate PICTURES so the user chooses by looking. **대화 → 로컬 → 유료**, in that order. ⚠ **Asks before touching the GPU**, and paid generation only when the user says so |
+| **`knowledge`** | **개발지식** — reaches `docs/knowledge/` before code is written against Godot, Blender or an instrument, and adds a page when a round measures something durable. ⚠ **It decides nothing and writes no ticket** |
 
 ## Kept from `mattpocock/skills`
 
