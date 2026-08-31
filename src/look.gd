@@ -481,38 +481,21 @@ const DRAG_PAN_THRESHOLD_PX := 6.0
 ## the camera, and a key and a drag cannot end up disagreeing about which way is right.
 const CAM_PAN_KEY_PX_PER_SEC := 900.0
 
-## **How deep the edge band reaches in from each side of the window, in screen px.** The pointer
-## inside it pans the camera for as long as it stays there.
-##
-## ⚠⚠ **THE EDGE IS THE PRIMARY WAY THE CAMERA TRAVELS NOW** (2026-08-30, the user: 「wasd 보다는
-## 마우스가 끝으로 가면 자동으로 이동이 맞을듯」). WASD is not deleted — it was working and nobody
-## asked for it to go — but it is no longer the hand that goes looking for a boat.
-##
-## ⚠ **NOT MEASURED ON A SCREEN. Nobody has looked at this number yet.** Both ends bite: too wide and
-## the band covers ground a body is ordered onto, too narrow and the pointer has to be parked on the
-## last few pixels of glass, which is the version of this control every review complains about.
-const CAM_EDGE_PAN_BAND_PX := 28.0
+## ⚠⚠ **THE EDGE BAND'S THREE CONSTANTS STOOD HERE AND ALL THREE ARE DELETED** (2026-08-31, the user:
+## 「그것도 지워줘」): how deep the band reached in from each side (28 px), how fast it panned at full
+## depth (the keys' own speed), and how much of that speed the band's inner lip got (0.30, ramping to
+## full at the glass). **They were the user's own on 2026-08-30** (「wasd 보다는 마우스가 끝으로 가면
+## 자동으로 이동이 맞을듯」) and none of the three was ever judged on a screen.
+## ⚠ **`CAM_PAN_KEY_PX_PER_SEC` above is untouched** — WASD kept its speed and is now the only thing
+## reading it.
 
-## **How fast the edge pans at full depth, in SCREEN px per second** — the same units and the same
-## `pan_by` the keys and the drag already go through, so no third idea of which way is right can grow.
-##
-## ⚠⚠ **DELIBERATELY THE KEYS' OWN SPEED, AND THE LINK IS ONE EDIT TO BREAK.** Two independent
-## literals for 「how fast does the camera travel」 drift apart the first time either one is tuned, and
-## the edge has not been judged on a screen yet. **When somebody looks at it, this becomes its own
-## number** — the name is already here so nothing else has to move that day.
-const CAM_EDGE_PAN_PX_PER_SEC := CAM_PAN_KEY_PX_PER_SEC
-
-## **How fast the edge pans at the band's INNER lip, as a fraction of the top speed.** It ramps
-## linearly from here at the lip to the full speed at the window's own edge. ⚠ **1.0 is a flat band
-## with no ramp at all** — that is what this constant answers 「does it ramp」 with, rather than a
-## second flag that could disagree with it.
-##
-## ⚠ **Without a ramp the whole band is a switch**: brushing the lip is already top speed, so the
-## band's width buys nothing and the camera jumps the moment the pointer drifts.
-const CAM_EDGE_PAN_LIP_FACTOR := 0.30
-
-## How far one key press turns the board. **The board turning is the hand moving during a fight**, and
+## How far ONE NOTCH turns the board. **The board turning is the hand moving during a fight**, and
 ## that is 티켓 07's whole question — this is the knob that lets it be answered by trying it.
+##
+## ⚠⚠ **NO KEY READS THIS ANY MORE** (2026-08-31): Q and E were the notch and they are deleted, and
+## the right-button drag turns by `CAM_YAW_PER_PX_DEG` instead. **What still reads it is the shot
+## tool**, which turns the camera itself to put the island at the angle a picture was last judged
+## from — so the number stays a number rather than becoming a literal inside a tool.
 const CAM_YAW_STEP_DEG := 15.0
 
 ## ⚠⚠ **THESE ARE A DEFAULT NOW AND NOT THE MAP SIZE.** They were `const 48` / `32` read directly by
