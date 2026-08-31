@@ -1,82 +1,124 @@
 ---
 name: wrap-up
-description: Closes out the session. Repairs the docs that drifted, writes the new tickets, clears the loose images, runs the nets, commits. Use whenever the user's message contains 마무리 — "마무리", "마무리하자", "마무리했어", "마무리 좀" — or says "wrap up".
+description: Closes the session — verifies and closes this session's tickets and tasks, repairs the map and the log, clears the loose images, runs the nets, commits. Use whenever the user's message contains 마무리 — "마무리", "마무리하자", "마무리했어", "마무리 좀" — or says "wrap up".
 ---
 
-# Wrap-up
+# 마무리 — the session ends and the state has to end with it
 
-**The work finishes and the state never changes.** A ticket stays `claimed`; a doc points at a deleted
-file; the next session believes all of it.
+**The work finishes and nothing else moves.** A ticket stays `claimed`; the map still says the week is
+open; the next session believes all of it and rebuilds what is already built.
 
-⚠⚠ **Two things only: repair what drifted, then commit.** Anything that is not a document gone wrong is
-not this skill's business.
+⚠⚠ **Run this skill, do not remember it.** It was run from memory once (2026-08-31) and **the ticket
+and map half fell out of the round entirely** — five commits landed and neither the map nor the log
+was opened.
 
-## 1. List what actually finished
+## ⚠⚠ The rule the order exists for
 
-Built, fixed, deleted, decided. **"Almost done" is not done.** Do not mix done and not-done.
+**A ticket is not closed because the work happened. It is closed because it was CHECKED and then
+closed** (2026-08-31, the user: *"verifying this session's tickets and tasks and closing them has to be
+part of the wrap-up"*).
 
-## 2. Repair the docs
+**Ten steps, in this order, one at a time. Say the result of each out loud before moving to the next.**
 
-- **Ticket `Status:`** — is a finished ticket still `claimed`
-- **The roadmap's status column** — **flip every row that finished to ✅.** A row left unflipped is how
-  the next session concludes the work never happened
-- **Dead references** — does any doc or comment point at what you deleted or renamed this session
-- ⚠⚠ **`CLAUDE.md` — do not touch it.** Not edit, not measure. **Only the user adds to it, and only when
-  they say so.** If something must land there, name it in the report and stop
+---
+
+## 1. What actually finished
+
+**List it: built · fixed · deleted · decided.** ⚠ **"Almost done" goes on the not-done list.**
+**Done when** the two lists are written and nothing sits in both.
+
+## 2. Open every ticket this session touched
+
+**One file at a time.** `docs/roadmap/task-NN-*/MM-*/NN-MM.ticket.md`.
+**Done when** every ticket touched this session has been opened and read, and you can name each one.
+
+## 3. Check each ticket against its own `## Done when`
+
+⚠⚠ **Read that section and check it, do not recall it.** Run the check, look at the screen, read the
+number. **A ticket whose bar was never checked is not closed** — it is put back on the open list with
+one line saying what is missing.
+
+**Done when** every ticket from step 2 has a verdict: **met** or **not met, and what is missing.**
+
+## 4. Close the ones that passed
+
+- **`Status:` → `resolved`**, and the answer written under `## Answer`
+- ⚠ **The file never moves between folders.** Status is a line inside it
+- **What the ticket produced stays in that ticket's folder** — the screenshot, the measurement, the note
+
+**Done when** no ticket that passed step 3 is still `open` or `claimed`.
+
+## 5. Check the task above them
+
+**Open `NN.task.md`.** Is every ticket in its table now `resolved`?
+
+- **Yes** → the task is done. Set its `Status:` and flip its row on the map to ✅
+- **No** → say which tickets are still open. **A task with one open ticket is an open task**
+
+**Done when** every task that owns a ticket from step 2 has been opened and its status is right.
+
+## 6. The map — `docs/roadmap/README.md`
+
+**Opened every session, whatever the round built.** ⚠ The failure this pays for: a round touched no
+`src/`, so 「repair the docs」 read as already-done, and the map's opening section was a day stale with
+a net count of 59 against a measured 63.
+
+- **This week's row** — does its status still match what happened
+- **The opening section** — rewrite it for the session that opens next
+- **What is still the user's to answer** — every open question, by name
+- **Any number that went stale** — net counts most of all
+
+**Done when** all four have been looked at and each is either changed or said to be already right.
+
+## 7. The log — `docs/roadmap/log.md`
+
+**What happened and why.** ⚠⚠ **The user's own words go here and nowhere else** — translated to
+English, with the citation kept.
+
+⚠ **A round that decided nothing still writes an entry.** 「nothing was decided, here is what is still
+open」 is exactly what the next session needs.
+
+**Done when** this session has an entry with a date on it.
+
+## 8. New tickets, dead references, loose pictures
+
+- **New tickets** — anything the user decided that no ticket holds. ⚠ **You are writing down answers,
+  not inventing work.** A question the user must answer is `Type: grilling`, never `task`
+- ⚠⚠ **A ticket is one day. If it does not fit in a day, the user says where it splits** — never you
+- **Dead references** — does any doc or comment point at what you deleted or renamed
+- **Loose pictures** — `ls image*.png image*.jpg` (they are gitignored, so `git status` cannot see
+  them). ⚠ **Check how many there are and ask which ones mattered** — that is the user's call
+- ⚠⚠ **`CLAUDE.md` — do not touch it.** Only the user adds to it. If something belongs there, say so
+  in the report and stop
 - **Acceptance** — ask whether they looked, then [`ACCEPTANCE.md`](ACCEPTANCE.md)
-- **Memory** — **delete what became wrong. Do not add.** What can live in the repo lives in the repo
+- **Memory** — delete what became wrong. **Do not add.** What can live in the repo lives in the repo
 
-**Say you checked each, or say it doesn't apply.** Never skip silently.
+**Done when** each of the seven has an answer, including 「doesn't apply」.
 
-## 3. Write the tickets
-
-**Anything the user decided this session that no ticket holds.** ⚠ **You are writing down answers, not
-inventing work** — open forks are `grilling`'s round, and that happens before this step.
-
-- `docs/roadmap/task-NN-<english-slug>/MM-<english-slug>/NN-MM.ticket.md` — **a folder inside the task it
-  serves**, numbered on from the last ticket **in that task**, starting at `01`. Its task's number goes
-  into the roadmap
-- ⚠ **What the ticket produced goes in that same folder** — the screenshot, the measurement, the note.
-  **That is where a ticket says how it went**, and step 4's loose images land here instead of being cleared
-- **A ticket is one day.** ⚠ **If it does not fit in a day, the user says how it splits** — never you
-- **A task with no folder yet** gets `docs/roadmap/task-NN-<english-slug>/NN.task.md` first, one sentence
-  saying what is on screen when the task ends. ⚠ **Task folders sit directly under `docs/roadmap/`**
-- **Answer is code → `Type: task`. Answer is what to build → `Type: grilling`**, the user answers it
-- ⚠⚠ **A question the user must answer never becomes a `task`** — it gets guessed at, and the guess
-  reaches the screen before anyone notices it was a guess
-
-## 4. Clear the loose images
-
-**Pasted screenshots land in the repo root and pile up.** ⚠ **They are gitignored, so `git status` cannot
-see them** — `ls image*.png image*.jpg` is the only way this step finds them.
-
-- **A shot a decision was made from** → `docs/reference/YYYY-MM-DD-what-it-shows.png`
-- **The rest** → delete
-- ⚠⚠ **Count them and ask first.** Which shots mattered is the user's call
-
-## 5. Run the nets
+## 9. Run the nets
 
 ```
 powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1
 ```
 
-**Never commit a red you caused.** If it fails, stop and take it to the user. **Do not fix the net to
-make it pass.**
+- **Never commit a red you caused.** If it fails, stop and take it to the user
+- ⚠ **Do not fix the net to make it pass**
+- ⚠⚠ **A red that was already there is reported, not a blocker** — measure it at the START of the
+  session too, and when the counts match and this session touched none of those files it is
+  pre-existing. **Say the numbers out loud either way; never call it green**
+- ⚠ **Where the nets cannot run at all, say so and say why** — an unrun suite is not a passing one
 
-⚠⚠ **A red that was already there is reported, not a blocker.** **Measure it at the start of the
-session too** — when the counts come back identical and this session touched none of those files, it is
-**pre-existing**, and holding the commit hostage to it only loses the session's work. **Say the numbers
-out loud either way**; never call it green.
+**Done when** the numbers are written down, before and after.
 
-## 6. Commit — **and stop here**
+## 10. Commit, then stop
 
+- **`git status` first** — anything unintended mixed in
 - **Straight to `main`. Do not branch, do not ask** — settled by the user. **Asking is itself friction**
-- `git status` first: anything unintended mixed in
 - **Korean message**, saying what was done and why
 - ⚠ **Do not push.** Only when the user says so
 
-## 7. Report
+## The report
 
-What finished · **what didn't, and why** · candidates for next.
+**What finished · what didn't and why · what is still the user's to answer · candidates for next.**
 
-⚠ **Do not write unfinished as finished.** The moment a doc says "done", the next session believes it.
+⚠ **Never write unfinished as finished.** The moment a doc says "done", the next session believes it.

@@ -99,7 +99,7 @@ split the net writing, write them fast and review them fast"*).
 
 ⚠ **This is `diagnosing-bugs`' Phase 1 bar applied to nets**; that skill holds the long form.
 
-⚠⚠ **Work touching Godot, a shader or the Blender export reads `docs/knowledge/` first** — call the
+⚠⚠ **Work touching Godot, a shader or the Blender export reads `docs/개발지식/` first** — call the
 Skill tool with `knowledge` and **name the page in the plan.** A subagent inherits no context, so a
 pointer you held in your head does not reach builder.
 

@@ -45,7 +45,7 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 
 | Skill | What it does |
 |---|---|
-| **`wrap-up`** | **Closes the session** — repairs the docs that drifted, writes the new tickets, clears the loose images, runs the nets, commits. **Stops at the commit** |
+| **`wrap-up`** | **Closes the session** — **verifies this session's tickets against their own bar and closes them**, then the task above them, then the map and the log, the loose images, the nets, the commit. **Ten steps in order, and it stops at the commit** |
 | **`naming`** | **Settles what a thing is CALLED** and writes it into `CONTEXT.md`, so the next round can say it in one word |
 | **`roadmap`** | **Checks the big picture** against the commits — drift, gaps, what December still owes — **then lays the weeks out again, one thing per week.** ⚠ **Never edits a file; `wrap-up` writes what it settles.** ⚠⚠ **Slicing a week is the user's call** |
 
@@ -61,7 +61,7 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 | **`prototype`** | Builds one thing **three or more genuinely different ways** and puts them side by side, so a look is chosen by seeing rather than by argument. ⚠ **Called `spike` until 2026-08-29** — renamed to the word the user actually says |
 | **`listup`** | **Names what is actually at one spot, one line each, grouped by kind.** ⚠ **It judges nothing** |
 | **`commission`** | **시안** — pulls candidate PICTURES so the user chooses by looking. **대화 → 로컬 → 유료**, in that order. ⚠ **Asks before touching the GPU**, and paid generation only when the user says so |
-| **`knowledge`** | **개발지식** — reaches `docs/knowledge/` before code is written against Godot, Blender or an instrument, and adds a page when a round measures something durable. ⚠ **It decides nothing and writes no ticket** |
+| **`knowledge`** | **개발지식** — reaches `docs/개발지식/` before code is written against Godot, Blender or an instrument, and adds a page when a round measures something durable. ⚠ **It decides nothing and writes no ticket** |
 
 ## Kept from `mattpocock/skills`
 
