@@ -401,6 +401,10 @@ func _process(delta: float) -> void:
 	# from inside `_paint_bodies` — it is a per-body fact, and that is the one loop with a body's
 	# centre and radius in hand at the same time.
 	_fx_begin()
+	# ⚠ **Before the bodies and that is the stacking order.** The buffer is one surface drawn in the
+	# order it was filled, so a route laid down first passes UNDER the shadows of the bodies walking
+	# it — which is the way round that reads as a line on the ground rather than over the feet.
+	_paint_move_lines()
 	_paint_bodies()
 	_fx_flush()
 
@@ -721,6 +725,22 @@ var _pads_mat: ShaderMaterial = null
 ## Whether the player is holding the reveal key. **Written only by `set_pads_revealed`**, which the
 ## shell calls on the key down and the key up.
 var _pads_revealed := false
+
+## **The reach mask the shader reads, one texel per 조각**, and the image behind it. ⚠ **Both are
+## rebuilt when the BOARD changes size and only then** — a pick rewrites the pixels of the image that
+## is already there, because reallocating a texture on every click is a stall the player feels.
+var _reach_img: Image = null
+var _reach_tex: ImageTexture = null
+
+## Whether the hand is holding anybody. **Drives the shader's `show_reach`**, which is what took over
+## from TAB as the reason a 판 is visible.
+var _reach_on := false
+
+## **The 이동선 waiting to be drawn**, one `PackedInt32Array` of 조각 per picked body. Written by the
+## shell on hover, read by `_paint_move_lines` inside the fx pass, and cleared by handing back an
+## empty array. ⚠ **It holds 조각 and not points** — the height each piece is laid at is decided at
+## draw time by `_ground_y_px`, exactly as every other ground mark is.
+var _move_lines: Array = []
 var _builds: Node3D = null
 var _props: Node3D = null
 
@@ -787,6 +807,8 @@ func _adopt_the_pads() -> void:
 	mat.set_shader_parameter("all_lighten", Look.PAD_ALL_LIGHTEN)
 	mat.set_shader_parameter("hover_lighten", Look.PAD_HOVER_LIGHTEN)
 	mat.set_shader_parameter("hover_lift", Look.PAD_HOVER_LIFT)
+	mat.set_shader_parameter("reach_alpha", Look.PAD_REACH_ALPHA)
+	mat.set_shader_parameter("reach_lighten", Look.PAD_REACH_LIGHTEN)
 	_pads.material_override = mat
 	# ⚠ **No shadow.** The 판 is a mark on the ground, and a mark that casts one reads as a slab
 	# floating over it — the same argument the summon ring's own material carried.
@@ -802,6 +824,12 @@ func _tell_the_pads() -> void:
 		return
 	_pads_mat.set_shader_parameter("hover_cell", float(_hover_cell))
 	_pads_mat.set_shader_parameter("show_all", 1.0 if _pads_revealed else 0.0)
+	# ⚠⚠ **THE MASK GOES THROUGH HERE TOO AND NOT FROM `set_reach` DIRECTLY.** The 판 is re-adopted
+	# every time the island is rebuilt, and a mask pushed anywhere else would be the one uniform the
+	# new material never received — the reach would go dark on island two with every other mark fine.
+	_pads_mat.set_shader_parameter("show_reach", 1.0 if _reach_on else 0.0)
+	if _reach_tex != null:
+		_pads_mat.set_shader_parameter("reach_tex", _reach_tex)
 	# ⚠⚠ **The merge and the board's width go the same way as the hover**, because the shader needs all
 	# three to answer one question: what lights up. Far out a 칸 is one 판, so the whole 칸 lights.
 	_pads_mat.set_shader_parameter("merge", pad_merge())
@@ -825,6 +853,47 @@ func pad_merge() -> float:
 func set_pads_revealed(on: bool) -> void:
 	_pads_revealed = on
 	_tell_the_pads()
+
+
+## **Lights every 조각 the picked bodies may stand on, and nothing else.** An empty list puts the board
+## back to rest, which is what an empty hand hands in.
+##
+## ⚠⚠ **THIS IS WHAT REPLACED HOLDING TAB** (2026-08-31, the user: 「tab 없이 그냥 캐릭터를 누르면
+## 이동할 수 있는 칸들이 뜨고」). The reveal key still works and still shows the whole board; it is no
+## longer the only way to see where a body may go, and it is no longer required for the hover to light.
+##
+## ⚠ **The set is `Hand.reach` and this does not recompute it.** A second reachability rule living here
+## is exactly the drift `how-nets-lie` names: the picture would light 조각 the order then refuses.
+func set_reach(tiles: PackedInt32Array) -> void:
+	var size := _map_tiles()
+	if _reach_img == null or _reach_img.get_width() != size.x or _reach_img.get_height() != size.y:
+		# ⚠ **`FORMAT_R8` and one channel.** The shader asks a yes/no question and an RGBA8 mask would
+		# be four times the upload for three channels nobody reads.
+		_reach_img = Image.create(size.x, size.y, false, Image.FORMAT_R8)
+		_reach_tex = ImageTexture.create_from_image(_reach_img)
+	_reach_img.fill(Look.COL_REACH_OFF)
+	for k in tiles.size():
+		var t := int(tiles[k])
+		if t < 0:
+			continue
+		var tx := t % size.x
+		var ty := t / size.x
+		if ty >= size.y:
+			continue
+		_reach_img.set_pixel(tx, ty, Look.COL_REACH_ON)
+	_reach_tex.update(_reach_img)
+	_reach_on = not tiles.is_empty()
+	_tell_the_pads()
+
+
+## **The route each picked body would walk**, handed in as 조각 lists. An empty array draws nothing,
+## which is the resting state and the state a press restores.
+##
+## ⚠ **Stored and not drawn here.** Every ground mark in this file is built inside the one fx pass in
+## `_process`, between the buffer opening and its flush — a mark drawn outside it is a mark on a
+## buffer that has already been committed, and it never reaches the screen.
+func set_move_lines(lines: Array) -> void:
+	_move_lines = lines
 
 
 ## **Puts the standing buildings on the ground.** ⚠ **Nothing is placed by eye**: the kind comes from
@@ -2380,6 +2449,13 @@ func _fx_layer() -> MeshInstance3D:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	# ⚠⚠ **THIS IS WHAT PUTS A GROUND MARK IN FRONT OF THE 판, AND IT IS SORT ORDER AND NOT DEPTH**
+	# (measured 2026-08-31). Both this layer and the 판 are transparent and neither writes depth, so
+	# the engine orders them by their AABB — and both AABBs are the whole island, which makes the
+	# ordering arbitrary. **The 판 was winning**: the moment a pick lit the board, the bodies' own
+	# shadows and the 이동선 both disappeared under it. ⚠ **Raising the marks does nothing** — measured
+	# at half a 조각 of lift, still invisible; a priority is the only thing that decides this.
+	mat.render_priority = 1
 	m.material_override = mat
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_world.add_child(m)
@@ -2432,3 +2508,40 @@ func _g_disc(centre: Vector2, radius: float, col: Color) -> void:
 		var a1 := TAU * float(k + 1) / float(segs)
 		_g_tri(centre, centre + Vector2(cos(a0), sin(a0)) * radius,
 			centre + Vector2(cos(a1), sin(a1)) * radius, col)
+
+
+## **Lays every 이동선 on the ground**, one per picked body, plus a dot where each one ends.
+##
+## ⚠ **Nothing here decides where the line goes.** The points arrive from `Hand.route_points` in tile
+## units and this converts them to world px and draws — a view that worked its own route out would be
+## a second copy of the walking rule, which is the defect shape `how-nets-lie` opens with.
+func _paint_move_lines() -> void:
+	if _move_lines.is_empty():
+		return
+	for raw in _move_lines:
+		var pts: PackedVector2Array = raw
+		if pts.size() < 2:
+			continue
+		for k in range(pts.size() - 1):
+			_g_ribbon(pts[k] * Look.TILE_PX, pts[k + 1] * Look.TILE_PX,
+				Look.MOVE_LINE_HALF_PX, Look.COL_MOVE_LINE)
+		_g_disc(pts[pts.size() - 1] * Look.TILE_PX, Look.MOVE_LINE_END_PX, Look.COL_MOVE_LINE_END)
+
+
+## **One straight run of the line, CUT INTO PIECES along its length.**
+##
+## ⚠⚠ **THE CUT IS THE WHOLE REASON THIS IS NOT ONE QUAD** — the same reason the header of this
+## section already gives for every ground mark. A run crossing a stair drawn as a single quad becomes
+## a chord across the slope and half the line ends up inside the hill.
+func _g_ribbon(a: Vector2, b: Vector2, half: float, col: Color) -> void:
+	var span := b - a
+	var len_px := span.length()
+	if len_px <= Rules.EPS:
+		return
+	var side := Vector2(-span.y, span.x) / len_px * half
+	var steps := maxi(1, int(ceil(len_px / Look.FX_GROUND_STEP_PX)))
+	for k in steps:
+		var p0 := a + span * (float(k) / float(steps))
+		var p1 := a + span * (float(k + 1) / float(steps))
+		_g_tri(p0 - side, p0 + side, p1 + side, col)
+		_g_tri(p0 - side, p1 + side, p1 - side, col)

@@ -732,14 +732,48 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 	game._unhandled_input(_press(click_at))
 	game._unhandled_input(_release(click_at))
 	t.eq(fs.cam_px, held, "제자리에서 누르고 떼면 카메라는 안 움직인다")
+	# ⚠⚠ **A PRESS ON A BODY PICKS IT AND ORDERS NOBODY, AND THAT IS THE 2026-08-31 REVERSAL** (the
+	# user: 「tab 없이 그냥 캐릭터를 누르면 이동할 수 있는 칸들이 뜨고 눌러서 이동하는거임」). This row
+	# asserted the opposite until that day — one press, one walk, nearest body answers — and the old
+	# row is rewritten rather than kept beside this one: two rows asserting opposite gestures is not a
+	# record, it is one of them lying.
 	var ordered2 := 0
 	for i in b.soldier_order.size():
 		if int(b.soldier_order[i]) >= 0:
 			ordered2 += 1
-	t.ok(ordered2 > 0, "그런데 몸 하나가 그 조각으로 간다 — 누름은 여전히 명령이다")
+	t.eq(ordered2, 0, "몸을 누른 것은 아직 명령이 아니다 — 고른 것이다")
+	t.eq(game.hand.ids.size(), 1, "그리고 손이 그 몸 하나를 쥐고 있다")
+	t.ok(game.hand.reach.size() > 1, "갈 수 있는 자리가 깔렸다 (%d 조각)" % game.hand.reach.size())
+	t.ok(game.hand.can_reach(body_tile), "선 자리도 그중 하나다 — 제자리는 늘 설 수 있는 자리다")
 
-	# ⚠ **The self-check that keeps the pair honest**: the press point really is a 조각 a body can be
-	# sent to. On water both rows above would be satisfied by a shell that does nothing at all.
+	# -- and the SECOND press, on a lit 조각, is the walk ---------------------------------------------
+	# ⚠ **The destination is taken from the reach itself and not typed.** A literal 조각 would measure
+	# a board this net does not own, and the island's shape has moved twice already.
+	var dest := -1
+	var dest_at := Vector2.ZERO
+	for k in game.hand.reach.size():
+		var cand := int(game.hand.reach[k])
+		if cand == body_tile:
+			continue
+		var at := fs.tile_to_screen_px(cand % b.grid.w, cand / b.grid.w)
+		# ⚠ **The round trip is the self-check.** A screen point that resolves to a different 조각
+		# would order somebody somewhere else and this pair would still be green.
+		if game._tile_at(at) != cand:
+			continue
+		dest = cand
+		dest_at = at
+		break
+	t.ok(dest >= 0, "자가 점검 — 화면에서 겨눌 수 있는 갈 수 있는 자리가 있다")
+	if dest >= 0:
+		game._unhandled_input(_press(dest_at))
+		game._unhandled_input(_release(dest_at))
+		t.eq(int(b.soldier_order[game.hand.ids[0]]), dest,
+			"불이 들어온 조각을 누르면 그 몸이 거기로 간다")
+		t.eq(fs.cam_px, held, "그리고 명령한 누름도 카메라를 안 움직인다")
+		t.eq(game.hand.ids.size(), 1, "명령한 뒤에도 손은 그 몸을 놓지 않는다")
+
+	# ⚠ **The self-check that keeps the rows honest**: the press point really is a 조각 a body can be
+	# sent to. On water every row above would be satisfied by a shell that does nothing at all.
 	t.ok(b.grid.passable[body_tile] != 0, "자가 점검 — 누른 자리가 걸을 수 있는 조각이다")
 
 

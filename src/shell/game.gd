@@ -52,6 +52,12 @@ var run: Run = null
 ## behind the panel, and the loss screen has to keep showing enemies-left to say *why* it was lost.
 var battle: Battle = null
 
+## **What the player has hold of.** ⚠⚠ **The shell owns the object and decides NOTHING about it** —
+## every rule about who may be picked, where they may go and what route they would walk lives in
+## `Hand`, which is in `sim/` and drivable with `.new()`. This file only turns presses into its three
+## verbs. **A selection rule written here would be a rule no net can reach.**
+var hand := Hand.new()
+
 ## **Which pan keys are down right now**, as a screen-space direction. Written by `_unhandled_input`
 ## on the key's two edges, spent by `_process` against the frame's own delta.
 ##
@@ -155,6 +161,9 @@ func _open_island() -> void:
 	var opened := run.begin_island()
 	if opened != null:
 		battle = opened
+		# ⚠ **A hand holding bodies from the last island would light a reach built on the last GRID.**
+		# The ids survive an island; the 조각 they were measured against do not.
+		_let_go()
 		# ⚠⚠ **A `battle.commit()` STOOD HERE FOR ONE ROUND AND IT WAS WRONG** (2026-08-28), and the
 		# commit itself is deleted now (2026-08-29) with the fight. **What it cost is worth keeping:**
 		# launched with the commit here, the island was **won before the first frame reached the
@@ -218,6 +227,14 @@ func _process(delta: float) -> void:
 	var vel := _pan_keys * Look.CAM_PAN_KEY_PX_PER_SEC + _edge_pan_dir() * Look.CAM_EDGE_PAN_PX_PER_SEC
 	if vel != Vector2.ZERO:
 		field_view.pan_by(vel * delta)
+	# ⚠⚠ **THE 이동선 IS REBUILT EVERY FRAME AND NOT ONLY ON MOTION.** Its first point is the picked
+	# body's OWN position, and that body walks — built once on hover, the line stayed anchored where he
+	# used to be and trailed behind him across the island. **The camera moves under a still cursor too**
+	# (the edge pan two lines up is the proof), so 「the pointer has not moved」 never meant 「the route
+	# has not changed」.
+	# ⚠ **It is cheap**: `Hand.routes` caches the 조각 list per destination, so this re-reads positions
+	# rather than rebuilding a flow field.
+	_show_route(_pointer_at)
 	# ⚠ **No multiplier is handed down any more.** `speed-off-open-landing` deleted the ladder, so the
 	# sim and both views run on the bare frame delta — which is what every duration in `look.gd` was
 	# budgeted against in the first place. `set_time_scale` and `set_speed` are gone rather than being
@@ -356,6 +373,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		# on the ground". **It is set here and not inside the summon branch below** — the plate says
 		# where the cursor is, which is true whether or not a slot is armed.
 		field_view.set_hover_tile(_tile_at(motion.position))
+		# ⚠⚠ **THE 이동선 IS BUILT ON HOVER AND NOT ON PRESS** (2026-08-31, the user: 「이동할때
+		# 이동선이 미리 보였으면 좋겠네」). 미리 means before the press, so the only event that can carry
+		# it is the motion — a line drawn on the press would appear at the same instant the walk does
+		# and would be a picture of a decision already made.
+		_show_route(motion.position)
 		# ⚠ **The summon aim used to sit above the pan and consume every motion while a slot was
 		# armed** (deleted 2026-08-28). With it gone a motion on the field is a pan or it is nothing.
 		# **The threshold, and it is measured from the press point rather than accumulated per motion.**
@@ -414,7 +436,7 @@ func _quit_the_game() -> void:
 ## ⚠ **One rule in them is worth keeping and is written down here rather than lost**: *whether a card
 ## may be taken was asked of the SIM* — `reward_view.is_card_pressable` called the same predicate
 ## `run.take_card` refused on, so the picture could never offer a card the sim would then reject. That
-## is the same discipline `_order_walk_at` keeps today by driving off `battle.order_walk`'s own bool.
+## is the same discipline `_press_the_island` keeps today by driving off the sim's own answer.
 
 
 ## 시작하기: a brand new run. **`Run.restart()` is not called here** — a fresh `Run` is what 시작하기
@@ -506,7 +528,7 @@ func _end_press() -> void:
 	# Only the left press ever reaches `_begin_press`, so `_press_open` is already the answer to
 	# 「was this a press that may command」 — see the tombstone where `_press_orders` stood.
 	if _press_open and not _panning and battle != null:
-		_order_walk_at(_press_at)
+		_press_the_island(_press_at)
 	_press_open = false
 	_panning = false
 
@@ -656,31 +678,80 @@ func _notification(what: int) -> void:
 ## **Sends the body under the player's command to the tile that was pressed.** True when somebody was
 ## actually ordered, which is what tells the caller the press was consumed.
 ##
-## ⚠⚠ **It orders the body NEAREST THE PRESS and not「the first one ashore」.** With one body the two
-## are the same sentence and the difference cannot be seen; with two it is the difference between
-## commanding what you are looking at and commanding whatever happens to sit lowest in the roster.
-## **The whole cost of getting it right today is this loop**, and getting it wrong would read as a
-## random body answering the click.
-## ⚠ **This is not a squad.** Squads do not exist (2026-08-27, the user: 「칸단위 부대는 따로 없음
-## 아직」) — when they do, this is the function that grows a selection instead of a nearest-body rule.
-func _order_walk_at(at: Vector2) -> bool:
+## ⚠⚠ **`_order_walk_at` STOOD HERE AND IT IS DELETED** (2026-08-31). It ordered **the body nearest
+## the press**, with no selection at all: one press, one walk, and whichever body happened to be
+## closest answered it. Its own comment named the day it would die — 「when squads exist, this is the
+## function that grows a selection instead of a nearest-body rule」 — and this is that function.
+##
+## **Three verbs and the press picks exactly one of them** (2026-08-31, the user: 「tab 없이 그냥
+## 캐릭터를 누르면 이동할 수 있는 칸들이 뜨고 눌러서 이동하는거임」):
+##
+##  1. **a body** -> pick it, and its reach lights;
+##  2. **a lit 조각** -> everybody picked walks there;
+##  3. **anything else** -> let go.
+##
+## ⚠ **True means the press was consumed**, which is what tells `_end_press` it was not a pan — the
+## same contract `_order_walk_at` had.
+func _press_the_island(at: Vector2) -> bool:
 	if battle == null:
 		return false
+	# **A body first, always.** ⚠ A body standing on a 조각 its own hand has lit is BOTH a body and a
+	# destination; asking the destination first would make a picked body impossible to re-pick, and
+	# pressing your own soldier would order him onto himself.
+	var who := hand.body_at(battle, _point_at(at), Look.PICK_BODY_TILES)
+	if who >= 0:
+		var picked := hand.pick(battle, who)
+		_tell_the_view()
+		return picked
+	# **Then a lit 조각.** `Hand.order` refuses anything outside the reach on its own, so there is no
+	# second reachability test here — see the tombstone below.
 	var tile := _tile_at(at)
-	if tile < 0:
-		return false
-	var here := Vector2(float(tile % battle.grid.w), float(tile / battle.grid.w))
-	var who := -1
-	var best := INF
-	for raw_id in battle.ashore_ids():
-		var i := int(raw_id)
-		var d: float = (battle.soldier_pos[i] as Vector2).distance_to(here)
-		if d < best:
-			best = d
-			who = i
-	if who < 0:
-		return false
-	return battle.order_walk(who, tile)
+	if tile >= 0 and hand.can_reach(tile):
+		var keep := hand.ids.duplicate()
+		var sent := hand.order(battle, tile)
+		# ⚠ **The hand keeps hold after the order** (and the reach is rebuilt from where the bodies
+		# still are, not from where they are going). The user's own rule is that the hand never stops
+		# moving; dropping the selection on every order would make a second command a second pick.
+		hand.pick_many(battle, keep)
+		_tell_the_view()
+		return sent > 0
+	# **Everything else lets go** — the sea, a cliff face, a 조각 nobody picked can stand on.
+	_let_go()
+	return false
+
+
+## **The one place the view is told what the hand is holding.** ⚠ Both halves go together on purpose:
+## a reach pushed without clearing the stale route leaves a line pointing at a 조각 that is no longer
+## lit, which is the picture disagreeing with the rule.
+func _tell_the_view() -> void:
+	field_view.set_reach(hand.reach)
+	field_view.set_move_lines([])
+
+
+## **Drops the selection and puts the board back to rest.**
+func _let_go() -> void:
+	hand.clear()
+	_tell_the_view()
+
+
+## **The 이동선 under the cursor, or nothing.** ⚠ **Nothing is drawn while the hand is empty or the
+## cursor is off the reach** — a route to a 조각 the press would refuse is a line the game will not
+## walk.
+func _show_route(at: Vector2) -> void:
+	if battle == null or hand.is_empty():
+		return
+	var tile := _tile_at(at)
+	if tile < 0 or not hand.can_reach(tile):
+		field_view.set_move_lines([])
+		return
+	field_view.set_move_lines(hand.route_points(battle, tile))
+
+
+## **A screen press in 조각 units, fractions and all.** ⚠ **Not `_tile_at` rounded** — `Hand.body_at`
+## measures a real distance to a body standing off the middle of its 조각, and a rounded point would
+## throw away exactly the part that decides whether the press hit him.
+func _point_at(at: Vector2) -> Vector2:
+	return field_view.screen_to_terrain_px(at) / Look.TILE_PX
 
 
 ## A screen press converted to the tile it landed on, or -1 off the grid — the one function every
@@ -752,4 +823,4 @@ func _on_wheel(at: Vector2, notch: int) -> void:
 #  - `_ring_hit_at` — it undid a placed boat, and there is no boat the player places (2026-08-28);
 #  - `_on_summon_key` / `_slot_of_keycode` / `_arm` / `_disarm` / `_begin_summon` / `_fire_one_summon`
 #    — the whole summon gesture, deleted with the start button it was authored in front of.
-#    ⇒ **`_order_walk_at` is the only hit test a field press gets now.**
+#    ⇒ **`_press_the_island` is the only hit test a field press gets now.**

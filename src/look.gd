@@ -291,6 +291,22 @@ const PAD_HOVER_LIFT := 0.06            # world units. **3x the 판's own 0.02 t
 const PAD_MERGE_ZOOM := 0.72
 const PAD_APART_ZOOM := 1.45
 
+## **What a 판 the picked body may stand on is worth** (2026-08-31, the user: 「캐릭터를 누르면 이동할
+## 수 있는 칸들이 뜨고 눌러서 이동하는거임」).
+##
+## ⚠⚠ **BETWEEN THE RESTING BOARD AND THE HOVER, AND THAT ORDERING IS THE WHOLE POINT.** Three states
+## are on screen at once — the board TAB reveals, the reach the pick lights, and the one 조각 under the
+## cursor — and if any two of them are worth the same the player cannot tell which is which.
+## ⇒ `PAD_ALL_* < PAD_REACH_* < PAD_HOVER_*` on both channels, and a net asserts exactly that.
+const PAD_REACH_ALPHA := 0.55
+const PAD_REACH_LIGHTEN := 0.30
+
+## **The two values the reach MASK is written with** — not a colour anybody looks at, but the mask is
+## an `Image` and every literal colour in this project lives here. ⚠ **Red is the only channel the
+## shader reads** (`FORMAT_R8`); the rest is there because `Image.set_pixel` takes a `Color`.
+const COL_REACH_OFF := Color(0.0, 0.0, 0.0, 1.0)
+const COL_REACH_ON := Color(1.0, 1.0, 1.0, 1.0)
+
 ## How big one texel of a `Sprite3D` is in world units. **The inverse of `TILE_PX` and written as that
 ## division**, because it is the same fact as "one world unit is one tile" at the top of this section —
 ## a picture sized in canvas px lands at the size this file already says it is.
@@ -1916,6 +1932,36 @@ const FX_GROUND_LIFT_TILES := 0.02
 ## ⚠ Lowering this multiplies triangles on every ring and every route. Raising it makes a route lay a
 ## chord across a ramp instead of following it.
 const FX_GROUND_STEP_PX := 20.0
+
+## **The 이동선 — the route the picked body would walk, drawn before it walks it** (2026-08-31, the
+## user: 「이동할때 이동선이 미리 보였으면 좋겠네」).
+##
+## ⚠⚠ **IT IS THE ROUTE AND NOT A STRAIGHT LINE.** `Hand.routes` builds it from the same flow field and
+## the same `string_pull` that `Battle.order_walk` uses, so the line drawn is the line walked. A line
+## drawn any other way is a promise the walk does not keep, and 티켓 37 is the round that measured a
+## walk bending where the picture did not.
+##
+## ⚠ **Half-width, so the ribbon is twice this across.** Kept under half a 조각 — a line as wide as the
+## 판 it crosses reads as another 판 rather than as a route over them.
+const MOVE_LINE_HALF_PX := 3.0
+
+## **How near a press has to land to count as pressing a BODY** rather than the ground under it, in
+## 조각. ⚠ **A distance and not a 조각 test**: bodies stand up to three to a 조각 and off its centre,
+## so 「the body whose 조각 you pressed」 refuses presses that visibly hit somebody and accepts presses
+## that visibly missed.
+## ⚠ **A body is drawn standing UP from its feet**, so a press aimed at the chest lands past the feet
+## on the ground behind them. This is generous on purpose for that reason, and it is the first number
+## to move if picking feels sticky or slippery.
+const PICK_BODY_TILES := 0.8
+
+## The dot dropped where the route ends. **Bigger than the line is wide**, or the end of the walk is
+## indistinguishable from a bend in it.
+const MOVE_LINE_END_PX := 7.0
+
+## ⚠ **Alpha is in the colour and there is no second fade.** The ground layer is alpha-blended and
+## unshaded, so what is written here is what is on screen.
+const COL_MOVE_LINE := Color(1.0, 0.98, 0.86, 0.72)
+const COL_MOVE_LINE_END := Color(1.0, 0.98, 0.86, 0.92)
 
 
 ## ⚠⚠ **`FX_SETTLE_FRAMES` WAS DELETED 2026-08-27, AND ITS OWN HEADER PREDICTED IT.** It said "nothing
