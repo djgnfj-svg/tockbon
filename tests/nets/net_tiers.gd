@@ -728,9 +728,11 @@ const ACROSS_THE_WALL := 2.2360679775
 ## enemy first — which is the ticket's own sentence and the thing that cannot happen while `_walk`
 ## exits on its first line.
 ##
-## ⚠ **The enemy is a LION for one reason: `Rules.detect_of` is 2.0, the smallest on the table.** A
-## shieldbearer (6.0) would start walking down the stair to meet the wolves and the row would be
-## measuring which of them moved. At 2.24 the lion does not wake, so what the row watches is the wolves.
+## ⚠⚠ **THIS SAID 「the enemy is a LION because its detect is the smallest on the table」 AND IT WAS
+## STALE BEFORE THE LION WAS DELETED** (2026-08-31). `Rules.LION` appears nowhere in this file's code
+## — the fixture below is built with an EMPTY enemy list. **The reason the note gave is still the
+## right reason to be careful**: a body with a wide detect radius walks down the stair to meet the
+## wolves, and then the row measures which of them moved rather than the climb.
 const CLIMB_ROWS := [
 	"~~~~~~~~~~~~~~",
 	"~............~",

@@ -1365,7 +1365,10 @@ const COL_SLOT_OFF := Color(0.420, 0.420, 0.440)
 ## ⚠⚠ **FIVE, in `Rules.UNITS` order since the sides swapped**: 검사 · 늑대 · 곰 · 까마귀 · 사자.
 ## **The swordsman takes the shieldbearer's 0.245** — it is the same drawing at the same scale, and a
 ## new number here would change how big a body reads for a reason nobody chose.
-const BODY_RADIUS_RATIO := [0.245, 0.22, 0.31, 0.174, 0.342]
+## ⚠⚠ **THIS WAS FIVE NUMBERS AND IT IS TWO** (2026-08-31), with 곰 0.31 · 까마귀 0.174 · 사자 0.342
+## leaving alongside their rows. **The 1.29x ladder they sat on is recorded in the note above and the
+## three values are here**, so a beast coming back does not have its size re-guessed by eye.
+const BODY_RADIUS_RATIO := [0.245, 0.22]
 
 
 ## **The wolf, seen from four sides.** Screen-right, screen-left, screen-down (coming at the camera),
@@ -1402,10 +1405,14 @@ const BEAST_WOLF_H_U := "res://assets/beast/wolf_h/north.png"
 ## **mixing two canvases is a measured defect** — 티켓 48: 「캔버스가 프레임마다 다르면 몸이 뛰고
 ## 떠오른다」. ⇒ **The wolf walks unanimated until H is given its own strips**, which is one row of the
 ## table below and nothing else.
-const BEAST_BEAR_R := "res://assets/beast/bear_r.png"
-const BEAST_BEAR_L := "res://assets/beast/bear_l.png"
-const BEAST_CROW_R := "res://assets/beast/crow_r.png"
-const BEAST_CROW_L := "res://assets/beast/crow_l.png"
+## ⚠⚠ **THE BEAR'S AND THE CROW'S FOUR PICTURES STOOD HERE AND ARE DELETED WITH THEIR ROWS**
+## (2026-08-31, the user: *"take out the bear, crow and lion code — there is only the wolf"*).
+## **`bear_l/r.png` and `crow_l/r.png` are off disk too**, because a picture no row names is a file
+## nobody dares remove later.
+## ⚠ **They were the last TWO-picture rows in the table.** Every row left names four, which is why
+## `net_fx_view`'s 「a two-picture row never answers with a head-on picture」 lost its subject in the
+## same edit — the guarantee stands in `beast_facings`, and **nothing measures it until a species with
+## two pictures exists again.**
 
 ## ⚠⚠ **THE PLAYER, since 2026-08-26.** ⚠⚠ **AND THE DRAWING WAS REPLACED 2026-08-31.** What stood
 ## here was `sword_r/_l.png`, a 33 x 40 side-on chibi drawn back when the humans were the enemy; the
@@ -1754,9 +1761,11 @@ const BEAST_TEX := [
 	# than he is). **0.85 is what this file ships**; the rest are written down because the user asked to
 	# see them and may want one instead.
 	[[BEAST_WOLF_H_R, BEAST_WOLF_H_L, BEAST_WOLF_H_D, BEAST_WOLF_H_U], WOLF_ANIM_FRAMES, 0.85],
-	[[BEAST_BEAR_R, BEAST_BEAR_L], NO_ANIM_FRAMES, 1.0],
-	[[BEAST_CROW_R, BEAST_CROW_L], NO_ANIM_FRAMES, 1.0],
-	[[], NO_ANIM_FRAMES, 1.0],
+	# ⚠⚠ **THREE ROWS STOOD HERE — 곰, 까마귀 AND THE LION'S EMPTY ONE — AND ALL THREE ARE DELETED**
+	# (2026-08-31). **The lion's was `[[], NO_ANIM_FRAMES, 1.0]`**, the one row with no picture at all,
+	# and `field_view` drew the plain rounded shape for it. ⚠ **That fallback is now unreachable and it
+	# is kept anyway**: it is what a row with a missing file lands on, and the day the boss is drawn it
+	# is what stands there while the art is being chosen.
 ]
 
 const _TEX_COL_PICS := 0

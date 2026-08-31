@@ -29,9 +29,16 @@ class_name Rules
 ## row coming back is a row, not a drawing.
 const SWORDSMAN := 0
 const WOLF := 1
-const BEAR := 2
-const CROW := 3
-const LION := 4
+## ⚠⚠ **`BEAR := 2` · `CROW := 3` · `LION := 4` STOOD HERE AND ALL THREE ARE DELETED** (2026-08-31,
+## the user: 「곰까마귀사자 관련코드제거 아직 늑대만있음」 — *"take out the bear, crow and lion code —
+## there is only the wolf"*). **Nothing spawned them.** The shipped island's own letters are `H`, `~`
+## and `.` only, the boats carry 늑대, and every one of the three had no attack art, no walk art and
+## no death art. **They were four numbers in a table and two pictures each.**
+## ⚠ **The survivors keep their indices**, because the three that left were the last three: SWORDSMAN
+## is still 0 and WOLF is still 1. **Nothing indexed by a saved type id moved.**
+## ⚠⚠ **7 주 is 「짐승 종류를 늘린다」 and this does not make that week bigger.** A species is a row in
+## `UNITS` plus a row in `Look.BEAST_TEX`; **what a new beast actually costs is the DRAWING**, and none
+## of the three had one. **Adding a row back is the cheap half either way.**
 
 ## ⚠ **`TYPE_COUNT` is DELETED, not renamed.** It meant two different things at once — the table's
 ## height and the number of equipment boards — and those stopped being the same number the day the
@@ -261,14 +268,12 @@ const UNITS := [
 	# difference unattributable. **They gained a detect radius** — an enemy has to notice something.
 	# ⚠⚠ **1.0 → 2.0 AND 2.0 → 4.0, the same trade the 검사 above took** and for the same reason. DPS
 	# is 2.0 either way.
-	# ⚠⚠ **THE OTHER THREE BEASTS WERE NOT TOUCHED, AND THAT IS A KNOWN INCONSISTENCY.** 곰 · 까마귀 ·
-	# 사자 have no attack art and none of them is spawned today, so re-timing them would be tuning a
-	# fight nobody has seen. **The day one of them walks, its row takes the same doubling** — otherwise
-	# a 곰 swings twice for every one blow of a 늑대 for a reason nobody chose.
+	# ⚠⚠ **THREE ROWS STOOD UNDER THIS ONE AND THEY ARE DELETED** (2026-08-31) — see the tombstone
+	# where `BEAR` was. **Their numbers, in case one comes back**: 곰 30/3.5/1.8/0/1.5/2.8/6 ·
+	# 까마귀 8/1.5/1.0/**4 사거리**/1.0/4.0/12 · 사자 140/4.0/1.5/0/1.5/2.5/**2 탐지**.
+	# ⚠ **The 까마귀's 4-tile range and the 사자's 2-tile detect were the only two of their kind on the
+	# table**, so the day a ranged beast or a boss is built, those two columns have no other example.
 	["WOLF", 14.0, 4.0, 2.0, 0.0, 0.0, 4.0, 6.0, Side.ENEMY, "늑대"],
-	["BEAR", 30.0, 3.5, 1.8, 0.0, 1.5, 2.8, 6.0, Side.ENEMY, "곰"],
-	["CROW", 8.0, 1.5, 1.0, 4.0, 1.0, 4.0, 12.0, Side.ENEMY, "까마귀"],
-	["LION", 140.0, 4.0, 1.5, 0.0, 1.5, 2.5, 2.0, Side.ENEMY, "사자"],
 ]
 
 const _COL_NAME := 0

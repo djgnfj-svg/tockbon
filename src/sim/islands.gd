@@ -226,11 +226,14 @@ static func spawns() -> Array:
 ## **One row per letter that puts a body on the ground: the character, and the `Rules.UNITS` row it
 ## is.** ⚠⚠ **THIS IS THE ONE PLACE A SPAWN LETTER IS BOUND TO ANYTHING.** `grid.land_chars()` reads
 ## this table, so **a letter that spawns a body is walkable ground by construction**.
+## ⚠⚠ **`B` · `C` · `L` STOOD HERE AND ALL THREE ARE DELETED** (2026-08-31) with the rows they bound
+## to — 곰 · 까마귀 · 사자. **The shipped island never used any of them**: its own letters are `H`,
+## `~` and `.`, and even `W` is unused because the beasts come by boat.
+## ⚠ **A letter here makes its tile walkable by construction** (`grid.land_chars()` reads this), so
+## three letters leaving means three characters that no longer make ground. **Nothing on the board
+## used them, so nothing on the board changed.**
 const SPAWN_ROWS := [
 	["W", Rules.WOLF],
-	["B", Rules.BEAR],
-	["C", Rules.CROW],
-	["L", Rules.LION],
 ]
 
 const _SPAWN_COL_CHAR := 0

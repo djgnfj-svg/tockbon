@@ -2597,3 +2597,32 @@ and re-running.
 - **The engine swing has not been looked at by the user.**
 - **소리 is still zero**, and it is the one thing every source names first.
 - **곰 · 까마귀 · 사자 have no attack art**, so their rows are on the old tempo.
+
+### ⚠⚠ 곰 · 까마귀 · 사자 were deleted after the wrap-up, on one sentence
+
+> ***"Take out the bear, crow and lion code — there is only the wolf."***
+
+**Nothing was spawning them and nothing had drawn them.** The shipped island's own letters are `H`,
+`~` and `.` — **not one spawn character is used**, because the beasts come by boat, and the boats
+carry 늑대. **All three had two standing pictures each and no walk, no attack and no death.**
+
+| What left | Where |
+|---|---|
+| `BEAR` · `CROW` · `LION` and their three `UNITS` rows | `rules.gd`, with their numbers on the tombstone |
+| The `B` · `C` · `L` spawn letters | `islands.gd` — ⚠ a letter here also makes its tile walkable, and none was used |
+| Four pictures and their two `BEAST_TEX` rows, plus the lion's empty one | `look.gd` |
+| Three of the five `BODY_RADIUS_RATIO` numbers | `look.gd`, values recorded |
+| `bear_l/r.png` · `crow_l/r.png` | off disk — **a picture no row names is a file nobody dares remove later** |
+
+⚠⚠ **THE BEAR AND THE CROW WERE THE LAST TWO-PICTURE ROWS, AND A GUARANTEE LOST ITS SUBJECT WITH
+THEM.** `net_fx_view` asserted that a row with two pictures never answers with a head-on picture,
+however it walks. **Every row left names four**, so that assertion has nothing to measure. **It was
+deleted with a note saying what it asserted and when to bring it back** — a check that quietly stops
+covering something is exactly what `how-nets-lie` is about.
+
+⚠ **Two columns now have no example left on the table**: the 까마귀's 4-tile range and the 사자's
+2-tile detect were the only ones of their kind. **7 주 builds a ranged beast and 9 주 builds the
+boss**, and both start from a table with no precedent for their own column.
+
+**Nets: 1257 · 67 → 1242 · 66.** ⚠ **The fifteen lost passes are all assertions about the three rows**
+— `net_fx_view` −6, `net_islands` −6, `net_fight` −3 — and **one failure went with them.**

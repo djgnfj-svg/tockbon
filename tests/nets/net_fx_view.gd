@@ -499,12 +499,16 @@ func _the_wolf_ashore_wears_the_picture_that_was_chosen(t) -> void:
 			"옛 옆모습 늑대가 한 장도 안 남았다 (%s)" % str(raw))
 	# ⚠ **The other rows keep the two they had.** Fixing one row by breaking three is the failure this
 	# guards, and it is the shape 「a list per species」 was chosen to make impossible.
-	# ⚠⚠ **THE SWORDSMAN LEFT THIS LIST 2026-08-31.** He was a 33 x 40 side-on chibi with two pictures;
-	# the user chose a new body and asked for the turned views, so his row now names four files of its
-	# own. **He is checked on the four-picture side below**, which is the same guard pointed the other
-	# way — the row that must NOT break is now bear and crow.
-	for ty in [Rules.BEAR, Rules.CROW]:
-		t.eq(Look.beast_facings(ty), 2, "%d 번 줄은 좌우 두 장 그대로다" % ty)
+	# ⚠⚠ **THE SWORDSMAN LEFT THIS LIST 2026-08-31, AND THE BEAR AND THE CROW LEFT THE GAME THE SAME
+	# DAY.** He was a 33 x 40 side-on chibi with two pictures; the user chose a new body and asked for
+	# the turned views. Then 곰 · 까마귀 · 사자 were deleted outright — 「there is only the wolf」.
+	# ⚠⚠ **SO THE TWO-PICTURE SIDE OF THIS GUARD HAS NO SUBJECT LEFT AND IS NOT MEASURED.** Every row
+	# in the table now names four files. **The guarantee still stands in `Look.beast_facings`** — a
+	# row's own length is what decides — and **the day a species ships with two pictures, the two rows
+	# that stood here come back.** They asserted `beast_facings(ty) == 2` and that walking down the
+	# screen still answered with one of the two side views.
+	# ⚠ **Written down rather than left as a silently shorter loop**, because a check that quietly
+	# stops covering something is the failure `how-nets-lie` is about.
 	t.eq(Look.beast_facings(Rules.SWORDSMAN), 4, "검사 줄도 그림 넉 장을 든다 — 좌·우·앞·뒤")
 	var man_paths := []
 	for f in Look.beast_facings(Rules.SWORDSMAN):
@@ -524,10 +528,8 @@ func _the_wolf_ashore_wears_the_picture_that_was_chosen(t) -> void:
 	var fv: FieldView = pack["fv"]
 	var b: Battle = pack["b"]
 	fv.cam_yaw_deg = 0.0
-	for ty in [Rules.BEAR, Rules.CROW]:
-		t.ok(fv._facing_index(ty, Vector2(0.0, 1.0)) <= Look.FACE_LEFT,
-			"%d 번 줄은 화면 아래로 걸어도 옆모습 둘 중 하나다" % ty)
-	# ⚠ **And the swordsman now goes the wolf's way**, because the row's own length is what decides it.
+	# ⚠⚠ **THE TWO-PICTURE ROWS THIS LINE ASKED ABOUT ARE GONE** (2026-08-31) — see the note above.
+	# ⚠ **The swordsman goes the wolf's way**, because the row's own length is what decides it.
 	t.eq(fv._facing_index(Rules.SWORDSMAN, Vector2(0.0, 1.0)), Look.FACE_DOWN,
 		"검사도 화면 아래로 걸으면 앞모습이다")
 	# And the wolf, which does have them, does not.
