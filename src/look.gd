@@ -1331,10 +1331,27 @@ const BEAST_BEAR_L := "res://assets/beast/bear_l.png"
 const BEAST_CROW_R := "res://assets/beast/crow_r.png"
 const BEAST_CROW_L := "res://assets/beast/crow_l.png"
 
-## ⚠⚠ **THE PLAYER, since 2026-08-26.** The same body again with a sword in its hands — drawn back
-## when the humans were the enemy, which is exactly why the swap cost no art at all.
-const HUMAN_SWORD_R := "res://assets/human/sword_r.png"
-const HUMAN_SWORD_L := "res://assets/human/sword_l.png"
+## ⚠⚠ **THE PLAYER, since 2026-08-26.** ⚠⚠ **AND THE DRAWING WAS REPLACED 2026-08-31.** What stood
+## here was `sword_r/_l.png`, a 33 x 40 side-on chibi drawn back when the humans were the enemy; the
+## user chose this body from sixteen candidates and it carries **no sword, no clothes and no face** —
+## a pale mass, a round bald head and two black dots.
+##
+## ⚠⚠ **RIGHT AND LEFT ARE TURNED, NOT SIDE-ON** (2026-08-31, the user at the screen: 「지금 너무
+## 좌여서」 — what I want is 정면우 and 정면좌). A flat profile shows one eye and reads as a different
+## creature from the front view beside it; these two are the **south-east and south-west** rotations,
+## so the chest still faces the camera and both eyes stay visible.
+## ⚠ **DOWN AND UP ARE STILL THE FLAT FRONT AND BACK.** The user also asked for **뒤우 · 뒤좌**, the
+## two turned BACK views, and those cannot be hung on these two slots: `field_view._facing_index`
+## picks up/down by **which ground axis is bigger**, and four turned pictures need it to pick by
+## **the sign of both axes**. That is a change to the picker the wolf shares, so it is not made here.
+##
+## ⚠ **ALL FOUR ARE 40 x 60**, which is what keeps the man the same size whichever way he faces —
+## `_beast_rect` fixes the drawn WIDTH from the body radius and takes the HEIGHT from this texture's
+## aspect ratio, so two facings on two canvases is a body that pulses.
+const HUMAN_MAN_R := "res://assets/human/man/right.png"
+const HUMAN_MAN_L := "res://assets/human/man/left.png"
+const HUMAN_MAN_D := "res://assets/human/man/down.png"
+const HUMAN_MAN_U := "res://assets/human/man/up.png"
 
 ## ⚠⚠ **`IDLE` IS NOT A STRIP.** It is the standing picture every row already has and every row
 ## without a strip falls back to, which is why it carries no frame count and why the frame table below
@@ -1417,7 +1434,7 @@ const BEAST_FRAME_SEC := 0.12
 ## be card art now. ⇒ **A second player body costs a new DRAWING, not a new row**, and the estimate
 ## anyone makes off this table has to include that.
 const BEAST_TEX := [
-	[[HUMAN_SWORD_R, HUMAN_SWORD_L], NO_ANIM_FRAMES, 1.0],
+	[[HUMAN_MAN_R, HUMAN_MAN_L, HUMAN_MAN_D, HUMAN_MAN_U], NO_ANIM_FRAMES, 1.0],
 	[[BEAST_WOLF_H_R, BEAST_WOLF_H_L, BEAST_WOLF_H_D, BEAST_WOLF_H_U], NO_ANIM_FRAMES, 1.70],
 	[[BEAST_BEAR_R, BEAST_BEAR_L], NO_ANIM_FRAMES, 1.0],
 	[[BEAST_CROW_R, BEAST_CROW_L], NO_ANIM_FRAMES, 1.0],
