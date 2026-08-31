@@ -232,6 +232,10 @@ func _table() -> Dictionary:
 			# away, which is the same thing 기법 23 measured.
 			"_maybe_sway": 0,
 			"_paint_sway": 0,
+			# ⚠ **A sine is the wrong shape** — Crysis uses a smoothed triangle and Unity's grass a
+			# sin⁴, both to sharpen the crest so a plant rests between gusts. See the 08-31 note in
+			# `docs/reference/`.
+			"_gust_wave": 0,
 			"_put_flat_prop": 0,
 			# ⚠ **It is a PAINT and it runs every frame**, unlike everything else in this block:
 			# a picture prop is built once, but the camera's pitch stretch has to be paid back to it

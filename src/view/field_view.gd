@@ -1271,9 +1271,10 @@ func _maybe_sway(n: Node3D, kind: String, tile: int) -> void:
 	_sway_nodes.append(n)
 	_sway_base.append(n.basis)
 	_sway_amp.append(deg_to_rad(deg))
-	# **A prime times the tile, wrapped** — neighbours land far apart in phase, so a row of bushes
-	# does not lean as one board.
-	_sway_phase.append(fmod(float(tile) * 2.399963, TAU))
+	# **An irrational times the tile, wrapped into ONE CYCLE** — neighbours land far apart in phase,
+	# so a row of bushes does not lean as one board. ⚠ **0..1, not radians**: `_gust_wave` counts
+	# cycles, and a phase in radians would put every prop within a sixth of a cycle of its neighbour.
+	_sway_phase.append(fposmod(float(tile) * 0.381966, 1.0))
 
 
 ## **Leans every plant, once a frame.**
@@ -1288,12 +1289,27 @@ func _paint_sway(dt: float) -> void:
 	var wind := deg_to_rad(Look.PROP_SWAY_WIND_DEG)
 	# the lean tips TOWARD the wind, so the turn is about the axis across it
 	var axis := Vector3(-sin(wind), 0.0, cos(wind))
-	var w := TAU * Look.PROP_SWAY_HZ * _sway_clock
-	var g := TAU * Look.PROP_SWAY_GUST_HZ * _sway_clock
+	var w := Look.PROP_SWAY_HZ * _sway_clock
+	var g := Look.PROP_SWAY_GUST_HZ * _sway_clock
 	for i in _sway_nodes.size():
 		var ph: float = _sway_phase[i]
-		var a: float = _sway_amp[i] * lerpf(sin(w + ph), sin(g + ph * 0.37), Look.PROP_SWAY_GUST)
+		var a: float = _sway_amp[i] * lerpf(
+			_gust_wave(w + ph), _gust_wave(g + ph * 0.37), Look.PROP_SWAY_GUST)
 		_sway_nodes[i].basis = Basis(axis, a) * _sway_base[i]
+
+
+## **The wave the lean rides, in −1..1, one cycle per unit of `x`.**
+##
+## ⚠⚠ **A SINE IS THE WRONG SHAPE AND THAT IS WRITTEN DOWN OUTSIDE THIS REPO.** Crysis's own vegetation
+## code uses a SMOOTHED TRIANGLE — `smooth(tri(x))` — and Unity's shipped grass raises its sine to the
+## fourth power; both sharpen the crest and flatten the trough, so a plant **rests, gusts, and rests**
+## instead of ticking like a metronome. **The reference note on foliage, mesh-vs-card and sway already
+## carries the complaint that names the defect** — a reply to Bad North's developer: 「your bush
+## wiggling is too regular… wind is more wave like」. The formulas are in the note beside it, on the
+## sway arithmetic and the outline shell.
+static func _gust_wave(x: float) -> float:
+	var tri := absf(fposmod(x + 0.5, 1.0) * 2.0 - 1.0)      # 0..1..0, a triangle
+	return (tri * tri * (3.0 - 2.0 * tri)) * 2.0 - 1.0      # eased at both ends, then to −1..1
 
 
 ## **A prop drawn as a picture instead of a mesh** — `assets/props/flat/<kind>.png`.
