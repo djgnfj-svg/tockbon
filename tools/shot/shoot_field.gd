@@ -34,13 +34,6 @@ func _click(at: Vector2) -> InputEventMouseButton:
 	return ev
 
 
-func _key(code: int) -> InputEventKey:
-	var ev := InputEventKey.new()
-	ev.pressed = true
-	ev.keycode = code
-	return ev
-
-
 func _wheel_up() -> InputEventMouseButton:
 	var ev := InputEventMouseButton.new()
 	ev.button_index = MOUSE_BUTTON_WHEEL_UP
@@ -74,8 +67,11 @@ func _process(_delta: float) -> bool:
 		4:
 			_save("5_island_running")
 		5:
+			# ⚠ **This turned the board with three E presses until 2026-08-31**, when the user had the
+			# keyboard turn deleted from the shell. **The camera is turned directly now** — the shot
+			# still needs a turned island and the tool is not a player.
 			for _i in 3:
-				_game._unhandled_input(_key(KEY_E))
+				_game.field_view.turn_by(Look.CAM_YAW_STEP_DEG)
 		6:
 			_save("6_turned")
 		7:
