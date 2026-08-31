@@ -15,6 +15,13 @@ keeps its place, and the stair will be placed into THIS board rather than a boar
 climbed. **Neither is a defect any more** — the stair (ticket 06) is what opens the plateau, and the
 islet waits for boats.
 
+⚠⚠ **MEASURED 2026-08-30 — what「not a defect」costs in nets.** `net_islands` runs 17 red of 45, and
+**four of those reds are the islet by itself**: the island's land is 284 칸 while its largest walkable
+body is 280, and the boat-reachable shore at 680 · 681 · 710 · 711 leads nowhere on foot. **The ground
+is right and the nets are stale** — they still encode 「every landing spot walks to the island」, which
+is the rule this decision overturned. ⇒ Roadmap ticket **15** counts this as a third cause of its reds,
+beside the island's size. **Nothing about the island is to be changed for it.**
+
 ## The question
 
 **What shape should the real island be, now that there are twelve kinds of block to build it from?**
