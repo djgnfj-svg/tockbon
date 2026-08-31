@@ -28,8 +28,10 @@ the four questions and where to find each.
 **It was pulled out on 2026-08-27 because the 3D ate the conversation**, and it went back because **twice
 it did the work and sent no result**, so the caller measured everything by hand anyway. The agent saved
 context and spent a round each time.
-⇒ **What it knew is `tools/blender/README.md`** — the five traps, the mirror rule, the loop and the
+⇒ **What it knew is `docs/manual/blender.md`** — the traps, the mirror rule, the loop and the
 numbers. **Read that before touching a mesh**; the reading step is no longer somebody else's.
+⚠ **`tools/blender/` was deleted 2026-08-31.** The meshes are `.blend` originals in `blend/` now, and
+that page is where the rule lives.
 
 ## ⚠ **`net-tuner` is gone too** (2026-08-29, the user: *"when it gets long, we check it then"*)
 

@@ -1,10 +1,13 @@
 class_name Builds
 ## **The buildings that can stand on the island — READ FROM A FILE, not written here.**
 ##
-## ⚠⚠ **`tools/blender/buildings_build.py` is the source.** One run of it writes both
-## `assets/buildings/buildings.glb` (what the game DRAWS) and `assets/buildings/buildings.json` (what
-## the game KNOWS: the kind, its footprint in tiles, and its name). **They cannot disagree**, because
-## nothing writes one without the other — the same arrangement the island itself stands on.
+## ⚠⚠ **`blend/buildings.blend` is the source of the SHAPE, and this file's table has no source any
+## more.** `assets/buildings/buildings.glb` (what the game DRAWS) and `assets/buildings/buildings.json`
+## (what the game KNOWS: the kind, its footprint in tiles, and its name) were written by one run of a
+## script that was deleted 2026-08-31 with `tools/blender/`.
+## ⚠⚠ **THEY CAN NOW DISAGREE, WHICH THEY COULD NOT BEFORE.** Resize a building in the `.blend` and
+## this table still reports the old footprint. **See the Blender manual** — it carries this trap
+## and the commit the deleted script is recoverable from.
 ##
 ## ⚠ **This file holds no shape and no picture.** It answers "how many tiles does a keep cover" and
 ## nothing more, so `sim` stays a thing a net can drive with `.new()` and no tree.
@@ -25,7 +28,7 @@ static func _load() -> Array:
 	if not _table.is_empty():
 		return _table
 	var text := FileAccess.get_file_as_string(TABLE_PATH)
-	assert(text != "", "buildings.json is missing — run tools/blender/buildings_build.py")
+	assert(text != "", "buildings.json is missing — see the Blender manual")
 	var parsed: Variant = JSON.parse_string(text)
 	assert(parsed is Dictionary, "buildings.json is not an object")
 	_table = (parsed as Dictionary)["builds"] as Array

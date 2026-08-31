@@ -126,19 +126,11 @@ deleted. **If a screen is worth having, it is worth being designed.**
 ⚠ **What this does NOT forbid**: a shader, a line the sim needs to prove something, or a throwaway
 probe. **The test is whether the PLAYER is meant to look at it.**
 
-## ⚠⚠ **A mesh has a `.blend`, and that file is the original** (2026-08-31, the user)
+## ⚠⚠ **A mesh has a `.blend` in `blend/`, and that file is the original** (2026-08-31, the user)
 
-***"우리는 블렌더 원본 파일도 남기면서 작업해야 함. 툴 쓰지 말라고 수십 번도 넘게 말했는데 계속 무시했다.
-모델을 만들어 놓고 원본 파일이 있는 상태에서 그걸 쓰는 거지, 코드로 남기는 건 말이 안 된다."***
-
-- **`blend/` holds every original.** Boat, island, buildings, props, small boat — **saved, never regenerated**
-- **To change a shape, OPEN the `.blend` and change it.** ⚠ **Do not edit a build script and re-run it** — that overwrites what the user did by hand
-- **Export the `.glb` out of that `.blend`**, into `assets/`
-- ⚠ **The user does the detail work with a mouse.** A mesh only a script can change is a mesh only the model can change
-- ⚠ **`tools/blender/*.py` is history, not the source** — read it for why a number is what it is
-
-**One exception, and say it out loud rather than acting on it**: the island's `island.json` — passability,
-levels, harbours, coast — is written by `island_build.py` and no `.blend` carries it.
+***"모델을 만들어 놓고 원본 파일이 있는 상태에서 그걸 쓰는 거지, 코드로 남기는 건 말이 안 된다."***
+**Open it, change it, export from it. Never rebuild a mesh from a script.**
+⇒ **Before touching any shape, read `docs/manual/blender.md`.**
 
 # The docs
 
