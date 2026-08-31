@@ -45,26 +45,44 @@ const FACE_NAMES := ["south", "east"]
 ## It exists to answer 「do they stand still?」 with a number instead of with a claim: **two frames of a
 ## frozen board must differ only by the idle sway.** It was written the day the nine vibrated.
 const STILL_GAP := 4
+
+## --- `-- move`: the walk, photographed ------------------------------------------------------------
+## ⚠⚠ **THE ONLY WAY TO SHOW A MOVE TO SOMEBODY WHO IS NOT AT THE KEYBOARD.** (2026-08-31, the user:
+## 「you have to take the screenshots and show me — I'm lying down right now」.)
+## **Which frames are kept.** At 60 a second: the order, then the crossing, then the settle. ⚠ **The
+## last two are close together on purpose** — the interesting part is the last second, where the nine
+## stop walking and slide onto the lattice, and one frame either side of that reads as a jump.
+const MOVE_FRAMES := [0, 45, 105, 165, 225, 285, 345, 420]
+## The sim step the move shoot advances by, held rather than taken from the frame. **A photographed
+## walk that used the real delta would cross a different distance on a slower machine.**
+const MOVE_DT := 1.0 / 60.0
+## How far apart the two 블록 are aimed, in 조각. Far enough that the crossing is a walk and not a
+## shuffle, near enough that both ends are in one frame at a readable zoom.
+const MOVE_SPAN := 8.0
+## Notches of zoom for the move shoot. **Fewer than a still shot** — two 블록 and the ground between
+## them have to fit.
+const MOVE_NOTCHES := 5
 ## Wheel notches for the shot. The nine have to fill the frame or the sheet is a picture of an island.
 const NEAR_NOTCHES := 9
 
 ## --- move mode: `06-ranks-wide`, walked ----------------------------------------------------------
-## ⚠⚠ **WHICH OF THE NINE LATTICE SEATS BELONGS TO WHICH 조각 OF THE 블록** — the table the 3x3 lattice
-## needs and does not have on its own. Nine seats over four 조각 is 2.25, so the split is 3 · 2 · 2 · 2
-## and **the middle seats do not sit in the 조각 nearest them**: assigning by nearest gives one 조각
-## four seats, which is over `Rules.TILE_CAPACITY`.
+## **The nine seats of the 3x3, in 조각, measured from the middle of the 블록.**
 ##
-## ⚠ **Indexed `local.y * 2 + local.x`**, the 조각's own place inside the 블록. Values are in 조각,
-## relative to the middle of the 블록.
-## ⚠⚠ **THE CENTRE SEAT (0, 0) BELONGS TO THE FAR 조각**, so the body holding it is DRAWN two thirds
-## of a 조각 from the 조각 the sim has it standing in. **That is the whole cost of a per-블록 lattice
-## and it is why this is a lab and not a patch to `look.gd`**: shipping it means the seat index moves
-## up a unit, out of `Grid.slot_of`.
-const SEATS := [
-	[Vector2(-2.0 / 3.0, -2.0 / 3.0), Vector2(0.0, -2.0 / 3.0), Vector2(-2.0 / 3.0, 0.0)],
-	[Vector2(2.0 / 3.0, -2.0 / 3.0), Vector2(2.0 / 3.0, 0.0)],
-	[Vector2(-2.0 / 3.0, 2.0 / 3.0), Vector2(0.0, 2.0 / 3.0)],
-	[Vector2(0.0, 0.0), Vector2(2.0 / 3.0, 2.0 / 3.0)],
+## ⚠⚠ **A PER-조각 SEAT TABLE STOOD HERE AND IT PRODUCED A LOPSIDED CLUMP** (measured 2026-08-31 by
+## photographing the arrival). It gave each of the four 조각 its own share of the nine — 3 · 2 · 2 · 2 —
+## and **the walk does not deliver that split**: the same move landed 3 · 3 · 2 · 1, so the third body
+## in a 조각 with two seats fell through to no seat at all and stood on the 조각 centre, off the
+## lattice, while a seat elsewhere went empty.
+##
+## ⚠⚠ **⇒ THE SEAT IS A FACT ABOUT THE 블록 AND CANNOT BE DERIVED FROM `Grid.slot_of`.** Which 조각 a
+## body stands in says nothing about which of the nine places it should be drawn in. **That is the cost
+## `02-grid`'s notes named — the seat index moves up a unit — seen for the first time as a picture
+## rather than as a sentence.**
+const P := 2.0 / 3.0
+const LATTICE := [
+	Vector2(-P, -P), Vector2(0.0, -P), Vector2(P, -P),
+	Vector2(-P, 0.0), Vector2(0.0, 0.0), Vector2(P, 0.0),
+	Vector2(-P, P), Vector2(0.0, P), Vector2(P, P),
 ]
 ## How fast a body slides between「where the sim has it」and「its seat in the lattice」, per second.
 ## ⚠ **Eased rather than snapped**: a body that popped onto its seat the instant it stopped walking
@@ -91,6 +109,16 @@ var _i := 0
 var _booted := false
 var _shooting := false
 var _still := false
+var _move_shoot := false
+## Frame counter for the move shoot, in sim frames since the order was given.
+var _move_t := 0
+## Steps taken after the last strip frame, while the camera closes in on the arrival.
+var _tail := 0
+## The two 조각 the crop is framed between, and how big it is. Both ends are the same 블록 for a still
+## picture; for a walk they are the 블록 it starts in and the 블록 it ends in.
+var _crop_a := Vector2i.ZERO
+var _crop_b := Vector2i.ZERO
+var _crop := CROP
 var _wait := 0
 var _boot := 0
 var _shot := 0
@@ -103,9 +131,9 @@ var _moving := false
 ## when it is given** — see `_nudge`.
 var _goal_block := -1
 var _goal_tiles: Array = []
-## Where each body is drawn relative to where the sim has it, in 조각. Eased, so it survives a body
-## starting to walk again mid-slide.
-var _draw_off := {}
+## Where the walk left each settled body — the point its slide onto the lattice starts from, and the
+## point its seat is chosen against. **Erased the moment it is given a new order.**
+var _base := {}
 
 
 func _initialize() -> void:
@@ -114,10 +142,15 @@ func _initialize() -> void:
 	root.add_child(game)
 	var argv := OS.get_cmdline_args() + OS.get_cmdline_user_args()
 	_still = argv.has("still")
-	_shooting = argv.has("shoot") or _still
+	_move_shoot = argv.has("move")
+	_shooting = argv.has("shoot") or _still or _move_shoot
 
 
 func _process(_delta: float) -> bool:
+	# ⚠ **Every frame and not one in four.** A photographed walk is a clock, and a gate would make the
+	# frame numbers in `MOVE_FRAMES` mean four times what they say.
+	if _booted and _move_shoot:
+		return _move_shoot_step()
 	if _booted and _moving:
 		# ⚠⚠ **THE LAB STEPS THE FIGHT, AND `game.battle` STAYS NULL EVEN HERE.** Handing it back would
 		# also hand the shell its own click handler, and that one orders **the single nearest body** —
@@ -167,6 +200,8 @@ func _boot_step() -> bool:
 				return true
 			block_low = _pick_block()
 			_make_nine()
+			_crop_a = block_low
+			_crop_b = block_low + Vector2i(1, 1)
 			_frame_camera()
 			_booted = true
 			# ⚠ **`bat` and not `game.battle`** — `_make_nine` has already frozen the sim by nulling the
@@ -175,6 +210,8 @@ func _boot_step() -> bool:
 				str(block_low), str(_block_centre()), bat.ashore_ids().size(),
 				game.run.army.type_id.size(), str(game.battle == null),
 				str(field.cam_px), field.zoom])
+			if _move_shoot:
+				_begin_move_shoot()
 			if not _shooting:
 				_label = Label.new()
 				_label.position = Vector2(14, 10)
@@ -346,6 +383,98 @@ func _restand() -> void:
 		s.position.y = foot + tall2 * 0.5
 
 
+## --- the walk, photographed -----------------------------------------------------------------------
+
+## Stands the nine in one 블록, aims them at another `MOVE_SPAN` 조각 away, and frames both.
+func _begin_move_shoot() -> void:
+	_moving = true
+	_enter_move()
+	var goal := _far_block(block_low, MOVE_SPAN)
+	if goal.x < 0:
+		push_error("lab: no flat 블록 %0.f 조각 from the start one" % MOVE_SPAN)
+		return
+	_crop_a = block_low
+	_crop_b = goal + Vector2i(1, 1)
+	_crop = Vector2i(940, 560)
+	# The camera sits between the two ends rather than on either, and pulls back so both fit.
+	for _n in NEAR_NOTCHES - MOVE_NOTCHES:
+		field.zoom_at(Look.viewport_size_px() * 0.5, 1.0 / Look.ZOOM_STEP)
+	var mid := (Vector2(block_low) + Vector2(goal)) * 0.5 + Vector2(0.5, 0.5)
+	field.cam_px = Look.tile_point_px(mid) - field._visible_ground_px() * 0.5
+	field._clamp_cam()
+	_order_all(grid.tile_index(goal.x, goal.y))
+	print("[lab] move %s -> %s" % [str(block_low), str(goal)])
+
+
+## The flat, land-ringed 블록 nearest to `span` 조각 away from `low`.
+func _far_block(low: Vector2i, span: float) -> Vector2i:
+	var b := Rules.BLOCK_TILES
+	var best := Vector2i(-1, -1)
+	var score := 1.0e9
+	for by in range(0, grid.h - b + 1, b):
+		for bx in range(0, grid.w - b + 1, b):
+			if not _clear_block(bx, by):
+				continue
+			var d := Vector2(bx, by).distance_to(Vector2(low))
+			var off := absf(d - span)
+			if off < score:
+				score = off
+				best = Vector2i(bx, by)
+	return best
+
+
+## One frame of the photographed walk. **Saves BEFORE stepping**, because `get_texture()` hands back
+## the frame already drawn — a save after the step files the picture one frame early.
+func _move_shoot_step() -> bool:
+	if MOVE_FRAMES.has(_move_t):
+		_save("move", "%03d" % _move_t)
+		print("[lab] move frame %d — 목적지 블록에 %d / %d" % [_move_t, _in_goal(), NINE])
+	if _move_t > int(MOVE_FRAMES[MOVE_FRAMES.size() - 1]):
+		# ⚠⚠ **THE STRIP CANNOT SHOW THE THING THE STRIP IS ABOUT.** Both ends of a walk in one frame
+		# means a zoom at which nine men are a smudge, so **the arrival is photographed again close up**
+		# — the 3x3 they settle into is the whole reason the walk was worth watching.
+		match _tail:
+			0:
+				_crop_a = _block_low_of(_goal_block)
+				_crop_b = _crop_a + Vector2i(1, 1)
+				_crop = CROP
+				for _n in NEAR_NOTCHES - MOVE_NOTCHES:
+					field.zoom_at(Look.viewport_size_px() * 0.5, Look.ZOOM_STEP)
+				var c := Look.tile_point_px(Vector2(_crop_a) + Vector2(0.5, 0.5))
+				field.cam_px = c - field._visible_ground_px() * 0.5
+				field._clamp_cam()
+			# ⚠ **Forty frames and not two.** `SEAT_EASE` is a rate, so the slide onto the lattice takes
+			# about two thirds of a second — a close-up taken the frame after the camera moved catches
+			# the nine a tenth of the way there and reads as「the lattice does not work」.
+			40:
+				_save("settled", "near")
+				print("[lab] settled near — 목적지 블록에 %d / %d · 몸0 자리 %s · 스프라이트 %d"
+						% [_in_goal(), NINE, str(bat.soldier_pos[0]),
+						field._sprites_used])
+			41:
+				return true
+		_tail += 1
+		bat.step(MOVE_DT)
+		_seat_settled(MOVE_DT)
+		return false
+	bat.step(MOVE_DT)
+	_nudge()
+	_seat_settled(MOVE_DT)
+	_move_t += 1
+	return false
+
+
+## How many of the nine are standing in the 블록 they were sent to.
+func _in_goal() -> int:
+	if _goal_block < 0:
+		return 0
+	var n := 0
+	for raw_id in bat.ashore_ids():
+		if grid.block_of(_tile_of_body(int(raw_id))) == _goal_block:
+			n += 1
+	return n
+
+
 ## --- move mode ------------------------------------------------------------------------------------
 
 ## **Puts the nine back on real 조각 and reserves them**, which is what the still modes deliberately
@@ -370,16 +499,21 @@ func _enter_move() -> void:
 		grid.release_all(i)
 		bat.soldier_state[i] = Battle.SoldierState.RESERVE
 		bat.place_ashore(i, int(tiles[k % tiles.size()]))
-	_draw_off = {}
+	_base = {}
 	_goal_block = -1
 	_goal_tiles = []
+	# ⚠⚠ **NO BOAT SAILS WHILE THIS LAB IS RUNNING.** `_launch_if_due` puts the first one on the water
+	# at `Rules.BOAT_FIRST_SEC`, five seconds in, and a walk takes about six — so the crossing being
+	# looked at always had a hull and eight riders arriving in the middle of it. **The due time counts
+	# off how many have launched**, so saying a great many already have is the whole of the switch.
+	bat._boats_launched = 1_000_000
 
 
 ## Back to the still board: the nine let go of their 조각 and stand on the current seat plan again.
 func _leave_move() -> void:
 	for i in NINE:
 		grid.release_all(i)
-	_draw_off = {}
+	_base = {}
 	block_low = _block_low_of(grid.block_of(_tile_of_body(0)))
 	_frame_camera()
 	_apply(_i, maxi(SCALES.find(_scale), 0))
@@ -407,42 +541,79 @@ func _tiles_of_block(low: Vector2i) -> Array:
 # a settled body stands beside its own shadow. That is the lab, not the arrangement.
 func _seat_settled(dt: float) -> void:
 	var ids := bat.ashore_ids()
-	for k in ids.size():
-		var i := int(ids[k])
-		# **Walking bodies are drawn where they really are.** Sliding a body toward a seat while it is
-		# crossing the board would put the picture and the collision in different places for seconds.
-		var want := Vector2.ZERO if int(bat.soldier_order[i]) >= 0 else _lattice_offset(i)
-		var have: Vector2 = _draw_off.get(i, Vector2.ZERO)
-		_draw_off[i] = have.lerp(want, clampf(SEAT_EASE * dt, 0.0, 1.0))
-	if field == null:
-		return
-	for k in mini(field._sprites_used, ids.size()):
-		# ⚠ **Sprite `k` is body `ids[k]`** because `_paint_bodies` lays beasts down first and then the
-		# ashore 검사 in this order. **With a beast on the board this mapping is wrong** — move mode
-		# opens with no spawns, and that is what keeps it true.
-		var off: Vector2 = _draw_off.get(int(ids[k]), Vector2.ZERO)
-		var s: Sprite3D = field._sprites[k]
-		s.position = Vector3(s.position.x + off.x, s.position.y, s.position.z + off.y)
+	var want := _seat_plan(ids)
+	for raw_id in ids:
+		var i := int(raw_id)
+		if int(bat.soldier_order[i]) >= 0:
+			# Walking: forget where it was sitting, so the next arrival measures from the new 조각.
+			_base.erase(i)
+			continue
+		if not _base.has(i):
+			# **The 조각 the walk actually delivered it to.** Held rather than re-derived, because the
+			# slide below moves the position and a base read back off it would chase itself.
+			_base[i] = bat.soldier_pos[i]
+		var seat: Vector2 = want.get(i, _base[i])
+		var have: Vector2 = bat.soldier_pos[i]
+		var next := have.lerp(seat, clampf(SEAT_EASE * dt, 0.0, 1.0))
+		bat.soldier_pos[i] = next
+		# ⚠⚠ **THE GOAL HAS TO MOVE WITH THE POSITION OR THE SIM WALKS THE BODY STRAIGHT BACK.**
+		# Measured 2026-08-31: the nine slid exactly one frame's worth toward the lattice and stopped
+		# dead, forty frames running. **A settled body is held at `_soldier_goal`**, which
+		# `place_ashore` set to the 조각 centre the walk delivered it to — so every tenth of a step
+		# toward a seat was undone by the next `step()`, and the arrival read as「the lattice does
+		# nothing」. This is the second time this round that the goal column was the thing missing.
+		bat._soldier_goal[i] = next
 
 
-## Where body `i` should be DRAWN relative to its own 조각 centre, in 조각.
-func _lattice_offset(i: int) -> Vector2:
-	var p: Vector2 = bat.soldier_pos[i]
-	var tx := clampi(int(round(p.x)), 0, grid.w - 1)
-	var ty := clampi(int(round(p.y)), 0, grid.h - 1)
-	var tile := ty * grid.w + tx
-	var blk := grid.block_of(tile)
-	if blk < 0:
-		return Vector2.ZERO
-	var low := _block_low_of(blk)
-	var local := Vector2i(tx - low.x, ty - low.y)
-	var list: Array = SEATS[local.y * Rules.BLOCK_TILES + local.x]
-	var slot := grid.slot_of(tile, i)
-	if slot < 0 or slot >= list.size():
-		return Vector2.ZERO
-	# The seat is measured from the middle of the 블록; the body is standing on `local`. Half a 조각
-	# is where the middle of a 2x2 lump sits relative to its low corner.
-	return Vector2(0.5, 0.5) + (list[slot] as Vector2) - Vector2(local)
+## **Hands out the nine seats of every 블록 that has settled bodies in it.** Returns body id -> the
+## offset from where the sim has it to where it should be drawn, in 조각.
+##
+## ⚠ **Walking bodies get nothing and are drawn where they really are.** Sliding a body toward a seat
+## while it is crossing the board would put the picture and the collision in different places for
+## seconds at a time.
+##
+## ⚠⚠ **NEAREST FREE SEAT, AND THE BODIES ARE TAKEN IN ID ORDER.** Both halves are determinism: id
+## order so the same crowd always resolves the same way, and nearest-free so nobody slides across the
+## 블록 to reach a place that was empty beside them. A settled body does not move, so the assignment it
+## gets is the same one it gets on the next frame.
+func _seat_plan(ids: Array) -> Dictionary:
+	var by_block := {}
+	for raw_id in ids:
+		var i := int(raw_id)
+		if int(bat.soldier_order[i]) >= 0:
+			continue
+		var blk := grid.block_of(_tile_of_body(i))
+		if blk < 0:
+			continue
+		var members: Array = by_block.get(blk, [])
+		members.append(i)
+		by_block[blk] = members
+	var out := {}
+	for blk in by_block:
+		var centre := Vector2(_block_low_of(int(blk))) + Vector2(0.5, 0.5)
+		var free := LATTICE.duplicate()
+		var members: Array = by_block[blk]
+		members.sort()
+		for raw_i in members:
+			var i := int(raw_i)
+			# ⚠ **Measured from where the walk DELIVERED it, not from where it has slid to.** Reading
+			# the live position would re-run this search against the answer it gave last frame, and the
+			# nine would swap seats with each other for as long as they stood there.
+			var p: Vector2 = _base.get(i, bat.soldier_pos[i])
+			var best := -1
+			var best_d := INF
+			for s in free.size():
+				if free[s] == null:
+					continue
+				var d: float = (centre + (free[s] as Vector2)).distance_to(p)
+				if d < best_d:
+					best_d = d
+					best = s
+			if best < 0:
+				continue
+			out[i] = centre + (free[best] as Vector2)
+			free[best] = null
+	return out
 
 
 func _block_low_of(blk: int) -> Vector2i:
@@ -562,11 +733,15 @@ func _still_step() -> bool:
 
 func _save(name: String, which: String) -> void:
 	var img := root.get_texture().get_image()
-	var p := (field.tile_to_screen_px(block_low.x, block_low.y)
-			+ field.tile_to_screen_px(block_low.x + 1, block_low.y + 1)) * 0.5
-	var x := clampi(int(p.x) - CROP.x / 2, 0, maxi(img.get_width() - CROP.x, 0))
-	var y := clampi(int(p.y) - CROP_RISE - CROP.y / 2, 0, maxi(img.get_height() - CROP.y, 0))
-	img.get_region(Rect2i(x, y, CROP.x, CROP.y)).save_png(
+	# **The crop follows two 조각 and not one**, so a picture of a walk can be framed on both ends of it
+	# while a picture of nine standing still stays framed on the 블록 they stand in.
+	var p := (field.tile_to_screen_px(_crop_a.x, _crop_a.y)
+			+ field.tile_to_screen_px(_crop_b.x, _crop_b.y)) * 0.5
+	var w := mini(_crop.x, img.get_width())
+	var h := mini(_crop.y, img.get_height())
+	var x := clampi(int(p.x) - w / 2, 0, maxi(img.get_width() - w, 0))
+	var y := clampi(int(p.y) - CROP_RISE - h / 2, 0, maxi(img.get_height() - h, 0))
+	img.get_region(Rect2i(x, y, w, h)).save_png(
 		ProjectSettings.globalize_path(OUT % [name, which]))
 	print("[lab] %s %s  sprites=%d ashore=%d" % [name, which,
 		field._sprites_used, bat.ashore_ids().size()])
