@@ -125,6 +125,17 @@ const CAM_PITCH_DEG := MAP_TILT_DEG
 ## Floor 20 — under it the ground is nearly edge-on, bodies stand in front of each other in a single
 ## row and the island stops being a map. Ceiling 80 — past it the terrain's own height stops reading
 ## at all, which is the flat board the 3D move was for.
+## ⚠⚠ **HOW FAR A BODY IS STRETCHED BACK UP WHEN THE CAMERA LOOKS DOWN** (2026-08-31, 개발지식 01
+## 기법 22). Since the bodies became `BILLBOARD_FIXED_Y` they stand upright in the WORLD, so pitching
+## the camera down foreshortens them — at 80 degrees a standing man is 17% of his height and reads as
+## a puddle. The stretch is `cos(CAM_PITCH_DEG) / cos(cam_pitch_deg)`, which is **exactly 1.0 at the
+## opening angle**: the 27 px the user chose at the screen is the height every other angle is pulled
+## back toward, rather than some new height nobody looked at.
+## ⚠ **The cap is a dial and it is not measured.** Full compensation at 80 degrees is 4.4x, a man
+## drawn four times his own height to fight an angle the camera is allowed to reach. 2.0 stops it at
+## about 67 degrees and lets the rest foreshorten honestly. **Move it by eye.**
+const BILLBOARD_PITCH_STRETCH_MAX := 2.0
+
 const CAM_PITCH_MIN_DEG := 20.0
 const CAM_PITCH_MAX_DEG := 80.0
 ## Per key press. 5 is one twelfth of the usable range, so the whole span is twelve presses — the same
@@ -1433,8 +1444,16 @@ const BEAST_FRAME_SEC := 0.12
 ## player weapon is not being built — and a row needs BOTH columns, so those three constants can only
 ## be card art now. ⇒ **A second player body costs a new DRAWING, not a new row**, and the estimate
 ## anyone makes off this table has to include that.
+## ⚠⚠ **THE SWORDSMAN'S OWN COLUMN IS 0.65 AND IT WAS CHOSEN AT THE SCREEN** (2026-08-31). Four
+## sizes were stood on the island in the same frame — **41 · 33 · 27 · 23 px** — and the user picked
+## **27**: 「27이 맞는 듯」. ⚠ **23 was also called fine** 「23도 괜찮네」 and is the value to try
+## first if 27 turns out big; the user asked for both to be written down, not only the winner.
+## ⚠⚠ **41 px IS WHAT THE NEW PICTURE GAVE FOR FREE, AND NOBODY CHOSE IT.** The old drawing was
+## 33 x 40 and the new one is 40 x 60, so the same width ratio bought 24% more height — the body grew
+## because the CANVAS grew. **This column is where that is paid back**, and it is the swordsman's
+## alone: `BODY_SPRITE_SCALE` sizes every body at once and the wolf was judged at its own value.
 const BEAST_TEX := [
-	[[HUMAN_MAN_R, HUMAN_MAN_L, HUMAN_MAN_D, HUMAN_MAN_U], NO_ANIM_FRAMES, 1.0],
+	[[HUMAN_MAN_R, HUMAN_MAN_L, HUMAN_MAN_D, HUMAN_MAN_U], NO_ANIM_FRAMES, 0.65],
 	[[BEAST_WOLF_H_R, BEAST_WOLF_H_L, BEAST_WOLF_H_D, BEAST_WOLF_H_U], NO_ANIM_FRAMES, 1.70],
 	[[BEAST_BEAR_R, BEAST_BEAR_L], NO_ANIM_FRAMES, 1.0],
 	[[BEAST_CROW_R, BEAST_CROW_L], NO_ANIM_FRAMES, 1.0],
