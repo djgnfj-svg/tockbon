@@ -110,6 +110,10 @@ var _booted := false
 var _shooting := false
 var _still := false
 var _move_shoot := false
+## **Pins every body's heading to RIGHT while it stands.** ⚠ **A measuring switch and not a rule** —
+## `-- move facelock` turns it on so the walked nine can be compared with the placed nine without the
+## sprite mirroring standing in the way.
+var _face_lock := false
 ## Frame counter for the move shoot, in sim frames since the order was given.
 var _move_t := 0
 ## Steps taken after the last strip frame, while the camera closes in on the arrival.
@@ -143,6 +147,7 @@ func _initialize() -> void:
 	var argv := OS.get_cmdline_args() + OS.get_cmdline_user_args()
 	_still = argv.has("still")
 	_move_shoot = argv.has("move")
+	_face_lock = argv.has("facelock")
 	_shooting = argv.has("shoot") or _still or _move_shoot
 
 
@@ -493,6 +498,17 @@ func _move_shoot_step() -> bool:
 			_seat_settled(MOVE_DT)
 		else:
 			_restand()
+			# ⚠⚠ **THE CONTROL WAS CONTAMINATED AND THIS IS THE FIX** (2026-08-31). `_restand` puts body
+			# `i` on seat `i`, while the walk had given body `i` whichever seat was nearest — so
+			# switching to the still plan **teleports every one of the nine**, `_fx_step` reads that as
+			# distance walked, and the「hand-placed」control came out wearing nine different strides.
+			# **A control that is disturbed by being set up measures the disturbance.**
+			for i in NINE:
+				var key := "s%d" % i
+				if field != null and field._body.has(key):
+					var b: Dictionary = field._body[key]
+					b["gait"] = 0.0
+					field._body[key] = b
 		return false
 	bat.step(MOVE_DT)
 	_nudge()
@@ -584,6 +600,14 @@ func _report_drawn(what: String) -> void:
 	spread = hi - lo
 	print("[lab] %s 아홉의 머리 높이 %s" % [what, str(tops)])
 	print("[lab] %s 머리 높이가 벌어진 폭 %.3f 조각" % [what, spread])
+	var pts := []
+	for raw_id in bat.ashore_ids():
+		var p: Vector2 = bat.soldier_pos[int(raw_id)]
+		pts.append("(%.2f, %.2f)" % [p.x, p.y])
+	pts.sort()
+	print("[lab] %s 아홉의 자리 %s" % [what, str(pts)])
+	print("[lab] %s 때 카메라 %s · 줌 %.4f · 크롭 기준 %s" % [what, str(field.cam_px), field.zoom,
+			str(field.tile_to_screen_px(_crop_a.x, _crop_a.y))])
 
 
 ## How many of the nine are standing in the 블록 they were sent to.
@@ -678,6 +702,23 @@ func _seat_settled(dt: float) -> void:
 		var have: Vector2 = bat.soldier_pos[i]
 		var next := have.lerp(seat, clampf(SEAT_EASE * dt, 0.0, 1.0))
 		bat.soldier_pos[i] = next
+		# ⚠⚠ **EVERY FRAME, AND A ONE-OFF RESET DOES NOT WORK.** `_fx_step` re-phases the gait from the
+		# distance moved, so a body eased onto its seat re-earns a stride every frame it is still
+		# sliding — **a reset written once is undone before the next picture is taken**, which is
+		# exactly how the「control」shot came back identical to the thing it was controlling for.
+		# ⚠ **This is the game-side fix wearing lab clothes**: `_gait_squash`'s own header says a
+		# standing body sits at phase 0 and must be UNDEFORMED, and nothing puts it back there.
+		var key := "s%d" % i
+		if field != null and field._body.has(key):
+			var b: Dictionary = field._body[key]
+			b["gait"] = 0.0
+			# ⚠ **The heading too, and only so the two pictures can be compared.** A body facing the
+			# way it walked is CORRECT — it is not a defect and the game should keep it. It is pinned
+			# here because a mirrored sprite differs from its unmirrored self across most of its own
+			# area, and that difference was being read as「the arrangement changed」.
+			if _face_lock:
+				b["head"] = Vector2.RIGHT
+			field._body[key] = b
 		# ⚠⚠ **THE GOAL HAS TO MOVE WITH THE POSITION OR THE SIM WALKS THE BODY STRAIGHT BACK.**
 		# Measured 2026-08-31: the nine slid exactly one frame's worth toward the lattice and stopped
 		# dead, forty frames running. **A settled body is held at `_soldier_goal`**, which
