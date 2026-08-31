@@ -3,7 +3,7 @@ extends SceneTree
 ## # 실험대 02 — 때리고 맞을 때 뭔가 일어난 것처럼 보이게 하는 법
 ##
 ## ```
-## .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/lab/hit_lab.gd
+## .\Godot_v4.7.1-stable_win64.exe --path . --script res://docs/개발지식/02-때리고-맞을-때-뭔가-일어나게/lab.gd
 ## ```
 ##
 ## **검사 하나와 짐승 하나가 계속 서로 때린다.** 스위치를 켜면 그 타격에 기법이 하나씩 얹힌다.
@@ -16,7 +16,7 @@ extends SceneTree
 ## ⚠ 문서는 개발지식 02 번 — 「때리고 맞을 때 뭔가 일어난 것처럼 보이게 하는 법」이다. 기법 스물여섯 개 중
 ## **화면에서 갈리는 열넷**이 스위치로 서 있다.
 
-const Stage := preload("res://tools/lab/lab_stage.gd")
+const Stage := preload("res://docs/개발지식/02-때리고-맞을-때-뭔가-일어나게/stage.gd")
 
 const PERIOD := 0.9
 const ROWS := [
@@ -244,7 +244,7 @@ func _hit() -> void:
 	var st = _stage
 	var live: Dictionary = _pairs[1]
 	var killing := _hp <= 25.0            # 22 번이 「마지막 한 방」이라고 부르는 것
-	var big := (not st.on("last_only")) or killing
+	var big: bool = (not st.on("last_only")) or killing
 
 	_hp = maxf(0.0, _hp - 9.0)
 	if _hp <= 0.0:

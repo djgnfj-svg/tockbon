@@ -3,7 +3,7 @@ extends SceneTree
 ## # 실험대 01 — 2D 판때기를 3D 에 넣을 때 어색하지 않게 하는 법
 ##
 ## ```
-## .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/lab/billboard_lab.gd
+## .\Godot_v4.7.1-stable_win64.exe --path . --script res://docs/개발지식/01-2D-판때기를-3D에-넣기/lab.gd
 ## ```
 ##
 ## **기법 하나에 스위치 하나.** ↑↓ 로 고르고 스페이스로 켠다. **조합은 켜는 것이지 만드는 게 아니다** —
@@ -15,7 +15,7 @@ extends SceneTree
 ## ⚠ **문서는 개발지식 01 번 — 「2D 판때기를 3D 에 넣을 때 어색하지 않게 하는 법」이다.** 기법 스물여덟 개 중
 ## **화면에서 갈리는 열여섯 개**가 여기 스위치로 서 있다. 나머지 열둘은 설정이거나 그림이 있어야 한다.
 
-const Stage := preload("res://tools/lab/lab_stage.gd")
+const Stage := preload("res://docs/개발지식/01-2D-판때기를-3D에-넣기/stage.gd")
 
 const ROWS := [
 	{"id": "y_axis", "name": "1 · Y 축 고정 빌보드", "on": false,

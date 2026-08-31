@@ -1791,3 +1791,76 @@ closed because the work happened, it is closed because it was checked.*
 
 ⚠ **One word was corrected too.** The picture step said 「센다」, which the user said is not how anyone
 talks — 「몇 장인지 확인한다」.
+
+## 🧪 **The labs moved in beside their docs, and the skill that lets them lie got fixed — 2026-08-31 (afternoon)**
+
+**Nothing in `src/` was touched.** The round pulled 12 commits, cleaned up branches, moved the three
+labs into `docs/개발지식/`, and rewrote the `knowledge` skill after the user took it apart.
+
+### The code had to sit beside the prose
+
+**The labs lived in `tools/lab/` with ASCII names, one folder away from the Korean docs they serve.**
+The user: ***"The Godot code has to be inside 개발지식, so that running it shows you straight away ...
+so I can read the code myself, and see how it was implemented."***
+
+⇒ Each topic folder is now four files — `README.md`, `그림.svg`, `lab.gd`, `stage.gd`.
+**`tools/lab/` is gone.** `stage.gd` is duplicated three times on the user's own call: **a folder you
+can read whole beat a single copy**, and the price is fixing three files instead of one.
+
+⚠ **The folder README had been claiming an `예제.gd` that never existed** — not once in the whole
+history. The user found it: 「코드가 없는데 어떻게 한거지?」 **The lab is that file now.**
+
+### 02 and 03 had never once loaded
+
+**Both died on a parse error** — `Cannot infer the type of "big"` and `"hit"`. They were written,
+reviewed, table'd on the map and shipped **while neither could be loaded at all.** One line each.
+
+### The first thing measured on screen was a bug
+
+**With every switch on, `01` shows no bodies.** Measured by rendering a sprite with the technique on
+and off and reading the pixels: **「pivot at the feet」 puts the sprite a full sprite-height too low,
+entirely under the ground.** The 2D convention was copied into 3D, where +Y is up — in the document
+that exists to catch exactly that.
+
+### ⚠⚠ Why the skill was rewritten
+
+**The user, on the labs as study material**: ***"There is no normal map, no name you could call a
+technique, alpha only has the cutout one, nothing on perspective. And you pick those values far too
+casually, and that is disgusting. Nobody studies anything from a test like this. I need to understand
+what exists and how it changes, and read how the code is written."***
+
+**Three rules and one gate went into `knowledge`:**
+
+| | What it now forces |
+|---|---|
+| **Name** | Every technique is written `한국어(English)`. **The English half is what goes in a search box**, so it is the name practitioners use — and a technique with no established name says `통용 이름 없음` rather than getting one invented for it |
+| **Dial** | ⚠⚠ **A switch answers「is it there」; a dial answers「what does it do」.** A technique with a value gets ← → and a printed number; an engine constant walks **every** option, not two of five |
+| **Origin** | Every starting value carries where it came from on its own line — measured, sourced, or marked `# 추정` |
+| **Run** (5th gate criterion) | **The lab launched on screen this round.** Reading the code statically is not this criterion — that is exactly what passed 02 and 03 |
+
+**The evidence written into the skill is this round's measurement**: `12.0` degrees of lean, `1.10`
+outline scale, `Color(1.18, 1.14, 1.22)`, `3.2`, `0.35`, `0.02` — **six numbers, no origin for any of
+them**, in a folder whose own rule is that a number arrives with how it was taken.
+
+⚠ **`01` shipped 「기법 28 · 스위치 16」 and named none of the missing twelve** — which included the
+normal map and the projection comparison, the two a reader most wants to see. **A silent gap reads as
+coverage.**
+
+### What is still broken, and was left broken on purpose
+
+**The user stopped the round here**: ***"I'll leave this for later. Documentation is just awful.
+Working out where and how it went wrong is something I'd rather do later."***
+
+- **The pictures were not re-made** — nine placeholder PNGs and three `그림.svg`. ⚠ **The PNGs are not
+  to be drawn in Python again** (the user: 「python 으로 안 만들고 제대로 ComfyUI 나 pixellab 으로
+  만들어서 사용」)
+- **No technique carries its name yet** — 80 of them across the three pages
+- **`01`'s feet pivot buries the body · `03` draws no bodies at all · the title overprints the list**
+  in all three
+- **Seven merged remote branches could not be deleted** — the permission classifier refused the push
+
+### One thing the map had wrong
+
+**The net count said 통과 1048 · 실패 63.** Measured this round: **통과 1241 · 실패 61 · 그물 15**.
+⚠ **This session touched no `src/` and no `tests/`, so all 61 are pre-existing** — the number was
+stale, not moved.

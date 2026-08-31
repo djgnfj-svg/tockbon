@@ -8,7 +8,7 @@ extends RefCounted
 ## ⚠ **해와 하늘값은 `look.gd` 에서 가져온다.** 실험대가 게임과 다른 빛을 쓰면 여기서 괜찮아 보인
 ## 것이 게임에서 안 괜찮아진다 — 이 저장소가 여섯 라운드 걸려 배운 것이다.
 
-const ART := "res://tools/lab/art/"
+const ART := "res://docs/개발지식/자리표시/"
 
 var tree: SceneTree = null
 var world: Node3D = null

@@ -3,7 +3,7 @@ extends SceneTree
 ## # 실험대 03 — 몸과 부대가 기분 좋게 움직이게 하는 법
 ##
 ## ```
-## .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/lab/move_lab.gd
+## .\Godot_v4.7.1-stable_win64.exe --path . --script res://docs/개발지식/03-몸과-부대가-기분-좋게-움직이게/lab.gd
 ## ```
 ##
 ## **아홉이 한 부대다. 왼쪽 클릭으로 갈 자리를 찍는다.** 스위치를 켜면 그 이동에 기법이 하나씩 얹힌다.
@@ -19,7 +19,7 @@ extends SceneTree
 ## ⚠ 문서는 개발지식 03 번 — 「몸과 부대가 기분 좋게 움직이게 하는 법」이다. 기법 스물여섯 개 중
 ## **화면에서 갈리는 열셋**이 스위치로 서 있다.
 
-const Stage := preload("res://tools/lab/lab_stage.gd")
+const Stage := preload("res://docs/개발지식/03-몸과-부대가-기분-좋게-움직이게/stage.gd")
 
 const N := 9
 const SPEED := 2.4
@@ -185,7 +185,7 @@ func _on_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var click := event as InputEventMouseButton
 		if click.button_index == MOUSE_BUTTON_LEFT and click.pressed:
-			var hit := _ground_under(click.position)
+			var hit = _ground_under(click.position)
 			if hit != null:
 				_order(hit)
 		return
