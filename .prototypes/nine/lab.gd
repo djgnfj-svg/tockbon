@@ -448,20 +448,97 @@ func _move_shoot_step() -> bool:
 			# the nine a tenth of the way there and reads as「the lattice does not work」.
 			40:
 				_save("settled", "near")
-				print("[lab] settled near — 목적지 블록에 %d / %d · 몸0 자리 %s · 스프라이트 %d"
-						% [_in_goal(), NINE, str(bat.soldier_pos[0]),
-						field._sprites_used])
+				print("[lab] settled near — 목적지 블록에 %d / %d" % [_in_goal(), NINE])
+				_report_seats()
 			41:
+				# ⚠⚠ **THE SAME NINE WITH EVERY STRIDE PUT BACK TO REST.** Nothing else changes — same
+				# seats, same camera, same frame — so whatever differs between `settled_near` and
+				# `settled_rest` is the frozen stride and nothing else. **This is the control that
+				# turns「it looks less tidy」into a measured cause.**
+				for raw_id in bat.ashore_ids():
+					var key := "s%d" % int(raw_id)
+					if field._body.has(key):
+						var b: Dictionary = field._body[key]
+						b["gait"] = 0.0
+						# ⚠ **And the heading with it.** A body faces the way it last walked, so nine
+						# that walked west are all mirrored against nine that never moved — which is a
+						# difference in the PICTURE and not in the seat plan. Putting both back is what
+						# makes this shot a control rather than a second variable.
+						b["head"] = Vector2.RIGHT
+						field._body[key] = b
+			45:
+				_save("settled", "rest")
+				print("[lab] settled rest — 걸음 위상을 0 으로 되돌린 같은 아홉")
+			46:
+				# ⚠⚠ **THE CONTROL THAT SETTLES IT: THE SAME 블록, PLACED BY HAND.** Every earlier
+				# comparison put the walked nine beside a still shot taken on a DIFFERENT 블록 — so
+				#「it looks less tidy」 could have been the ground, the neighbours or the crop rather
+				# than the walk. **This stands them on the goal 블록 the still way**, and any
+				# difference left between this and `settled_rest` is the walk and nothing else.
+				_moving = false
+				block_low = _block_low_of(_goal_block)
+				_apply(1, 0)
+			50:
+				_save("fresh", "near")
+				print("[lab] fresh near — 같은 블록에 손으로 세운 아홉")
+			51:
 				return true
 		_tail += 1
-		bat.step(MOVE_DT)
-		_seat_settled(MOVE_DT)
+		if _moving:
+			bat.step(MOVE_DT)
+			_seat_settled(MOVE_DT)
+		else:
+			_restand()
 		return false
 	bat.step(MOVE_DT)
 	_nudge()
 	_seat_settled(MOVE_DT)
 	_move_t += 1
 	return false
+
+
+## **Prints where the nine actually ended up, against the nine places the lattice says.**
+##
+## ⚠⚠ **A PICTURE CANNOT ANSWER 「is it still the grid?」** (2026-08-31, the user, on the arrival shot:
+## 「they were arranged systematically before — so now they're not systematic. Does moving break it?」).
+## Nine bodies seen from above at this pitch overlap; **the only honest answer is the coordinates.**
+func _report_seats() -> void:
+	var low := _block_low_of(_goal_block)
+	var centre := Vector2(low) + Vector2(0.5, 0.5)
+	var off := 0
+	var worst := 0.0
+	var taken := {}
+	for raw_id in bat.ashore_ids():
+		var i := int(raw_id)
+		var p: Vector2 = bat.soldier_pos[i]
+		var best := -1
+		var best_d := INF
+		for s in LATTICE.size():
+			var d: float = (centre + (LATTICE[s] as Vector2)).distance_to(p)
+			if d < best_d:
+				best_d = d
+				best = s
+		worst = maxf(worst, best_d)
+		if best_d > 0.01:
+			off += 1
+		taken[best] = int(taken.get(best, 0)) + 1
+	var doubled := 0
+	for s in taken:
+		if int(taken[s]) > 1:
+			doubled += 1
+	print("[lab] 격자에서 벗어난 몸 %d / %d · 최대 어긋남 %.3f 조각 · 두 몸이 겹친 자리 %d · 채운 자리 %d / 9"
+			% [off, NINE, worst, doubled, taken.size()])
+	# ⚠⚠ **THE POSITIONS BEING PERFECT IS NOT THE SAME AS THE PICTURE BEING REGULAR.** `_gait_squash`
+	# phases on DISTANCE WALKED and nothing resets it when a body stops, so nine men who each walked a
+	# different number of 조각 come to rest each squashed by a different amount. **That is a difference
+	# in how wide and how tall each one is drawn**, on a lattice whose whole point is that they match.
+	var w := []
+	for raw_id in bat.ashore_ids():
+		var key := "s%d" % int(raw_id)
+		if field._body.has(key):
+			var sq: Vector2 = field._gait_squash(key)
+			w.append("%.2f" % sq.x)
+	print("[lab] 몸마다 걸음 찌그러짐(가로) %s — 서 있던 몸은 전부 1.00 이다" % str(w))
 
 
 ## How many of the nine are standing in the 블록 they were sent to.
