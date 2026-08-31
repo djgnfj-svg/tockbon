@@ -94,7 +94,9 @@ the old size.**
 ⇒ **Say this out loud before reshaping either.** ⚠ `Builds` treats a missing `buildings.json` as a hard
 failure by design, so it will not silently limp.
 ⇒ The deleted `island_build.py` and `buildings_build.py` are recoverable from git at **`16e2e2fa`** if
-a data file ever has to be rebuilt.
+a data file ever has to be rebuilt. ⚠ **Copies of both also survive under `.prototypes/palette/` as
+`.orig` files** — left there by a palette round, and easier to reach than git archaeology. **They are
+copies, not the source**: nothing keeps them in step with anything.
 
 ⚠ **3. Winding decides whether a face exists at all.**
 The materials cull back faces, so a quad wound the wrong way is simply not drawn — a stair looked like
