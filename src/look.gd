@@ -476,18 +476,18 @@ const CAM_ROAM_TILES := 20.0
 ## comfortable is a threshold that swallows short drags, and a hand that moves 6 px was never clicking.
 const DRAG_PAN_THRESHOLD_PX := 6.0
 
-## How fast a held pan key moves the view, in SCREEN px per second.
-## ⚠ **Screen px and not 조각**, so it goes through the same `pan_by` a mouse drag does — one path to
-## the camera, and a key and a drag cannot end up disagreeing about which way is right.
-const CAM_PAN_KEY_PX_PER_SEC := 900.0
-
-## ⚠⚠ **THE EDGE BAND'S THREE CONSTANTS STOOD HERE AND ALL THREE ARE DELETED** (2026-08-31, the user:
-## 「그것도 지워줘」): how deep the band reached in from each side (28 px), how fast it panned at full
-## depth (the keys' own speed), and how much of that speed the band's inner lip got (0.30, ramping to
-## full at the glass). **They were the user's own on 2026-08-30** (「wasd 보다는 마우스가 끝으로 가면
-## 자동으로 이동이 맞을듯」) and none of the three was ever judged on a screen.
-## ⚠ **`CAM_PAN_KEY_PX_PER_SEC` above is untouched** — WASD kept its speed and is now the only thing
-## reading it.
+## ⚠⚠ **FOUR CAMERA-TRAVEL CONSTANTS STOOD HERE AND ALL FOUR ARE DELETED** over two days, on the
+## user's word: `CAM_PAN_KEY_PX_PER_SEC` (900 screen px a second — WASD's speed), and the edge band's
+## three, `CAM_EDGE_PAN_BAND_PX` (28 px deep from each side), `CAM_EDGE_PAN_PX_PER_SEC` (the keys' own
+## speed, deliberately linked) and `CAM_EDGE_PAN_LIP_FACTOR` (0.30 at the inner lip, ramping to full
+## at the glass).
+##
+##  - 2026-08-30, the user: 「wasd 보다는 마우스가 끝으로 가면 자동으로 이동이 맞을듯」 — the band is born;
+##  - 2026-08-31, the user: 「그것도 지워줘」 — the band goes;
+##  - 2026-08-31, the user: 「wasd 도 지워줘」 — the keys follow it the same day.
+##
+## ⚠ **None of the four was ever judged on a screen.** ⚠⚠ **Nothing in `src/` moves the camera on a
+## clock any more** — the left-button drag moves it by the hand's own delta, which needs no speed.
 
 ## How far ONE NOTCH turns the board. **The board turning is the hand moving during a fight**, and
 ## that is 티켓 07's whole question — this is the knob that lets it be answered by trying it.

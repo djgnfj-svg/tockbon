@@ -76,28 +76,35 @@ func _run() -> void:
 	quit()
 
 
-# --- mode: can a player find a hull with WASD -------------------------------------------------------
+# --- mode: can a player find a hull by looking around ------------------------------------------------
+
+## ⚠⚠ **THIS SCANNED WITH WASD UNTIL 2026-08-31**, when the user had the pan keys deleted from the
+## shell along with the window's edge band. **The camera is panned directly now, at the keys' old
+## 900 px a second and for the same durations**, so the frames this mode saves are the same frames.
+## ⚠ **The signs are `pan_by`'s, which are the DRAG's**: north is a POSITIVE y here, exactly as W
+## answered `(0, 1)` before.
+const PAN_PX_PER_SEC := 900.0
 
 func _find() -> void:
 	await _until(6.2)
 	await _shot("02_t6_no_pan")
 
-	await _hold(KEY_W, 1.6)
+	await _pan(Vector2(0.0, 1.0), 1.6)
 	await _shot("03_north")
-	await _hold(KEY_S, 3.2)
+	await _pan(Vector2(0.0, -1.0), 3.2)
 	await _shot("04_south")
-	await _hold(KEY_W, 1.6)
-	await _hold(KEY_A, 1.6)
+	await _pan(Vector2(0.0, 1.0), 1.6)
+	await _pan(Vector2(1.0, 0.0), 1.6)
 	await _shot("05_west")
-	await _hold(KEY_D, 3.2)
+	await _pan(Vector2(-1.0, 0.0), 3.2)
 	await _shot("06_east")
-	await _hold(KEY_A, 1.6)
+	await _pan(Vector2(1.0, 0.0), 1.6)
 
 	await _until(14.0)
 	await _shot("07_t14_centre")
-	await _hold(KEY_W, 1.6)
+	await _pan(Vector2(0.0, 1.0), 1.6)
 	await _shot("08_t14_north")
-	await _hold(KEY_S, 3.2)
+	await _pan(Vector2(0.0, -1.0), 3.2)
 	await _shot("09_t14_south")
 
 
@@ -798,22 +805,16 @@ func _click(at: Vector2) -> void:
 		root.push_input(ev, true)
 
 
-func _hold(keycode: Key, sec: float) -> void:
-	_key(keycode, true)
+## **Pans the camera for `sec` seconds, a frame at a time**, so the sim keeps running underneath and
+## every shot lands at the time its name says. ⚠ **Per frame and not one big `pan_by`** — the clamp
+## sits inside `pan_by`, and a single jump would cross the roam bound where the travel used to stop.
+func _pan(dir: Vector2, sec: float) -> void:
 	var t := 0.0
 	while t < sec:
-		t += await _frame_delta()
-	_key(keycode, false)
+		var dt := await _frame_delta()
+		t += dt
+		_game.field_view.pan_by(dir * PAN_PX_PER_SEC * dt)
 	await process_frame
-
-
-func _key(keycode: Key, down: bool) -> void:
-	var ev := InputEventKey.new()
-	ev.keycode = keycode
-	ev.physical_keycode = keycode
-	ev.pressed = down
-	ev.echo = false
-	root.push_input(ev, true)
 
 
 func _centre_on_boat(i: int) -> void:

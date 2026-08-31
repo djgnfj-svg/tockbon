@@ -296,7 +296,6 @@ func run(t) -> void:
 	# It reports as 「41 passed」 either way, which is exactly the shape `tests/README` warns about.
 	# ⚠ **The red itself is 티켓 15's and is not touched here**; what is done is putting the new rows
 	# where they actually run. **Frozen sim above, so the pan is the only thing moving.**
-	_the_pan_keys_move_the_camera_and_stop(t, game, fs)
 	_a_drag_looks_around_and_a_click_commands(t, game, fs)
 	# ⚠⚠ **THE TWO NEW CAMERA FUNCTIONS SIT HERE FOR THE REASON THE PARAGRAPH ABOVE GIVES**, and for
 	# no other: everything below the terrain block has been abandoned by a throw twice this session,
@@ -523,8 +522,8 @@ func run(t) -> void:
 	# THAT HAD NOT EXECUTED IN MONTHS**, and it was written by reasoning rather than by running: the
 	# terrain throw above abandoned `run()` before any of this. It is deleted rather than re-argued.
 	# **The literal is whatever the round now measures**, and if it is wrong it will say so.
-	# ⚠ **The travel itself is measured in `_the_pan_keys_move_the_camera_and_stop`**, which is called
-	# above the throw for exactly that reason. The centred literal, by hand:
+	# ⚠ **The travel itself was measured in `_the_pan_keys_move_the_camera_and_stop`, which is deleted
+	# with the keys it drove** (2026-08-31). The centred literal, by hand:
 	# ((1040 - 1280) / 2, (800 - 1120.12) / 2) = **(-120.00, -160.06)**.
 	# ⚠ The y half moved on 2026-08-25 when the pitch divisor was corrected from cosine to sine; it
 	# read -69.95, which was the wrong span reaching the clamp.
@@ -565,113 +564,14 @@ func run(t) -> void:
 
 
 
-## **WASD, at the shell seam: an event goes in, the camera comes out.** 티켓 41.
+## ⚠⚠ **`_the_pan_keys_move_the_camera_and_stop` STOOD HERE AND IT IS DELETED** (2026-08-31, the
+## user: 「wasd 도 지워줘」). It drove WASD as HELD state — one press, then frames — and measured that
+## the camera kept moving across them, that the release stopped it, that an OS auto-repeat echo did
+## not add a second direction, that two keys held made a diagonal and letting one go left the other
+## running, and that a key held into the roam ring stopped at the bound instead of running out to sea.
 ##
-## ⚠⚠ **THIS IS THE WHOLE MECHANISM FOR NOTICING A BOAT** (2026-08-30, the user: 「안 알아채는 게
-## 맞겠다 ... 마우스 돌리다가 보이면 그때 가는 걸로」). There is no arrow and no alarm; a boat is born
-## 24 조각 out and the opening frame shows about 6 조각 of sea, so **a camera that cannot travel means
-## the player never sees one coming.**
-##
-## ⚠⚠ **HELD STATE, NOT ONE STEP PER EVENT, AND EVERY ROW HERE TURNS ON THAT.** The press is sent once
-## and the camera is expected to keep moving across frames; the release is sent and it is expected to
-## stop. **A shell that panned once per event passes nothing below** — and a shell that never read the
-## release passes the first half and fails the last.
-##
-## ⚠ **`game._process(dt)` by hand and never a pumped frame.** Headless deltas are whatever the machine
-## gives, and the pan is a rate — a row that read the real frame delta would be measuring the test
-## runner. The sim's own clock is stopped by the caller before this, so nothing else moves.
-func _the_pan_keys_move_the_camera_and_stop(t, game, fs: FieldView) -> void:
-	# ⚠⚠ **PARKED AT THE WESTERN ROAM EDGE, WITH SMALL FRAMES, AND BOTH ARE MEASURED RATHER THAN
-	# TASTE.** At this island and this zoom the whole east-west range is about 1120 px of `cam_px` and
-	# `CAM_PAN_KEY_PX_PER_SEC` crosses roughly 295 px of it per quarter second — **so a first draft of
-	# this row using 0.25 s frames from the middle hit the stop on its second frame and the rate rows
-	# below both read 0.0.** Starting at the far edge with 1/20 s frames leaves the stop twenty frames
-	# away, which is where a rate can be measured at all.
-	fs.cam_px = Vector2(-99999.0, 0.0)
-	fs._clamp_cam()
-	var start := fs.cam_px
-
-	# Nothing held: frames pass and the camera stands still. **The floor of every row below** — a
-	# `_process` that panned unconditionally would move here and nothing else would notice.
-	game._process(0.05)
-	t.eq(fs.cam_px, start, "아무 키도 안 눌렀으면 프레임이 지나도 카메라가 그대로다")
-
-	game._unhandled_input(_key_edge(KEY_D, true))
-	game._process(0.05)
-	var after_d := fs.cam_px
-	t.ok(after_d.x > start.x + 1.0,
-		"D 를 누르고 있으면 카메라가 동쪽으로 간다 (%.2f → %.2f)" % [start.x, after_d.x])
-	t.ok(absf(after_d.y - start.y) < 0.001, "그동안 세로로는 안 움직인다")
-
-	# **Still down: it keeps going.** One event, two frames — this is what separates a hold from a step.
-	game._process(0.05)
-	t.ok(fs.cam_px.x > after_d.x + 1.0,
-		"키를 그대로 두면 다음 프레임에도 계속 간다 (%.2f → %.2f)" % [after_d.x, fs.cam_px.x])
-
-	# **The rate is the delta's**, so twice the time is twice the distance. A pan that ignored `delta`
-	# would move the same amount for both, and this is the only row that can see it.
-	var mark := fs.cam_px
-	game._process(0.02)
-	var slow := fs.cam_px.x - mark.x
-	mark = fs.cam_px
-	game._process(0.04)
-	var fast := fs.cam_px.x - mark.x
-	t.ok(slow > 0.5, "짧은 프레임에도 실제로 움직였다 (%.2f) — 0이면 아래가 공허하다" % slow)
-	t.ok(fast > slow * 1.5,
-		"움직인 거리가 프레임 시간에 비례한다 (0.02초에 %.1f, 0.04초에 %.1f)" % [slow, fast])
-
-	# **The release stops it.** ⚠ Without this a held key pans for the rest of the island.
-	game._unhandled_input(_key_edge(KEY_D, false))
-	var stopped := fs.cam_px
-	game._process(0.05)
-	t.eq(fs.cam_px, stopped, "손을 떼면 멈춘다")
-
-	# **A repeat is not a second key.** OS auto-repeat delivers `pressed = true, echo = true` many
-	# times a second; if each one added its direction again, W held for a second would pan at a dozen
-	# times the rate nobody chose.
-	game._unhandled_input(_key_edge(KEY_A, true))
-	mark = fs.cam_px
-	game._process(0.02)
-	var one_key := mark.x - fs.cam_px.x
-	for _r in 5:
-		game._unhandled_input(_key_edge(KEY_A, true, true))
-	mark = fs.cam_px
-	game._process(0.02)
-	var with_echo := mark.x - fs.cam_px.x
-	t.ok(absf(with_echo - one_key) < 0.01,
-		"자동 반복이 와도 속도가 그대로다 (%.2f · %.2f)" % [one_key, with_echo])
-	t.ok(one_key > 1.0, "그리고 A 는 서쪽으로 간다 (자가 점검 — 0이면 위가 공허하다)")
-	game._unhandled_input(_key_edge(KEY_A, false))
-
-	# **Two keys are two axes**, and releasing one leaves the other running — the failure a handler
-	# that WROTE the direction instead of adding it would have.
-	game._unhandled_input(_key_edge(KEY_W, true))
-	game._unhandled_input(_key_edge(KEY_D, true))
-	mark = fs.cam_px
-	game._process(0.03)
-	t.ok(fs.cam_px.x > mark.x + 1.0 and fs.cam_px.y != mark.y,
-		"W 와 D 를 같이 누르면 두 축이 다 움직인다")
-	game._unhandled_input(_key_edge(KEY_D, false))
-	mark = fs.cam_px
-	game._process(0.03)
-	t.ok(absf(fs.cam_px.x - mark.x) < 0.001 and fs.cam_px.y != mark.y,
-		"D 만 떼면 가로는 멎고 W 는 계속 간다")
-	game._unhandled_input(_key_edge(KEY_W, false))
-
-	# **It stops at the roam edge and does not run out to sea forever.**
-	game._unhandled_input(_key_edge(KEY_D, true))
-	for _f in 40:
-		game._process(0.25)
-	var edge := fs.cam_px
-	game._process(0.25)
-	t.ok(fs.cam_px.distance_to(edge) < 0.001, "계속 눌러도 바다 테두리에서 멈춘다 (%.2f)" % edge.x)
-	var roam := Look.CAM_ROAM_TILES * Look.TILE_PX
-	var map_w := float(fs._map_tiles().x) * Look.TILE_PX
-	t.ok(fs._ground_centre_px().x <= map_w + roam + 0.1,
-		"멈춘 자리가 섬 + 바다 테두리 %d조각 안이다" % int(Look.CAM_ROAM_TILES))
-	t.ok(edge.x > start.x + Look.TILE_PX,
-		"자가 점검 — 멈추기까지 실제로 한 조각보다 훨씬 멀리 갔다: 못 움직이는 카메라가 아니다")
-	game._unhandled_input(_key_edge(KEY_D, false))
+## ⚠ **`_key_edge` went with it** — it built a key event on either edge, with an `echo` flag, and the
+## keys were the only thing left in this file that needed one.
 
 
 ## **A press that travels is a look-around; a press that does not is an order.** 티켓 41.
@@ -995,17 +895,6 @@ func _rects_land_on_screen(t, label: String, rects: Array[Rect2]) -> void:
 func _key(code: int) -> InputEventKey:
 	var ev := InputEventKey.new()
 	ev.pressed = true
-	ev.keycode = code
-	return ev
-
-
-## The same event with an edge and an echo flag on it. ⚠ **A held key is TWO events and a net that only
-## ever sends the press is measuring half of it** — the release is what stops the pan, and a shell that
-## never reads one pans until the island ends.
-func _key_edge(code: int, pressed: bool, echo: bool = false) -> InputEventKey:
-	var ev := InputEventKey.new()
-	ev.pressed = pressed
-	ev.echo = echo
 	ev.keycode = code
 	return ev
 

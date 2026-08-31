@@ -52,25 +52,12 @@ var run: Run = null
 ## behind the panel, and the loss screen has to keep showing enemies-left to say *why* it was lost.
 var battle: Battle = null
 
-## **Which pan keys are down right now**, as a screen-space direction. Written by `_unhandled_input`
-## on the key's two edges, spent by `_process` against the frame's own delta.
-##
-## ⚠⚠ **HELD STATE AND NOT ONE STEP PER EVENT, AND THE DIFFERENCE IS THE WHOLE FEATURE.** A key that
-## panned once per event would move the camera at the OS's auto-repeat rate — a pause, then a stutter,
-## then a speed nobody chose and that differs per machine. **Panning is continuous or it is not
-## panning**, and 「looking around for a boat」 is the one thing the camera now has to be good at
-## (2026-08-30, the user: 「마우스 돌리다가 보이면 그때 가는 걸로」).
-##
-## ⚠⚠ **A NET CAN DRIVE THIS AND COULD NOT DRIVE `Input.is_key_pressed`.** The alternative was polling
-## the input singleton from `_process`; headless, nothing can put a key down in it, so the whole
-## feature would be unmeasurable — and `tests/README` already records half an input suite going green
-## while the other half was dead. **The events come in through `_unhandled_input` like every other
-## input this shell reads**, and a net hands it the same events the OS would.
-##
-## ⚠ **Diagonals are NOT normalised**, deliberately: W and D together move the camera 1.41 times as
-## fast, which is what every drag already does — `pan_by` takes a screen delta and a mouse moving
-## diagonally covers more ground too. Normalising here would make the keys disagree with the mouse.
-var _pan_keys := Vector2.ZERO
+## ⚠⚠ **`_pan_keys` STOOD HERE AND IT IS DELETED** (2026-08-31, the user: 「wasd 도 지워줘」). It was
+## the WASD direction held down, written on each key's two edges and spent by `_process` against the
+## frame's own delta — **held state and never one step per event**, because a key that panned per
+## event moves at the OS's auto-repeat rate.
+## ⚠ **The left-button drag is the only thing that moves the camera now.** The edge band went the
+## same day, and the keys followed it.
 
 ## ⚠⚠ **`reward_view` AND `refit_view` STOOD HERE AND BOTH ARE DELETED** (2026-08-28, the user:
 ## 「고르는 창도 이제 필요 없는데 왜있지? 이것도 제거」 · 「둘 다 지우면 돼」) — the three-card screen
@@ -192,18 +179,12 @@ func _open_island() -> void:
 func _process(delta: float) -> void:
 	if run == null:
 		return
-	# ⚠⚠ **THE PAN IS SPENT ABOVE THE `battle == null` GUARD, DELIBERATELY.** Below it the camera would
-	# freeze on any frame the sim is not running, and looking around is exactly the thing that must not
-	# stop being possible. ⚠ **`field_view.pan_by` ends in the clamp**, so a key held into the edge of
-	# the roam ring stops there rather than running off — one path to the camera, the same one the drag
-	# uses, and no second bound to keep in step.
-	# ⚠⚠ **THE EDGE BAND WAS THE SECOND SOURCE ADDED HERE AND IT IS DELETED** (2026-08-31). Two
-	# screen-space velocities were summed and spent through ONE `pan_by` so the clamp only ran once;
-	# **with the band gone the keys are the only source left**, and the single call is kept because
-	# that is the shape a second source would have to come back into.
-	var vel := _pan_keys * Look.CAM_PAN_KEY_PX_PER_SEC
-	if vel != Vector2.ZERO:
-		field_view.pan_by(vel * delta)
+	# ⚠⚠ **A PAN WAS SPENT HERE EVERY FRAME AND IT IS DELETED** (2026-08-31). Two screen-space
+	# velocities — the WASD keys and the window's edge band — were summed and pushed through ONE
+	# `field_view.pan_by` above the `battle == null` guard, so the camera kept working on a frame the
+	# sim was not running. **Both sources are gone**, and the drag that replaced them moves the camera
+	# from `_unhandled_input` rather than from the clock, so nothing needs a per-frame call.
+	# ⚠ **`pan_by` still ends in the clamp** — that is the drag's bound too, and it is untouched.
 	# ⚠ **No multiplier is handed down any more.** `speed-off-open-landing` deleted the ladder, so the
 	# sim and both views run on the bare frame delta — which is what every duration in `look.gd` was
 	# budgeted against in the first place. `set_time_scale` and `set_speed` are gone rather than being
@@ -269,14 +250,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		if key.keycode == KEY_TAB and not key.echo:
 			field_view.set_pads_revealed(key.pressed)
 			return
-		# ⚠⚠ **READ ON BOTH EDGES, LIKE TAB AND UNLIKE EVERY OTHER KEY HERE**, because a held key that
-		# is never told it was released pans forever. It sits ABOVE the `not key.pressed` return for
-		# exactly that reason — below it, only the press would ever be seen.
-		# ⚠ **The echo guard is what makes a hold one press.** OS auto-repeat delivers `pressed` many
-		# times a second while a key is down; without this, each repeat would re-add the same direction
-		# and W held for a second would read as a dozen W keys at once.
-		if _on_pan_key(key):
-			return
+		# ⚠⚠ **THE WASD BRANCH STOOD HERE AND IT IS DELETED** (2026-08-31). It was read on BOTH edges,
+		# like TAB and unlike everything left in this handler, and it sat ABOVE the `not key.pressed`
+		# return for that reason — a held key never told it was released pans forever. **TAB is the
+		# only two-edged key left.**
 		if not key.pressed:
 			return
 		# ⚠⚠ **Tilting is not gated on anything**, on purpose — 티켓 07 asks whether a hand may move
@@ -496,38 +473,13 @@ func _end_press() -> void:
 
 # --- the camera keys ------------------------------------------------------------------------------
 
-## **WASD, held, as a screen direction.** True when the key was one of the four, which is what tells
-## `_unhandled_input` the event is spent.
-##
-## ⚠⚠ **THE SIGNS ARE THE MOUSE DRAG'S, NOT THE CAMERA'S.** `pan_by` takes the delta a DRAG would
-## deliver, and dragging the ground rightwards moves the view LEFT — so 「look right」 is a negative x.
-## Getting this backwards is a control that works and feels wrong, which no check catches; the one
-## thing that pins it is that a key and a drag go through the same call.
-## ⚠ **A key going down ADDS its direction and going up SUBTRACTS it**, rather than either one writing
-## the whole vector. Writing it whole loses the other axis: A and W held together, then A released,
-## would stop the pan entirely instead of leaving W running.
-func _on_pan_key(key: InputEventKey) -> bool:
-	if key.echo:
-		# ⚠ **`true` and not `false`.** A repeat is still a pan key, and letting it fall through would
-		# hand it to `_on_tilt_key` — which ignores echoes too, so nothing would happen, but the event
-		# would be reported unhandled for a key this shell very much handles.
-		return true
-	var dir := Vector2.ZERO
-	if key.keycode == KEY_W:
-		dir = Vector2(0.0, 1.0)
-	elif key.keycode == KEY_S:
-		dir = Vector2(0.0, -1.0)
-	elif key.keycode == KEY_A:
-		dir = Vector2(1.0, 0.0)
-	elif key.keycode == KEY_D:
-		dir = Vector2(-1.0, 0.0)
-	else:
-		return false
-	if key.pressed:
-		_pan_keys += dir
-	else:
-		_pan_keys -= dir
-	return true
+## ⚠⚠ **`_on_pan_key` STOOD HERE AND IT IS DELETED** (2026-08-31, the user: 「wasd 도 지워줘」). It
+## turned W/A/S/D into a held screen direction, **adding on the press and subtracting on the release**
+## rather than writing the whole vector — writing it whole loses the other axis the moment two keys
+## are held and one is let go.
+## ⚠ **Its signs were the mouse drag's, not the camera's**, and that is the one thing worth carrying
+## forward: `pan_by` takes the delta a DRAG delivers, so 「look right」 is a NEGATIVE x. The drag is
+## now the only caller and it never had to convert.
 
 
 ## R stands the camera up toward looking straight down, F lays it over toward the horizon — one notch
