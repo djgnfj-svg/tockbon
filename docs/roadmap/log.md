@@ -2490,3 +2490,66 @@ is 0.450 — the disc never grew when the animal did.
 **Nothing was chosen about the black wolf.** **The house is still standing and still un-decided.**
 **The facing picker still splits on the bigger axis**, so the four-diagonal rule is true of the folder
 and not yet of the game.
+
+## ⚠⚠ **Three of the four ways to move the camera were deleted, in one conversation — 2026-08-31 night, fifth session**
+
+**The user removed them one at a time, and each removal was a separate message.** ⚠ **The second one
+had been their own idea the day before.**
+
+> ***"Remove this QE feature"*** (「QE 이거 기능제거해줘」)
+> ***"Is there still the logic where the map moves when the mouse is at the edge of the screen?"***
+> (「혹시 화면 끝에 마우스 뒀을떄 이동되는 로직남아있나?」) → ***"Delete that too"*** (「그것도 지워줘」)
+> ***"Delete WASD as well"*** (「wasd 도 지워줘」)
+
+⚠⚠ **The edge band was born on 2026-08-30 from this same person** — ***"rather than wasd, it should
+move automatically when the mouse goes to the edge"*** (「wasd 보다는 마우스가 끝으로 가면 자동으로
+이동이 맞을듯」) — **and it lived one day.** The keys it was meant to replace outlived it by a single
+message. **Both are written into the tombstones in `look.gd` in the user's own words**, because this
+repo records a flip rather than erasing the thing that flipped.
+
+### What went with them
+
+| Deleted | What it was |
+|---|---|
+| **Q · E** | 15° a notch on the keyboard. ⚠ **The right button's drag is untouched** — measured at **18° per 100 px** |
+| **The edge band** | 28 px deep from each side, ramping from **0.30 of top speed at the inner lip** to full at the glass; the remembered pointer; **two flags** for alt-tab and mouse-exit, kept apart on purpose; the `_notification` that set them |
+| **WASD** | Held state, added on the press and subtracted on the release. ⚠⚠ **The per-frame `pan_by` went with it** — with both sources gone `_process` no longer touches the camera at all |
+| **Four constants** | `CAM_PAN_KEY_PX_PER_SEC` (900 px/s) and the band's three. **Nothing in `src/` moves the camera on a clock any more** |
+| **43 net rows** | Everything that measured the three. ⚠ **The failure set was compared before and after all three times and was identical each time** |
+
+### ⚠ Three tools would have gone quietly dead and were re-wired instead
+
+**The screenshot tool pressed E three times to turn the island**, the palette prototype did the same,
+and `capture_boat`'s 「can a player find a hull」 mode **scanned with WASD**. All three now move the
+camera directly, **at the keys' old 900 px a second and for the same durations**, so the pictures they
+save are the same pictures. ⚠ **This is the failure mode the repo names 「code that pretends to work」**:
+none of the three would have errored — they would have saved a frame that never turned.
+
+### ⚠⚠ The user's next premise did not survive the measurement
+
+> ***"So now there's the problem that the map doesn't move, right?"*** (「이제 여기서 맵이 이동이
+> 안되는 문제가 있는거잖아?」)
+
+**Measured headless, on the running shell:**
+
+| What | Number |
+|---|---|
+| **A 300 px drag sideways** | the board moves **393.8 px** |
+| **The same drag, begun on the 조각 a body stands on** | **393.8 px — identical**, and **zero walk orders** |
+| **A 300 px drag downward** | **584.9 px** — the pitch stretches the vertical |
+| **How far the camera may travel east-west at all** | ⚠⚠ **1120 px, against a 1280 px screen** |
+
+⇒ **The drag is not broken.** **The last row is the real finding**: the whole roam range is narrower
+than one screen, so there is barely anywhere to travel to — which is what 「it doesn't move」 reads as
+on a screen. **That number is `Look.CAM_ROAM_TILES` and nobody has ever judged it on a screen.**
+
+### What is still open
+
+**Ticket `03-01` — 판을 무엇으로 움직이나** is the first ticket to exist since the forty-five were
+deleted on 2026-08-30, and it is `Type: grilling`: **the model does not pick.** All three deletions
+were the user's word, and so is what replaces them.
+
+⚠ **The left button is doing two jobs and that is untouched**: a press in place commands a body, a
+press that travels 6 px (`Look.DRAG_PAN_THRESHOLD_PX`) looks around instead.
+
+⚠ **This session sits on `worktree-drop-qe-turn` and is NOT in `main`.** It was pushed to the remote.
