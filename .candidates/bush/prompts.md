@@ -38,7 +38,25 @@ in the middle of the row**, which is the comparison that matters: a 32 px bush a
 
 The code that carries a picture prop went in with the trees — see `../tree/prompts.md`.
 
+## ⚠⚠ **Four BAKED bushes now stand beside them** — `2026-08-31-lowpoly_v*.png`
+
+**The tree's rejection applies here too** (2026-08-31, the user, about the trees: 「it is AI itself, far
+too realistic」). Four bushes were cut as low-poly meshes and baked the same way the trees were —
+geometry in `../tree/2026-08-31-lowpoly.blend`, sheet in `2026-08-31-sheet-lowpoly.png`.
+
+| | What it is |
+|---|---|
+| `v1_mound` | one low faceted mound |
+| `v2_two` | two lumps leaning on each other |
+| `v3_scrub` | short spikes out of a low base |
+| `v4_thicket` | **no leaves at all**, six bare twigs |
+
+**32 px over a 0.8 조각 frame is the same 40 px per 조각 the trees bake at.**
+
+⚠⚠ **The south row of the island is now the COMPARISON**: four baked on the left of the swordsmen, four
+generated on the right (`a01` · `b03` · `c01` · `c03` — the best of the nine). **The other five came out
+of `assets/`** and survive here.
+
 ## Still unsettled
 
-**Which one.** Nothing chosen. ⚠ **All but the winner comes out of `assets/` when it is** — nine PNGs
-and nine `.import` files.
+**Which one, and which WAY.** Nothing chosen. ⚠ **All but the winner comes out of `assets/`** when it is.

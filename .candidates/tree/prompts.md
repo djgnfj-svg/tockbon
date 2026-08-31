@@ -1,6 +1,42 @@
-# `tree` — the words each candidate was pulled with
+# `tree`
 
-**Nothing chosen yet.** Eight candidates, all pixellab `pixen`, all `no_background`, `low detail`.
+## ⚠⚠ **ALL EIGHT GENERATED TREES WERE REJECTED** (2026-08-31, the user)
+
+> ***"The tree is horrible. It is AI itself — far too realistic, sort of... it probably does not even
+> need leaves."***
+
+**They came out of `assets/` the same day they went in** and survive here, which is what this folder is
+for. **What replaced them is not another generator wave**: six trees cut as low-poly meshes in Blender
+and BAKED to sprites — `2026-08-31-lowpoly.blend`, sheet in `2026-08-31-sheet-lowpoly.png`, files
+`2026-08-31-lowpoly_w*.png`.
+
+| | What it is |
+|---|---|
+| `w1_cone` | one faceted cone on a short trunk |
+| `w2_tiers` | three cone tiers |
+| `w3_blob` | one blob canopy — a waist, a shoulder, a flat top |
+| `w4_cluster` | three blobs that overlap, so the outline is lumpy |
+| `w5_bare` | **no leaves at all**, a trunk and five angular limbs |
+| `w6_umbrella` | a tall trunk under a wide flat canopy |
+
+**Why baking beats pulling here.** The island is flat facets in four tones; every generated tree
+carried painted leaf clusters and a photographic canopy, so **it read as a different game.** A tree cut
+the same way as the rock cannot.
+
+⚠⚠ **The bake is EMISSION, not lit.** The sprite is drawn `shaded = false`, so whatever pixel comes out
+of the render is the pixel on screen — lighting the bake would put this world's sun into the picture
+twice. **The facets come from which material a face gets, not from where the sun is**, exactly how
+`props.blend` already works.
+
+⚠ **96 px over a 2.4 조각 frame is 40 px per 조각** — `Look.TILE_PX`, the same ruler the generated set
+used. **MEASURED: baked at 1.6 조각 first and the tree stood 1.5x the swordsman and read as a shrub**;
+at 2.4 it reads as a tree. The frame grows with the tree so the six keep their honest differences.
+
+---
+
+## The eight that were rejected — the words they were pulled with
+
+**All pixellab `pixen`, `no_background`, `low detail`.**
 
 ⚠⚠ **The tree is going 2D** (2026-08-31, the user: *"the tree is 2D, the bush is 2D too, and the stone,
 the iron ore and the buildings are 3D"*). A pine, a tree and a bush already stand as MESHES in

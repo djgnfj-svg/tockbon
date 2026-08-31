@@ -3,9 +3,27 @@
 **Nothing chosen yet — TWELVE shapes now** (2026-08-31, the user, after the first six: 「철광석은 좀더
 뽑아보자」).
 
+## ⚠⚠ **`o8` IS THE DIRECTION** (2026-08-31, the user: 「철광석 o8을 조금만 더 변경해줄래? 저부분이
+## 마음에 들긴함」)
+
+**o8 is the one where the ORE is the mass and the grey is only a crust** — the inverse of every other
+shape, and the same squat silhouette as the chosen 돌 `r2`. **Six variations on it** are in
+`2026-08-31-variants-c-o8.blend`, sheet `2026-08-31-sheet-o8-variants.png`, with the original at the end.
+
+| | What the crust does |
+|---|---|
+| `o8a_slab` | one grey slab laid across the crown |
+| `o8b_band` | grey below and above, a band of ore round the waist |
+| `o8c_split` | grey plates stood round the base |
+| `o8d_shards` | grey shards driven OUT of the ore, the crust broken rather than laid on |
+| `o8e_bare` | **no crust at all**, and the top cut into two planes |
+| `o8f_pair` | a small grey boulder beside it, the way `r2` pairs a mass with a shoulder |
+| `o8_ORIGINAL` | three grey lumps on the crest — what was picked |
+
 | Sheet | What is on it |
 |---|---|
-| `2026-08-31-sheet-all-twelve.png` | ⭐ **all twelve, in ONE palette, with the chosen 돌 `r2` at the end.** This is the sheet to look at |
+| `2026-08-31-sheet-o8-variants.png` | ⭐ **the six above plus the original.** This is the sheet to look at |
+| `2026-08-31-sheet-all-twelve.png` | all twelve shapes, in ONE palette, with the chosen 돌 `r2` at the end |
 | `2026-08-31-sheet.png` | the first six only, in the shipped (bright) tones |
 | `2026-08-31-in-game.png` | two colourings of `o1` standing on the real island |
 
