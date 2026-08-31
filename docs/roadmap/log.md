@@ -2963,3 +2963,145 @@ boss**, and both start from a table with no precedent for their own column.
 **`ee9907ab` 에서 통과 1255 · 실패 65.** 세션 내내 이 수를 지켰다. ⚠ 두 번 붉어졌고 둘 다
 이 세션이 만든 것이라 그 자리에서 고쳤다 — `net_draw_leaf` 의 함수 표에 새 함수 넷이 없었던 것,
 그리고 `net_citations` 가 주석에 박은 문서 경로를 잡은 것.
+
+## ⚠⚠ **The loop the game did not have — fishing, curiosity, and six things cut — 2026-08-31, fifth session**
+
+**Nothing was built. The whole round was the user working out what the game does moment to moment**,
+and it ended with the first end-to-end description of that loop this repo has ever held.
+
+### ⚠⚠ The loop, in the user's own words
+
+> ***"You fish, and then if you take a boat out there are better-looking fishing spots you can see out
+> at sea. So you go 'hey, is there a boat? A boat?' and if there is no boat you head for a fishing spot,
+> and looking for a better fishing spot you find a new island, and you go to the new island and some new
+> monster hits you and you go 'what the hell is this' and come back — and meanwhile our base has been
+> raided. Somebody has to hold it. You have to place soldiers again. That crowded, bustling feeling."***
+
+**The user marked this line themself**: ***"this one, the one just now, was really important."***
+
+⚠⚠ **What it supplies is a motive that arrives through the eyes.** The map's old week 10 said "build a
+wooden boat and sail out" and stated no reason to prefer *there* over *here*; the old week 4 said
+"gather three resources" with no pull at all. **A better fishing spot the player can see before he can
+reach it is the first pull in this repo that the player forms himself.**
+
+### ⚠⚠ Why this is the antidote to the second dead game
+
+**The post-mortem line is that splitting cost nothing and absorbing undid it for free, so splitting was
+never a decision.** Sailing out while home still needs defending is the first mechanic proposed here
+where **splitting has a price the player feels immediately and an undo that is not free** — travel time.
+
+⚠ **It is not paid for yet.** Measured in `battle.gd`: `keep_hp` is the ONLY building HP in the file,
+and `Rules.REVIVE_SEC := 20.0` is the whole of what a death costs. ⇒ **"Your base was raided while you
+were away" has exactly two outcomes** — everyone revives in twenty seconds and nothing happened, or the
+성채 burnt and the run is over. **There is no middle, and without a middle the split is still free.**
+
+### Two reviews ran against this direction at once, and they agreed on three things
+
+**The user asked for an adversarial and a positive review simultaneously**, then a synthesis.
+⚠⚠ **They reached the same verdict on three items from different evidence**, which is the strongest
+signal the round produced.
+
+| Cut | The positive review's reason | The adversarial review's reason |
+|---|---|---|
+| **Food** | Curiosity already does the job food was hired for — the visible better spot justifies fishing on its own | It gates the only progression axis (soldier count), and **no instrument exists to measure its rate**; too slow is irrelevant, too fast is a fishing game, **and both look identical in every net** |
+| **Hero character** | Buys no beat of the loop; adds a second control mode | `look.gd` says it on the line: **"A second player body costs a new DRAWING, not a new row."** And it reverses the 2026-08-30 "an observer, not a hero being driven" |
+| **Rarity** | Fails the bar — it is a multiplier on a number | **Already deleted twice.** `rules.gd`: *"EQUIPMENT, RARITY, TAGS, STATUSES AND CARDS: ALL DELETED... because NOTHING COULD REACH IT"*, and the nets did not move when it went |
+
+### ⚠⚠ Where the two reviews contradicted each other, and what the measurement said
+
+**The positive review claimed a second island costs "a second `island.json` plus one line".
+The adversarial review claimed nothing can author `island.json` at all.** Both were measured directly:
+
+- **`Battle` never reads `Islands`** — it is handed a board, a 성채 and a doorstep. `run.gd`'s
+  `begin_island` is the only meeting point. ⇒ **The fight is island-agnostic by construction, and the
+  positive review is right about the CODE.**
+- **`Islands` reads one path** — `const BOARD_PATH` and a single `static var _board`. **And the script
+  its own assert points at (`tools/blender/island_build.py`) was deleted from `main` in `ac9f0955`.**
+  It survives on the `worktree-soldier-sprite` branch.
+- ⚠⚠ **`docs/manual/blender.md` says it outright**: **"TWO `.json` FILES SIT BESIDE THE MESHES AND NO
+  `.blend` CARRIES THEM."**
+
+⇒ **A second board is cheap in code and currently impossible to author.** ⚠ **The user defused this in
+the same round**: ***"the map is going to be made bigger, the one now is a temporary map"*** — so the
+authoring path gets built when the island is rebuilt, rather than as separate work.
+
+### The counted cost of the version before the cuts
+
+| What | Measured |
+|---|---|
+| **New drawings** | **744 frames** — hero 124 · a monster for the new island 124 · the boss 124 · equipment as three complete sets 372. ⚠ **124 per body was counted on disk**, and an earlier figure of 108 given in the same conversation was wrong |
+| **Buildings** | **5 → 7**, and **all five standing ones are hollow** — `buildings.json` is `kind/w/h/label`, `builds.gd` answers footprint and label and nothing else. **There is no build action anywhere in `src/shell/game.gd`** |
+| **UI screens** | **8, from a base of zero.** `hud_view._draw` is `pass`. **The map allots one week (12) to every screen in the game** |
+| **Sim concepts** | **18 missing.** wood/stone/iron/food/gather return **zero hits** across `src/sim/`, and "group" appears only as a group of tiles in the stair code |
+
+### ⚠ A ceiling nobody had looked at
+
+**`Look.CAM_ROAM_TILES := 20.0`** is how far past the island the camera may travel.
+**`Rules.BOAT_START_DIST_TILES := 24.0`** is where the beasts' boat is born — **four 조각 beyond where
+the camera can be centred at all.** ⇒ **"A better fishing spot further out" rides on a 20-조각 axis
+whose far end cannot be brought to screen centre.**
+
+### What the user settled
+
+- **Magic is out.** ***"Take magic out. Adding magic now would be too hard."***
+- **Rarity is out.** **The hero character is out.**
+- **Food comes from fish** — and the user pulled it back in after cutting it: ***"food, food should be
+  fish, I think."*** ⚠ **This reverses the 2026-08-30 merge of 「farming and fishing」 into 「gathering」**,
+  and the resource count goes three → four.
+- **Equipment slots are out, but a hand stays**: ***"the equipment slot, I think we can drop that. It is
+  a bit rough. I think just a hand would do — just what you put in the hand."*** ⚠ **Armour was reopened
+  one sentence later** and left open, on the ground that the pictures come from pixellab and cost time
+  and AI credits rather than hand-drawing.
+- **Equipment applies to a whole squad at once**, not per body — ***"there can be several squads too, and
+  taking that into account, applying it all at once is right."***
+- **Multiplayer stays parked, and parking it costs nothing** — measured this round: **`src/sim/` contains
+  no `seed`, `rng`, `randi` or `randf` at all.** The sim is deterministic because it has no randomness,
+  so multiplayer is a thing to add later rather than to rebuild for.
+
+### ⚠⚠ Squad selection is going to be StarCraft's, and that puts a THIRD job on the left button
+
+> ***"I think grouping and commanding squads probably has to be like StarCraft. Drag to select and move
+> them. There is no other method as good as that one."***
+
+**Ticket 03-01 (on the `worktree-drop-qe-turn` branch) already measured the left button carrying two
+jobs** — a press in place commands a body, a press that travels 6 px (`Look.DRAG_PAN_THRESHOLD_PX`)
+pans the camera. **A drag that selects is a third**, and the same ticket measured the roam range at
+**1120 px against a 1280 px screen** — the board has barely anywhere to go.
+
+**The user raised camera rotation as the worry and asked for ideas**: ***"camera rotation is a slight
+worry. Rather than free rotation — should we set fixed angles? Or how should camera rotation work?
+Right mouse, or pressing the wheel?"*** ⚠ **Left open.**
+
+### ⚠ Automation was raised and nothing was decided
+
+> ***"There needs to be something that automates the base. Cutting wood, mining — that automation
+> element is missing. Don't we have to make a pickaxe too? You cannot mine stone by hand."***
+
+**Nothing in `src/sim/` gathers anything**, so this has no existing behaviour to extend.
+
+### What is still open
+
+**Whether a worker is a separate body from a soldier** — ⚠ **measured against the loop this round: if
+workers gather and soldiers defend, the two never compete, and the price on splitting disappears.**
+· **Whether armour joins the hand** · **How the camera rotates** · **Whether the tech tree opens from
+the base** · **What is actually lost when the base is raided while you are away.**
+
+### What this round left standing
+
+**Ticket `03-04` — 무리를 끌어서 고르고 보낸다.** The user named the next thing themself:
+***"let's settle the UI/UX used when moving. That is the really core thing"***, and said they would
+carry it on from the cloud and leave it as a pull request. **The ticket is `Type: grilling` and holds
+what was measured, not a plan** — the plan is the user's next conversation.
+
+⚠⚠ **`03-04` and `03-03` are one decision in two files.** If a drag selects, the left drag stops
+panning, and **panning has nowhere left to go** — the user deleted the other three ways on 2026-08-31.
+
+### The nets
+
+⚠⚠ **They could not be run in this round's worktree** — the Godot binary is `.gitignore`d and is not
+present outside the main checkout. **An unrun suite is not a passing one, so no green is claimed here.**
+
+**The number this session opened with, measured in the main checkout: 통과 1253 · 실패 67.**
+⚠ That reading was taken over 440 uncommitted files belonging to other sessions, so it measures their
+tree rather than `main`. **This round changed two markdown files and one new markdown file and touched
+no code**, so nothing here can have moved it.
