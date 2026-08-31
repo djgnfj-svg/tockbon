@@ -94,7 +94,7 @@
 ## 화면에서 켜 보기 — 실험대
 
 ```
-.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/lab/billboard_lab.gd
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://docs/개발지식/01-2D-판때기를-3D에-넣기/lab.gd
 ```
 
 **몸 셋이 나란히 선다.** 왼쪽은 스위치를 안 받는 대조군, 가운데가 스위치를 받는 쪽, 오른쪽은
@@ -108,7 +108,7 @@
 코드는 16 덩어리다.
 
 ⚠ **아직 화면에서 한 번도 안 돌려 봤다.** 문법과 이름은 훑었지만 고도가 없는 곳에서 쓴 것이다 —
-안 뜨면 `tools/lab/README.md` 의 「볼 곳 셋」부터 본다.
+안 뜨면 `docs/개발지식/README.md` 의 「안 뜨면 볼 곳 셋」부터 본다.
 
 
 ## 출처

@@ -31,9 +31,6 @@ it will be drawn at, what it stands beside, and which of this game's styles it j
 **The local ComfyUI is `CompyUI_2DPixel`**, on this PC's GPU, and every beast in this game came from it.
 **It costs nothing.**
 
-⚠⚠ **ASK BEFORE STARTING IT.** **Measured 2026-08-30**: a batch was launched while the user had a game
-running and had to be stopped mid-generation. **This GPU is not idle by default.**
-
 **`tools/pixel/README.md` is the single source of truth for the pipeline** — presets, the chroma green
 ground, generating at 4x, the colour cast and `--desat`, silhouette words instead of action verbs, the
 onion-skin check. **Follow it. Do not restate it here and do not invent a phrase.**
