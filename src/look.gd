@@ -1466,14 +1466,26 @@ const BEAST_FRAME_SEC := 0.12
 ## alone: `BODY_SPRITE_SCALE` sizes every body at once and the wolf was judged at its own value.
 const BEAST_TEX := [
 	[[HUMAN_MAN_R, HUMAN_MAN_L, HUMAN_MAN_D, HUMAN_MAN_U], NO_ANIM_FRAMES, 0.65],
-	# ⚠⚠ **2.60, RAISED FROM 1.70 FOR THE 64 px PULL** (2026-08-31, the user: 「it is too small, and the
-	# picture has to be much bigger — big enough to tell from a distance that these really are wolves.
-	# Thick and big」). **The base frame is 24.6 px**, so this number IS the frame in 조각: 1.70 gave a
-	# 41.9 px frame and 2.60 gives 64.0. ⚠ **64 is not a taste, it is the candidate's own canvas** — the
-	# new wolves are drawn at 64 and a 64 px frame makes one texture pixel exactly one screen pixel at
-	# the opening zoom, which is what stopped them breaking up. **Re-pull at a different canvas and this
-	# number moves with it.**
-	[[BEAST_WOLF_H_R, BEAST_WOLF_H_L, BEAST_WOLF_H_D, BEAST_WOLF_H_U], NO_ANIM_FRAMES, 2.60],
+	# ⚠⚠ **0.85, CUT FROM 2.60 — THE WOLF IS SMALLER THAN THE MAN NOW** (2026-08-31 night, the user
+	# looking at the two of them side by side for the first time: 「the wolf got too big. Shrink it —
+	# it has to be smaller than the human」). **The base frame is 24.6 px**, so this number IS the frame
+	# in 조각: 2.60 gave a 64.0 px frame and 0.85 gives 20.9. ⚠ **The comparison is INK, not frame** —
+	# the wolf's ink fills its whole 64 x 64 canvas while the man's fills 40 of his 40 x 60, so at 0.85
+	# the wolf's ink is **20.9 px against the man's 26.8**: 0.78 of his height and 1.42 of his width, an
+	# animal that comes up to his waist and is longer than he is wide.
+	#
+	# ⚠⚠ **THIS REVERSES THE SAME DAY'S 2.60 AND THE REASON IT WAS RAISED IS NOW DEAD.** 2.60 was not a
+	# taste either: **64 px on screen made one texture pixel exactly one screen pixel** at the opening
+	# zoom, which is what stopped the art breaking up. **At 0.85 that is gone** — 64 texture px are
+	# resampled down into 20.9, so the wolves are a 3.1x downscale. ⇒ **If they read mushy, the fix is
+	# re-pulling the art at a ~24 px canvas, NOT raising this back**; the user has now judged the size
+	# with a man beside it, which 2.60 never was.
+	#
+	# ⚠ **Four other sizes were stood on the island in the same frame** and are one edit away:
+	# **1.00** (0.92 of his height) · **0.70** (0.64) · **0.55** (0.51, the first that is also narrower
+	# than he is). **0.85 is what this file ships**; the rest are written down because the user asked to
+	# see them and may want one instead.
+	[[BEAST_WOLF_H_R, BEAST_WOLF_H_L, BEAST_WOLF_H_D, BEAST_WOLF_H_U], NO_ANIM_FRAMES, 0.85],
 	[[BEAST_BEAR_R, BEAST_BEAR_L], NO_ANIM_FRAMES, 1.0],
 	[[BEAST_CROW_R, BEAST_CROW_L], NO_ANIM_FRAMES, 1.0],
 	[[], NO_ANIM_FRAMES, 1.0],
