@@ -3085,3 +3085,23 @@ Right mouse, or pressing the wheel?"*** ⚠ **Left open.**
 workers gather and soldiers defend, the two never compete, and the price on splitting disappears.**
 · **Whether armour joins the hand** · **How the camera rotates** · **Whether the tech tree opens from
 the base** · **What is actually lost when the base is raided while you are away.**
+
+### What this round left standing
+
+**Ticket `03-04` — 무리를 끌어서 고르고 보낸다.** The user named the next thing themself:
+***"let's settle the UI/UX used when moving. That is the really core thing"***, and said they would
+carry it on from the cloud and leave it as a pull request. **The ticket is `Type: grilling` and holds
+what was measured, not a plan** — the plan is the user's next conversation.
+
+⚠⚠ **`03-04` and `03-03` are one decision in two files.** If a drag selects, the left drag stops
+panning, and **panning has nowhere left to go** — the user deleted the other three ways on 2026-08-31.
+
+### The nets
+
+⚠⚠ **They could not be run in this round's worktree** — the Godot binary is `.gitignore`d and is not
+present outside the main checkout. **An unrun suite is not a passing one, so no green is claimed here.**
+
+**The number this session opened with, measured in the main checkout: 통과 1253 · 실패 67.**
+⚠ That reading was taken over 440 uncommitted files belonging to other sessions, so it measures their
+tree rather than `main`. **This round changed two markdown files and one new markdown file and touched
+no code**, so nothing here can have moved it.
