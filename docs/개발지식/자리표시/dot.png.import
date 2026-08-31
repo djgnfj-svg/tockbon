@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dwp30qwk6gg62"
-path="res://.godot/imported/dot.png-4d2731d5e06178883e0d95e3c37d0f7d.ctex"
+path="res://.godot/imported/dot.png-5cc526fef98bf85a7b188db0d16b1738.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tools/lab/art/dot.png"
-dest_files=["res://.godot/imported/dot.png-4d2731d5e06178883e0d95e3c37d0f7d.ctex"]
+source_file="res://docs/개발지식/자리표시/dot.png"
+dest_files=["res://.godot/imported/dot.png-5cc526fef98bf85a7b188db0d16b1738.ctex"]
 
 [params]
 

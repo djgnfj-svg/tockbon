@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cmudqiww6vcdt"
-path="res://.godot/imported/spark.png-27acc747af8328b6b1d765ee86b660f8.ctex"
+path="res://.godot/imported/spark.png-2b948bdb6e01187c358e92d5b228b548.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tools/lab/art/spark.png"
-dest_files=["res://.godot/imported/spark.png-27acc747af8328b6b1d765ee86b660f8.ctex"]
+source_file="res://docs/개발지식/자리표시/spark.png"
+dest_files=["res://.godot/imported/spark.png-2b948bdb6e01187c358e92d5b228b548.ctex"]
 
 [params]
 

@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://48igsiy8jed3"
-path="res://.godot/imported/body_front.png-d9207c78d40be6a62ac316b8ea6e208a.ctex"
+path="res://.godot/imported/body_front.png-0485908c9f8b4efcecd5db234fdb2295.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tools/lab/art/body_front.png"
-dest_files=["res://.godot/imported/body_front.png-d9207c78d40be6a62ac316b8ea6e208a.ctex"]
+source_file="res://docs/개발지식/자리표시/body_front.png"
+dest_files=["res://.godot/imported/body_front.png-0485908c9f8b4efcecd5db234fdb2295.ctex"]
 
 [params]
 

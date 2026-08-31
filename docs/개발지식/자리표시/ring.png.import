@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dgadycopvj4rl"
-path="res://.godot/imported/ring.png-c621a179fd75a0e5da052223c3a06868.ctex"
+path="res://.godot/imported/ring.png-2f20d8ba607423cf9bb065072063bb2d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tools/lab/art/ring.png"
-dest_files=["res://.godot/imported/ring.png-c621a179fd75a0e5da052223c3a06868.ctex"]
+source_file="res://docs/개발지식/자리표시/ring.png"
+dest_files=["res://.godot/imported/ring.png-2f20d8ba607423cf9bb065072063bb2d.ctex"]
 
 [params]
 

@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b71sxcrrkndvy"
-path="res://.godot/imported/beast.png-e53434a7200aaab63caadc4c5e9a027e.ctex"
+path="res://.godot/imported/beast.png-f5103da7f458111b3a549a9437176efd.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tools/lab/art/beast.png"
-dest_files=["res://.godot/imported/beast.png-e53434a7200aaab63caadc4c5e9a027e.ctex"]
+source_file="res://docs/개발지식/자리표시/beast.png"
+dest_files=["res://.godot/imported/beast.png-f5103da7f458111b3a549a9437176efd.ctex"]
 
 [params]
 
