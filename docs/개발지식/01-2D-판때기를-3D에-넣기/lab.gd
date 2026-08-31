@@ -156,9 +156,14 @@ func _apply() -> void:
 		s.shaded = st.on("shaded")
 		s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if st.on("real_shadow") else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		s.modulate = Color(1.18, 1.14, 1.22) if st.on("separate") else Color(1, 1, 1)
+		# ⚠⚠ **이 자리가 2026-08-31 에 틀린 것으로 실측됐다.** 그전 코드는
+		# `centered = false` 로 두고 `offset = (-폭/2, -높이)` 를 줬는데, **둘이 겹쳐서 두 번 내려간다** —
+		# `centered = false` 자체가 이미 기준점을 그림 위쪽 끝으로 옮기고, 거기서 높이만큼 또 내리니
+		# **몸이 땅 아래로 통째로 사라진다.** 스위치를 켜면 화면에서 몸이 없어지는 것으로 나왔다.
+		# ⇒ **가운데 정렬은 그대로 두고 위로 반 높이만 올린다.** 그러면 그림의 아래끝이 원점에 앉는다.
 		if st.on("feet"):
-			s.centered = false
-			s.offset = Vector2(-float(s.texture.get_width()) * 0.5, -float(s.texture.get_height()))
+			s.centered = true
+			s.offset = Vector2(0.0, float(s.texture.get_height()) * 0.5)
 		else:
 			s.centered = true
 			s.offset = Vector2.ZERO

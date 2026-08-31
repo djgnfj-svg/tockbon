@@ -2323,3 +2323,170 @@ re-earns a stride. **A control that is disturbed by being set up measures the di
 **With the same 블록, the same camera, the same nine coordinates, the same stride and the same heading,
 the placed nine and the walked nine still differ by about 9,000 pixels and sit some 25 px apart on
 screen.** ⚠ **The cause was not found and is not guessed at here** (ticket 65).
+
+## ✅✅ **Three branches went into `main`, the wolf shrank below the man, and a lab was found lying — 2026-08-31 night, fourth session**
+
+### What the session was asked to do
+
+> ***"Then pull, and there is our wolf one too. Merge that as well. I want to merge everything in this
+> session and be done with the parallel work — the wolf, and the soldier one? Ah, the one about soldiers
+> moving in a group, what was it?"***
+
+**The 「soldiers moving in a group」 turned out to be already on `main`** — the nine-in-a-block session
+had pushed it, and pulling was the whole of that half. **Only the wolf branch was still outside.**
+
+### The merge, and the three conflicts
+
+**Nine commits, three conflicts, all resolved by hand.**
+
+| Where | How it was settled |
+|---|---|
+| `BEAST_TEX` | **The swordsman's row from `main`** (four facings, 0.65) and **the wolf's row from the branch** (2.60). Different rows, so both survived |
+| `docs/roadmap/README.md` | The night's session count went from two to three |
+| `docs/roadmap/log.md` | Evening entry (blend originals, wolf) then night entry (soldier, nine) — the file appends in time order |
+
+⚠ **The branch had never touched `tests/`**, so the four rows pinned to the wolf's old 92 px frame bit
+the moment the 64 px art arrived. **62 fails became 66.** Two rows went green in exchange: the hull's
+half-length finally matched the rule, and 「the wolf stands 31.9 px, too small」.
+
+⚠ **A second, smaller repair rode along**: fourteen `.import` files in the branch pointed at
+`tools/lab/art/`, a folder that had moved to `docs/개발지식/자리표시/`. One Godot import run rewrote them.
+
+### ⚠⚠ The wolf was too big, and the user said so the first time he saw it beside a man
+
+> ***"The wolf got too big. Shrink the wolf — it has to be smaller than the human. Make it smaller than
+> the human."***
+
+**2.60 → 0.85.** Measured as INK and not as frame, because the wolf fills its whole 64 x 64 canvas while
+the man fills 40 of his 40 x 60:
+
+| | ink on screen | against the man |
+|---|---|---|
+| **the man, 0.65** | 14.7 x 26.8 px | — |
+| **the wolf at 2.60** | 64.1 x 64.1 px | **2.39x his height · 4.35x his width** |
+| **the wolf at 0.85** | 20.9 x 20.9 px | **0.78x his height · 1.42x his width** |
+
+**Five sizes were stood on the island in the same frame** — 2.60 · 1.00 · 0.85 · 0.70 · 0.55 — and the
+user picked off the pictures: ***"go with 0.85"***.
+
+⚠⚠ **THE REASON 2.60 EXISTED IS NOW DEAD AND THAT COST IS REAL.** It was not a taste: **a 64 px frame
+made one texture pixel exactly one screen pixel** at the opening zoom, which is what stopped the art
+breaking up. **At 0.85 the wolves are a 3.1x downscale.** ⇒ **If they read mushy the answer is re-pulling
+at a ~24 px canvas, never raising this back** — the user has now judged the size with a man beside it,
+which 2.60 never was.
+
+⚠ **The overflow was never a 3D problem.** The user, seeing wolves spill past the block: ***"should I
+have made a 3D model? I did not expect it to stick out."*** **It stuck out because the picture was drawn
+bigger than the ground it stood on.** At 0.85 eight riders fit inside the block.
+
+### ⚠⚠ The brown wolf was never the art — it was the faction tint, and that is arithmetic
+
+> ***"And the wolf needs re-pulling I think. In black."***
+
+**Enemies are multiplied by `COL_ENEMY` at `BEAST_TEAM_TINT` 0.45**, a per-channel gain of
+`(1.00, 0.739, 0.712)`:
+
+| fur as drawn | on screen |
+|---|---|
+| `g5`'s grey `(120, 118, 120)` | `(120, 87, 85)` — **a visible brown/purple shift** |
+| a black `(20, 20, 22)` | `(20, 15, 16)` — **nothing left to bend** |
+
+⇒ **Black is the one fur colour this tint cannot turn brown.** ⚠ **And `c03_black`, pulled as a black
+wolf on the paid route the same morning, still arrives brown** — it is a dark GREY, and the gain still
+has room. **Only fur near actual black is immune.**
+
+### Twenty-four black wolves, on two routes, and what each route can do
+
+**Sixteen local** (free, 8 s an image, `monster` preset) and **eight on pixellab** (one generation each
+of 1760 left). ⚠⚠ **The local prompts are written down; the thirty-eight wolf candidates before them
+have no prompt anywhere — only job ids.**
+
+| | what it gave |
+|---|---|
+| **Local** | ⚠ **Asked for black, it empties the interior.** Fifteen of sixteen came back a flat silhouette; only the row naming body PARTS (muzzle, paws) kept anything inside. **The blacks are neutral, so the tint cannot touch them** |
+| **pixellab** | ⚠ **A warm black — still bends brown.** But it gives **the animal's face**: true three-quarter fronts with eyes and a muzzle at the camera, which local refused whatever was asked |
+
+⚠ **At 20.9 px the empty interior does not matter** — there is no room for shading, and a black
+silhouette on pale sand read as a wolf **more clearly than the grey it replaces.**
+⚠ **Nothing was chosen.** `assets/` was not touched.
+⚠ **One paid generation was spent and never landed** — `p5_ruff` sat at 95% and never completed.
+
+### ⚠⚠ Every body is pulled in FOUR DIAGONALS from now on
+
+> ***"And every image is 정면우 · 정면좌 · 후면우 · 후면좌 — four of them. Put it somewhere I can refer
+> to when pulling. Not memory."***
+
+**Written into `.candidates/README.md`** — the rules file every pull already lands beside — with the
+exact phrase per view, and `commission`'s first stage now says to read it before writing a prompt.
+
+⚠⚠ **The animal's own left is the SCREEN's right.** Written the other way the four come back as two
+pairs of the same view, which 「the folder has four files」 cannot catch.
+⚠⚠ **NOTHING IN `src/` PICKS THIS WAY YET.** `_facing_index` chooses by **which ground axis is bigger**,
+which is right for right/left/front/back and **wrong for four diagonals** — those split on the SIGNS of
+both. **A diagonal set installed against today's picker shows two of the four and never the other two.**
+
+### The house was deleted, and the company went with it
+
+> ***"Delete the house from the game, shall we see?"***
+
+**The island went bare — and so did the soldiers.** `beside_home_tile` is where a 검사 appears, at the
+opening and after every death, and with no building it returns -1. ⚠ **The keep is also what burns**, so
+an island without one cannot be lost. **Reverted; it is a question for the user, not a deletion.**
+
+### ⚠⚠ Why the art does not read, measured rather than guessed
+
+> ***"Why won't it read? The picture."***
+
+**A 64 px picture drawn at 20.9 px, sampled with `TEXTURE_FILTER_NEAREST` and no mipmaps.** That is a
+**3.06x linear downscale — one texture pixel in 9.4 survives, and the rest are dropped, not averaged.**
+A leg, an ear or an eye that lands on a dropped row disappears outright, and **which pixels survive
+changes as the body moves**, which is the shimmer. ⇒ **It is not being downscaled, it is being thinned.**
+**The pixel pipeline's own rule already says it: generate at the size you will use.**
+
+### Twenty-one pictures of 개발지식 01, and the lab was lying
+
+> ***"Do all the things you do when putting a 2D panel into 3D, photograph each one and the combination
+> too, and show me. I need those prototypes. It has to not look awkward standing there. Or should I give
+> up? Is it a fact that not-awkward is hard?"***
+
+**The lab was driven by a shooting loop instead of the keyboard and the technique code was not touched** —
+sixteen one-switch pictures, four combinations and a control.
+
+⚠⚠ **기법 12 (기준점을 발에) WAS DELETING THE BODIES AND HAD NEVER BEEN SWITCHED ON.** `centered = false`
+already moves the anchor to the picture's top edge, and the code then subtracted a full height on top of
+it — **two moves down, and the body left the world.** The disc stayed where it belonged, which is how it
+was caught. ⚠ **The game's own code was never wrong**; `field_view` computes the footing separately and
+the nets guard it. **The lab was the only liar**, and this is exactly what the folder's own rule
+「the lab was on screen this round」 exists to stop.
+
+**And the answer to the question**: **it is not hard, but no single technique does it.** The control is
+buried to the waist with no shadow; fourteen switches on, the body stands on its feet, wears a disc and
+lifts off the ground with an outline. ⚠ **The three games the folder cites all stacked several.**
+
+### 기법 17 and 26 went into the game; 23 and 24 could not
+
+> ***"Take 14 and 16 out and show me it in my game."***
+
+| | |
+|---|---|
+| **17 외곽선 · 1.04** | ✅ **One screen pixel** — 1.037 at a 27 px man, 1.048 at a 20.9 px wolf, so **1.04 is one pixel for both**. ⚠ **1.10 was photographed first and ate the wolf whole**: a 2 px rim on a 21 px animal left a black lump. The man survived it because he is a flat pale shape |
+| **26 색으로 떼기 · 1.10** | ✅ Folded into `Look.beast_tint`. ⚠⚠ **As one line in the view it reddened `net_shell`'s 「a body's colour came from the sim」 immediately, and rightly — two places deciding one colour is two answers** |
+| **23 뒤로 눕히기** | ❌ **Inert on a billboard.** `BILLBOARD_FIXED_Y` has its basis rebuilt every frame and the node rotation is thrown away. **It needs the lean drawn into the picture or a non-billboard quad** |
+| **24 깊이 밀기** | ❌ **The body rose 0.0245 조각 off the ground.** Under an orthographic camera moving along the camera axis is invisible on screen, **but the world position moves and this camera is pitched.** `net_fx_view` caught it in one round. ⇒ **It wants a depth BIAS, not a translation** |
+| **25 숨쉬기** | ❌ **The user deleted it by hand six hours earlier.** A request for 「everything except 14 and 16」 does not re-open what the same person closed |
+| **2 각도 고정** | ❌ The folder's own conflict table: locking the pitch costs the tilt control. **A trade the user picks** |
+
+### The nets
+
+**`main` before the merge: 통과 1258 · 실패 62. After everything: 통과 1254 · 실패 66.**
+**The four are the wolf's frame going 92 px → 64 px with `tests/` left behind**, and **one of them is a
+screen defect rather than a stale net**: the deck's shadow disc is 0.438 조각 across and the wolf on it
+is 0.450 — the disc never grew when the animal did.
+
+⚠ **The last change (17 · 26) took this worktree from 66 to 65 and broke nothing.**
+
+### What is still open
+
+**Nothing was chosen about the black wolf.** **The house is still standing and still un-decided.**
+**The facing picker still splits on the bigger axis**, so the four-diagonal rule is true of the folder
+and not yet of the game.

@@ -141,6 +141,10 @@ func _table() -> Dictionary:
 			# (2026-08-28, the user: 「체력바 없이 그림자도 단순하게 아래 동그라미정도해줘」).
 			# `_put_hp` and `_hp_rects` left the table with it.
 			"_put_ground_shadow": 0,
+			# **기법 17's black copy behind a body** (2026-08-31). It strokes nothing — it copies the
+			# body sprite the pool just handed out and stands it one screen pixel bigger and one step
+			# further from the camera.
+			"_put_outline": 0,
 			"_beast_tex": 0,
 			# **Which of its row's pictures a body wears, resolved against the camera's own two ground
 			# axes.** It is the deck's old `_boat_rider_tex` generalised, and the deck comes through it.
