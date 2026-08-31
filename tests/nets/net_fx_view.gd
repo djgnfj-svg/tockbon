@@ -499,8 +499,19 @@ func _the_wolf_ashore_wears_the_picture_that_was_chosen(t) -> void:
 			"옛 옆모습 늑대가 한 장도 안 남았다 (%s)" % str(raw))
 	# ⚠ **The other rows keep the two they had.** Fixing one row by breaking three is the failure this
 	# guards, and it is the shape 「a list per species」 was chosen to make impossible.
-	for ty in [Rules.SWORDSMAN, Rules.BEAR, Rules.CROW]:
+	# ⚠⚠ **THE SWORDSMAN LEFT THIS LIST 2026-08-31.** He was a 33 x 40 side-on chibi with two pictures;
+	# the user chose a new body and asked for the turned views, so his row now names four files of its
+	# own. **He is checked on the four-picture side below**, which is the same guard pointed the other
+	# way — the row that must NOT break is now bear and crow.
+	for ty in [Rules.BEAR, Rules.CROW]:
 		t.eq(Look.beast_facings(ty), 2, "%d 번 줄은 좌우 두 장 그대로다" % ty)
+	t.eq(Look.beast_facings(Rules.SWORDSMAN), 4, "검사 줄도 그림 넉 장을 든다 — 좌·우·앞·뒤")
+	var man_paths := []
+	for f in Look.beast_facings(Rules.SWORDSMAN):
+		man_paths.append(Look.beast_tex_path(Rules.SWORDSMAN, f))
+	t.eq(_distinct(man_paths), 4, "그리고 서로 다른 파일 넷이다 %s" % str(man_paths))
+	for raw in man_paths:
+		t.ok(not str(raw).contains("sword_"), "옛 칼든 검사가 한 장도 안 남았다 (%s)" % str(raw))
 
 	# **A two-picture row can never answer with a head-on picture, whatever way it walks.** Asked at the
 	# heading that would pick one if the row had it — straight down the screen.
@@ -513,9 +524,12 @@ func _the_wolf_ashore_wears_the_picture_that_was_chosen(t) -> void:
 	var fv: FieldView = pack["fv"]
 	var b: Battle = pack["b"]
 	fv.cam_yaw_deg = 0.0
-	for ty in [Rules.SWORDSMAN, Rules.BEAR, Rules.CROW]:
+	for ty in [Rules.BEAR, Rules.CROW]:
 		t.ok(fv._facing_index(ty, Vector2(0.0, 1.0)) <= Look.FACE_LEFT,
 			"%d 번 줄은 화면 아래로 걸어도 옆모습 둘 중 하나다" % ty)
+	# ⚠ **And the swordsman now goes the wolf's way**, because the row's own length is what decides it.
+	t.eq(fv._facing_index(Rules.SWORDSMAN, Vector2(0.0, 1.0)), Look.FACE_DOWN,
+		"검사도 화면 아래로 걸으면 앞모습이다")
 	# And the wolf, which does have them, does not.
 	t.eq(fv._facing_index(Rules.WOLF, Vector2(0.0, 1.0)), Look.FACE_DOWN,
 		"늑대는 화면 아래로 걸으면 앞모습이다 — 넉 장을 든 줄만 여기로 온다")

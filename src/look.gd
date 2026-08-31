@@ -125,6 +125,17 @@ const CAM_PITCH_DEG := MAP_TILT_DEG
 ## Floor 20 — under it the ground is nearly edge-on, bodies stand in front of each other in a single
 ## row and the island stops being a map. Ceiling 80 — past it the terrain's own height stops reading
 ## at all, which is the flat board the 3D move was for.
+## ⚠⚠ **HOW FAR A BODY IS STRETCHED BACK UP WHEN THE CAMERA LOOKS DOWN** (2026-08-31, 개발지식 01
+## 기법 22). Since the bodies became `BILLBOARD_FIXED_Y` they stand upright in the WORLD, so pitching
+## the camera down foreshortens them — at 80 degrees a standing man is 17% of his height and reads as
+## a puddle. The stretch is `cos(CAM_PITCH_DEG) / cos(cam_pitch_deg)`, which is **exactly 1.0 at the
+## opening angle**: the 27 px the user chose at the screen is the height every other angle is pulled
+## back toward, rather than some new height nobody looked at.
+## ⚠ **The cap is a dial and it is not measured.** Full compensation at 80 degrees is 4.4x, a man
+## drawn four times his own height to fight an angle the camera is allowed to reach. 2.0 stops it at
+## about 67 degrees and lets the rest foreshorten honestly. **Move it by eye.**
+const BILLBOARD_PITCH_STRETCH_MAX := 2.0
+
 const CAM_PITCH_MIN_DEG := 20.0
 const CAM_PITCH_MAX_DEG := 80.0
 ## Per key press. 5 is one twelfth of the usable range, so the whole span is twelve presses — the same
@@ -1343,10 +1354,27 @@ const BEAST_BEAR_L := "res://assets/beast/bear_l.png"
 const BEAST_CROW_R := "res://assets/beast/crow_r.png"
 const BEAST_CROW_L := "res://assets/beast/crow_l.png"
 
-## ⚠⚠ **THE PLAYER, since 2026-08-26.** The same body again with a sword in its hands — drawn back
-## when the humans were the enemy, which is exactly why the swap cost no art at all.
-const HUMAN_SWORD_R := "res://assets/human/sword_r.png"
-const HUMAN_SWORD_L := "res://assets/human/sword_l.png"
+## ⚠⚠ **THE PLAYER, since 2026-08-26.** ⚠⚠ **AND THE DRAWING WAS REPLACED 2026-08-31.** What stood
+## here was `sword_r/_l.png`, a 33 x 40 side-on chibi drawn back when the humans were the enemy; the
+## user chose this body from sixteen candidates and it carries **no sword, no clothes and no face** —
+## a pale mass, a round bald head and two black dots.
+##
+## ⚠⚠ **RIGHT AND LEFT ARE TURNED, NOT SIDE-ON** (2026-08-31, the user at the screen: 「지금 너무
+## 좌여서」 — what I want is 정면우 and 정면좌). A flat profile shows one eye and reads as a different
+## creature from the front view beside it; these two are the **south-east and south-west** rotations,
+## so the chest still faces the camera and both eyes stay visible.
+## ⚠ **DOWN AND UP ARE STILL THE FLAT FRONT AND BACK.** The user also asked for **뒤우 · 뒤좌**, the
+## two turned BACK views, and those cannot be hung on these two slots: `field_view._facing_index`
+## picks up/down by **which ground axis is bigger**, and four turned pictures need it to pick by
+## **the sign of both axes**. That is a change to the picker the wolf shares, so it is not made here.
+##
+## ⚠ **ALL FOUR ARE 40 x 60**, which is what keeps the man the same size whichever way he faces —
+## `_beast_rect` fixes the drawn WIDTH from the body radius and takes the HEIGHT from this texture's
+## aspect ratio, so two facings on two canvases is a body that pulses.
+const HUMAN_MAN_R := "res://assets/human/man/right.png"
+const HUMAN_MAN_L := "res://assets/human/man/left.png"
+const HUMAN_MAN_D := "res://assets/human/man/down.png"
+const HUMAN_MAN_U := "res://assets/human/man/up.png"
 
 ## ⚠⚠ **`IDLE` IS NOT A STRIP.** It is the standing picture every row already has and every row
 ## without a strip falls back to, which is why it carries no frame count and why the frame table below
@@ -1428,8 +1456,16 @@ const BEAST_FRAME_SEC := 0.12
 ## player weapon is not being built — and a row needs BOTH columns, so those three constants can only
 ## be card art now. ⇒ **A second player body costs a new DRAWING, not a new row**, and the estimate
 ## anyone makes off this table has to include that.
+## ⚠⚠ **THE SWORDSMAN'S OWN COLUMN IS 0.65 AND IT WAS CHOSEN AT THE SCREEN** (2026-08-31). Four
+## sizes were stood on the island in the same frame — **41 · 33 · 27 · 23 px** — and the user picked
+## **27**: 「27이 맞는 듯」. ⚠ **23 was also called fine** 「23도 괜찮네」 and is the value to try
+## first if 27 turns out big; the user asked for both to be written down, not only the winner.
+## ⚠⚠ **41 px IS WHAT THE NEW PICTURE GAVE FOR FREE, AND NOBODY CHOSE IT.** The old drawing was
+## 33 x 40 and the new one is 40 x 60, so the same width ratio bought 24% more height — the body grew
+## because the CANVAS grew. **This column is where that is paid back**, and it is the swordsman's
+## alone: `BODY_SPRITE_SCALE` sizes every body at once and the wolf was judged at its own value.
 const BEAST_TEX := [
-	[[HUMAN_SWORD_R, HUMAN_SWORD_L], NO_ANIM_FRAMES, 1.0],
+	[[HUMAN_MAN_R, HUMAN_MAN_L, HUMAN_MAN_D, HUMAN_MAN_U], NO_ANIM_FRAMES, 0.65],
 	# ⚠⚠ **2.60, RAISED FROM 1.70 FOR THE 64 px PULL** (2026-08-31, the user: 「it is too small, and the
 	# picture has to be much bigger — big enough to tell from a distance that these really are wolves.
 	# Thick and big」). **The base frame is 24.6 px**, so this number IS the frame in 조각: 1.70 gave a

@@ -1287,12 +1287,24 @@ func _sprite() -> Sprite3D:
 		return reused
 	var s := Sprite3D.new()
 	s.pixel_size = Look.SPRITE_PIXEL_SIZE
-	s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	# ⚠⚠ **FIXED_Y AND NOT ENABLED** (2026-08-31, 개발지식 01 기법 1). Full billboard turns on every
+	# axis, so pitching the camera down lays the body flat on the ground; fixing the up axis keeps it
+	# standing whatever the camera does. ⚠ **Godot rebuilds the model matrix for a billboard and can
+	# throw the node's scale away** — this repo already measured that on the labs — so `_billboard_scale`
+	# is checked on screen after this line changes, never assumed.
+	s.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	# ⚠ **DISCARD gives the sprite a real depth value**, so a body behind a cliff is hidden by it
 	# rather than drawing through it. Without it a billboard is one transparent quad that neither
 	# occludes nor is occluded.
 	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	# ⚠⚠ **UNSHADED, AND IT WAS TRIED THE OTHER WAY TODAY** (2026-08-31, 개발지식 01 기법 16). The doc
+	# calls taking the same light the minimum, so `shaded = true` was put in and photographed: **the
+	# faction tint washed out to near white.** A billboard's normal faces the CAMERA, so the sun hits
+	# every body square-on at full strength and multiplies the blue away — and which side a body is on
+	# is carried by exactly that blue (기법 27, and this repo's own rule).
+	# ⇒ **Technique 16 is not free here. It needs the ambient matched WITHOUT the sun**, or the tint
+	# re-applied after the light, and neither is a line. **Left unshaded on purpose, not by omission.**
 	s.shaded = false
 	# ⚠⚠ **A BODY CASTS NO REAL SHADOW ANY MORE** (2026-08-28, the user: 「그림자도 단순하게 아래
 	# 동그라미정도해줘」). A billboard's cast shadow is the shadow of a flat card that keeps turning to
@@ -1324,7 +1336,20 @@ func _sprite() -> Sprite3D:
 func _billboard_scale(pic: Texture2D, wide: float, squash: Vector2) -> Vector3:
 	var sx := wide * squash.x / float(pic.get_width())
 	var sy := sx * squash.y / maxf(squash.x, 0.001)
-	return Vector3(sx, sy, 1.0)
+	return Vector3(sx, sy * _pitch_stretch(), 1.0)
+
+
+## **How much taller a body is drawn to pay back what the camera's pitch takes away** (개발지식 01
+## 기법 22). `BILLBOARD_FIXED_Y` stands the card upright in the WORLD, so a camera looking down sees a
+## foreshortened card — the further down, the shorter the man, and 「the art is bad」 is what that looks
+## like from outside. ⚠ **1.0 at the opening angle by construction**, so the size judged on screen is
+## the size that is kept; the ratio only ever pulls the body back UP, never squashes it.
+func _pitch_stretch() -> float:
+	var opened := cos(deg_to_rad(Look.CAM_PITCH_DEG))
+	var now := cos(deg_to_rad(cam_pitch_deg))
+	if now <= 0.001:
+		return Look.BILLBOARD_PITCH_STRETCH_MAX
+	return clampf(opened / now, 1.0, Look.BILLBOARD_PITCH_STRETCH_MAX)
 
 
 ## Puts one billboard at a body's feet. `centre_px` is the same world px the flat board drew at, so

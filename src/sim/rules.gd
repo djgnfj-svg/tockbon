@@ -132,10 +132,14 @@ const MAX_CLIMB_LEVELS := 1
 ## nine to a 칸 is more than two per 조각, and a reservation table holding one id per 조각 could not
 ## express it.
 ##
-## **3 is the smallest uniform per-조각 cap that admits the user's figure**: at 2 a 칸 holds eight,
-## which is fewer than was asked for. ⚠ **It therefore admits TWELVE and not nine**, and that
-## overshoot is written down rather than hidden — no uniform per-조각 cap gives exactly nine over four
-## 조각, and 「about nine」 is a floor rather than a ceiling.
+## **3 is the smallest uniform per-조각 cap that admits the user's figure**: at 2 a 블록 holds eight,
+## which is fewer than was asked for.
+##
+## ⚠⚠ **THE OVERSHOOT TO TWELVE IS CLOSED BY `BLOCK_CAPACITY` BELOW** (2026-08-31, the user:
+## 「nine soldiers is the maximum, I think」). This number is still what one 조각 admits, and it is
+## deliberately NOT nine-over-four: no uniform per-조각 cap divides nine into four 조각, so the
+## ceiling that is actually nine has to be stated one unit up. **Both hold at once** — a 조각 takes
+## three and the 블록 takes nine, so the tenth body is refused even when the 조각 it wants has room.
 ##
 ## ⚠⚠ **THE SLOT INDEX INSIDE A 조각 IS NOT PRIVATE TO THE RESERVATION.** `Grid.slot_of` answers it and
 ## the view reads it to spread a crowd apart on screen, because three bodies handed the same 조각 centre
@@ -145,6 +149,26 @@ const MAX_CLIMB_LEVELS := 1
 ## ⚠ **Raising this does not widen a doorway by itself.** A neck is measured in 조각, and the queue at
 ## one is now three deep per 조각 instead of one.
 const TILE_CAPACITY := 3
+
+## --- How many bodies stand on one 블록 (칸) ---------------------------------------------------------
+## ⚠⚠ **NINE, AND IT IS A CEILING RATHER THAN A TARGET** (2026-08-31, the user: 「nine soldiers is
+## the maximum, I think」). `TILE_CAPACITY` alone admitted twelve, and twelve bodies over four 조각 is
+## what a pile looks like — the same crowd read as one lump instead of as nine men.
+##
+## ⚠⚠ **THE 블록 IS CALLED BOTH 「블록」 AND 「칸」** (2026-08-31, the user: 「let both 칸 and
+## 블록 work — we are going to do it that way anyway」). 「칸」 was retired on 2026-08-29 and it is
+## live again as a second name for the same thing; the glossary carries the pair.
+##
+## ⚠⚠ **THE GAME CODE HAD NO NAME FOR A 블록 UNTIL THIS LINE.** It was Blender's unit only —
+## `island_build.py`'s `PIECES`, where **`S = 2.0` and the outline may only turn on even tiles**. That
+## is exactly what makes `Grid.block_of` a shift rather than a lookup: a 블록 is the four 조각 whose
+## coordinates share a top-left even pair, and nothing has to be exported to say so.
+##
+## ⚠ **Nine over four 조각 is 2.25, so the split is never even.** Which 조각 of a 블록 holds three
+## and which holds two falls out of arrival order, and **that is a fact about the picture, not only
+## about the table** — where the nine actually stand is `Look.crowd_offset_px`'s business.
+const BLOCK_TILES := 2
+const BLOCK_CAPACITY := 9
 
 ## --- What one step of a walk costs -----------------------------------------------------------------
 ## ⚠⚠ **A DIAGONAL USED TO BE FREE, AND THAT IS WHY A STRAIGHT WALK ARCED TO THE TOP OF THE BOARD**

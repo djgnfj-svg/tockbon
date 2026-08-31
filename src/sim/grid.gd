@@ -1464,6 +1464,11 @@ func release_all(unit_id: int) -> void:
 func hold(unit_id: int, tile: int) -> bool:
 	var k := slot_of(tile, unit_id)
 	if k < 0:
+		# ⚠⚠ **THE 블록 CEILING IS ASKED HERE AND NOT ONLY IN `can_hold`** (2026-08-31). Three sites in
+		# `battle` place a body by calling this straight — the muster, a landing beast, a body coming
+		# off a boat — and none of them walks, so none of them passes through the walk's admission test.
+		if not block_has_room(block_of(tile), unit_id):
+			return false
 		k = _free_slot(tile)
 		if k < 0:
 			return false
@@ -1533,16 +1538,107 @@ func hold_count(tile: int) -> int:
 	return n
 
 
-## Whether one more body would fit in `tile`.
+## --- The 블록, also called the 칸 -----------------------------------------------------------------
+## ⚠⚠ **THE GAME CODE HAD NO NAME FOR THE 2x2 LUMP UNTIL 2026-08-31.** It was Blender's unit alone,
+## and the glossary said so out loud. It is here now because **the ceiling the user asked for is a
+## 블록 ceiling and not a 조각 one** — see `Rules.BLOCK_CAPACITY`.
+##
+## ⚠ **A shift and not a lookup, and that is only sound because the island is built in 2x2 pieces**
+## whose outline may turn on even tiles only (`island_build.py`: `S = 2.0`). **The day a piece stops
+## being 2x2, this function is wrong and nothing else is** — which is why the size is
+## `Rules.BLOCK_TILES` rather than a bare 2 in here.
+
+## **Which 블록 `tile` lies in, or -1 off the board.** Numbered row-major over the 블록 grid.
+func block_of(tile: int) -> int:
+	if tile < 0 or tile >= w * h:
+		return -1
+	var b := Rules.BLOCK_TILES
+	return int(tile / w / b) * ((w + b - 1) / b) + int((tile % w) / b)
+
+
+## **How many bodies stand in `block` right now — DISTINCT unit ids, never occupied slots.**
+##
+## ⚠⚠ **DISTINCT IDS IS A CORRECTNESS CONTRACT, NOT A TIDINESS ONE.** A body mid-step holds the 조각
+## it is walking into as well as the one it stands on, and both may be in the same 블록 — counting
+## slots would make one walker read as two and refuse the ninth body while eight stood there.
+##
+## ⚠ **A BUILDING COUNTS AS ONE, so a 블록 with the 성채 in it admits EIGHT walkers and not nine.**
+## `fill` gives the house every slot of its own 조각 under one id, and that id is a body as far as this
+## count is concerned. **Written down rather than special-cased**: `Grid` does not know what `KEEP_UID`
+## is, and teaching it would put a battle constant inside the board.
+func block_hold_count(block: int) -> int:
+	var seen := {}
+	var b := Rules.BLOCK_TILES
+	var per_row := (w + b - 1) / b
+	if block < 0 or per_row <= 0:
+		return 0
+	var bx := (block % per_row) * b
+	var by := int(block / per_row) * b
+	var cap := Rules.TILE_CAPACITY
+	for dy in b:
+		var ty := by + dy
+		if ty >= h:
+			continue
+		for dx in b:
+			var tx := bx + dx
+			if tx >= w:
+				continue
+			var base := (ty * w + tx) * cap
+			for k in cap:
+				var id := reserved[base + k]
+				if id != -1:
+					seen[id] = true
+	return seen.size()
+
+
+## Whether `unit_id` may take a NEW slot in `block`. **A unit already standing somewhere in the 블록
+## is always allowed**, or a body would be refused the 조각 it is stepping into from inside the same
+## 블록 — that is the mid-step hold above, seen from the admission side.
+## ⚠ **`unit_id` of -1 asks the question for a body that is not on the board yet.**
+func block_has_room(block: int, unit_id: int) -> bool:
+	if block < 0:
+		return false
+	if block_hold_count(block) < Rules.BLOCK_CAPACITY:
+		return true
+	return unit_id >= 0 and _block_holds(block, unit_id)
+
+
+## Whether `unit_id` already stands in any 조각 of `block`.
+func _block_holds(block: int, unit_id: int) -> bool:
+	var b := Rules.BLOCK_TILES
+	var per_row := (w + b - 1) / b
+	if block < 0 or per_row <= 0:
+		return false
+	var bx := (block % per_row) * b
+	var by := int(block / per_row) * b
+	for dy in b:
+		var ty := by + dy
+		if ty >= h:
+			continue
+		for dx in b:
+			var tx := bx + dx
+			if tx >= w:
+				continue
+			if slot_of(ty * w + tx, unit_id) >= 0:
+				return true
+	return false
+
+
+## Whether one more body would fit in `tile`. **Both ceilings, and the 블록 one is the new half**
+## (2026-08-31): a 조각 with a free slot in a full 블록 answers false.
 func has_room(tile: int) -> bool:
-	return _free_slot(tile) >= 0
+	return _free_slot(tile) >= 0 and block_has_room(block_of(tile), -1)
 
 
 ## Whether this unit may stand in `tile` — it already does, or there is room for it.
 ## **This is the admission test every walker asks**, and it is one function so the field walk and the
 ## straightened route cannot come to disagree about what a full 조각 is.
+## ⚠⚠ **IT ASKS THE 블록 TOO SINCE 2026-08-31.** A walk that only asked the 조각 would pack twelve into
+## a 블록 one 조각 at a time, with every per-조각 check green the whole way.
 func can_hold(tile: int, unit_id: int) -> bool:
-	return slot_of(tile, unit_id) >= 0 or _free_slot(tile) >= 0
+	if slot_of(tile, unit_id) >= 0:
+		return true
+	return _free_slot(tile) >= 0 and block_has_room(block_of(tile), unit_id)
 
 
 ## The lowest empty slot of `tile`, or -1 when it is full or off the board.

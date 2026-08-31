@@ -22,6 +22,7 @@ it is the difference between a round that takes an hour and a round that takes a
 | **what happens BETWEEN two camera distances** | `merge/lab.gd` | the real game with the baked 판 hidden, and every candidate photographed at three zooms |
 | **something moving over time** | `wake/lab.gd` | a boat sailing a path, four frames per candidate seconds apart, the shipped sea as the control |
 | **whether a body can physically get somewhere** | `stairs/walk_probe.gd` | a probe that prints numbers instead of taking a picture |
+| **where a crowd STANDS, and how it gets there** | `nine/lab.gd` | the real game opened, nine 검사 in one 블록, the sim frozen for stills and stepped by hand for a walk, plus two probes |
 
 ## The three families, and which one you are in
 
