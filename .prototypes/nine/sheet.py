@@ -72,7 +72,8 @@ def main():
 
     for ci, name in enumerate(names):
         x = COL_LABEL + ci * (w + PAD) + PAD
-        d.text((x, 47), "%s — %s" % (name, WHAT.get(name, "")), font=small, fill=DIM)
+        # The user calls these by number — "2 or 3", "let's go with 6" — so the number leads.
+        d.text((x, 47), "%d번  %s" % (ci + 1, WHAT.get(name, name)), font=small, fill=INK)
         for ri, size in enumerate(sizes):
             y = HEAD + ri * (h + PAD) + PAD
             sheet.paste(Image.open(shots[name][size]).convert("RGB"), (x, y))
