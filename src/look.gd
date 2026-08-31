@@ -467,7 +467,10 @@ const BODY_SPRITE_SCALE := 0.80
 ## ⚠⚠ **How big a building is drawn.** Same round, same reason: the one house on the island stood taller
 ## than the two-storey rock behind it. **Nothing reads a building's size but the eye** — no rule, no
 ## check, no footprint — so unlike the body above this one costs nothing and hides nothing.
-const BUILD_SCALE := 0.45
+## ⚠ **0.45 -> 0.34 on 2026-08-31**, the user, on the planted island: 「집도 지금 너무 크고」.
+## The wood and the grown rocks went in the same session and the building stopped being the biggest
+## thing on open ground — **a size that was right beside an empty island is not right beside a wood.**
+const BUILD_SCALE := 0.34
 
 ## **How far off its 조각's centre a body stands when it is not alone there, as a fraction of a 조각.**
 ##
