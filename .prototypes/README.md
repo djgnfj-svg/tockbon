@@ -104,3 +104,8 @@ to the table above and copy the other one.
 **`bush/`** (three candidates: a baked mesh, quads, a Bad North card) and **`props/`** carry no
 `README.md` and `bush/` has no runner at all — its candidates are opened one at a time. Anyone who
 touches either should leave one behind.
+
+✅ **`bush/03-badnorth` WON on 2026-08-31** (the user: 「2d로해서 적용만해줘」). Its `card.gdshader`
+grew into **`src/view/prop_card.gdshader`**, with the shared `wind.gdshaderinc` folded in because the
+other two candidates stayed behind. **The bush in the game is that card.** ⚠ The three candidates are
+kept here anyway — the losers are what say why the winner won, and nobody has asked to clear them.

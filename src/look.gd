@@ -241,6 +241,89 @@ const AMBIENT_ENERGY := 0.92
 ## into the box it stands on at some yaws; a hair of lift costs nothing and never does.
 const BODY_LIFT_PX := 1.0
 
+## --- the plants MOVE ------------------------------------------------------------------------------
+##
+## ⚠⚠ **The bush's whole job is that the map is not still** (2026-08-31, the user: 「that bush is just
+## the amount it sways when it moves — the whole intent is to make the map not look monotonous」).
+##
+## **A prop LEANS about its own base; nothing bends.** A bend needs a vertex shader, and a vertex
+## shader has to be written twice here because every prop carries an inverted-hull outline as a
+## `next_pass` — displace the mesh and not the shell and the ink peels off the object. **A lean is one
+## Basis per prop per frame and the outline follows for free**, and at 25 to 55 screen px the two are
+## not told apart. ⚠ **If a tree ever has to bend rather than lean, that is the round to write the
+## shader in, and the shell is the trap.**
+##
+## ⚠⚠ **A PICTURE PROP CANNOT DO THIS AT ALL.** `BILLBOARD_FIXED_Y` has its basis rebuilt every frame
+## and throws the node's rotation away — measured on this repo's own 기법 23, which is inert for
+## exactly that reason. **Swaying is a thing only a mesh can be asked for.**
+
+## **How far a prop leans, in degrees, by kind.** ⚠⚠ **A kind that is not in this table does not move**,
+## and that is the safe way round: a still rock is invisible, a swaying rock is loud. **The tip travels
+## `height * sin(deg)`**, so a tall thing moves further than a short one off the same number — which is
+## what wind does.
+## ⚠⚠ **MEASURED AND RAISED THE SAME ROUND.** The first cut leaned a bush 5° and its tip travelled
+## **1.25 screen px** across a whole cycle — arithmetically a sway and visually nothing. A bush is
+## only 0.62 조각 tall, so the angle has to be large for the tip to move at all. **These numbers are
+## what the screen needed, not what a tree does in a photograph.**
+const PROP_SWAY_DEG_OF := {
+	"bush_mound": 12.0,
+	"bush_two": 12.0,
+	"bush_scrub": 15.0,
+	"bush_thicket": 15.0,
+	"tree_pine": 3.2,
+	"tree_oak": 4.0,
+	"tree_cluster": 4.0,
+	"tree_bare": 4.5,
+	"tree_umbrella": 4.2,
+	"tree_young": 7.0,
+}
+
+## Full cycles a second. ⚠ **Slow on purpose** — the map has to stop being still, not start being busy.
+const PROP_SWAY_HZ := 0.19
+
+## Which way the wind blows, as a compass angle in the ground plane. **One direction for the whole
+## island**: plants that lean independently read as a bug, not as weather.
+const PROP_SWAY_WIND_DEG := 35.0
+
+## How much of the lean comes from a second, slower wave. **Two waves and no random number** — one
+## sine makes every plant a metronome, and this repo does not roll dice at load time.
+## ⚠ **0.45 -> 0.30 the same round.** At 0.45 the slow wave took nearly half the lean and, because it
+## turns once every fourteen seconds, most of the movement was simply gone. **The gust is seasoning.**
+const PROP_SWAY_GUST := 0.30
+const PROP_SWAY_GUST_HZ := 0.071
+
+## --- and the same wind, for a prop drawn as a CARD -------------------------------------------------
+##
+## ⚠⚠ **A card bends, a mesh leans, and the two need different numbers.** The mesh turns about its
+## base, so its number is an angle; the card displaces its top vertices sideways in world units,
+## weighted to zero at the roots. **They read off one clock so a card and a bush never blow different
+## weather** — see `field_view._paint_flat_props`.
+
+## How far the top of a card is pushed, in 조각, at full weight.
+const PROP_CARD_WIND_STRENGTH := 0.075
+## Radians a second inside the card's own two-sine wave. ⚠ **Not `PROP_SWAY_HZ`** — that one counts
+## whole cycles because the mesh's wave is a triangle; this one is fed to `sin` directly.
+const PROP_CARD_WIND_SPEED := 2.1
+
+
+## --- a prop drawn as a PICTURE rather than a mesh --------------------------------------------------
+##
+## ⚠⚠ **The tree and the bush are 2D and the stone, the ore and the buildings are 3D** (2026-08-31,
+## the user). A prop kind is now either a node in `props.glb` or a picture in `assets/props/flat/`,
+## and these two numbers are everything the picture path decides.
+
+## **How many world px one picture pixel draws as.** ⚠⚠ **1.0 means one texture pixel per screen pixel
+## at the opening zoom**, which is the rule the pixel pipeline already states and the rule the wolf
+## broke: a 64 px picture drawn 20.9 px wide keeps one pixel in 9.4 and drops the rest, so a branch
+## lands on a dropped row and vanishes. **A 64 px tree therefore stands 1.6 조각 tall.**
+## ⚠ **This is the knob if a tree is the wrong size** — not the picture, and not the row's own `scale`,
+## which is there to make ONE prop differ from its neighbours.
+const PROP_PIC_SCALE := 1.0
+
+## The same hair of lift `BODY_LIFT_PX` gives a body, for the same reason: a picture's bottom row
+## sinking into the ground it stands on reads as a prop half-buried.
+const PROP_PIC_LIFT_PX := 1.0
+
 
 ## --- 개발지식 01, the four techniques the game was NOT running -------------------------------------
 ##
@@ -384,7 +467,10 @@ const BODY_SPRITE_SCALE := 0.80
 ## ⚠⚠ **How big a building is drawn.** Same round, same reason: the one house on the island stood taller
 ## than the two-storey rock behind it. **Nothing reads a building's size but the eye** — no rule, no
 ## check, no footprint — so unlike the body above this one costs nothing and hides nothing.
-const BUILD_SCALE := 0.45
+## ⚠ **0.45 -> 0.34 on 2026-08-31**, the user, on the planted island: 「집도 지금 너무 크고」.
+## The wood and the grown rocks went in the same session and the building stopped being the biggest
+## thing on open ground — **a size that was right beside an empty island is not right beside a wood.**
+const BUILD_SCALE := 0.34
 
 ## **How far off its 조각's centre a body stands when it is not alone there, as a fraction of a 조각.**
 ##

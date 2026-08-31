@@ -20,7 +20,7 @@ page, and it says the true thing.**
 | `blend/island.blend` | The island as one mesh, **plus its 32 block parts standing separately** |
 | `blend/boat.blend` | Hull · gunwale · deck · mast · yard · sail · stem · stern post · four benches |
 | `blend/buildings.blend` | Keep · house · tower · store · wall |
-| `blend/props.blend` | Pine · tree · rock · stone · bush |
+| `blend/props.blend` | Six trees · a stump · rock · stone (a pebble) · the 철광석. ⚠⚠ **The bush is NOT here** — it is a picture, `assets/props/flat/lp_bush_v*.png`, drawn by `src/view/prop_card.gdshader`. **A prop kind is a node in this file OR a PNG in that folder, and the mesh wins**, so moving a thing from 3D to 2D is deleting it from here |
 | `blend/boat_small.blend` | The small boat |
 
 ## The loop

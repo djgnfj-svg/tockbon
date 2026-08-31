@@ -444,6 +444,12 @@ func _process(delta: float) -> void:
 	_paint_bodies()
 	_paint_marks()
 	_fx_flush()
+	# ⚠ **Outside the buffer.** A picture prop writes nothing into the fx buffers — it is a standing
+	# node, not a per-frame draw — and the only reason it is touched at all is the camera's pitch.
+	# ⚠ **The wind's clock is aged FIRST.** The cards read it as a uniform, so painting them before
+	# it ticks hands every card the frame before the one the meshes are already standing in.
+	_paint_sway(delta)
+	_paint_flat_props()
 
 
 # --- the camera: still one transform, still in one place -------------------------------------------
@@ -745,6 +751,13 @@ const ISLAND_SCENE := "res://assets/terrain/island.glb"
 const BUILDINGS_SCENE := "res://assets/buildings/buildings.glb"
 ## The scatter — trees, rocks, bushes. One file, one node per kind, cloned out of.
 const PROPS_SCENE := "res://assets/props/props.glb"
+## ⚠⚠ **The other half of the scatter, and it is PICTURES** (2026-08-31, the user: 「the tree is 2D,
+## the bush is 2D too, and the stone, the iron ore and the buildings are 3D」). One PNG per kind,
+## named exactly as the kind is named in `island.json`. **A kind found in `props.glb` never reaches
+## here** — the mesh wins, so moving a tree from 3D to 2D is deleting it from the `.blend`.
+const FLAT_PROP_DIR := "res://assets/props/flat/"
+## **The card's own shader** — it turns itself, bends itself in the wind and draws its own ink.
+const PROP_CARD_SHADER := "res://src/view/prop_card.gdshader"
 ## **The beasts' hull, as one object Blender made.** ⚠ **Loaded, never built** (`CLAUDE.md`: what the
 ## player looks at is made in a tool). It arrives at its authored size and nothing scales it — 티켓 47
 ## says the hull, the sail and their proportions are judged on the game screen, after it is in.
@@ -764,6 +777,21 @@ var _pads_mat: ShaderMaterial = null
 var _pads_revealed := false
 var _builds: Node3D = null
 var _props: Node3D = null
+## **The picture props, and the two numbers `_paint_flat_props` needs to redraw them.**
+## ⚠ **Three parallel arrays and they are built in one place** — `_put_flat_prop` appends to all three
+## and `_rebuild_props` clears all three. Nothing else may append to one of them.
+## **The picture props, two draws each — the ink first and the card over it.**
+## ⚠ Filled in one place (`_put_flat_prop`) and cleared in one place (`_rebuild_props`).
+var _flat_props: Array = []
+var _card_shader: Shader = null
+## **The plants that lean, and what they lean off.** ⚠ Four parallel arrays filled in one place
+## (`_maybe_sway`) and cleared in one place (`_rebuild_props`). Nothing else may append to one.
+var _sway_nodes: Array[Node3D] = []
+var _sway_base: Array[Basis] = []
+var _sway_amp: Array[float] = []
+var _sway_phase: Array[float] = []
+## The wind's own clock. ⚠ **Aged by the bare frame delta**, like every other clock in this file.
+var _sway_clock := 0.0
 
 
 func _rebuild_terrain() -> void:
@@ -1232,23 +1260,177 @@ func _rebuild_props() -> void:
 	var lib := packed.instantiate()
 	_props = Node3D.new()
 	_world.add_child(_props)
+	_flat_props.clear()
+	_sway_nodes.clear()
+	_sway_base.clear()
+	_sway_amp.clear()
+	_sway_phase.clear()
 	for row in placed:
 		var d := row as Dictionary
-		var src := lib.find_child(str(d["kind"]), true, false) as MeshInstance3D
-		if src == null:
-			continue
-		var one := src.duplicate() as MeshInstance3D
 		var t := int(d["y"]) * battle.grid.w + int(d["x"])
-		one.position = Vector3(
+		var foot := Vector3(
 			float(d["x"]) + 0.5 + float(d.get("ox", 0.0)),
 			Islands.ground_h(battle.grid.level_of(t)),
 			float(d["y"]) + 0.5 + float(d.get("oy", 0.0)))
-		one.rotation.y = deg_to_rad(float(d.get("yaw", 0.0)))
 		var sc := float(d.get("scale", 1.0))
+		var src := lib.find_child(str(d["kind"]), true, false) as MeshInstance3D
+		if src == null:
+			_put_flat_prop(str(d["kind"]), foot, sc)
+			continue
+		var one := src.duplicate() as MeshInstance3D
+		one.position = foot
+		one.rotation.y = deg_to_rad(float(d.get("yaw", 0.0)))
 		one.scale = Vector3(sc, sc, sc)
+		# ⚠ **After the yaw AND after the scale** — what is remembered is the finished basis, and the
+		# lean is composed onto it every frame. Remember it before either and the prop snaps to
+		# north at full size on the first frame it sways.
+		_maybe_sway(one, str(d["kind"]), t)
 		_props.add_child(one)
+	# ⚠⚠ **BEFORE the pictures are hung, and that is why they are added after this call.** `_outline`
+	# walks `MeshInstance3D` and a `Sprite3D` is not one, so a picture would be skipped anyway — but
+	# the ordering is written down because the pictures ALREADY CARRY THEIR OWN BORDER. Every tree
+	# 시안 came back with a dark rim (pixellab's `lineless` is documented as weakly guiding and behaved
+	# that way), so an engine outline on top of them is a second rim on a 64 px picture — and 1.10 was
+	# measured to eat a 21 px wolf whole.
 	_outline(_props)
+	for pair in _flat_props:
+		for mi in pair:
+			_props.add_child(mi)
 	lib.free()
+
+
+## **Enrols a prop in the wind, if its kind is one that moves.**
+##
+## ⚠⚠ **The phase comes from the TILE and never from a random number.** A scatter that rolled dice at
+## load time would sway differently every launch and no screenshot of it would mean anything — the
+## same rule `_rebuild_props`'s own header states about where props go.
+func _maybe_sway(n: Node3D, kind: String, tile: int) -> void:
+	var deg := float(Look.PROP_SWAY_DEG_OF.get(kind, 0.0))
+	if deg <= 0.0:
+		return
+	_sway_nodes.append(n)
+	_sway_base.append(n.basis)
+	_sway_amp.append(deg_to_rad(deg))
+	# **An irrational times the tile, wrapped into ONE CYCLE** — neighbours land far apart in phase,
+	# so a row of bushes does not lean as one board. ⚠ **0..1, not radians**: `_gust_wave` counts
+	# cycles, and a phase in radians would put every prop within a sixth of a cycle of its neighbour.
+	_sway_phase.append(fposmod(float(tile) * 0.381966, 1.0))
+
+
+## **Leans every plant, once a frame.**
+##
+## ⚠ **Composed onto the remembered basis, never accumulated onto the live one.** Multiplying this
+## frame's tilt into whatever is already there is how a prop walks itself over on its own axis in
+## about four seconds — the drift is invisible per frame and total after a minute.
+func _paint_sway(dt: float) -> void:
+	if _sway_nodes.is_empty():
+		return
+	_sway_clock += dt
+	var wind := deg_to_rad(Look.PROP_SWAY_WIND_DEG)
+	# the lean tips TOWARD the wind, so the turn is about the axis across it
+	var axis := Vector3(-sin(wind), 0.0, cos(wind))
+	var w := Look.PROP_SWAY_HZ * _sway_clock
+	var g := Look.PROP_SWAY_GUST_HZ * _sway_clock
+	for i in _sway_nodes.size():
+		var ph: float = _sway_phase[i]
+		var a: float = _sway_amp[i] * lerpf(
+			_gust_wave(w + ph), _gust_wave(g + ph * 0.37), Look.PROP_SWAY_GUST)
+		_sway_nodes[i].basis = Basis(axis, a) * _sway_base[i]
+
+
+## **The wave the lean rides, in −1..1, one cycle per unit of `x`.**
+##
+## ⚠⚠ **A SINE IS THE WRONG SHAPE AND THAT IS WRITTEN DOWN OUTSIDE THIS REPO.** Crysis's own vegetation
+## code uses a SMOOTHED TRIANGLE — `smooth(tri(x))` — and Unity's shipped grass raises its sine to the
+## fourth power; both sharpen the crest and flatten the trough, so a plant **rests, gusts, and rests**
+## instead of ticking like a metronome. **The reference note on foliage, mesh-vs-card and sway already
+## carries the complaint that names the defect** — a reply to Bad North's developer: 「your bush
+## wiggling is too regular… wind is more wave like」. The formulas are in the note beside it, on the
+## sway arithmetic and the outline shell.
+static func _gust_wave(x: float) -> float:
+	var tri := absf(fposmod(x + 0.5, 1.0) * 2.0 - 1.0)      # 0..1..0, a triangle
+	return (tri * tri * (3.0 - 2.0 * tri)) * 2.0 - 1.0      # eased at both ends, then to −1..1
+
+
+## **A prop drawn as a picture instead of a mesh** — `assets/props/flat/<kind>.png`.
+##
+## ⚠⚠ **The kind is looked up in `props.glb` FIRST and here only if it is not there**, so nothing in
+## `island.json` says which of the two a prop is. **The file that exists decides**, which means a tree
+## going from mesh to picture is a file move and not a data edit.
+##
+## ⚠ **Built once and kept**, unlike a body: a prop never moves, so the per-frame `Sprite3D` pool would
+## be paying a body's price for a rock that stands still. **The one thing that must still change every
+## frame is the pitch stretch** — see `_paint_flat_props`.
+func _put_flat_prop(kind: String, foot: Vector3, sc: float) -> void:
+	var path := FLAT_PROP_DIR + kind + ".png"
+	if not ResourceLoader.exists(path):
+		return
+	var pic := load(path) as Texture2D
+	if pic == null:
+		return
+	# ⚠⚠ **A `Sprite3D` STOOD HERE AND IT COULD NOT MOVE** (2026-08-31). `BILLBOARD_FIXED_Y` rebuilds
+	# the node's basis every frame and throws its rotation away — measured at **0.00 px of sway while
+	# the mesh beside it travelled 5.8** — and a `Sprite3D` also wears no outline, measured at **0
+	# near-black pixels against the mesh's 306**. **Both are cured by owning the quad**: the card
+	# below turns itself, bends itself, and draws its own ink, which is the package Bad North's
+	# billboards actually ship with.
+	# ⚠ **One texture pixel is one world px** at `Look.SPRITE_PIXEL_SIZE` (1 / `TILE_PX`), so a 64 px
+	# picture at scale 1.0 stands **1.6 조각** tall. That rule did not change with the mechanism.
+	var base := Look.PROP_PIC_SCALE * sc
+	var wide := float(pic.get_width()) * base * Look.SPRITE_PIXEL_SIZE
+	var tall := float(pic.get_height()) * base * Look.SPRITE_PIXEL_SIZE
+	var quad := QuadMesh.new()
+	quad.size = Vector2(wide, tall)
+	# ⚠ **Offset up by half, so the quad's FOOT is its origin.** The shader's stretch and its wind
+	# weight both measure from y = 0, and a centred quad would lift off the ground as either grew.
+	quad.center_offset = Vector3(0.0, tall * 0.5, 0.0)
+	if _card_shader == null:
+		_card_shader = load(PROP_CARD_SHADER) as Shader
+	var pair: Array[MeshInstance3D] = []
+	# ⚠⚠ **The ink is a SEPARATE DRAW and it goes first.** It is not a `next_pass`: a next pass is
+	# ordered by material properties and distance rather than by request, and the ink has to be the
+	# one behind. **Two nodes, and the shader's own `back_push` keeps them apart in depth.**
+	for is_ink in [true, false]:
+		var mat := ShaderMaterial.new()
+		mat.shader = _card_shader
+		mat.set_shader_parameter("card", pic)
+		mat.set_shader_parameter("silhouette", is_ink)
+		mat.set_shader_parameter("ink", Look.COL_OUTLINE)
+		mat.set_shader_parameter("wind_dir", Vector2(
+			cos(deg_to_rad(Look.PROP_SWAY_WIND_DEG)), sin(deg_to_rad(Look.PROP_SWAY_WIND_DEG))))
+		mat.set_shader_parameter("wind_strength", Look.PROP_CARD_WIND_STRENGTH)
+		mat.set_shader_parameter("wind_speed", Look.PROP_CARD_WIND_SPEED)
+		var mi := MeshInstance3D.new()
+		mi.mesh = quad
+		mi.material_override = mat
+		mi.position = Vector3(foot.x, foot.y + Look.PROP_PIC_LIFT_PX / Look.TILE_PX, foot.z)
+		# **No shadow, on purpose.** A card's shadow is the shadow of a plane that keeps turning.
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# ⚠ **The wind pushes the top out past the quad's own bounds.** Without a margin the card
+		# pops out of existence near the screen edge — the stale-AABB trap the reference note names.
+		mi.extra_cull_margin = tall
+		pair.append(mi)
+	_flat_props.append(pair)
+
+
+## **Hands every card the wind's clock and the camera's pitch, once a frame.**
+##
+## ⚠⚠ **A body gets the pitch stretch inside `_billboard_scale` and a card cannot**, because the card
+## rebuilds its own basis in the vertex shader and throws the node's scale away with it. It arrives as
+## a uniform instead. Without it a card shortens as the camera tilts while the swordsman beside it
+## does not, and **two things drawn the same way disagreeing on screen is worse than both being wrong.**
+## ⚠ **The same clock the meshes lean off**, so a card and a bush do not blow different weather.
+func _paint_flat_props() -> void:
+	if _flat_props.is_empty():
+		return
+	var k := _pitch_stretch()
+	for pair in _flat_props:
+		for mi in pair:
+			var mat := mi.material_override as ShaderMaterial
+			if mat == null:
+				continue
+			mat.set_shader_parameter("stretch", k)
+			mat.set_shader_parameter("wind_t", _sway_clock)
 
 
 ## --- the drawn blob is GONE -------------------------------------------------------------------------

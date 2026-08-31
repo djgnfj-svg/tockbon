@@ -257,6 +257,25 @@ func _table() -> Dictionary:
 			"_stand_h": 0,
 			"_rebuild_buildings": 0,
 			"_rebuild_props": 0,
+			# **The other half of the scatter: a prop drawn as a PICTURE** (2026-08-31, the user:
+			# 「the tree is 2D, the bush is 2D too, and the stone, the iron ore and the buildings are
+			# 3D」). A kind missing from `props.glb` is looked for in `assets/props/flat/` instead.
+			# **The plants lean** (2026-08-31, the user: 「is it easy to put swaying in? the whole
+			# intent is that the map does not look monotonous」). `_maybe_sway` enrols one prop at
+			# build time; `_paint_sway` leans every enrolled one once a frame.
+			# ⚠ **A picture prop is never enrolled** — `BILLBOARD_FIXED_Y` throws a node's rotation
+			# away, which is the same thing 기법 23 measured.
+			"_maybe_sway": 0,
+			"_paint_sway": 0,
+			# ⚠ **A sine is the wrong shape** — Crysis uses a smoothed triangle and Unity's grass a
+			# sin⁴, both to sharpen the crest so a plant rests between gusts. See the 08-31 note in
+			# `docs/reference/`.
+			"_gust_wave": 0,
+			"_put_flat_prop": 0,
+			# ⚠ **It is a PAINT and it runs every frame**, unlike everything else in this block:
+			# a picture prop is built once, but the camera's pitch stretch has to be paid back to it
+			# each frame or it shortens while the body beside it does not.
+			"_paint_flat_props": 0,
 			"_outline": 0,
 			"_use_vertex_colours": 0,
 			"_hand_the_sea_its_shoreline": 0,
