@@ -241,6 +241,24 @@ const AMBIENT_ENERGY := 0.92
 ## into the box it stands on at some yaws; a hair of lift costs nothing and never does.
 const BODY_LIFT_PX := 1.0
 
+## --- a prop drawn as a PICTURE rather than a mesh --------------------------------------------------
+##
+## ⚠⚠ **The tree and the bush are 2D and the stone, the ore and the buildings are 3D** (2026-08-31,
+## the user). A prop kind is now either a node in `props.glb` or a picture in `assets/props/flat/`,
+## and these two numbers are everything the picture path decides.
+
+## **How many world px one picture pixel draws as.** ⚠⚠ **1.0 means one texture pixel per screen pixel
+## at the opening zoom**, which is the rule the pixel pipeline already states and the rule the wolf
+## broke: a 64 px picture drawn 20.9 px wide keeps one pixel in 9.4 and drops the rest, so a branch
+## lands on a dropped row and vanishes. **A 64 px tree therefore stands 1.6 조각 tall.**
+## ⚠ **This is the knob if a tree is the wrong size** — not the picture, and not the row's own `scale`,
+## which is there to make ONE prop differ from its neighbours.
+const PROP_PIC_SCALE := 1.0
+
+## The same hair of lift `BODY_LIFT_PX` gives a body, for the same reason: a picture's bottom row
+## sinking into the ground it stands on reads as a prop half-buried.
+const PROP_PIC_LIFT_PX := 1.0
+
 
 ## --- 개발지식 01, the four techniques the game was NOT running -------------------------------------
 ##

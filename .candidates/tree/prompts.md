@@ -41,10 +41,30 @@ heavy does at this size: **1.10 ate a 21 px animal whole.**
 turned off for props — **and that is a decision, because the outline is what lifts a flat picture off
 the ground.**
 
+## ✅ **ALL EIGHT ARE STANDING IN THE GAME** (2026-08-31, the user: 「the tree might have to be seen
+## applied in the game」)
+
+**Every candidate is installed as its own prop kind** — `tree_a01` … `tree_b04` in
+`assets/props/flat/` — and placed in a row across the island's north edge, two 조각 apart, **left to
+right in this table's order.** ⚠ **Photograph it with `tools/shot/shoot_flat_props.gd`**, which aims
+the real shell's camera at the row; the pictures land in `tools/shot/out/field/flat_*.png`.
+
+**What went in to make that possible** — the 2D path did not exist:
+
+- **`FieldView.FLAT_PROP_DIR`** — a prop kind is a node in `props.glb`, **or** a PNG here. The mesh
+  wins, so moving a tree from 3D to 2D is deleting it from the `.blend`.
+- **`Look.PROP_PIC_SCALE`** — 1.0 means one texture pixel per screen pixel at the opening zoom, so a
+  64 px tree stands 1.6 조각. ⚠ **This is the knob if a tree is the wrong size**, not the picture.
+- **`_paint_flat_props`** pays the camera's pitch stretch back every frame, or a tree shortens as the
+  camera tilts while the swordsman beside it does not.
+
+⚠⚠ **The engine outline is NOT applied to a picture prop**, deliberately — every candidate already
+carries its own dark rim, and a second one on a 64 px picture is what 1.10 did to the 21 px wolf.
+
 ## Not settled
 
 - **Which one.** Nothing chosen.
 - **Whether a tree is one picture or four.** The four-view rule in `../README.md` is for BODIES; a tree
-  does not turn. **One picture, billboarded, is the assumption here and it has not been agreed.**
-- **How `_rebuild_props` puts a 2D prop on the board.** It instances a `MeshInstance3D` out of
-  `props.glb` today and knows nothing about a picture. **That is a code round, not a drawing round.**
+  does not turn. **One picture, billboarded, is what is standing and it has not been argued.**
+- ⚠ **The losers leave behind a PNG and a `.import` each.** Eight trees and nine bushes are seventeen
+  of both in `assets/`; **all but the winner comes out** when the choice is made.

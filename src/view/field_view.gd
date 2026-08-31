@@ -408,6 +408,9 @@ func _process(delta: float) -> void:
 	_fx_begin()
 	_paint_bodies()
 	_fx_flush()
+	# ⚠ **Outside the buffer.** A picture prop writes nothing into the fx buffers — it is a standing
+	# node, not a per-frame draw — and the only reason it is touched at all is the camera's pitch.
+	_paint_flat_props()
 
 
 # --- the camera: still one transform, still in one place -------------------------------------------
@@ -709,6 +712,11 @@ const ISLAND_SCENE := "res://assets/terrain/island.glb"
 const BUILDINGS_SCENE := "res://assets/buildings/buildings.glb"
 ## The scatter — trees, rocks, bushes. One file, one node per kind, cloned out of.
 const PROPS_SCENE := "res://assets/props/props.glb"
+## ⚠⚠ **The other half of the scatter, and it is PICTURES** (2026-08-31, the user: 「the tree is 2D,
+## the bush is 2D too, and the stone, the iron ore and the buildings are 3D」). One PNG per kind,
+## named exactly as the kind is named in `island.json`. **A kind found in `props.glb` never reaches
+## here** — the mesh wins, so moving a tree from 3D to 2D is deleting it from the `.blend`.
+const FLAT_PROP_DIR := "res://assets/props/flat/"
 ## **The beasts' hull, as one object Blender made.** ⚠ **Loaded, never built** (`CLAUDE.md`: what the
 ## player looks at is made in a tool). It arrives at its authored size and nothing scales it — 티켓 47
 ## says the hull, the sail and their proportions are judged on the game screen, after it is in.
@@ -728,6 +736,12 @@ var _pads_mat: ShaderMaterial = null
 var _pads_revealed := false
 var _builds: Node3D = null
 var _props: Node3D = null
+## **The picture props, and the two numbers `_paint_flat_props` needs to redraw them.**
+## ⚠ **Three parallel arrays and they are built in one place** — `_put_flat_prop` appends to all three
+## and `_rebuild_props` clears all three. Nothing else may append to one of them.
+var _flat_props: Array[Sprite3D] = []
+var _flat_base: Array[float] = []
+var _flat_foot: Array[float] = []
 
 
 func _rebuild_terrain() -> void:
@@ -1196,23 +1210,94 @@ func _rebuild_props() -> void:
 	var lib := packed.instantiate()
 	_props = Node3D.new()
 	_world.add_child(_props)
+	_flat_props.clear()
+	_flat_base.clear()
+	_flat_foot.clear()
 	for row in placed:
 		var d := row as Dictionary
-		var src := lib.find_child(str(d["kind"]), true, false) as MeshInstance3D
-		if src == null:
-			continue
-		var one := src.duplicate() as MeshInstance3D
 		var t := int(d["y"]) * battle.grid.w + int(d["x"])
-		one.position = Vector3(
+		var foot := Vector3(
 			float(d["x"]) + 0.5 + float(d.get("ox", 0.0)),
 			Islands.ground_h(battle.grid.level_of(t)),
 			float(d["y"]) + 0.5 + float(d.get("oy", 0.0)))
-		one.rotation.y = deg_to_rad(float(d.get("yaw", 0.0)))
 		var sc := float(d.get("scale", 1.0))
+		var src := lib.find_child(str(d["kind"]), true, false) as MeshInstance3D
+		if src == null:
+			_put_flat_prop(str(d["kind"]), foot, sc)
+			continue
+		var one := src.duplicate() as MeshInstance3D
+		one.position = foot
+		one.rotation.y = deg_to_rad(float(d.get("yaw", 0.0)))
 		one.scale = Vector3(sc, sc, sc)
 		_props.add_child(one)
+	# ⚠⚠ **BEFORE the pictures are hung, and that is why they are added after this call.** `_outline`
+	# walks `MeshInstance3D` and a `Sprite3D` is not one, so a picture would be skipped anyway — but
+	# the ordering is written down because the pictures ALREADY CARRY THEIR OWN BORDER. Every tree
+	# 시안 came back with a dark rim (pixellab's `lineless` is documented as weakly guiding and behaved
+	# that way), so an engine outline on top of them is a second rim on a 64 px picture — and 1.10 was
+	# measured to eat a 21 px wolf whole.
 	_outline(_props)
+	for s in _flat_props:
+		_props.add_child(s)
 	lib.free()
+
+
+## **A prop drawn as a picture instead of a mesh** — `assets/props/flat/<kind>.png`.
+##
+## ⚠⚠ **The kind is looked up in `props.glb` FIRST and here only if it is not there**, so nothing in
+## `island.json` says which of the two a prop is. **The file that exists decides**, which means a tree
+## going from mesh to picture is a file move and not a data edit.
+##
+## ⚠ **Built once and kept**, unlike a body: a prop never moves, so the per-frame `Sprite3D` pool would
+## be paying a body's price for a rock that stands still. **The one thing that must still change every
+## frame is the pitch stretch** — see `_paint_flat_props`.
+func _put_flat_prop(kind: String, foot: Vector3, sc: float) -> void:
+	var path := FLAT_PROP_DIR + kind + ".png"
+	if not ResourceLoader.exists(path):
+		return
+	var pic := load(path) as Texture2D
+	if pic == null:
+		return
+	var s := Sprite3D.new()
+	s.texture = pic
+	s.centered = true
+	# 개발지식 01 기법 1. **The same billboard the bodies use** — upright in the WORLD and turning only
+	# about Y, so a tree does not lie down when the camera tilts.
+	s.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	# 기법 16 is OFF here for the reason it is off for the bodies: a billboard's normal faces the
+	# camera, so the sun hits it dead on and washes the picture out.
+	s.shaded = false
+	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	# ⚠⚠ **`pixel_size` IS THE WHOLE CONVERSION AND FORGETTING IT MAKES A SLIVER.** At
+	# `Look.SPRITE_PIXEL_SIZE` (1 / `TILE_PX`) one texture pixel is one world px, so a 64 px picture
+	# at scale 1.0 stands **1.6 조각** tall with no arithmetic at all. The first cut divided by
+	# `TILE_PX` by hand as well and every tree came out 1/40th of its size — a white splinter.
+	s.pixel_size = Look.SPRITE_PIXEL_SIZE
+	var base := Look.PROP_PIC_SCALE * sc
+	var tall := float(pic.get_height()) * base * Look.SPRITE_PIXEL_SIZE
+	s.position = Vector3(foot.x, foot.y + Look.PROP_PIC_LIFT_PX / Look.TILE_PX + tall * 0.5, foot.z)
+	_flat_props.append(s)
+	_flat_base.append(base)
+	_flat_foot.append(foot.y)
+
+
+## **Pays the pitch back to every picture prop, once a frame.**
+##
+## ⚠⚠ **A body gets this inside `_billboard_scale` and a prop cannot**, because a prop is built once and
+## a body is rebuilt every frame. Without this line a tree shortens as the camera tilts down while the
+## swordsman beside it does not, and **two things drawn the same way disagreeing on screen is worse
+## than both being wrong** — see `_pitch_stretch` for what the stretch is paying for.
+## ⚠ **The Y position is re-derived from the same stretch**, or a taller tree floats: the sprite is
+## centred, so half of whatever height the stretch adds has to come back off the middle.
+func _paint_flat_props() -> void:
+	var k := _pitch_stretch()
+	for i in _flat_props.size():
+		var s := _flat_props[i]
+		var base: float = _flat_base[i]
+		s.scale = Vector3(base, base * k, 1.0)
+		var tall := float(s.texture.get_height()) * base * k * Look.SPRITE_PIXEL_SIZE
+		s.position.y = _flat_foot[i] + Look.PROP_PIC_LIFT_PX / Look.TILE_PX + tall * 0.5
 
 
 ## --- the drawn blob is GONE -------------------------------------------------------------------------

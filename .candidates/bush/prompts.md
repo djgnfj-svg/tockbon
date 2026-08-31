@@ -30,7 +30,15 @@ written out in `../tree/prompts.md`.
 ⇒ The `c` wave names the plant rather than the colour, and four of the nine are now dry or bare
 rather than lush, which is what the island's own palette asks for.
 
-## The same unsettled things as the tree
+## ✅ **ALL NINE ARE STANDING IN THE GAME**
 
-**Which one · one picture or four · and how a 2D prop reaches the board at all.** See
-`../tree/prompts.md`; both subjects are blocked on the same code round.
+**Installed as `bush_a01` … `bush_c04` in `assets/props/flat/`** and placed in a row across the
+island's south edge, two 조각 apart, **left to right in this table's order.** ⚠ **The swordsmen stand
+in the middle of the row**, which is the comparison that matters: a 32 px bush against a 27 px man.
+
+The code that carries a picture prop went in with the trees — see `../tree/prompts.md`.
+
+## Still unsettled
+
+**Which one.** Nothing chosen. ⚠ **All but the winner comes out of `assets/` when it is** — nine PNGs
+and nine `.import` files.

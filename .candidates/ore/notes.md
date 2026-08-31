@@ -1,14 +1,34 @@
 # `ore` — 철광석, and the colour lesson it dug up
 
-**Nothing chosen yet.** Six shapes in `2026-08-31-variants.blend`, photographed in
-`2026-08-31-sheet.png`, and **two colourings of the winner-so-far standing in the real game** in
-`2026-08-31-in-game.png`.
+**Nothing chosen yet — TWELVE shapes now** (2026-08-31, the user, after the first six: 「철광석은 좀더
+뽑아보자」).
+
+| Sheet | What is on it |
+|---|---|
+| `2026-08-31-sheet-all-twelve.png` | ⭐ **all twelve, in ONE palette, with the chosen 돌 `r2` at the end.** This is the sheet to look at |
+| `2026-08-31-sheet.png` | the first six only, in the shipped (bright) tones |
+| `2026-08-31-in-game.png` | two colourings of `o1` standing on the real island |
+
+**Geometry**: the first six in `2026-08-31-variants.blend`, the second six in
+`2026-08-31-variants-b.blend` — which also carries dim copies of the first six, which is what makes
+the twelve-up sheet a fair comparison.
+
+## The second six
+
+| | What it is | Why it is in the set |
+|---|---|---|
+| `o7_vein` | two grey halves with a rust plate standing between them | the ore is a SEAM, continuous |
+| `o8_rusted` | the ore is the mass and grey is the crust | **the inverse of every other shape** |
+| `o9_cluster` | rust spikes straight out of the ground, no host rock | |
+| `o10_plates` | grey and rust plates layered | the seam read edge-on |
+| `o11_capped` | **the chosen 돌 `r2`'s own shape** with rust crystals on top | **the family match** |
+| `o12_pit` | a ring of spoil stones with ore in the middle | the only one that reads as WORKED |
 
 **There was no iron ore before today.** `blend/props.blend` held pine · tree · rock · stone · bush and
 nothing else, and `CONTEXT.md` says **one ore is embedded on the island** — so this is one prop, not a
 scatter.
 
-## The six shapes
+## The first six
 
 | | What it is | Why it is in the set |
 |---|---|---|
