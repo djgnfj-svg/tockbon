@@ -2963,3 +2963,94 @@ boss**, and both start from a table with no precedent for their own column.
 **`ee9907ab` 에서 통과 1255 · 실패 65.** 세션 내내 이 수를 지켰다. ⚠ 두 번 붉어졌고 둘 다
 이 세션이 만든 것이라 그 자리에서 고쳤다 — `net_draw_leaf` 의 함수 표에 새 함수 넷이 없었던 것,
 그리고 `net_citations` 가 주석에 박은 문서 경로를 잡은 것.
+
+---
+
+## ✅ **Five branches became one tree, and a scan had been reading its own line endings — 2026-09-01**
+
+**Nothing was built. Five nights of parallel work were merged, and two reds turned out to be the
+instrument rather than the game.**
+
+### What the session was asked to do
+
+> ***"I'm going to merge the worktrees, let's prepare. First I need everything checked."*** Then, after
+> the audit: ***"Good. Now merge it cleanly. Merge it cleanly and that's it. There'll be a lot of
+> chunks. ... And let's tidy things up properly while we're at it. Do the whole thing and push."***
+
+⚠ **The audit came first and it paid.** Merging blind would have hidden three of the four judgement
+calls below — git reported none of them as conflicts.
+
+### What was merged
+
+| Branch | What came in |
+|---|---|
+| `props-and-ore` | 31 pines in one wood, 17 bushes, 3 rocks, 1 ore |
+| `drop-qe-turn` | QE yaw keys, the edge-of-screen pan and WASD all deleted |
+| `pick-then-move` | the hand: pick a body, light its reach, see the route, send it (`src/sim/hand.gd`) |
+| `twodo-folder` | one `TODO.md` line `main` already held |
+| `island-findings` | the 08-30 measurement naming the islet as the cause of four reds |
+
+**Order was `props → drop-qe → pick`, decided by the clock and not by size.** `drop-qe` finished at
+18:30 and `pick` branched at 19:53 **from a root before it**, so `pick` was written against a camera
+that no longer exists. ⇒ **the later word wins on the camera, the newer work wins on the hand.**
+
+### ⚠⚠ Four things git could not decide, and one it did not even report
+
+**1. One name pointed at two things.** Both branches pooled an outline sprite under `_outlines` — 기법
+17's black copy behind EVERY body, and the white rim behind the PICKED body. Two `var _outlines` in one
+file is not a merge conflict, it is a parse error waiting. **The black copy kept the name because every
+body has one; the rim became `_rims`**, with `_rims_used`, `_rim_sprite` and `RIM_SHADER` following it
+through `net_shell`, `net_draw_leaf` and `shoot_pick`.
+
+**2. `_pointer_at` had to come back from its own tombstone.** The edge pan was its only reader and both
+went out together on 08-31; `pick`'s 이동선 reads it every frame. **A still cursor over a walking body is
+a changing route**, and the left drag moves the board under a still cursor too.
+
+**3. The two edge-band rows in `net_shell` were dropped, not merged.** `pick` still carried them because
+it never saw the deletion. **Kept, they would have been two green rows over a feature that is gone** —
+which is this repo's named fake.
+
+**4. ⚠⚠ THE ONE GIT MERGED SILENTLY: two task-03 folders.** `drop-qe` opened
+`task-03-commanding-squads` with a ticket it numbered `03-01`; `pick` opened `task-03-command-the-squads`
+with `03-01` and `03-02`. **Different paths, so both went in with no conflict and two files claimed the
+same number.** Folded into one folder; the built two kept their numbers and the unbuilt one is `03-03`.
+
+### 🔍 Two reds were the ruler, not the thing measured
+
+**`net_title.gd` and six other `.gd` files were CRLF in the working copy while the repo blob is LF.**
+`_func_body` splits its target on its OWN line ending, so it read `title_view.gd` as a single line,
+found no `func`, and returned nothing — **the row said 「the drifting shape is not a cell」 and was
+measuring nothing at all.** LF restored, both rows green.
+
+⚠⚠ **Nothing was committed for it, and that is the point**: the blobs were always LF, so only this
+machine was wrong. `.gitattributes` already carries `*.gd text eol=lf` **and a comment recording three
+MATCH-FAIL rounds from this exact cause.** The rule was right and the working copy had drifted past it.
+
+### The island, measured rather than recalled
+
+**26 rows × 30 chars · land 284 · water 388 · harbour 108 · plateau 48 칸 · stair 4 칸 · spawns 0.**
+The nets still hold 12 × 16, land 76, plateau 16, stair 1, six beasts. ⇒ **Every one of the 64 reds is
+a stale net, and 티켓 15 owns all of them.** The wolf frame is 92 × 66 and `net_fx_view` says 92 × 92.
+
+### 그물
+
+**Before: `main` 통과 1242 · 실패 66.** Each branch alone measured the same 66 on its own root.
+**After: 통과 1227 · 실패 64.** ⚠ **The 15 lost passes are `drop-qe`'s own deletions** — it removed the
+rows that measured the camera it deleted. **The two lost failures are the CRLF fix.**
+⚠⚠ **No red in this round is new**, and the six red nets are the same six that were red before it.
+
+### Housekeeping
+
+**Six worktrees and thirteen remote branches went.** What is left on the remote is `main`, `gh-pages`,
+`archive-full-history` and `salvage/cell-harness` — none of them deletable. **Session ordinals were
+renumbered by the clock**: three rounds had called themselves 다섯째 or 여섯째. The dead
+`docs/roadmap.md` tried to come back with `island-findings` and was refused; its content lives in the
+map. Thirteen screenshots were re-shot from the merged tree, because neither branch's pictures showed
+both features at once.
+
+### What is still open
+
+**Nothing was decided by the user this round.** The thirteen questions the earlier sessions left are
+untouched and still theirs: **the ore's approach · doubling the map · which bush · when the bench and
+turret come out · whether the engine's swing reads as an attack · damage numbers · which black wolf ·
+the four-way facing picker · 판을 무엇으로 움직이나 (티켓 `03-03`)** and the four about the soldier.
