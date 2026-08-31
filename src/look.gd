@@ -241,6 +241,59 @@ const AMBIENT_ENERGY := 0.92
 ## into the box it stands on at some yaws; a hair of lift costs nothing and never does.
 const BODY_LIFT_PX := 1.0
 
+
+## --- 개발지식 01, the four techniques the game was NOT running -------------------------------------
+##
+## ⚠⚠ **THE USER ASKED FOR EVERYTHING EXCEPT 14 AND 16** (2026-08-31): 「take 14 and 16 out and show me
+## it in my game」. **14 is the deliberate wrong answer** (a billboard's real shadow swings as the board
+## turns) and **16 was measured today to blow the faction colour to white** — see `_sprite`'s own note.
+## The four below are what was left over once those two and the seven already running came out.
+##
+## ⚠ **25 (숨쉬기) is NOT here on purpose.** It is on the folder's endorsed list and the user **deleted
+## it by hand earlier the same day** — 「that springy up-and-down animation, just get rid of it」. The
+## request above does not re-open a thing the same person closed six hours earlier.
+## ⚠ **2 (카메라 각도 고정) is not here either**: the folder's own conflict table says locking the pitch
+## costs the tilt control this game already has, and **that is a trade the user picks, not a constant.**
+
+## **기법 17 · 외곽선.** How much bigger the black copy behind a body is drawn.
+##
+## ⚠⚠ **1.04 IS ONE SCREEN PIXEL AND IT WAS PHOTOGRAPHED AGAINST 1.10** (2026-08-31). The lab ships
+## 1.10 and marks it a guess; **Bad North's own answer is one pixel and no more**, which at a 27 px
+## swordsman is 1.037 and at a 20.9 px wolf is 1.048 — **1.04 is one pixel for both bodies at once.**
+## **What 1.10 looked like**: a 2 px rim on a 21 px animal. The swordsman survived it because he is a
+## flat pale shape, but **the wolves went solid black** — the rim ate the fur it was supposed to edge.
+## ⇒ **This number is a fraction of the BODY, so it moves whenever a body's drawn size does.**
+const BODY_OUTLINE_SCALE := 1.04
+
+## The outline's colour. Near-black rather than black so it reads as an edge and not as a hole.
+const COL_BODY_OUTLINE := Color(0.09, 0.08, 0.10, 1.0)
+
+## How far the outline copy is pushed AWAY from the camera, in 조각. ⚠ **Along the camera's own axis,
+## never the world's** — pushed along world Z the copy slides out from behind the body the moment the
+## board turns, because a billboard faces the screen and not the world.
+const BODY_OUTLINE_BACK_TILES := 0.03
+
+## **기법 23 · 살짝 뒤로 눕히기**, in degrees. ⚠⚠ **MEASURED INERT ON A BILLBOARD** (2026-08-31): a
+## `BILLBOARD_FIXED_Y` sprite has its basis rebuilt by the engine every frame, so a node rotation set
+## here is thrown away. **Kept as a constant with its measurement**, because the technique is real —
+## it just needs the lean baked into the picture or a non-billboard quad, and neither is this line.
+const BODY_LEAN_DEG := 0.0
+
+## **기법 24 · 깊이 조금 밀어주기 — 0.0, AND IT WAS TRIED** (2026-08-31). Under an ORTHOGRAPHIC camera
+## moving a body along the camera's own axis is invisible on screen, but **the world position moves and
+## this camera is pitched, so the body rose 0.0245 조각 off the ground** — the frame-bottom row of
+## `net_fx_view` reddened on it within one round. ⇒ **The technique wants a depth BIAS on the material,
+## not a translation**, and nothing in this game has reported the z-fighting it cures.
+## **Kept at 0 with its measurement**, so the next agent does not re-derive it.
+## ⚠ **The OUTLINE is still pushed along that axis and that is right** — it is meant to sit behind, and
+## it stands on nothing.
+const BODY_DEPTH_PUSH_TILES := 0.0
+
+## **기법 26 · 색으로 배경에서 떼기.** A gain on the body's own colour so it sits above the ground
+## rather than in it. ⚠⚠ **THIS MULTIPLIES ON TOP OF THE FACTION TINT**, which is the one thing telling
+## the player whose body it is — push it far and both sides go white, which is exactly how 16 failed.
+const BODY_SEPARATE_GAIN := 1.10
+
 ## The body picture that is NOT a wolf — the rounded square the 2D field drew with `draw_polyline`,
 ## baked once into a texture so a billboard can wear it. Texels, not px: it is scaled to the body's
 ## own radius wherever it is used.
@@ -1978,8 +2031,14 @@ static func sprite_half_px(type_id: int) -> float:
 ## The modulate a body's picture is drawn with: its own side colour mixed `BEAST_TEAM_TINT` of the way
 ## into white. **It lives here and not in `field_view` because every colour in this game lives here**,
 ## and `net_draw_leaf` reddens on a `Color.` written anywhere else.
+## ⚠⚠ **기법 26 · 색으로 배경에서 떼기 LIVES HERE AND NOT IN THE VIEW** (2026-08-31). A gain applied
+## in `_put_body` broke `net_shell`'s 「a body's colour came from the sim」 the moment it went in, and
+## rightly: **two places deciding one colour is two answers.** Folded in here, the check computes the
+## same number the drawer does and the guarantee survives the technique.
 static func beast_tint(colour: Color) -> Color:
-	return Color.WHITE.lerp(colour, BEAST_TEAM_TINT)
+	var lit := Color.WHITE.lerp(colour, BEAST_TEAM_TINT)
+	return Color(lit.r * BODY_SEPARATE_GAIN, lit.g * BODY_SEPARATE_GAIN, lit.b * BODY_SEPARATE_GAIN,
+		lit.a)
 
 
 static func body_colour_of(is_enemy: bool) -> Color:

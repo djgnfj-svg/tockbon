@@ -136,6 +136,11 @@ var _hover_cell := -1
 var _wash_cell := PackedInt32Array()
 var _sprites: Array[Sprite3D] = []
 var _sprites_used := 0
+## **기법 17's black copies, one per body, in their own pool.** ⚠⚠ **A parallel pool and not a child
+## node**, because the body sprites are recycled by index across frames: a child would be carried to
+## whichever body reused that slot, and the outline would be right by accident. **Index `i` of this
+## pool belongs to index `i` of `_sprites`, always**, and `_hide_unused` closes both together.
+var _outlines: Array[Sprite3D] = []
 ## What the terrain in the mesh was built for. Rebuilding 5120 boxes every frame is waste; the island
 ## only changes when it opens, and the summonable band only when the plan is committed.
 var _built_for := ""
@@ -1316,8 +1321,40 @@ func _sprite() -> Sprite3D:
 	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_world.add_child(s)
 	_sprites.append(s)
+	# **기법 17's copy is born with its body**, so the two pools can never come apart by one.
+	var edge := Sprite3D.new()
+	edge.pixel_size = Look.SPRITE_PIXEL_SIZE * Look.BODY_OUTLINE_SCALE
+	edge.billboard = s.billboard
+	edge.alpha_cut = s.alpha_cut
+	edge.texture_filter = s.texture_filter
+	edge.shaded = false
+	edge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	edge.modulate = Look.COL_BODY_OUTLINE
+	edge.visible = false
+	_world.add_child(edge)
+	_outlines.append(edge)
 	_sprites_used += 1
 	return s
+
+
+## **The black copy standing behind the body the pool just handed out.** ⚠ `_sprites_used` has already
+## been advanced by `_sprite()`, so the body's own index is one less than it.
+##
+## ⚠⚠ **PUSHED ALONG THE CAMERA'S OWN AXIS, NEVER THE WORLD'S.** A billboard faces the screen, so a
+## copy pushed along world Z slides out from behind its body the moment the board turns — it would
+## read as a black shadow beside the animal at some yaws and as an outline at others.
+func _put_outline(body: Sprite3D) -> void:
+	var i := _sprites_used - 1
+	if i < 0 or i >= _outlines.size():
+		return
+	var edge := _outlines[i]
+	edge.visible = true
+	edge.texture = body.texture
+	edge.scale = body.scale
+	edge.pixel_size = Look.SPRITE_PIXEL_SIZE * Look.BODY_OUTLINE_SCALE
+	edge.centered = body.centered
+	edge.offset = body.offset
+	edge.position = body.position - _cam.global_transform.basis.z * Look.BODY_OUTLINE_BACK_TILES
 
 
 ## ⚠⚠ **`_hull_box` STOOD HERE AND IT IS DELETED** (2026-08-29) with the boats. **The fact it cost a
@@ -1424,6 +1461,21 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 	var sole := float(_foot_body.get(pic, 0.0)) * tall
 	s.position = Vector3(centre_px.x / Look.TILE_PX, foot - sole + tall * 0.5,
 		centre_px.y / Look.TILE_PX)
+	# **기법 24 · 깊이 조금 밀어주기 IS NOT DONE HERE, AND IT WAS TRIED** (2026-08-31). Moving the body
+	# along the camera's own axis is invisible under an ORTHOGRAPHIC camera — the screen position does
+	# not change — but **the world position does, and this camera is pitched, so the body rose 0.0245
+	# 조각 off the ground.** `net_fx_view` caught it on the frame-bottom row. ⇒ **The technique needs a
+	# depth BIAS, not a translation**, and nothing here has reported the z-fighting it cures.
+	# ⚠ **The OUTLINE is still pushed along that axis and that is correct** — it is meant to sit behind,
+	# and it stands on nothing.
+	#
+	# **기법 23 · 살짝 뒤로 눕히기.** ⚠ Measured inert on a billboard — see `Look.BODY_LEAN_DEG`. The
+	# line stays so the technique has one home rather than none.
+	s.rotation = Vector3(deg_to_rad(-Look.BODY_LEAN_DEG), 0.0, 0.0)
+	# **기법 17 · 외곽선**, last, because it copies everything decided above.
+	# ⚠ **기법 26 · 색으로 배경에서 떼기 is not a line here** — it lives inside `Look.beast_tint`, so
+	# there is one place a body's colour is decided and `net_shell` reads the same answer this does.
+	_put_outline(s)
 	# ⚠⚠ **THE TOP USED TO BE RETURNED HERE and the halo that read it is deleted** (2026-08-29).
 	# **The rule it carried is the part to keep**: a wolf is 55 x 40 and a caveman 36 x 40, so sized by
 	# WIDTH off the same radius the man stands half again as tall as the animal. ⇒ **Nothing that
@@ -1671,6 +1723,10 @@ func _crowd_slot_of(at: Vector2, unit_id: int) -> int:
 func _hide_unused() -> void:
 	for k in range(_sprites_used, _sprites.size()):
 		_sprites[k].visible = false
+	# ⚠⚠ **The outline pool is closed by the SAME index**, never by its own count. A copy left visible
+	# behind a hidden body is a black silhouette of a dead animal standing on the island.
+	for k in range(_sprites_used, _outlines.size()):
+		_outlines[k].visible = false
 
 
 # --- the beasts' boats, and the riders standing on them ---------------------------------------------
