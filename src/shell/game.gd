@@ -691,41 +691,50 @@ func _notification(what: int) -> void:
 ## closest answered it. Its own comment named the day it would die — 「when squads exist, this is the
 ## function that grows a selection instead of a nearest-body rule」 — and this is that function.
 ##
-## **Three verbs and the press picks exactly one of them** (2026-08-31, the user: 「tab 없이 그냥
-## 캐릭터를 누르면 이동할 수 있는 칸들이 뜨고 눌러서 이동하는거임」):
+## **What the press does is decided by whether the hand is holding anybody, and by nothing else**
+## (2026-08-31, the user: 「tab 없이 그냥 캐릭터를 누르면 이동할 수 있는 칸들이 뜨고 눌러서
+## 이동하는거임」, then 「esc를 하지 않는 이상 이동 우선으로 해줘야할듯한데」):
 ##
-##  1. **a body** -> pick it, and its reach lights;
-##  2. **a lit 조각** -> everybody picked walks there;
-##  3. **anything else** -> let go.
+##  - **empty hand** -> a press on a body picks it, and its reach lights;
+##  - **full hand** -> a press on a lit 조각 is a walk, and a body standing there does not intercept it;
+##  - **full hand, pressed anywhere else** -> nothing. **ESC is the only thing that lets go.**
 ##
 ## ⚠ **True means the press was consumed**, which is what tells `_end_press` it was not a pan — the
 ## same contract `_order_walk_at` had.
 func _press_the_island(at: Vector2) -> bool:
 	if battle == null:
 		return false
-	# **A body first, always.** ⚠ A body standing on a 조각 its own hand has lit is BOTH a body and a
-	# destination; asking the destination first would make a picked body impossible to re-pick, and
-	# pressing your own soldier would order him onto himself.
+	var tile := _tile_at(at)
+	# ⚠⚠ **A FULL HAND MOVES; AN EMPTY HAND PICKS. THE BODY TEST CAME FIRST FOR ONE ROUND AND IT IS
+	# REVERSED** (2026-08-31, the user at the screen: 「이게 조각에 옮길 수가 있잖아? 같은 조각으로?
+	# 그때 살짝 불편하네? 이게 esc를 하지 않는 이상 이동 우선으로 해줘야할듯한데」).
+	#
+	# **The old line is kept rather than erased**: it read 「a body first, always」, and its reasoning
+	# was that a picked body must stay re-pickable. **What it did on screen** is what killed it — a
+	# 조각 with somebody standing on it is a 조각 you may want to send another body TO, and the body
+	# test swallowed the press and picked the man already standing there instead. ⇒ **while the hand
+	# holds anybody, a press on a lit 조각 is a walk and nothing else looks at it.**
+	if not hand.is_empty():
+		if tile >= 0 and hand.can_reach(tile):
+			var sent := hand.order(battle, tile)
+			# ⚠⚠ **THE ORDER LETS GO, AND IT KEPT HOLD FOR ONE ROUND** (2026-08-31, the user:
+			# 「이동하면 그러면 그 이동관 관련은 꺼져야지」). The earlier line is kept because this repo
+			# records a flip: **it re-picked the same bodies** so a second command needed no second
+			# pick, reasoning from 「the hand never stops moving」. **What that ignored is that the board
+			# then stays lit with nothing left to decide.**
+			_let_go()
+			return sent > 0
+		# ⚠⚠ **A PRESS THAT CANNOT BE A WALK KEEPS THE HAND, AND ESC IS THE ONLY WAY TO LET GO**
+		# (the user, same sentence: 「esc를 하지 않는 이상」). **The sea used to drop the selection here**
+		# — which meant a hand aimed a little wide lost the body it had, and the player had to pick him
+		# again to try the same order twice.
+		return false
+	# **An empty hand picks whoever was pressed**, and that is the only thing an empty hand does.
 	var who := hand.body_at(battle, _point_at(at), Look.PICK_BODY_TILES)
 	if who >= 0:
 		var picked := hand.pick(battle, who)
 		_tell_the_view()
 		return picked
-	# **Then a lit 조각.** `Hand.order` refuses anything outside the reach on its own, so there is no
-	# second reachability test here — see the tombstone below.
-	var tile := _tile_at(at)
-	if tile >= 0 and hand.can_reach(tile):
-		var sent := hand.order(battle, tile)
-		# ⚠⚠ **THE ORDER LETS GO, AND IT KEPT HOLD FOR ONE ROUND** (2026-08-31, the user at the screen:
-		# 「이동하면 그러면 그 이동관 관련은 꺼져야지」). The earlier line is kept rather than erased,
-		# because this repo records a flip: **it re-picked the same bodies** so a second command needed
-		# no second pick, reasoning from 「the hand never stops moving」. **What that ignored is that the
-		# board then stays lit with nothing left to decide** — the reach and the 이동선 are a question
-		# being asked, and once it is answered they are an answer nobody is waiting for.
-		_let_go()
-		return sent > 0
-	# **Everything else lets go** — the sea, a cliff face, a 조각 nobody picked can stand on.
-	_let_go()
 	return false
 
 

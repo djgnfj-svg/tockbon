@@ -560,11 +560,65 @@ func run(t) -> void:
 	# **All of it went with the verdict.** ⚠ **The hole it leaves is real and is written down rather
 	# than papered over: nothing returns to the title any more.** The title opens a run and a run has
 	# no end — see `game.gd`, where `_click_panel` used to be.
+	_a_full_hand_moves_instead_of_picking(t, game, fs)
 	_the_picked_body_wears_a_rim(t, game, fs)
 
 	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
 	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
 	t.done()
+
+
+## **A hand that is holding somebody MOVES, and a body standing on the destination does not intercept
+## the press** (2026-08-31, the user at the screen: 「이게 조각에 옮길 수가 있잖아? 같은 조각으로? 그때
+## 살짝 불편하네? 이게 esc를 하지 않는 이상 이동 우선으로 해줘야할듯한데」).
+##
+## ⚠⚠ **THIS IS THE ONE ROW THE OLD ORDER PASSED AND THE SCREEN FAILED.** Until this day the press
+## asked 「is there a body here」 first, and every check stayed green: picking worked, ordering worked,
+## the reach lit. **What nothing measured is the two of them meeting** — pressing a 조각 that is BOTH a
+## destination and somebody's spot — and that is the only case where the priority is visible at all.
+## ⇒ the destination is deliberately chosen to be another body's own 조각.
+##
+## ⚠ **Everything is taken off the board rather than typed.** Which 조각 a body stands on moves with the
+## island, and a literal here would be measuring a fixture instead of the rule.
+func _a_full_hand_moves_instead_of_picking(t, game, fs: FieldView) -> void:
+	var b: Battle = game.battle
+	if b == null:
+		return
+	var ashore := b.ashore_ids()
+	t.ok(ashore.size() >= 2, "자가 점검 — 섬에 몸이 둘 이상이다 (하나면 이 규칙이 안 보인다)")
+	if ashore.size() < 2:
+		return
+	var mover := int(ashore[0])
+	game.hand.pick(b, mover)
+	var mine: Vector2 = b.soldier_pos[mover]
+	var my_tile := int(floor(mine.y)) * b.grid.w + int(floor(mine.x))
+	var target := -1
+	var at := Vector2.ZERO
+	for k in range(1, ashore.size()):
+		var p: Vector2 = b.soldier_pos[int(ashore[k])]
+		var tx := int(floor(p.x))
+		var ty := int(floor(p.y))
+		var tile := ty * b.grid.w + tx
+		# ⚠ **Somebody else's 조각 and not the mover's own.** Ordering a body onto the 조각 he already
+		# stands on is legal and would pass this row while measuring nothing.
+		if tile == my_tile or not game.hand.can_reach(tile):
+			continue
+		var scr := fs.tile_to_screen_px(tx, ty)
+		# ⚠ The round trip is the self-check: a point that resolves elsewhere would order elsewhere.
+		if game._tile_at(scr) != tile:
+			continue
+		target = tile
+		at = scr
+		break
+	t.ok(target >= 0, "자가 점검 — 다른 몸이 선 조각 중 화면에서 겨눌 수 있고 갈 수 있는 것이 있다")
+	if target < 0:
+		return
+	b.soldier_order[mover] = -1
+	game._unhandled_input(_press(at))
+	game._unhandled_input(_release(at))
+	t.eq(int(b.soldier_order[mover]), target,
+		"몸이 선 조각을 눌러도 쥔 몸이 거기로 간다 — 그 자리의 몸이 대신 골라지지 않는다")
+	t.ok(game.hand.is_empty(), "그리고 명령이었으므로 손을 놓는다 — 새로 고른 게 아니다")
 
 
 ## **The white rim on the body the hand is holding** (2026-08-31, the user: 「캐릭터 눌렀을때 살짝 내가
