@@ -132,6 +132,10 @@ func _table() -> Dictionary:
 			# until the riders needed the same number, and a second copy of it is a rider drawn at a
 			# size nobody chose.
 			"_billboard_scale": 0,
+			# What the camera's pitch takes off a `BILLBOARD_FIXED_Y` card, paid back (개발지식 01
+			# 기법 22). It is beside `_billboard_scale` because it is the second half of the same
+			# number and the two are read together whenever a body's size is questioned.
+			"_pitch_stretch": 0,
 			"_paint_bodies": 0,
 			# 티켓 「캐릭터」's first slice: a body's whole shadow, and the HP bar deleted from over it
 			# (2026-08-28, the user: 「체력바 없이 그림자도 단순하게 아래 동그라미정도해줘」).
