@@ -241,6 +241,12 @@ func _table() -> Dictionary:
 			"set_move_lines": 0,
 			"_paint_move_lines": 0,
 			"_g_ribbon": 0,
+			# **The white rim on the picked body** (2026-08-31, the user: 「내가 누른 캐릭이 티가
+			# 나야할듯함」). `set_picked` takes the ids in, `_put_pick_outline` places one rim from the
+			# body's own finished sprite, and `_outline_sprite` is that pool's own `_sprite`.
+			"set_picked": 0,
+			"_put_pick_outline": 0,
+			"_outline_sprite": 0,
 		},
 		# ⚠⚠ **NINE NAMES LEFT THIS FILE IN ONE EDIT AND NOTHING ARRIVED** (2026-08-28). The start
 		# button and the five summon slot boxes were deleted whole (the user: 「게임플레이에서 시작

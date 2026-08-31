@@ -734,6 +734,10 @@ func _press_the_island(at: Vector2) -> bool:
 ## lit, which is the picture disagreeing with the rule.
 func _tell_the_view() -> void:
 	field_view.set_reach(hand.reach)
+	# ⚠⚠ **THE RIM GOES WITH THE REACH AND NOT SEPARATELY** (2026-08-31, the user: 「내가 누른 캐릭이
+	# 티가 나야할듯함」). They are two halves of one sentence — 「this body, and these are its places」 —
+	# and a rim pushed from anywhere else could outlive a reach that had already gone dark.
+	field_view.set_picked(hand.ids)
 	field_view.set_move_lines([])
 
 

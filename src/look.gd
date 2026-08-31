@@ -1954,6 +1954,28 @@ const MOVE_LINE_HALF_PX := 3.0
 ## to move if picking feels sticky or slippery.
 const PICK_BODY_TILES := 0.8
 
+## **The white rim around the body the hand is holding** (2026-08-31, the user: 「캐릭터 눌렀을때 살짝
+## 내가 누른 캐릭에 흰색 테두리 ... 내가 누른 캐릭이 티가 나야할듯함」).
+##
+## ⚠⚠ **THE RIM IS THE BODY'S OWN PICTURE DRAWN LARGER BEHIND IT**, so this number is a MULTIPLIER on
+## the drawn width and the rim therefore thickens with the body as the camera comes in. A rim in fixed
+## world units would vanish at the far zoom and swallow the body at the near one.
+## ⚠ **The user asked for 「살짝」.** 1.10 puts about one body-pixel of white outside the silhouette at
+## the opening framing; past about 1.2 it stops reading as an outline and starts reading as a ghost
+## standing behind.
+const PICK_OUTLINE_GROW := 1.14
+
+## How far behind the body the rim sits, in 조각, measured along the CAMERA's own forward.
+##
+## ⚠⚠ **IT HAS TO BE ALONG THE VIEW AND NOT ALONG AN AXIS.** Both sprites are billboards at the same
+## point; without a separation they write the same depth and the rim wins over the body's face in
+## whichever order the frame happens to draw them. **The camera's forward is the only direction that
+## means 「behind」 for something that always turns to face the camera.**
+const PICK_OUTLINE_BACK_TILES := 0.05
+
+## ⚠ **Alpha 1.** The rim is a silhouette and a translucent one reads as a smear rather than a line.
+const COL_PICK_OUTLINE := Color(1.0, 1.0, 1.0, 1.0)
+
 ## The dot dropped where the route ends. **Bigger than the line is wide**, or the end of the walk is
 ## indistinguishable from a bend in it.
 const MOVE_LINE_END_PX := 7.0

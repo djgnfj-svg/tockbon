@@ -150,6 +150,9 @@ func _process(_delta: float) -> bool:
 				_game._unhandled_input(_release(at))
 		5:
 			# **The reach, and nothing pressed since.** This is the shot the whole ticket is about.
+			print("[shot] picked_set=%d rims_drawn=%d hand=%d"
+				% [_game.field_view._picked.size(), _game.field_view._outlines_used,
+					_game.hand.ids.size()])
 			_save("2_picked")
 		6:
 			_dest_at = _aim_from_reach()

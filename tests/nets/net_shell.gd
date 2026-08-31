@@ -560,9 +560,66 @@ func run(t) -> void:
 	# **All of it went with the verdict.** ⚠ **The hole it leaves is real and is written down rather
 	# than papered over: nothing returns to the title any more.** The title opens a run and a run has
 	# no end — see `game.gd`, where `_click_panel` used to be.
+	_the_picked_body_wears_a_rim(t, game, fs)
+
 	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
 	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
 	t.done()
+
+
+## **The white rim on the body the hand is holding** (2026-08-31, the user: 「캐릭터 눌렀을때 살짝 내가
+## 누른 캐릭에 흰색 테두리 ... 내가 누른 캐릭이 티가 나야할듯함」).
+##
+## ⚠⚠ **THE POOLED NODE STATE IS THE AGREED VIEW SEAM** (`CONTEXT.md`) — `visible`, `texture` and
+## `scale` are three of the fields the engine consumes. **A rim is not measurable from `Hand`**: the
+## defect this guards is a shell that picks somebody the view never marks, and both sides read green
+## when only the sim is asked.
+##
+## ⚠⚠ **IT RUNS LAST AND THAT IS NOT TIDINESS.** `_paint_bodies` fills the boat pool as well as the
+## body pool, and one row above reads `_boats_used` to say 「before the first boat there is nothing to
+## draw」. Called from the middle of the file this function turned that row red — **measured, and it is
+## why the fixture's paint state is left alone until every other row has had it.**
+func _the_picked_body_wears_a_rim(t, game, fs: FieldView) -> void:
+	var b: Battle = game.battle
+	if b == null:
+		return
+	var ashore := b.ashore_ids()
+	t.ok(not ashore.is_empty(), "자가 점검 — 테두리를 씌울 몸이 섬에 있다")
+	if ashore.is_empty():
+		return
+	# ⚠ **Picked through the sim and not by aiming a press.** Where a body happens to be on screen is
+	# another function's subject; this one is about what the view does once somebody IS picked.
+	game.hand.pick(b, int(ashore[0]))
+	game.field_view.set_picked(game.hand.ids)
+	fs._paint_bodies()
+	var rims := 0
+	for k in fs._outlines_used:
+		if fs._outlines[k].visible:
+			rims += 1
+	t.eq(rims, 1, "고른 몸 하나에만 흰 테두리가 선다")
+	var rim_tex_ok := false
+	if fs._outlines_used > 0:
+		var rim: Sprite3D = fs._outlines[0]
+		for raw_s in _body_sprites(fs):
+			var body_s: Sprite3D = raw_s
+			if body_s.texture != rim.texture:
+				continue
+			# ⚠ **The two scales are compared rather than a number typed.** The rim is the body's own
+			# picture grown, so the growth constant may move and this row still measures it.
+			if is_equal_approx(rim.scale.x, body_s.scale.x * Look.PICK_OUTLINE_GROW):
+				rim_tex_ok = true
+				break
+	t.ok(rim_tex_ok, "그 테두리는 그 몸의 그림을 그대로 키운 것이다 — 다른 그림이 아니다")
+
+	# -- and ESC takes it off -------------------------------------------------------------------------
+	game._unhandled_input(_key(KEY_ESCAPE))
+	t.ok(game.hand.is_empty(), "ESC 를 누르면 선택이 풀린다")
+	fs._paint_bodies()
+	var rims_after := 0
+	for k in fs._outlines_used:
+		if fs._outlines[k].visible:
+			rims_after += 1
+	t.eq(rims_after, 0, "그러면 흰 테두리도 같이 없어진다")
 
 
 

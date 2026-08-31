@@ -736,6 +736,19 @@ var _reach_tex: ImageTexture = null
 ## from TAB as the reason a 판 is visible.
 var _reach_on := false
 
+## **Which bodies the hand is holding**, as a set of soldier ids. ⚠ **A set and not one id**, for the
+## same reason `Hand.ids` is a list: the day a 무리 is picked, nine bodies wear the rim and nothing here
+## changes. Written by the shell through `set_picked`.
+var _picked := {}
+
+## The rim sprites, pooled the way the bodies are. ⚠ **Their own pool and not the body pool**, because
+## each one carries a `ShaderMaterial` with that body's picture in it — handing one back out as a plain
+## body would put a white silhouette where a soldier should be.
+var _outlines: Array[Sprite3D] = []
+var _outlines_used := 0
+const OUTLINE_SHADER := "res://src/view/body_outline.gdshader"
+
+
 ## **The 이동선 waiting to be drawn**, one `PackedInt32Array` of 조각 per picked body. Written by the
 ## shell on hover, read by `_paint_move_lines` inside the fx pass, and cleared by handing back an
 ## empty array. ⚠ **It holds 조각 and not points** — the height each piece is laid at is decided at
@@ -894,6 +907,17 @@ func set_reach(tiles: PackedInt32Array) -> void:
 ## buffer that has already been committed, and it never reaches the screen.
 func set_move_lines(lines: Array) -> void:
 	_move_lines = lines
+
+
+## **Puts the white rim on these bodies and takes it off every other** (2026-08-31, the user: 「내가
+## 누른 캐릭이 티가 나야할듯함」). An empty list is the resting state.
+##
+## ⚠ **Ids and not positions.** The rim is drawn inside the body loop from the body's own picture and
+## its own place, so a rim cannot end up a frame behind the body it belongs to.
+func set_picked(ids: PackedInt32Array) -> void:
+	_picked = {}
+	for k in ids.size():
+		_picked[int(ids[k])] = true
 
 
 ## **Puts the standing buildings on the ground.** ⚠ **Nothing is placed by eye**: the kind comes from
@@ -1353,6 +1377,10 @@ func _sprite() -> Sprite3D:
 		var reused := _sprites[_sprites_used]
 		_sprites_used += 1
 		reused.visible = true
+		# ⚠ **The pool is shared and one member may have been something else last frame.** Nothing in
+		# here overrides a material today except the rim, which has its own pool — this line is what
+		# keeps that true if a second one is ever added.
+		reused.material_override = null
 		return reused
 	var s := Sprite3D.new()
 	s.pixel_size = Look.SPRITE_PIXEL_SIZE
@@ -1453,7 +1481,7 @@ func _pitch_stretch() -> float:
 ## one read of the row; the row also says how big this species is drawn, and passing the derived number
 ## while the caller kept the row is how the two would have been read in two places.
 func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id: int, colour: Color,
-		squash: Vector2, tex: Texture2D) -> void:
+		squash: Vector2, tex: Texture2D, outlined: bool = false) -> void:
 	var radius := Look.body_radius_of(type_id)
 	# ⚠⚠ **The shadow goes down FIRST and it is the body's only one** (2026-08-28, the user: 「그림자도
 	# 단순하게 아래 동그라미정도해줘」). It is drawn from here rather than from the two callers because
@@ -1493,6 +1521,12 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 	var sole := float(_foot_body.get(pic, 0.0)) * tall
 	s.position = Vector3(centre_px.x / Look.TILE_PX, foot - sole + tall * 0.5,
 		centre_px.y / Look.TILE_PX)
+	# ⚠⚠ **THE RIM IS PLACED FROM THE BODY'S FINISHED POSITION AND SCALE, NOT RE-DERIVED.** Every
+	# correction above it — the foot height, the frame's empty rows, the gait squash, the crowd offset
+	# — would otherwise have to be repeated, and a rim that repeated four of five would sit a little
+	# off its own body in exactly the cases that were hardest to get right.
+	if outlined:
+		_put_pick_outline(s, pic)
 	# ⚠⚠ **THE TOP USED TO BE RETURNED HERE and the halo that read it is deleted** (2026-08-29).
 	# **The rule it carried is the part to keep**: a wolf is 55 x 40 and a caveman 36 x 40, so sized by
 	# WIDTH off the same radius the man stands half again as tall as the animal. ⇒ **Nothing that
@@ -1511,6 +1545,9 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 ## that are not ported yet.
 func _paint_bodies() -> void:
 	_sprites_used = 0
+	# ⚠ **Opened with the body pool and closed by the same `_hide_unused`.** A rim pool opened
+	# anywhere else is a rim left standing over a body that has died.
+	_outlines_used = 0
 	if battle == null or army == null or battle.grid == null:
 		# ⚠ **Still called on the empty path**: `_paint_boats` is what hides a pooled hull, so skipping
 		# it here would leave the last island's boats standing on the title screen.
@@ -1529,7 +1566,7 @@ func _paint_bodies() -> void:
 	for raw_id in battle.ashore_ids():
 		var i := int(raw_id)
 		_put_walker("s%d" % i, int(army.type_id[i]), battle.soldier_pos[i], false,
-			_crowd_slot_of(battle.soldier_pos[i], i))
+			_crowd_slot_of(battle.soldier_pos[i], i), _picked.has(i))
 
 	# ⚠ **Inside this function and not beside it.** The riders come out of the same `Sprite3D` pool the
 	# bodies do, and that pool is opened by the `_sprites_used = 0` above and closed by the
@@ -1704,7 +1741,8 @@ func _body_tex(key: String, type_id: int, head: Vector2) -> Texture2D:
 ##
 ## ⚠ **The side reaches the screen as a TINT and never as a different animal** — `Look.body_colour_of`.
 ## The picture comes from the unit row, which is why a 검사 and a 늑대 need no branch here at all.
-func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: int) -> void:
+func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: int,
+		outlined: bool = false) -> void:
 	# ⚠ **The crowd offset is kept apart from the sway** and handed down separately — see `_put_body`,
 	# where the shadow takes one and not the other.
 	var crowd := Look.crowd_offset_px(slot, Rules.TILE_CAPACITY)
@@ -1712,7 +1750,8 @@ func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: i
 	# A body faces the way it last walked. `_facing_of` returns RIGHT when it has never moved, so a
 	# body standing still faces right rather than flipping on a zero vector.
 	var tex := _body_tex(key, type_id, _facing_of(key))
-	_put_body(centre, at, crowd, type_id, Look.body_colour_of(is_enemy), _gait_squash(key), tex)
+	_put_body(centre, at, crowd, type_id, Look.body_colour_of(is_enemy), _gait_squash(key), tex,
+		outlined)
 
 
 ## **Which slot of its own 조각 this body holds, or 0 when the sim does not say.**
@@ -1740,6 +1779,53 @@ func _crowd_slot_of(at: Vector2, unit_id: int) -> int:
 func _hide_unused() -> void:
 	for k in range(_sprites_used, _sprites.size()):
 		_sprites[k].visible = false
+	for k in range(_outlines_used, _outlines.size()):
+		_outlines[k].visible = false
+
+
+## **The white rim behind one body**, grown from that body's own finished sprite.
+##
+## ⚠⚠ **BEHIND IS ALONG THE CAMERA'S FORWARD AND NOTHING ELSE.** Both quads are billboards standing at
+## the same point, so 「behind」 has no world axis — pushed along +Y the rim would ride up the body's
+## head as the camera pitched, and along +Z it would swing out from behind it as the board turned.
+## ⚠ **Both write depth**, which is what leaves only the rim showing: the body sits in front and its
+## own silhouette fails the test everywhere the two overlap.
+func _put_pick_outline(body: Sprite3D, pic: Texture2D) -> void:
+	if _cam == null:
+		return
+	var rim := _outline_sprite()
+	rim.texture = pic
+	rim.scale = body.scale * Look.PICK_OUTLINE_GROW
+	var back := -_cam.global_transform.basis.z.normalized() * Look.PICK_OUTLINE_BACK_TILES
+	rim.position = body.position + back
+	var mat: ShaderMaterial = rim.material_override
+	mat.set_shader_parameter("body_tex", pic)
+	mat.set_shader_parameter("line_col", Look.COL_PICK_OUTLINE)
+
+
+## One rim sprite, pooled and hidden but never freed — the same rule `_sprite` keeps.
+##
+## ⚠ **A `ShaderMaterial` PER SPRITE and not one shared.** The picture goes into the material, and a
+## facing or an animation frame is a different picture; one material for all of them would put the
+## last body drawn's silhouette around every rim on screen.
+func _outline_sprite() -> Sprite3D:
+	if _outlines_used < _outlines.size():
+		var reused := _outlines[_outlines_used]
+		_outlines_used += 1
+		reused.visible = true
+		return reused
+	var s := Sprite3D.new()
+	s.pixel_size = Look.SPRITE_PIXEL_SIZE
+	s.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var mat := ShaderMaterial.new()
+	mat.shader = load(OUTLINE_SHADER)
+	s.material_override = mat
+	_world.add_child(s)
+	_outlines.append(s)
+	_outlines_used += 1
+	return s
 
 
 # --- the beasts' boats, and the riders standing on them ---------------------------------------------
