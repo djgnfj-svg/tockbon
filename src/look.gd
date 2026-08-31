@@ -118,7 +118,8 @@ const CAM_PITCH_DEG := MAP_TILT_DEG
 
 ## --- the tilt, as a HANDLE ---------------------------------------------------------------------
 ## ⚠⚠ **`CAM_PITCH_DEG` is the value an island OPENS at, not the value it is stuck at** (2026-08-24,
-## the user: 「기울기도 조절 되었으면 좋겠네」). The yaw got its handle first — Q and E — and the same
+## the user: 「기울기도 조절 되었으면 좋겠네」). The yaw got its handle first — Q and E, deleted on
+## 2026-08-31, the drag left standing — and the same
 ## argument carries: **the tilt does not change what happens, only what is visible**, so it is not the
 ## hand moving during combat in the sense the base rule forbids (see 티켓 07's answer).
 ##

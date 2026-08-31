@@ -449,7 +449,7 @@ func _the_clamp_stops_at_hand_literals(t) -> void:
 	t.ok(fv.cam_px.distance_to(held) < 0.001, "거기서 더 밀어도 안 움직인다")
 
 
-## 「돌려도 판이 안 흔들리나」, in numbers: Q/E and R/F hold the ground point at the middle of the
+## 「돌려도 판이 안 흔들리나」, in numbers: the turn and the tilt hold the ground point at the middle of the
 ## screen, and the real camera keeps orbiting the SAME world point. The target is recovered off the
 ## engine node itself — `position - basis.z * CAM_DIST_TILES` — never re-derived from the formula.
 ## ⚠ **The fixture parks the screen centre at world y 640 — the exact middle of the 1280-tall map —

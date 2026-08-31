@@ -293,10 +293,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if not key.pressed:
 			return
-		# ⚠⚠ **Turning is not gated on anything**, on purpose — 티켓 07 asks whether a hand may move
+		# ⚠⚠ **Tilting is not gated on anything**, on purpose — 티켓 07 asks whether a hand may move
 		# the board mid-fight, and gating it before the question is decided would answer it by
 		# omission (2026-08-24, the user: 「3D 회전 회전 버튼이 내가 돌려봐야 될 듯」).
-		_on_turn_key(key)
+		# ⚠ **The turn keys stood beside the tilt here and are deleted** — see `_on_tilt_key`.
+		_on_tilt_key(key)
 		return
 	if event is InputEventMouseButton:
 		var click := event as InputEventMouseButton
@@ -304,8 +305,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		# the user: 「마우스 휠이 회전 오른쪽이 끌어서 이동으로 해야할듯」; the same day at the screen,
 		# reversing it: 「마우스 휠이 확대 축소가 맞고, 오른쪽 버튼은 카메라 회전으로 이해했어」).
 		# **The later word wins and the earlier one is kept here rather than erased.**
-		# ⚠ **Q and E are what turn by a notch now**, and the yaw drag went back onto the right button —
-		# see `_turning`. A second path to one state, never a second state.
+		# ⚠ **The yaw drag went back onto the right button** — see `_turning`. Q and E turned by a notch
+		# beside it for one week and are deleted (2026-08-31); the drag is the only turn left.
 		if click.button_index == MOUSE_BUTTON_WHEEL_UP and click.pressed:
 			_on_wheel(click.position, 1)
 		elif click.button_index == MOUSE_BUTTON_WHEEL_DOWN and click.pressed:
@@ -526,7 +527,7 @@ func _end_press() -> void:
 func _on_pan_key(key: InputEventKey) -> bool:
 	if key.echo:
 		# ⚠ **`true` and not `false`.** A repeat is still a pan key, and letting it fall through would
-		# hand it to `_on_turn_key` — which ignores echoes too, so nothing would happen, but the event
+		# hand it to `_on_tilt_key` — which ignores echoes too, so nothing would happen, but the event
 		# would be reported unhandled for a key this shell very much handles.
 		return true
 	var dir := Vector2.ZERO
@@ -547,27 +548,26 @@ func _on_pan_key(key: InputEventKey) -> bool:
 	return true
 
 
-## Q turns the board one notch anticlockwise, E one notch clockwise. **Returns whether it took the
-## key** — a leftover from when the summon keys were asked next, kept because it is the honest answer
-## to 「did this handler consume the event」 and because every net that drives a key reads it.
+## R stands the camera up toward looking straight down, F lays it over toward the horizon — one notch
+## each. **Returns whether it took the key**, which is the honest answer to 「did this handler consume
+## the event」 and what every net that drives a key reads.
+##
+## ⚠⚠ **Q AND E WERE THE KEYBOARD'S TURN AND THEY ARE DELETED** (2026-08-31, the user: 「QE 이거
+## 기능제거해줘」). They stood here from 2026-08-24 (「3D 회전 회전 버튼이 내가 돌려봐야 될 듯」) and
+## called the same `turn_by` the right-button drag calls. **The drag is untouched and is now the only
+## way a player turns the board** — `Look.CAM_YAW_STEP_DEG` is left standing for the shot tool, which
+## turns the camera itself. The tilt keys were never asked to go and did not.
 ##
 ## ⚠⚠ **The `echo` guard is not optional.** OS auto-repeat on a held key delivers
-## `pressed = true, echo = true` many times a second, and a turn per repeat spins the board.
+## `pressed = true, echo = true` many times a second, and a tilt per repeat rolls the camera over.
 ##
 ## ⚠ **Raw keycodes and no `[input]` action**: there is no `[input]` section in `project.godot` and
 ## none is added, so what a check drives is this shell rather than a settings file.
-func _on_turn_key(key: InputEventKey) -> bool:
+func _on_tilt_key(key: InputEventKey) -> bool:
 	if key.echo:
 		return false
-	if key.keycode == KEY_Q:
-		field_view.turn_by(-Look.CAM_YAW_STEP_DEG)
-		return true
-	if key.keycode == KEY_E:
-		field_view.turn_by(Look.CAM_YAW_STEP_DEG)
-		return true
-	# ⚠ **R and F tilt, and they are ungated exactly as Q and E are** (2026-08-24, the user: 「기울기도
-	# 조절 되었으면 좋겠네」). R stands the camera up toward looking straight down; F lays it over toward
-	# the horizon. Same argument as the turn: it changes what is visible and nothing that happens.
+	# ⚠ **R and F are ungated** (2026-08-24, the user: 「기울기도 조절 되었으면 좋겠네」). Same argument
+	# the turn had: it changes what is visible and nothing that happens.
 	if key.keycode == KEY_R:
 		field_view.tilt_by(Look.CAM_PITCH_STEP_DEG)
 		return true
@@ -708,8 +708,10 @@ func _tile_at(at: Vector2) -> int:
 ## to do, and **a second unowned path to one state is exactly what this file refuses to keep**: two
 ## gestures for one zoom drift apart the first time either is tuned.
 ##
-## ⚠ **Q/E and R/F are untouched.** They are the keyboard's turn and tilt, and they go through the
-## same `turn_by` / `tilt_by` the mouse does — a second path to one state, never a second state.
+## ⚠ **R/F is untouched.** It is the keyboard's tilt and goes through the same `tilt_by` the rest of
+## the shell does — a second path to one state, never a second state.
+## ⚠⚠ **Q/E stood beside it as the keyboard's turn and is deleted** (2026-08-31, the user: 「QE 이거
+## 기능제거해줘」). **The right button's drag is the only turn.**
 ##
 ## ⚠ **The zoom keeps the world point under the cursor fixed** (`field_view.zoom_at`).
 ## ⚠ **`notch` and not a factor**: the caller has a wheel direction and this is the one place that
