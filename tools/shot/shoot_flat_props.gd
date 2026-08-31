@@ -19,11 +19,18 @@ const SHOT := "res://tools/shot/out/field/flat_%s.png"
 ## ⚠ **The widths hold all of a row.** Eight trees sit on x 4..18 and nine bushes on x 4..20, both two
 ## 조각 apart, so a 13-조각 view clips the ends — the first cut did and lost two of the eight.
 const AIMS := [
-	["trees", 11.0, 3.4, 17.0],
-	["bushes", 12.0, 14.4, 19.0],
-	["trees_near", 7.0, 3.4, 8.0],
-	["bushes_near", 8.0, 14.4, 8.0],
-	["trees_with_man", 11.0, 8.0, 17.0],
+	["trees", 11.0, 3.4, 17.0, 0.0],
+	["bushes", 12.0, 14.4, 19.0, 0.0],
+	["trees_near", 7.0, 3.4, 8.0, 0.0],
+	["bushes_near", 8.0, 14.4, 8.0, 0.0],
+	["trees_with_man", 11.0, 8.0, 17.0, 0.0],
+	# ⚠⚠ **The same trees at three yaws, and this is a MEASUREMENT, not a picture.** 개발지식 01
+	# 기법 14 says a billboard's real shadow swings as the board turns, and the baked trees cast one
+	# (`ALPHA_CUT_DISCARD` lets a `Sprite3D` into the shadow pass). **If the shadow swings, that is
+	# the cost of drawing a tree flat**, and it is the only thing 3D buys that is not taste.
+	["yaw_00", 11.0, 3.4, 10.0, 0.0],
+	["yaw_45", 11.0, 3.4, 10.0, 45.0],
+	["yaw_90", 11.0, 3.4, 10.0, 90.0],
 ]
 
 var _game: Game = null
@@ -75,6 +82,8 @@ func _process(_delta: float) -> bool:
 	# ⚠⚠ **`cam_px` IS THE TOP-LEFT CORNER OF THE VISIBLE GROUND, NOT ITS CENTRE.** Assigning the
 	# target 조각 straight into it put the aim half a screen out and the first four shots looked at
 	# the middle of the island instead of the row. The file's own header says so at the top.
+	fv.cam_yaw_deg = Look.CAM_YAW_DEG + float(aim[4])
+	# ⚠ **After the yaw** — the visible ground is read in the camera's own axes.
 	var half := fv._visible_ground_px() * 0.5
 	fv.cam_px = Vector2(float(aim[1]) * Look.TILE_PX, float(aim[2]) * Look.TILE_PX) - half
 	fv._process(1.0 / 60.0)
