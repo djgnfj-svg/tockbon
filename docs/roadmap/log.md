@@ -3559,3 +3559,46 @@ that fishing is an individual act, and there is no main character now.
 
 **What has no home at all**: **요리가 어느 태스크인가** · **특성이 어느 태스크인가** · **현상수배범이라는
 설정이 어느 문서에 사는가** (there is no GDD).
+
+### ⚠⚠ **Addendum, an hour later — the split came back as 「일반병」, and it is a different split**
+
+**The user reopened the one thing this round had settled**, and it is worth reading carefully because it
+is **not** a reversal:
+
+> *"I think we have to split the 병사 and the 일반병. The 일반병 should be able to move as a squad and
+> also move as one. The 병사 stay bunched. This one should be a bit apart."*
+> (「병사랑 일반병을 나눠야 될 거 같아. 일반병은 그 부대로도 움직일 수 있고 한 명으로도 움직일 수 있어야
+> 될 거 같은데? 병사들은 뭉쳐있는 건데. 이 병은 좀 떨어져 있어야 될 거 같은데?」)
+
+**An hour earlier the same user refused 일꾼** (「병사랑 일꾼을 나누면은 조금 힘들 거 같고」).
+⚠⚠ **The two are not the same cut.** 일꾼 splits bodies by **what job they do**; 일반병 splits them by
+**how they are commanded** — 병사 move only as a squad, 일반병 can be sent one at a time.
+
+⇒ **It fills the hole the hero's death left.** Fishing is an individual act, the unit of command is a
+squad, and there is no main character — **일반병 is the body that can go alone.**
+
+⚠⚠ **The price survives only if a 일반병 can FIGHT.** Foldable into a squad ⇒ sending one out to gather
+is sending away a defender, and the choice costs something. Not foldable ⇒ **gathering and defending
+never compete again, which is the sentence both dead games died on.** The user's 「부대로도 움직일 수 있고」
+points at yes. **It is not confirmed.**
+
+⚠ **「일반병」 is a new word with no glossary row and no code.** It needs a `naming` round.
+
+### ✅ 밭 is a 블록, and 우물 removes the watering chore
+
+> *"If a field is a block the land is really narrow. Movement has to be fun. But right now it is not ...
+> I do want 조각 units, but block units look better for now. Let us do block units."*
+> (「밭은 블록으로 하기엔 그럼 땅이 엄청 좁은데? 이동이 재밌어야 돼. 근데 지금은 그게 아니니까 ... 조각
+> 단위로 하고 싶긴 한데 ... 블록 단위로 하는 게 일단은 좋아 보이긴 한다. 블록 단위로 하자」)
+
+⚠⚠ **「이동이 재밌어야 돼. 근데 지금은 그게 아니니까」 is a judgement on the game as it stands.** It is a
+measurement, not a preference, and **it belongs to task 03 (부대를 조종한다).**
+
+**Measured against the choice**: 고원 **48 조각 = 12 블록**, 성채 takes one ⇒ **11 fields fit upstairs.**
+1층 is **236 조각 = 59 블록.** ⇒ **2층 is tight and 1층 is roomy** — exactly the 2026-08-26 shape.
+
+> *"Build a well, or if it rains you do not have to draw water; otherwise before that, use the well."*
+> (「우물을 만들거나 비가 오면 안 길러도 되고 아니면 그전에는 우물을 사용하는 걸로」)
+
+⇒ **물 긷기 is a chore the player REMOVES by building a 우물**, and rain removes it for free while it
+falls. ⚠ **우물 is a sixth building** — the glossary lists 성채·집·탑·창고·성벽, and **only 성채 stands.**
