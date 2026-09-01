@@ -1,0 +1,85 @@
+2026-09-02 — twenty full suite rounds, sixteen processes in parallel, Linux
+==========================================================================
+
+WHAT THIS IS
+  Ticket 03-15's Done-when 1. Twenty runs of the whole suite, sixteen Godot
+  processes at once, against a DETACHED CHECKOUT OF 4cce75c that nothing edited
+  while the loop ran. Every net's exit code is recorded every round.
+
+THE RESULT
+  20 rounds. 0 nets ran no checks. 0 deaths.
+  Every round: 1567 passed, 4 failed, 879 undeclared stderr lines, 5 bad.
+  All 320 exit codes across the 20 rounds are IDENTICAL — one distinct line.
+  Rounds ran 40.2s to 42.8s.
+
+  "bad" mirrors the PowerShell wrapper's own verdict: a net that exited
+  non-zero, or carried stderr it did not declare. The five are the same five
+  every round — boats, fx_view and shell exit 1 on their known reds, and
+  camera and wake carry noise (19 and 480 lines) at exit 0.
+
+WHAT IT DOES NOT SAY
+  This is Linux. The defect was measured on Windows, and 0xC06D007F is a
+  Windows exception code that cannot appear here. A clean 20 here cannot
+  distinguish "the shape did not survive the OS change" from "1-in-3 was never
+  the rate", and it does not travel back to the Windows machine.
+
+  The stillness is FILE stillness, not machine stillness. Godot's user
+  directory is keyed on the project name, which is identical in both
+  checkouts, so both trees share one log directory with no lock.
+
+  The fingerprints cannot be compared. The wrapper's digest folds each file's
+  ABSOLUTE PATH in, so a detached checkout hashes differently from the working
+  tree byte for byte.
+
+HOW IT WAS RUN
+  A Linux stand-in for run_nets.ps1, mirroring its two jobs — one process per
+  net with an exact-match filter, and undeclared stderr as a failure. There is
+  no PowerShell on this machine. The stand-in is not repo content.
+
+  An EARLIER loop of 20 was discarded: a graphical Godot ran across its rounds
+  8 and 9 (round 9 was the lone 50.5s outlier), and it printed 5 exit codes a
+  round out of 16. It also came back 20 for 20 with no deaths.
+
+THE ROUNDS
+-----------------------------------------------------------------------------
+
+=== round 1/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 40.7s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 2/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 41.4s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 3/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 39.5s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 4/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 40.9s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 5/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 41.2s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 6/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 42.8s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 7/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 40.7s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 8/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 41.8s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 9/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 39.4s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 10/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 41.4s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 11/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 40.4s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 12/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 40.7s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 13/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 40.4s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 14/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 40.6s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 15/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 42.8s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 16/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 40.7s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 17/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 40.8s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 18/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 41.0s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 19/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 40.9s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
+=== round 20/20 — 1567 passed · 4 failed · 879 stderr · 5 bad · 40.2s ===
+  codes: boats=1/130  camera=0/87  citations=0/14  draw_leaf=0/76  fight=0/285  fleck=0/52  fx_view=1/150  hand=0/91  islands=0/21  process=0/23  roster=0/20  shell=1/153  tiers=0/110  title=0/120  wake=0/121  walk=0/114
