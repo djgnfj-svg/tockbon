@@ -121,7 +121,7 @@ def main():
     im = cut(Image.open(a.src))
 
     # ⚠ **Each generation lights the wolf a different colour.** Measured against the shipped
-    #  `assets/beast/wolf_r.png`, whose mean saturation is **7.6**: candidates came back at 5.1 (a match)
+    #  `assets/beast/wolf_r.png` (⚠ deleted 2026-09-01, 티켓 02-07 — the number was measured off it), whose mean saturation is **7.6**: candidates came back at 5.1 (a match)
     #  but also at 14.9 teal, 17.1 teal and 21.0 blue, and one bite row at 13.6 pink. On the stage's
     #  `#0E0E13` a tinted wolf does not read as the same animal as the one already in the game.
     # => Pulling each pixel toward its own luminance removes the cast **without touching the shading**,
@@ -228,7 +228,7 @@ def main():
     onion.save(out / "_onion.png")
 
     # The colour cast, as one number, so `--desat` is aimed rather than guessed. **The shipped
-    #  `assets/beast/wolf_r.png` reads 7.6**; saturation scales with `1 - desat`, so the value that
+    #  `assets/beast/wolf_r.png` (⚠ deleted 2026-09-01) reads 7.6**; saturation scales with `1 - desat`, so the value that
     #  lands on the shipped wolf is `1 - 7.6/<the number printed at --desat 0>` and it differs per
     #  candidate — one generation came in at 9.8 and another at 21.0.
     px = np.asarray(frames[0])

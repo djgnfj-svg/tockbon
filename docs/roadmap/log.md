@@ -16,6 +16,88 @@
 [roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅ **Task 02 got built — eight tickets in one day, 2026-09-01**
+
+**The week's sentence now holds on the glass**: 늑대 land from a small boat, **climb the stair**, break
+the 성채 at 38.8 초, and a red GAME OVER comes up with a way back to the title.
+**Nets 1227 → 1464 passing, 64 → 21 failing.**
+
+### Three decisions the user made, in their own words
+
+**1. 성채 체력 240 → 120.** The boat halved and that number was derived from a boatload's damage.
+At `BOAT_CAPACITY` 8 it was fifteen seconds of one undefended boat; at four the same arithmetic hit
+exactly `BOAT_INTERVAL_SEC`, so 「a boat ignored whole loses you the run」 went false and `net_fight`
+reddened on it. The builder stopped and asked rather than picking a design number.
+> *"Lower it."* (「내려」)
+
+**2. 「끝」 was reversed — a button back to the title.** 티켓 02-03 had settled the loss screen as
+**엔딩씬 하나 그리고 끝**, and named a way back in its own Out of scope. The user reversed it **after
+looking at the built screen**.
+> *"And make a button on that game over that goes back to the title too."*
+> (「그 게임오버 하고 타이틀로 돌아가는 버튼도 만들어줘」)
+
+**3. 병사 뽑기 — 이십 초에 하나, 천장 아홉.** ⚠⚠ **The model proposed twelve and the user caught it**:
+아홉 had already been their word on 2026-08-31 (「병사 아홉 개가 최대일 거 같아」).
+> *"We had it at nine, so why would it suddenly become twelve — nine."*
+> (「아홉 개로 했었는데 왜 갑자기 열둘이 될지 아홉 개」)
+
+### ⚠⚠ 바닥의 마름모 — 원인은 블록의 모양이 아니었다
+
+The user had been describing it for days: *"the diamond is always visible ... faintly black."*
+**It was the shading data on the island mesh, not its shape.**
+
+- **섬 본체만 부드러운 음영이었다** — 폴리곤 22724 중 22292. **그 섬을 이루는 KIT 부품 32 개는 전부
+  각져 있었다.** 평평한 바닥 삼각형의 **85.4%** 가 제 꼭짓점 법선이 서로 달랐고, 중앙값 7.53 도 기울어
+  있었다. 조각 하나가 삼각형 둘이라 **둘이 만나는 대각선**이 마름모였다.
+- **바닥 색도 같은 대각선에서 어긋나 있었다** — 삼각형의 **54.8%**.
+
+⚠⚠ **The fix took three tries and the two wrong ones are written on the ticket.** Flattening every
+face's colour turned the white cliffs into brickwork; flattening by each face's most-common colour put
+**dark triangular wedges on sand that had none** — measured pixel for pixel: the same spot was
+`(229,218,114)`, identical to the plain beside it, and dropped to `(217,205,109)`.
+**「최빈색」이 함정이었다** — a face whose corners were mixed read as plain on screen but voted dark.
+⇒ **Third try: one colour per floor level**, chosen only where it was already over 80% of that level.
+The white rims sit at 13% and were left alone.
+
+### ⚠ A defect that no ticket held, found by looking
+
+**사라진 배가 물에 검은 타원과 흰 항적을 남겼다** — three of them floating on open water at 178 초 with
+no hull under any. `_paint_wake` counted boats and never read their state; `boat_pos` never shrinks.
+⚠⚠ **A net row was asserting the defect as correct behaviour** — 「flipping to `GONE` does not free it,
+nothing is erased there」, written the same day by the ticket that introduced `GONE`. **It was reversed,
+and the reason is written above it.**
+
+### ⚠⚠ 낡은 검사 열여덟은 낡은 게 아니었다 — 사용자 답을 기다린다
+
+The ticket said 「delete the stale nets」 and the user had corrected it once already
+(「지워달라고 했어 지금 섬에 맞추는 게 아니라」). **But 18 of `net_tiers`' 25 red rows are not island
+numbers.** Its hand-built boards spell a plateau with the character `1`, and **`grid.gd` changed `1`
+from meaning 눈금 2 to 눈금 1 on 2026-08-26** when the user widened the stair — so those boards now
+build a one-notch step a body can climb.
+
+**What those 18 measure**: 「층 경계는 못 넘는다」·「반대 방향으로도」·「대각선으로도」·「계단을 막으면
+고원이 봉쇄된다」. ⇒ **Delete them and nothing in the repo measures that a body cannot cross a two-notch
+gap — the rule `02-01` built `Grid.can_strike` on the same day.**
+
+**The question is still open**: 그 열여덟을 지우나, 판 글자 `1` 을 `2` 로 고쳐 살리나.
+
+### ⚠ 계획이 잘못돼서 한 티켓이 통째로 멈췄다
+
+**02-06 의 계획을 「게임을 켜서 찍고 본다」 넷 중 셋으로 썼고, 그것을 짓는 에이전트에게 줬다.**
+Builders are forbidden from launching the game — the editor bridge takes one client at a time and
+「the moment you measure, you have judged」. **The agent wrote nothing and said why.**
+⇒ **A ticket whose Done when needs eyes is not a `task` ticket for a builder.**
+
+### 그 밖에
+
+- **워크플로우로 여덟을 줄줄이 짓고 검증은 병렬로 돌렸다** — 에이전트 열일곱.
+  ⚠ **짓기는 병렬이 안 된다**: 엔진과 `.godot` 임포트 캐시가 하나고, 워크트리로도 못 가른다 —
+  Godot 실행 파일이 `.gitignore` 대상이라 워크트리에는 검증할 엔진이 없다.
+- **화면에 붙는 것은 전부 픽셀랩에서 만들어 불러왔다** — 게임 오버 글씨, 체력바 두 장, 타이틀 단추.
+  ⚠ 첫 단추는 판이 하얗고 한글이 뭉개져서 버렸고, 둘째 판을 썼다.
+
+---
+
 ## ⏳ **Four ways for the 판 to merge at a distance — 2026-08-29**
 
 **The user, after playing with the 조각 판 in the game**: ***"I looked. It is good — but when the camera

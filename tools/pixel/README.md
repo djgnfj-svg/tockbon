@@ -148,7 +148,7 @@ already says `plain light grey material`. Measured as mean saturation over the o
 
 | | meanSat |
 |---|---|
-| **shipped `assets/beast/wolf_r.png`** | **7.6** |
+| **shipped `assets/beast/wolf_r.png`** (⚠ 2026-09-01 에 지워졌다 — 티켓 02-07. 이 수는 그 파일에서 잰 것이고, 파일은 히스토리에만 있다) | **7.6** |
 | candidates, as generated | **5.1** (a match) · **9.8** pink · **14.9** teal · **16.0** teal · **21.0** blue |
 
 On the stage's `#0E0E13` a teal wolf does not read as the same animal as the one already in the game.
@@ -166,7 +166,7 @@ the new frames are cooler, slimmer and finer-faceted. That gap is in the geometr
 ⚠⚠ **And matching saturation is not matching colour.** Both installed sets hit the shipped wolf's
 meanSat 7.6 and still measured **16 and 13 points heavier in blue** — the renders are lit cool, the
 shipped wolf is lit warm, and `--desat` fixes how strong a cast is, never which way it points.
-`install_anim.py --tint assets/beast/wolf_r.png` applies a **per-channel gain onto the reference's
+`install_anim.py --tint assets/beast/wolf_h/east.png` applies a **per-channel gain onto the reference's
 mean**, which brought every channel inside ±3.7. It is multiplicative on purpose: **an additive shift
 flattens the dark facets**, and the facets are the whole look.
 
@@ -221,7 +221,7 @@ One entry in `gen.py`'s `PRESETS` holds the style phrasing, the LoRA strength an
 ### ⚠⚠ The shipped game's art is **two styles**, and neither is a preset in this table
 
 Recovered 2026-08-25 by regenerating `beast_wolf_03_seed675153149` and matching it against the shipped
-`assets/beast/wolf_l.png`. **Both ride the `raw` preset**, so the style lives in the prompt and nothing
+`assets/beast/wolf_l.png` (⚠ 2026-09-01 에 지워졌다 — 티켓 02-07. 이 수는 그 파일에서 잰 것이고, 파일은 히스토리에만 있다). **Both ride the `raw` preset**, so the style lives in the prompt and nothing
 in `gen.py` protects it — write the phrase, do not invent one.
 
 | What | Preset | The phrase that carries the style |
