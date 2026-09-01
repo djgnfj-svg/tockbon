@@ -3522,6 +3522,286 @@ not sufficient** — there is no netcode, no host, no input sync.
 
 ---
 
+## ⚠⚠ **Farming got a reason, the hero came and went, and the game was cut back twice — 2026-09-01, the fishing/farming/gathering round**
+
+**The session was one long brainstorm on task 05 and it settled nine things.** ⚠ **Nothing was built.**
+It ran under `grilling`, so every decision below is the user's own and none of them is the model's pick.
+
+⚠⚠ **THIS SECTION WAS WRITTEN MID-CONVERSATION AT THE USER'S EXPLICIT INSTRUCTION**, not by `wrap-up`
+at the close: *"Everything I said above has to be recorded. It has to be recorded. Break the log down
+properly and record it well."* (「저거 내가 위에서 말했던 것들은 다 기록해 놔야 돼 ... 로그 막 잘 분해해서
+잘 기록해 놔야 돼」) ⚠ **The conversation was still moving when this was written** — anything below that
+a later message overturns is the later message's, and `wrap-up` repairs it.
+
+### ⚠⚠ The premise was named for the first time — **현상수배범**
+
+> *"When I was thinking about deciding the characters at the start, I thought about it before — wanted
+> criminals would be good, I think. Wanted criminals occupying an island and the story going forward
+> from there — I think drawing that is good."*
+> (「캐릭터를 처음에 정할 때 고민을 저번에 해봤는데 현상수배범들이 좋을 거 같아. 현상수배범들이 섬을
+> 점령하고 거기서부터 나아가는 이야기를 그리는 게 좋을 거 같아」)
+
+**`CLAUDE.md` says only 「A human company holds one island」.** ⚠⚠ **현상수배범 is a word this repository
+had never held**, and this is the first sentence anybody has written about WHO the player is.
+⇒ **It is the first line of the GDD that has never been written** (`docs/design/` holds sixteen fork
+docs and no GDD, which the docs table already calls the defect). ⚠ **It was not written this round** —
+the user asked for a record, not a design doc.
+
+### The nine decisions, in the order they were made
+
+| 무엇 | 사용자의 말 |
+|---|---|
+| **Bad North is not copied here** | *"Bad North is only what is visible; actually we should do it properly."* (「베드노스는 보이는 것뿐이지, 사실상 이제는 좀 제대로 해서 하는 것이」) |
+| **Soldiers and workers are NOT split** | *"I think splitting the soldier and the worker would be a bit hard."* (「병사랑 일꾼을 나누면은 조금 힘들 거 같고」) — **one body farms, gathers and fishes** |
+| **Fighting is by squad only** | *"Squads move as a unit, but fishing has to be done by an individual."* (「부대 단위로 움직이는데 낚시는 또 개인이 해야 되잖아?」) |
+| **Hotkeys 1–4 register squads** | *"Register squads on hotkeys one two three four."* (「단축키 일 이 삼 사로 부대 등록을 해놓고」) |
+| **Everything else is pushed back** | *"Cut it, cut it."* (「쭉 빼고 쭉 빼고」) · *"Push the rest. I will decide later."* (「나머지는 다 밀어. 나중에 정할게」) |
+| **Cooking is a BUILDING, not a body** | *"A building is right. A building is right."* (「건물이 맞아. 건물이 맞아」) |
+| **Two crops** | Said three, then took it back in the same breath — *"let us do three. No, let us do two."* (「세 개로 하자. 나 두 개로 하자」) |
+| **Farming costs place AND time** | *"The price of farming looks like it is both place and time."* (「농사의 값은 자리하고 시간이 다 쓰이는 듯」) |
+| **Anyone can cook; a TRAIT makes a cook** | *"Anyone can cook, but there are characters with the cook trait."* (「누구나 요리를 할 수 있는데 요리사 특성이 있는 캐릭터가 있는 거지」) — **decided at the start of a run** |
+
+### ⚠⚠ The main character came in and went out inside ONE conversation
+
+**It was proposed** because fishing is an individual act and squads move as a lump. **It was then made
+solo by rule** — *"the main and the squads should be kept completely separate. So the character is
+always alone."* (「메인이랑 부대랑 아예 따로 둬야 될 거 같은데? 그니까 캐릭터는 무조건 혼자인 거지」)
+
+**Three messages later the user talked themself out of it, out loud:**
+
+> *"Let us keep the character. I think we need a character. Wait — is it fine without a character? Is it
+> fine without one? No character, and instead each one is its own character that grows in its own
+> direction — that seems better."*
+> (「캐릭터는 살리자 ... 잠깐만 캐릭터가 없어도 되나? ... 캐릭터는 없고 그냥 각각의 캐릭터가 있어서 그쪽으로
+> 자기가 성장해가 가는 게 좀 더 좋을 듯」)
+
+⇒ **There is no hero. Every body is a character with its own traits and its own growth.**
+⚠ **This is the SECOND time the hero has been cut** — it was cut once already on 2026-08-31 for adding a
+second control mode. ⚠⚠ **It also kills the question that was open against it**: 「what gets worse while
+the main is away fishing」 has no subject any more. **And it re-opens who fishes** — the individual has to
+come out of a squad now.
+
+### ⚠⚠ The user asked whether the game had grown too big, and answered themself
+
+> *"The game is slowly getting bigger. Has the game got too big? Is it a bit big to do alone? Should I
+> compromise? Compromise is right, isn't it?"*
+> (「서서히 게임이 커지네. 게임이 너무 커졌나? 혼자 하긴 좀 큰가? 타협해야 될까? 타협이 맞겠지?」)
+
+**What had just been added in one message**: 낚시 전용 병사 · 생활 레벨 (나무 캐기 레벨 1 병사) · 외부에서
+오는 배 · 상인 · 포로를 산다 · 「일반에서 영웅 언저리」 병사.
+
+**What it was counted against, measured**:
+
+| What | Measured |
+|---|---|
+| **A body's drawings** | **124 frames.** Four new bodies (낚시병 · 상인 · 포로 · 좋은 병사) = **496 frames** |
+| **UI screens in the game today** | **0.** `hud_view._draw` is `pass`, and every screen in the game is allotted **one week — week 12** |
+| **Weeks left** | **12** (weeks 3–14), then the December demo |
+| **Weeks allotted to 상인 · 포로 · 생활 레벨 · 낚시병** | **0.** None of them is on the map |
+| **What the user cut on 2026-08-31** | **744 frames** — 주인공 124 · 새 몬스터 124 · 보스 124 · 장비 372 |
+
+⇒ **The message put back roughly half of what the user themself had cut a day earlier.**
+⚠⚠ **「일반에서 영웅 언저리」 병사 is 등급 under another name** — deleted twice, and pulled back by the
+user's own hand on 2026-08-30. **It went out again here.**
+
+**And the reason the compromise is not a preference**:
+
+> *"The biggest problem is getting to release and earning money even once."*
+> (「가장 큰 문제가 ... 출시까지 ... 돈을 한 번이라도 벌어보는 게」)
+
+⚠ **This is the same line as 2026-09-01's** 「개발 기간보단 돈 벌어야지」, said again a day later and
+unprompted. **It is now the thing every cut is measured against.**
+
+### ⚠⚠ Farming got the one thing gathering never had — a reason
+
+> *"The meaning of farming is that cooking has to exist. With just one dish you actually do not need to
+> farm a variety."*
+> (「농사의 의미는 요리가 있어야 돼 ... 요리 하나는 사실 농사를 지어서 다양한 농사를 할 필요가 없거든」)
+
+**Cooking is what makes more than one crop worth having.** ⚠ **Without cooking, one crop is enough and
+farming is a counter that goes up** — which is exactly what the 2026-08-31 reviews cut 식량 for.
+
+**Farming is FOUR steps, and the user laid them out in order:**
+
+> *"Make the field, then hoe the field, then plant the crop, water it, and it has to grow."*
+> (「밭을 만들고 거기에 밭을 맨 다음에 농작물을 심고 물을 주고 그냥 성장까지 해야 돼」)
+
+⇒ **밭 만들기 → 밭 매기 → 심기 → 물 주기 → 자람.**
+
+**And watering opened a job nobody had named:**
+
+> *"So a job that brings water is needed too — not fishing, bringing water. Rain will probably fall, I
+> think."* (「물을 가지고 오는 작업도 필요해. 아마 비가 내릴 거 같긴 해」)
+
+⚠ **Rain was said as a guess, not a decision** — 「~일 것 같다」. **Whether rain replaces carrying water
+is not settled.**
+
+### 🔍 What was measured rather than recalled
+
+| 무엇 | 값 |
+|---|---|
+| **Resource words in `src/sim/`** | **0 lines.** 나무 · 돌 · 철 · 식량 · 채집 · 부대 — none of them exists. The only hit in all of `src/` is a comment in `rules.gd` saying **「a resource cost is task 05」** |
+| **What the island already carries** | **소나무 31 · 덤불 17 · 돌 3 · 그루터기 2 · 철광석 1** — 54 props, and **성채 1 is the only building** |
+| **뽑기 already runs** | **20 s per 검사 (`MUSTER_PERIOD_SEC`), ceiling 9 (`MUSTER_CAP`), and TIME is the whole price.** ⇒ **the one empty socket a resource cost can drop into** |
+| **The clock exists** | `Battle.elapsed` and `muster_left` both run. **A time-based price has somewhere to attach** |
+| **Selection is ALREADY a list** | `Hand.ids` is a `PackedInt32Array` and `pick_many` already exists — built that way on 2026-08-31 at the user's own request (「선택한게 캐릭터든 그룹이든 할 수 있게 확장성 있게」). ⇒ **hotkeys 1–4 sit on top of it and nothing below changes** |
+| **The plateau** | **48 조각, 성채 takes 4 ⇒ 44 left.** 2026-08-26 already settled 「2층 is favourable for farming and building and costs more」, and **that 「costs more」 is still undefined** |
+| **The 1–5 keys deleted on 2026-08-29** | **소환 칸, not squad registration.** A different thing — deleting them does not block this |
+
+### What outside games do — **and the sourcing caveat**
+
+**`research` was sent out and its note is at `docs/reference/2026-09-01-same-body-gathers-and-fights.md`.**
+
+⚠⚠ **NO PAGE WAS OPENED.** `WebFetch` and `curl` were both blocked by the session's egress proxy, so
+every line of that note rests on search-result snippets. **Re-open the links before quoting any of it.**
+
+**What it reported**: 킹덤 투 크라운스 (archers hunt by day, stand at the wall by night) · 워크래프트 3
+(Call to Arms turns miners into militia for 45 s and they mine nothing) · 에이지 오브 엠파이어 2 (the Town
+Bell halts all gathering) · 컴퍼니 오브 히어로즈 (no worker unit at all — infantry capture the income).
+**Who did the opposite**: 쓰론폴 · 데이 아 빌리언스 · 헤일로 워즈.
+
+⚠⚠ **Bad North — the bar for this project — has no gathering at all.** Coin comes only from houses left
+standing, and a burnt house pays nothing. **The user rejected copying that**, above.
+
+**The pattern the note found**: every game that makes ONE body do both **puts a floor under the gathering
+side** so defence cannot drive income to zero. Kingdom keeps two archers hunting. ⚠ **That number is
+from a community wiki, not the developer.**
+
+### What is still open
+
+**Four questions carried through the whole round unanswered**: **먹으면 무엇이 좋아지나** (ticket
+`05-01` — 뽑는 값인가, 천장 아홉인가, 몸의 숫자인가) · **어디서 캐나** (섬에 서 있는 물건에서만인가) ·
+**철광석에 어떻게 가나** (걸어서 못 간다) · **비가 물 긷기를 대신하나.**
+
+**And what the hero's death re-opened**: **낚시를 누가 하나** — the reason a main character existed was
+that fishing is an individual act, and there is no main character now.
+
+**What has no home at all**: **요리가 어느 태스크인가** · **특성이 어느 태스크인가** · **현상수배범이라는
+설정이 어느 문서에 사는가** (there is no GDD).
+
+### ⚠⚠ **Addendum, an hour later — the split came back as 「일반병」, and it is a different split**
+
+**The user reopened the one thing this round had settled**, and it is worth reading carefully because it
+is **not** a reversal:
+
+> *"I think we have to split the 병사 and the 일반병. The 일반병 should be able to move as a squad and
+> also move as one. The 병사 stay bunched. This one should be a bit apart."*
+> (「병사랑 일반병을 나눠야 될 거 같아. 일반병은 그 부대로도 움직일 수 있고 한 명으로도 움직일 수 있어야
+> 될 거 같은데? 병사들은 뭉쳐있는 건데. 이 병은 좀 떨어져 있어야 될 거 같은데?」)
+
+**An hour earlier the same user refused 일꾼** (「병사랑 일꾼을 나누면은 조금 힘들 거 같고」).
+⚠⚠ **The two are not the same cut.** 일꾼 splits bodies by **what job they do**; 일반병 splits them by
+**how they are commanded** — 병사 move only as a squad, 일반병 can be sent one at a time.
+
+⇒ **It fills the hole the hero's death left.** Fishing is an individual act, the unit of command is a
+squad, and there is no main character — **일반병 is the body that can go alone.**
+
+⚠⚠ **The price survives only if a 일반병 can FIGHT.** Foldable into a squad ⇒ sending one out to gather
+is sending away a defender, and the choice costs something. Not foldable ⇒ **gathering and defending
+never compete again, which is the sentence both dead games died on.** The user's 「부대로도 움직일 수 있고」
+points at yes. **It is not confirmed.**
+
+⚠ **「일반병」 is a new word with no glossary row and no code.** It needs a `naming` round.
+
+### ✅ 밭 is a 블록, and 우물 removes the watering chore
+
+> *"If a field is a block the land is really narrow. Movement has to be fun. But right now it is not ...
+> I do want 조각 units, but block units look better for now. Let us do block units."*
+> (「밭은 블록으로 하기엔 그럼 땅이 엄청 좁은데? 이동이 재밌어야 돼. 근데 지금은 그게 아니니까 ... 조각
+> 단위로 하고 싶긴 한데 ... 블록 단위로 하는 게 일단은 좋아 보이긴 한다. 블록 단위로 하자」)
+
+⚠⚠ **「이동이 재밌어야 돼. 근데 지금은 그게 아니니까」 is a judgement on the game as it stands.** It is a
+measurement, not a preference, and **it belongs to task 03 (부대를 조종한다).**
+
+**Measured against the choice**: 고원 **48 조각 = 12 블록**, 성채 takes one ⇒ **11 fields fit upstairs.**
+1층 is **236 조각 = 59 블록.** ⇒ **2층 is tight and 1층 is roomy** — exactly the 2026-08-26 shape.
+
+> *"Build a well, or if it rains you do not have to draw water; otherwise before that, use the well."*
+> (「우물을 만들거나 비가 오면 안 길러도 되고 아니면 그전에는 우물을 사용하는 걸로」)
+
+⇒ **물 긷기 is a chore the player REMOVES by building a 우물**, and rain removes it for free while it
+falls. ⚠ **우물 is a sixth building** — the glossary lists 성채·집·탑·창고·성벽, and **only 성채 stands.**
+
+### ⚠⚠ **The hand decides what a body IS — and the drawing on disk already has no weapon**
+
+> *"The 일반병 fights, but it has to be weak. So there is a thing called 병사, and if you equip a weapon
+> it becomes one — so what do we call the plain single thing that is not a 병사? The state with nothing
+> at all. And if you put a farm tool in that state's hand it becomes a 농부."*
+> (「일반병은 싸운데 약해야지. 그러니까 병사라는 게 있고 무기를 장착하면은 병사가 ... 뭔가 하나짜리 단순한
+> 걸 뭐라고 해야 될까? 그냥 아무것도 없는 상태. 그 상태에서 뭔가 농기계를 쥐어주면은 농부가 되고」)
+
+⇒ **A body is not a type. It is an empty body plus whatever is in its hand.** 무기 → 병사 · 농기구 → 농부.
+
+⚠⚠ **This is the 2026-08-31 「손」 decision arriving at its conclusion.** That round cut equipment slots
+and kept one hand — 「the equipment slot, I think we can drop that ... just a hand would do — just what
+you put in the hand」. **What is new is that the hand now decides the body's JOB, not just its numbers.**
+
+### 🔍 The measurement that decides what this costs
+
+| 무엇 | 값 |
+|---|---|
+| **The player's sprite folder** | **`assets/human/man/`** — it is called **man**, not swordsman. **248 files = 124 pngs and their imports** |
+| **What the drawing shows** | **옅은 덩어리 · 둥근 대머리 · 검은 점 둘 — 옷도 무기도 얼굴도 없다** (measured 2026-08-31) |
+| **`UNITS` rows** | **Two.** `SWORDSMAN` (label 검사) and `WOLF` (label 늑대) |
+
+⚠⚠ **THE BODY ON DISK IS ALREADY EMPTY-HANDED.** It carries no weapon at all. ⇒ **The empty state costs
+ZERO new drawings, and it is 병사 — the body holding something — that is the new art.**
+⚠ **This inverts the cost question that was open**: 「do 병사 and the other body share a drawing?」 was
+asked as though the plain body were the new one. **It is the opposite.**
+
+### ⚠ A collision the glossary has not caught
+
+**`CONTEXT.md` says 「검사 — 플레이어의 몸, 그리고 유일한 병종」.** Under the hand model **검사 is a body
+holding a sword**, and **병사 becomes the word for any body holding a weapon** — 검사 one of them, the
+활 of week 5 another. ⚠ **The glossary's 검사 row is written as though it were the top of the tree.**
+**It is not corrected here — the user has not settled the words yet.**
+
+### ⚠⚠ 「일반병」 lasted about an hour
+
+**It was coined to mean 「a body that can be sent one at a time」.** The hand model reaches the same set
+from the other side — a body with no weapon — and the user asked for a better word in the same breath.
+⚠ **The two definitions do not obviously agree**: 농부 holds a farm tool and still has to go alone, so
+**「moves alone」 and 「holds no weapon」 are not the same set.** ⇒ **Only 「holds a weapon ⇒ moves as a
+squad」 makes them agree, and nobody has said that.**
+
+### 마무리 — **티켓 일곱을 세웠고, 닫은 것은 0 이다**
+
+**The user closed the round with one instruction**: *"For now I think we should wrap up with what we
+have made so far ... just make the tickets properly."* (「일단 지금까지 만든거 해서 마무리해야할듯 ...
+티켓들을 잘 만들어주면됨」) ⇒ **The output of a round that wrote no code is tickets.**
+
+**And the last decision of the round**: *"Right, recruiting soldiers is the correct one."*
+(「그렇네 병사는 뽑는게 맞는데」) ⇒ **뽑기 stays and 「이벤트로 받는다」 does not replace it.**
+⚠ **뽑기 was already decided AND already built** — ticket `02-09` is `resolved` and `MUSTER_PERIOD_SEC`
+runs at 20 s. **The user was re-deciding something the repository already had.**
+
+| 새 티켓 | 무엇 | Type |
+|---|---|---|
+| **05-02** | 밭을 만들고 심고 물을 준다 | task |
+| **05-03** | 우물을 지으면 물을 안 길어도 된다 | task |
+| **05-04** | 요리 건물이 작물을 음식으로 바꾼다 | task |
+| **05-05** | 어디서 캐나 | grilling |
+| **05-06** | 걸어서 못 가는 철광석에 어떻게 가나 | grilling |
+| **03-05** | 단축키 1~4 로 부대를 등록한다 | task |
+| **03-06** | 무기를 들면 부대로만 움직이나 | grilling |
+| **03-07** | 이동이 재미있어야 한다 | grilling |
+| **04-04** | 맨손과 손에 든 것을 용어집에 세운다 | grilling |
+
+⚠ **Nine, not seven** — the count in the map's opening was written before 03-06 and 03-07 were split.
+
+**티켓 05-01 은 안 닫혔다.** Its bar is 「the user has said what eating changes」 and they have not.
+
+### ⚠⚠ 그물을 못 돌렸다
+
+**`tests/run_nets.ps1` is PowerShell and this container has no elevated shell**, the same as the other
+2026-09-01 round. **The last real measurement is 통과 1464 · 실패 21**, and **`src/` was not touched this
+session**, so the numbers should still hold. ⚠ **Not run is not passed.**
+
+### ⚠ 지도가 자기 자신과 어긋나 있었다
+
+**The map's ticket table said all nine of task 02's tickets were `open`; eight are `resolved` and one is
+`claimed`.** The opening section of the SAME file said 「여덟이 닫혔다」. **The ticket files were true and
+the table was corrected.**
 ## ✅✅ **The order stopped speaking in 조각, and one conversation settled every hand on the mouse — 2026-09-02**
 
 **The session opened as 「what should I do」 and ended with twelve tickets and a control layout that
