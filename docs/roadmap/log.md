@@ -3204,3 +3204,117 @@ both features at once.
 untouched and still theirs: **the ore's approach · doubling the map · which bush · when the bench and
 turret come out · whether the engine's swing reads as an attack · damage numbers · which black wolf ·
 the four-way facing picker · 판을 무엇으로 움직이나 (티켓 `03-03`)** and the four about the soldier.
+
+---
+
+## ⚠⚠ **Five tasks, fourteen tickets, three reversals — and not one line of code — 2026-09-01**
+
+**The session was asked for one thing and it changed shape twice.** It opened as 「what should I do」,
+became 「turn everything I say into tickets」, and ended with **멀티 overturning a decision from
+2026-08-30.** ⚠ **Nothing was built. That is not a failure of the round — it is what the round was.**
+
+### What the session was asked to do
+
+> ***"Tell me what I have to do. Look at the roadmap and list up what I should be making now."***
+> (「지금 뭐 해야 되는지 한번 알려줄래? 로드맵 확인해보고 ... 리스트 업 좀 해줘」)
+
+**Four messages later the user set the session's actual purpose:**
+
+> ***"The purpose of this session is to turn everything I spit out from now on into tickets. And they
+> have to go into the right task."*** (「이 세션의 목적은 내가 지금부터 뱉어내는 것들을 다 티켓으로
+> 만들어 주는 거야. 그 알맞은 태스크에 넣어줘야 돼」)
+
+### ⚠⚠ Three decisions were REVERSED, all of them the user's own
+
+| 언제 정했던 것 | 무엇으로 | 사용자의 말 |
+|---|---|---|
+| **2026-08-30 멀티 ⏸ 보류** | ✅ **간다** | 「멀티하자. 멀티가 와야 맞아. **돈 벌어야지. 개발 기간보단 돈 벌어야지**」 |
+| **2026-08-28 「체력바 없이」** | ✅ **넣는다** | 「체력바는 없다고 한 거는 **그 당시** 없는 거고 **지금 추가하겠다는 거야**」 |
+| **티켓 41 「배는 쌓인다」** | ✅ **사라진다** | 「배가 도착한 다음에 배가 안 사라지거든? 배가 사라지긴 해야 돼」 |
+
+⚠ **The HP bar one is worth reading twice**: the model reported 「the bar was deleted 2026-08-28」 as a
+standing fact, and **the user corrected the tense, not the fact.** A dead decision is not a closed one.
+
+### ⚠⚠ The grain rule was wrong in six places and the user caught it
+
+> ***"I never said a ticket is one a day. Sometimes tickets all get done at once, so it does not
+> matter, and there can be several. There can be many tickets. What is two is the TASKS. Per week."***
+> (「티켓은 뭐 하루에 하나 한다고 안 했어 ... 티켓은 여러 개여도 돼. 태스크가 두 개라는 거지. 주당」)
+
+**「A ticket is one day」 was written into**: the `roadmap` skill (its description line included), the
+`wrap-up` skill, the map's folder diagram and its rules list, both example files, both example folder
+names, and **the `## What this day builds` heading of every one of sixteen ticket files.** All fixed.
+
+⚠ **What did NOT change**: cutting a task, ordering it, and saying where it stops **are still the
+user's.** That rule was paid for twice — 2026-08-30 and 2026-08-31.
+
+**Two levels, and the user named them**: 「대신 핵심 태스크랑 서브태스크로 해서 반드시 두 개로만 해주고」.
+
+### What was decided, in the user's own words
+
+| 무엇 | 사용자의 말 |
+|---|---|
+| **병사를 뽑는다** | 「병사는 뽑자」 — ⚠ **언제인지는 본인이 모른다고 했다** |
+| **뽑기는 기능 먼저, 그림 나중** | 「기능 구현하고 UI 는 더 생각해 보는 걸로」 |
+| **게임 오버 빨간 글씨** | 「게임 오버 빨간 글씨고 딱 뜨고. 끝」 — ⚠ **엔딩씬에서 좁혀졌고 통계는 본인이 미뤘다** |
+| **작은 배에 늑대 넷** | 「작은 배에 있는 늑대 네 마리로 교체하고 큰 배는 나중으로」 |
+| **배는 몇 초 뒤 사라진다** | 「그냥 도착하고 몇 초 있다가 사라지는 걸로 ... 게임적 허용이라고 해서」 |
+| **낡은 검사는 지운다** | 「지워달라고 했어 **지금 섬에 맞추는 게 아니라**」 — ⚠ 모델이 「맞춘다」로 잘못 세웠던 것 |
+| **기본 섬을 넓힌다** | 「그냥 기본적으로 주는 섬을 늘리자는 거」 — ✅ **옛 티켓 46 의 답이다** |
+| **농사와 낚시를 안 가른다** | 차이를 직접 대 보고 (**시간 대 즉각 · 채소 대 고기**) 「사실 그럴 필요까진 없겠다」 |
+| **낚시는 서브 콘텐츠** | 「병사들 잘 싸우게 하려면 낚시 이제 서브컨텐츠이긴 맞지」 |
+| **마름모는 항상 보인다** | 「마름모는 항상 보여 ... 마름모 단위로 살짝 검정색으로 ... 약간 거의 검정색이야」 |
+| **회전 중 가장자리 이동 · 판떼기 빛** | 「해결했어」 — **사용자가 화면에서 닫았다** |
+
+### 🔍 What was measured rather than recalled
+
+| 무엇 | 값 |
+|---|---|
+| **섬** | 30 × 26 = **780 조각** · 땅 **284 조각 (71 칸)** · 물 388 · 항구 108 |
+| **고원** | **48 조각 — 땅의 16.9%.** 1층 평지가 **236 조각, 83.1%** |
+| **계단** | **4 조각 = 1 칸.** ⚠⚠ **섬 전체에 올라가는 문이 하나다.** 눈금 3 이상은 **0** |
+| **성채** | (10,12) 2x2, **네 조각 전부 눈금 2**, 체력 240 |
+| **1층에서 성채까지** | **1.414**, 대각선 **1.732**, 늑대 사거리 **1.75** ⇒ 두른 여덟 자리 전부에서 닿는다 |
+| **늑대가 성채를 태우는 시간** | 혼자 **2 분**, 넷이면 **30 초** |
+| **안 읽히는 낱개 그림** | **24 장** — 황소 1 · 물기 8 · 걷기 8 · 활방패창검 5. **게임이 읽는 것은 0** |
+| **살아 있는 몸 그림** | 늑대 폴더와 사람 폴더 안에 **각각 124 장** |
+| **커밋된 작업 폴더** | 사진 **123 MB / 494 파일** · 프로토타입 **54 MB / 891** · 시안 **15 MB / 284** |
+| **`src/` 전체의 난수** | ⚠⚠ **0 회.** `randi`·`randf`·`randomize`·`shuffle`·`pick_random` 전부. sim 에 시계도 없다 |
+
+⚠⚠ **The randomness count is now load-bearing.** It was a side note while 멀티 was 보류; with 멀티
+decided it is **the reason multiplayer is a thing to attach and not a thing to rebuild.** ⚠ **Necessary,
+not sufficient** — there is no netcode, no host, no input sync.
+
+### ⚠⚠ Three documents were wrong about the code, and one label was wrong about its own units
+
+- **용어집: 「지금 서 있는 것은 집 하나뿐이다」** → 섬 파일에 **성채 하나, 집 0 개**
+- **용어집: 「주석 두 줄에 세포가 남아 있다」** → `src/` 에 **0 줄**, 검사 한 줄에만
+- **그리는 쪽 주석: 「건물은 몸을 안 막는다」** → **막는다.** 같은 주석의 「안 탄다」는 맞다
+- ⚠⚠ **지도가 「땅 284 칸 · 고원 48 칸 · 계단 4 칸」이라고 적어 뒀는데 전부 조각이다.** 284 칸이면
+  1136 조각이라 **판 전체보다 크다.** 고쳤다 — 나머지 셋은 티켓 04-01 이 고친다
+
+### What was built
+
+**태스크 다섯**: 01 (맵, 끝난 일의 기록) · 02 (몬스터가 내려서 싸우고 성을 부순다, 티켓 아홉) ·
+04 (낱말과 문서를 맞춘다, 셋) · 05 (자원, 하나) · 06 (기본 섬, 둘).
+**티켓 열넷.** 그중 **여섯이 `Type: grilling`** — 답이 먼저 필요한 것들이다.
+
+⚠⚠ **닫힌 티켓은 0 이다.** 코드를 한 줄도 안 짰고, 캐묻는 티켓의 물음에 사용자가 아직 답하지 않았다.
+
+### 그물
+
+⚠⚠ **못 돌렸다.** 이 라운드는 **고도가 없는 컨테이너**에서 돌았고 `run_nets.ps1` 은 파워셸이다.
+**마지막 실측은 2026-09-01 첫 세션의 통과 1227 · 실패 64 그대로다.** ⚠ **안 돌린 것은 통과한 것이 아니다.**
+
+### What is still open
+
+**아홉 개가 이름을 갖고 있다**: 02-01 성채를 무엇으로 막나 · 02-09 무엇을 내고 뽑나 · 05-01 먹으면 무엇이
+좋아지나 · 06-01 얼마나 넓히나 · 06-02 「덜 평면」이 무엇인가 · 04-03 용어집 이름 · 03-02 정보에 무엇이
+뜨나 · 03-03 판을 무엇으로 움직이나 · 03-04 끌어서 고르면 판은 무엇이 옮기나.
+
+**그리고 티켓이 없는 것들**: 요리 · 사냥 바깥 콘텐츠 · 섬이 랜덤 · 성 셋과 자원 공유 · 뽑은 병사가 어떻게
+부대로 들어오나 · 부대 쪼개기와 합치기.
+
+⚠⚠ **12 월.** 사용자가 **「진짜 오래 걸리더라도 제대로 만들어 볼까, 십이 월 빼고」**와 **「개발 기간보단
+돈 벌어야지」**를 같은 세션에 말했다. **「12 월을 뺀다」는 말은 아직 안 나왔다.** ⚠ **이 줄은 두 번 뒤집힌
+적이 있고 사용자가 마지막에 한 말로만 정해진다 — 논쟁으로는 안 정해진다.**
