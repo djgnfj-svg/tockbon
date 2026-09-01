@@ -1100,8 +1100,91 @@ func _q_and_e_turn_a_quarter(t, game, fs: FieldView) -> void:
 	t.ok(absf(fs.cam_yaw_deg - yaw) < 0.001, "R 과 F 는 판을 안 돌린다 (%.2f°)" % fs.cam_yaw_deg)
 	t.ok(absf(fs.cam_pitch_deg - pitch) < 0.001, "그리고 기울기도 제자리로 돌아왔다 (자가 점검)")
 
+	# -- ⚠⚠ THE HOVER PLATE FOLLOWS A KEYBOARD TURN, WITH THE CURSOR NEVER MOVING --------------------
+	# `set_hover_tile` had exactly ONE call site — the motion branch — and **a key press is not a
+	# motion**. One press of E left the white plate on the 조각 the cursor used to be over, a quarter
+	# of the board away, until the hand moved. **The 이동선 never had that problem** because `_process`
+	# rebuilds it from the remembered pointer every frame; this is the row that puts the plate beside
+	# it. ⚠ **Not one motion event is sent after the aim below** — that is the whole claim.
+	var b: Battle = game.battle
+	var ashore := b.ashore_ids()
+	t.ok(ashore.size() > 0, "자가 점검 — 판 위에 선 몸이 있다")
+	if ashore.is_empty():
+		return
+	# ⚠⚠ **THE AIM HAS TO CARRY A 판 자국 AT BOTH ANGLES, AND A FIRST DRAFT DID NOT.** Aimed at a
+	# body's own 조각, the point landed on bare ground after the quarter turn — so the row read 「the
+	# plate goes dark」, which a shell that blanked it every frame would also pass. **The point is
+	# searched for instead**: padded before the turn, padded after it, and a different 조각.
+	var at := _a_point_padded_at_both_quarters(game, fs)
+	t.ok(at.x >= 0.0,
+		"자가 점검 — 돌기 전후로 다 자국이 있는 화면 점을 찾았다 (없으면 아래가 공허하다)")
+	if at.x < 0.0:
+		return
+	game._unhandled_input(_motion(at, Vector2.ZERO))
+	var tile_before: int = game._tile_at(at)
+	var cell_before := fs._hover_cell
+	t.ok(tile_before >= 0 and cell_before >= 0,
+		"자가 점검 — 커서가 섬 위에 있고 자국이 하나 켜져 있다 (조각 %d, 자국 %d)"
+			% [tile_before, cell_before])
+	game._unhandled_input(_key_edge(KEY_E, true))
+	game._unhandled_input(_key_edge(KEY_E, false))
+	_settle(fs)
+	var tile_after: int = game._tile_at(at)
+	t.ok(tile_after >= 0 and tile_after != tile_before,
+		"자가 점검 — 90 도 돌고 나면 같은 화면 점이 다른 조각이다 (%d → %d)"
+			% [tile_before, tile_after])
+	game._process(1.0 / 60.0)
+	var want_cell := int(fs._wash_cell[tile_after])
+	t.ok(want_cell >= 0 and want_cell != cell_before,
+		"자가 점검 — 그 새 조각에도 자국이 있고 앞의 것과 다른 자국이다 (%d → %d)"
+			% [cell_before, want_cell])
+	t.eq(fs._hover_cell, want_cell,
+		"키로 돌린 뒤에도 자국이 커서 밑 조각으로 옮겨간다 — 손이 안 움직여도 따라온다")
+
 	fs.cam_yaw_deg = Look.CAM_YAW_DEG
 	fs._yaw_remaining = 0.0
+
+
+## **A screen point that sits on a 판 자국 at this yaw AND a quarter round from it**, or `(-1, -1)`.
+##
+## ⚠ **Searched over SCREEN points and not over 조각**, because the same 조각 is somewhere else on the
+## glass after a turn — what has to hold still is the cursor, which is a screen point.
+## ⚠⚠ **It turns the board four times and leaves it where it found it.** Four quarters is a whole
+## turn, so the caller's board is back at the angle it handed over.
+func _a_point_padded_at_both_quarters(game, fs: FieldView) -> Vector2:
+	var w := Look.VIEWPORT_W_PX
+	var h := Look.VIEWPORT_H_PX
+	var pts: Array[Vector2] = []
+	var tiles: Array[int] = []
+	for iy in 12:
+		for ix in 20:
+			var p := Vector2(w * (float(ix) + 0.5) / 20.0, h * (float(iy) + 0.5) / 12.0)
+			var tile: int = game._tile_at(p)
+			if tile < 0 or tile >= fs._wash_cell.size() or int(fs._wash_cell[tile]) < 0:
+				continue
+			pts.append(p)
+			tiles.append(tile)
+	_turn_one_quarter(game, fs)
+	var found := Vector2(-1.0, -1.0)
+	for k in pts.size():
+		var tile: int = game._tile_at(pts[k])
+		if tile < 0 or tile == tiles[k] or tile >= fs._wash_cell.size():
+			continue
+		if int(fs._wash_cell[tile]) < 0:
+			continue
+		found = pts[k]
+		break
+	for _n in 3:
+		_turn_one_quarter(game, fs)
+	return found
+
+
+## One press of E, run out. ⚠ Through the shell's own key path, so the searcher cannot find a point
+## the row it feeds could not reach.
+func _turn_one_quarter(game, fs: FieldView) -> void:
+	game._unhandled_input(_key_edge(KEY_E, true))
+	game._unhandled_input(_key_edge(KEY_E, false))
+	_settle(fs)
 
 
 ## Runs a sweep out on the real field, bounded. ⚠ **Never 「while not settled」** — see the header.
