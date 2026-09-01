@@ -324,6 +324,23 @@ func run(t) -> void:
 	# It reports as 「41 passed」 either way, which is exactly the shape `tests/README` warns about.
 	# ⚠ **The red itself is 티켓 15's and is not touched here**; what is done is putting the new rows
 	# where they actually run. **Frozen sim above, so the pan is the only thing moving.**
+	# ⚠⚠ **THIS ROW STOOD FAR BELOW AND IT WAS GREEN ON A STALE PAINT** (moved 2026-09-02). It read
+	# `fs._boats_used` **after the camera rows had hand-driven `game._process` through ten seconds of
+	# sim** — the first boat is long afloat by then, and the only reason the row passed is that nothing
+	# had repainted the field since. **03-10's sweep rows call `fs._process` by hand**, the paint went
+	# fresh, and the row went red for the fixture rather than for the shell.
+	# ⇒ **Moved to where its own claim is true**: a battle two frames old, before anything here has
+	# advanced the clock. ⚠ **`fs._process` has run on the pumped frames above**, so this reads a
+	# painted frame and not a leftover.
+	# ⚠⚠ **THIS ROW READ `fs._hulls_used` AND THAT FIELD WAS DELETED WITH THE PLAYER'S BOATS**
+	# (2026-08-28). It did not go red — **it threw, and a runtime error abandons the rest of `run()`** —
+	# and its subject is gone too: nobody presses to make a boat any more. **Re-aimed at the subject
+	# that replaced it**: the beasts' hulls are `_boats_used`, and the claim that survives is the same
+	# one — **before the first boat's clock there is nothing to draw.**
+	t.ok(game.battle.elapsed < Rules.BOAT_FIRST_SEC,
+		"자가 점검 — 이 섬의 시계가 아직 첫 배 앞이다 (%.3f초)" % game.battle.elapsed)
+	t.eq(fs._boats_used, 0, "첫 배가 뜨기 전에는 선체가 하나도 안 그려진다")
+
 	_the_pan_keys_move_the_camera_and_stop(t, game, fs)
 	_a_drag_looks_around_and_a_click_commands(t, game, fs)
 	# ⚠⚠ **THE CAMERA FUNCTIONS SIT HERE FOR THE REASON THE PARAGRAPH ABOVE GIVES**, and for
@@ -332,7 +349,8 @@ func run(t) -> void:
 	# camera is the only thing moving and a `cam_px` that changed changed because of an input.
 	# ⚠ **After the drag rows, not before**: `_a_drag_...` leaves the yaw at its opening angle, and
 	# every direction row below reads `cam_px` axes that only line up with the screen at that yaw.
-	_the_right_button_turns_and_never_commands(t, game, fs)
+	_the_right_button_turns_nothing_and_commands_nobody(t, game, fs)
+	_q_and_e_turn_a_quarter(t, game, fs)
 	_the_edge_of_the_window_pans(t, game, fs)
 
 	var b: Battle = game.battle
@@ -379,13 +397,8 @@ func run(t) -> void:
 	# reaches for now, and **nothing measures whether the start button overlaps them** — `net_slots`
 	# only checks the boxes against each other and against the viewport. That is a real hole, not a
 	# tidy deletion.
-	# ⚠⚠ **THIS ROW READ `fs._hulls_used` AND THAT FIELD WAS DELETED WITH THE PLAYER'S BOATS**
-	# (2026-08-28). It did not go red — **it threw, and a runtime error abandons the rest of `run()`**,
-	# so this was the SECOND landmine in this function after the terrain one above. The subject is gone
-	# too: nobody presses to make a boat any more.
-	# ⇒ **Re-aimed at the subject that replaced it.** The beasts' hulls are `_boats_used`, and the
-	# claim that survives is the same one: **before the first boat's clock there is nothing to draw.**
-	t.eq(fs._boats_used, 0, "첫 배가 뜨기 전에는 선체가 하나도 안 그려진다")
+	# ⚠⚠ **THE `_boats_used` ROW MOVED UP OUT OF HERE** (2026-09-02) — see the camera block above,
+	# which is where 「before the first boat's clock」 is actually still true.
 	# ⚠⚠ **THE 0.87912 ROW IS DELETED** (02-08). It was hand arithmetic on a 26 x 20 board —
 	# `1280 / (26 * 40 * 1.40)` — and the island loads 30 x 26. **What stopped being measured: the
 	# opening zoom's actual VALUE.** The row underneath keeps the half of it that carries no literal,
@@ -583,6 +596,7 @@ func run(t) -> void:
 	_the_route_points_are_in_soldier_pos_units(t, game)
 	_a_full_hand_moves_instead_of_picking(t, game, fs)
 	_the_picked_body_wears_a_rim(t, game, fs)
+	_the_turn_flag_has_no_writers_left(t)
 
 	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
 	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
@@ -901,20 +915,26 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 	t.ok(b.grid.passable[body_tile] != 0, "자가 점검 — 누른 자리가 걸을 수 있는 조각이다")
 
 
-## **The right button TURNS the board and commands nobody** (2026-08-30, the user at the screen:
-## 「오른쪽 버튼은 카메라 회전으로 이해했어」).
+## **The right button turns NOTHING and commands nobody** (2026-09-02, the user: 「오른쪽 마우스로
+## 회전을 하면 뭔가 장점이 별로 없어서」 — *"rotating with the right mouse does not really have any
+## advantage"*).
 ##
-## ⚠⚠ **THIS FUNCTION MEASURED A PAN FOR ONE ROUND** (「오른쪽이 끌어서 이동으로 해야할듯」, the same
-## day, earlier). **The later word wins** and the old rows are rewritten rather than kept beside the
-## new ones — two sets asserting opposite gestures is not a record, it is one of them lying.
+## ⚠⚠ **THIS FUNCTION HAS MEASURED THREE DIFFERENT GESTURES ON ONE BUTTON AND THE OLD ROWS ARE
+## REWRITTEN, NEVER KEPT BESIDE THE NEW ONES.** It measured a PAN (2026-08-30 morning, 「오른쪽이
+## 끌어서 이동으로 해야할듯」), then a TURN the same day at the screen (「오른쪽 버튼은 카메라 회전으로
+## 이해했어」), and now **nothing at all** — Q and E carry the turn. Two sets asserting opposite
+## gestures is not a record, it is one of them lying.
 ##
-## ⚠⚠ **THE ROWS ARE THE SAME GESTURE MEASURED ON ITS TWO OUTCOMES.** A right button that turned but
-## also ordered would pass the turn row; one that ordered nothing but never turned would pass the order
-## row. **Neither row is worth anything alone.**
+## ⚠⚠ **THE TWO 「COMMANDS NOBODY」 ROWS CERTIFIED NOTHING UNTIL TODAY.** They ran over a **provably
+## empty hand** — the function wiped every order and never picked anything, and the function before it
+## ends on ESC — so a shell that started ordering on the right button would have left both of them
+## green. ⇒ **the hand holds a body here, the point is a 칸 that body can be sent to, and the left
+## button is fired at the same point at the end to prove the order was there to be given.**
 ##
-## ⚠ **The camera is asked to stay PUT as well as to turn.** The right button moved `cam_px` this
-## morning, and a turn that also panned would read as the old gesture surviving under the new one.
-func _the_right_button_turns_and_never_commands(t, game, fs: FieldView) -> void:
+## ⚠ **The camera is asked to stay PUT as well as to stay unturned.** The right button moved `cam_px`
+## on 2026-08-30 morning, and a dead button that still panned would read as the oldest gesture
+## surviving under the newest.
+func _the_right_button_turns_nothing_and_commands_nobody(t, game, fs: FieldView) -> void:
 	var b: Battle = game.battle
 	for i in b.soldier_order.size():
 		b.soldier_order[i] = -1
@@ -931,36 +951,72 @@ func _the_right_button_turns_and_never_commands(t, game, fs: FieldView) -> void:
 	var body_tile := int(round(body.y)) * b.grid.w + int(round(body.x))
 	t.eq(game._tile_at(on_land), body_tile, "자가 점검 — 그 화면 점이 몸이 선 조각으로 돌아온다")
 
-	# -- a right click in place: nothing turns and nobody is sent ------------------------------------
+	# **The hand is filled and a destination is found**, so every 「nobody was ordered」 row below is a
+	# row about a press that had somebody to order and did not.
+	game._let_go()
+	var picked := false
+	for raw in ashore:
+		if game.hand.pick(b, int(raw)):
+			picked = true
+			break
+	t.ok(picked, "자가 점검 — 손이 몸 하나를 쥐었다 (빈 손이면 아래 두 줄이 공허하다)")
+	var dest := -1
+	var dest_at := Vector2.ZERO
+	for k in game.hand.reach.size():
+		var cand := int(game.hand.reach[k])
+		if b.grid.block_of(cand) == b.grid.block_of(body_tile):
+			continue
+		var at := fs.tile_to_screen_px(cand % b.grid.w, cand / b.grid.w)
+		if game._tile_at(at) != cand:
+			continue
+		dest = cand
+		dest_at = at
+		break
+	t.ok(dest >= 0, "자가 점검 — 화면에서 겨눌 수 있는, 보낼 수 있는 칸이 있다")
+	if dest < 0:
+		game._let_go()
+		return
+
+	# -- a right click on a 칸 the hand could be sent to: nothing turns and nobody is sent ------------
 	var held := fs.cam_px
 	var held_yaw := fs.cam_yaw_deg
-	game._unhandled_input(_rpress(on_land))
+	game._unhandled_input(_rpress(dest_at))
 	game._unhandled_input(_rrelease())
 	t.eq(fs.cam_px, held, "오른쪽을 제자리에서 누르고 떼면 카메라가 안 움직인다")
 	t.ok(absf(fs.cam_yaw_deg - held_yaw) < 0.001,
-		"그리고 판도 안 돌아간다 — 안 움직인 끌기는 회전이 아니다 (%.2f°)" % fs.cam_yaw_deg)
+		"그리고 판도 안 돌아간다 (%.2f°)" % fs.cam_yaw_deg)
 	var ordered := 0
 	for i in b.soldier_order.size():
 		if int(b.soldier_order[i]) >= 0:
 			ordered += 1
-	t.eq(ordered, 0, "그리고 아무도 명령받지 않는다 — 오른쪽은 절대 보내지 않는다")
+	t.eq(ordered, 0, "보낼 수 있는 칸을 오른쪽으로 눌러도 아무도 명령받지 않는다")
+	t.ok(not game.hand.is_empty(), "그리고 손도 안 놓는다 — 오른쪽은 명령의 어느 절반도 아니다")
 
-	# -- a right drag: the board turns, by the pixels the hand travelled ------------------------------
-	# ⚠ **The expected yaw is `Look.CAM_YAW_PER_PX_DEG` times the HORIZONTAL travel and nothing else** —
-	# the vertical 40 px of the same motion must not reach the camera, or a stray diagonal tilts the
-	# board as well as turning it.
+	# -- a 60 px right drag turns 0.00°, and it turned 10.8° until today ------------------------------
+	# ⚠⚠ **THE NUMBER IS THE WHOLE ROW.** `Look.CAM_YAW_PER_PX_DEG` is 0.18 and still standing (the
+	# piece viewer reads it), so 60 px of drag through the deleted arm would be **10.8°** — written out
+	# by hand here rather than read off the constant, because a row that asks the constant what to
+	# expect is green whatever the constant says.
 	var before_yaw := fs.cam_yaw_deg
 	var before_px := fs.cam_px
-	game._unhandled_input(_rpress(on_land))
-	game._unhandled_input(_motion(on_land + Vector2(60.0, 40.0), Vector2(60.0, 40.0)))
-	var want := fmod(before_yaw + 60.0 * Look.CAM_YAW_PER_PX_DEG + 360.0, 360.0)
-	t.ok(absf(fs.cam_yaw_deg - want) < 0.001,
-		"오른쪽으로 60px 끌면 판이 %.2f° 로 돌아간다 (%.2f°)" % [want, fs.cam_yaw_deg])
-	t.eq(fs.cam_px, before_px, "그러면서 카메라는 안 움직인다 — 돌리기는 이동이 아니다")
-	# **The other way comes back**, which is the row that stops both directions turning one way.
-	game._unhandled_input(_motion(on_land, Vector2(-60.0, -40.0)))
-	t.ok(absf(fs.cam_yaw_deg - fmod(before_yaw + 360.0, 360.0)) < 0.001,
-		"되돌리면 정확히 제자리로 돌아온다 (%.2f°)" % fs.cam_yaw_deg)
+	game._unhandled_input(_rpress(dest_at))
+	game._unhandled_input(_motion(dest_at + Vector2(60.0, 40.0), Vector2(60.0, 40.0)))
+	t.ok(absf(fs.cam_yaw_deg - before_yaw) < 0.001,
+		"오른쪽으로 60px 끌어도 판이 0.00° 돈다 — 어제는 10.8° 였다 (%.2f°)" % fs.cam_yaw_deg)
+	t.eq(fs.cam_px, before_px, "그러면서 카메라도 안 움직인다")
+
+	# -- and the hover plate and the 이동선 both keep up under a held right button ---------------------
+	# ⚠⚠ **THEY FROZE FOR THE WHOLE LENGTH OF A RIGHT DRAG AND NOTHING SAID SO.** The turn's arm ended
+	# in an early `return`, and both of these sat below it. **Deleting the arm un-freezes them**, which
+	# is a fix this ticket gets for free — and this is the row that keeps it.
+	var want_cell := int(fs._wash_cell[dest]) if dest < fs._wash_cell.size() else -1
+	game._unhandled_input(_motion(dest_at, Vector2(-60.0, -40.0)))
+	t.ok(want_cell >= 0, "자가 점검 — 그 조각에 판 자국이 하나 있다")
+	t.eq(fs._hover_cell, want_cell,
+		"오른쪽을 누른 채 움직여도 호버 자국이 커서를 따라간다 — 끌기가 끝날 때까지 얼지 않는다")
+	t.ok(fs._move_lines.size() > 0,
+		"그리고 이동선도 같이 그려진다 (%d 줄) — 같은 이른 return 이 둘 다 먹고 있었다"
+			% fs._move_lines.size())
 	game._unhandled_input(_rrelease())
 	ordered = 0
 	for i in b.soldier_order.size():
@@ -968,11 +1024,130 @@ func _the_right_button_turns_and_never_commands(t, game, fs: FieldView) -> void:
 			ordered += 1
 	t.eq(ordered, 0, "끌고 나서도 아무도 명령받지 않는다")
 
-	# **The release really ended it**, or the next motion turns the board behind the player's back.
+	# **The release really ended nothing**, or a motion after it turns the board behind the player.
 	var after_yaw := fs.cam_yaw_deg
-	game._unhandled_input(_motion(on_land + Vector2(120.0, 80.0), Vector2(120.0, 80.0)))
+	game._unhandled_input(_motion(dest_at + Vector2(120.0, 80.0), Vector2(120.0, 80.0)))
 	t.ok(absf(fs.cam_yaw_deg - after_yaw) < 0.001,
-		"오른쪽을 뗀 뒤의 움직임은 판을 안 돌린다 (%.2f°)" % fs.cam_yaw_deg)
+		"오른쪽을 뗀 뒤의 움직임도 판을 안 돌린다 (%.2f°)" % fs.cam_yaw_deg)
+
+	# -- ⚠⚠ THE POSITIVE CONTROL: the same point, the LEFT button, and somebody IS sent ---------------
+	# Without this every 「nobody was ordered」 row above is equally true of a shell that cannot order at
+	# all, which is exactly the state those rows were in until today.
+	var walker := int(game.hand.ids[0]) if not game.hand.is_empty() else -1
+	game._unhandled_input(_press(dest_at))
+	game._unhandled_input(_release(dest_at))
+	var sent := 0
+	for i in b.soldier_order.size():
+		if int(b.soldier_order[i]) >= 0:
+			sent += 1
+	t.ok(sent > 0 and walker >= 0,
+		"같은 점을 왼쪽으로 누르면 몸이 간다 — 위의 0 들은 명령할 것이 없어서가 아니다 (%d명)" % sent)
+	game._let_go()
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
+
+
+## **Q and E turn the board a quarter, the sweep is visible, and nothing else on the keyboard turns**
+## (2026-09-02, the user: 「즉시 돌 거 같아. 도는 것이 보여」).
+##
+## ⚠⚠ **THE SWEEP IS PUMPED BY CALLING THE FIELD'S OWN `_process` BY HAND.** `Game._process` does not
+## tick its children — the engine does — and this net stops the shell's clock precisely so it never
+## guesses frame counts. **A row here that pumped engine frames would be measuring the machine.**
+## ⚠ **Every loop is bounded.** A sweep that never settles hangs the runner rather than reddening,
+## and a hung net has its whole count taken out of the passes with nothing added to the failures.
+func _q_and_e_turn_a_quarter(t, game, fs: FieldView) -> void:
+	fs.cam_yaw_deg = 0.0
+	fs._yaw_remaining = 0.0
+
+	# **One press, one frame: the board is partway round.** This is the row the user's choice lives in.
+	game._unhandled_input(_key_edge(KEY_E, true))
+	fs._process(0.02)
+	t.ok(fs.cam_yaw_deg > 0.001 and fs.cam_yaw_deg < 89.999,
+		"E 를 한 번 누르고 한 프레임이면 판이 0 과 90 사이다 — 도는 것이 보인다 (%.2f°)"
+			% fs.cam_yaw_deg)
+	_settle(fs)
+	t.ok(absf(fs.cam_yaw_deg - 90.0) < 0.001,
+		"그리고 정확히 90 에 앉는다 (%.6f°)" % fs.cam_yaw_deg)
+
+	# **A held E is one quarter and not a spin.** OS auto-repeat delivers `pressed = true, echo = true`
+	# many times a second, and a quarter per repeat rolls the board over.
+	var before := fs.cam_yaw_deg
+	for _r in 5:
+		game._unhandled_input(_key_edge(KEY_E, true, true))
+	_settle(fs)
+	t.ok(absf(fs.cam_yaw_deg - before) < 0.001,
+		"자동 반복은 0° 를 더한다 — 눌러 둔 E 가 판을 안 돌린다 (%.2f°)" % fs.cam_yaw_deg)
+	# ⚠ **And the release turns nothing either.** Unlike the pan keys, this is one action and not a
+	# state held for as long as a key is — a release arm here would double every press.
+	game._unhandled_input(_key_edge(KEY_E, false))
+	_settle(fs)
+	t.ok(absf(fs.cam_yaw_deg - before) < 0.001, "손을 떼는 것도 0° 다 (%.2f°)" % fs.cam_yaw_deg)
+
+	# **Q is the other way.** Without this row both keys could turn the same way.
+	game._unhandled_input(_key_edge(KEY_Q, true))
+	game._unhandled_input(_key_edge(KEY_Q, false))
+	_settle(fs)
+	t.ok(absf(fs.cam_yaw_deg) < 0.001,
+		"Q 는 반대로 돈다 — E 한 번 뒤의 Q 한 번은 제자리다 (%.6f°)" % fs.cam_yaw_deg)
+
+	# **The tilt keys and the wheel still do not turn the board**, which is what stops one key doing
+	# two things — the same claim the wheel's own row makes, aimed at the keys beside Q and E.
+	var yaw := fs.cam_yaw_deg
+	var pitch := fs.cam_pitch_deg
+	game._unhandled_input(_key(KEY_R))
+	game._unhandled_input(_key(KEY_F))
+	_settle(fs)
+	t.ok(absf(fs.cam_yaw_deg - yaw) < 0.001, "R 과 F 는 판을 안 돌린다 (%.2f°)" % fs.cam_yaw_deg)
+	t.ok(absf(fs.cam_pitch_deg - pitch) < 0.001, "그리고 기울기도 제자리로 돌아왔다 (자가 점검)")
+
+	fs.cam_yaw_deg = Look.CAM_YAW_DEG
+	fs._yaw_remaining = 0.0
+
+
+## Runs a sweep out on the real field, bounded. ⚠ **Never 「while not settled」** — see the header.
+func _settle(fs: FieldView) -> void:
+	for _n in 60:
+		if fs._yaw_remaining == 0.0:
+			return
+		fs._process(1.0 / 60.0)
+
+
+## **The right button writes nothing in the shell any more**, read out of the file's own text.
+##
+## ⚠⚠ **A DELETION NEEDS A CHECK THAT THE THING IS GONE**, not only that what is left still passes: the
+## rows that drove the yaw drag were rewritten in the same edit that deleted it, so a green round says
+## nothing about whether the arm is still there. **`_turning` was its only flag** and this counts the
+## writes of it — one line of the scan, and it goes red the day somebody puts the drag back without
+## saying so.
+func _the_turn_flag_has_no_writers_left(t) -> void:
+	var text := FileAccess.get_file_as_string("res://src/shell/game.gd")
+	t.ok(text.length() > 0, "자가 점검 — 셸의 원문을 실제로 읽었다 (%d자)" % text.length())
+	var re := RegEx.new()
+	re.compile("^\\s*_turning\\s*=")
+	var writes := 0
+	var mentions := 0
+	for raw in text.split("\n"):
+		var line := raw
+		var hash_at := line.find("#")
+		if hash_at >= 0:
+			line = line.substr(0, hash_at)
+		if re.search(line) != null:
+			writes += 1
+		if raw.contains("_turning"):
+			mentions += 1
+	t.eq(writes, 0, "셸에 _turning 을 쓰는 줄이 하나도 안 남았다")
+	# ⚠ **The scanner's own self-check.** `not found` is satisfied by a typo, a renamed file or an
+	# empty string; this says the name is still in the file — as a tombstone — so the scan is looking
+	# at something.
+	t.ok(mentions > 0, "그러면서 그 이름은 무덤으로 남아 있다 (%d줄) — 스캐너가 헛돌지 않는다" % mentions)
+	# ⚠ **And the scanner catches a write when there is one to catch**, or the row above passes for a
+	# regular expression that can never match.
+	var probe := "\tif x:\n\t\t_turning = click.pressed\n"
+	var probe_hits := 0
+	for raw in probe.split("\n"):
+		if re.search(raw) != null:
+			probe_hits += 1
+	t.eq(probe_hits, 1, "스캐너 자가 점검 — 진짜 쓰기 한 줄은 잡는다")
 
 
 ## **W, A, S and D hold a screen direction and the camera keeps travelling on the clock** (2026-08-30,
