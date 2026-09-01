@@ -226,6 +226,27 @@ is a reader like any other.
 (0.025%). **특정 나무의 결함이 아니라 어느 프로세스에나 균일하게 걸리는 사고**이고, 114회 중 1회이며
 그 뒤 90회 연속 초록이라 재현되지 않는다. **왜 죽었는지는 증거가 없어 단정하지 않는다.**
 
+**A third net, a week later, the same shape (2026-09-02, ticket 03-15).** `net_hand` died in **1 of 3 full
+suite runs**: stdout **75 bytes, the engine banner and nothing else**, stderr **0 bytes**, no parse error
+and no script error. The header printed `hand 통과 0 [실패]` and the round's total fell **1567 → 1476 — a
+drop of 91, which is the whole of that net.** Run alone it came back 91 passed, twice the same day.
+⚠ **`net_hand` touches no tree, pumps no frame and reads no file.** It does strictly less at startup than
+almost every net that did NOT die, so 「a defect in that one net」 is not available as an explanation for any
+of the three — which is the census's own conclusion arriving a third time.
+
+⚠ **The exit code was -1066598273.** Ticket 03-15 records why this repo neither decodes it nor accepts the
+gloss it was first given, and **no replacement guess is offered here either.**
+
+⚠⚠ **What caught it was the exit code, and the 실패 column stayed at 0.** That column counts failure-marked
+lines and a net that printed none contributes nothing to it — so this death **subtracted 91 from 통과 and
+added nothing to 실패.** **The identical crash at exit code 0 would have been a grey 통과 0 row under a
+green wrapper**, which is the door the same ticket then closed in the wrapper, unrun.
+
+**Twenty full suite rounds were run afterwards, sixteen processes in parallel, on Linux: 0 deaths**, every
+round bit-identical. ⚠⚠ **That does not travel back to Windows** — a clean 20 cannot tell 「the shape did
+not survive the OS change」 from 「1-in-3 was never the rate」, and the ticket's own numbers file says so
+rather than picking one.
+
 ---
 
 ## 이름을 바꾸면 그 이름으로 짜인 검사가 조용히 다른 것을 재기 시작한다 (2026-08-25, 티켓 15)

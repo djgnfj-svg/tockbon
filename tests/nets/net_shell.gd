@@ -1277,6 +1277,19 @@ func _key(code: int) -> InputEventKey:
 	return ev
 
 
+## The same event with an edge and an echo flag on it.
+##
+## ⚠⚠ **`_key` ALONE CANNOT MEASURE A HELD KEY AND THAT IS WHY THIS EXISTS.** It builds
+## `pressed = true` and nothing else — no release edge and no `echo` flag — so a WASD row written
+## against it measures the press half and **stays green over a camera that never stops.**
+func _key_edge(code: int, pressed: bool, echo: bool = false) -> InputEventKey:
+	var ev := InputEventKey.new()
+	ev.pressed = pressed
+	ev.echo = echo
+	ev.keycode = code
+	return ev
+
+
 func _click(at: Vector2) -> InputEventMouseButton:
 	var ev := InputEventMouseButton.new()
 	ev.button_index = MOUSE_BUTTON_LEFT
