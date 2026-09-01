@@ -1,6 +1,6 @@
 ---
 name: roadmap
-description: Draw the whole way to December, check it against what happened, and lay it out as numbered tasks whose tickets are one day each. Use when the user says 로드맵 점검 / 로드맵 보자 / 로드맵 정비 / 로드맵 다시 / 태스크 나누자 / 일단위로 / 12월까지 되나, or asks whether the plan still holds.
+description: Draw the whole way to December, check it against what happened, and lay it out as numbered tasks — two a week — with as many tickets under each as the work takes. Use when the user says 로드맵 점검 / 로드맵 보자 / 로드맵 정비 / 로드맵 다시 / 태스크 나누자 / 일단위로 / 12월까지 되나, or asks whether the plan still holds.
 ---
 
 # roadmap — draw the whole way, then cut it into tasks
@@ -18,14 +18,23 @@ being written**. Balance, fun, and polish are judged by playing, not by reading 
 |---|---|---|
 | **The roadmap** | **The whole way to the December demo, on one page.** The tasks fall out of it | `docs/roadmap/README.md` |
 | **A task** | **One numbered folder.** `NN.task.md` says what is on screen when it ends; the ticket folders that build it sit beside it | `docs/roadmap/task-NN-<english-slug>/NN.task.md` |
-| **A ticket** | **One day of work, and a folder too.** `NN-MM.ticket.md` describes it; **what it produced piles up beside it** — the screenshot, the measurement, the note that says how it went | `docs/roadmap/task-NN-<slug>/MM-<english-slug>/NN-MM.ticket.md` |
+| **A ticket** | **One piece of the task, and a folder too.** ⚠ **Not a day** — see the grain rule below. `NN-MM.ticket.md` describes it; **what it produced piles up beside it** — the screenshot, the measurement, the note that says how it went | `docs/roadmap/task-NN-<slug>/MM-<english-slug>/NN-MM.ticket.md` |
 
 **A ticket's number is unique inside its task, never across the repo.** Task `03`'s second ticket is
 **03-02**, and task `04` has its own `02`.
 
-⚠⚠ **A ticket is one day.** The week was the grain until 2026-08-30 and it did not hold — **a week is
-too big to keep quality inside it.** ⇒ **A ticket that cannot be finished in a day is two tickets**,
-and cutting it is the user's call, not yours.
+⚠⚠ **THE GRAIN IS THE TASK, NOT THE TICKET** (2026-09-01, the user).
+
+> *"I never said a ticket is one a day. Sometimes tickets all get done at once, so it does not matter,
+> and there can be several. There can be many tickets. What is two is the TASKS. Per week."*
+> (「티켓은 뭐 하루에 하나 한다고 안 했어 ... 티켓은 여러 개여도 돼. 태스크가 두 개라는 거지. 주당」)
+
+⇒ **Two tasks a week.** ⇒ **A task carries as many tickets as the work takes** — one, or eight, and
+several may be finished in one sitting.
+
+⚠⚠ **DO NOT SPLIT A TICKET TO MAKE IT FIT A DAY, AND DO NOT COUNT TICKETS AGAINST THE DAYS LEFT IN THE
+WEEK.** ⚠ **What is still never yours**: how a task is cut, in what order, and where it stops. **That
+was rolled back twice** — 2026-08-30 and 2026-08-31.
 
 ⚠⚠ **`docs/plan/` and its flat `tickets/` folder are both gone.** Forty-five ticket files were deleted
 2026-08-30 (the user: *"deleting them all would be fine"*), the folder became `docs/roadmap/` on
@@ -100,7 +109,8 @@ is worth its place.**
    and names the task, net or commit it came from. **Where a section is empty, say it is empty** —
    a clean section is a measurement.
 2. **The task table** — every task to December, **numbered**, one line each, one thing each.
-3. **The nearest task's days** — the tickets that already sit in it, one line each, one day each.
+3. **The nearest task's tickets** — the ones that already sit in it, one line each. ⚠ **Do not assign
+   them days**; the count is not a schedule.
    ⚠ **Where its cut is not settled, say it is not settled** and stop. **Never fill the days yourself.**
 4. **What is still the user's to answer** — the cuts, the orderings, the day counts, the stopping points.
 

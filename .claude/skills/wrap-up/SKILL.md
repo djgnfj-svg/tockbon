@@ -84,7 +84,9 @@ open」 is exactly what the next session needs.
 
 - **New tickets** — anything the user decided that no ticket holds. ⚠ **You are writing down answers,
   not inventing work.** A question the user must answer is `Type: grilling`, never `task`
-- ⚠⚠ **A ticket is one day. If it does not fit in a day, the user says where it splits** — never you
+- ⚠⚠ **A ticket is NOT a day** (2026-09-01, the user: 「티켓은 여러 개여도 돼. 태스크가 두 개라는 거지.
+  주당」). **Two tasks a week; a task carries as many tickets as the work takes.** ⚠ **Where a task is
+  cut is still the user's, never yours**
 - **Dead references** — does any doc or comment point at what you deleted or renamed
 - **Loose pictures** — `ls image*.png image*.jpg` (they are gitignored, so `git status` cannot see
   them). ⚠ **Check how many there are and ask which ones mattered** — that is the user's call
