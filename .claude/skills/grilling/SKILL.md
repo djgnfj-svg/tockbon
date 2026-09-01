@@ -36,6 +36,22 @@ break the very thing they name.
 - ⚠ **A frontier of one is a round of one.** Never pad a round to look like grilling
 - ⚠⚠ **No emoji.** The template above used them; **this repo's no-emoji rule wins**
 
+## ⚠⚠ **Everything that is not a question is kept to a MINIMUM** (2026-09-01, the user)
+
+***"Do not do anything but those questions and recommendations this session. It gets too long. And from
+now on too, when brainstorming, everything but the question and the recommendation is too long. It makes
+the body above them too hard to look at. So everything but the questions and recommendations should be
+the bare minimum."***
+
+**The round IS the questions.** Everything above them is overhead the user reads before reaching what
+they are actually being asked.
+
+- **Three lines above the rule, at most** — what the last round settled, and nothing else
+- ⚠⚠ **No section headings above the questions.** A heading is the sign the body grew into a document
+- ⚠ **A measurement goes in the `왜` line, never in a table above it.** If it does not fit on that line,
+  it is not what the user needs in order to answer
+- **Nothing after the last question** — no summary, no next step, no offer
+
 Each round the user answers reshapes the tree: settled decisions push the frontier outward and unblock questions that depended on them. Recompute the frontier and ask the next round. A question whose answer depends on another question still open in this round belongs to a _later_ round, not this one.
 
 Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, tools, etc.), dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself.
