@@ -55,8 +55,10 @@ $tmp = [System.IO.Path]::GetTempPath()
 # **A brand-new `class_name` file is invisible to `--headless --script`.** Measured twice on 4.7.1: the net
 #  that references it dies with `Parse error` and `Nonexistent function 'new' in base 'GDScript'` — and that
 #  shape does NOT reach the runner's zero-check detector, because the net never gets as far as `run()`.
-#  Only the stderr verdict below turns it red, so the round goes red for a reason that reads like broken code
-#  and is actually a missing import.
+#  ⚠⚠ **「Only the stderr verdict below turns it red」 was true until 2026-09-02 and is not any more.**
+#  That shape prints `[net] 0 passed` at exit code 0, so `Get-CheckCount` reddens it as well — measured live
+#  this round on a net whose stdout was 97 bytes and whose exit code was 0. **Two verdicts fire on it now.**
+#  Either way the round goes red for a reason that reads like broken code and is actually a missing import.
 #  **`--script` does not re-import on its own** (a rule file said it did, for two days, and four agents lost a
 #  round to it; that wrong line is gone now and this comment is what replaced it). Every plan that adds a class file walks into this, so the guard lives here rather than in
 #  someone's memory.
@@ -305,13 +307,19 @@ if ($Serial) {
         foreach ($n in $noise) { Write-Host "  | $n" -ForegroundColor Red }
         $exitCode = 1
     }
-    # **The same guard as `$ranNothing` below, and it is here because this branch exits before ever
-    #  reaching `$bad`.** `-Serial` is what the top of this file tells you to reach for when the parallel
-    #  result is suspect — which is the exact path somebody walks to chase a net that vanished, so leaving
-    #  it as the one door with no guard would put the hole in the control.
-    # ⚠ One process runs every filtered net here, so this count is the whole batch's. **A batch of zero
-    #  cannot reach it**: a filter matching no net already exited above, and this side strips `net_` before
-    #  matching while the engine side does not, so the engine's set is a superset of this one.
+    # **NOT the same guard as `$ranNothing` below, and the difference is the whole of what it can see.**
+    #  One process runs every filtered net here and prints ONE summary for the batch, so this count is the
+    #  batch's and never a net's. ⇒ **It fires only when the WHOLE batch ran nothing.** A single net
+    #  vanishing inside a batch that still reported is invisible to it.
+    # ⚠⚠ **Measured, 2026-09-02**: `net_hand` and `net_islands` in one process with `net_hand`'s class
+    #  unresolvable printed `[net] 21 passed` at exit code 0 — `net_islands`' whole count, `net_hand`'s 91
+    #  checks gone, and this guard silent. **The parallel path catches that one; this path cannot.**
+    # ⚠ **Do not go hunting for the fix here.** One summary line carries one number for the batch, so a
+    #  per-net loss may not be recoverable from it at all. What is left is still worth having: the narrowed
+    #  run somebody actually reaches for to chase a vanished net is `-Serial` on that one net, and there the
+    #  batch IS the net.
+    # ⚠ A batch of zero cannot reach this at all: a filter matching no net already exited above, and this
+    #  side strips `net_` before matching while the engine side does not, so the engine's set is a superset.
     if ((Get-CheckCount $stdout) -eq 0) {
         Write-Host ""
         Write-Host "[빈그물] 검사를 하나도 안 돌렸다 — 이 라운드는 아무것도 재지 않았다." -ForegroundColor Red

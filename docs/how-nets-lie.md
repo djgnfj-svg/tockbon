@@ -226,7 +226,8 @@ is a reader like any other.
 (0.025%). **특정 나무의 결함이 아니라 어느 프로세스에나 균일하게 걸리는 사고**이고, 114회 중 1회이며
 그 뒤 90회 연속 초록이라 재현되지 않는다. **왜 죽었는지는 증거가 없어 단정하지 않는다.**
 
-**A third net, a week later, the same shape (2026-09-02, ticket 03-15).** `net_hand` died in **1 of 3 full
+**A third net across this file, a week later, the same shape (2026-09-02, ticket 03-15).** ⚠ It is the
+second in THIS entry — the other is further down. `net_hand` died in **1 of 3 full
 suite runs**: stdout **75 bytes, the engine banner and nothing else**, stderr **0 bytes**, no parse error
 and no script error. The header printed `hand 통과 0 [실패]` and the round's total fell **1567 → 1476 — a
 drop of 91, which is the whole of that net.** Run alone it came back 91 passed, twice the same day.

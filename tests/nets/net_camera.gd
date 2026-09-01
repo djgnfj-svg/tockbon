@@ -520,6 +520,183 @@ func _turn_and_tilt_hold_the_centre(t) -> void:
 	t.eq(fv.cam_pitch_deg, Look.CAM_PITCH_MAX_DEG, "위로는 80° 에서 멈춘다")
 
 
+
+## **Q and E ask for a quarter, the board sweeps there, and it lands ON the quarter** (2026-09-02, the
+## user choosing between an instant snap and a visible turn: 「즉시 돌 거 같아. 도는 것이 보여」 —
+## *"it starts turning right away, and the turning is visible."*).
+##
+## ⚠⚠ **EVERY LOOP HERE IS BOUNDED AND NONE OF THEM PUMPS 「UNTIL SETTLED」.** A sweep that never
+## finishes does not redden a net that waits for it — **it hangs**, and this runner reports a hung net
+## by taking its whole count out of the passes and adding **nothing** to the failures. A row that can
+## only ever hang is worse than no row.
+##
+## ⚠ **`_process` is called by hand on an untreed view**, the same way every other row in this file
+## drives it: the sweep is a rate, and a pumped frame would be measuring the machine.
+func _a_notch_sweeps_and_lands_on_the_quarter(t) -> void:
+	var fv := _fv()
+	fv._build_world()
+	fv.zoom = 1.0
+	fv.cam_px = Vector2(300.0, 79.94)
+
+	# **A frame with nothing owed moves nothing.** The floor under everything below — and the reason
+	# the four instruments that call `turn_by` on a live tree are not dragged anywhere.
+	fv.cam_yaw_deg = 37.0
+	fv._process(0.05)
+	t.eq(fv.cam_yaw_deg, 37.0, "아무것도 안 시켰으면 프레임이 지나도 각도가 그대로다")
+	# ⚠⚠ **AND A DIRECT `turn_by` LEAVES NOTHING OWED.** Two shot tools turn 45° on purpose to
+	# photograph a seam measured at that angle, on a `FieldView` inside a real tree with `_process`
+	# running. **A sweep that pulled the yaw toward a stored target would drag them back at 409°/s.**
+	fv.turn_by(8.0)
+	fv._process(0.05)
+	fv._process(0.05)
+	t.ok(absf(fv.cam_yaw_deg - 45.0) < 0.001,
+		"turn_by 로 직접 돌린 각도는 프레임이 지나도 안 끌려간다 (%.3f°) — 도구 넷이 여기 산다"
+			% fv.cam_yaw_deg)
+
+	# -- one press, one frame: the board is PARTWAY round -------------------------------------------
+	# ⚠⚠ **THIS SINGLE ROW IS THE WHOLE OF THE USER'S CHOICE.** It is the row that goes red the day
+	# somebody makes the turn instant, and there is nothing else in the repo that would.
+	fv.cam_yaw_deg = 0.0
+	fv.turn_notch(Look.CAM_YAW_SNAP_DEG)
+	fv._process(0.02)
+	t.ok(fv.cam_yaw_deg > 0.001 and fv.cam_yaw_deg < Look.CAM_YAW_SNAP_DEG - 0.001,
+		"한 번 누르고 한 프레임이면 판이 0 과 90 사이 어딘가다 — 도는 것이 보인다 (%.2f°)"
+			% fv.cam_yaw_deg)
+
+	# **And it settles exactly on the quarter, not near it.** ⚠ The frame count is a bound, not a
+	# guess: 0.22 s of sweep at 1/60 s a frame is fourteen frames, and forty is comfortably past it.
+	var frames := _sweep_out(fv, 40)
+	t.ok(frames < 40, "%d 프레임 만에 멈췄다 — 안 멈추면 여기가 아니라 러너가 매달린다" % frames)
+	t.ok(absf(fv.cam_yaw_deg - 90.0) < 0.001,
+		"그리고 정확히 90 에 앉는다 — 근처가 아니라 그 위다 (%.6f°)" % fv.cam_yaw_deg)
+
+	# -- four presses come back to 0, and the FOURTH is the one that used to spin for ever -----------
+	# ⚠⚠ **A STORED TARGET YAW MAKES THIS ROW HANG, NOT FAIL.** `turn_by` wraps with `fmod(yaw + deg,
+	# 360)`; a target does not wrap with it. From 270 an E press targets **360**, the step that would
+	# reach it comes back as 0, the remainder becomes 360 again, and the board turns at 409°/s for
+	# ever — simulated exactly: 0, 90 and 180 settle in 14 frames and 270 was still turning at frame
+	# 2000. **The remaining form is what makes that unreachable**, and this loop is where it is said.
+	fv.cam_yaw_deg = 0.0
+	var yaws := PackedFloat64Array()
+	var stalled := 0
+	for _p in 4:
+		fv.turn_notch(Look.CAM_YAW_SNAP_DEG)
+		if _sweep_out(fv, 40) >= 40:
+			stalled += 1
+		yaws.append(_off_the_quarter(fv.cam_yaw_deg))
+	t.eq(stalled, 0, "네 번 다 멈춘다 — 넷째 누름이 360 을 건너다 영영 도는 것이 이 줄이 잡는 것이다")
+	var off := 0.0
+	for k in yaws.size():
+		off = maxf(off, float(yaws[k]))
+	t.ok(off < 0.001, "네 번 다 눈금 위에 앉는다 — 가장 어긋난 것이 %.6f° 다" % off)
+	# ⚠⚠ **IT COMES BACK TO 0 MODULO 360, AND MEASURED IT IS 359.99999999999994.** The ticket's prose
+	# says ±90 is exact in float and that is true of ±90 — **but the sweep never adds 90 once.** It adds
+	# fourteen fractional steps whose sum is exactly the notch in `_yaw_remaining`'s own accounting,
+	# while `cam_yaw_deg` carries the rounding of fourteen `fmod` additions. **The residue is 6e-14 of a
+	# degree**, and a row written as `absf(yaw) < 0.001` reddens on a board that is exactly where the
+	# player put it. ⇒ the distance is measured the short way round the circle.
+	var home := fmod(absf(fv.cam_yaw_deg), 360.0)
+	t.ok(minf(home, 360.0 - home) < 0.001,
+		"E 를 네 번 누르면 판이 여는 각도로 돌아온다 — 한 바퀴 돌아 0 이다 (%.14f°)" % fv.cam_yaw_deg)
+
+	# **And the residue does not grow.** ⚠⚠ **「nothing drifts」 IS A CLAIM ABOUT MANY PRESSES, NOT ONE**,
+	# and a rounding of 6e-14 a turn that accumulated would be off a notch by a degree after enough of
+	# them. Forty presses is ten full turns.
+	fv.cam_yaw_deg = 0.0
+	var worst := 0.0
+	for _p in 40:
+		fv.turn_notch(Look.CAM_YAW_SNAP_DEG)
+		_sweep_out(fv, 40)
+		worst = maxf(worst, _off_the_quarter(fv.cam_yaw_deg))
+	t.ok(worst < 0.001,
+		"마흔 번을 눌러도 눈금에서 가장 멀리 어긋난 것이 %.14f° 다 — 쌓이지 않는다" % worst)
+
+	# -- Q is the other way, and Q then E cancels ----------------------------------------------------
+	# ⚠ **`fmod` keeps the dividend's sign**, so one Q leaves **−90** and not 270 — the same picture,
+	# six numbers in the field rather than four. That is why the row above measures the distance to the
+	# NEARER quarter and never `fmod(yaw, 90)` on its own.
+	fv.cam_yaw_deg = 0.0
+	fv.turn_notch(-Look.CAM_YAW_SNAP_DEG)
+	_sweep_out(fv, 40)
+	t.ok(absf(fv.cam_yaw_deg - (-90.0)) < 0.001,
+		"Q 는 반대로 돈다 — 한 번이면 −90 이고 270 이 아니다 (%.2f°)" % fv.cam_yaw_deg)
+	t.ok(_off_the_quarter(fv.cam_yaw_deg) < 0.001, "그래도 눈금 위다 (%.6f°)" % fv.cam_yaw_deg)
+	# **Both inside one sweep**: Q then E, before either has finished, leaves the board where it was.
+	fv.cam_yaw_deg = 0.0
+	fv.turn_notch(-Look.CAM_YAW_SNAP_DEG)
+	fv._process(0.02)
+	var mid := fv.cam_yaw_deg
+	t.ok(mid < -0.001, "자가 점검 — 그 한 프레임에 실제로 돌기 시작했다 (%.2f°)" % mid)
+	fv.turn_notch(Look.CAM_YAW_SNAP_DEG)
+	_sweep_out(fv, 40)
+	t.ok(absf(fv.cam_yaw_deg) < 0.001,
+		"돌던 중에 반대를 누르면 제자리로 돌아온다 — 한쪽이 삼켜지지 않는다 (%.6f°)" % fv.cam_yaw_deg)
+	# **Two the same way inside one sweep are a HALF**, which is the other half of the same claim.
+	fv.cam_yaw_deg = 0.0
+	fv.turn_notch(Look.CAM_YAW_SNAP_DEG)
+	fv._process(0.02)
+	fv.turn_notch(Look.CAM_YAW_SNAP_DEG)
+	_sweep_out(fv, 60)
+	t.ok(absf(fv.cam_yaw_deg - 180.0) < 0.001,
+		"같은 쪽으로 두 번 빠르게 누르면 180 이다 — 두 번째가 첫 번째의 도중에 안 먹힌다 (%.2f°)"
+			% fv.cam_yaw_deg)
+
+	# -- the duration is the constant's, measured as a rate ------------------------------------------
+	# ⚠ **Hand arithmetic and not a read-back of the same expression the code evaluates**: half of the
+	# sweep's own seconds buys half of a quarter, which is 45°.
+	fv.cam_yaw_deg = 0.0
+	fv.turn_notch(Look.CAM_YAW_SNAP_DEG)
+	fv._process(Look.CAM_YAW_SWEEP_SEC * 0.5)
+	t.ok(absf(fv.cam_yaw_deg - 45.0) < 0.001,
+		"쓸어 도는 시간의 절반이 지나면 정확히 절반을 돌았다 (%.3f°)" % fv.cam_yaw_deg)
+	# **A zero delta moves nothing**, which is what lets a net hand-set the yaw and then call
+	# `_process` — `net_fx_view` does exactly that twenty-six times.
+	var held := fv.cam_yaw_deg
+	fv._process(0.0)
+	t.eq(fv.cam_yaw_deg, held, "델타가 0 인 프레임은 한 도도 안 돈다")
+	_sweep_out(fv, 40)
+
+	# -- an island opening drops a sweep in flight ---------------------------------------------------
+	# ⚠ Without this the quarter still owed when the last board closed goes on being paid onto the new
+	# one, off the angle `setup` has just said the board opens at.
+	fv.turn_notch(Look.CAM_YAW_SNAP_DEG)
+	var army := Army.new()
+	var rows := Islands.rows()
+	var g := Grid.new()
+	g.load_rows(rows)
+	var b := Battle.new()
+	b.setup(g, army, [])
+	fv.setup(b, army, rows)
+	t.eq(fv.cam_yaw_deg, Look.CAM_YAW_DEG, "자가 점검 — setup 이 각도를 여는 값으로 되돌렸다")
+	fv._process(0.05)
+	fv._process(0.05)
+	t.eq(fv.cam_yaw_deg, Look.CAM_YAW_DEG,
+		"섬이 열리면 돌던 것도 같이 놓는다 — 앞 판이 빚진 사분의 일이 새 판에서 마저 돌지 않는다")
+
+
+## **Runs the sweep out and answers how many frames it took**, at most `cap`.
+##
+## ⚠⚠ **A CAP AND NEVER A 「WHILE NOT SETTLED」.** The failure this ticket is built around does not stop:
+## a stored target yaw turns the board for ever, and a loop with no bound would take this whole net out
+## of the round without adding one to the failure column.
+func _sweep_out(fv: FieldView, cap: int) -> int:
+	for n in cap:
+		if fv._yaw_remaining == 0.0:
+			return n
+		fv._process(1.0 / 60.0)
+	return cap
+
+
+## **How far a yaw is from the NEARER multiple of 90.**
+##
+## ⚠⚠ **`fmod` KEEPS THE DIVIDEND'S SIGN, SO `absf(fmod(yaw, 90.0))` IS ONE-SIDED.** One Q press leaves
+## −90 rather than 270, and a yaw one ulp under a notch answers 89.99999999999999 rather than 0 — a row
+## written that way would redden on a board sitting exactly where it should.
+func _off_the_quarter(yaw: float) -> float:
+	var q := Look.CAM_YAW_SNAP_DEG
+	var r := fmod(absf(yaw), q)
+	return minf(r, q - r)
+
 ## ⚠⚠ **The pin that makes the pure rows whole**: measuring a pure function is not measuring that
 ## anything calls it. `_place_camera` is the one place `cam_px` / `zoom` / the two angles reach the
 ## engine, so the REAL `Camera3D` is read back against hand literals — position, orientation, size.
