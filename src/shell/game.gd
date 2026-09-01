@@ -285,6 +285,15 @@ func _process(delta: float) -> void:
 	# frame where nothing moved costs 0.04 ms and a frame where something did costs 3.9 ms — measured on
 	# the real island with a 부대 of nine.
 	_show_route(_pointer_at)
+	# ⚠⚠ **AND THE HOVER PLATE IS RE-ASKED EVERY FRAME TOO, SINCE 2026-09-02.** `set_hover_tile` had
+	# exactly one call site — the motion branch — and **a keyboard turn produces no motion event**, so
+	# one press of E left the white plate sitting on the 조각 the cursor used to be over, a quarter of
+	# the board away, until the hand moved. The 이동선 above never had that problem because it is built
+	# from the remembered pointer every frame; this is the plate joining it.
+	# ⚠ **It is a different thing from a plate under a HELD right button**, which is a stream of real
+	# motion events and was frozen by an early `return` instead.
+	# ⚠ **Below the pan and not above it**, so the plate answers for the camera this frame ends on.
+	field_view.set_hover_tile(_tile_at(_pointer_at))
 	# ⚠ **No multiplier is handed down any more.** `speed-off-open-landing` deleted the ladder, so the
 	# sim and both views run on the bare frame delta — which is what every duration in `look.gd` was
 	# budgeted against in the first place. `set_time_scale` and `set_speed` are gone rather than being
