@@ -193,8 +193,17 @@ func _process(_delta: float) -> bool:
 			# **Turn the board and re-aim.** ⚠⚠ **The 이동선 and the rim both have to survive this**
 			# (2026-08-31, the user: 「약간 회전하니까 이상한거 같은데? 회전했을때도 자연스럽게
 			# 해줄래?」).
-			for _i in 3:
-				_game._unhandled_input(_turn_key())
+			# ⚠⚠ **THREE PRESSES STOOD HERE AND THEY WERE DEAD CODE THAT STILL RAN** — E did nothing
+			# from 2026-08-31 to 2026-09-02, so this photographed an unturned board under a name that
+			# said 「turned」. **E turns a QUARTER now**, so three of them would be 270° and the shot
+			# would be a picture of the board turned the wrong way. **One press, one quarter.**
+			# ⚠ **The sweep takes `Look.CAM_YAW_SWEEP_SEC` and this tool gates each step on six
+			# frames**, so the board is still moving when the next step runs — the frames are run out
+			# by hand here so `4_turned` is a settled board and not a blurred moment. **The
+			# mid-sweep picture is `shoot_turn.gd`'s**, which exists for exactly that frame.
+			_game._unhandled_input(_turn_key())
+			for _i in 30:
+				_game._process(1.0 / 60.0)
 			_dest_at = _aim_from_reach()
 		9:
 			_save("4_turned")

@@ -753,8 +753,8 @@ func tilt_by(deg: float) -> void:
 ## from the board the shell was reading.** Measured against `Camera3D.unproject_position` on island 0:
 ## a press aimed at the tile actually under the cursor landed a **mean of 18.6 tiles** away.
 ## ⚠ **It is not symmetric and cannot be absorbed into the yaw**: `cam_yaw_deg` is the player's, the
-## right-button drag writes it (Q and E did too until 2026-08-31), and 0 has to be the view the flat
-## board had.
+## turn keys write it — the right-button drag did from 2026-08-26 until it was deleted on 2026-09-02,
+## and Q and E carry it again — and 0 has to be the view the flat board had.
 func _place_camera() -> void:
 	if _cam == null:
 		return

@@ -41,6 +41,7 @@ func run(t) -> void:
 	_the_clamp_holds_at_every_yaw(t)
 	_the_clamp_stops_at_hand_literals(t)
 	_turn_and_tilt_hold_the_centre(t)
+	_a_notch_sweeps_and_lands_on_the_quarter(t)
 	_the_real_camera_obeys_the_pure_functions(t)
 	await _the_engine_agrees_with_the_forward(t)
 	_the_shake_rides_the_screen_axes(t)
@@ -473,7 +474,13 @@ func _turn_and_tilt_hold_the_centre(t) -> void:
 		"카메라가 실제로 화면 한가운데 땅점을 보고 있다 (자가 점검)")
 
 	var drift := 0
-	for step: float in [15.0, 30.0, 45.0, 75.0, 135.0]:
+	# ⚠⚠ **90 AND 270 WERE ADDED HERE ON 2026-09-02, AND THE ROW'S LABEL WAS READING BETTER THAN THE
+	# LOOP.** It named the accumulated yaws 15·45·90·165·300, so it reached yaw 90 — but its STEPS were
+	# 15·30·45·75·135 and **not one of them was a quarter**, which is the only step Q and E can take.
+	# ⚠ **270 follows the 90 so the accumulated angle comes back to 300**, which is what keeps the two
+	# rows under this loop on the exact literals they were measured at. It is a quarter-family step
+	# too — three E presses.
+	for step: float in [15.0, 30.0, 45.0, 75.0, 135.0, 90.0, 270.0]:
 		fv.turn_by(step)
 		fv._place_camera()
 		if fv._ground_centre_px().distance_to(centre0) > 0.01:
@@ -483,7 +490,8 @@ func _turn_and_tilt_hold_the_centre(t) -> void:
 		var target: Vector3 = fv._cam.position - fv._cam.transform.basis.z * Look.CAM_DIST_TILES
 		if target.distance_to(target0) > 0.01:
 			drift += 1
-	t.eq(drift, 0, "yaw 15·45·90·165·300 을 지나도록 중심·줌·시선 목표가 한 번도 안 움직였다 — 판이 제자리에서 돈다")
+	t.eq(drift, 0,
+		"yaw 15·45·90·165·300·30·300 을 지나도록 중심·줌·시선 목표가 한 번도 안 움직였다 — 90 도 한 걸음도 포함이다")
 	t.ok(absf(fv.cam_yaw_deg - 300.0) < 0.01, "각도 자체는 실제로 쌓였다 (자가 점검, %.1f°)" % fv.cam_yaw_deg)
 	fv.turn_by(60.0)
 	t.ok(absf(fv.cam_yaw_deg - 0.0) < 0.01, "한 바퀴를 채우면 0 으로 감긴다 (fmod 360)")

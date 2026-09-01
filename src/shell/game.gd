@@ -132,9 +132,12 @@ var _press_open := false
 ## drag back on the right button). It said whether the press in flight commands a body on a release in
 ## place, and it existed for exactly one reason: **both buttons opened the same press**, so something
 ## had to tell them apart without keeping a button index.
-## ⚠ **The right button no longer opens a press at all** — it turns the board — so this flag could
+## ⚠ **The right button no longer opens a press at all** — it turned the board — so this flag could
 ## only ever be `true`, and a gate that can only be true is not a gate, it is a deleted branch waiting
 ## to be noticed. **What kept the right button from commanding is now the wiring itself.**
+## ⚠⚠ **AND SINCE 2026-09-02 THE RIGHT BUTTON DOES NOTHING AT ALL** — the yaw drag went to Q and E, so
+## it is not that the button is busy turning, it is that the shell has no right-button branch left.
+## **03-11 is what picks it up**, and the flag it needs is this one.
 
 ## **Whether the pointer is over this window, and whether this window has the focus.** ⚠⚠ **BOTH WERE
 ## DELETED WITH THE EDGE BAND ON 2026-08-31** (the user: 「화면 끝에 마우스 뒀을 때 이동되는 로직 ...
@@ -330,6 +333,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	# ⚠ **One line above every branch rather than a test inside each**, the same argument the deleted
 	# hold guard made in this position: TAB, ESC, the tilt keys, the wheel and both drags each waved a
 	# press through on their own terms, and five guards are five chances to miss one.
+	# ⚠ **「both drags」 is ONE drag since 2026-09-02** — the right button's yaw drag is deleted and the
+	# turn keys took it — and the argument is unchanged: one line above every branch.
 	# ⚠ **It is NOT a return in `_process`.** The views keep their own clocks and the island keeps
 	# drawing behind the words — that is the ticket's answer (「뒤에는 섬이 그대로 남고」), and a shell
 	# that stopped processing would freeze the picture rather than the play.
@@ -338,8 +343,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		# after seeing the words on the glass: 「그 게임오버 하고 타이틀로 돌아가는 버튼도 만들어줘」).
 		# **This reverses 티켓 02-03's own 「끝」**, which put a way back in its Out of scope.
 		# ⚠ **Inside the closed door and not above it.** Above, it would be one more branch competing
-		# with TAB, the wheel and both drags for a press on a LIVE board; here the board is already
-		# dead and this is the only sentence left that means anything.
+		# with TAB, the wheel and the left drag for a press on a LIVE board; here the board is already
+		# dead and this is the only sentence left that means anything. ⚠ **It read 「both drags」 until
+		# 2026-09-02**, when the right button's yaw drag was deleted.
 		# ⚠ **The rect comes from the view that drew it** — see `HudView.back_rect_px`, which is zero
 		# until the words are up, so there is no second 「is the screen showing」 test here.
 		if event is InputEventMouseButton:
@@ -401,7 +407,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		# ⚠⚠ **Tilting is not gated on anything**, on purpose — 티켓 07 asks whether a hand may move
 		# the board mid-fight, and gating it before the question is decided would answer it by
 		# omission (2026-08-24, the user: 「3D 회전 회전 버튼이 내가 돌려봐야 될 듯」).
-		# ⚠ **The turn keys stood beside the tilt here and are deleted** — see `_on_tilt_key`.
+		# ⚠⚠ **THE TURN KEYS STOOD BESIDE THE TILT HERE, WERE DELETED, AND ARE BACK** (2026-08-31, the
+		# user: 「QE 이거 기능제거해줘」; restored 2026-09-02 turning a QUARTER instead of 15°). **They
+		# are their own handler again** rather than living inside the tilt's, which is the shape they
+		# had before the deletion — see `_on_turn_key`.
+		if _on_turn_key(key):
+			return
 		_on_tilt_key(key)
 		return
 	if event is InputEventMouseButton:
@@ -410,8 +421,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		# the user: 「마우스 휠이 회전 오른쪽이 끌어서 이동으로 해야할듯」; the same day at the screen,
 		# reversing it: 「마우스 휠이 확대 축소가 맞고, 오른쪽 버튼은 카메라 회전으로 이해했어」).
 		# **The later word wins and the earlier one is kept here rather than erased.**
-		# ⚠ **The yaw drag went back onto the right button** — see `_turning`. Q and E turned by a notch
-		# beside it for one week and are deleted (2026-08-31); the drag is the only turn left.
+		# ⚠⚠ **THE YAW DRAG WENT BACK ONTO THE RIGHT BUTTON AND IS NOW DELETED** (2026-09-02, the
+		# user: 「오른쪽 마우스로 회전을 하면 뭔가 장점이 별로 없어서」). Q and E turned by a notch
+		# beside it for one week, were deleted with it in between, and **are the only turn now** — the
+		# right button carries no camera at all, which is what frees it for the move order.
 		if click.button_index == MOUSE_BUTTON_WHEEL_UP and click.pressed:
 			_on_wheel(click.position, 1)
 		elif click.button_index == MOUSE_BUTTON_WHEEL_DOWN and click.pressed:
@@ -423,35 +436,37 @@ func _unhandled_input(event: InputEvent) -> void:
 				_begin_press(click.position)
 			else:
 				_end_press()
-		elif click.button_index == MOUSE_BUTTON_RIGHT:
-			# ⚠⚠ **RIGHT-DRAG TURNS THE BOARD. IT PANNED FOR ONE ROUND AND THAT IS REVERSED**
-			# (2026-08-30 morning, the user: 「오른쪽이 끌어서 이동으로 해야할듯」; the same day at the
-			# screen: 「오른쪽 버튼은 카메라 회전으로 이해했어」). **The later word wins.**
-			# ⚠ **It does not go through `_begin_press` at all**, which is what makes 「a right drag
-			# over the island never commands a body」 true by construction rather than by a flag: the
-			# right button opens no press, so there is no release in place for `_end_press` to turn
-			# into a walk order.
-			_turning = click.pressed
-			_turn_from = click.position
+		# ⚠⚠ **THE RIGHT BUTTON'S TWO ARMS STOOD HERE AND BOTH ARE DELETED** (2026-09-02, the user:
+		# 「오른쪽 마우스로 회전을 하면 뭔가 장점이 별로 없어서」). **The two reversals they carried are
+		# kept rather than erased**, because deleting this branch is itself reversing a reversal:
+		#
+		#  - 2026-08-26, the user: 「회전은 오른쪽 마우스 누르고 돌릴 수 있었으면 좋겠음」 — the yaw drag is born;
+		#  - 2026-08-30 morning: 「오른쪽이 끌어서 이동으로 해야할듯」 — it becomes a pan;
+		#  - 2026-08-30 at the screen: 「오른쪽 버튼은 카메라 회전으로 이해했어」 — the turn is re-taken;
+		#  - 2026-09-02 — **the turn moves onto Q and E and the button carries nothing.**
+		#
+		# ⚠ **What it made true by construction is now true by there being no branch**: the right
+		# button opens no press, so there is no release in place for `_end_press` to turn into a walk
+		# order. **That stops being an argument the day 03-11 puts the order on it.**
 	elif event is InputEventMouseMotion:
 		var motion := event as InputEventMouseMotion
-		# ⚠⚠ **THE POINTER IS RECORDED HERE, AND THE 이동선 IS ITS ONLY READER NOW.** It was the edge
-		# pan's line and was deleted with it (2026-08-31); it came back on 2026-09-01 for the route,
-		# which `_process` rebuilds every frame because the picked body walks. **It sits above the
-		# turn's early return** so a yaw drag does not leave the route reading a stale cursor.
+		# ⚠⚠ **THE POINTER IS RECORDED HERE, AND IT HAS TWO READERS.** It was the edge pan's line and
+		# was deleted with it (2026-08-31); it came back on 2026-09-01 for the 이동선, which `_process`
+		# rebuilds every frame because the picked body walks, and the band reads it again (2026-09-02).
+		# **It used to sit above the turn's early return** so a yaw drag did not leave the route
+		# reading a stale cursor; that return is gone with the drag.
 		_pointer_at = motion.position
-		# ⚠⚠ **THE YAW DRAG SITS ABOVE EVERYTHING ELSE**, because a turning drag is neither a hover
-		# nor a pan.
-		# ⚠ **Horizontal travel only.** Adding the vertical axis to the tilt here was tried on paper
-		# and dropped: R and F step the tilt, and a drag that changed two things at once made every
-		# accidental diagonal a lost camera the user then had to fix by hand.
-		# ⚠ **Measured from the LAST motion and not from the press point**, so the yaw follows the hand
-		# continuously — a delta taken from the press would re-apply the whole travel on every event.
-		if _turning:
-			var dx := motion.position.x - _turn_from.x
-			_turn_from = motion.position
-			field_view.turn_by(dx * Look.CAM_YAW_PER_PX_DEG)
-			return
+		# ⚠⚠ **THE YAW DRAG STOOD HERE, ABOVE EVERYTHING ELSE, AND IT IS DELETED** (2026-09-02, the
+		# user: 「오른쪽 마우스로 회전을 하면 뭔가 장점이 별로 없어서」). It read the HORIZONTAL travel
+		# only — a drag that changed two things at once made every accidental diagonal a lost camera —
+		# and it measured from the LAST motion rather than from the press point, so the yaw followed
+		# the hand continuously.
+		# ⚠⚠ **IT ENDED IN AN EARLY `return`, AND FOUR THINGS BELOW WERE FROZEN FOR THE LENGTH OF A
+		# TURN**: the hover plate, the 이동선, the left drag's pan threshold, and a left pan already in
+		# flight. **The first two coming back is a fix this ticket gets for free.** ⚠ **The fourth is
+		# new behaviour nobody asked for** — a left pan and a right press can now run together. It is
+		# harmless while the right button does nothing, **and it stops being harmless the day 03-11
+		# puts the move order on it**, which is why it is written here rather than found there.
 		# The panel is asked here too, and not only on press: a drag begun on the field before the
 		# panel opened must not keep panning (or sending) behind it once it does — `panel_active()`
 		# becoming true mid-drag is what `_begin_press` alone cannot catch.
@@ -599,8 +614,10 @@ func _start_run() -> void:
 ## 배드노스 보니까 손이 놀면 안될듯」, 2026-08-25). It sits above the pan because the pan is the
 ## fall-through that means 「the press hit nothing」, and a press that ordered somebody hit something.
 ## ⚠⚠ **THE `orders` PARAMETER IS GONE** (2026-08-30). It told the two buttons apart while both of
-## them opened this same gesture; **the right button turns the board now and never gets here**, so the
+## them opened this same gesture; **the right button turned the board and never got here**, so the
 ## only caller left is the left press and the only value it ever passed was `true`.
+## ⚠ **The right button turns nothing since 2026-09-02** and still never gets here — what changed is
+## the reason, not the fact.
 func _begin_press(at: Vector2) -> void:
 	# ⚠ **Nothing is ordered and nothing is panned here.** Both are decided by what happens next — see
 	# `_press_open`. A press that resolves to neither (no battle, no walkable 조각 under it) still ends
@@ -610,22 +627,20 @@ func _begin_press(at: Vector2) -> void:
 	_panning = false
 
 
-## ⚠⚠ **`_turning` AND `_turn_from` WERE DELETED ON 2026-08-30 AND THEY ARE BACK THE SAME DAY.** The
-## line that removed them is kept because this repo records a flip and does not erase the old one:
+## ⚠⚠ **`_turning` AND `_turn_from` STOOD HERE, WERE DELETED ONCE, CAME BACK, AND ARE DELETED AGAIN.**
+## Every line is kept because this repo records a flip and does not erase the old one:
 ##
 ##  - 2026-08-26, the user: 「회전은 오른쪽 마우스 누르고 돌릴 수 있었으면 좋겠음」 — the yaw drag is born;
 ##  - 2026-08-30 morning, the user: 「마우스 휠이 회전 오른쪽이 끌어서 이동으로 해야할듯」 — the turn
 ##    moves onto the wheel and these two fields are deleted;
 ##  - 2026-08-30 at the screen, the user: 「마우스 휠이 확대 축소가 맞고, 오른쪽 버튼은 카메라 회전으로
-##    이해했어」 — **reversed, and the later word wins.**
+##    이해했어」 — reversed, and they come back;
+##  - 2026-09-02, the user: 「오른쪽 마우스로 회전을 하면 뭔가 장점이 별로 없어서」 — **the drag is
+##    deleted and Q and E carry the turn.** ⚠ **Deleting it is reversing a reversal**, which is why
+##    the three lines above are not cut.
 ##
-## ⚠ **`Look.CAM_YAW_PER_PX_DEG` is read again.** Its tombstone said it was left standing rather than
-## deleted because re-deriving a measured per-pixel yaw costs a round; one round later that is exactly
-## what it saved.
-##
-## **Two plain fields and no state machine**: a drag is a button and a previous point.
-var _turning := false
-var _turn_from := Vector2.ZERO
+## ⚠ **`Look.CAM_YAW_PER_PX_DEG` is left standing again**, and no longer for this file: the piece
+## viewer drags a piece around by it, and that reader is live.
 
 
 ## Ends whichever gesture was in flight, and **dropping the pan is all that is left**.
@@ -633,8 +648,10 @@ var _turn_from := Vector2.ZERO
 ## ⚠ **Two gestures ended here before it and both are deleted**: the soldier drag that authored a
 ## landing (2026-08-25), and the held summon press (2026-08-28).
 ## ⚠⚠ **THE `at` PARAMETER IS GONE** (2026-08-30). It was kept unread as the shell's own release
-## signature; **the right button now ends the same gesture and its release position is unread too**,
-## so the parameter had become a value two callers had to invent for nobody to read.
+## signature; **the right button ended the same gesture and its release position was unread too**, so
+## the parameter had become a value two callers had to invent for nobody to read.
+## ⚠ **The right button ends nothing now** (2026-09-02) — there is one caller and it is the left
+## release.
 func _end_press() -> void:
 	# **A press that never travelled is a click, and a click commands.** ⚠ **Ordered from the point the
 	# button went DOWN and not from where it came up** — a hand that shifts two pixels while clicking
@@ -707,15 +724,41 @@ func _pan_the_board(delta: float) -> void:
 		field_view.pan_by(vel * delta)
 
 
+## **Q and E turn the board a QUARTER, and the sweep starts on this very frame** (2026-09-02, the user
+## on being shown the two choices: 「즉시 돌 거 같아. 도는 것이 보여」 — *"it starts turning right away,
+## and the turning is visible."*). ⚠ **The user named Don't Starve for the 90° feel.**
+##
+## **Returns whether it took the key**, the same contract `_on_tilt_key` has.
+##
+## ⚠⚠ **IT ASKS FOR A NOTCH RATHER THAN TURNING.** `field_view.turn_notch` adds to what the board still
+## owes and the view pays it off frame by frame — **two quick presses turn a half** instead of one of
+## them being eaten in the middle of the other's sweep.
+## ⚠⚠ **The `echo` guard is not optional.** OS auto-repeat on a held key delivers
+## `pressed = true, echo = true` many times a second, and a quarter per repeat spins the board.
+## ⚠ **Ungated, exactly as the tilt is** — 티켓 07 asks whether a hand may move the board mid-fight,
+## and gating it before that is decided would answer it by omission.
+func _on_turn_key(key: InputEventKey) -> bool:
+	if key.echo:
+		return false
+	if key.keycode == KEY_Q:
+		field_view.turn_notch(-Look.CAM_YAW_SNAP_DEG)
+		return true
+	if key.keycode == KEY_E:
+		field_view.turn_notch(Look.CAM_YAW_SNAP_DEG)
+		return true
+	return false
+
+
 ## R stands the camera up toward looking straight down, F lays it over toward the horizon — one notch
 ## each. **Returns whether it took the key**, which is the honest answer to 「did this handler consume
 ## the event」 and what every net that drives a key reads.
 ##
-## ⚠⚠ **Q AND E WERE THE KEYBOARD'S TURN AND THEY ARE DELETED** (2026-08-31, the user: 「QE 이거
-## 기능제거해줘」). They stood here from 2026-08-24 (「3D 회전 회전 버튼이 내가 돌려봐야 될 듯」) and
-## called the same `turn_by` the right-button drag calls. **The drag is untouched and is now the only
-## way a player turns the board** — `Look.CAM_YAW_STEP_DEG` is left standing for the shot tool, which
-## turns the camera itself. The tilt keys were never asked to go and did not.
+## ⚠⚠ **Q AND E WERE THE KEYBOARD'S TURN, THEY WERE DELETED, AND THEY ARE BACK** (2026-08-31, the
+## user: 「QE 이거 기능제거해줘」; restored 2026-09-02). They stood here from 2026-08-24 (「3D 회전 회전
+## 버튼이 내가 돌려봐야 될 듯」) and called the same `turn_by` the right-button drag called. **The drag
+## is what is deleted now, and they are the only way a player turns the board** — see `_on_turn_key`,
+## which is where they live rather than inside this function. The tilt keys were never asked to go and
+## did not.
 ##
 ## ⚠⚠ **The `echo` guard is not optional.** OS auto-repeat on a held key delivers
 ## `pressed = true, echo = true` many times a second, and a tilt per repeat rolls the camera over.
@@ -956,7 +999,8 @@ func _tile_at(at: Vector2) -> int:
 ##
 ## ⚠⚠ **THE WHEEL WAS MOVED ONTO THE TURN ON 2026-08-30 AND MOVED BACK THE SAME DAY** (the user, at
 ## the screen: 「마우스 휠이 확대 축소가 맞고」). The right button's yaw drag came back with it — see
-## the block where `_turning` is declared, which carries all three of the user's words in order.
+## the tombstone where `_turning` was declared, which carries all four of the user's words in order,
+## the 2026-09-02 one that deleted the drag included.
 ##
 ## ⚠⚠ **SHIFT+WHEEL IS DELETED AND IT WAS NEVER THE USER'S.** While the bare wheel turned the board,
 ## a previous builder pinned the zoom to SHIFT+wheel and wrote down that the pairing was **unowned** —
@@ -966,8 +1010,10 @@ func _tile_at(at: Vector2) -> int:
 ##
 ## ⚠ **R/F is untouched.** It is the keyboard's tilt and goes through the same `tilt_by` the rest of
 ## the shell does — a second path to one state, never a second state.
-## ⚠⚠ **Q/E stood beside it as the keyboard's turn and is deleted** (2026-08-31, the user: 「QE 이거
-## 기능제거해줘」). **The right button's drag is the only turn.**
+## ⚠⚠ **Q/E STOOD BESIDE IT AS THE KEYBOARD'S TURN, WAS DELETED, AND IS BACK** (2026-08-31, the user:
+## 「QE 이거 기능제거해줘」; restored 2026-09-02 at a quarter a press). The line that closed this —
+## 「the right button's drag is the only turn」 — **is the half that stopped being true**: the drag is
+## deleted and Q and E are the only turn.
 ##
 ## ⚠ **The zoom keeps the world point under the cursor fixed** (`field_view.zoom_at`).
 ## ⚠ **`notch` and not a factor**: the caller has a wheel direction and this is the one place that
