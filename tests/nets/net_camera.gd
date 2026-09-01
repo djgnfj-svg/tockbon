@@ -410,7 +410,7 @@ func _the_clamp_holds_at_every_yaw(t) -> void:
 	wild.zoom = 0.9
 	wild.cam_px = Vector2(-50000.0, -50000.0)
 	t.ok(not map.has_point(wild._ground_centre_px()),
-		"자가 점검 — 클램프를 안 걸면 중심이 실제로 지도 밖이다")
+		"자가 점검 — 클램프를 안 걸면 중심이 실제로 섬 + 바다 테두리 밖이다")
 
 
 ## The stops, as hand literals at zoom 1.0 on 48 x 32: visible (1280, 1120.12), and the bound is the

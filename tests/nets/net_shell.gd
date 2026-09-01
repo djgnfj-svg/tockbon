@@ -254,7 +254,7 @@ func run(t) -> void:
 
 	# 「지도에서 칸을 누르면 섬이 열린다」 — and the ring walks first. `_process(dt)` is called by hand
 	# because a headless frame is 6.9 ms and 0.45 s would be 66 frames of guessing.
-	t.ok(not game._panning, "지도를 누르기 전에는 카메라를 안 끌고 있다 (자가 점검)")
+	t.ok(not game._panning, "판을 누르기 전에는 카메라를 안 끌고 있다 (자가 점검)")
 
 	# -- swap in the spies and re-open the island --------------------------------------------------
 	# ⚠ **`reward_view` used to be swapped in here too**, early, so item 4 could tell 「rebound」 from
@@ -688,7 +688,7 @@ func _a_full_hand_moves_instead_of_picking(t, game, fs: FieldView) -> void:
 ## **The white rim on the body the hand is holding** (2026-08-31, the user: 「캐릭터 눌렀을때 살짝 내가
 ## 누른 캐릭에 흰색 테두리 ... 내가 누른 캐릭이 티가 나야할듯함」).
 ##
-## ⚠⚠ **THE POOLED NODE STATE IS THE AGREED VIEW SEAM** (`CONTEXT.md`) — `visible`, `texture` and
+## ⚠⚠ **THE POOLED NODE STATE IS THE AGREED VIEW SEAM** (`GLOSSARY.md`) — `visible`, `texture` and
 ## `scale` are three of the fields the engine consumes. **A rim is not measurable from `Hand`**: the
 ## defect this guards is a shell that picks somebody the view never marks, and both sides read green
 ## when only the sim is asked.

@@ -80,7 +80,7 @@ INSET = 0.42        # how far in the flat interior starts
 # WARNING **0.46 -> 0.75 ON 2026-08-28** (the user: 「그 해얀선에 닿는 칸의 곡선을 그냥 더 완만하게
 # 해줘볼래?」). The same drop spread over a longer run is a gentler slope; nothing about the heights moved.
 # WARNING **THIS WALKS BACK A LINE THE USER SET THEMSELVES**, and it is said out loud rather than done
-# quietly: `CONTEXT.md` records 「완만한 해변은 사용자가 일부러 버렸다」 under 여울, and the land ending in a
+# quietly: `GLOSSARY.md` records 「완만한 해변은 사용자가 일부러 버렸다」 under 여울, and the land ending in a
 # vertical wall is what that decision bought. **This is the user asking to try the other way**, so the
 # old line is left standing in the glossary rather than deleted.
 SKIRT = 0.75

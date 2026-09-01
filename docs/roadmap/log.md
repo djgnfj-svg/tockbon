@@ -16,6 +16,125 @@
 [roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅✅ **The week's two tasks both closed — four tickets, and the lead reddened the nets twice — 2026-09-01 (late)**
+
+**Nets 1464 pass · 21 fail → 1476 pass · 4 fail, and two unfinished nets became one.**
+**Task 02 closed on its ninth ticket; task 04 closed on all three of its own.**
+
+### What the user decided, in their own words
+
+**1. The stale nets are repaired, not deleted — the board letter was the defect.**
+> *"do 1 and 6 as recommended."* (「1번 6번 은 추천대로 해줘」)
+
+**Seventeen rows in `net_tiers` were red because hand-built fixtures spell their plateau `1`, and
+`1` has meant one notch — a stair — since 2026-08-26.** ⚠⚠ **`src/sim/islands.gd` had the diagnosis
+written into it the whole time**: 「Write the plateau as `1` and it becomes one notch above the ground,
+a body walks up it anywhere along the cliff, no error is raised, no net goes red, and the second storey
+quietly stops being a place you have to earn.」 **`net_tiers.gd` said 「re-reading that fixture is its
+own round」 in two places.** This was that round.
+
+**2. The glossary is `GLOSSARY.md` and stays at the root.** The root is not a preference —
+`CLAUDE.md` imports it from there with the repo's only `@` line, which is why it arrives every session.
+
+**3. Movement is commanded by 칸, and a full 칸 no longer refuses the order.**
+> *"let's do it by block. And you should be able to move even when something overlaps — so if there is
+> an enemy you fight, if not you gather, and if not you just get placed."*
+> (「블록단위로 하자 그리고 뭔가 겹쳐도 이동할 수 있어야해서 만약적이있으면 싸우고 아니면 채집을 하고
+> 아니면 배치만 되는것처럼 되야할듯」)
+
+⚠⚠ **This reverses 2026-08-29's 「자국을 칸마다 → 조각마다」**, which the user chose off the screen.
+**284 marks become 71.** ⚠ **Measured today**: a 조각 holds three and a 칸 holds nine, and today a
+full one **does not light and the order returns 0** — that is the half being removed.
+**The ceiling of nine stays; the overflow is pushed to the next 칸.** **The gathering branch is
+deferred to 4 주** — 나무·돌·철·식량 appear **0 times** in `src/sim/`.
+
+**4. 「부대」 is the word.**
+> *"the words are being used interchangeably, but 부대 is the right one."*
+> (「단어가 혼용되고 있긴한데 부대가 맞음」)
+
+⇒ **It is given only to what you pick and command.** **The bodies that happen to stand on one 칸 get
+no Korean name** — they are the result of seats being handed out, not something the player makes.
+
+**5. Wheel-drag was rejected as the way to move the board.**
+> *"go ahead except 3, and drop the wheel-press-and-drag."* (「3번 빼고 진행 훨누르고 끌기 뺴고」)
+
+⚠⚠ **So 「판을 무엇으로 움직이나」 is still open, and 03-04 (drag to select) is blocked on it.**
+**Three of the four ways were deleted by the user on 2026-08-31**, so re-proposing one re-opens their
+own decision.
+
+### ⚠⚠ Four times the plan was wrong and the agents caught it
+
+**Not one of these was found by the agent that wrote the plan.**
+
+| What the plan said | What was measured |
+|---|---|
+| 「The 성채 does not block bodies, but 「it does not burn」 is correct」 | ⚠⚠ **All three claims false.** Driven headless: **0 of its 4 조각 take a body**, `keep_hp` first drops at **t=25.0s**, and `lost = true` at **t=39.0s**. Losing the run on it was already wired to the screen |
+| The fixture table is complete | **`CLIMB_TIERS` was missing**, and it IS read |
+| Two rows go with the `(22,2)` deletion | **Four**, plus the `Grid` and `Battle` built only for them |
+| `island_build.py.orig` is a backup, leave it | **`git ls-files` shows no `island_build.py`** — the `.orig` is the only tracked copy, so it is a backup of nothing |
+
+⚠ **And one justification the lead wrote was measured false.** It claimed `CLIMB_TIERS` at `1` made a
+row 「a green measuring nothing」. Put back to `1` with the guard removed, **the row went red — 얻은 값 3 ·
+기대 0.** **The edit was right; the argument for it was not**, and the argument is corrected on the
+ticket rather than quietly dropped.
+
+### ⚠⚠ Not one row went green by getting weaker — this was measured
+
+**`verify` broke the code four ways and watched the repaired rows bite:**
+
+| Broken | Went red |
+|---|---|
+| A body may cross two 눈금 | **8 rows**, all three 「경계는 못 넘는다」 among them |
+| The plateau flattened again | **all 15** of the red-to-green rows, **and 5 more** |
+| The collect guard dropped | 「그중 계단 칸은 없다」 |
+| The walk guard weakened to bare passability | both strip rows |
+
+**And no expectation moved.** Every failure line in the before-run reads `얻은 값 X · 기대 Y`, **and
+every `Y` is the same literal sitting in the file today.**
+
+**`04-02` was proven the same way**: `verify` stripped every comment and blanked every string's
+contents from both copies of all eight files and diffed the residue — **byte-identical**.
+
+### ⚠⚠ The lead reddened the nets twice, and both were its own text
+
+- **File-and-line citations written into a plan.** `net_citations` forbids the `file.gd:NNN` form in
+  `docs/` too. **Eight of them, all in one ticket.**
+- **An `## Answer` heading written as 「## ⚠⚠ Answer — …」.** `net_process` looks for the literal
+  `## Answer` to check that a resolved ticket carries one. **It went green when the heading was fixed,
+  not when any code changed.**
+
+### ⚠⚠ A plan that lives only in the working tree is one command from gone
+
+**Reverting an edit it had been told not to make, `builder` ran `git checkout --` on a ticket.**
+**The whole second half was uncommitted, so it erased the plan, the corrections, the adversarial read,
+the blocker answer and the final list.** It was restored from the copy the agent had read at the start,
+**and one section written after that read was lost and had to be written again by hand.**
+
+### What was NOT changed, which is larger than what was
+
+**`04-02` touched 27 sites and left more than it took**: 캐릭터 **23** (all inside 「」, each read
+individually), 곰·까마귀·사자 **18 lines** (tombstones — deleted numbers kept on purpose), 「지도」 **11**
+(the verb ending 닫히지도 · 만들지도, not the word), 무리 **3** (무리사냥, a different word), 세포 **1**
+(it names the dead cell game itself).
+
+⚠⚠ **The ticket widened by seven sites and it was right to.** **All nine 해안선 in `net_boats.gd` were
+wrong** — 해안선 is the two drawn white lines and the glossary says 「윤곽이 아니다」, while every one of
+the nine reads `Islands.coast()`, which that same glossary's mismatch table names as **윤곽**.
+**Two were the builder's own from the first round; seven were pre-existing drift.**
+
+### Found and deliberately not fixed
+
+- **The glossary calls the five buildings 성채·탑·성벽; the building file labels them 본채·망루·돌담.**
+  **Only the count of five agrees**
+- ⚠ **A pre-existing hole**: deleting the level test inside `_shoulder_open` leaves the nets green,
+  because `can_step` refuses the diagonal on the destination test first — **no board in `net_tiers`
+  can isolate that guard**
+- **`TREAD_ROWS`/`TREAD_TIERS` are now character-for-character identical to `FIXTURE_ROWS`/`FIXTURE_TIERS`.**
+  That block existed because 「`FIXTURE_TIERS` is broken」, and **fixing the letter spent its reason**
+- ⚠ **No net can ever catch the `GLOSSARY.md` rename.** `net_citations` checks forbidden path FORM,
+  never existence, and **nothing in the repo opens the file at runtime.** A missed reference would have
+  cost a future session, not a red
+
 ## ✅ **Task 02 got built — eight tickets in one day, 2026-09-01**
 
 **The week's sentence now holds on the glass**: 늑대 land from a small boat, **climb the stair**, break
@@ -1122,7 +1241,7 @@ Bad North 강연이 말한 아홉 줄, 그리고 만들 때 지킬 일곱 가지
 | 버린 것 | 그 자리를 무엇이 받았나 |
 |---|---|
 | **`breakdown`** | **`press` 가 묻고 `wrap-up` 이 적는다.** 티켓 쓰는 절차가 마무리 안으로 들어가 있다 |
-| **`tdd`** | **규칙은 살았다** — 합의 안 된 이음매에는 검사를 안 쓴다. 합의된 셋은 `CONTEXT.md` 에 있다 |
+| **`tdd`** | **규칙은 살았다** — 합의 안 된 이음매에는 검사를 안 쓴다. 합의된 셋은 `GLOSSARY.md` 에 있다 |
 | **`prototype`** | **한 번도 안 돌았다.** 이 저장소는 진짜 게임을 화면에 띄워서 설계 질문에 답해 왔다 |
 
 ⚠⚠ **죽은 참조를 열 곳 고쳤다** — `CLAUDE.md` · `CONTEXT.md` · 스킬 다섯 · `docs/plan/` 둘 ·
@@ -2854,7 +2973,7 @@ strip (moving BACKWARD), snap 8%, hold 17%, recover 45%. **Measured in a real fi
 ### The word that changed
 
 **「물기」 and 「때리기」 became 「공격」**, on the user's own instruction. `Anim.BITE` became
-`Anim.ATTACK`, and **`HURT` and `DEATH` joined it the same day.** ⚠ `CONTEXT.md` now carries the five
+`Anim.ATTACK`, and **`HURT` and `DEATH` joined it the same day.** ⚠ `GLOSSARY.md` now carries the five
 things a body does, and the reversal row.
 
 ### The tempo, and the one sim edit of the round

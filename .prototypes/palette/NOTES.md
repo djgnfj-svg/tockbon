@@ -40,7 +40,7 @@ four times they did not:
    conversion the vertex colours never had. Every base sat darker than the tone it addressed and the
    roof came out white.
 2. **Buildings fed through the vertex-colour path.** They have no colour layer at all, so `COLOR` was
-   (1,1,1,1) and they painted white. `CONTEXT.md` already said the two are painted differently.
+   (1,1,1,1) and they painted white. `GLOSSARY.md` already said the two are painted differently.
 3. **The second sweep did not recognise its own material.** Re-collecting each palette (the view
    remakes some meshes as the run ticks) read the recolour shader as "some ShaderMaterial the game
    owns" and walked past it — so every palette after the first painted nothing.

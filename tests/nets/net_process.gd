@@ -61,7 +61,7 @@ func run(t) -> void:
 	t.done()
 
 ## One assertion per defect kind, each label carrying **how much was actually walked**. A reader who sees
-## `지도 0개` knows this line measured nothing; a bare green would have hidden that.
+## `로드맵 0개` knows this line measured nothing; a bare green would have hidden that.
 func _tree(t) -> void:
 	var efforts := _effort_dirs()
 	var task_count := 0
@@ -114,8 +114,8 @@ func _tree(t) -> void:
 				if ticket_field(text, "Status") == "resolved" and not text.contains(ANSWER_HEAD):
 					resolved_without_answer.append(name)
 
-	var walked := "지도 %d개 · 태스크 %d개 · 티켓 %d개" % [efforts.size(), task_count, tickets]
-	t.ok(bad_head.is_empty(), "%s — 지도가 요구된 절을 다 갖고 있다 %s" % [walked, str(bad_head)])
+	var walked := "로드맵 %d개 · 태스크 %d개 · 티켓 %d개" % [efforts.size(), task_count, tickets]
+	t.ok(bad_head.is_empty(), "%s — 로드맵이 요구된 절을 다 갖고 있다 %s" % [walked, str(bad_head)])
 	t.ok(task_without_task_file.is_empty(),
 		"%s — 태스크 폴더는 자기 번호로 된 .task.md 를 들고 있다 %s" % [walked, str(task_without_task_file)])
 	t.ok(ticket_without_ticket_file.is_empty(),
@@ -231,8 +231,8 @@ func _scanner_self_checks(t) -> void:
 			missing_none += 1
 		if not short_map.contains(h):
 			missing_one += 1
-	t.eq(missing_none, 0, "요구된 절을 다 가진 지도는 안 잡는다 (스캐너 자가 점검)")
-	t.eq(missing_one, 1, "절 하나가 빠진 지도를 잡는다 (스캐너 자가 점검)")
+	t.eq(missing_none, 0, "요구된 절을 다 가진 로드맵은 안 잡는다 (스캐너 자가 점검)")
+	t.eq(missing_one, 1, "절 하나가 빠진 로드맵을 잡는다 (스캐너 자가 점검)")
 
 
 # -- io ---------------------------------------------------------------------------------------------------

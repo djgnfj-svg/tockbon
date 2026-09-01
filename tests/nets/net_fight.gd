@@ -6,7 +6,7 @@ extends RefCounted
 ## phase than the blow, a dead 검사 stands again at the 성채, and the 성채 reaching zero loses the run.**
 ##
 ## ⚠⚠ **NOTHING HERE TOUCHES THE TREE.** `Grid.new()`, `Army.new()`, `Battle.new()` and `step(dt)` are
-## the whole of it — the `src/sim/` seam `CONTEXT.md` names.
+## the whole of it — the `src/sim/` seam `GLOSSARY.md` names.
 ##
 ## ⚠⚠ **THE DECIDED VALUES ARE PINNED AS LITERALS IN ONE FUNCTION AND DERIVED FROM `Rules` EVERYWHERE
 ## ELSE**, the same split `net_boats` carries and for the same reason: a row that drives the fight from

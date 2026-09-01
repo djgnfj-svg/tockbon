@@ -18,11 +18,12 @@ extends RefCounted
 ## where a pack-hunting check passed on a board with one enemy on it because any point gave the same
 ## answer.
 ##
-## ⚠⚠ **AND THE INSTRUMENT IS INVERTED TOO.** `_unreachable_pairs` is the check that is supposed to
-## stop an island where an enemy on a plateau can never be reached — a fight that never ends, on a
-## board with no time limit left in it, with every net still green. A helper that always returns 0
-## would pass that duty silently, so it is run on a fixture built to FAIL it. See
-## `_the_reach_check_can_actually_fail`.
+## ⚠⚠ **AND THE INSTRUMENT WAS INVERTED TOO — UNTIL 02-08 DELETED BOTH HALVES OF IT.**
+## `_unreachable_pairs` was the check that stopped an island where an enemy on a plateau can never be
+## reached — a fight that never ends, on a board with no time limit left in it, with every net still
+## green — and it was run on a fixture built to FAIL it. **Neither the helper nor that fixture is here
+## any more**, and the deletion blocks below say why. ⚠ **The rule the pair stood for is untouched by
+## their going**: an instrument that cannot be seen to fail is not an instrument.
 ##
 ## ⚠⚠ **WHAT THIS FILE MISSED THE FIRST TIME, WRITTEN DOWN BECAUSE THE SHAPE WILL RECUR.** Every row
 ## below the rule section measured a PIECE — the field extends, one `step_toward` call turns away, HP
@@ -50,10 +51,10 @@ const FIXTURE_ROWS := [
 ]
 const FIXTURE_TIERS := [
 	".........",
-	".....111.",
-	".....111.",
-	"..../111.",
-	".....111.",
+	".....222.",
+	".....222.",
+	"..../222.",
+	".....222.",
 	".........",
 ]
 const FIXTURE_W := 9
@@ -81,10 +82,10 @@ const SQUEEZE_W := 6
 ## sharpest row here green for no reason.
 const FIXTURE_TIERS_NO_STAIR := [
 	".........",
-	".....111.",
-	".....111.",
-	".....111.",
-	".....111.",
+	".....222.",
+	".....222.",
+	".....222.",
+	".....222.",
 	".........",
 ]
 
@@ -98,32 +99,20 @@ const FIXTURE_LOW := 15
 ## 12 + 16 without it.
 const FIXTURE_LOW_NO_STAIR := 16
 
-## The board `_the_reach_check_can_actually_fail` runs the reachability helper on: an INLAND plateau
-## with no stair and one defender on top of it. The plateau is inland so that no landing tile is on it
-## — otherwise a boat parked on the plateau reaches that defender and the failure is only partial,
-## which is a weaker bite than the one this fixture exists to prove.
-const SEALED_ROWS := [
-	"~~~~~~~~~~~",
-	"~.........~",
-	"~.........~",
-	"~.........~",
-	"~....S....~",
-	"~.........~",
-	"~.........~",
-	"~~~~H~~~~~~",
-]
-const SEALED_TIERS := [
-	"...........",
-	"...........",
-	"...........",
-	"....111....",
-	"....111....",
-	"....111....",
-	"...........",
-	"...........",
-]
-## 9 x 6 of land, so the 8-way coast is its perimeter: 2 x (9 + 6) - 4 = 26.
-const SEALED_LANDINGS := 26
+## ⚠⚠ **`SEALED_ROWS`, `SEALED_TIERS` AND `SEALED_LANDINGS` ARE DELETED WITH THEIR FUNCTION** (02-08,
+## 2026-09-01, the user choosing deletion over repair: 「3번 빼고 진행」). Their board was never reached:
+## it wrote its defender as `S`, the shieldbearer, and `Islands.SPAWN_ROWS` binds only `W`, so the
+## function died on an empty spawn list. **Repairing the letter is what showed the fixture could not be
+## repaired**: `SEALED_LANDINGS` (26) was hand-derived from a `_is_landing` that tested adjacency to
+## water, and the predicate was re-aimed on 2026-08-29 to mean 「could a body be stood here at all」.
+## Under it a plateau 조각 IS a landing, so the fixture's own design sentence — 「the plateau is inland
+## so that no landing tile is on it」 — is false and **one constant can no longer serve both rows**.
+## ⇒ Repaired it would be a net whose comment says one thing and whose numbers measure another, which
+## is the shape `how-nets-lie` collects.
+##
+## **What stopped being measured**: 「the reachability check can actually fail」 — that a defender sealed
+## on a stairless plateau is reported unreachable from every landing. ⚠⚠ **Nothing else in the repo
+## asserts it**, and the helper that made the claim went with the board — see where it stood.
 
 ## The island `Rules.MAP_NODES[0]` opens — the first fight of every run, and the only island with a
 ## tier board today.
@@ -168,7 +157,8 @@ func run(t) -> void:
 	# code**: the day one is built, this row and its flat controls come back before it ships.
 	_a_landing_never_puts_a_body_on_the_plateau(t)
 	_the_first_island_carries_a_real_plateau(t)
-	_the_reach_check_can_actually_fail(t)
+	# ⚠⚠ **`_the_reach_check_can_actually_fail` IS DELETED** (02-08) — see the block where
+	# `SEALED_ROWS` stood for why it could not be repaired instead.
 	_no_tier_board_is_a_different_shape_from_its_island(t)
 	_an_island_number_is_loaded_through_one_door(t)
 
@@ -201,7 +191,7 @@ func _an_empty_tier_board_is_flat(t) -> void:
 ## a board that ran off the end reading garbage would put a stair somewhere nobody authored one.
 func _a_short_tier_board_is_flat_where_it_ends(t) -> void:
 	var g := Grid.new()
-	g.load_rows(FIXTURE_ROWS, ["..1"])
+	g.load_rows(FIXTURE_ROWS, ["..2"])
 	t.eq(g.level_at(2, 0), 2, "짧은 단 판도 적힌 자리는 읽힌다 (자가 점검)")
 	t.eq(g.level_at(5, 0), 0, "줄이 끝난 뒤는 0단이다")
 	t.eq(g.level_at(5, 3), 0, "판이 끝난 뒤의 행도 전부 0단이다")
@@ -259,12 +249,14 @@ func _the_climb_rule_itself(t) -> void:
 ## ⚠ **It is a VIEW height and this net drives the SIM** — that is allowed and is the point: the
 ## function lives in `Grid` so one arithmetic serves the bake and the picture, and `Grid` is the seam
 ## a net may drive with `.new()`.
-## ⚠⚠ **IT USES ITS OWN BOARD AND NOT `FIXTURE_TIERS`, AND THE REASON IS A LIVE DEFECT.**
-## `FIXTURE_TIERS` spells its plateau with `1`, which meant level 2 when the fixture was written and
-## means **level 1** since `TIER_CHARS` was widened on 2026-08-26 — so on that board the plateau and
-## the stair are the SAME level, no run is ever built, and several of this file's own rows have been
-## red ever since. **Re-reading that fixture is its own round** (`TIER_CHARS`'s header says so); a new
-## row must not be built on top of a board that is measuring the wrong island.
+## ⚠⚠ **IT USES ITS OWN BOARD BECAUSE `FIXTURE_TIERS` WAS BROKEN, AND THAT IS NOW HISTORY.**
+## **The record worth keeping**: `1` meant level 2 when the fixtures here were written, and has meant
+## **level 1** since `TIER_CHARS` was widened on 2026-08-26 — so every board still spelling its plateau
+## `1` had its plateau and its stair at the SAME level, built no run at all, and left seventeen of this
+## file's rows red for five days. **02-08 was the round that re-read them** and they are all `2` today.
+## ⇒ **The reason this board stands apart is spent.** `TREAD_ROWS` and `TREAD_TIERS` are now character
+## for character what `FIXTURE_ROWS` and `FIXTURE_TIERS` hold, and **one of the two pairs should go** —
+## 02-08 was told not to touch this one, so it is left for whoever folds them.
 ## ⚠ Here `2` is the plateau and `/` is the stair, which is what the legend says today.
 const TREAD_ROWS := [
 	"~~~~~~~~~",
@@ -526,7 +518,7 @@ func _the_real_island_still_has_a_route(t) -> void:
 	# the user: 「about the stale tests — I asked you to delete them, not fit them to the current
 	# island」). It asked that no walkable 조각 be cut off from the first one, and **the island has a
 	# satellite 2x2 block that nothing walks to** — 설계 31 settled that block is the island rather
-	# than a defect, and CONTEXT.md says the 철광석 on it cannot be reached.
+	# than a defect, and GLOSSARY.md says the 철광석 on it cannot be reached.
 	# ⚠⚠ **What stopped being measured is this function's whole subject**: a stricter step rule that
 	# seals the real island now shows up nowhere. The header's own warning — 「every row above would
 	# still be green」 — is true of this file again, and the count above is all that is left.
@@ -557,10 +549,13 @@ static func _octile(ax: int, ay: int, bx: int, by: int) -> int:
 ## a diagonal stopped being free, so every literal in this function had to be restated — **the claims are
 ## word for word what they were**, and each is written as `_octile(...)` against the fixture's own
 ## coordinates rather than as a number typed by hand or read off a run.
-## ⚠ **The assertions that were RED are still red, on purpose.** `FIXTURE_TIERS` spells its plateau with
-## `1`, which has meant level **1** since the tier legend was widened — so this board has no level-2 조각
-## in it at all and no wall for the stair to be the door through. Restating the unit does not repair that,
-## and turning one of them into an inequality so it passes would be a green measuring nothing.
+## ⚠ **THE ASSERTIONS HERE WERE RED FOR FIVE DAYS AND THE BOARD WAS WHY, NOT THE CLAIMS.**
+## `FIXTURE_TIERS` spelled its plateau `1`, which has meant level **1** since the tier legend was
+## widened — so the board held no level-2 조각 at all and no wall for the stair to be the door through.
+## **02-08 corrected the letter and every one of them went green with its expected value untouched**,
+## which is the evidence that the claims were right the whole time. ⚠ **The temptation that was refused
+## is the record worth keeping**: turning one of them into an inequality so it passed would have been a
+## green measuring nothing, and it would have hidden the board rather than fixing it.
 func _the_field_climbs_only_by_the_stair(t) -> void:
 	var flat := Grid.new()
 	flat.load_rows(FIXTURE_ROWS)
@@ -668,11 +663,11 @@ const PAIR_ROWS := [
 ## put and the only thing that changes over the stepped seconds is HP.
 const PAIR_TIERS := [
 	"....................",
-	"...............111..",
-	"...............111..",
-	"...............111..",
-	"...............111..",
-	"...............111..",
+	"...............222..",
+	"...............222..",
+	"...............222..",
+	"...............222..",
+	"...............222..",
 	"....................",
 ]
 const PAIR_W := 20
@@ -735,10 +730,10 @@ const CLIMB_ROWS := [
 const CLIMB_TIERS := [
 	"..............",
 	"..............",
-	"......111111..",
-	"......111111..",
-	"......111111..",
-	"......111111..",
+	"......222222..",
+	"......222222..",
+	"......222222..",
+	"......222222..",
 	"....../.......",
 	"..............",
 ]
@@ -766,10 +761,10 @@ const HOLD_ROWS := [
 const HOLD_TIERS := [
 	"....................",
 	"....................",
-	"............111111..",
-	"............111111..",
-	"............111111..",
-	"............111111..",
+	"............222222..",
+	"............222222..",
+	"............222222..",
+	"............222222..",
 	"............/.......",
 	"....................",
 ]
@@ -790,7 +785,7 @@ const SPLIT_TIERS := [
 	".........",
 	".........",
 	".........",
-	".1111111.",
+	".2222222.",
 	".........",
 	".........",
 ]
@@ -829,31 +824,21 @@ const CLIMB_START := [Vector2(5, 2), Vector2(5, 3), Vector2(5, 4)]
 
 
 func _a_landing_never_puts_a_body_on_the_plateau(t) -> void:
-	var g := Grid.new()
-	Islands.load_into(g)
-	var b := Battle.new()
-	b.setup(g, Army.new(), Islands.spawns())
-	# ⚠⚠ **The tile moved with the island and the choice is not arbitrary.** (16,3) was a shore on the
-	# rectangle and is inland on the drawn coast. (22,2) is picked because it is **the approved landing
-	# nearest the plateau** — it touches the plateau's own corner diagonally, so the ten-tile search
-	# starting there has the strongest pull up the wall of any beach on this island. A landing far from
-	# the plateau would pass this row without ever testing it.
-	var landing := g.tile_index(22, 2)
-	t.ok(_is_landing(g, landing), "(22,2) 는 실제로 승인된 상륙지다 (자가 점검)")
-	t.eq(g.level_of(landing), 0, "그리고 낮은 층이다 (자가 점검)")
-	var want := 10
-	var tiles := b._free_tiles_from(landing, want)
-	t.eq(tiles.size(), want, "그 상륙지에서 설 자리 %d 칸을 실제로 받았다 (자가 점검)" % want)
-	var high := 0
-	for tile in tiles:
-		if g.level_of(tile) != 0:
-			high += 1
-	t.eq(high, 0, "그중 고원 위인 칸은 하나도 없다 — 배는 벽 위에 몸을 못 내려놓는다")
-
-	# ⚠⚠ **THE ROW ABOVE ALONE PROVES ONE GUARD AND NOT THE OTHER, AND THAT WAS MEASURED.** The search
-	# has two: it will not WALK across a wall, and it will not COLLECT a tile off the landing's own
-	# tier. For a plateau tile either one is enough, so **deleting either alone reddened nothing.**
-	# Two boards follow, each built so only one guard can answer.
+	# ⚠⚠ **THE HALF THAT RAN ON THE LOADED ISLAND IS DELETED** (02-08): four rows and the `landing`
+	# 조각 they all read, hand-picked as (22,2) back when the island was a rectangle. **On today's
+	# island (22,2) is water**, so the self-check naming it a landing went red — and the three rows
+	# under it kept passing anyway, because `_free_tiles_from` starting in the sea cheerfully hands
+	# back ten land 조각 and none of them are high. **A row that passes from a 조각 nobody can stand
+	# on measures nothing.** The `Grid` and the `Battle` built for them go with them.
+	#
+	# **What stopped being measured**: that a real landing 조각 on the loaded island hands back free
+	# tiles and not one of them is on the plateau. ⚠ The two synthetic boards below still measure
+	# both guards the search has, and they are the reason this function is kept.
+	#
+	# ⚠⚠ **NEITHER BOARD ALONE PROVES BOTH GUARDS, AND THAT WAS MEASURED.** The search has two: it
+	# will not WALK across a wall, and it will not COLLECT a tile off the landing's own tier. For a
+	# plateau tile either one is enough, so **deleting either alone reddened nothing.** Two boards
+	# follow, each built so only one guard can answer.
 
 	# ① **The STAIR, which the search is right to walk through and wrong to stop on.** Asking from the
 	# low tile beside it, only the collect test can refuse it — the walk test lets a level-1 tile
@@ -981,32 +966,14 @@ func _the_first_island_carries_a_real_plateau(t) -> void:
 #  island cannot spin forever with the player stuck and every net green, because nothing here watches
 #  a fight for a hundred simulated seconds. **The beasts arrive by boat now**, so the claim needs a
 #  live fight rather than the island's letters, and no net in this file can make it.
-#  ⚠ `_unreachable_pairs` itself is kept — the function below still runs it on a synthetic board.
+#  ⚠ `_unreachable_pairs` itself is gone as well — see the block where it stood.
 
 
-## ⚠⚠ **Inverting the INSTRUMENT, not the subject.** `_unreachable_pairs` returning a constant 0 would
-## pass the row above forever, and this repo has shipped exactly that twice in one night. So the same
-## helper is run on a board built to break it: a plateau with no stair, a shore it can be landed on,
-## and an enemy standing up top.
-func _the_reach_check_can_actually_fail(t) -> void:
-	var g := Grid.new()
-	g.load_rows(SEALED_ROWS, SEALED_TIERS)
-	var spawns := _spawns_of_rows(SEALED_ROWS)
-	t.eq(spawns.size(), 1, "합성 섬에 적이 하나 있다 (자가 점검)")
-	t.eq(g.level_of(int((spawns[0] as Dictionary)["tile"])), 2,
-		"그 적은 고원 위에 선다 (자가 점검)")
-	var landings := _landings_of(g)
-	# 9 x 6 of land, so the coast is its perimeter: 2 x (9 + 6) - 4 = 26, and the 3 x 3 plateau is
-	# inland, so not one landing tile is on it.
-	t.eq(landings.size(), SEALED_LANDINGS, "그 섬의 상륙지는 %d 칸이다 (자가 점검)" % SEALED_LANDINGS)
-	var on_high := 0
-	for tile in landings:
-		if g.level_of(tile) == 2:
-			on_high += 1
-	t.eq(on_high, 0, "그리고 상륙지 중 고원 위인 칸은 없다 (자가 점검)")
-	t.eq(_unreachable_pairs(g, spawns, landings), SEALED_LANDINGS,
-		"계단 없는 고원에 선 적은 상륙지 %d 칸 전부에서 못 닿는다 — 도달 검사가 실제로 문다"
-			% SEALED_LANDINGS)
+## ⚠⚠ **`_the_reach_check_can_actually_fail` IS DELETED WHOLE** (02-08). It was the inversion of the
+## INSTRUMENT rather than of the subject: `_unreachable_pairs` returning a constant 0 would pass its
+## neighbour forever, and this repo has shipped exactly that twice in one night. **The reason it goes
+## rather than being repaired is written where its board stood.**
+## ⚠ **`_spawns_of_rows`, `_landings_of` and `_unreachable_pairs` went with it** — see where they stood.
 
 
 ## The two boards have to be the same shape or a stair lands on a tile nobody authored. Asked for
@@ -1181,37 +1148,8 @@ func _step_for(b: Battle, seconds: float) -> void:
 		left -= dt
 
 
-## Every spawn on a hand-written fixture, in `Islands.spawns_of`'s own shape. **Reads
-## `Islands.spawn_type_of_char`** rather than naming a unit row here, so a letter that is re-bound
-## cannot leave this file spawning something else than the game would.
-func _spawns_of_rows(rows: Array) -> Array:
-	var w := String(rows[0]).length()
-	var out := []
-	for y in rows.size():
-		var row := String(rows[y])
-		for x in row.length():
-			var type_id := Islands.spawn_type_of_char(row[x])
-			if type_id >= 0:
-				out.append({"type_id": type_id, "tile": y * w + x})
-	return out
-
-
-func _landings_of(g: Grid) -> PackedInt32Array:
-	var out := PackedInt32Array()
-	for tile in g.passable.size():
-		if _is_landing(g, tile):
-			out.append(tile)
-	return out
-
-
-## How many (landing, enemy) pairs the game's own flow field cannot connect. **One field per enemy and
-## not per landing**: the field is symmetric in reachability and 6 fields is 54 times cheaper than 324.
-func _unreachable_pairs(g: Grid, spawns: Array, landings: PackedInt32Array) -> int:
-	var bad := 0
-	for raw in spawns:
-		var s: Dictionary = raw
-		var field := g.flow_field(int(s["tile"]))
-		for tile in landings:
-			if int(field[tile]) == Grid.UNREACHABLE:
-				bad += 1
-	return bad
+## ⚠⚠ **`_spawns_of_rows`, `_landings_of` AND `_unreachable_pairs` ARE DELETED** (02-08). All three
+## existed for `_the_reach_check_can_actually_fail` and went with it — **nothing else in the repo
+## called any of them.** ⚠ `_unreachable_pairs` in particular was the one instrument here that had a
+## board built to break it; with that board gone it was a measuring tool nothing measured, which is
+## the same false-green shape this ticket was opened to remove.

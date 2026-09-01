@@ -19,8 +19,8 @@ const CROP := "res://tools/shot/out/water/crop_%d_%s.png"
 const CROP_AT := Vector2(0.14, 0.13)
 const CROP_FRACTION := 0.24
 const CROP_ZOOM := 4
-## ⚠ **A SECOND close-up, on the coast**, because 물가 and 거품 live where the water meets the rock and
-## the open-sea crop above cannot see either of them.
+## ⚠ **A SECOND close-up, on the coast**, because the 해안선 lives where the water meets the rock and
+## the open-sea crop above cannot see it.
 const EDGE := "res://tools/shot/out/water/edge_%d_%s.png"
 const EDGE_AT := Vector2(0.26, 0.55)
 const EDGE_FRACTION := 0.30

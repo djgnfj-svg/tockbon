@@ -1094,7 +1094,7 @@ const WATER_SURGE := 1.6
 const WATER_REST_SHAPE := 0.7
 
 ## **4. The second white, the one standing off the rock** — how far off in tiles, how wide the stroke
-## is, and how strong. ⚠⚠ **It is a LINE, not a band**: every 거품 drawn before it was a soft wash
+## is, and how strong. ⚠⚠ **It is a LINE, not a band**: every 해안선 drawn before it was a soft wash
 ## fading outward and the reference frames have a hard stroke. ⚠ Keep `WATER_SECOND_W` at or under the
 ## resting line or the two whites stop reading as two.
 ## ⚠ **`WATER_SECOND_AT` is the first number that will look wrong if the blocks change size.**
@@ -1116,7 +1116,7 @@ const WATER_CUT_OPEN := 0.62
 const WATER_TIP_AT := 0.90
 const WATER_TIP_FULL := 1.30
 ## ⚠⚠ **HOW MUCH THE INNER LINE IS ALLOWED TO THIN WHERE THE OUTER ONE IS MISSING, AND IT IS THE ONE
-## NUMBER THAT ARGUES WITH THE GLOSSARY.** `CONTEXT.md` defined 해안선 as ringing the island **without
+## NUMBER THAT ARGUES WITH THE GLOSSARY.** `GLOSSARY.md` defined 해안선 as ringing the island **without
 ## a gap, because water is always touching land**. At 0 that rule holds; at 1 the coast can go bare.
 ## **0.35 is deliberately partial — the line thins and never disappears.** If it ever reads as a hole
 ## in the island, the glossary was right and the answer was `25-broken` or `26-tips`.

@@ -2,7 +2,7 @@
 
 ## ⚠⚠ **THE GLOSSARY IS LOADED BELOW. READ IT BEFORE THE FIRST TOOL CALL.** (2026-08-28, the user)
 
-@CONTEXT.md
+@GLOSSARY.md
 
 ***"판이 뭔지 제대로 이해한 거 맞아? ... 시작하면 바로 읽어야지."*** **A round was spent building the
 wrong thing because the word 판 was guessed at instead of read.**
@@ -52,7 +52,7 @@ exists to stop.
 
 ⚠ **Three things stay Korean because translating them would break what they name**: **a skill's trigger
 phrases** (the user types those words), **the labelled lines a question is printed with** (output, not
-prose), and **the glossary's Korean column in `CONTEXT.md`** (the Korean word IS the name).
+prose), and **the glossary's Korean column in `GLOSSARY.md`** (the Korean word IS the name).
 
 **One exception: the GDD is Korean** (2026-08-22, the user) — one page, and the user is the one who reads
 it. ⚠ **No twin.** Korean twins existed and were deleted because the same fact in two files drifts.
@@ -160,7 +160,7 @@ whole game headless in seconds.
 | Path | The rule it obeys |
 |---|---|
 | `src/sim/` | **Never touches the tree.** No `Node`, no `_draw`, no `Input`, no `get_node`, no `$`. Every file is constructible and drivable with `.new()` and nothing else |
-| `src/view/` | **Reads `sim`, never writes it.** Everything that is a Node or draws lives here. ⚠ **Every view exposes `_paint_*` hooks**, the field included — but the field's hooks build a 3D world, so **asserting their arguments does not measure what the player sees.** What a net measures here is the three-fold surface named in `CONTEXT.md`, not the hook |
+| `src/view/` | **Reads `sim`, never writes it.** Everything that is a Node or draws lives here. ⚠ **Every view exposes `_paint_*` hooks**, the field included — but the field's hooks build a 3D world, so **asserting their arguments does not measure what the player sees.** What a net measures here is the three-fold surface named in `GLOSSARY.md`, not the hook |
 | `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. It builds its children in code, so a net calling `_ready()` exercises the real wiring |
 | `src/look.gd` | **Every presentation constant, in exactly one file.** `src/sim/rules.gd` holds every constant that changes what happens |
 
@@ -168,4 +168,4 @@ whole game headless in seconds.
 pixels, what survived measured **input → state**. ⇒ **Prefer the shape that survives; reach for pixels
 only when the pixels are the subject.**
 
-⚠ **No check is written at a seam `CONTEXT.md` does not name.**
+⚠ **No check is written at a seam `GLOSSARY.md` does not name.**

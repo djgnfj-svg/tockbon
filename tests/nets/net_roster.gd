@@ -99,7 +99,7 @@ func _the_run_slots(t) -> void:
 	# five slots any more.** `Rules.UNITS` carries exactly ONE player-side row (SWORDSMAN); the loop
 	# this replaced registered slot 0, then spent four more iterations re-registering the same species
 	# and being refused by Lesson 3 — `full.slot_count()` stalled at 1 forever, and the row asserting
-	# 5 had gone permanently unreachable the day the human roster collapsed to one type (CONTEXT.md).
+	# 5 had gone permanently unreachable the day the human roster collapsed to one type (GLOSSARY.md).
 	# **`SUMMON_SLOT_MAX` itself is still real and still five** (`Army.slots` and the raid path can grow
 	# a roster mid-run, per `rules.gd`'s own note); it is driven here directly on `slots`, a public
 	# field a real caller never pokes but a check aimed only at the CEILING clause may, so the

@@ -4,7 +4,7 @@ extends RefCounted
 ##
 ## ⚠⚠ **THE WHOLE OF THE EXTENSION THE USER ASKED FOR IS THAT `ids` IS A LIST** (2026-08-31, the user:
 ## 「선택한게 캐릭터든 그룹이든 할 수 있게 확장성 있게 작업해 달라고」). Today the press puts ONE body in
-## it. The day a 무리 exists the same press puts nine in it and **nothing below this line changes**:
+## it. The day a 부대 exists the same press puts nine in it and **nothing below this line changes**:
 ## the reach is a union, the order is a loop, and the preview is one route per body. There is no
 ## 「one body」 branch anywhere in this file to find and fix later, because there is no 「one body」 case
 ## — there is a list whose length happens to be 1.
@@ -63,15 +63,15 @@ func has(soldier_id: int) -> bool:
 
 
 ## **Picks one body.** The single-body door, and it is a one-line wrapper over the list door on
-## purpose — see the header. A caller that wants a 무리 calls `pick_many` and gets the same behaviour.
+## purpose — see the header. A caller that wants a 부대 calls `pick_many` and gets the same behaviour.
 func pick(battle: Battle, soldier_id: int) -> bool:
 	var one := PackedInt32Array()
 	one.append(soldier_id)
 	return pick_many(battle, one)
 
 
-## **Picks a whole list.** ⚠ **Ids that are not ashore are dropped rather than refused** — a 무리 with
-## one dead member is still a 무리, and refusing the lot would make death a selection bug.
+## **Picks a whole list.** ⚠ **Ids that are not ashore are dropped rather than refused** — a 부대 with
+## one dead member is still a 부대, and refusing the lot would make death a selection bug.
 ## **False only when nothing at all survived the filter**, in which case the hand is left empty.
 func pick_many(battle: Battle, want: PackedInt32Array) -> bool:
 	clear()
@@ -131,7 +131,7 @@ func body_at(battle: Battle, at_tiles: Vector2, radius: float) -> int:
 ##
 ## ⚠⚠ **ONE BODY GETS THE PRESSED 조각; MANY GET ONE 조각 EACH.** Nine bodies ordered onto the same
 ## 조각 would be nine walk orders onto three slots, and six of them would stall against a full 조각
-## with no way for the player to see why. **`_spread` is the seam the 무리's own formation plugs into**
+## with no way for the player to see why. **`_spread` is the seam the 부대's own formation plugs into**
 ## — the roadmap has 「아홉이 서는 모양」 already chosen as shape 6, and when it is built it replaces the
 ## body of that one function and nothing else here.
 func order(battle: Battle, tile: int) -> int:
@@ -228,7 +228,7 @@ func route_points(battle: Battle, tile: int) -> Array:
 ## `reach`. Folding the two into one test would wall off every upper storey, because a stair is the
 ## only door there is.
 ##
-## ⚠ **The union, for a 무리.** A 조각 one member can reach lights even if another cannot — the order
+## ⚠ **The union, for a 부대.** A 조각 one member can reach lights even if another cannot — the order
 ## then seats that member elsewhere, which `_spread` already does.
 func _build_reach(battle: Battle) -> void:
 	var grid := battle.grid
@@ -293,7 +293,7 @@ func _standable(battle: Battle, tile: int) -> bool:
 
 ## **One seat per picked body, `ids`-aligned**, nearest the pressed 조각 first.
 ##
-## ⚠⚠ **THIS IS THE 무리's FORMATION SEAM AND IT IS DELIBERATELY THE DUMBEST ONE THAT WORKS.** It
+## ⚠⚠ **THIS IS THE 부대's FORMATION SEAM AND IT IS DELIBERATELY THE DUMBEST ONE THAT WORKS.** It
 ## takes the nearest standable 조각 outward from the press and hands them out in `ids` order. **The
 ## shape the roadmap already chose (아홉이 서는 모양, 6번) replaces the body of this function** — every
 ## caller above asks it the same question and none of them will need touching.

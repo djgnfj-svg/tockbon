@@ -58,7 +58,7 @@ the twelve-up sheet a fair comparison.
 | `o12_pit` | a ring of spoil stones with ore in the middle | the only one that reads as WORKED |
 
 **There was no iron ore before today.** `blend/props.blend` held pine · tree · rock · stone · bush and
-nothing else, and `CONTEXT.md` says **one ore is embedded on the island** — so this is one prop, not a
+nothing else, and `GLOSSARY.md` says **one ore is embedded on the island** — so this is one prop, not a
 scatter.
 
 ## The first six

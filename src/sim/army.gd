@@ -16,7 +16,7 @@ extends RefCounted
 ##
 ## ⚠ **The 「cell army GDD」 this line used to cite does not exist** (2026-08-25, 티켓 23) — it was the
 ## deleted cell game's design document, and there is no GDD in this repo at all. What a body is, is
-## read out of `CONTEXT.md` and `Rules.UNITS`. See the first-slice plan's "The sim — shapes and entry, and the first-slice plan's "The sim — shapes and entry
+## read out of `GLOSSARY.md` and `Rules.UNITS`. See the first-slice plan's "The sim — shapes and entry, and the first-slice plan's "The sim — shapes and entry
 ## points" for the signatures below.
 
 ## Every value that changes what happens lives in `rules.gd`, reached through its global `Rules` class

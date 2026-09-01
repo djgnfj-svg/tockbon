@@ -142,7 +142,7 @@ func run(t) -> void:
 				continue
 			if x != 0 and y != 0 and x != row.length() - 1 and y != rows.size() - 1:
 				off_ring.append(y * row.length() + x)
-	t.eq(off_ring.size(), 0, "항구는 전부 판 가장자리 한 줄이다 — 배는 지도 밖에서 온다 %s" % str(off_ring))
+	t.eq(off_ring.size(), 0, "항구는 전부 판 가장자리 한 줄이다 — 배는 판 밖에서 온다 %s" % str(off_ring))
 	# ⚠ **The row that stood here was GREEN and went with the reds** (02-08): it asserted
 	# `52 == 16*2 + 10*2`, three constants that no longer describe any board, under the label 「그리고
 	# 그 52는 가장자리 한 바퀴 그대로다」. **Arithmetic among deleted literals is a green measuring
@@ -205,7 +205,7 @@ func run(t) -> void:
 	# region」, 「that region is 76 tiles」, 「every beaching coast tile sits in a region of at least
 	# `min_region_floor`」 and 「the smallest such region is big enough」. **The satellite 2x2 block the
 	# 철광석 stands on does not touch the island**, so the board has two land regions by design — 설계 31
-	# settled that it is the island rather than a defect, and CONTEXT.md says outright that the ore
+	# settled that it is the island rather than a defect, and GLOSSARY.md says outright that the ore
 	# cannot be walked to. ⚠ **Nothing measures the island's connectivity from here on**, so a resize
 	# that strands half the ground passes this file in silence.
 	_the_floor_actually_rejects_something(t, min_region_floor)

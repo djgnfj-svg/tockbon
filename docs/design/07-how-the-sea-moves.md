@@ -10,7 +10,7 @@ and lets a line go on its way out.** In the user's own words — 「멀어지면
 
 ⚠⚠ **THE WORD IN THIS TICKET'S TITLE MOVED THE SAME DAY.** When it was written, 「파도」 meant the white
 lines at the island's rim. **It now means the open sea's own slow rise and fall**, and the rim's white
-lines are 「거품」. The reversal and the reason are in `CONTEXT.md`; the ticket keeps its old title so the
+lines are 「거품」. The reversal and the reason are in `GLOSSARY.md`; the ticket keeps its old title so the
 line that cites it still finds it.
 
 ## 무엇이 정해졌나

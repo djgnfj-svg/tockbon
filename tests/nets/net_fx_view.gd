@@ -786,7 +786,7 @@ func _distinct(items: Array) -> int:
 ## eye is given on top of that, and none of it is measurable at the `sim` seam — `net_boats` drives that
 ## half and is deliberately tree-free.
 ##
-## ⚠ **Measured on the two surfaces `CONTEXT.md` names for this seam**: the pooled `Sprite3D` fields the
+## ⚠ **Measured on the two surfaces `GLOSSARY.md` names for this seam**: the pooled `Sprite3D` fields the
 ## engine consumes, and **the committed surface count** — a hull whose mesh has zero surfaces is a node
 ## in the right place drawing nothing, and every transform check about it stays green.
 

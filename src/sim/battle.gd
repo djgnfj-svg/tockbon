@@ -1567,8 +1567,9 @@ func _tile_of(pos: Vector2) -> int:
 ## sub-step.
 ## ⚠⚠ **THE BEACH NOW FILLS DEEP BEFORE IT FILLS WIDE** (2026-08-30). While a 조각 admitted one body
 ## the landing 조각 was taken by the first body ashore and everyone after it stepped out a ring; with
-## `Rules.TILE_CAPACITY` slots the same 조각 comes back until it is full. **That is the pile the user
-## asked for**, and it is a property of this search rather than of a rule anybody maintains.
+## `Rules.TILE_CAPACITY` slots the same 조각 comes back until it is full. **That is the several bodies
+## standing on one 조각 the user asked for**, and it is a property of this search rather than of a rule
+## anybody maintains.
 ##
 ## The search WALKS OVER full tiles and only COLLECTS ones with room. A search that refused to
 ## cross an occupied tile would be sealed in by the first soldier to land, and the boat behind it

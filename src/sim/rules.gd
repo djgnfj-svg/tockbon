@@ -14,7 +14,7 @@ class_name Rules
 # every constant here is asserted to name its own row, and the pair list's LENGTH is pinned against
 # the table so a row added without a constant reddens too.
 #
-# ⚠⚠ **`CELL_MELEE` and `CELL_RANGED` are GONE, renamed to `WOLF` and `CROW`.** `CONTEXT.md` marked
+# ⚠⚠ **`CELL_MELEE` and `CELL_RANGED` are GONE, renamed to `WOLF` and `CROW`.** `GLOSSARY.md` marked
 # them as the last place the dead cell game was still spelled out and said they change 「고도가 도는
 # 데서」; the five-beast roster is that place. **The numbers moved unchanged** — the wolf is the one
 # row a whole run has been played on, and re-tuning it while renaming it would make a later
@@ -159,8 +159,8 @@ const TILE_CAPACITY := 3
 
 ## --- How many bodies stand on one 블록 (칸) ---------------------------------------------------------
 ## ⚠⚠ **NINE, AND IT IS A CEILING RATHER THAN A TARGET** (2026-08-31, the user: 「nine soldiers is
-## the maximum, I think」). `TILE_CAPACITY` alone admitted twelve, and twelve bodies over four 조각 is
-## what a pile looks like — the same crowd read as one lump instead of as nine men.
+## the maximum, I think」). `TILE_CAPACITY` alone admitted twelve, and twelve is where the bodies
+## standing on one 칸 stop reading as nine men and start reading as one shape.
 ##
 ## ⚠⚠ **THE 블록 IS CALLED BOTH 「블록」 AND 「칸」** (2026-08-31, the user: 「let both 칸 and
 ## 블록 work — we are going to do it that way anyway」). 「칸」 was retired on 2026-08-29 and it is

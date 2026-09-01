@@ -7,7 +7,7 @@ description: Diagnosis loop for hard bugs and performance regressions. Use when 
 
 A discipline for hard bugs. Skip phases only when explicitly justified.
 
-Read `CONTEXT.md` first for the modules and the agreed seams. ⚠ **There is no `docs/adr/` here** — what was decided and what was reversed live in `docs/roadmap/log.md`, and **every green already measured false lives in `docs/how-nets-lie.md`.** Read that one before believing any loop you build.
+Read `GLOSSARY.md` first for the modules and the agreed seams. ⚠ **There is no `docs/adr/` here** — what was decided and what was reversed live in `docs/roadmap/log.md`, and **every green already measured false lives in `docs/how-nets-lie.md`.** Read that one before believing any loop you build.
 
 ⚠ **Redact every secret out of anything you paste** — write `<REDACTED>` in its place.
 
@@ -23,7 +23,7 @@ Spend disproportionate effort here. **Be aggressive. Be creative. Refuse to give
 loop below is the engine, run headless, or the game with the user in front of it.
 
 1. **A net** at a seam the glossary already agrees on — `tests/nets/`, run by `tests/run_nets.ps1`.
-   ⚠ **No net is written at a seam `CONTEXT.md` does not name**; needing a new one is the user's call.
+   ⚠ **No net is written at a seam `GLOSSARY.md` does not name**; needing a new one is the user's call.
 2. **A throwaway `--headless --script` runner** that builds the `sim` objects with `.new()` and asserts
    the symptom. **`src/sim/` is constructible without the tree, which is what makes this cheap.**
 3. **A throwaway under `.prototypes/<subject>/`.** ⚠ **Ten runners already exist there** — copy the

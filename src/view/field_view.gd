@@ -805,7 +805,7 @@ var _reach_tex: ImageTexture = null
 var _reach_on := false
 
 ## **Which bodies the hand is holding**, as a set of soldier ids. ⚠ **A set and not one id**, for the
-## same reason `Hand.ids` is a list: the day a 무리 is picked, nine bodies wear the rim and nothing here
+## same reason `Hand.ids` is a list: the day a 부대 is picked, nine bodies wear the rim and nothing here
 ## changes. Written by the shell through `set_picked`.
 var _picked := {}
 
@@ -1046,9 +1046,11 @@ func set_picked(ids: PackedInt32Array) -> void:
 ## building stands on. All three are written by the two Blender runs, so a building cannot end up half
 ## a tile off or floating over a step.
 ##
-## ⚠⚠ **This draws them and nothing else.** They do not block a body, they do not burn, and losing the
-## run when the keep burns is not wired. Saying so here is cheaper than someone reading a picture of a
-## keep as a keep that works.
+## ⚠⚠ **This draws them and nothing else, and everything a building DOES lives in `Battle`.** The
+## 성채 blocks bodies (`setup` fills every 조각 it covers under `KEEP_UID`), it burns (a 늑대 that takes
+## `TARGET_KEEP` spends its blow on `keep_hp`), and the run is lost in the sub-step it falls. **Read
+## those there** — a picture that stopped agreeing with them is a question for the sim, not for this
+## function.
 func _rebuild_buildings() -> void:
 	if _world == null:
 		return

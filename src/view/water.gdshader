@@ -15,7 +15,7 @@
 // **What the chosen border is, and every line of it is something the user judged by eye:**
 //
 //   1. **Two whites, not one.** A line on the rock, and a second stroke standing about `second_at`
-//      tiles off it with dark water between. ⚠⚠ **The second one is a LINE, not a band** — every 거품
+//      tiles off it with dark water between. ⚠⚠ **The second one is a LINE, not a band** — every 해안선
 //      drawn before it was a soft wash fading outward, and the reference frames have a hard stroke
 //   2. **Thin because it is HARD, not because it is narrow.** ⚠⚠ `line_hard` 0.85 is the real answer
 //      to 「좀더 얇으면」: a soft edge spends most of its width fading, so it reads thick however narrow
@@ -29,7 +29,7 @@
 //   6. **Bays are quiet because they are bays.** The refraction reads the bend of the coast, and the
 //      pattern crawls ALONG the shore so a quiet stretch does not stay quiet forever
 //
-// ⚠⚠ **IT ARGUES WITH THE GLOSSARY AND THAT IS THE DECISION.** `CONTEXT.md` defined 해안선 as ringing
+// ⚠⚠ **IT ARGUES WITH THE GLOSSARY AND THAT IS THE DECISION.** `GLOSSARY.md` defined 해안선 as ringing
 // the island **without a gap, because the water is always touching the land**. `first_cut` is how much
 // of that rule is given up: at 0 the rule holds, at 1 the coast can go bare. **It is deliberately
 // partial — the inner line THINS where the outer one is missing and never disappears.** If even that

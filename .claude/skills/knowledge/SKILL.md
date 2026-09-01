@@ -37,7 +37,7 @@ a subagent inherits no context, and a pointer you held in your head does not exi
 |---|---|
 | **Measured** | ⚠⚠ **A number and how it was taken.** 「it is known that」is not a measurement |
 | **Durable** | True after this island, this ticket, this week. **A fact about the current board belongs to the board** |
-| **Unowned** | ⚠ **Check the README's routing table first** — `how-nets-lie`, `docs/manual/blender.md`, `CONTEXT.md`, `log.md`, `docs/reference/` each own a kind of fact, and **the same fact in two files drifts** |
+| **Unowned** | ⚠ **Check the README's routing table first** — `how-nets-lie`, `docs/manual/blender.md`, `GLOSSARY.md`, `log.md`, `docs/reference/` each own a kind of fact, and **the same fact in two files drifts** |
 | **Actionable** | It changes what the next agent types. **A symptom with no instruction is a war story** |
 | **Run** | ⚠⚠ **The page's lab launched on screen this round and was looked at.** Static reading of the code is not this criterion — 02 and 03 were written, reviewed and shipped while a parse error kept them from loading at all |
 

@@ -6,7 +6,7 @@ extends RefCounted
 ## riders aboard and none of them on the board.**
 ##
 ## ⚠⚠ **NOTHING HERE TOUCHES THE TREE.** `Grid.new()`, `Army.new()`, `Battle.new()` and `step(dt)` are
-## the whole of it — the `src/sim/` seam `CONTEXT.md` names. The one exception is the hull the deck
+## the whole of it — the `src/sim/` seam `GLOSSARY.md` names. The one exception is the hull the deck
 ## offsets were read off, which is a RESOURCE load and an orphan node, at the foot of this file.
 ##
 ## ⚠⚠ **THE RING AND THE STRIDE ARE MEASURED ON THE REAL ISLAND AND NOTHING ELSE.** A hand-built board
@@ -252,7 +252,7 @@ func _the_real_island_s_ring_is_its_walkable_coast(t) -> void:
 		"물에 닿은 땅 %d 조각 중 %d 만 본섬이다 — 떨어진 땅 %d 조각을 잘라냈다"
 			% [coastal, walkable, coastal - walkable])
 	t.ok(walkable > ring.size(),
-		"그 %d 중 %d 만 해변이다 — 안쪽 물가 %d 조각은 바다에서 못 온다"
+		"그 %d 중 %d 만 해변이다 — 안쪽 윤곽 %d 조각은 바다에서 못 온다"
 			% [walkable, ring.size(), walkable - ring.size()])
 
 
@@ -532,7 +532,7 @@ func _seaward_points_off_the_land(t) -> void:
 	# the 조각 grid was the only rule. **The drawn outline can ask for more and does**, so the 조각-space
 	# clearance is now 0.60 or better — an equality here would go red on the fix itself.
 	t.ok(tightest >= Rules.BOAT_BEACH_GAP_TILES - NEAR,
-		"그리고 제일 빠듯한 자리가 조각 격자 기준으로 %.2f 조각 이상이다 (얻은 값 %.4f) — 화면의 해안선이 아니라 판의 조각이 기준이다"
+		"그리고 제일 빠듯한 자리가 조각 격자 기준으로 %.2f 조각 이상이다 (얻은 값 %.4f) — 화면의 윤곽이 아니라 판의 조각이 기준이다"
 			% [Rules.BOAT_BEACH_GAP_TILES, tightest])
 
 	# The self-check that makes the pair above a claim: some beaches DO have land jutting seaward of
@@ -549,7 +549,7 @@ func _seaward_points_off_the_land(t) -> void:
 		if _sim_stop(grid, tile3, grid.seaward_at(tile3)) > Rules.BOAT_STANDOFF_TILES + NEAR:
 			pushed += 1
 	t.ok(pushed > 0,
-		"자가 점검 — %d 곳은 그려진 해안선이 조각 규칙보다 더 밀어낸다: 전부 같은 거리면 위가 공허하다"
+		"자가 점검 — %d 곳은 그려진 윤곽이 조각 규칙보다 더 밀어낸다: 전부 같은 거리면 위가 공허하다"
 			% pushed)
 
 
@@ -768,7 +768,7 @@ func _the_stored_stop_is_measured_from_the_water(t) -> void:
 		if _sim_stop(probe, tile, probe.seaward_at(tile)) > Rules.BOAT_STANDOFF_TILES + NEAR:
 			juts.append(k)
 	t.ok(juts.size() > 0,
-		"고리 %d 곳 중 %d 곳은 그려진 해안선이 더 밀어낸다 (자가 점검 — 0이면 아래가 전부 공허하다)"
+		"고리 %d 곳 중 %d 곳은 그려진 윤곽이 더 밀어낸다 (자가 점검 — 0이면 아래가 전부 공허하다)"
 			% [ring.size(), juts.size()])
 
 	# ⚠⚠ **THE CURSOR IS SET BY HAND RATHER THAN WAITED FOR.** Left to itself the stride walks the ring
@@ -803,7 +803,7 @@ func _the_stored_stop_is_measured_from_the_water(t) -> void:
 		if _hull_touches_drawn_land(b.grid, beach, dir, b.boat_stop[0] as Vector2):
 			wrong.append(beach)
 	t.eq(checked, mini(juts.size(), 4), "밀려난 해변 %d 곳에 배를 실제로 띄웠다 (자가 점검)" % checked)
-	t.eq(wrong.size(), 0, "그 배들이 다 물가에서 잰 자리에 선다 — 해변까지의 거리로 잰 게 아니다 %s"
+	t.eq(wrong.size(), 0, "그 배들이 다 윤곽에서 잰 자리에 선다 — 해변까지의 거리로 잰 게 아니다 %s"
 		% str(wrong))
 
 
@@ -824,7 +824,7 @@ func _the_drawn_shore_is_not_the_tile_grid(t) -> void:
 	var grid := _real()
 	var ring := grid.beach_ring(Rules.BOAT_START_DIST_TILES)
 	var coast := Islands.coast()
-	t.ok(coast.size() > 0, "구워진 해안선이 %d 토막이다 (자가 점검 — 0이면 아래가 전부 공허하다)" % coast.size())
+	t.ok(coast.size() > 0, "구워진 윤곽이 %d 토막이다 (자가 점검 — 0이면 아래가 전부 공허하다)" % coast.size())
 	# ⚠⚠ **AND THAT THE BOARD ACTUALLY GOT IT.** Every rule that reads the outline falls back to the
 	# 조각 grid when `Grid.coast` is empty, and **so does every check in this file** — so cutting the
 	# outline out of `Islands.load_into` degraded both sides together and reddened NOTHING. **This is
@@ -842,7 +842,7 @@ func _the_drawn_shore_is_not_the_tile_grid(t) -> void:
 	t.eq(agree, total, "안팎 판정이 %d 조각 전부에서 passable 과 일치한다 (%d)" % [total, agree])
 
 	t.eq(grid.coast.size(), coast.size(),
-		"그리고 판이 그 해안선을 실제로 들고 있다 — 빈 채로 두면 규칙도 검사도 조각 격자로 내려앉는다")
+		"그리고 판이 그 윤곽을 실제로 들고 있다 — 빈 채로 두면 규칙도 검사도 조각 격자로 내려앉는다")
 
 	var tightest := 9999.0
 	var widest := -9999.0
@@ -886,10 +886,10 @@ func _the_drawn_shore_is_not_the_tile_grid(t) -> void:
 	# clearance spread — and **neutering the coast reader entirely left it green**, because `bow` already
 	# varies by itself wherever a headland juts. **The row has to bite on the thing it claims to read.**
 	t.ok(edge_hi - edge_lo > 0.01,
-		"구워진 해안선이 조각 중심에서 해변마다 다른 거리에 있다 — %.2f 부터 %.2f 까지 (조각 격자라면 전부 같은 값이다)"
+		"구워진 윤곽이 조각 중심에서 해변마다 다른 거리에 있다 — %.2f 부터 %.2f 까지 (조각 격자라면 전부 같은 값이다)"
 			% [edge_lo, edge_hi])
 	t.ok(widest - tightest > 0.01,
-		"그려진 해안선과 조각 격자가 다른 경계다 — 그려진 여유가 좁은 쪽 %.2f, 넓은 쪽 %.2f 로 갈리는데 조각 격자로는 전부 %.2f 다.%s"
+		"그려진 윤곽과 조각 격자가 다른 경계다 — 그려진 여유가 좁은 쪽 %.2f, 넓은 쪽 %.2f 로 갈리는데 조각 격자로는 전부 %.2f 다.%s"
 			% [tightest, widest, Rules.BOAT_BEACH_GAP_TILES, named])
 
 	# ⚠⚠ **THE ZERO QUESTION IS DELIBERATELY NOT ASSERTED HERE, AND THAT IS A REFUSAL RATHER THAN AN

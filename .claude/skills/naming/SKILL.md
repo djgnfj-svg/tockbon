@@ -5,12 +5,12 @@ description: Settle what a thing on screen or in the code is CALLED, and write i
 
 # naming — one thing, one word, written down
 
-**This skill ends with an edit to `CONTEXT.md`.** A name agreed only in chat is a name that is gone
+**This skill ends with an edit to `GLOSSARY.md`.** A name agreed only in chat is a name that is gone
 next session, and this repo has already paid for that: `판` meant both the mat on the ground and the
 mark under the cursor for a whole round, and the round could not be steered because neither the user
 nor the assistant could say which one they meant.
 
-⚠⚠ **`CONTEXT.md` is the ONLY glossary.** Do not start a second one, and **do not accept a
+⚠⚠ **`GLOSSARY.md` is the ONLY glossary.** Do not start a second one, and **do not accept a
 `CONTEXT-MAP.md` or a per-folder glossary** — this repo has one context and one file. It is where the
 agreed test seams live and where interfaces take their vocabulary from; **a name that lives anywhere else
 is a name nothing can see.**
@@ -56,7 +56,7 @@ being used.
 - **Write a settled term in as it settles.** ⚠ **Do not batch them to the end of the round**; a term
   agreed in chat and written down an hour later is the one that gets lost
 
-⚠⚠ **`CONTEXT.md` holds no implementation details.** Not a spec, not a scratch pad, not a place for
+⚠⚠ **`GLOSSARY.md` holds no implementation details.** Not a spec, not a scratch pad, not a place for
 decisions. **A glossary and nothing else** — the decisions live in `docs/roadmap/log.md`.
 ⚠ **Only terms this project actually coined belong.** A general programming concept the project happens
 to use is not a row here.
@@ -78,7 +78,7 @@ Every row this skill writes carries all four. **A row missing one is not finishe
 around what is being built. **List the things, not the words** — two things sharing one word is exactly
 what you are looking for, and it is invisible if you list words. **Print that list through `listup`.**
 
-**2. Check `CONTEXT.md` first.** A word may already be settled and simply not have been used.
+**2. Check `GLOSSARY.md` first.** A word may already be settled and simply not have been used.
 ⚠ **When the user is asking what the glossary HOLDS rather than settling a new word, this step is the
 whole job**: print it through `listup` and stop — do not propose names nobody asked for. ⚠ **Parts
 of that file are older than the sides swapping** — a row that reads as though the beast were the player
@@ -95,7 +95,7 @@ is stale, and stale is a finding, not a fact.
 **4. Put the choices to the user, one question per thing**, in this repo's grilling shape. ⚠ **The name
 is the user's decision.** Recommend, give the reason, and wait.
 
-**5. Write the settled rows into `CONTEXT.md`** — into the section they belong to, or a new one when
+**5. Write the settled rows into `GLOSSARY.md`** — into the section they belong to, or a new one when
 there is none. ⚠ **A reversal is written ONTO the file, never by deleting what it overturned**: the dead
 word stays with a line saying what killed it and when. **The dead words are how the next round avoids
 re-proposing them.**
@@ -109,4 +109,4 @@ is not yet a name.
   not exist is a design document, and this repo does not keep one.
 - ⚠ **Do not rename a code symbol as part of this.** Record the mismatch as a row and stop; the symbol
   moved in its own round, as a change to `src/`.
-- ⚠ **Do not write the same fact in two files.** `CONTEXT.md` and nothing else.
+- ⚠ **Do not write the same fact in two files.** `GLOSSARY.md` and nothing else.

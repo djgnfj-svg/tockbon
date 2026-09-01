@@ -70,7 +70,7 @@ ComfyUI 나 pixellab 으로 만들어서 사용」). **`tools/pixel/` 이나 pix
 |---|---|---|
 | **초록인데 거짓말한 검사** | `docs/how-nets-lie.md` | 이미 실측 사례만 587 줄이다 |
 | **이 저장소에서 블렌더 쓰는 법** | `docs/manual/blender.md` | 원본은 `blend/`. 함정 넷과 손대기 전에 읽을 것 |
-| **이 게임의 낱말** | `CONTEXT.md` | 용어집. 한국어 낱말이 곧 이름이다 |
+| **이 게임의 낱말** | `GLOSSARY.md` | 용어집. 한국어 낱말이 곧 이름이다 |
 | **왜 그렇게 정해졌나** | `docs/roadmap/log.md` | 사용자가 한 말은 전부 거기 있다 |
 | **밖에서 찾아온 자료와 출처** | `docs/reference/` | 날짜별, 질문 하나에 파일 하나, 줄마다 출처 |
 | **무엇을 언제 만드나** | `docs/roadmap/README.md` | 지도 |

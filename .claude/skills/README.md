@@ -46,7 +46,7 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 | Skill | What it does |
 |---|---|
 | **`wrap-up`** | **Closes the session** — **verifies this session's tickets against their own bar and closes them**, then the task above them, then the map and the log, the loose images, the nets, the commit. **Ten steps in order, and it stops at the commit** |
-| **`naming`** | **Settles what a thing is CALLED** and writes it into `CONTEXT.md`, so the next round can say it in one word |
+| **`naming`** | **Settles what a thing is CALLED** and writes it into `GLOSSARY.md`, so the next round can say it in one word |
 | **`roadmap`** | **Checks the big picture** against the commits — drift, gaps, what December still owes — **then lays the weeks out again, one thing per week.** ⚠ **Never edits a file; `wrap-up` writes what it settles.** ⚠⚠ **Slicing a week is the user's call** |
 
 ## The rest of the chain
@@ -70,7 +70,7 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 | Skill | Why it stays |
 |---|---|
 | **`diagnosing-bugs`** | The hard bug: intermittent, or a regression between two known-good states |
-| ~~`domain-modeling`~~ | ⚠⚠ **Folded into `naming` on 2026-08-29.** Both wrote `CONTEXT.md` and asked the same question; `naming` was this repo's own. **Its ADR half was dropped** — there is no `docs/adr/` here and decisions go to `docs/roadmap/log.md` |
+| ~~`domain-modeling`~~ | ⚠⚠ **Folded into `naming` on 2026-08-29.** Both wrote `GLOSSARY.md` and asked the same question; `naming` was this repo's own. **Its ADR half was dropped** — there is no `docs/adr/` here and decisions go to `docs/roadmap/log.md` |
 | **`codebase-design`** | The deep-module vocabulary interfaces are designed with |
 | **`writing-for-agents`** | How to write a skill. **The ones written here were written with it** |
 | **`resolving-merge-conflicts`** | Two sessions have collided on `main` once already |
@@ -84,7 +84,7 @@ cut three more the user said they do not use.** **The later word wins.**
 | Gone | What restoring it costs |
 |---|---|
 | **`breakdown`** | **`grilling` asks and `wrap-up` writes** — restoring it means two skills that both split work into tickets |
-| **`tdd`** | The rule it carried survives: **no check at a seam that is not agreed**, and the agreed three are in `CONTEXT.md` |
+| **`tdd`** | The rule it carried survives: **no check at a seam that is not agreed**, and the agreed three are in `GLOSSARY.md` |
 | ~~**`prototype`**~~ | ⚠⚠ **The NAME came back on 2026-08-29** on a different skill — the one written here that builds three mechanisms side by side. **The imported skill is still gone**, and restoring it now means two skills wearing one word. ⚠ This row used to say it never fired; the record shows **one** call |
 | `wayfinder` `to-spec` `to-tickets` | **`compass` + `grilling` + the roadmap file replaced all three.** Restoring means two planning shapes at once |
 | `triage` `to-questionnaire` | Both assume **other people** — a reporter filing bugs, a colleague to send a questionnaire to |
