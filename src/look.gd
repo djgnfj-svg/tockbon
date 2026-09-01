@@ -645,11 +645,34 @@ const CAM_EDGE_PAN_LIP_FACTOR := 0.30
 ## How far ONE NOTCH turns the board. **The board turning is the hand moving during a fight**, and
 ## that is 티켓 07's whole question — this is the knob that lets it be answered by trying it.
 ##
-## ⚠⚠ **NO KEY READS THIS ANY MORE** (2026-08-31): Q and E were the notch and they are deleted, and
-## the right-button drag turns by `CAM_YAW_PER_PX_DEG` instead. **What still reads it is the shot
-## tool**, which turns the camera itself to put the island at the angle a picture was last judged
-## from — so the number stays a number rather than becoming a literal inside a tool.
+## ⚠⚠ **NO KEY READS THIS ANY MORE** (2026-08-31): Q and E were the notch and they were deleted, and
+## the right-button drag turned by `CAM_YAW_PER_PX_DEG` instead. ⚠⚠ **THAT LINE SURVIVES THE KEYS
+## COMING BACK** (2026-09-02): Q and E turn a QUARTER now and read `CAM_YAW_SNAP_DEG`, so this 15 is
+## still read by nothing the player touches.
+## ⚠ **Its reader list said 「the shot tool」 and it was one short.** What reads it is **four call sites
+## in three files outside `src/`** — the field shooter, the piece viewer's two notch keys, and the
+## palette prototype's shooter. Each turns the camera itself to put the island at the angle a picture
+## was last judged from, so the number stays a number rather than becoming a literal inside a tool.
 const CAM_YAW_STEP_DEG := 15.0
+
+## **How far ONE PRESS of Q or E turns the board.** ⚠⚠ **The board stands at one of FOUR yaws and that
+## is a CONSEQUENCE of this number, not a second rule** (2026-09-02, the user having named Don't
+## Starve for the feel). ±90 is exact in float, and with the right-button drag deleted nothing else
+## writes the yaw — so {0, 90, 180, 270} is where the board can be and nothing drifts.
+## ⚠ **`CAM_YAW_STEP_DEG` above is NOT this number.** They are two notches for two different hands:
+## 15 is what an instrument turns the camera by, 90 is what the player's key asks for.
+const CAM_YAW_SNAP_DEG := 90.0
+
+## **How long a quarter turn takes, in seconds** (2026-09-02, the user choosing between an instant
+## snap and a visible sweep: 「즉시 돌 거 같아. 도는 것이 보여」 — *"it starts turning right away, and
+## the turning is visible."*).
+##
+## ⚠⚠ **A FIRST VALUE AND NOT A MEASURED ONE.** 0.22 s is fast enough to read as a snap and slow
+## enough to be seen; **the user's eye is what settles it**, and the flip back to instant is this one
+## constant going to 0.0.
+## ⚠ **It is a DURATION and not a rate**, so the rate follows from it and the notch — 90° in 0.22 s is
+## 409°/s — and a notch that changed size would keep taking the same time.
+const CAM_YAW_SWEEP_SEC := 0.22
 
 ## ⚠⚠ **THESE ARE A DEFAULT NOW AND NOT THE MAP SIZE.** They were `const 48` / `32` read directly by
 ## `field_view._draw` and `_clamp_cam`, which made **two maps of different sizes unrepresentable** —
@@ -696,6 +719,13 @@ const ZOOM_MAX := 2.2
 ## ⚠ **Degrees of yaw per pixel of right-drag.** At 0.5 a screen-width drag spins the board more than
 ## three full turns and the hand loses where north was; at 0.05 it takes four drags to see the far side.
 ## This is a bit over half a turn across the window, which is the range a single drag can hold.
+##
+## ⚠⚠ **THE DRAG IT WAS MEASURED FOR IS DELETED** (2026-09-02, the user: 「오른쪽 마우스로 회전을 하면
+## 뭔가 장점이 별로 없어서」 — *"rotating with the right mouse does not really have any advantage"*).
+## **The constant is left standing rather than deleted with its shell reader**, because
+## `tools/look/piece_viewer.gd` drags a piece around by it and that reader is live. Deleting it breaks
+## the piece viewer — the same reason `CAM_YAW_STEP_DEG` above stands for four readers it does not
+## share a hand with.
 const CAM_YAW_PER_PX_DEG := 0.18
 
 ## ⚠⚠ **THE DRAWN BLOB AND ITS FOUR NUMBERS ARE DELETED** (2026-08-26). `COL_BLOB`, `BLOB_SPREAD`,
