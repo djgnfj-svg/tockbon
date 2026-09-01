@@ -3602,3 +3602,45 @@ measurement, not a preference, and **it belongs to task 03 (부대를 조종한�
 
 ⇒ **물 긷기 is a chore the player REMOVES by building a 우물**, and rain removes it for free while it
 falls. ⚠ **우물 is a sixth building** — the glossary lists 성채·집·탑·창고·성벽, and **only 성채 stands.**
+
+### ⚠⚠ **The hand decides what a body IS — and the drawing on disk already has no weapon**
+
+> *"The 일반병 fights, but it has to be weak. So there is a thing called 병사, and if you equip a weapon
+> it becomes one — so what do we call the plain single thing that is not a 병사? The state with nothing
+> at all. And if you put a farm tool in that state's hand it becomes a 농부."*
+> (「일반병은 싸운데 약해야지. 그러니까 병사라는 게 있고 무기를 장착하면은 병사가 ... 뭔가 하나짜리 단순한
+> 걸 뭐라고 해야 될까? 그냥 아무것도 없는 상태. 그 상태에서 뭔가 농기계를 쥐어주면은 농부가 되고」)
+
+⇒ **A body is not a type. It is an empty body plus whatever is in its hand.** 무기 → 병사 · 농기구 → 농부.
+
+⚠⚠ **This is the 2026-08-31 「손」 decision arriving at its conclusion.** That round cut equipment slots
+and kept one hand — 「the equipment slot, I think we can drop that ... just a hand would do — just what
+you put in the hand」. **What is new is that the hand now decides the body's JOB, not just its numbers.**
+
+### 🔍 The measurement that decides what this costs
+
+| 무엇 | 값 |
+|---|---|
+| **The player's sprite folder** | **`assets/human/man/`** — it is called **man**, not swordsman. **248 files = 124 pngs and their imports** |
+| **What the drawing shows** | **옅은 덩어리 · 둥근 대머리 · 검은 점 둘 — 옷도 무기도 얼굴도 없다** (measured 2026-08-31) |
+| **`UNITS` rows** | **Two.** `SWORDSMAN` (label 검사) and `WOLF` (label 늑대) |
+
+⚠⚠ **THE BODY ON DISK IS ALREADY EMPTY-HANDED.** It carries no weapon at all. ⇒ **The empty state costs
+ZERO new drawings, and it is 병사 — the body holding something — that is the new art.**
+⚠ **This inverts the cost question that was open**: 「do 병사 and the other body share a drawing?」 was
+asked as though the plain body were the new one. **It is the opposite.**
+
+### ⚠ A collision the glossary has not caught
+
+**`CONTEXT.md` says 「검사 — 플레이어의 몸, 그리고 유일한 병종」.** Under the hand model **검사 is a body
+holding a sword**, and **병사 becomes the word for any body holding a weapon** — 검사 one of them, the
+활 of week 5 another. ⚠ **The glossary's 검사 row is written as though it were the top of the tree.**
+**It is not corrected here — the user has not settled the words yet.**
+
+### ⚠⚠ 「일반병」 lasted about an hour
+
+**It was coined to mean 「a body that can be sent one at a time」.** The hand model reaches the same set
+from the other side — a body with no weapon — and the user asked for a better word in the same breath.
+⚠ **The two definitions do not obviously agree**: 농부 holds a farm tool and still has to go alone, so
+**「moves alone」 and 「holds no weapon」 are not the same set.** ⇒ **Only 「holds a weapon ⇒ moves as a
+squad」 makes them agree, and nobody has said that.**
