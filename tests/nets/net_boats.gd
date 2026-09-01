@@ -2,8 +2,8 @@ extends RefCounted
 ## **The beasts cross the water.** 티켓 41, the 월~수 slice.
 ##
 ## The claim under test is one sentence: **a boat is born out at sea on a clock, sails at one speed
-## along open water toward one coast 조각, stops short of it and never moves again, with eight riders
-## aboard and none of them on the board.**
+## along open water toward one coast 조각, stops short of it and never moves again, with `BOAT_CAPACITY`
+## riders aboard and none of them on the board.**
 ##
 ## ⚠⚠ **NOTHING HERE TOUCHES THE TREE.** `Grid.new()`, `Army.new()`, `Battle.new()` and `step(dt)` are
 ## the whole of it — the `src/sim/` seam `CONTEXT.md` names. The one exception is the hull the deck
@@ -50,10 +50,22 @@ const DRY := [
 	"...",
 ]
 
+## **One land 조각 and nothing else**, so a boat that comes to it can only ever put `Rules.TILE_CAPACITY`
+## 늑대 down and keeps the rest. ⚠⚠ **It exists to falsify the WAIT, not the landing**: the wait must not
+## run while anybody is still aboard, and on every other board here the deck empties in one sub-step and
+## a wait that ignored the riders would be green.
+const PERCH := [
+	"~~~~~~~",
+	"~~~~~~~",
+	"~~~.~~~",
+	"~~~~~~~",
+	"~~~~~~~",
+]
+
 ## **The detached islet on the shipped board**, as 조각 numbers on a 30-wide island: a 2x2 at
 ## (20,22)–(21,23) with no walk to the other 280 land 조각. **All four touch water**, so a bare coast
-## test hands them back as beaches — and a boat that came to one would put eight wolves somewhere they
-## can never leave. `net_islands` names the same four in its own reachability row.
+## test hands them back as beaches — and a boat that came to one would put its whole load somewhere
+## they can never leave. `net_islands` names the same four in its own reachability row.
 ## ⚠ **If the island is re-baked these four move**, and this row is meant to go red rather than be
 ## quietly widened: it is the only place the exclusion is measured against named 조각 rather than
 ## against the rule that produced them.
@@ -76,6 +88,8 @@ func run(t) -> void:
 	_the_first_boat_is_born_out_at_sea(t)
 	_it_closes_the_distance_at_the_boat_speed(t)
 	_it_stops_short_of_the_shore_and_stays(t)
+	_an_emptied_hull_waits_and_is_gone(t)
+	_a_hull_with_riders_still_aboard_never_goes(t)
 	_the_second_boat_comes_one_interval_later_and_far_round(t)
 	_the_stored_stop_is_measured_from_the_water(t)
 	_the_drawn_shore_is_not_the_tile_grid(t)
@@ -97,6 +111,7 @@ func run(t) -> void:
 func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 	t.eq(Rules.BOAT_FIRST_SEC, 5.0, "첫 배는 5초에 온다")
 	t.eq(Rules.BOAT_INTERVAL_SEC, 30.0, "그 뒤로는 30초마다다 — 일정하게, 랜덤이 아니다")
+	t.eq(Rules.BOAT_LINGER_SEC, 3.0, "내려놓은 배는 3초 있다가 사라진다")
 	t.eq(Rules.BOAT_SPEED_TILES, 1.2, "배는 초당 1.2조각으로 간다")
 	t.eq(Rules.BOAT_START_DIST_TILES, 24.0, "해변 조각에서 24조각 떨어진 데서 뜬다")
 	t.eq(Rules.BOAT_BEACH_GAP_TILES, 0.6, "뱃머리와 해안 사이에 0.6조각이 남는다")
@@ -127,9 +142,10 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 		"그런데 제일 낮은 자리(%.4f)는 흔들림의 바닥에서도 물 위다 — 늑대가 안 잠긴다" % lowest_seat)
 
 	# ⚠⚠ **THE VALUE IS PINNED, BECAUSE THE REAL CEILING IS AN EYE'S AND NOT AN ARITHMETIC ONE.** The
-	# binding distance is **seat-to-seat on ONE bench** — about 0.3 조각 — and **6x has already reached
-	# it**: the two riders sharing a bench overlap, and the deck reads as four pairs rather than eight
-	# figures. There is no headroom left to bound, so what keeps 6x from drifting is this pin.
+	# binding distance is **seat-to-seat on ONE bench** — 0.292 조각 on `boat.glb` — and **6x had already
+	# reached it**: the two riders sharing a bench overlapped, and that deck read as four pairs rather
+	# than eight figures. There was no headroom left to bound, so what keeps 6x from drifting is this
+	# pin.
 	# ⚠⚠ **THE BENCH-TO-BENCH BOUND BELOW IS A FAR BACKSTOP AND NOTHING MORE.** It reddens near 10.1x —
 	# **measured: a mutation to 9.0 does not touch it** — and the 「about 8x」 and 「~10.1x headroom」
 	# written here on two earlier rounds were both taken against bench-to-bench, which is the wrong
@@ -139,6 +155,11 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 	# be multiplied in downstream, so the drawn width was always `6.0 x 0.45`; the 0.45 is folded into
 	# the ratio now and the row below no longer multiplies it. **The pin moves with the arithmetic, not
 	# with a judgement** — see that constant for why the two were separated.
+	# ⚠⚠ **EVERY MEASUREMENT ABOVE WAS TAKEN ON THE BIG HULL AND THE SMALL ONE ARRIVES NOW**
+	# (2026-09-01). Its benches are 0.84 조각 apart with a 0.600 조각 seat gap, so the seat-to-seat
+	# ceiling the pin was set against is **not where it was**. ⚠ **Nothing here is re-aimed for that**:
+	# where the ratio stops is an eye's answer on a running screen, and the two rows below hold the same
+	# two arithmetic bounds they always held.
 	t.eq(Look.BOAT_RIDER_W_RATIO, 2.70, "갑판 늑대는 몸 반지름의 2.7배로 그린다")
 	var bench_gap := absf((Look.BOAT_DECK_SLOTS[2] as Vector3).x - (Look.BOAT_DECK_SLOTS[0] as Vector3).x)
 	var rider_wide := Look.body_radius_of(Rules.WOLF) * Look.BOAT_RIDER_W_RATIO / Look.TILE_PX
@@ -146,17 +167,17 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 	var seat_gap := absf((Look.BOAT_DECK_SLOTS[1] as Vector3).z - (Look.BOAT_DECK_SLOTS[0] as Vector3).z)
 	t.ok(bench_gap > 0.0, "판자 사이 간격이 %.2f 조각이다 (자가 점검)" % bench_gap)
 	# ⚠⚠ **THE FLOOR DOES NOT ENCODE THE 4x -> 6x CHANGE AND IT IS NOT PRETENDING TO.** 4x already
-	# cleared 「invisible」 — eight countable marks in four pairs — and what it failed was
-	# 「identifiable」: they read as generic dark animals rather than as wolves. **That is an eye's
-	# answer and this row holds only the arithmetic one**, a quarter of the bench spacing, which is
-	# about 2.5x. **Measured: a mutation back to 4.0 does not redden this**, and that is stated rather
-	# than papered over with a threshold reverse-engineered to bite.
+	# cleared 「invisible」 — countable marks in pairs — and what it failed was 「identifiable」: they
+	# read as generic dark animals rather than as wolves. **That is an eye's answer and this row holds
+	# only the arithmetic one**, a quarter of the bench spacing. **Measured: a mutation back to 4.0 does
+	# not redden this**, and that is stated rather than papered over with a threshold reverse-engineered
+	# to bite.
 	t.ok(rider_wide > bench_gap * 0.25,
 		"갑판 늑대가 %.3f 조각 폭으로 그려진다 — 판자 간격의 4분의 1은 넘는다" % rider_wide)
 	t.ok(rider_wide < bench_gap,
-		"그리고 판자 사이 간격보다는 좁다 — 네 줄이 서로 안 붙는다 (%.3f < %.2f). ⚠ 한 판자 위 두 자리 간격 %.3f 는 이미 넘었다"
+		"그리고 판자 사이 간격보다는 좁다 — 판자 줄끼리 안 붙는다 (%.3f < %.2f). ⚠ 한 판자 위 두 자리 간격은 %.3f 다"
 			% [rider_wide, bench_gap, seat_gap])
-	t.eq(Rules.BOAT_CAPACITY, 8, "한 배에 여덟이 탄다")
+	t.eq(Rules.BOAT_CAPACITY, 4, "한 배에 넷이 탄다")
 	t.eq(Rules.BOAT_BEACH_TURN, 0.42, "다음 배는 고리를 0.42 바퀴 돌아온 자리로 온다")
 
 	# **How long the crossing lasts, derived rather than pinned.** ⚠ **Deliberately not asserted against
@@ -607,7 +628,82 @@ func _it_stops_short_of_the_shore_and_stays(t) -> void:
 	var later: Vector2 = b.boat_pos[0]
 	t.ok(stood.distance_to(later) <= NEAR, "그 뒤로 10초를 더 밀어도 안 움직인다 (얻은 값 %.5f)"
 		% stood.distance_to(later))
-	t.eq(int(b.boat_state[0]), Battle.BoatState.ARRIVED, "그리고 상태도 그대로다")
+	# ⚠ **「항해로 안 돌아간다」 이고 「그대로 서 있다」 가 아니다** (2026-09-01). Ten seconds is past
+	# `Rules.BOAT_LINGER_SEC`, so by here the hull has counted itself out — **and it counted out where it
+	# stood**, which is what the distance above is now measuring. The wait itself is the next row's.
+	t.ok(int(b.boat_state[0]) != Battle.BoatState.SAILING, "그리고 다시 건너기 시작하지 않는다")
+
+
+## **A hull that has put its 늑대 on the beach waits, and then is not there.**
+##
+## ⚠⚠ **THIS REVERSES 티켓 41's 「배는 쌓인다」, WHICH WAS A DELIBERATE LINE** (2026-09-01, the user:
+## 「the boat should just arrive, sit for a few seconds and then disappear — call it a game-y
+## allowance」). **The two halves are asserted against each other**: 「사라졌다」 alone is true of a hull
+## that vanished the instant it stopped, and 「기다린다」 alone is true of one that never leaves. The row
+## below the flip is the leak — **a hull that took its riders with it would satisfy both.**
+func _an_emptied_hull_waits_and_is_gone(t) -> void:
+	var b := _battle(ISLE)
+	var crossing := (Rules.BOAT_START_DIST_TILES - Rules.BOAT_STANDOFF_TILES) / Rules.BOAT_SPEED_TILES
+	b.step(Rules.BOAT_FIRST_SEC)
+	b.step(crossing + 0.1)
+	t.eq(int(b.boat_state[0]), Battle.BoatState.ARRIVED, "배가 다 와서 서 있다 (자가 점검)")
+	t.eq(int(b.boat_riders[0]), 0, "그리고 갑판이 비었다 (자가 점검)")
+	var stood: Vector2 = b.boat_pos[0]
+	var landed := b.living_enemy_ids().size()
+	t.eq(landed, Rules.BOAT_CAPACITY, "자가 점검 — 넷이 다 내렸다, 아니면 아래의 셈이 공허하다")
+
+	# **Still there while the wait runs.** Without this row a hull that disappeared on the sub-step it
+	# emptied is green, and 「몇 초 있다가」 would be a number nothing reads.
+	b.step(Rules.BOAT_LINGER_SEC - 0.4)
+	t.eq(int(b.boat_state[0]), Battle.BoatState.ARRIVED,
+		"%.1f초가 안 찼으면 아직 그 자리에 있다" % Rules.BOAT_LINGER_SEC)
+
+	b.step(0.6)
+	t.eq(int(b.boat_state[0]), Battle.BoatState.GONE, "%.1f초가 지나면 없다" % Rules.BOAT_LINGER_SEC)
+	t.ok((b.boat_pos[0] as Vector2).distance_to(stood) <= NEAR,
+		"그런데 어디로도 안 갔다 — 되돌아 항해하는 게 아니라 선 자리에서 끊긴다 (움직인 거리 %.5f)"
+			% (b.boat_pos[0] as Vector2).distance_to(stood))
+	t.eq(b.boat_pos.size(), 1, "선체 줄은 그대로 하나다 — 지운 게 아니라 상태만 넘긴 것이다")
+	t.eq(b.boat_state.size(), 1, "상태 칸도 그대로 하나다 (자가 점검 — 칸이 어긋나면 그림이 남의 배를 입는다)")
+
+	# **Nothing went with it, and nothing comes out of it afterwards.**
+	b.step(5.0)
+	t.eq(b.living_enemy_ids().size(), landed, "사라진 뒤에도 판 위의 짐승 수가 그대로다")
+	t.eq(int(b.boat_state[0]), Battle.BoatState.GONE, "그리고 다시 나타나지 않는다")
+
+
+## **A hull that could not put everybody down does not leave.**
+##
+## ⚠⚠ **THE ONLY ROW THAT FALSIFIES THE WAIT'S RIDER GATE.** Everywhere else here the beach has room and
+## the whole deck walks off in the sub-step the hull arrives, so **a wait counted from the arrival alone
+## is green on every other board in this file** — and it would be carrying the leak: four riders paid
+## for, three delivered, and the count that would show it is the one that just disappeared.
+func _a_hull_with_riders_still_aboard_never_goes(t) -> void:
+	var perch := _grid(PERCH)
+	t.ok(perch.beach_ring(Rules.BOAT_START_DIST_TILES).size() > 0,
+		"조각 하나짜리 섬에도 해변이 있다 (자가 점검 — 없으면 배가 아예 안 온다)")
+
+	var b := _battle(PERCH)
+	var crossing := (Rules.BOAT_START_DIST_TILES - Rules.BOAT_STANDOFF_TILES) / Rules.BOAT_SPEED_TILES
+	# Well past the arrival and three times the wait, and still inside the first interval.
+	#
+	# ⚠⚠ **THE STEP HAS TO LAND INSIDE THE FIRST INTERVAL OR THE ROWS BELOW ARE ABOUT A SECOND HULL.**
+	# It read four times the wait until 2026-09-01 and that left 0.25 초 of margin — **the small hull
+	# ate it**: a shorter hull stops further out, so the crossing takes longer, and this row started
+	# counting two boats. ⚠ **The self-check is here and not left to 「배가 한 척 왔다」**, which reads as
+	# a boat-clock defect rather than as a fixture whose arithmetic ran out.
+	var waited := Rules.BOAT_LINGER_SEC * 3.0
+	t.ok(crossing + waited < Rules.BOAT_INTERVAL_SEC,
+		"자가 점검 — 건너기 %.2f초에 기다림 %.2f초가 배 간격 %.1f초 안에 든다"
+			% [crossing, waited, Rules.BOAT_INTERVAL_SEC])
+	b.step(Rules.BOAT_FIRST_SEC + crossing + waited)
+	t.eq(b.boat_pos.size(), 1, "배가 한 척 왔다 (자가 점검)")
+	t.eq(int(b.boat_state[0]), Battle.BoatState.ARRIVED, "그리고 다 와서 서 있다 (자가 점검)")
+	t.ok(b.living_enemy_ids().size() > 0, "설 자리가 있는 만큼은 내렸다 (자가 점검)")
+	t.ok(int(b.boat_riders[0]) > 0,
+		"그런데 %d 마리가 아직 갑판에 남아 있다 — 조각 하나에 다 못 선다" % int(b.boat_riders[0]))
+	t.ok(int(b.boat_state[0]) != Battle.BoatState.GONE,
+		"그래서 기다림이 안 돈다 — 태운 채로 사라지지 않는다")
 
 
 ## **On the real island, because「the other side」 is a fact about a real coast.**
@@ -635,8 +731,11 @@ func _the_second_boat_comes_one_interval_later_and_far_round(t) -> void:
 	var apart := absf(rad_to_deg(v0.angle_to(v1)))
 	t.ok(apart > 90.0, "섬 가운데에서 보면 둘이 %.0f도 떨어져 있다 — 옆이 아니라 반대편이다" % apart)
 
-	# The first one never leaves this round, which is what makes them pile up.
-	t.eq(int(b.boat_state[0]), Battle.BoatState.ARRIVED, "먼저 온 배는 아직 그 자리에 있다")
+	# ⚠⚠ **THE FIRST ONE IS ALREADY GONE BY THE TIME THE SECOND IS BORN** (2026-09-01), which is a fact
+	# about the SCREEN and not only about this array: it landed at about 23 seconds and waited
+	# `Rules.BOAT_LINGER_SEC`. **Two hulls are never on the water together any more.** ⚠ Its ROW is still
+	# here and still index 0 — that is what keeps 「둘째」 meaning the second boat.
+	t.eq(int(b.boat_state[0]), Battle.BoatState.GONE, "먼저 온 배는 이미 사라졌다")
 	t.eq(int(b.boat_state[1]), Battle.BoatState.SAILING, "둘째는 오는 중이다")
 
 
@@ -810,7 +909,7 @@ func _the_drawn_shore_is_not_the_tile_grid(t) -> void:
 func _the_riders_are_aboard_and_not_on_the_board(t) -> void:
 	var b := _battle(ISLE)
 	b.step(Rules.BOAT_FIRST_SEC)
-	t.eq(int(b.boat_riders[0]), Rules.BOAT_CAPACITY, "첫 배에 여덟이 타 있다")
+	t.eq(int(b.boat_riders[0]), Rules.BOAT_CAPACITY, "첫 배에 넷이 타 있다")
 
 	# Nothing landed. **Both halves**: no body is standing, and no 조각 is claimed by one.
 	t.eq(b.ashore_ids().size(), 0, "그런데 판 위에 선 몸은 하나도 없다")
@@ -829,7 +928,7 @@ func _the_riders_are_aboard_and_not_on_the_board(t) -> void:
 	# is not re-measured here; two files measuring one rule is how they come to disagree.
 	b.step((Rules.BOAT_START_DIST_TILES - Rules.BOAT_STANDOFF_TILES) / Rules.BOAT_SPEED_TILES - 0.5)
 	t.eq(int(b.boat_state[0]), Battle.BoatState.SAILING, "아직 건너는 중이다 (자가 점검)")
-	t.eq(int(b.boat_riders[0]), Rules.BOAT_CAPACITY, "건너는 내내 여덟이 그대로 타 있다")
+	t.eq(int(b.boat_riders[0]), Rules.BOAT_CAPACITY, "건너는 내내 넷이 그대로 타 있다")
 	t.eq(b.ashore_ids().size(), 0, "그리고 판 위에 선 몸은 여전히 없다")
 	var claimed_late := 0
 	for tile2 in b.grid.w * b.grid.h:
@@ -875,10 +974,16 @@ func _a_board_with_no_coast_launches_nothing(t) -> void:
 
 # == the hull the deck offsets were read off ===========================================================
 
-## **`Look.BOAT_DECK_SLOTS` is eight numbers copied out of `boat.glb`, and this is what stops them being
-## a second copy of it.** Eight offsets sitting in `look.gd` with nothing tying them to the benches they
-## were measured from is exactly the shape this repo has watched rot: the mesh gets re-exported with a
-## bench moved, the constants stay, and eight wolves stand in mid-air with every check green.
+## **`Look.BOAT_DECK_SLOTS` is twelve numbers copied out of the arriving hull, and this is what stops
+## them being a second copy of it.** Offsets sitting in `look.gd` with nothing tying them to the benches
+## they were measured from is exactly the shape this repo has watched rot: the mesh gets re-exported
+## with a bench moved, the constants stay, and the wolves stand in mid-air with every check green.
+##
+## ⚠⚠ **NOTHING HERE IS READ BY NODE NAME ANY MORE** (2026-09-01). `boat.glb` carried `boat_stem`,
+## `boat_tail` and `boat_bench_0..3` as separate objects and this row asked for them by name;
+## `boat_small.glb` is **one joined mesh**, so the bow and the benches are found in the geometry
+## instead. ⚠ **That is not a loosening**: a name can sit on a node somebody moved anywhere, while the
+## vertices cannot lie about where a plank is.
 ##
 ## ⚠ **It also proves the file loads at all.** `boat.glb` had never been imported by Godot before 티켓
 ## 41 — no `.import` sat beside it — and everything else in this net would stay green if the load came
@@ -896,17 +1001,29 @@ func _the_deck_offsets_are_the_mesh_s_own_benches(t) -> void:
 	if hull == null:
 		return
 
+	var pts := _mesh_points(hull, "")
+	t.ok(pts.size() > 0, "선체 정점을 실제로 읽었다 (자가 점검 — 0이면 아래가 전부 공허하다)")
+
 	# The bow. `_boat_yaw` turns the model's +X along the heading, and that is only right because the
 	# sharp end is the positive one — a re-export that turned the hull round would sail every boat
 	# backwards with every position check in this file still green.
-	var stem := hull.find_child("boat_stem", true, false) as Node3D
-	var tail := hull.find_child("boat_tail", true, false) as Node3D
-	t.ok(stem != null and tail != null, "뱃머리와 고물이 이름으로 서 있다 (자가 점검)")
-	if stem != null and tail != null:
-		t.ok(stem.position.x > tail.position.x, "뱃머리가 +X 쪽이다 — 배의 앞이 어느 축인가")
+	# ⚠ **Asked of the shape, in the last fifth at each end.** The named `boat_stem` and `boat_tail`
+	# went with the big hull, and a joined mesh answers 「which end is sharp」 only by how wide it is
+	# there.
+	var end_x := Rules.BOAT_HULL_HALF_TILES * 0.8
+	var fore := 0.0
+	var aft := 0.0
+	for raw_p in pts:
+		var p := raw_p as Vector3
+		if p.x >= end_x:
+			fore = maxf(fore, absf(p.z))
+		elif p.x <= -end_x:
+			aft = maxf(aft, absf(p.z))
+	t.ok(fore > 0.0 and aft > 0.0, "양 끝 오분의 일에 정점이 있다 (자가 점검)")
+	t.ok(fore < aft, "뱃머리 쪽 끝이 고물 쪽보다 좁다 — 배의 앞이 +X 다 (%.3f < %.3f)" % [fore, aft])
 
 	t.eq(Look.BOAT_DECK_SLOTS.size(), Rules.BOAT_CAPACITY,
-		"자리가 탈 수 있는 수만큼 있다 — 여덟에 여덟")
+		"자리가 탈 수 있는 수만큼 있다 — 넷에 넷")
 
 	# ⚠⚠ **`Rules.BOAT_HULL_HALF_TILES` IS READ BACK OFF THE MESH'S OWN BOX.** It is the number the
 	# standoff is built on, and a hull re-exported longer would put the bow back on the grass with every
@@ -930,27 +1047,113 @@ func _the_deck_offsets_are_the_mesh_s_own_benches(t) -> void:
 	t.ok(absf(box.position.y) < 0.05,
 		"바닥이 원점 높이다 — 흘수는 여기서부터 잰다 (%.3f)" % box.position.y)
 
+	# ⚠⚠ **THE END POSTS WEAR THE BENCH MATERIAL TOO, AND THEY ARE NOT BENCHES.** Four runs of bench
+	# geometry stand along the hull; the two amidships cross the whole beam and the two at the ends are
+	# 0.27 and 0.13 조각 wide. **Taking every run would hand back four planks and two of them would have
+	# no seat table to match**, so the filter is 「crosses more than the half-beam」 and the half-beam
+	# comes off `Rules` rather than being typed here.
+	var planks := _thwarts(_mesh_points(hull, "bench"), Rules.BOAT_HULL_BEAM_TILES * 0.5)
+	t.eq(planks.size(), Look.BOAT_DECK_SLOTS.size() / 2,
+		"빔을 가로지르는 판자가 자리 표의 절반만큼 있다 — 자리 둘에 판자 하나 %s" % str(planks))
+	# ⚠ **A wrong count leaves rather than indexing off the end.** Measured: without this the row above
+	# goes red and the function then dies on the seat index, and the runner's own header says a net that
+	# dies half way reports a partial pass count in a shape a healthy net cannot be told from.
+	if planks.size() != Look.BOAT_DECK_SLOTS.size() / 2:
+		hull.free()
+		return
+
 	var off_bench := []
-	for k in 4:
-		var bench := hull.find_child("boat_bench_%d" % k, true, false) as Node3D
-		if bench == null:
-			off_bench.append("boat_bench_%d 없음" % k)
-			continue
+	for k in planks.size():
+		var plank: AABB = planks[k]
 		# Two seats a bench, a quarter of the plank's own width either side of its middle.
-		var want_y := bench.position.y + bench.scale.y * 0.5
-		var want_z := bench.scale.z * 0.25
+		var want_x := plank.position.x + plank.size.x * 0.5
+		var want_y := plank.position.y + plank.size.y
+		var want_z := plank.size.z * 0.25
 		for side in 2:
 			var slot: Vector3 = Look.BOAT_DECK_SLOTS[k * 2 + side]
 			var sign_z := -1.0 if side == 0 else 1.0
-			if absf(slot.x - bench.position.x) > NEAR:
-				off_bench.append("%d 번 자리의 x %.3f · 판자 %.3f" % [k * 2 + side, slot.x, bench.position.x])
+			if absf(slot.x - want_x) > NEAR:
+				off_bench.append("%d 번 자리의 x %.3f · 판자 %.3f" % [k * 2 + side, slot.x, want_x])
 			if absf(slot.y - want_y) > NEAR:
 				off_bench.append("%d 번 자리의 y %.4f · 판자 위 %.4f" % [k * 2 + side, slot.y, want_y])
 			if absf(slot.z - sign_z * want_z) > NEAR:
-				off_bench.append("%d 번 자리의 z %.3f · 판자 반폭의 절반 %.3f"
+				off_bench.append("%d 번 자리의 z %.3f · 판자 폭의 4분의 1 %.3f"
 					% [k * 2 + side, slot.z, sign_z * want_z])
-	t.eq(off_bench.size(), 0, "여덟 자리가 전부 제 판자 위다 %s" % str(off_bench))
+	t.eq(off_bench.size(), 0, "네 자리가 전부 제 판자 위다 %s" % str(off_bench))
 	hull.free()
+
+
+## Every vertex of the surfaces whose material name holds `tag`, in the hull's own space. **An empty
+## `tag` takes every surface.**
+## ⚠ **The mesh and not a node.** `boat_small.glb` is one object, so the only thing that can say where a
+## bench is, is the geometry wearing the bench material.
+func _mesh_points(n: Node3D, tag: String) -> Array:
+	var out := []
+	for raw in _mesh_children(n):
+		var mi: MeshInstance3D = raw
+		if mi.mesh == null:
+			continue
+		for s in mi.mesh.get_surface_count():
+			if tag != "":
+				var mat := mi.mesh.surface_get_material(s)
+				if mat == null:
+					mat = mi.get_surface_override_material(s)
+				if mat == null or not mat.resource_name.contains(tag):
+					continue
+			var arrays := mi.mesh.surface_get_arrays(s)
+			if arrays.size() <= Mesh.ARRAY_VERTEX:
+				continue
+			for v in (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array):
+				out.append(mi.transform * v)
+	return out
+
+
+## The given points cut into runs along the hull's length, keeping only the runs that cross more than
+## `half_beam`, ordered stern to bow. **One box per plank somebody sits on.**
+##
+## ⚠⚠ **THE CUT IS 0.3 조각 OF EMPTY x, AND THE WINDOW IT SITS IN IS BOTH-SIDED.** A box has vertices
+## only at its two end faces, so **a cut narrower than a plank is thick splits every plank into two
+## slabs of zero length** — measured: at 0.1 this handed back four flat boxes for two benches. The
+## planks are 0.135 thick, and the narrowest empty run between two pieces of bench geometry is 0.557
+## 조각, so the cut has to sit between those two. ⚠ **Either wall of that window fails loudly** — too
+## narrow doubles the plank count, too wide merges two planks into one — and the count asserted above
+## is what catches both.
+func _thwarts(pts: Array, half_beam: float) -> Array:
+	if pts.is_empty():
+		return []
+	var xs := []
+	for raw in pts:
+		xs.append((raw as Vector3).x)
+	xs.sort()
+	var runs := []
+	var lo: float = xs[0]
+	var prev: float = xs[0]
+	for k in range(1, xs.size()):
+		var x: float = xs[k]
+		if x - prev > 0.3:
+			runs.append([lo, prev])
+			lo = x
+		prev = x
+	runs.append([lo, prev])
+
+	var out := []
+	for raw_run in runs:
+		var run: Array = raw_run
+		var box := AABB()
+		var first := true
+		for raw_p in pts:
+			var p := raw_p as Vector3
+			if p.x < float(run[0]) - NEAR or p.x > float(run[1]) + NEAR:
+				continue
+			if first:
+				box = AABB(p, Vector3.ZERO)
+				first = false
+			else:
+				box = box.expand(p)
+		if not first and box.size.z > half_beam:
+			out.append(box)
+	out.sort_custom(func(a, c): return (a as AABB).position.x < (c as AABB).position.x)
+	return out
 
 
 ## Every mesh under `n`, merged into one box in `n`'s own space. **The model's real extent**, which is

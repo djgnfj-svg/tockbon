@@ -42,10 +42,16 @@ func run(t) -> void:
 	# was written the five boat rows below it were not being measured at all and the file still read
 	# 59 green. **The order of independent rows carries no meaning; the bite row still reddens where it
 	# is**, and nothing here is hidden by moving the boats above it.
+	# ⚠⚠ **THE BAR FAMILY RUNS FIRST FOR THE REASON THE BOATS DO** (2026-09-01). This file is
+	# **incomplete today** — a row below it dies and abandons everything under it — so a row appended at
+	# the bottom would be green by never running at all. **The order carries no meaning otherwise.**
+	_a_bar_appears_only_once_something_is_hurt(t)
+	_the_fill_drains_from_the_right_and_never_moves_its_left(t)
+	_the_keep_wears_its_bar_over_its_own_roof(t)
 	_every_hull_stands_on_its_own_boat(t)
 	_the_hull_is_a_committed_mesh_pointing_where_it_sails(t)
 	_the_sea_moves_the_hull_and_the_sim_does_not(t)
-	_the_deck_carries_eight_riders(t)
+	_the_deck_carries_its_riders(t)
 	_the_rider_faces_the_screen_and_not_the_compass(t)
 	_the_rider_stands_on_the_plank_and_not_on_its_frame(t)
 	_the_footing_survives_the_picture_changing(t)
@@ -55,7 +61,6 @@ func run(t) -> void:
 	_the_first_island_opens_with_room_around_it(t)
 	_a_body_lays_one_shadow_disc(t)
 	_bodies_sharing_a_piece_are_drawn_apart(t)
-	_a_body_stands_on_its_own_tile_and_not_the_next_one(t)
 	_the_readers_themselves(t)
 	_every_row_wears_its_own_picture(t)
 	_the_wolf_ashore_wears_the_picture_that_was_chosen(t)
@@ -150,7 +155,11 @@ func _the_hills_never_swallow_the_tier(t) -> void:
 	# carries the meaning; this row only refuses to let that claim be vacuous.
 	# ⚠ **14 since 2026-08-29 and it was 15**: the stair moved out of the plateau's corner onto the
 	# middle of its west wall, so the plateau is a clean rectangle and has one boundary corner fewer.
-	t.eq(walls, 14, "첫 섬의 층 경계 모서리는 14개다 (자가 점검, 이 수가 0이면 아래가 전부 공허하다)")
+	# ⚠⚠ **THE COUNT ROW IS DELETED** (02-08, 2026-09-01, the user: 「about the stale tests — I asked
+	# you to delete them, not fit them to the current island」). It said the island has 14 층 경계
+	# 모서리; it has 38. **What stopped being measured: that the loop below has any subject at all.**
+	# The row's own label said what it was for — 「이 수가 0이면 아래가 전부 공허하다」 — so the four
+	# claims underneath it are now green over a loop that could be empty.
 
 	# ⚠⚠ **THE ONE THAT CARRIES THE CLAIM, AND IT HAS NO MAGIC NUMBER IN IT.** A tier boundary reads as
 	# a boundary only if it is unmistakably steeper than the ground's own roll — so the two populations
@@ -193,7 +202,9 @@ func _the_first_island_opens_with_room_around_it(t) -> void:
 	var g := Grid.new()
 	Islands.load_into(g)
 	var zoom := Look.survey_zoom_of(g.w, g.h)
-	t.eq(Vector2i(g.w, g.h), Vector2i(26, 20), "첫 노드가 여는 섬은 26 x 20 이다 (자가 점검)")
+	# ⚠⚠ **DELETED** (02-08): 「첫 노드가 여는 섬은 26 x 20 이다」. It loads 30 x 26. **What stopped
+	# being measured: the island's size**, so every fraction below is now a claim about whatever board
+	# happens to be shipped rather than about a board anyone named.
 	t.ok(zoom > Look.ZOOM_MIN + 0.01 and zoom < Look.ZOOM_MAX - 0.01,
 		"여는 줌 %.4f 가 양쪽 한계 안에 있다 — 한계에 걸리면 여백 상수가 아무 일도 못 한다" % zoom)
 
@@ -233,6 +244,209 @@ func _the_first_island_opens_with_room_around_it(t) -> void:
 ## `note_refusal` and `FxKind.REFUSE` were all deleted with the start button. See `game.gd`.
 
 
+
+
+## ⚠⚠ **A BAR HANGS OVER A THING ONLY ONCE IT HAS BEEN HIT** (2026-09-01, the user choosing all three
+## recommendations at once: over every 몸 · only a hurt one · the 성채's over its roof). **The opening
+## frame has every 몸 and the 성채 untouched**, so a bar that always showed would fill the screen before
+## anything had happened — that is the whole reason the fraction gates the node.
+##
+## **Four claims, and the last three are the floors the first one needs:**
+##  1. full HP draws NO bar node at all — not a hidden one, not an empty one
+##  2. one blow makes exactly ONE appear, over the body that took it
+##  3. a SECOND hurt body makes a second — one bar per frame would pass claim 2 alone
+##  4. healing it back closes the pool — a bar left visible is a wound that never happened
+##
+## ⚠ **The bar's height is measured against the body's own drawn top and not against a number.** A
+## wolf is 55 x 40 and a man 36 x 40, so anything hanging above a body that computes its height from
+## the radius lands across one of the two faces — `_put_body`'s own header carries that measurement.
+##
+## ⚠ Mutation: drop the `frac >= 1.0` gate in `_put_bar` and claim 1 reddens; put the bar at the body's
+## centre instead of its top and the height row reddens; drop `_hide_unused`'s two bar loops and
+## claim 4 reddens.
+func _a_bar_appears_only_once_something_is_hurt(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN, Rules.SWORDSMAN]), [])
+	_ashore(b, 0, Vector2(14.0, 6.0))
+	_ashore(b, 1, Vector2(11.0, 6.0))
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	t.eq(_body_spots(fv).size(), 2, "몸 둘이 그려졌다 (자가 점검)")
+	t.eq(fv._bars_used, 0, "둘 다 성한 채로 열리면 체력바가 하나도 안 뜬다")
+	t.eq(_bar_frames(fv).size(), 0, "그리고 풀 어디에도 보이는 바가 없다")
+
+	# One blow, and only on the first body.
+	b.soldier_hp[0] = b.army.max_hp_of(0) * 0.5
+	fv._process(0.0)
+	t.eq(fv._bars_used, 1, "한 대 맞은 몸 하나에만 체력바가 뜬다")
+	var one := _bar_frames(fv)
+	t.eq(one.size(), 1, "그리고 그 하나가 실제로 보인다")
+	if one.is_empty():
+		return
+	var bar: Sprite3D = one[0]
+	# ⚠ **Tile CENTRES.** `Look.tile_point_px` puts 조각 (14,6) at (14.5, 6.5) in tile units.
+	t.ok(absf(bar.position.x - 14.5) < 0.01 and absf(bar.position.z - 6.5) < 0.01,
+		"그 바가 맞은 몸 위에 선다 (%.2f, %.2f)" % [bar.position.x, bar.position.z])
+
+	# **Above the body's own drawn top**, and by exactly the lift.
+	var s := _body_sprite(fv)
+	t.ok(s != null, "그 몸의 스프라이트를 잡았다 (자가 점검)")
+	if s != null:
+		var top: float = s.position.y + s.scale.y * float(s.texture.get_height()) * 0.5 / Look.TILE_PX
+		t.ok(bar.position.y > top,
+			"바가 몸의 그림 꼭대기보다 위다 (%.3f > %.3f)" % [bar.position.y, top])
+		t.ok(absf(bar.position.y - (top + Look.HP_BAR_LIFT_PX / Look.TILE_PX)) < 0.01,
+			"그 높이가 꼭대기에서 딱 HP_BAR_LIFT_PX 만큼이다 (%.3f)" % bar.position.y)
+
+	# **The floor: a second wound is a second bar.** One bar a frame passes everything above.
+	b.soldier_hp[1] = b.army.max_hp_of(1) * 0.5
+	fv._process(0.0)
+	t.eq(fv._bars_used, 2, "둘 다 맞으면 바도 둘이다 — 프레임당 하나가 아니다")
+	t.eq(_bar_frames(fv).size(), 2, "그리고 둘 다 보인다")
+
+	# **The floor the other way: healed back, the pool closes.**
+	b.soldier_hp[0] = b.army.max_hp_of(0)
+	b.soldier_hp[1] = b.army.max_hp_of(1)
+	fv._process(0.0)
+	t.eq(fv._bars_used, 0, "다 나으면 바를 하나도 안 집어 든다")
+	t.eq(_bar_frames(fv).size(), 0, "그리고 아까 서 있던 둘이 실제로 숨었다 — 안 쓰는 것을 닫는 자리가 여기다")
+
+
+## ⚠⚠ **THE FILL IS CROPPED, AND A CENTRED SPRITE CROPPED FROM THE MIDDLE IS THE DEFECT THIS ROW
+## HOLDS DOWN.** A `Sprite3D` narrowed by `region_rect` shrinks toward its own centre, which on screen
+## is a bar closing in from BOTH ends — `_put_bar` pushes it back by half of what the crop took, so the
+## left edge stands still and only the right one moves.
+##
+## **The property is exact and it is what is measured**: the fill's drawn LEFT edge is the same number
+## at every fraction, and its drawn WIDTH is the fraction times the whole. ⚠ **Both, not one** — an
+## `offset` that pinned the left edge while the region never shrank would leave a bar that is always
+## full, and a region that shrank with no offset would leave one that closes in from both ends.
+##
+## ⚠ Mutation: set `offset` to `Vector2.ZERO` and the left-edge row reddens at every fraction; drop the
+## `frac` out of `region_rect` and the width row does.
+func _the_fill_drains_from_the_right_and_never_moves_its_left(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN]), [])
+	_ashore(b, 0, Vector2(14.0, 6.0))
+	var fv := _view_of(b, rows)
+	var pic: Texture2D = fv._tex_bar_fill
+	t.ok(pic != null, "채움 그림이 실제로 실렸다 (자가 점검)")
+	if pic == null:
+		return
+	# **The fill lives inside the frame's trough**, so it is the narrower of the two pictures.
+	t.ok(pic.get_width() < (fv._tex_bar_frame as Texture2D).get_width(),
+		"채움 그림이 테 그림보다 좁다 — 홈 안에 들어가는 것이니까 (%d < %d)"
+			% [pic.get_width(), (fv._tex_bar_frame as Texture2D).get_width()])
+
+	var lefts := []
+	var widths := []
+	for raw_frac in [0.75, 0.5, 0.25]:
+		var frac: float = raw_frac
+		b.soldier_hp[0] = b.army.max_hp_of(0) * frac
+		fv._process(0.0)
+		t.eq(fv._bars_used, 1, "%.2f 에서 바가 하나 떠 있다 (자가 점검)" % frac)
+		if fv._bars_used != 1:
+			return
+		var fill: Sprite3D = fv._bar_fills[0]
+		t.ok(fill.visible, "%.2f 에서 채움이 보인다" % frac)
+		t.ok(absf(fill.region_rect.size.x - float(pic.get_width()) * frac) < 0.01,
+			"오려낸 폭이 hp/max 그대로다 (%.2f 에서 %.2f 텍셀)" % [frac, fill.region_rect.size.x])
+		var span := _fill_span(fv, 0)
+		lefts.append(span.x)
+		widths.append(span.y - span.x)
+
+	# **The left edge is one number at all three fractions.** This is the whole row.
+	t.ok(absf(float(lefts[0]) - float(lefts[1])) < 0.0005
+			and absf(float(lefts[1]) - float(lefts[2])) < 0.0005,
+		"채움의 왼쪽 끝이 세 값에서 다 같다 (%.4f · %.4f · %.4f 조각)"
+			% [lefts[0], lefts[1], lefts[2]])
+	# And the right one does move, in the right direction and by the right amount.
+	t.ok(float(widths[0]) > float(widths[1]) and float(widths[1]) > float(widths[2]),
+		"그러면서 폭은 줄어든다 (%.4f > %.4f > %.4f 조각)" % [widths[0], widths[1], widths[2]])
+	t.ok(absf(float(widths[0]) / float(widths[2]) - 3.0) < 0.01,
+		"0.75 의 폭이 0.25 의 세 배다 (%.4f 배) — 비례가 아니면 눈금이 거짓말한다"
+			% (float(widths[0]) / float(widths[2])))
+
+	# ⚠ **Zero is HIDDEN, not a zero-width quad**, and the frame stays to read as an empty trough.
+	b.soldier_hp[0] = 0.0
+	fv._process(0.0)
+	t.eq(fv._bars_used, 1, "체력 0 에서도 테는 남는다 — 빈 홈이 죽음의 그림이다")
+	t.ok(not (fv._bar_fills[0] as Sprite3D).visible,
+		"그런데 채움은 숨는다 — 폭 0 짜리 사각형을 그리지 않는다")
+
+
+## ⚠⚠ **THE 성채's BAR SITS OVER ITS ROOF** (2026-09-01, the user: 「지붕 위」), and the roof is a
+## number this file does not own — it is `BUILD_SCALE` times whatever `buildings.blend` was last saved
+## with. **So it is read off the mesh that was placed**, and this row is what proves the reading is a
+## roof and not a ground line.
+##
+## ⚠⚠ **THE FLOOR IS A BOARD WITH NO HOUSE.** `keep_hp` is 0 there — `Battle.setup` opens it that way —
+## and a bar gated on the HP instead of on `keep_tiles` would hang a permanently empty bar over open
+## water on every arena in this file. **That is the plan's own named risk** and it is measured here.
+##
+## ⚠ **This is the one row that opens the REAL island**, because `Islands.builds()` is what places a
+## keep and no arena fixture can carry one.
+##
+## ⚠ Mutation: gate `_paint_bars` on `keep_hp <= 0.0` instead of on `keep_tiles` and the arena floor
+## reddens; take the roof as `one.position.y` and the height row does.
+func _the_keep_wears_its_bar_over_its_own_roof(t) -> void:
+	# **The floor first**: an arena with no building at all, and the keep HP that comes with it.
+	var arena := _open(ARENA_W, ARENA_H)
+	var empty := _battle_of(arena, _army_of([]), [])
+	t.ok(empty.keep_tiles.is_empty(), "이 판에는 성채가 없다 (자가 점검)")
+	t.eq(empty.keep_hp, 0.0, "그래서 성채 체력이 0 이다 (자가 점검)")
+	var fv0 := _view_of(empty, arena)
+	fv0._process(0.0)
+	t.eq(fv0._bars_used, 0, "집 없는 판에는 빈 바가 안 뜬다 — 0/240 은 체력이 아니라 집이 없는 것이다")
+	t.eq(_bar_frames(fv0).size(), 0, "그리고 화면에도 하나도 안 서 있다")
+
+	var b := _keep_island()
+	t.ok(not b.keep_tiles.is_empty(), "진짜 섬에는 성채가 서 있다 (자가 점검)")
+	var fv := _view_of(b, Islands.rows())
+	fv._process(0.0)
+	t.ok(fv._keep_roof_known, "그 성채의 지붕 높이를 실제 메시에서 읽었다")
+	t.eq(fv._bars_used, 0, "성한 240 에서는 성채도 바를 안 단다")
+	t.eq(_bar_frames(fv).size(), 0, "그리고 화면에도 안 서 있다")
+
+	# The roof is above the ground the keep stands on, and by more than a rounding error.
+	var placed := Islands.builds()[0] as Dictionary
+	var fp := Builds.footprint_of(Builds.KEEP)
+	t.eq(str(placed["kind"]), Builds.KEEP, "섬 파일의 첫 건물이 성채다 (자가 점검)")
+	var tile := int(placed["y"]) * b.grid.w + int(placed["x"])
+	var ground := Islands.ground_h(b.grid.level_of(tile))
+	t.ok(fv._keep_roof.y > ground + 0.5,
+		"지붕이 그 조각의 바닥보다 반 조각 넘게 위다 (%.3f vs %.3f) — 바닥선이 아니다"
+			% [fv._keep_roof.y, ground])
+
+	b.keep_hp = Rules.KEEP_MAX_HP * 0.5
+	fv._process(0.0)
+	t.eq(fv._bars_used, 1, "한 대 맞으면 성채에도 바가 하나 뜬다")
+	var bars := _bar_frames(fv)
+	if bars.is_empty():
+		return
+	var bar: Sprite3D = bars[0]
+	var cx := float(placed["x"]) + float(fp.x) * 0.5
+	var cy := float(placed["y"]) + float(fp.y) * 0.5
+	t.ok(absf(bar.position.x - cx) < 0.01 and absf(bar.position.z - cy) < 0.01,
+		"그 바가 성채 발자국 한가운데다 (%.2f, %.2f — 기대 %.2f, %.2f)"
+			% [bar.position.x, bar.position.z, cx, cy])
+	t.ok(absf(bar.position.y - (fv._keep_roof.y + Look.HP_BAR_KEEP_LIFT_PX / Look.TILE_PX)) < 0.01,
+		"높이가 지붕에서 딱 HP_BAR_KEEP_LIFT_PX 만큼이다 (%.3f)" % bar.position.y)
+	t.ok(absf((fv._bar_fills[0] as Sprite3D).region_rect.size.x
+			- float((fv._tex_bar_fill as Texture2D).get_width()) * 0.5) < 0.01,
+		"그리고 반 남은 성채의 채움이 반이다 (%.2f 텍셀)"
+			% (fv._bar_fills[0] as Sprite3D).region_rect.size.x)
+
+	# ⚠⚠ **AND HERE IS WHERE THE GATE ACTUALLY BITES** (2026-09-01, found by inverting it). The arena
+	# floor above proves nothing on its own: **an arena never draws a keep mesh either**, so a
+	# `_paint_bars` with no gate at all is still silent there and the row stays green. **The case is a
+	# board where the ROOF is on screen and the sim says there is no 성채** — which is what a keep that
+	# has been taken out of `keep_tiles` is, and `keep_hp` reads 0 exactly as an unbuilt board's does.
+	b.keep_tiles = PackedInt32Array()
+	b.keep_hp = 0.0
+	fv._process(0.0)
+	t.eq(fv._bars_used, 0, "sim 이 성채가 없다고 하면 지붕이 화면에 있어도 바를 안 단다")
+	t.eq(_bar_frames(fv).size(), 0, "그리고 아까 서 있던 것도 숨는다")
 
 
 ## ⚠⚠ **A BODY'S WHOLE SHADOW, AND IT IS THE ONLY ONE IT HAS** (2026-08-28, the user: 「그림자도
@@ -340,52 +554,23 @@ func _bodies_sharing_a_piece_are_drawn_apart(t) -> void:
 
 
 
-## ⚠⚠ **A BODY ON THE LIP OF THE PLATEAU SANK INTO THE GROUND** (2026-08-28, the user: 「지금보면
-## 땅속으로 들어감 2층 에서 보셈」). The foot height was asked as `centre_px / Look.TILE_PX` — and
-## `Look.tile_point_px` puts a tile centre **half a tile along both axes**, so the sample landed at
-## `pos + 0.5` and `Grid.surface_h` rounded it onto the NEXT tile. On the edge of the plateau the next
-## tile is the floor a storey down, so the body was drawn standing at the low tile's height while
-## actually being on the high one.
-##
-## ⚠ **The y axis was off by a different amount than the x**, because `TILE_H_PX` need not equal
-## `TILE_PX` — which is why this is measured on BOTH axes and on a boundary, not on open ground where
-## a half-tile error reads as nothing.
-##
-## ⚠ Mutation: pass `centre_px / Look.TILE_PX` back into `_stand_h` and the body on the high tile drops
-## to the low tile's height.
-func _a_body_stands_on_its_own_tile_and_not_the_next_one(t) -> void:
-	# ⚠⚠ **THE PLATEAU IS ON THE WEST AND THE BODY STANDS ON ITS EAST LIP**, and that orientation is
-	# the whole of the row. The bad sample was `pos + 0.5`, which rounds to the tile **east** of the
-	# body — so a plateau whose edge faced the other way would put both samples on the SAME tile and
-	# the check would pass against the very defect it is written for. **Measured: it did, first try.**
-	var rows := _open(ARENA_W, ARENA_H)
-	var tiers := []
-	for y in ARENA_H:
-		var row := ""
-		for x in ARENA_W:
-			row += "2" if x <= 8 else "."
-		tiers.append(row)
-	var b := _battle_of(rows, _army_of([Rules.WOLF]), [_spawn(ARENA_W, Rules.WOLF, 8, 6)], tiers)
-	var fv := _view_of(b, rows, tiers)
-	fv._process(0.0)
-	var g := b.grid
-	t.eq(g.level_of(g.tile_index(8, 6)), 2, "몸이 선 조각이 2층이다 (자가 점검)")
-	t.eq(g.level_of(g.tile_index(9, 6)), 0, "그 동쪽 조각은 1층이다 (자가 점검 — 반 조각 밀리면 여기로 간다)")
-
-	var s := _body_sprite(fv)
-	t.ok(s != null, "몸이 그려졌다 (자가 점검)")
-	# The body's own tile height, and the tile next to it. They must differ, or this row proves nothing.
-	var high := g.surface_h(Vector2(8.0, 6.0)) + Islands.base_h()
-	var low := g.surface_h(Vector2(9.0, 6.0)) + Islands.base_h()
-	t.ok(high > low + 0.5, "두 조각의 높이가 한 층 벌어져 있다 (%.3f vs %.3f — 자가 점검)" % [high, low])
-
-	# `_put_body` returns the TOP; the foot is the sprite's centre minus half its drawn height.
-	var foot: float = s.position.y - s.scale.y * float(s.texture.get_height()) * 0.5 / Look.TILE_PX
-	t.ok(absf(foot - (high + Look.BODY_LIFT_PX / Look.TILE_PX)) < 0.02,
-		"발이 자기 조각(2층)의 높이에 있다 (%.3f, 기대 %.3f)"
-			% [foot, high + Look.BODY_LIFT_PX / Look.TILE_PX])
-	t.ok(foot > low + 0.5,
-		"그리고 동쪽 조각(1층) 높이가 아니다 — 반 조각 밀려 읽으면 여기가 문다 (%.3f vs %.3f)" % [foot, low])
+# ⚠⚠ **`_a_body_stands_on_its_own_tile_and_not_the_next_one` IS DELETED WHOLE** (02-08,
+#  2026-09-01, the user: 「about the stale tests — I asked you to delete them, not fit them to the
+#  current island」). **Its fixture stood a beast on a plateau with a spawn, and a spawn stands nothing
+#  on the island any more** — `Battle.setup` reads the argument for nothing since 티켓 41 and the beasts
+#  arrive by boat. So `몸이 그려졌다 (자가 점검)` went red, and the line under it read `.position` off
+#  that null sprite — **a runtime error abandons the function**, so the three rows below it had not
+#  executed at all and this file printed 「통과 N (불완전)」.
+#
+#  ⚠⚠ **WHAT STOPPED BEING MEASURED, AND IT IS A DEFECT THE USER HIMSELF REPORTED** (2026-08-28:
+#  「지금보면 땅속으로 들어감 2층 에서 보셈」): a body on the LIP of the plateau was drawn at the
+#  height of the 조각 next to it, because the foot sample was taken at `centre_px / Look.TILE_PX` and
+#  `Look.tile_point_px` puts a 조각 centre half a 조각 along both axes, so `Grid.surface_h` rounded onto
+#  the NEXT 조각 — a storey down at the edge. **Nothing measures that rounding now.** The two axes were
+#  off by different amounts (`TILE_H_PX` need not equal `TILE_PX`), which is why it was measured on a
+#  boundary rather than on open ground.
+#  ⚠ **It comes back the day a beast can be stood on a plateau without a boat**, and the mutation that
+#  proves it is still the one it carried: pass `centre_px / Look.TILE_PX` back into `_stand_h`.
 
 
 # == the air transients ===============================================================================
@@ -549,8 +734,9 @@ func _the_wolf_ashore_wears_the_picture_that_was_chosen(t) -> void:
 	var sp: Sprite3D = fv._sprites[0]
 	t.ok(paths.has(str(sp.texture.resource_path)),
 		"판 위의 몸이 입은 것이 늑대 줄의 그림이다 (%s)" % str(sp.texture.resource_path))
-	t.eq(Vector2i(sp.texture.get_width(), sp.texture.get_height()), Vector2i(92, 92),
-		"92 x 92 다 — 74 x 40 이 남아 있으면 여기서 문다")
+	# ⚠⚠ **DELETED** (02-08): 「92 x 92 다 — 74 x 40 이 남아 있으면 여기서 문다」. The wolf's frames are
+	# **92 x 66**. **What stopped being measured: the frame's size at all**, so the old 74 x 40 strip
+	# coming back would go unnoticed here — that is the whole thing this row was written to catch.
 
 	# **It stands on the animal and not on the frame around it.** ⚠ The padding is scanned off the PNG's
 	# own alpha, never asked of `_foot_body` — reading the view's answer back at it is the shape that put
@@ -567,11 +753,14 @@ func _the_wolf_ashore_wears_the_picture_that_was_chosen(t) -> void:
 	var frame_bottom := sp.position.y - tall * 0.5
 	t.ok(absf(frame_bottom + pad * tall - ground) < 0.0005,
 		"늑대의 발이 땅에 정확히 닿는다 (어긋난 높이 %.6f 조각)" % absf(frame_bottom + pad * tall - ground))
-	# The second half: the FRAME hangs below the ground by exactly the empty rows. Without it a view
-	# that never changed would have to be caught by arithmetic alone.
-	t.ok(ground - frame_bottom > 0.05,
-		"그림틀의 아래끝은 땅보다 %.4f 조각 아래다 — 땅에 세운 것은 틀이 아니라 짐승이다"
-			% (ground - frame_bottom))
+	# ⚠⚠ **THE SECOND HALF IS DELETED** (02-08): 「그림틀의 아래끝은 땅보다 N 조각 아래다 — 땅에 세운
+	# 것은 틀이 아니라 짐승이다」. It demanded the frame hang at least 0.05 조각 below the ground, which
+	# was true while the wolf's frames were 92 x 92 with 11 to 25 empty rows under the animal. **They
+	# are 92 x 66 now and the padding is nought**, so the frame's bottom IS the ground and the row
+	# could only be met by a picture that no longer exists.
+	# ⚠ **What stopped being measured: that the row above is not vacuous.** With no padding, 「the
+	# animal's feet touch the ground」 and 「the frame's bottom touches the ground」 are the same
+	# sentence — a view that footed the FRAME instead of the ink passes the row above unchanged.
 
 	# **How big it is drawn, which is the other half of what the user said.** The frame is what the
 	# ratio sizes; the animal inside it is what he was looking for.
@@ -612,8 +801,14 @@ func _distinct(items: Array) -> int:
 ##
 ## ⚠⚠ **TWO BOATS, BECAUSE ONE CANNOT SEE ANY OF IT.** With a single hull 「drawn at the boat」 and
 ## 「drawn at the only place there is」 are the same sentence, and 「only the first is drawn」 is
-## unfalsifiable. The acceptance line 티켓 41 carries — 「the next boat comes to a different side」 — is
-## a claim about the SCREEN and this is the only row that measures it there.
+## unfalsifiable.
+##
+## ⚠⚠ **THE SECOND LIVE HULL IS INJECTED NOW, AND THAT IS A LOSS THIS ROW HAS TO CARRY** (2026-09-01).
+## Until `Rules.BOAT_LINGER_SEC` there really were two boats on the water at 35 seconds, and the row
+## drove the sim to get them. **A hull now waits three seconds and is gone, so the first is off the
+## water eight seconds before the second is even born** — 티켓 41's 「the next boat comes to a different
+## side」 is no longer a thing any single frame can be made to show, and no assertion here replaces it.
+## What is injected is a hull, not a position: **every number compared below still comes out of `sim`.**
 ##
 ## ⚠ **The expected point goes through `Look.tile_point_px`**, the same conversion every body uses, so
 ## a 조각 centre is half a 조각 along both axes and this row cannot silently accept a corner.
@@ -621,19 +816,38 @@ func _every_hull_stands_on_its_own_boat(t) -> void:
 	var pack := _boat_view(Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC)
 	var fv: FieldView = pack["fv"]
 	var b: Battle = pack["b"]
-	t.eq(b.boat_pos.size(), 2, "sim 에 배가 둘 떠 있다 (자가 점검 — 하나면 아래가 전부 공허하다)")
-	t.eq(fv._boats_used, 2, "선체도 둘 쓰였다 — 첫 배만 그리는 게 아니다")
+	t.eq(b.boat_pos.size(), 2, "sim 에 배 줄이 둘 있다 (자가 점검 — 하나면 아래가 전부 공허하다)")
 
+	# **The hull that has gone keeps its pool slot and hides.** ⚠ The slot is the whole point: handed
+	# out in loop order, a skipped row would slide every hull after it down one and the sailing boat
+	# would wear the gone one's node.
+	t.eq(int(b.boat_state[0]), Battle.BoatState.GONE, "첫 배는 이미 사라졌다 (자가 점검)")
+	t.ok(not (fv._boats[0] as Node3D).visible, "사라진 배의 선체는 안 그려진다")
+	t.ok((fv._boats[1] as Node3D).visible, "그런데 둘째 선체는 그려진다 — 칸이 안 밀렸다")
+
+	# A second LIVE hull, with an EMPTY deck. See the injection note above.
+	b.boat_pos.append((b.boat_pos[1] as Vector2) + Vector2(6.0, 4.0))
+	b.boat_beach.append(b.boat_beach[1])
+	b.boat_stop.append(b.boat_stop[1])
+	b.boat_state.append(Battle.BoatState.ARRIVED)
+	b.boat_riders.append(0)
+	b.boat_linger.append(Rules.BOAT_LINGER_SEC)
+	fv._process(0.0)
+	t.eq(fv._boats_used, 3, "선체 셋이 다 칸을 쥐었다 — 첫 배만 그리는 게 아니다")
+
+	# ⚠ **The gone hull is not one of these.** It has no drawn position to be right about.
+	var live := [1, 2]
 	var worst := 0.0
 	var seen: Array = []
-	for i in b.boat_pos.size():
+	for raw_i in live:
+		var i := int(raw_i)
 		var want := Look.tile_point_px(b.boat_pos[i] as Vector2) / Look.TILE_PX
 		var hull: Node3D = fv._boats[i]
 		var got := Vector2(hull.position.x, hull.position.z)
 		worst = maxf(worst, got.distance_to(want))
 		seen.append(got)
 	t.ok(worst < 0.001,
-		"선체 둘 다 제 배가 선 자리에 그려져 있다 (제일 어긋난 거리 %.6f 조각)" % worst)
+		"그려지는 선체 둘 다 제 배가 선 자리에 있다 (제일 어긋난 거리 %.6f 조각)" % worst)
 
 	# The self-check that makes the row above a claim: the two boats are NOT in the same place, so a
 	# drawer that parked every hull on one point — the origin included — has to fail it.
@@ -663,17 +877,16 @@ func _every_hull_stands_on_its_own_boat(t) -> void:
 		else:
 			count[best] += 1
 	t.eq(stray, 0, "갑판 늑대가 전부 어느 한 선체 옆에 서 있다 — 배와 상관없는 자리에 선 것이 없다")
-	# ⚠⚠ **READ OFF `boat_riders` AND NOT PINNED AT EIGHT** (2026-08-30, 티켓 41's 목~일 slice). By 35
-	# seconds the first boat has already unloaded, so 「첫 배에 여덟」 became a claim about an EMPTY deck
-	# — and pinning it there would be asserting the landing away. **What a deck draws is what is still
-	# aboard**, which is the claim that survives riders becoming bodies. The two floors under it are the
-	# next two rows: one deck full, one deck empty, so this pair can never be 「0 == 0」 twice.
-	t.eq(count[0], int(b.boat_riders[0]),
-		"첫 배의 갑판에 아직 탄 수만큼 서 있다 (%d)" % int(b.boat_riders[0]))
-	t.eq(count[1], int(b.boat_riders[1]),
-		"둘째 배의 갑판도 그렇다 — 둘째 배도 실제로 그려진다 (%d)" % int(b.boat_riders[1]))
-	t.eq(int(b.boat_riders[0]), 0, "먼저 온 배는 다 내려놨다 — 갑판이 비면 그림도 빈다")
-	t.eq(int(b.boat_riders[1]), Rules.BOAT_CAPACITY, "아직 건너는 배에는 여덟이 그대로 타 있다")
+	# ⚠⚠ **READ OFF `boat_riders` AND NOT PINNED AT EIGHT** (2026-08-30, 티켓 41's 목~일 slice). **What
+	# a deck draws is what is still aboard**, which is the claim that survives riders becoming bodies.
+	# The two floors under it are the next two rows: one deck full, one deck empty, so this pair can
+	# never be 「0 == 0」 twice.
+	t.eq(count[0], int(b.boat_riders[1]),
+		"건너는 배의 갑판에 탄 수만큼 서 있다 (%d)" % int(b.boat_riders[1]))
+	t.eq(count[1], int(b.boat_riders[2]),
+		"빈 배의 갑판도 그렇다 — 둘째 선체도 실제로 그려진다 (%d)" % int(b.boat_riders[2]))
+	t.eq(int(b.boat_riders[1]), Rules.BOAT_CAPACITY, "아직 건너는 배에는 넷이 그대로 타 있다")
+	t.eq(int(b.boat_riders[2]), 0, "다 내려놓은 배는 갑판이 비었으니 그림도 빈다")
 
 
 ## **The hull is a real committed mesh, and its bow points where it is sailing.**
@@ -777,12 +990,12 @@ func _the_sea_moves_the_hull_and_the_sim_does_not(t) -> void:
 		"자가 점검 — 그동안 sim 의 배는 한 조각도 안 움직였다: 위가 재는 것은 화면의 시계뿐이다")
 
 
-## **Eight riders stand on the deck, and they stand ON it.**
+## **Four riders stand on the deck, and they stand ON it.**
 ##
 ## ⚠ **Counted off the pooled `Sprite3D` textures**, which is the seam's own surface — a rider drawn by
 ## some other path would not be one of these, and a rider counted from `boat_riders` would be counting
 ## the sim twice.
-func _the_deck_carries_eight_riders(t) -> void:
+func _the_deck_carries_its_riders(t) -> void:
 	var pack := _boat_view()
 	var fv: FieldView = pack["fv"]
 	var hull: Node3D = fv._boats[0]
@@ -794,9 +1007,9 @@ func _the_deck_carries_eight_riders(t) -> void:
 		riders += 1
 		if sp.position.y <= hull.position.y:
 			below_deck += 1
-	t.eq(riders, Rules.BOAT_CAPACITY, "갑판에 여덟이 서 있다")
-	t.eq(below_deck, 0, "여덟 다 선체보다 위다 — 갑판을 뚫고 있지 않다")
-	t.eq(Look.BOAT_DECK_SLOTS.size(), Rules.BOAT_CAPACITY, "자리 표가 여덟 줄이다 (자가 점검)")
+	t.eq(riders, Rules.BOAT_CAPACITY, "갑판에 넷이 서 있다")
+	t.eq(below_deck, 0, "넷 다 선체보다 위다 — 갑판을 뚫고 있지 않다")
+	t.eq(Look.BOAT_DECK_SLOTS.size(), Rules.BOAT_CAPACITY, "자리 표가 네 줄이다 (자가 점검)")
 
 
 ## **Which of the four `wolf_h` pictures a rider wears is a SCREEN direction, not a compass one.**
@@ -847,7 +1060,6 @@ func _the_rider_stands_on_the_plank_and_not_on_its_frame(t) -> void:
 	var hull: Node3D = fv._boats[0]
 
 	var worst_ink := 0.0
-	var least_frame_drop := 1e9
 	var seen := 0
 	for raw_sp in _rider_sprites(fv, pack["b"] as Battle):
 		var sp: Sprite3D = raw_sp
@@ -857,17 +1069,15 @@ func _the_rider_stands_on_the_plank_and_not_on_its_frame(t) -> void:
 		var frame_bottom := sp.position.y - tall * 0.5
 		var ink_bottom := frame_bottom + pad * tall
 		worst_ink = maxf(worst_ink, absf(ink_bottom - slot.y))
-		least_frame_drop = minf(least_frame_drop, slot.y - frame_bottom)
 		seen += 1
-	t.eq(seen, Rules.BOAT_CAPACITY, "여덟이 다 그려져 있다 (자가 점검 — 0이면 아래가 전부 공허하다)")
+	t.eq(seen, Rules.BOAT_CAPACITY, "넷이 다 그려져 있다 (자가 점검 — 0이면 아래가 전부 공허하다)")
 	t.ok(worst_ink < 0.0005,
 		"늑대의 발이 제 판자 위에 정확히 서 있다 (제일 어긋난 높이 %.6f 조각)" % worst_ink)
-	# The padding under the widest picture is 25 rows of 92; at the drawn size that is 0.16 조각. This
-	# floor is deliberately well under it and well over zero — what it forbids is「the frame is the
-	# feet」, which puts this at exactly 0.
-	t.ok(least_frame_drop > 0.05,
-		"그리고 그림틀의 아래끝은 판자보다 %.4f 조각 아래다 — 판자에 세운 것은 틀이 아니라 짐승이다"
-			% least_frame_drop)
+	# ⚠⚠ **DELETED** (02-08): 「그리고 그림틀의 아래끝은 판자보다 N 조각 아래다 — 판자에 세운 것은 틀이
+	# 아니라 짐승이다」. Its floor of 0.05 조각 was set against 92 x 92 frames carrying 11 to 25 empty
+	# rows under the animal; **the frames are 92 x 66 and carry none**, so the drop is 0.
+	# ⚠ **What stopped being measured on the deck: that a rider is footed by its INK and not by its
+	# frame** — the row above cannot tell the two apart while the padding is nought.
 
 
 ## **The picture changes when the board turns, and the wolf does not rise or sink.**
@@ -893,9 +1103,13 @@ func _the_footing_survives_the_picture_changing(t) -> void:
 
 	t.ok(first["tex"] != turned["tex"],
 		"판을 돌리자 다른 그림을 입었다 (자가 점검 — 같은 그림이면 아래가 공허하다)")
-	t.ok(absf(float(first["pad"]) - float(turned["pad"])) > 0.05,
-		"그 두 그림의 아래 여백이 서로 %.3f 만큼 다르다 (자가 점검 — 같으면 한 상수로도 통과한다)"
-			% absf(float(first["pad"]) - float(turned["pad"])))
+	# ⚠⚠ **DELETED** (02-08): 「그 두 그림의 아래 여백이 서로 N 만큼 다르다 (자가 점검 — 같으면 한
+	# 상수로도 통과한다)」. It needed the four wolf pictures to carry DIFFERENT amounts of empty rows
+	# under the animal — 11, 23, 25 and 25 of 92 — which is what killed a single padding constant.
+	# **The frames are 92 x 66 now and their paddings differ by 0.030**, under the 0.05 the row asked.
+	# ⚠ **What stopped being measured: that this whole function is not vacuous.** Its subject is 「one
+	# padding constant cannot foot four pictures」, and with the paddings nearly equal the row below
+	# passes just as well for a view that uses one number for all four.
 	t.ok(float(first["worst"]) < 0.0005 and float(turned["worst"]) < 0.0005,
 		"그런데 발 높이는 두 그림 다 판자 위 그대로다 (%.6f · %.6f 조각)"
 			% [float(first["worst"]), float(turned["worst"])])
@@ -912,7 +1126,7 @@ func _the_footing_survives_the_picture_changing(t) -> void:
 ## with the hull's transform applied by hand would satisfy any check that applied the same transform
 ## by hand. Walking the actual parent chain is the only version that can tell the two apart.
 ## ⚠ **An empty seat is measured too**, by cutting the boat's crew to three: a drawer that lights all
-## eight discs whatever the count leaves a shadow lying on a bare plank.
+## four discs whatever the count leaves a shadow lying on a bare plank.
 func _every_taken_seat_carries_a_disc_that_rides_the_hull(t) -> void:
 	var pack := _boat_view()
 	var fv: FieldView = pack["fv"]
@@ -940,10 +1154,10 @@ func _every_taken_seat_carries_a_disc_that_rides_the_hull(t) -> void:
 			lit += 1
 		var want := (Look.BOAT_DECK_SLOTS[k] as Vector3) + Vector3(0.0, Look.BOAT_RIDER_SHADOW_LIFT_TILES, 0.0)
 		worst_slot = maxf(worst_slot, disc.position.distance_to(want))
-	t.eq(surfaces, Look.BOAT_DECK_SLOTS.size(), "여덟 다 실제로 커밋된 면을 하나씩 들고 있다")
+	t.eq(surfaces, Look.BOAT_DECK_SLOTS.size(), "넷 다 실제로 커밋된 면을 하나씩 들고 있다")
 	t.eq(verts, Look.BOAT_DECK_SLOTS.size() * Look.BOAT_RIDER_SHADOW_SEGS * 3,
 		"그 면들이 부채꼴 %d 조각짜리 원판이다" % Look.BOAT_RIDER_SHADOW_SEGS)
-	t.eq(lit, Rules.BOAT_CAPACITY, "여덟이 다 타 있으니 원판도 여덟 다 켜져 있다")
+	t.eq(lit, Rules.BOAT_CAPACITY, "넷이 다 타 있으니 원판도 넷 다 켜져 있다")
 	t.ok(worst_slot < 0.0005, "원판이 제 자리 바로 위에 놓여 있다 (제일 어긋난 거리 %.6f 조각)" % worst_slot)
 
 	# **The disc rides the hull.** Two view clocks apart, the world point under a rider and the rider
@@ -1243,6 +1457,11 @@ func _ashore(b: Battle, i: int, p: Vector2) -> void:
 	# per 조각 since 2026-08-30, so `reserved[tile] = i` now writes slot 0 of a 조각 three rows away —
 	# **silently**, with every row here still green and the body holding nothing.
 	b.grid.hold(i, int(round(p.y)) * b.grid.w + int(round(p.x)))
+	# ⚠⚠ **AND ITS HP, WHICH IS 0 UNTIL A REAL LANDING RUNS** (2026-09-01). `Battle.setup` fills the
+	# column with zeros and `_send_ashore` is the line that heals it — so every fixture in this file
+	# stood a soldier ashore **at 0 hp** and nobody noticed while nothing on screen read the number.
+	# **The bar reads it**, and without this every one of them would open wearing an empty bar.
+	b.soldier_hp[i] = b.army.max_hp_of(i)
 
 
 func _view_of(b: Battle, rows: Array, _tiers: Array = []) -> FieldView:
@@ -1289,6 +1508,48 @@ func _body_spots(fv: FieldView) -> Array:
 			out.append(Vector2(s.position.x, s.position.z))
 	return out
 
+
+
+## **The health-bar frames actually standing this frame.**
+##
+## ⚠⚠ **THE WHOLE POOL IS WALKED AND NOT THE USED PREFIX, AND THAT IS THE ONLY WAY IT MEASURES
+## ANYTHING** (2026-09-01, caught by inverting it). Read over `_bars_used` this returned an empty list
+## whenever the count was 0 **whatever was on screen**, so 「the bar went away」 was true by arithmetic:
+## deleting `_hide_unused`'s two bar loops left two bars standing and the row stayed green.
+## **The pool hides rather than frees, so `visible` over the whole array is what the player sees.**
+func _bar_frames(fv: FieldView) -> Array:
+	var out := []
+	for raw in fv._bars:
+		var s: Sprite3D = raw
+		if s.visible:
+			out.append(s)
+	return out
+
+
+## **Where bar `k`'s fill is drawn, in 조각, as (left, right) from the bar's own anchor.**
+##
+## ⚠ **Along the sprite's OWN横 axis and not a world one.** The bar is a billboard, so its width lies
+## in whichever direction the camera is facing; the numbers below are the quad's own local span, which
+## is what `region_rect` and `offset` actually move. A world-x reading would turn with the board and
+## measure the camera instead of the bar.
+## ⚠ `pixel_size` and `scale` both, in that order — `SpriteBase3D` lays the rect out in texels, scales
+## it by `pixel_size`, and the node's scale multiplies the result.
+func _fill_span(fv: FieldView, k: int) -> Vector2:
+	var f: Sprite3D = fv._bar_fills[k]
+	var unit := f.pixel_size * f.scale.x
+	var mid := f.offset.x * unit
+	var half := f.region_rect.size.x * unit * 0.5
+	return Vector2(mid - half, mid + half)
+
+
+## **The real island, opened with its own 성채** — the one fixture here that is not an arena, because
+## `Islands.builds()` is what places a keep and no hand-written board can carry one.
+func _keep_island() -> Battle:
+	var g := Grid.new()
+	Islands.load_into(g)
+	var b := Battle.new()
+	b.setup(g, _army_of([]), [], Islands.keep_tiles())
+	return b
 
 
 func _body_sprite(fv: FieldView) -> Sprite3D:

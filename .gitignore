@@ -77,3 +77,6 @@ tools/blender/*.png.import
 # 짝이 없고, 편집기 밖에서 맨 png 에 `load()` 는 실패한다」고 랩 주석이 먼저 적어 두었다.
 # ⚠ 루트의 png/짝 규칙과 반대 방향이다. 저기는 짝만 남는 게 문제였고, 여기는 짝이 아예 안 쓰인다.
 .prototypes/**/*.import
+
+# Blender writes a .blend1 backup beside every save. The original is the .blend; the backup is noise.
+*.blend1

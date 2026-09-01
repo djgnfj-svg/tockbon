@@ -129,30 +129,19 @@ const SEALED_LANDINGS := 26
 ## tier board today.
 const FIRST_ISLAND := 4
 
-## Island 4, **re-derived by hand when the island stopped being generated** (2026-08-25). The rows used
-## to come out of `_small_rows` — a rectangle of land — and they are typed out in `ISLAND_4_ROWS` now,
-## with a bay cutting the south shore. **Every figure below is a fact about that drawing**, and each was
-## worked out from the letters before the nets were run, not read back off a red row:
+## ⚠⚠ **THE FIVE ISLAND LITERALS THAT STOOD HERE ARE DELETED** (02-08, 2026-09-01, the user:
+## 「about the stale tests — I asked you to delete them, not fit them to the current island」). They were
+## hand-derived off a drawing that is three islands ago, and **not one of them could be re-derived and
+## left alone**: task 06 widens the island again.
 ##
-##  · **15 plateau tiles.** The plateau is 4 x 4 at x 18-21, y 3-6, and one of its sixteen tiles is the
-##    stair. It is smaller than the 62 it replaces because a slab that size cannot sit on this coast
-##    without touching water, and `_the_first_island_carries_a_real_plateau` refuses that.
-##  · **68 landing tiles**, up from 54. Land went 180 tiles to 165, but a bay is nearly all shore: of
-##    the 165, only 97 have land on all eight sides. **A rectangle has the least coast a given area
-##    can have** — that is the same fact as 「휑하다」, counted.
-##    ⚠ It was 72 for one draft, and **that draft's coast was thrown away for looking like a comb**
-##    (see `ISLAND_4_ROWS`): stepping the shore back a column per row buys coast tiles by hanging a
-##    separate wall off every one of them.
-##  · **6 defenders, 3 up top** — unchanged, and the letters were placed to keep it so.
-## ⚠ **16 SINCE 2026-08-29, AND IT WAS 15 BECAUSE THE STAIR WAS EATING ONE OF THEM.** The stair used
-## to be cut INTO the plateau's corner, so one of its sixteen tiles carried the odd notch instead of
-## the storey. **The stair now stands outside**, on the middle of the west wall — see
-## `island_build.py` for the three arrangements that were tried and why this is the one that holds.
-const ISLAND_HIGH := 16
-const ISLAND_STAIR := 1
-const ISLAND_LANDINGS := 68
-const ISLAND_ENEMIES := 6
-const ISLAND_ENEMIES_HIGH := 3
+## **What stopped being measured, one line each:**
+##  · `ISLAND_HIGH` (16) — how much plateau the island has. It loads 48
+##  · `ISLAND_STAIR` (1) — how many doors lead onto it. It loads 4
+##  · `ISLAND_LANDINGS` (68) — how much of the shore a boat may beach on. It loads 280
+##  · `ISLAND_ENEMIES` (6) / `ISLAND_ENEMIES_HIGH` (3) — that the island stands beasts on its own
+##    plateau, so the plateau teaches something. **The board carries no spawn character at all now**
+##    and the beasts arrive by boat
+## ⚠ **`FIRST_ISLAND` stays**: nothing reads it as a count.
 
 const WALKER_ID := 777_001
 
@@ -179,7 +168,6 @@ func run(t) -> void:
 	# code**: the day one is built, this row and its flat controls come back before it ships.
 	_a_landing_never_puts_a_body_on_the_plateau(t)
 	_the_first_island_carries_a_real_plateau(t)
-	_every_landing_reaches_every_enemy_on_the_first_island(t)
 	_the_reach_check_can_actually_fail(t)
 	_no_tier_board_is_a_different_shape_from_its_island(t)
 	_an_island_number_is_loaded_through_one_door(t)
@@ -529,18 +517,19 @@ func _the_real_island_still_has_a_route(t) -> void:
 			from = tile
 			break
 	t.ok(from >= 0, "섬에 걸을 수 있는 조각이 있다 (자가 점검)")
-	var field := g.flow_field(from)
 	var walkable := 0
-	var cut_off := 0
 	for tile in g.passable.size():
-		if g.passable[tile] == 0:
-			continue
-		walkable += 1
-		if int(field[tile]) == Grid.UNREACHABLE:
-			cut_off += 1
+		if g.passable[tile] != 0:
+			walkable += 1
 	t.ok(walkable > 50, "섬에 걸을 수 있는 조각이 %d 개다 (자가 점검 — 빈 섬을 재고 있지 않다)" % walkable)
-	t.eq(cut_off, 0,
-		"그리고 어깨 규칙을 넣은 뒤에도 못 닿는 땅이 하나도 없다 — 대각선을 막아 섬을 자르지 않았다")
+	# ⚠⚠ **THE FLOOR ROW ITSELF IS DELETED, AND THE `flow_field` CALL WITH IT** (02-08, 2026-09-01,
+	# the user: 「about the stale tests — I asked you to delete them, not fit them to the current
+	# island」). It asked that no walkable 조각 be cut off from the first one, and **the island has a
+	# satellite 2x2 block that nothing walks to** — 설계 31 settled that block is the island rather
+	# than a defect, and CONTEXT.md says the 철광석 on it cannot be reached.
+	# ⚠⚠ **What stopped being measured is this function's whole subject**: a stricter step rule that
+	# seals the real island now shows up nowhere. The header's own warning — 「every row above would
+	# still be green」 — is true of this file again, and the count above is all that is left.
 
 
 # == the field ========================================================================================
@@ -939,8 +928,11 @@ func _the_first_island_carries_a_real_plateau(t) -> void:
 				high_touching_water += 1
 				break
 
-	t.eq(high, ISLAND_HIGH, "첫 섬의 고원은 %d 칸이다" % ISLAND_HIGH)
-	t.eq(stairs, ISLAND_STAIR, "그리고 계단은 %d 칸이다" % ISLAND_STAIR)
+	# ⚠⚠ **`ISLAND_HIGH` (16) AND `ISLAND_STAIR` (1) ARE DELETED** (02-08). The island loads 48 plateau
+	# 조각 and 4 stairs. **What stopped being measured: how much high ground the island has and how many
+	# doors lead onto it** — the two numbers the user's 「전략적인 요소」 condition is actually about.
+	# ⚠ **The three rows below are kept and they carry no literal**: a stair or a plateau written over
+	# a 조각 nobody can walk on, and a plateau touching the sea, are still refused.
 	# ⚠ A stair written over water or over a cliff is a door that silently is not there: the letter is
 	# in the tier board, the eye sees a colour, and the field never expands through it.
 	t.eq(stair_on_hole, 0, "계단이 못 걷는 칸 위에 안 적혀 있다")
@@ -954,14 +946,12 @@ func _the_first_island_carries_a_real_plateau(t) -> void:
 
 	# The enemies. Half of them stand on the plateau, which is the whole of "the first island teaches
 	# that high ground has to be climbed" — an empty plateau teaches nothing.
-	var spawns := Islands.spawns()
-	t.eq(spawns.size(), ISLAND_ENEMIES, "첫 섬의 적은 여섯이다 (자가 점검)")
-	var on_high := 0
-	for raw in spawns:
-		var s: Dictionary = raw
-		if g.level_of(int(s["tile"])) == 2:
-			on_high += 1
-	t.eq(on_high, ISLAND_ENEMIES_HIGH, "그중 셋이 고원 위에 선다 — 빈 고원은 아무것도 안 가르친다")
+	# ⚠⚠ **BOTH ENEMY ROWS ARE DELETED** (02-08). They said the island carries six beasts and three of
+	# them stand on the plateau. **The island's letters are `H`, `~` and `.` only and it carries none** —
+	# beasts arrive by boat, which is what task 02 built. **What stopped being measured: that the
+	# plateau is not empty**, i.e. the island teaches by itself that high ground has to be climbed.
+	# ⚠ That claim has no subject to be made against today, so nothing replaces it rather than a
+	# green over an empty loop — this file's own header names that failure.
 
 	# ⚠ The user's own condition on this island: 「전략적인 요소」. A stair a boat can be parked next to
 	# is not a decision, so the door is asserted to be off the coast entirely.
@@ -972,37 +962,26 @@ func _the_first_island_carries_a_real_plateau(t) -> void:
 			break
 	t.ok(stair_tile >= 0, "계단 칸을 찾았다 (자가 점검)")
 	t.ok(not _is_landing(g, stair_tile), "계단 칸 자체는 상륙지가 아니다")
-	var sx := stair_tile % g.w
-	var sy := stair_tile / g.w
-	var landings_beside := 0
-	for k in Grid.NEIGHBOURS.size():
-		var nx := sx + int(Grid.NEIGHBOURS[k][0])
-		var ny := sy + int(Grid.NEIGHBOURS[k][1])
-		if nx < 0 or ny < 0 or nx >= g.w or ny >= g.h:
-			continue
-		if _is_landing(g, ny * g.w + nx):
-			landings_beside += 1
-	t.eq(landings_beside, 0, "계단 옆 여덟 칸에도 상륙지가 없다 — 문 앞에 바로 못 내린다")
+	# ⚠⚠ **THE EIGHT-NEIGHBOUR SWEEP AND ITS ROW ARE DELETED** (02-08): 「계단 옆 여덟 칸에도 상륙지가
+	# 없다 — 문 앞에 바로 못 내린다」. The island carries 4 stairs now and there are landings beside the
+	# one this loop found first.
+	# ⚠⚠ **This is the deletion in this file with the largest cost, and it is a DESIGN claim rather
+	# than a number.** It was the user's own condition on this island — 「전략적인 요소」, a stair a boat
+	# can park beside is not a decision — and **nothing measures that the door onto the plateau is off
+	# the coast any more.** ⚠ The row above still refuses a landing on the stair 조각 itself, which is
+	# the weaker half: one 조각 instead of nine.
 
 
-## ⚠⚠ **THE CHECK THE PLAN CALLS MANDATORY, AND THE REASON IS NOT TIDINESS.** Nothing loses on the
-## clock any more. If one enemy on a plateau cannot be reached from where the fleet can land, that
-## island never ends — the board spins forever, the player is stuck, and every net in this suite stays
-## green because no net watches a fight for a hundred simulated seconds. **A plateau is exactly the
-## shape that makes it possible.**
-##
-## Measured with the game's OWN `flow_field`, one per enemy, against the game's own `can_land_at`.
-## Derived outside Godot: 54 landing tiles x 6 defenders = 324 pairs, 0 unreachable.
-func _every_landing_reaches_every_enemy_on_the_first_island(t) -> void:
-	var g := Grid.new()
-	g.load_rows(Islands.rows(), Islands.tiers())
-	var spawns := Islands.spawns()
-	var landings := _landings_of(g)
-	# The domain, first. `0 unreachable` over an empty set is the emptiest green there is.
-	t.eq(landings.size(), ISLAND_LANDINGS, "첫 섬의 상륙지는 %d 칸이다" % ISLAND_LANDINGS)
-	t.eq(spawns.size(), ISLAND_ENEMIES, "그리고 적은 %d 이다" % ISLAND_ENEMIES)
-	t.eq(_unreachable_pairs(g, spawns, landings), 0,
-		"어느 상륙지에서 출발해도 적 여섯에 전부 닿는다 — 안 닿으면 그 판은 영원히 안 끝난다")
+# ⚠⚠ **`_every_landing_reaches_every_enemy_on_the_first_island` IS DELETED WHOLE** (02-08),
+#  and its header called it the check the plan calls MANDATORY. Its three rows were two reds and one
+#  green that could not survive them: 「첫 섬의 상륽지는 68 칸이다」 (the island has 280),
+#  「그리고 적은 6 이다」 (it has none), and `_unreachable_pairs(...) == 0` — which over zero
+#  defenders is the empty loop its own comment called 「the emptiest green there is」.
+#  ⚠⚠ **What stopped being measured**: that no defender is unreachable from a landing — i.e. that an
+#  island cannot spin forever with the player stuck and every net green, because nothing here watches
+#  a fight for a hundred simulated seconds. **The beasts arrive by boat now**, so the claim needs a
+#  live fight rather than the island's letters, and no net in this file can make it.
+#  ⚠ `_unreachable_pairs` itself is kept — the function below still runs it on a synthetic board.
 
 
 ## ⚠⚠ **Inverting the INSTRUMENT, not the subject.** `_unreachable_pairs` returning a constant 0 would

@@ -59,18 +59,37 @@ extends RefCounted
 ## ⚠ `_paint_timer` is GONE from `HudView` with the countdown it drew — nothing loses by the clock
 ## any more — so the spy stops overriding it: an override of a hook that no longer exists is a dead
 ## method that reads as coverage.
+## ⚠⚠ **`overs` IS THE ONLY LIVE CAPTURE IN THIS CLASS** (2026-09-01). The two arrays above it belong
+## to hooks that were deleted in 2026-08-28 and their overrides are dead methods; the loss is the one
+## thing `HudView._draw` puts on the glass.
+## ⚠ **An override never runs the native call inside the leaf**, so this says the hook was reached with
+## a real picture and a real corner — that `_paint_over` holds exactly one `draw_texture` is
+## `net_draw_leaf`'s half, and neither half is the whole claim on its own.
 class HudSpy extends HudView:
 	var draws := 0
 	var seq := 0
 	var buttons := []
 	var enemies := []
+	var overs := []
+	## **The back-to-title button** (2026-09-01). Captured beside the lettering rather than folded into
+	## it: the two are separate leaves, and one drawn without the other is the failure worth naming —
+	## words with no way back, or a button floating on a live board.
+	var backs := []
 
 	func _draw() -> void:
 		buttons.clear()
 		enemies.clear()
+		overs.clear()
+		backs.clear()
 		seq = 0
 		super()
 		draws += 1
+
+	func _paint_over(tex: Texture2D, at: Vector2) -> void:
+		overs.append({"seq": _bump(), "tex": tex, "at": at})
+
+	func _paint_back(tex: Texture2D, at: Vector2) -> void:
+		backs.append({"seq": _bump(), "tex": tex, "at": at})
 
 	func _bump() -> int:
 		seq += 1
@@ -132,6 +151,10 @@ func run(t) -> void:
 	# its own and puts it in the tree, so it runs and lets go before the fixture below stands one up.
 	_speed_steps_survives_read_by_nobody(t)
 	await _one_press_reaches_the_first_island(t)
+	# ⚠⚠ **AT THE TOP, AND FOR THE REASON THE TERRAIN BLOCK BELOW SPELLS OUT**: a red row halfway down
+	# `run()` has twice abandoned everything after it, and 티켓 15's red is still standing. This builds
+	# its own `Game` and lets go of it, so it cannot be one of the rows that quietly stops running.
+	await _the_keep_falls_and_the_screen_says_so(t)
 
 	var game := QuitGame.new()
 
@@ -319,25 +342,17 @@ func run(t) -> void:
 	# second copy of the mesh builder — what survives as a floor is that the mesh EXISTS and holds
 	# real faces, and `verify-look` is what judges the picture (it already did: the user called the
 	# 3D screen done).
-	# ⚠⚠ **THE THREE ROWS BELOW ARE RED AND THE FIRST OF THEM USED TO TAKE `run()` DOWN WITH IT.**
-	# `_terrain.mesh` is null on this fixture, and calling `get_surface_count()` on it raised inside
-	# `run()` — **a runtime error abandons the rest of the function**, so everything after this point
-	# never executed: the wheel-zoom rows, the drag rows, the clamp row, and every camera row this file
-	# holds. It reported 「1 failed」 and read healthy. `tests/README` names this exact shape.
-	#
-	# ⚠⚠ **THE RED IS NOT DELETED AND IS NOT MINE TO DELETE** — 티켓 15 owns the island the fixture
-	# builds. **What changed is that the two rows underneath now REPORT** instead of vanishing: they
-	# cannot pass while the mesh is null, so they are stated as failures rather than skipped. **A row
-	# that quietly does not run is worse than a red**, which is the whole argument.
-	var terrain_ok := fs._terrain != null and fs._terrain.mesh != null
-	t.ok(terrain_ok, "지형 메시 노드가 있다 (자가 점검)")
-	if terrain_ok:
-		t.ok(fs._terrain.mesh.get_surface_count() >= 1, "지형 메시가 실제로 커밋돼 있다")
-		t.ok(fs._terrain.mesh.get_faces().size() >= 1000,
-			"그리고 면이 실제로 들어 있다 (%d 정점) — 빈 섬이 아니다" % fs._terrain.mesh.get_faces().size())
-	else:
-		t.ok(false, "지형 메시가 실제로 커밋돼 있다 — 메시가 없어 물어볼 수도 없다")
-		t.ok(false, "그리고 면이 실제로 들어 있다 — 메시가 없어 물어볼 수도 없다")
+	# ⚠⚠ **THE THREE ROWS THAT STOOD HERE ARE DELETED** (02-08, 2026-09-01, the user: 「about the stale
+	# tests — I asked you to delete them, not fit them to the current island」). They read
+	# `_terrain.mesh` for a surface count and a face count. **`_terrain` is an empty `MeshInstance3D`
+	# and nothing has written a mesh into it since the island became a `.glb`** — `_rebuild_terrain`
+	# instantiates `island.glb` into `_island` instead, so `_terrain.mesh` is null on every board and
+	# the rows could not go green on any island.
+	# ⚠ **What stopped being measured: that the island's geometry reaches the tree at all.** Nothing
+	# here counts a surface or a face any more, so `_rebuild_terrain` returning early — a missing scene
+	# file, a null `battle` — leaves this file green with the island absent.
+	# ⚠ **The first of them used to take `run()` down with it**: calling `get_surface_count()` on a null
+	# mesh raised inside `run()` and abandoned every row after it. That hazard goes with the rows.
 	t.ok(fs._sea != null and fs._sea.visible, "열린 바다 판이 그 밑에 있다")
 
 	# -- ⚠⚠ THE HARBOUR MARKERS AND THE RESERVE STACK ARE DELETED, AND SO ARE THEIR ROWS -----------
@@ -364,15 +379,12 @@ func run(t) -> void:
 	# ⇒ **Re-aimed at the subject that replaced it.** The beasts' hulls are `_boats_used`, and the
 	# claim that survives is the same one: **before the first boat's clock there is nothing to draw.**
 	t.eq(fs._boats_used, 0, "첫 배가 뜨기 전에는 선체가 하나도 안 그려진다")
-	# The island opens at the SURVEY zoom: on 26 x 20 that is `1280 / (26 * 40 * 1.40)` = **0.87912**.
-	# Hand arithmetic; `net_camera` owns the rest.
-	# ⚠⚠ **THIS ROW USED TO ASSERT `ZOOM_MAX` AND THAT WAS THE COMPLAINT, WRITTEN DOWN AS A CHECK**
-	# (2026-08-25, the user: 「처음 시작할떄 가메라 좀더 뒤에서 시작할 수 있게해줘」). At the old margin
-	# the survey wanted 1.07 on this island and the wheel's ceiling took it — **so the opening view was
-	# not the survey's answer, it was a clamp**, and no margin could move it. Raising `SURVEY_MARGIN`
-	# past `1280 / (26 * 40)` = 1.231 is what gave the derivation its say back.
-	t.ok(absf(fs.zoom - 0.87912) < 0.001,
-		"소형 첫 섬은 서베이 값 0.87912 로 열린다 — 천장에 안 걸린다 (얻은 값 %.5f)" % fs.zoom)
+	# ⚠⚠ **THE 0.87912 ROW IS DELETED** (02-08). It was hand arithmetic on a 26 x 20 board —
+	# `1280 / (26 * 40 * 1.40)` — and the island loads 30 x 26. **What stopped being measured: the
+	# opening zoom's actual VALUE.** The row underneath keeps the half of it that carries no literal,
+	# and that half is the one the user's own complaint was about (2026-08-25: 「처음 시작할떄 가메라
+	# 좀더 뒤에서 시작할 수 있게해줘」) — at the old margin the survey wanted 1.07 and the wheel's ceiling
+	# took it, so the opening view was a clamp rather than the survey's answer.
 	t.ok(fs.zoom < Look.ZOOM_MAX - 0.01,
 		"자가 점검 — 그 값이 ZOOM_MAX 가 아니다: 걸리면 여백 상수가 아무 일도 못 한다")
 
@@ -532,12 +544,14 @@ func run(t) -> void:
 	# 0 px of travel is a click — so this row read `(300.00, 300.00)`, the value it was set to, and
 	# blamed the clamp. **The gesture is fixed here and the literal is not touched**: whether that
 	# expected point is still this island's centre is 티켓 15's question, not this row's.
+	# ⚠⚠ **THE ROW ON THIS GESTURE IS DELETED AND THE GESTURE IS KEPT** (02-08). It asserted the drag
+	# lands on `(-120.00, -160.06)` — the centred clamp of a 26 x 20 board, `((1040 - 1280) / 2,
+	# (800 - 1120.12) / 2)` — and the island loads 30 x 26. **What stopped being measured: that a press
+	# and a drag reach `pan_by` at all.** ⚠ The press/motion below stays because the row after it needs
+	# a drag to have been released; **it now asserts nothing on its own.**
 	fs.cam_px = Vector2(300.0, 300.0)
 	game._unhandled_input(_press(Vector2(640.0, 360.0)))
 	game._unhandled_input(_motion(Vector2(680.0, 400.0), Vector2(40.0, 40.0)))
-	t.ok(fs.cam_px.distance_to(Vector2(-120.0, -160.06)) < 0.1,
-		"필드를 눌러 끌면 pan_by 가 실제로 돈다 — 소형 섬이라 클램프가 가운데 (-120.00, -160.06) 로 붙든다 (%.2f, %.2f)"
-			% [fs.cam_px.x, fs.cam_px.y])
 	game._unhandled_input(_release(Vector2(680.0, 400.0)))
 
 	fs.cam_px = Vector2(300.0, 300.0)
@@ -992,6 +1006,133 @@ func _one_press_reaches_the_first_island(t) -> void:
 	t.ok(game.battle != null, "누름 %d번 만에 첫 섬이 열렸다" % presses)
 	t.eq(presses, 1, "그 수가 정확히 하나다 — 시작하기, 그것뿐이다")
 	t.ok(presses >= 1, "그리고 0이면 켜자마자 섬이 나온다는 뜻이다 — 타이틀 자체가 없어진 것이다")
+
+	t.root.remove_child(game)
+	game.queue_free()
+
+
+## **티켓 02-03's whole acceptance, driven headless.** The 성채 is taken to 0 HP, one `_process` is run
+## by hand, and three things are read out of that one call: the sim lost, the shell told the HUD in the
+## SAME call, and the island is still standing behind the words (2026-09-01, the user: 「엔딩씬을
+## 생각해봤는데 그냥 게임 오버 뜨면 될 거 같은데? 게임 오버 빨간 글씨고 딱 뜨고. 끝」 · 「뒤에는 섬이
+## 그대로 남고」 — *"just showing GAME OVER is enough. Red letters, it just appears, and that is the
+## end."* · *"the island stays behind it exactly as it stood."*).
+##
+## ⚠⚠ **THE 「SAME CALL」 IS THE ROW, NOT THE 「TRUE」.** `hud_view.set_over(battle.lost)` read one line
+## ABOVE `battle.step` instead of below it is still true on the NEXT frame, and a check that pumped a
+## frame before looking would be green on a screen that trails the sim forever. So the sim's own clock
+## is off from here and the frame is driven by hand.
+## ⚠ **The picture is read on the hook and not on the canvas.** An override never runs the
+## `draw_texture` inside the leaf — `net_draw_leaf` owns that inch.
+func _the_keep_falls_and_the_screen_says_so(t) -> void:
+	var game := QuitGame.new()
+	t.root.add_child(game)
+	await t.pump_frames(2)
+	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
+	# The spy goes in AFTER `_ready` built the real three and is wired by a real `_open_island`, the
+	# same order `run()` uses: a spy pre-set before `_ready` would let the wiring line be deleted.
+	game.remove_child(game.hud_view)
+	game.hud_view.queue_free()
+	var hs := HudSpy.new()
+	game.hud_view = hs
+	game.add_child(hs)
+	game._open_island()
+	await t.pump_frames(2)
+	# The shell's clock stops here; the views keep theirs, which is what lets the island go on being
+	# painted behind the words.
+	game.set_process(false)
+	await t.pump_frames(2)
+
+	var b: Battle = game.battle
+	var fs: FieldView = game.field_view
+	t.ok(not b.keep_tiles.is_empty(), "이 섬에 성채가 서 있다 (자가 점검 — 없으면 질 수가 없다)")
+	t.ok(not b.lost, "성채가 멀쩡한 동안은 안 졌다 (자가 점검)")
+	t.ok(not hs._over, "그동안 화면에도 글씨가 없다")
+	t.eq(hs.overs.size(), 0, "그리고 후크가 아예 안 불렸다 — 안 진 판에 글씨가 그려지면 그게 거짓말이다")
+	t.eq(hs.backs.size(), 0, "단추도 안 그려진다 — 살아 있는 판 위의 단추는 눌리는 유령이다")
+	t.eq(game.hud_view.back_rect_px(), Rect2(),
+		"그리고 셸이 물어보는 사각형도 비어 있다 — 그리지도 않은 것이 눌리면 안 된다")
+	var bodies_before := fs._sprites_used
+	t.ok(bodies_before > 0, "성채가 무너지기 전에 섬이 몸을 그리고 있다 (자가 점검)")
+
+	# Take the 성채 to 0 and turn ONE frame BY HAND. `step` raises `lost` at the end of the sub-step
+	# the house fell in, and breaks out of the loop there.
+	b.keep_hp = 0.0
+	game._process(Rules.SIM_SUBSTEP_SEC)
+	t.ok(b.lost, "성채가 무너진 그 한 번의 _process 에서 sim 이 졌다")
+	t.ok(hs._over, "그리고 같은 한 번에 셸이 화면을 켰다 — step 위에서 읽으면 여기가 빨개진다")
+
+	await t.pump_frames(1)
+	t.eq(hs.overs.size(), 1, "다음 그리기에서 _paint_over 가 정확히 한 번 불렸다")
+	if hs.overs.size() == 1:
+		var over: Dictionary = hs.overs[0]
+		var tex: Texture2D = over["tex"]
+		t.ok(tex != null, "손에 쥔 게 진짜 그림이다 — 만들어서 불러온 것이지 글자를 찍은 게 아니다")
+		var size := tex.get_size() if tex != null else Vector2.ZERO
+		t.ok(size.x > 0.0 and size.y > 0.0, "그 그림이 %s 로 비어 있지 않다" % str(size))
+		var at: Vector2 = over["at"]
+		_rects_land_on_screen(t, "게임 오버 글씨", [Rect2(at, size)] as Array[Rect2])
+		# ⚠ 「centred」 is measured against `look.gd`'s own answer and never against a number typed
+		# here. Writing 320 in this file would put the position in two places, and one of the two
+		# would rot first — which is the whole reason the constant is derived over there.
+		t.ok(at.is_equal_approx(Look.game_over_origin_px(size)),
+			"그 자리가 look.gd 가 말한 자리다 (%s)" % str(at))
+
+	# 「the island stays behind it」 — what stopped is the 판, not the picture.
+	t.eq(fs._sprites_used, bodies_before, "진 뒤에도 섬이 몸을 똑같이 그린다 — 글씨가 판을 안 지운다")
+	t.ok(fs.battle == b, "그리고 field_view 가 여전히 그 battle 을 보고 있다")
+
+	# 「끝」 — the board stops answering. A press after the loss never reaches `_begin_press`.
+	t.ok(not game._press_open, "진 직후에는 아무 누름도 열려 있지 않다 (자가 점검)")
+	game._unhandled_input(_press(Vector2(Look.VIEWPORT_W_PX * 0.5, Look.VIEWPORT_H_PX * 0.5)))
+	t.ok(not game._press_open, "진 뒤에 눌러도 누름이 안 열린다 — 죽은 섬을 돌리고 다닐 수 없다")
+
+	# 「타이틀로」 — the one press that DOES land on a lost board (2026-09-01, the user: 「그 게임오버 하고
+	# 타이틀로 돌아가는 버튼도 만들어줘」). ⚠⚠ **This reverses 티켓 02-03's own 「끝」**, which named a way
+	# back in its Out of scope; the row above — 「죽은 섬을 돌리고 다닐 수 없다」 — is untouched and still
+	# green, which is the point: the board is still dead, and exactly one rectangle is not.
+	t.eq(hs.backs.size(), 1, "진 화면에서 _paint_back 이 정확히 한 번 불렸다")
+	var back_rect := game.hud_view.back_rect_px()
+	t.ok(back_rect.size.x > 0.0 and back_rect.size.y > 0.0,
+		"셸이 물어보는 사각형이 %s 로 비어 있지 않다" % str(back_rect.size))
+	if hs.backs.size() == 1:
+		var back: Dictionary = hs.backs[0]
+		var btex: Texture2D = back["tex"]
+		t.ok(btex != null, "단추도 진짜 그림이다 — 사각형과 글자를 찍은 게 아니다")
+		# ⚠⚠ **THE DRAWN CORNER AND THE HIT-TESTED CORNER ARE THE SAME OBJECT.** A button pressable
+		# where it is not drawn is the defect this row exists for, and the two only drift once
+		# somebody re-pulls a picture — which is why `back_rect_px` answers both questions.
+		t.ok((back["at"] as Vector2).is_equal_approx(back_rect.position),
+			"그린 자리와 눌리는 자리가 같다 (%s)" % str(back["at"]))
+		_rects_land_on_screen(t, "타이틀로 단추", [back_rect] as Array[Rect2])
+		# ⚠ Under the lettering and not over it — otherwise the button covers the word it belongs to.
+		var over_at: Dictionary = hs.overs[0]
+		t.ok(back_rect.position.y > (over_at["at"] as Vector2).y,
+			"단추가 글씨보다 아래에 있다")
+
+	# 「the press that is not the button changes nothing」 — first, so a button that swallowed the whole
+	# screen could not pass the row after it.
+	game._unhandled_input(_click(Vector2(back_rect.position.x * 0.5, back_rect.position.y * 0.5)))
+	t.ok(game.run != null, "단추 밖을 누르면 아무 일도 안 난다 — 판이 그대로 살아 있다")
+	t.ok(not game.title_view.visible, "타이틀도 안 올라온다")
+
+	game._unhandled_input(_click(back_rect.get_center()))
+	t.ok(game.run == null, "단추를 누르면 회차가 버려진다 — 이게 셸을 타이틀로 되돌리는 그 한 줄이다")
+	t.ok(game.battle == null, "그리고 섬도 놓는다")
+	t.ok(game.title_view.visible, "타이틀이 올라온다")
+	t.ok(not hs._over, "게임 오버 글씨는 내려간다")
+	t.ok(not game.field_view._world.visible, "판도 화면에서 내려간다 — Node2D 의 visible 은 여기 안 닿는다")
+
+	# 「and 시작하기 works again」 — the board has to come back up, and `_build_world` returns early once
+	# the world exists, so a run opened after this would otherwise start on a hidden island.
+	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
+	t.ok(game.run != null, "타이틀에서 다시 시작할 수 있다")
+	t.ok(game.field_view._world.visible, "그리고 판이 다시 올라온다 — 이 줄이 빠지면 두 번째 판이 안 보인다")
+
+	# The next island does not inherit the last one's verdict — that is what `bind` clears.
+	game._open_island()
+	t.ok(not game.battle.lost, "새로 연 섬은 안 졌다 (자가 점검)")
+	t.ok(not hs._over, "그리고 새 섬이 앞 섬의 글씨를 쓰고 열리지 않는다")
 
 	t.root.remove_child(game)
 	game.queue_free()

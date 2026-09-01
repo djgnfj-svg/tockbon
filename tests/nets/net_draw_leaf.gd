@@ -98,6 +98,10 @@ func _table() -> Dictionary:
 			# `COL_BAKE_CLEAR`) — the colour scan below is what pushed them there.
 			"_make_body_tex": 0,
 			"_make_flat_tex": 0,
+			# ⚠ **0, and it is a visibility flip and not a draw.** `visible` on this `Node2D` does not
+			# reach the `Node3D` the island hangs off, so the shell needed one call to clear the glass
+			# when a lost run goes back to the title (2026-09-01).
+			"show_board": 0,
 			"setup": 0,
 			"_process": 0,
 			# The camera: pure functions, all of them, driven by `net_camera` with `.new()`.
@@ -305,6 +309,16 @@ func _table() -> Dictionary:
 			"set_picked": 0,
 			"_put_pick_outline": 0,
 			"_rim_sprite": 0,
+			# ⚠⚠ **THE HP BAR IS BACK AND IT IS FOUR NAMES, NOT `_put_hp`** (2026-09-01, the user:
+			# 「뭔가 HP바가 보여야 상황이 보여야 될 거 같아」). The deleted one drew two rectangles from
+			# `_hp_rects`; **this one loads two pictures and fills node fields**, so the `draw_*` column
+			# is 0 here like every other row in this table — and that zero is the point, because a
+			# `draw_rect` reappearing in any of the four would mean the bar had been typed after all,
+			# which is the failure `CLAUDE.md` carries by name.
+			"_hp_frac": 0,
+			"_bar_sprite": 0,
+			"_put_bar": 0,
+			"_paint_bars": 0,
 		},
 		# ⚠⚠ **NINE NAMES LEFT THIS FILE IN ONE EDIT AND NOTHING ARRIVED** (2026-08-28). The start
 		# button and the five summon slot boxes were deleted whole (the user: 「게임플레이에서 시작
@@ -314,18 +328,38 @@ func _table() -> Dictionary:
 		# `_paint_slot_box` · `_paint_slot_digit` · `_paint_slot_bar`.
 		# ⚠⚠ **AND THE ENEMY COUNT WENT THE SAME DAY** (the user: 「위에 적이 몇명이나 오는지도
 		# 필요없을듯」), taking `_paint_enemies_left` with it — and `_process`, which existed only to
-		# keep that number fresh. ⇒ **13 -> 4 names, 3 -> 0 leaves: this layer draws NOTHING.**
+		# keep that number fresh. ⇒ **13 -> 4 names and 3 -> 0 leaves**, and this layer drew NOTHING for
+		# the four days between that and the row below.
 		# ⚠ The class survives for its two STATIC helpers, which `panel_view` and `refit_view` read.
 		# ⚠ A name the table holds that the file no longer has is caught by `_scan`'s
 		# `표에는 있는데 파일에 없는 함수` direction, whose synthetic case (c2) proves it bites.
 			# ⚠⚠ **24 ROWS LEFT THIS BLOCK ON 2026-08-29** with the fight: the hit halo, the twelve
 			# effects, the whole AIR layer and the three painters that fed them. **The ground layer
 			# stayed, because a body's shadow is drawn into it.**
+		# ⚠⚠ **AND ONE NAME CAME BACK ON 2026-09-01: THE LOSS** (the user: 「엔딩씬을 생각해봤는데 그냥
+		# 게임 오버 뜨면 될 거 같은데? 게임 오버 빨간 글씨고 딱 뜨고. 끝」 — *"I thought about the ending
+		# scene — I think just showing GAME OVER is enough. Red letters, it just appears, and that is
+		# the end."*). **`_draw` stops being `pass` for the first time since 2026-08-28**, and it is
+		# still 0: the words go out through `_paint_over`, which is the only leaf this layer has.
+		# ⚠ **The 1 is the whole point of this row.** `_paint_over` loads a picture pulled in
+		# `tools/pixel/` and hands it to ONE `draw_texture`; a 2 here would mean a rect had been typed
+		# behind the lettering, and a 0 in `_paint_over` with the constant still in `look.gd` would be
+		# a screen that says GAME OVER in the plan and nothing at all on the glass.
+		# ⚠⚠ **AND A SECOND NAME ON 2026-09-01: THE WAY BACK** (the user, after seeing the words on the
+		# glass: 「그 게임오버 하고 타이틀로 돌아가는 버튼도 만들어줘」). **This reverses 티켓 02-03's own
+		# 「끝」**, which put a way back in its Out of scope — the user reversed it themselves.
+		# ⚠ **`back_rect_px` is 0 and that is load-bearing.** It answers WHERE the button is and the
+		# shell hit-tests the very rect `_draw` draws; a draw call in it would mean the rectangle had
+		# grown a picture of its own, and then there would be two.
 		"hud_view.gd": {
 			"default_font": 0,
 			"type_label": 0,
 			"bind": 0,
+			"set_over": 0,
+			"back_rect_px": 0,
 			"_draw": 0,
+			"_paint_over": 1,
+			"_paint_back": 1,
 		},
 		# ⚠ **`panel_view.gd` had its own block here and the FILE is deleted** (2026-08-29) with the
 		# verdict it drew.

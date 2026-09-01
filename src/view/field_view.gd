@@ -349,6 +349,19 @@ func _make_flat_tex() -> Texture2D:
 
 
 @warning_ignore("shadowed_variable")
+## **Whether the 3D board is on screen at all.**
+##
+## ⚠⚠ **IT EXISTS BECAUSE `visible` ON THIS NODE DOES NOT REACH THE BOARD.** This is a `Node2D` and the
+## island hangs off it as a `Node3D`; the two use different visibility systems, so hiding the parent
+## leaves the whole island drawn with every check about it green. **The shell needs one call to clear
+## the glass** — going back to the title is the first thing that ever needed it (2026-09-01).
+## ⚠ **A method and not the shell reaching for `_world`.** `src/shell/` wires `sim` to `view`; it does
+## not know this file builds its world out of one node, and the day it is two this stays one call.
+func show_board(on: bool) -> void:
+	if _world != null:
+		_world.visible = on
+
+
 func setup(battle: Battle, army: Army, rows: Array) -> void:
 	self.battle = battle
 	self.army = army
@@ -768,7 +781,7 @@ const PROP_CARD_SHADER := "res://src/view/prop_card.gdshader"
 ## says the hull, the sail and their proportions are judged on the game screen, after it is in.
 ## ⚠ **It sits here and not in `look.gd` because it is a scene path**, and the three above it already
 ## decided where those live. Every number the hull is DRAWN with is still `look.gd`'s.
-const BOAT_SCENE := "res://assets/props/boat.glb"
+const BOAT_SCENE := "res://assets/props/boat_small.glb"
 
 var _island: Node3D = null
 ## **The 판 object, found inside the island scene by name**, and the material this file put on it.
@@ -805,6 +818,33 @@ var _picked := {}
 var _rims: Array[Sprite3D] = []
 var _rims_used := 0
 const RIM_SHADER := "res://src/view/body_outline.gdshader"
+
+## **The health bars, one pair of sprites each — the frame and the fill that is cropped inside it.**
+##
+## ⚠⚠ **A PARALLEL POOL AND NOT A CHILD NODE**, exactly the reason `_outlines` is one: the entries are
+## recycled by index across frames, so a fill parented to a frame would be carried to whichever bar
+## reused that slot. **Index `i` of `_bar_fills` belongs to index `i` of `_bars`, always**, and
+## `_hide_unused` closes both by the same count.
+## ⚠ **Its own count and not the body index.** Every body wears a black copy, so that pool is closed by
+## `_sprites_used`; only a HURT body wears a bar, and the 성채 wears one while being no body at all.
+## ⚠⚠ **THE OLD BAR WAS DELETED 2026-08-28 AND THIS IS NOT IT COMING BACK.** That one was two
+## rectangles `_put_hp` laid out from `_hp_rects`; this one is two pictures pulled in `tools/pixel/`.
+var _bars: Array[Sprite3D] = []
+var _bar_fills: Array[Sprite3D] = []
+var _bars_used := 0
+## ⚠ **Loaded at declaration, the same way `_tex_tooth` is** — a picture that never changes has no
+## reason to wait for `_build_world`, and loading it there would be a second place a bar can fail.
+var _tex_bar_frame: Texture2D = load(Look.HP_BAR_FRAME) as Texture2D
+var _tex_bar_fill: Texture2D = load(Look.HP_BAR_FILL) as Texture2D
+
+## **Where the 성채's roof is, in world units**, and whether one was ever put on screen. Written by
+## `_rebuild_buildings` from the very numbers that placed the mesh, so the bar cannot end up over a
+## roof the building is not standing at.
+## ⚠⚠ **NOT DERIVED FROM `keep_tiles`.** The sim's tiles say where the keep IS; how tall it is drawn
+## is `BUILD_SCALE` times a mesh nobody here authored, and a second guess at it is a bar floating over
+## the ridge or buried in it.
+var _keep_roof := Vector3.ZERO
+var _keep_roof_known := false
 
 
 ## **The 이동선 waiting to be drawn**, one `PackedInt32Array` of 조각 per picked body. Written by the
@@ -1015,6 +1055,9 @@ func _rebuild_buildings() -> void:
 	if _builds != null:
 		_builds.queue_free()
 		_builds = null
+	# ⚠ **Forgotten with the buildings and not beside them.** A roof remembered from the last island
+	# is a bar hanging over open ground on this one.
+	_keep_roof_known = false
 	if battle == null:
 		return
 	var placed := Islands.builds()
@@ -1046,6 +1089,15 @@ func _rebuild_buildings() -> void:
 		# shrunken building stays on its tile and stays standing on it rather than floating.
 		one.scale = Vector3(Look.BUILD_SCALE, Look.BUILD_SCALE, Look.BUILD_SCALE)
 		_builds.add_child(one)
+		# ⚠⚠ **THE ROOF IS READ OFF THE MESH THAT WAS JUST PLACED, NOT OFF A NUMBER HERE.** The keep's
+		# height is `BUILD_SCALE` times whatever `buildings.blend` was saved with, and `buildings.json`
+		# answers the footprint and nothing else — a constant for the roof would be a second copy of a
+		# shape this file does not own, wrong the first time the `.blend` is opened.
+		# ⚠ **`get_aabb()` is the mesh's own box in LOCAL units**, so the scale has to be applied here;
+		# `one.position.y` is already the ground the building stands on.
+		if kind == Builds.KEEP and one.mesh != null:
+			_keep_roof = Vector3(cx, one.position.y + one.mesh.get_aabb().end.y * Look.BUILD_SCALE, cy)
+			_keep_roof_known = true
 	# ⚠⚠ **NOT `_use_vertex_colours` here, and that call was the bug** (2026-08-26, the user: 「건물
 	# 벽면이 이상함」). It exists for the ISLAND, whose mesh carries a colour per vertex. **The buildings
 	# carry no colour attribute at all** — they are painted with one flat material per part — so turning
@@ -1332,7 +1384,7 @@ static func _hand_the_sea_its_look(mat: ShaderMaterial) -> void:
 	mat.set_shader_parameter("wake_froth_amt", Look.WAKE_FROTH_AMT)
 	# ⚠ **The hull's own footprint comes out of `Rules` and not out of `Look`**: where a boat stops is
 	# a rule, the box it stops with is the same box, and a second copy here would be right until the
-	# next export of `boat.glb`.
+	# next export of the hull.
 	mat.set_shader_parameter("hull_half", Rules.BOAT_HULL_HALF_TILES)
 	mat.set_shader_parameter("hull_beam", Rules.BOAT_HULL_BEAM_TILES * 0.5)
 	mat.set_shader_parameter("hull_shadow_w", Look.HULL_SHADOW_W_TILES)
@@ -1748,7 +1800,7 @@ func _pitch_stretch() -> float:
 ## one read of the row; the row also says how big this species is drawn, and passing the derived number
 ## while the caller kept the row is how the two would have been read in two places.
 func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id: int, colour: Color,
-		squash: Vector2, tex: Texture2D, outlined: bool = false) -> void:
+		squash: Vector2, tex: Texture2D, outlined: bool = false) -> float:
 	var radius := Look.body_radius_of(type_id)
 	# ⚠⚠ **THE ROW'S INK FRACTION, AND DIVIDING BY IT IS THE WHOLE POINT** (2026-08-31).
 	# `beast_draw_scale` is how wide the ANIMAL is drawn; this turns that into how wide the PICTURE
@@ -1818,11 +1870,16 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 	# off its own body in exactly the cases that were hardest to get right.
 	if outlined:
 		_put_pick_outline(s, pic)
-	# ⚠⚠ **THE TOP USED TO BE RETURNED HERE and the halo that read it is deleted** (2026-08-29).
-	# **The rule it carried is the part to keep**: a wolf is 55 x 40 and a caveman 36 x 40, so sized by
+	# ⚠⚠ **THE TOP IS RETURNED AGAIN** (2026-09-01), for the HP bar that hangs off it. It was returned
+	# until 2026-08-29 for a halo that is deleted, and the rule that outlived both is the reason it is
+	# a return and not arithmetic at the caller: a wolf is 55 x 40 and a caveman 36 x 40, so sized by
 	# WIDTH off the same radius the man stands half again as tall as the animal. ⇒ **Nothing that
-	# hangs above a body may compute its own height from the radius.** The HP bar did, and it landed
-	# across the caveman's face the first time he was on screen.
+	# hangs above a body may compute its own height from the radius.** The old HP bar did, and it
+	# landed across the caveman's face the first time he was on screen.
+	# ⚠ **The picture's top and not the ink's.** `_measure_body_feet` scans the empty rows UNDER the
+	# animal only, so a strip that grew its canvas upward lifts the bar with it — which is the safe
+	# direction: a bar too high is a bar, a bar too low is a bar across a face.
+	return s.position.y + tall * 0.5
 
 
 ## ⚠⚠ **`_put_hp` STOOD HERE AND IS DELETED** (2026-08-28, the user: 「체력바 없이」). It drew the two
@@ -1839,6 +1896,9 @@ func _paint_bodies() -> void:
 	# ⚠ **Opened with the body pool and closed by the same `_hide_unused`.** A rim pool opened
 	# anywhere else is a rim left standing over a body that has died.
 	_rims_used = 0
+	# ⚠ **Opened here even on the empty path below**, so a bar from the last island cannot be left
+	# hanging over the title screen — the same reason `_paint_boats` is still called down there.
+	_bars_used = 0
 	if battle == null or army == null or battle.grid == null:
 		# ⚠ **Still called on the empty path**: `_paint_boats` is what hides a pooled hull, so skipping
 		# it here would leave the last island's boats standing on the title screen.
@@ -1851,13 +1911,18 @@ func _paint_bodies() -> void:
 	# something needs the order back, it is here rather than having to be rediscovered.
 	for raw_id in battle.living_enemy_ids():
 		var e := int(raw_id)
-		_put_walker("e%d" % e, int(battle.enemy_type[e]), battle.enemy_pos[e], true,
-			_crowd_slot_of(battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e))
+		var ety := int(battle.enemy_type[e])
+		_put_walker("e%d" % e, ety, battle.enemy_pos[e], true,
+			_crowd_slot_of(battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e), false,
+			_hp_frac(float(battle.enemy_hp[e]), Rules.hp_of(ety)))
 
 	for raw_id in battle.ashore_ids():
 		var i := int(raw_id)
+		# ⚠ **`army.max_hp_of` and not `Rules.hp_of` off the row.** There is no `hp` column in the
+		# army since the revival, and `max_hp_of` is the one answer to 「what is this body healed to」.
 		_put_walker("s%d" % i, int(army.type_id[i]), battle.soldier_pos[i], false,
-			_crowd_slot_of(battle.soldier_pos[i], i), _picked.has(i))
+			_crowd_slot_of(battle.soldier_pos[i], i), _picked.has(i),
+			_hp_frac(float(battle.soldier_hp[i]), army.max_hp_of(i)))
 
 	# ⚠⚠ **THE ONE PLACE A BODY THE SIM HAS ALREADY DROPPED IS STILL DRAWN** (2026-08-31). Both lists
 	# above hold the living only — `living_enemy_ids`'s own header says a corpse must not be left on
@@ -1877,6 +1942,10 @@ func _paint_bodies() -> void:
 	# `_hide_unused()` below — painted outside the pair, every rider would be hidden the same frame it
 	# was drawn.
 	_paint_boats()
+
+	# ⚠ **Inside the pair too**, for the same reason the riders are: the 성채's bar comes out of the
+	# pool opened above and closed below, and painted outside them it would be hidden the same frame.
+	_paint_bars()
 
 	_hide_unused()
 
@@ -2090,8 +2159,11 @@ func _clock_of(b: Dictionary, anim: int) -> float:
 ##
 ## ⚠ **The side reaches the screen as a TINT and never as a different animal** — `Look.body_colour_of`.
 ## The picture comes from the unit row, which is why a 검사 and a 늑대 need no branch here at all.
+## ⚠⚠ **`hp_frac` DEFAULTS TO 1.0, WHICH IS 「no bar」, AND THE FALLING BODIES RELY ON IT** (2026-09-01).
+## A body in the middle of its death strip is already at 0 hp, and a bar drawn from that number would
+## be an empty trough riding a corpse down — the one thing 「깎인 것만 뜬다」 was chosen to avoid.
 func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: int,
-		outlined: bool = false) -> void:
+		outlined: bool = false, hp_frac: float = 1.0) -> void:
 	# ⚠ **The crowd offset is kept apart from the sway** and handed down separately — see `_put_body`,
 	# where the shadow takes one and not the other.
 	var crowd := Look.crowd_offset_px(slot, Rules.TILE_CAPACITY)
@@ -2108,8 +2180,15 @@ func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: i
 	var swing := _swing_squash(key)
 	# ⚠ **`outlined` rides along untouched** — whether this body is the one in hand is the shell's
 	# answer, not a thing the view re-derives.
-	_put_body(centre, at, crowd, type_id, lit,
+	var top := _put_body(centre, at, crowd, type_id, lit,
 		Vector2(gait.x * swing.x, gait.y * swing.y), tex, outlined)
+	# ⚠ **Here and not in `_paint_bodies`**, because this is the one line where the body's drawn top is
+	# in hand. `_put_body`'s own note carries what re-deriving it off the radius cost.
+	# ⚠ **`centre` and not the sim's 조각**: the bar hangs over the picture, so it takes the sway, the
+	# lunge and the crowd offset the picture took — a bar left on the 조각 centre would drift off the
+	# head of a body that is leaning into a blow.
+	_put_bar(Vector3(centre.x / Look.TILE_PX, top + Look.HP_BAR_LIFT_PX / Look.TILE_PX,
+		centre.y / Look.TILE_PX), hp_frac)
 
 
 ## **How far into its flash a body is**, 1.0 at the instant of the blow and 0.0 once it is spent.
@@ -2153,6 +2232,14 @@ func _hide_unused() -> void:
 	# body in hand wears a white rim, so this one has to carry its own.
 	for k in range(_rims_used, _rims.size()):
 		_rims[k].visible = false
+	# ⚠⚠ **THE BAR POOL CARRIES ITS OWN COUNT FOR THE SAME REASON THE RIM POOL DOES**: only a hurt
+	# thing wears a bar, and one of the wearers is the 성채, which is not in the body pool at all.
+	# ⚠ **The fill is closed by the FRAME's index**, never by its own — a fill left visible over a
+	# hidden frame is a red stripe hanging in the air where a body died.
+	for k in range(_bars_used, _bars.size()):
+		_bars[k].visible = false
+	for k in range(_bars_used, _bar_fills.size()):
+		_bar_fills[k].visible = false
 
 
 ## **The white rim behind one body**, grown from that body's own finished sprite.
@@ -2214,12 +2301,119 @@ func _rim_sprite() -> Sprite3D:
 	return s
 
 
+# --- the health bars -------------------------------------------------------------------------------
+## **A bar over a 몸 and a bar over the 성채, and both are the same two pictures** (2026-09-01, the
+## user: 「뭔가 HP바가 보여야 상황이 보여야 될 거 같아」 — *"I think an HP bar has to show, the situation
+## has to be visible"*). ⚠ **Nothing here is read back by `sim`** — `soldier_hp`, `enemy_hp` and
+## `keep_hp` all already existed and already decide who dies.
+
+## **How full a bar is, 0 at dead and 1 at untouched.** ⚠ **Clamped at BOTH ends**: `keep_hp` is
+## allowed to go negative for one sub-step before the floor catches it, and a negative fraction is a
+## `region_rect` with a negative width, which is a quad the engine draws inside out.
+func _hp_frac(now: float, most: float) -> float:
+	if most <= 0.0:
+		return 1.0
+	return clampf(now / most, 0.0, 1.0)
+
+
+## One bar's pair of sprites, pooled and hidden but never freed — the same rule `_sprite` keeps.
+## **The fill is born with its frame**, so the two pools can never come apart by one.
+func _bar_sprite() -> Sprite3D:
+	if _bars_used < _bars.size():
+		var reused := _bars[_bars_used]
+		_bars_used += 1
+		reused.visible = true
+		return reused
+	var frame := Sprite3D.new()
+	var fill := Sprite3D.new()
+	for s: Sprite3D in [frame, fill]:
+		s.pixel_size = Look.SPRITE_PIXEL_SIZE
+		# ⚠⚠ **FIXED_Y, the same as a body** (개발지식 01 기법 1). Full billboard turns on every axis,
+		# so pitching the camera down would lay the bar flat on the ground beside its own body.
+		s.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+		# ⚠⚠ **DISCARD, AND THE FILL DEPENDS ON IT.** It gives both quads a real depth value, which is
+		# what lets `HP_BAR_FILL_FRONT_TILES` decide which of the two is in front — left transparent,
+		# the pair would neither write depth nor be sorted against each other and the fill would
+		# flicker behind its own trough. ⚠ It is also what hides a bar behind a cliff, like a body.
+		s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+		s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		# Unshaded for the reason a body is: a billboard's normal faces the CAMERA, so the sun hits it
+		# square-on at full strength and washes the picture's own colours out.
+		s.shaded = false
+		s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		s.visible = false
+		_world.add_child(s)
+	frame.visible = true
+	_bars.append(frame)
+	_bar_fills.append(fill)
+	_bars_used += 1
+	return frame
+
+
+## **One bar hanging at `at`, and it is drawn only when `frac` is under 1.** (2026-09-01, the user
+## choosing among the recommendations: a full bar over every 몸 and the 성채 would fill the screen from
+## the opening frame, when nothing has been hit yet.)
+##
+## ⚠⚠ **THE FILL IS CROPPED AND THE FRAME IS NOT.** A single loaded picture is a fixed width, so the
+## shrinking half is `region_rect` over the fill and nothing else — see `Look.HP_BAR_FRAME` for why the
+## two pictures share one centre and therefore need no offset between them.
+## ⚠⚠ **`offset` PUTS THE CROP'S LEFT EDGE BACK WHERE THE FULL BAR'S WAS.** A centred sprite with a
+## narrowed region shrinks toward its own middle, which reads as a bar closing in from both ends
+## instead of draining from the right. The push is half of what the crop took, in TEXTURE px, and the
+## sprite's own scale carries it into the world — so it stays right at every zoom for free.
+## ⚠ **`offset` and not the position**: the bar is a billboard, so 「left」 has no world axis.
+func _put_bar(at: Vector3, frac: float) -> void:
+	if _cam == null or _tex_bar_frame == null or _tex_bar_fill == null:
+		return
+	if frac >= 1.0:
+		return
+	var frame := _bar_sprite()
+	frame.texture = _tex_bar_frame
+	frame.scale = _billboard_scale(_tex_bar_frame, Look.HP_BAR_W_PX, Vector2.ONE)
+	frame.position = at
+	var fill := _bar_fills[_bars_used - 1]
+	var wide := float(_tex_bar_fill.get_width()) / float(_tex_bar_frame.get_width())
+	# ⚠ **Zero is HIDDEN and not a zero-width region.** A `Rect2` of width 0 is a degenerate quad, and
+	# an empty trough is what a dead thing should read as anyway.
+	if frac <= 0.0:
+		fill.visible = false
+		return
+	fill.visible = true
+	fill.texture = _tex_bar_fill
+	fill.scale = _billboard_scale(_tex_bar_fill, Look.HP_BAR_W_PX * wide, Vector2.ONE)
+	fill.region_enabled = true
+	fill.region_rect = Rect2(0.0, 0.0, float(_tex_bar_fill.get_width()) * frac,
+		float(_tex_bar_fill.get_height()))
+	fill.offset = Vector2(-float(_tex_bar_fill.get_width()) * (1.0 - frac) * 0.5, 0.0)
+	# ⚠⚠ **ALONG THE CAMERA'S OWN AXIS, NEVER THE WORLD'S** — the same rule `_put_outline` keeps, and
+	# `basis.z` points back at the viewer, so ADDING it is toward the camera. Pushed along world Z the
+	# fill would slide out of its own trough the moment the board turned.
+	# ⚠ **`transform` and not `global_transform`**, the frame `_put_pick_outline` already names: the
+	# camera and every bar are children of `_world`, so that is the space they share. It is also the
+	# one of the two that does not need the node to be inside a tree.
+	fill.position = at + _cam.transform.basis.z * Look.HP_BAR_FILL_FRONT_TILES
+
+
+## **The 성채's bar, and only that one.** A body's bar is put from `_put_walker` instead, because the
+## drawn TOP of a body exists in exactly one place — the sprite `_put_body` just finished — and
+## `Look.BODY_SPRITE_SCALE` records what re-deriving it off the radius did: the old bar landed across
+## the caveman's face the first time he was on screen.
+##
+## ⚠⚠ **GATED ON `keep_tiles` AND NOT ON `keep_hp`.** A board with no house carries `keep_hp` 0, which
+## is a permanently empty bar standing over nothing — the same floor `Battle`'s own burn check uses.
+func _paint_bars() -> void:
+	if battle == null or battle.keep_tiles.is_empty() or not _keep_roof_known:
+		return
+	_put_bar(_keep_roof + Vector3(0.0, Look.HP_BAR_KEEP_LIFT_PX / Look.TILE_PX, 0.0),
+		_hp_frac(battle.keep_hp, Rules.KEEP_MAX_HP))
+
+
 # --- the beasts' boats, and the riders standing on them ---------------------------------------------
 ## **The sim's boat is a flat point and a landing 조각. Everything below is what the eye is given on top
-## of that** — the bob, the roll, the hull's yaw and eight wolves on the benches. ⚠ **Nothing here is
+## of that** — the bob, the roll, the hull's yaw and four wolves on the benches. ⚠ **Nothing here is
 ## read back by `sim`**, which is the whole of the view seam's rule.
 
-## One instantiated `boat.glb` per live hull. **Pooled and hidden, never freed**, the same rule
+## One instantiated `boat_small.glb` per live hull. **Pooled and hidden, never freed**, the same rule
 ## `_sprite` keeps — and it bites harder here: instantiating a `PackedScene` is a whole scene build, and
 ## doing one per frame per boat is the shape that made the old per-frame node churn expensive.
 var _boats: Array[Node3D] = []
@@ -2350,7 +2544,7 @@ func _boat() -> Node3D:
 		return null
 	# ⚠ **The rim and NOT `_use_vertex_colours`.** The buildings and the scatter are objects standing on
 	# the world and the rim is what separates them from it — a hull on open water needs it more, not
-	# less. But `boat.glb` carries no COLOR_0 attribute at all (its six materials hold their own
+	# less. But `boat_small.glb` carries no COLOR_0 attribute at all (its six materials hold their own
 	# colours), so reading vertex colours as albedo would multiply by nothing and land it white.
 	_outline(made)
 	# ⚠⚠ **AFTER `_outline` AND NEVER BEFORE.** `_outline` walks every `MeshInstance3D` under the node
@@ -2363,7 +2557,7 @@ func _boat() -> Node3D:
 	return made
 
 
-## The name of the node holding one hull's eight deck shadows. ⚠ **The hull owns them and there is no
+## The name of the node holding one hull's four deck shadows. ⚠ **The hull owns them and there is no
 ## second list of them anywhere** — a parallel array indexed by hull would have to be grown, shrunk and
 ## hidden in step with `_boats` by hand.
 const DECK_SHADOWS := "deck_shadows"
@@ -2454,6 +2648,12 @@ func _hide_unused_boats() -> void:
 ##
 ## ⚠ **The riders come out of `_sprite()`**, so this must run inside `_paint_bodies`' pool window — see
 ## the call site.
+##
+## ⚠⚠ **A `GONE` HULL TAKES ITS POOL SLOT AND THEN HIDES, AND SKIPPING THE SLOT IS THE DEFECT.** The
+## pool is handed out in the order this loop asks for it, so a row that asks for nothing shifts every
+## hull after it down one — **the second boat wears the first one's node**, its deck shadows and
+## whatever the last frame left on it. Taking the slot and hiding it keeps `_boats[i]` the hull of boat
+## `i` for as long as the island lasts, which is the same reason `Battle` never erases a hull row.
 func _paint_boats() -> void:
 	_boats_used = 0
 	if battle == null or battle.grid == null:
@@ -2463,6 +2663,12 @@ func _paint_boats() -> void:
 		var hull := _boat()
 		if hull == null:
 			break
+		if int(battle.boat_state[i]) == Battle.BoatState.GONE:
+			# **A cut and not a fade** — the user called the disappearance a game-y allowance, so there
+			# is nothing to shade. ⚠ The deck shadows are children of the hull and go with it; there is
+			# no second list to hide.
+			hull.visible = false
+			continue
 		var centre := _boat_centre(i)
 		# ⚠ **Each hull is one `BOAT_BOB_PHASE_PER_HULL` further along its own bob**, so two boats
 		# sitting off the same island do not rise and fall as one object — see that constant.
@@ -2505,11 +2711,14 @@ func _boat_heading(i: int) -> Vector2:
 
 ## The `rotation.y` that turns the model's bow along `head`.
 ##
-## ⚠⚠ **THE MODEL'S BOW IS +X, MEASURED OFF THE FILE AND NOT GUESSED.** Inside `boat.glb`, `boat_stem`
-## sits at local x = +2.30 and `boat_tail` at x = −2.26, and the hull's bounds run −2.60 .. +2.60 along x
-## against −0.95 .. +0.95 along z: the long axis is X and the sharp end is the positive one. **Godot's
-## own convention is −Z forward**, so a yaw written for that convention would sail every boat broadside
-## on with every position check still green.
+## ⚠⚠ **THE MODEL'S BOW IS +X, MEASURED OFF THE FILE AND NOT GUESSED.** `boat_small.glb` runs
+## −1.50 .. +1.50 along x against −0.75 .. +0.75 along z, so the long axis is X; and **the sharp end is
+## the positive one** — over the last fifth of the hull it is 0.12 조각 wide on the +X side against
+## 0.445 on the −X side. **Godot's own convention is −Z forward**, so a yaw written for that convention
+## would sail every boat broadside on with every position check still green.
+## ⚠ **The hull it arrives on has no named parts** (2026-09-01) — `boat.glb` carried `boat_stem` at
+## x = +2.30 and `boat_tail` at x = −2.26, and `net_boats` read those; on one joined mesh what says
+## which end is sharp is the width there, and that is what the net reads now.
 ##
 ## ⇒ `rotation.y = θ` sends local +X to world `(cos θ, 0, −sin θ)`. A tile-space heading `(hx, hy)` is
 ## world `(hx, 0, hy)`, so `cos θ = hx` and `−sin θ = hy`, which is `θ = atan2(−hy, hx)`.
@@ -2517,7 +2726,7 @@ func _boat_yaw(head: Vector2) -> float:
 	return atan2(-head.y, head.x)
 
 
-## Eight wolves on four benches. **Placed through the hull's own transform**, so the bob and the roll
+## Four wolves on two benches. **Placed through the hull's own transform**, so the bob and the roll
 ## carry them without either being written down twice.
 func _paint_riders(hull: Node3D, i: int, head: Vector2) -> void:
 	# ⚠⚠ **THE WOLF'S OWN ROW, THROUGH THE SAME CALL A BODY ASHORE MAKES** (2026-08-30). The deck had a
@@ -2686,7 +2895,17 @@ func _paint_wake() -> void:
 	# ⚠ **Over the SLOTS and not over the boats.** Past `Look.WAKE_HULLS` there is no block to write
 	# into; a loop over the boats would run off the end of the array the thirteenth time one lands.
 	for h in Look.WAKE_HULLS:
-		if h >= live:
+		# ⚠⚠ **A `GONE` HULL IS OFF THE BOARD AND `live` CANNOT SAY SO** (2026-09-01, seen on screen:
+		# 「사라진 배가 물 위에 자국을 남긴다」). `boat_pos` never shrinks — a row flips to `GONE` and
+		# stays — so the count alone still calls a vanished hull live, and this block kept stamping
+		# its transom. **Both marks come out of this one array**: the contact shadow reads slot 0 and
+		# the trail reads the rest, so the hull disappeared while its black ellipse and its two white
+		# lines sat on the water for the rest of the island. Three of them were floating at 178 초.
+		# ⚠ **Forgotten whole and not aged out.** The user chose a CUT for the hull (티켓 02-04:
+		# 「몇 초 있다가 사라지는 걸로」, cut over fade), and a mark that outlives the thing that made
+		# it is the same fiction the cut was chosen to avoid.
+		var gone := h < live and int(battle.boat_state[h]) == Battle.BoatState.GONE
+		if h >= live or gone:
 			_wake = _wake_forget(_wake, h)
 			_wake_last[h] = -1.0
 			continue

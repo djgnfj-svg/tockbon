@@ -69,7 +69,7 @@ def main():
                    help="walk=tools/pixel/out/full_walk 처럼. 여러 번 줄 수 있다")
     p.add_argument("--height", type=int, default=40, help="최종 캔버스 높이. 기존 짐승들이 전부 40이다")
     p.add_argument("--tint", default="", metavar="REF.PNG",
-                   help="이 그림의 평균 색으로 화이트밸런스를 맞춘다. 보통 assets/beast/wolf_r.png")
+                   help="이 그림의 평균 색으로 화이트밸런스를 맞춘다. 보통 assets/beast/wolf_h/east.png")
     p.add_argument("--no-tint", action="append", default=[], metavar="NAME",
                    help="이 묶음은 화이트밸런스를 건드리지 않는다. 색 기준이 되는 묶음에 쓴다")
     p.add_argument("--dry-run", action="store_true")

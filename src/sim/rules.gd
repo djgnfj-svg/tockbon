@@ -382,6 +382,36 @@ const SWORDSMAN_START_COUNT := 4
 ## costs, and `Army.alive` stays 1 through it.
 const REVIVE_SEC := 20.0
 
+## **How long the 성채 takes to turn out one more 검사.**
+##
+## 2026-09-01, the user: 「일단 병사 뽑는 데 이십 초」. ⚠ **Time is the whole price** — 나무·돌·철·식량
+## appear nowhere in the sim, so there is nothing else to spend, and a resource cost is task 05.
+##
+## ⚠⚠ **IT IS TWENTY AND SO IS `REVIVE_SEC`, AND THEY ARE TWO RULES THAT HAPPEN TO AGREE TODAY.** One is
+## what dying costs, the other is what growing costs. **Neither may be written as the other**: pointed
+## at one another, the day either is retuned both would move and nothing would say so.
+const MUSTER_PERIOD_SEC := 20.0
+
+## **How many 검사 a run may hold at once — the ceiling on the doorstep.**
+##
+## 2026-09-01, the user: 「천장 아홉 개」. ⚠ **It was already their word on 2026-08-31** (「병사 아홉 개가
+## 최대일 거 같아」) and the builder proposed twelve without reading it back: 「아홉 개로 했었는데 왜 갑자기
+## 열둘이 될지 아홉 개」.
+##
+## ⚠⚠ **IT IS NINE AND SO IS `BLOCK_CAPACITY`, AND THEY ARE DIFFERENT QUESTIONS.** `BLOCK_CAPACITY` is
+## how many bodies stand on ONE 블록; this is how many 검사 exist at all. At the ceiling every one of
+## them could stand on a single 블록, and **that coincidence is not a rule** — do not write either as
+## the other.
+const MUSTER_CAP := 9
+
+## Which summon slot the doorstep turns bodies out of.
+##
+## ⚠⚠ **THE BUILDER PICKED THIS AND THE USER DID NOT.** 티켓 02-09 settles 「이번엔 성채 하나만」 and
+## `START_SLOTS` carries exactly one row, so there is nothing to choose between today — and a 성채 that
+## picked among slots on its own would be choosing a species nobody asked it to choose. **The day a
+## second slot is fielded this is the line that has to be answered rather than defaulted.**
+const MUSTER_SLOT := 0
+
 ## **What the 성채 can take before the run is lost.**
 ##
 ## ⚠ **Chosen by the builder, not by the user and not by play** (2026-08-30). The arithmetic it was
@@ -390,7 +420,18 @@ const REVIVE_SEC := 20.0
 ## undefended boat**, and `BOAT_INTERVAL_SEC` is thirty. **A single boat that walks in unopposed must
 ## not end the run, and two must.** ⚠ It is a literal and not that product: retuning the 늑대 must not
 ## silently move the 성채's health.
-const KEEP_MAX_HP := 240.0
+##
+## ⚠⚠ **240 -> 120 ON 2026-09-01, BECAUSE THE BOATLOAD HALVED AND THIS NUMBER IS DERIVED FROM IT**
+## (the user: 「내려」, choosing to lower it rather than accept 「one boat alone cannot lose you the run」
+## as a new rule). **240 was fifteen seconds of one undefended boat at `BOAT_CAPACITY` 8.** At four the
+## same arithmetic gave **thirty seconds — exactly `BOAT_INTERVAL_SEC`**, so one boat walking in
+## unopposed stopped ending the run and `net_fight` went red on it. **120 restores the fifteen seconds
+## the old value was chosen to produce**, so the rule the number exists for survives the hull swap.
+##
+## ⚠ **It is still a literal and not that product.** The arithmetic above is what CHOSE it, twice now;
+## retuning the 늑대 must not silently move the 성채's health. **The day `BOAT_CAPACITY` moves again,
+## this is read again by hand.**
+const KEEP_MAX_HP := 120.0
 
 # --- The summon slots ------------------------------------------------------------------------------
 ## 번호키가 드는 칸. **칸은 회차 상태다** (`Army.slots`) — 상수가 아니다.
@@ -540,6 +581,19 @@ const BOAT_FIRST_SEC := 5.0
 ## And every one after it. **「일정하게」** — random timing is a later round's, so this is one number
 ## and not a band.
 const BOAT_INTERVAL_SEC := 30.0
+## **How long an emptied hull sits off its beach before it stops being there**, in seconds.
+##
+## ⚠⚠ **IT REVERSES 「배는 쌓인다」, WHICH WAS A DELIBERATE LINE AND NOT AN OVERSIGHT** (2026-09-01, the
+## user: 「the boat should just arrive, sit for a few seconds and then disappear — call it a game-y
+## allowance」). **The hull does not sail back out.** It arrives, unloads, waits this long and is gone,
+## and the user named the disappearance an allowance rather than a fiction that has to hold up — so
+## there is no return leg to write and no fade to shade. **It is a cut.**
+##
+## ⚠ **Three against thirty is the whole of why it is three**: a boat comes every `BOAT_INTERVAL_SEC`,
+## so this is long enough to watch the unloading and still leaves the water clear before the next hull
+## is anywhere near the shore. ⚠⚠ **Two hulls are no longer on the water at the same time**, which is
+## a claim about the SCREEN that was true every round until this one.
+const BOAT_LINGER_SEC := 3.0
 ## 조각 per second.
 ##
 ## ⚠⚠ **1.2 IS CHOSEN AND NOT MEASURED, AND 4.0 — WHICH WAS MEASURED — IS DELIBERATELY OVERRIDDEN.**
@@ -564,26 +618,29 @@ const BOAT_SPEED_TILES := 1.2
 ## ⚠ **Do not shrink this to bring the boat into the opening frame.** That is the change the design
 ## just refused, and it also deletes the room the pan exists to cross.
 const BOAT_START_DIST_TILES := 24.0
-## **How long the hull is, from its origin to its bow, in 조각.** Measured off `assets/props/boat.glb`:
-## the mesh runs x from -2.10 to +2.10 with the origin dead centre, so the bow is **2.10 조각** out.
+## **How long the hull is, from its origin to its bow, in 조각.** Measured off
+## `assets/props/boat_small.glb`: the rim runs x from -1.50 to +1.50 with the origin dead centre, so the
+## bow is **1.50 조각** out.
 ##
 ## ⚠⚠ **IT IS A RULE AND NOT A PICTURE, BECAUSE IT DECIDES WHERE A BOAT STOPS.** Everything else about
 ## the hull — its colours, its sail, its bob — is `look.gd`'s. This one number is where the sim has to
 ## stop it, so it lives with the stopping rule. ⚠ **`net_boats` reads it back off the mesh's own AABB**,
 ## which is what stops it being a second copy of the model.
 ##
-## ⚠⚠ **2.6 -> 2.1 (2026-08-31), and the MESH moved first** (the user at the screen: 「the boat is too
-## big, cut the useless part of it right down and make the monsters stand out」). **The benches span
-## 3.00 조각 and the hull was 5.20** — the other 2.20 was bow and stern carrying nobody. **Nothing that
-## carries a wolf moved**: `Look.BOAT_DECK_SLOTS` is byte-for-byte what it was.
-## ⚠ **The beam did NOT move** — 2.01 조각 still, so a boat that fitted a beach on its width still does.
-## ⚠⚠ **THE STANDOFF SHRANK WITH IT.** `BOAT_STANDOFF_TILES` is this plus the beach gap, so every boat
-## now stops **half a 조각 closer to the sand** than it did. That is a change to where eight wolves are
-## put down, not just to how the hull looks, and it is the half of this edit worth watching on screen.
-const BOAT_HULL_HALF_TILES := 2.1
+## ⚠⚠ **2.1 -> 1.5 (2026-09-01), AND THIS TIME IT IS A DIFFERENT MODEL AND NOT A TRIMMED ONE** (the
+## user: 「일단 오는 걸 작은 배에 있는 늑대 네 마리로 교체하고 큰 배는 나중으로 미루긴 해야 될 듯」 —
+## *"for now swap what arrives to the small boat with four 늑대 on it, and the big boat has to be put
+## off till later — it is not used yet"*). The 2.6 -> 2.1 of 2026-08-31 was `boat.glb` shrinking and
+## **nothing that carried a wolf moved**; this swaps the hull, so `Look.BOAT_DECK_SLOTS` had to be read
+## off the new mesh's own benches rather than trimmed.
+## ⚠ **The beam moved too this time** — see below.
+## ⚠⚠ **THE STANDOFF SHRANK AGAIN WITH IT.** `BOAT_STANDOFF_TILES` is this plus the beach gap, so every
+## boat now stops **0.6 조각 closer to the sand** than the big hull did. That is a change to where the
+## 늑대 are put down, not just to how the hull looks, and it is the half of this edit worth watching.
+const BOAT_HULL_HALF_TILES := 1.5
 
-## **How wide the hull is at its widest, in 조각.** Measured off `assets/props/boat.glb`: the rim runs z
-## from -1.005 to +1.005, so the beam is **2.01 조각** and the half-beam is 1.005.
+## **How wide the hull is at its widest, in 조각.** Measured off `assets/props/boat_small.glb`: the rim
+## runs z from -0.75 to +0.75, so the beam is **1.50 조각** and the half-beam is 0.75.
 ##
 ## ⚠⚠ **IT EXISTS BECAUSE A BOAT IS NOT A POINT AND FOUR ARRIVALS IN FIVE PROVED IT** (2026-08-30, seen
 ## on screen at the five worst beaches). A stop that clears the shore along the hull's own centre line
@@ -592,7 +649,12 @@ const BOAT_HULL_HALF_TILES := 2.1
 ## the eight straight ones looked clean. ⚠ **The one that only grazed met an OUTER corner tip-first** —
 ## the shape of the shore decides which part of the hull arrives first, and only a footprint sees that.
 ## ⚠ `net_boats` reads it back off the mesh's own box, like the half-length.
-const BOAT_HULL_BEAM_TILES := 2.01
+##
+## ⚠⚠ **2.01 -> 1.50 (2026-09-01) WITH THE HULL SWAP.** The small boat is narrower as well as shorter,
+## so the shoulder sweep is 0.255 조각 shallower on each side and a beach that only just admitted the
+## big hull on its width now has room to spare. **That widens the beach ring rather than narrowing it**,
+## which is the direction that adds landing places rather than losing them.
+const BOAT_HULL_BEAM_TILES := 1.5
 
 ## **How much open water is left between the hull and the shore, in 조각.**
 ##
@@ -611,9 +673,19 @@ const BOAT_BEACH_GAP_TILES := 0.6
 ## the crossing, which is the thing worth watching.
 ## ⚠ **Derived, so it cannot fall under the boat's own length again.** See the two above.
 const BOAT_STANDOFF_TILES := BOAT_HULL_HALF_TILES + BOAT_BEACH_GAP_TILES
-## How many ride one boat. ⚠ **Decided, not tuned** (티켓 41: 「한 배에 몇 — 여덟」). Four benches, two
-## each, and `Look.BOAT_DECK_SLOTS` is what puts them on the deck.
-const BOAT_CAPACITY := 8
+## How many ride one boat. ⚠ **Decided, not tuned.** **Two benches, two each**, and
+## `Look.BOAT_DECK_SLOTS` is what puts them on the deck.
+##
+## ⚠⚠ **EIGHT -> FOUR (2026-09-01), BECAUSE THE HULL WAS SWAPPED AND NOT BECAUSE THE FIGHT WAS TUNED**
+## (the user: 「일단 오는 걸 작은 배에 있는 늑대 네 마리로 교체하고 ...」). 티켓 41's 「한 배에 몇 —
+## 여덟」 was decided against `boat.glb`, which is no longer what arrives.
+## ⚠⚠ **THE CLOCK DID NOT MOVE WITH IT** (2026-09-01, the user taking the recommendation: 「이 위에
+## 열여섯 개 물어봤던 거 다 추천대로 좀 해줘」). `BOAT_FIRST_SEC` and `BOAT_INTERVAL_SEC` are
+## byte-for-byte what they were, **so that a board that got easier says which of the two made it so.**
+## ⚠ **`KEEP_MAX_HP` MOVED WITH IT, 240 -> 120** — the user's call the same day, so that one boat
+## ignored still ends the run. **It is the one number that followed the hull; the clock did not.**
+## Read that constant, where the whole of it is written down.
+const BOAT_CAPACITY := 4
 
 ## **Which row of `UNITS` walks off a boat.** ⚠ **Decided, not tuned** (티켓 41: 「무엇이 타고 오나 —
 ## 늑대. 확정」). It is a constant and not a literal at the landing, because the deck pictures, the

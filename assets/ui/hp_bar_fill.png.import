@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dwycmnk5152od"
-path="res://.godot/imported/wolf_walk_3_l.png-913bcdc9f6a369a4bf2aafb5028791a1.ctex"
+uid="uid://ctrv7seq4tuhi"
+path="res://.godot/imported/hp_bar_fill.png-540aeeb8f0c7016b20cf02aacc63ffa2.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/beast/wolf_walk_3_l.png"
-dest_files=["res://.godot/imported/wolf_walk_3_l.png-913bcdc9f6a369a4bf2aafb5028791a1.ctex"]
+source_file="res://assets/ui/hp_bar_fill.png"
+dest_files=["res://.godot/imported/hp_bar_fill.png-540aeeb8f0c7016b20cf02aacc63ffa2.ctex"]
 
 [params]
 

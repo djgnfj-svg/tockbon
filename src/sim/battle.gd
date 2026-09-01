@@ -34,12 +34,15 @@ enum SoldierState { RESERVE, ASHORE, DEAD }
 
 ## Where one of the beasts' boats is in its crossing.
 ##
-## ⚠⚠ **THERE IS NO `RETURNING` AND NO `SPENT`, AND THAT IS THIS ROUND'S SCOPE AND NOT AN OVERSIGHT.**
-## The old player-side boat sailed back to its harbour and was freed; **an ARRIVED boat here never
-## leaves**, so by the second interval two of them sit off different shores. 티켓 41: 「배는 쌓인다.
-## 그것은 원한 것이지 결함이 아니다」. **An enum member no code path can enter is a slot a future writer
-## fills by accident** — the reason `TRANSIT` and `LOADED` were both deleted before this.
-enum BoatState { SAILING, ARRIVED }
+## ⚠⚠ **THERE IS STILL NO `RETURNING`, AND `GONE` IS NOT ONE.** 티켓 41's 「배는 쌓인다. 그것은 원한
+## 것이지 결함이 아니다」 was reversed by the user on 2026-09-01 — a hull that has put its 늑대 on the
+## beach waits `Rules.BOAT_LINGER_SEC` and then **stops being there, in one step, without sailing
+## anywhere.** There is no leg back to the horizon to travel and no position to move along it.
+##
+## ⚠⚠ **ALL THREE ARE ENTERED, WHICH IS THE ONLY REASON `GONE` IS ALLOWED TO EXIST.** `_phase_boats`
+## writes every one of them. **An enum member no code path can enter is a slot a future writer fills by
+## accident** — the reason `TRANSIT` and `LOADED` were both deleted before this.
+enum BoatState { SAILING, ARRIVED, GONE }
 
 ## ⚠⚠ **`Event` STOOD HERE AND IT IS DELETED** (2026-08-29) with the fight, and it is NOT coming back
 ## with it. It was ATTACK · DEATH · LAND, an enum and never a string — `Battle.Event.ATTAK` is a parse
@@ -186,6 +189,15 @@ var keep_hp := 0.0
 ## here off `keep_tiles`, which is **two answers to 「where does a 검사 appear」** — and they would have
 ## disagreed the first time the 성채 moved off level ground, one body on the plateau and one below it.
 var muster_tile := -1
+## **Seconds until the 성채 turns out one more 검사.** Reset to `Rules.MUSTER_PERIOD_SEC` by a recruit
+## that actually landed, and by nothing else.
+##
+## ⚠⚠ **IT IS CLAMPED AT ZERO AND HELD FULL AT THE CEILING, AND THOSE ARE TWO DIFFERENT REFUSALS.**
+## A doorstep with nowhere free leaves this at zero and asks again next sub-step — one body pending,
+## never a queue. **At the ceiling it does not run at all**: counted to zero and parked there, the
+## roster would bank a body the moment the ceiling ever moved, and 「천장 아홉」 would be a delay rather
+## than a limit.
+var muster_left := 0.0
 ## **The island's verdict, and this week there is exactly one.** 티켓 41: 「이기는 조건 — 이번 주에
 ## 없다」, so there is no `Outcome` enum and no WON. ⚠ **A one-member enum every reader compares against
 ## is a branch that always takes the same arm**, which is the shape `Run` was caught carrying twice.
@@ -211,9 +223,10 @@ var substeps := 0
 ## that motion is `look.gd`'s — a net driving this file must not be able to see it. Height at sea is
 ## presentation all the way down: nothing about a crossing is decided by it.
 ##
-## ⚠ **They pile up on purpose.** Nothing removes a boat this round, so these arrays only ever grow
-## across one island. The day a boat unloads and leaves, that is a state on `boat_state` and not an
-## erase — an erase renumbers every index the view is holding.
+## ⚠⚠ **A HULL LEAVES BY FLIPPING TO `GONE` AND NOTHING IS EVER ERASED**, so these arrays only ever
+## grow across one island — exactly the contract `enemy_alive` and `Army.alive` keep, and for the same
+## reason: **an index is an identity** and the view holds indices. An erase renumbers every one of them,
+## and the second boat would wear the first one's hull, its trail and its bob.
 var boat_pos: Array = []                  # Vector2, tile units, tile centres on integers
 ## The 조각 each boat is aimed at — always a member of `grid.beach_ring`.
 var boat_beach := PackedInt32Array()
@@ -231,6 +244,9 @@ var boat_state := PackedInt32Array()      # BoatState
 ## until it steps off, and `_phase_landings` is what turns one into a row of the beast columns. **It
 ## only ever goes down**, and a hull that reaches 0 keeps sitting where it stopped.
 var boat_riders := PackedInt32Array()
+## **How long each ARRIVED hull still has before it is gone**, in seconds. Meaningless while a hull is
+## SAILING — `_phase_boats` writes it at the arrival flip and nowhere else reads it before then.
+var boat_linger := PackedFloat32Array()
 
 ## Where in `grid.beach_ring` the NEXT boat's 조각 comes from, already taken modulo the ring size.
 ## ⚠ **`Rules.beach_stride_for` is what advances it** — see that function for why the stride is derived
@@ -277,6 +293,7 @@ func setup(grid: Grid, army: Army, spawns: Array,
 	boat_stop = []
 	boat_state = PackedInt32Array()
 	boat_riders = PackedInt32Array()
+	boat_linger = PackedFloat32Array()
 	_beach_cursor = 0
 	_boats_launched = 0
 
@@ -294,6 +311,11 @@ func setup(grid: Grid, army: Army, spawns: Array,
 	keep_tiles = keep
 	muster_tile = muster
 	keep_hp = 0.0 if keep.is_empty() else Rules.KEEP_MAX_HP
+	# Every time, for the same reason `_substep_acc` is: a reused `Battle` carrying the previous
+	# island's clock would open the next one with a 검사 half turned out.
+	# ⚠ **A FULL period and not zero** — an island that opened at zero would hand out a body on its
+	# first sub-step, and the opening roster is `add_starting_force`'s to decide, not the doorstep's.
+	muster_left = Rules.MUSTER_PERIOD_SEC
 
 	if grid == null or grid.w <= 0 or grid.h <= 0:
 		# Not swallowed: a battle on an unloaded grid has no tiles, so every unit would stand still
@@ -564,6 +586,73 @@ func stand_at_keep(soldier_id: int) -> int:
 	return place_ashore(soldier_id, muster_tile)
 
 
+## **How many 검사 the run still has** — a body waiting out `Rules.REVIVE_SEC` included, because he is
+## coming back and the ceiling has to count him.
+##
+## ⚠ **Not `army.type_id.size()`**: that is the roster's history and never shrinks (see `Army`'s header
+## — a dead row is never removed), so a body killed for good would keep occupying one of the nine.
+func living_soldier_count() -> int:
+	if army == null:
+		return 0
+	var n := 0
+	for i in army.alive.size():
+		if army.alive[i] != 0:
+			n += 1
+	return n
+
+
+## **Turns out one more 검사 at the 성채's doorstep, mid-island.** Returns his roster id, or **-1 with
+## nothing at all changed** — not a row on the roster, not an element on any column.
+##
+## Refused when: there is no board · there is no doorstep · the run already holds `Rules.MUSTER_CAP`
+## 검사 · the slot fields nobody · **there is nowhere beside the 성채 to stand.**
+##
+## ⚠⚠ **THE FREE-TILE SEARCH RUNS BEFORE ANYTHING IS APPENDED, AND THAT ORDER IS THE REFUSAL.** `Army`
+## rows are identities and are never removed (its header says so), so a row appended and then found
+## nowhere to stand could not be taken back: it would sit RESERVE, invisible, counted against the
+## ceiling, for the rest of the run. **Ask first, append second.**
+##
+## ⚠⚠ **EVERY COLUMN THIS FILE INDEXES BY SOLDIER GROWS HERE, AND `setup` IS THE LIST.** A column left
+## short is not a wrong number, it is an out-of-range read on the first sub-step that touches the new
+## body — and the roster row would already exist.
+##
+## ⚠ **The 성채's own 블록 admits eight, not `Rules.BLOCK_CAPACITY`**: `setup` fills the house's 조각
+## whole, so the search walks outward past it and the ninth body stands further out rather than not
+## standing. **`net_fight` measures that rather than assuming it.**
+func recruit(slot: int) -> int:
+	if grid == null or army == null:
+		return -1
+	if muster_tile < 0:
+		return -1
+	if living_soldier_count() >= Rules.MUSTER_CAP:
+		return -1
+	if _free_tiles_from(muster_tile, 1).is_empty():
+		return -1
+	var id := army.recruit(slot)
+	if id < 0:
+		return -1
+	# ⚠ **RESERVE and empty, exactly as `setup` opens a row** — `place_ashore` refuses anything that is
+	# not RESERVE, and it is the one writer of a full HP bar. A body born ASHORE here would stand with
+	# no 조각 reserved and no position.
+	soldier_state.append(SoldierState.RESERVE)
+	soldier_order.append(-1)
+	_soldier_stale.append(0)
+	soldier_hp.append(0.0)
+	soldier_target.append(TARGET_NONE)
+	soldier_cool.append(0.0)
+	soldier_revive.append(0.0)
+	soldier_pos.append(OFFMAP)
+	_soldier_goal.append(OFFMAP)
+	_soldier_path.append(PackedInt32Array())
+	_soldier_path_i.append(0)
+	# The search above already answered 「there is room」, so this cannot refuse. **Not assumed
+	# silently**: a body left RESERVE here is on the roster, counted, and never on the board — the one
+	# outcome this function's whole ordering exists to make impossible.
+	if stand_at_keep(id) < 0:
+		push_error("battle.recruit: 자리를 찾아 놓고 못 세웠다 — 뽑기와 배치가 서로 다른 것을 묻고 있다")
+	return id
+
+
 ## **Puts one beast on the island at the nearest free 조각 to `near_tile`.** Returns its index, or -1
 ## when there is nowhere to stand. ⚠ **The index is an identity for the rest of the island** — rows are
 ## never removed, see the column block above.
@@ -648,15 +737,36 @@ func living_enemy_ids() -> Array:
 	return out
 
 
-## **How far `p` is from the nearest 조각 of the 성채, height included.** `INF` for a board with none.
+## **How far `p` is from the nearest 조각 of the 성채 a body standing there may actually strike, height
+## included.** `INF` for a board with none — and `INF` now also for a body the 눈금 rule shuts out.
 ##
 ## ⚠⚠ **THE NEAREST 조각 AND NOT THE LOW CORNER.** A house is a footprint, and a reach measured to one
 ## corner lets a body stand against the far wall swinging at nothing — the same 「a mean is not a place
 ## anybody stands」 trap `_dist`'s own header records.
+##
+## ⚠⚠ **A 조각 OUT OF THE STRIKER'S 눈금 REACH IS SKIPPED, NOT MEASURED FARTHER** (2026-09-01, the user
+## on what stops the 성채 burning from 눈금 0). The house stands on 눈금 2 and every flat 조각 hugging
+## the plateau is 1.414 away from it — inside a 늑대's reach, so **all eight of them burned it without
+## anything ever climbing**, and a board where the 계단 can be walked past is a board with no reason to
+## defend anything. ⚠ **It is not that height was ignored**: `_dist` squares the rise in and reports
+## 1.414 correctly. **The reach is simply longer than that**, and `Grid.can_strike` carries why the
+## fix cannot be the reach number.
+##
+## ⚠⚠ **SKIPPING AND NOT RETURNING EARLY.** The 성채 covers four 조각 at possibly different 눈금, so a
+## body may be shut out of the near one and still be level with the far one. **Asking the footprint as
+## a whole would answer for a 조각 nobody is beside.**
+##
+## ⚠ **Both readers get the change from here.** `_phase_targeting` chooses the 성채 through this and
+## `_phase_attacks` re-checks the blow through it, so choosing and landing cannot disagree.
 func keep_gap(p: Vector2) -> float:
+	var from_tile := _tile_of(p)
+	if from_tile < 0:
+		return INF
 	var best := INF
 	for k in keep_tiles.size():
 		var tile := int(keep_tiles[k])
+		if not grid.can_strike(from_tile, tile):
+			continue
 		best = minf(best, _dist(p, _point_of_tile(tile)))
 	return best
 
@@ -724,10 +834,17 @@ func _phase_orders(dt: float) -> void:
 ## ⚠ **The step is clamped to what is left, never overshot.** The old crossing tested arrival on the arc
 ## length rather than on proximity, and a hull that overshot its beach unloaded anyway; a clamp cannot
 ## overshoot, so there is no second arrival test to keep in step with the movement.
+##
+## ⚠⚠ **AND AN EMPTIED HULL COUNTS ITSELF OUT.** `Rules.BOAT_LINGER_SEC` is the wait; at the end of it
+## the hull flips to `GONE` where it stands. **Nothing moves and nothing is erased** — see `boat_pos`.
 func _phase_boats(dt: float) -> void:
 	var step_len := Rules.BOAT_SPEED_TILES * dt
 	for i in boat_pos.size():
-		if int(boat_state[i]) != BoatState.SAILING:
+		var state := int(boat_state[i])
+		if state == BoatState.ARRIVED:
+			_count_out(i, dt)
+			continue
+		if state != BoatState.SAILING:
 			continue
 		var stop: Vector2 = boat_stop[i]
 		var here: Vector2 = boat_pos[i]
@@ -735,9 +852,31 @@ func _phase_boats(dt: float) -> void:
 		if left <= step_len:
 			boat_pos[i] = stop
 			boat_state[i] = BoatState.ARRIVED
+			# Opened here and nowhere else, so 「three seconds」 is three seconds of SITTING and not
+			# three seconds that started somewhere out at sea.
+			boat_linger[i] = Rules.BOAT_LINGER_SEC
 			continue
 		boat_pos[i] = here + (stop - here) / left * step_len
 	_launch_if_due()
+
+
+## One ARRIVED hull's wait, one sub-step of it.
+##
+## ⚠⚠ **THE CLOCK DOES NOT RUN WHILE ANYBODY IS STILL ABOARD, AND WITHOUT THAT THE WAIT IS A LEAK.**
+## `_phase_landings` unloads a full deck in one sub-step **only when the beach has room for it** — it
+## walks over occupied 조각 and takes what is free, so a crowded shore unloads over several sub-steps
+## and a shore with nothing free at all unloads nobody. A hull that timed out in the middle of that
+## would take the rest of its 늑대 with it: eight riders paid for, five delivered, **and the count that
+## would show it is the one that just disappeared.** ⇒ the wait measures an EMPTY deck sitting there.
+func _count_out(i: int, dt: float) -> void:
+	if int(boat_riders[i]) > 0:
+		return
+	var left := float(boat_linger[i]) - dt
+	if left <= 0.0:
+		boat_linger[i] = 0.0
+		boat_state[i] = BoatState.GONE
+		return
+	boat_linger[i] = left
 
 
 ## Births one boat when the clock has reached the next launch.
@@ -798,6 +937,9 @@ func _launch_if_due() -> void:
 	boat_stop.append(centre + out * stop_d)
 	boat_state.append(BoatState.SAILING)
 	boat_riders.append(Rules.BOAT_CAPACITY)
+	# ⚠ **0 and not the wait.** A hull at sea has no wait left to spend; the number it will spend is
+	# written the moment it stops, so there is exactly one place the wait is opened from.
+	boat_linger.append(0.0)
 
 
 ## **An arrived boat puts its riders on the beach.**
@@ -810,8 +952,11 @@ func _launch_if_due() -> void:
 ## walks over occupied 조각 and collects free ones, so a crowded shore unloads over several sub-steps;
 ## a beach with nothing free at all keeps its riders, and they come off when something moves.
 ##
-## ⚠ **An emptied boat is not removed.** Nothing erases a hull this round — 티켓 41: 「배는 쌓인다」 —
-## and an erase would renumber every index the view is holding.
+## ⚠⚠ **ONLY AN `ARRIVED` HULL UNLOADS, WHICH IS WHAT REFUSES A `GONE` ONE.** A hull that has counted
+## itself out is not a hull that is still standing off the beach with a deck to walk down; landing off
+## one would put 늑대 ashore out of nothing the frame after the picture said the boat was no longer
+## there. ⚠ **Written as `!= ARRIVED` and not as `== GONE`**, so a fourth state cannot land bodies by
+## default the day somebody adds one.
 func _phase_landings() -> void:
 	for i in boat_pos.size():
 		if int(boat_state[i]) != BoatState.ARRIVED:
@@ -1028,7 +1173,12 @@ func _phase_deaths() -> void:
 				enemy_target[e2] = TARGET_NONE
 
 
-## **A dead 검사 counts down and stands again at the 성채.**
+## **A dead 검사 counts down and stands again at the 성채 — and the 성채 turns out new ones.**
+##
+## ⚠⚠ **TWO CLOCKS' WORTH OF RULE IN ONE PHASE, ON PURPOSE.** Both events put a body on the doorstep
+## through `stand_at_keep`, both are counted in `Rules.SIM_SUBSTEP_SEC`, and a second phase would be a
+## second place that decides who is standing beside the house. ⚠ **`Rules.REVIVE_SEC` and
+## `Rules.MUSTER_PERIOD_SEC` are still two numbers** and neither is written as the other.
 ##
 ## ⚠⚠ **「죽으면 영영 죽는다」 WAS OVERTURNED 2026-08-30** — the user weighed both and chose revival.
 ## **Death is a loss of TIME now**, and `Rules.REVIVE_SEC` is the whole of what it costs.
@@ -1052,6 +1202,25 @@ func _phase_muster(dt: float) -> void:
 		soldier_state[i] = SoldierState.RESERVE
 		if stand_at_keep(i) < 0:
 			soldier_state[i] = SoldierState.DEAD
+
+	# --- and the 성채 turns out a NEW one ------------------------------------------------------------
+	# ⚠⚠ **AFTER THE LOOP AND NEVER INSIDE IT.** `recruit` appends a row to every column this function
+	# has just been walking; appending mid-loop is the shape that skips a row or visits one twice.
+	# ⚠ **The same phase and not a new one, because it is the same clock**: a countdown of its own
+	# stepped anywhere else would be a second clock, and the seams between two clocks are where this
+	# project's defects have come from.
+	if living_soldier_count() >= Rules.MUSTER_CAP:
+		muster_left = Rules.MUSTER_PERIOD_SEC
+		return
+	muster_left = maxf(muster_left - dt, 0.0)
+	if muster_left > Rules.EPS:
+		return
+	# ⚠ **Nowhere to stand is a retry, not a spend** — the clock stays at zero and asks again next
+	# sub-step, the same answer a revival gets. Resetting it here instead would make the ceiling
+	# 「however many happen to fit」 with nothing on screen to say so.
+	if recruit(Rules.MUSTER_SLOT) < 0:
+		return
+	muster_left = Rules.MUSTER_PERIOD_SEC
 ## --- THE SHOVE AND THE CHARGE: DELETED 2026-08-27 --------------------------------------------------
 ## `_shove_victims`, `_shove` and the `_charged` column are gone with `Rules.SPECIES_SHOVE`. The table
 ## had been `[]` since 2026-08-26: its two rows were 다람쥐's pull and 소's charge, and both species

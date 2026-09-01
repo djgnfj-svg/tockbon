@@ -157,19 +157,21 @@ func _setup_on_the_real_island(t) -> void:
 	var rows := Islands.rows()
 	var g := Grid.new()
 	g.load_rows(rows)
-	t.eq(g.w, 26, "섬이 26칸 폭으로 실렸다 (자가 점검)")
-	t.eq(g.h, 20, "높이는 20칸이다 (자가 점검)")
+	# ⚠⚠ **FIVE ROWS ARE DELETED HERE AND NOTHING REPLACES THEM** (02-08, 2026-09-01, the user:
+	# 「about the stale tests — I asked you to delete them, not fit them to the current island」). They
+	# were 26 x 20 hand literals and the island loads 30 x 26:
+	#  · 「섬이 26칸 폭으로 실렸다」 / 「높이는 20칸이다」 — the fixture's own size self-check
+	#  · 「field_view 가 격자에게 크기를 묻는다」 (26, 20) — **the capability's exact answer**
+	#  · 「섬의 서베이가 0.87912 다」 — the opening zoom's value, `1280 / 1456`
+	#  · 「setup 뒤 cam_px 가 (-208.00, -237.07) 이다」 — where `_clamp_cam` centres both axes
+	# ⚠ **The capability itself is still measured** by the pair below: the view answers something other
+	# than the `Look.GRID_W` default, so it is reading the grid. **What went is every number** — the
+	# survey's value, the clamp's resting point, and the board's size.
 	var b := Battle.new()
 	b.setup(g, army, [])
 
 	var fv := _fv()
 	fv.setup(b, army, rows)
-	t.eq(fv._map_tiles(), Vector2i(26, 20), "field_view 가 격자에게 크기를 묻는다")
-	t.ok(absf(fv.zoom - 0.87912) < 0.001,
-		"섬의 서베이가 0.87912 다 (1280 / 1456, 손 산수) — 얻은 값 %.5f" % fv.zoom)
-	t.ok(fv.cam_px.distance_to(Vector2(-208.0, -237.07)) < 0.1,
-		"setup 뒤 cam_px 가 (-208.00, -237.07) 이다 — 두 축 다 가운데 맞춤이다 (%.2f, %.2f)"
-			% [fv.cam_px.x, fv.cam_px.y])
 
 	# The self-check that makes those numbers a claim: `Look.GRID_W` is still 48, and a view that read
 	# the constant instead of the grid would have answered `ZOOM_MIN` and (-320.00, -480.12) — the
@@ -698,7 +700,12 @@ func _both_ends_of_the_three_constants(t) -> void:
 	t.ok(Look.ZOOM_MIN <= 0.50 + 1e-6, "ZOOM_MIN 은 0.50 이하다 — 넘으면 섬 위아래 여백이 사라진다")
 	t.ok(Look.ZOOM_MIN >= 0.4 - 1e-6, "ZOOM_MIN 은 0.4 이상이다 — 못 미치면 작은 몸이 읽히지 않는 크기로 준다")
 	t.ok(Look.ZOOM_MAX >= 1.0 - 1e-6, "ZOOM_MAX 는 1.0 이상이다 — 오늘의 스케일을 잃으면 안 된다")
-	t.ok(Look.ZOOM_MAX <= 1.5 + 1e-6, "ZOOM_MAX 는 1.5 이하다")
+	# ⚠⚠ **THE CEILING ROW 「ZOOM_MAX 는 1.5 이하다」 IS DELETED** (02-08). The user raised `ZOOM_MAX`
+	# from 1.0 to 2.2 on 2026-08-26 (「좀 더 확대할 수 있어야 하고」) because the island became an
+	# authored mesh with detail that only exists above the old line — **so the row was pinning a
+	# ceiling the user had already decided against**, not catching a defect.
+	# ⚠ **What stopped being measured: there is no upper bound on the wheel's ceiling any more.** A
+	# `ZOOM_MAX` of 50 passes this file.
 	t.ok(Look.ZOOM_STEP > 1.05, "ZOOM_STEP 은 1.05 보다 커야 한 노치가 뭔가 바뀐다")
 	t.ok(Look.ZOOM_STEP < 1.4, "ZOOM_STEP 은 1.4 보다 작아야 두 노치가 범위를 못 건너뛴다")
 	# The tilt's own pair, because `tilt_by` clamps into them and the clamp rows above read them.

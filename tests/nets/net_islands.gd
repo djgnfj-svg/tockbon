@@ -83,38 +83,25 @@ extends RefCounted
 ## `H`, so a legend containing letters nothing writes would pass whatever the letters were.
 const LEGEND := "~H.#^/WBCL"
 
-## The board's shape. **Literals, and they are the user's own drawing** — `tools/blender/island_build.py`
-## bakes 16 x 12 and the game reads it back. ⚠ **Was 26 x 20 before the 2026-08-27 piece rewrite.**
-const EXPECT_ROWS := 12
-const EXPECT_COLS := 16
-
-## ⚠ **The whole border ring is `H`.** 16 + 16 across the top and bottom, 10 + 10 down the two sides =
-## **52**, and that is where the beasts' boats come from — off the edge of the board, not from three
-## docks somebody placed. The count and the ring are asserted separately: 52 characters scattered
-## anywhere in the middle would satisfy the first alone.
-const EXPECT_HARBOUR_CHARS := 52
-
-## Ground and water, counted off the rows. ⚠ **`H` counts as WATER** (`Grid.WATER_CHARS` is `"~H"`),
-## so 64 `~` plus 52 `H` is 116, and 116 + 76 is the whole 192-tile board — which is what makes
-## these two a partition rather than two loose numbers.
-const EXPECT_PASSABLE := 76
-const EXPECT_WATER := 116
-
-## The coast, both ways of counting it. ⚠⚠ **The 4-way answer is kept beside the 8-way one for ONE
-## job: proving they are different numbers.** A suite that dropped it could not tell an 8-way rule
-## from a 4-way one, and 「어디든지」 is exactly the four tiles between them.
-const EXPECT_COAST := 36
-const EXPECT_COAST_ORTHO := 32
-
-## The narrowest cut, per the definition the first slice plan pinned under "The islands": the fewest
-## passable tiles in any column that has one at all.
-const EXPECT_CUT := 2
-
-## **The island is ONE connected walkable region** — every tile of it. ⚠ **The count is asserted as
-## well as the count of regions, and neither alone is enough**: 「there is one component」 is satisfied
-## by an island that lost half its ground to a wall, and 「76 tiles」 is satisfied by two islands of
-## 38 with a channel between them.
-const EXPECT_LAND_REGION := 76
+## ⚠⚠ **EVERY SHAPE LITERAL THAT STOOD HERE IS DELETED, AND NOTHING REPLACES THEM** (02-08,
+## 2026-09-01, the user: 「about the stale tests — I asked you to delete them, not fit them to the
+## current island」). They described a 16 x 12 board and the game loads a 30 x 26 one, and this was the
+## THIRD island resize they had gone stale under. **They were not fitted to the new island on purpose**:
+## task 06 widens the island again, and a literal re-derived today is a literal re-derived twice.
+##
+## **What stopped being measured, one line each** — nothing below is measured anywhere else now:
+##  · `EXPECT_ROWS` / `EXPECT_COLS` (12 x 16) — that the board is rectangular and how big it is
+##  · `EXPECT_HARBOUR_CHARS` (52) — how many `H` the board carries, and that the count is the ring's
+##    own arithmetic. ⚠ **`H` sitting only on the border ring is still measured** off the rows below
+##  · `EXPECT_PASSABLE` / `EXPECT_WATER` (76 · 116) — the ground/water split, and that the two of them
+##    partition the whole board with no tile that is neither
+##  · `EXPECT_COAST` / `EXPECT_COAST_ORTHO` (36 · 32) — the size of the shore. ⚠ **That the 8-way and
+##    4-way answers DIFFER is still measured** — that row carries no literal
+##  · `EXPECT_CUT` (2) — the narrowest column on the island
+##  · `EXPECT_LAND_REGION` (76) and 「the island is one walkable region」 — **the satellite 2x2 block
+##    holding the 철광석 makes it two**, and 설계 31 settled that this is the island, not a defect
+##  · 「every beaching coast tile sits in a region big enough to unload into」 and 「every beaching coast
+##    tile really walks inland」 — **the same satellite block is 4 tiles and nothing walks off it**
 
 ## Ceiling on tiles crossed in one walk. **Generous on purpose** — the longest crossing on a 520-tile
 ## board is under 40 tiles, so a walk that hits this ceiling is stuck rather than long, which is the
@@ -128,13 +115,6 @@ func run(t) -> void:
 	# left `islands.gd` when Blender became the source of the island. A net naming the old consts would
 	# not just fail; it would be asserting that the board still lives in the game.
 	var rows := Islands.rows()
-	var tiers := Islands.tiers()
-	t.eq(rows.size(), EXPECT_ROWS, "섬은 스무 줄이다")
-	t.eq(tiers.size(), EXPECT_ROWS, "층 판도 같은 줄 수다")
-	var shape := _shape_errors(rows, EXPECT_ROWS, EXPECT_COLS)
-	t.eq(shape.size(), 0, "섬이 %d행 x %d자다 %s" % [EXPECT_ROWS, EXPECT_COLS, str(shape)])
-	var tier_shape := _shape_errors(tiers, EXPECT_ROWS, EXPECT_COLS)
-	t.eq(tier_shape.size(), 0, "층 판도 같은 모양이다 %s" % str(tier_shape))
 
 	# -- the legend ---------------------------------------------------------------------------------
 	var illegal := _illegal_chars(rows)
@@ -151,7 +131,6 @@ func run(t) -> void:
 	# -- the harbours -------------------------------------------------------------------------------
 	var grid := Grid.new()
 	Islands.load_into(grid)
-	t.eq(_count_char(rows, "H"), EXPECT_HARBOUR_CHARS, "판의 항구 글자가 %d 개다" % EXPECT_HARBOUR_CHARS)
 	# ⚠⚠ **`grid.harbour_tiles` was read here and it is deleted** (2026-08-29) with the boats. **WHERE
 	# the `H` sits is still the claim**, so the ring is walked off the board's own text instead — 88 `H`
 	# scattered through the middle would satisfy a bare count on its own.
@@ -164,21 +143,10 @@ func run(t) -> void:
 			if x != 0 and y != 0 and x != row.length() - 1 and y != rows.size() - 1:
 				off_ring.append(y * row.length() + x)
 	t.eq(off_ring.size(), 0, "항구는 전부 판 가장자리 한 줄이다 — 배는 지도 밖에서 온다 %s" % str(off_ring))
-	t.eq(EXPECT_HARBOUR_CHARS, 2 * EXPECT_COLS + 2 * (EXPECT_ROWS - 2),
-		"그리고 그 52는 가장자리 한 바퀴 그대로다 (16x2 + 10x2 — 자가 점검)")
-
-	# -- ground and water ---------------------------------------------------------------------------
-	var passable_n := 0
-	var water_n := 0
-	for tile in grid.passable.size():
-		if grid.passable[tile] != 0:
-			passable_n += 1
-		if grid.water[tile] != 0:
-			water_n += 1
-	t.eq(passable_n, EXPECT_PASSABLE, "섬의 땅은 %d칸이다" % EXPECT_PASSABLE)
-	t.eq(water_n, EXPECT_WATER, "물은 %d칸이다 (항구 글자도 물이다)" % EXPECT_WATER)
-	t.eq(passable_n + water_n, EXPECT_ROWS * EXPECT_COLS,
-		"땅과 물이 판 전부다 — 어느 쪽도 아닌 칸이 없다 (자가 점검)")
+	# ⚠ **The row that stood here was GREEN and went with the reds** (02-08): it asserted
+	# `52 == 16*2 + 10*2`, three constants that no longer describe any board, under the label 「그리고
+	# 그 52는 가장자리 한 바퀴 그대로다」. **Arithmetic among deleted literals is a green measuring
+	# nothing**, which is the failure `how-nets-lie` names.
 
 	# -- the coast ----------------------------------------------------------------------------------
 	# ⚠ **Built locally from `passable` + `water`.** The per-harbour `sendable` table it used to be read
@@ -210,13 +178,8 @@ func run(t) -> void:
 			coast += 1
 		if touch4:
 			coast_ortho += 1
-	t.eq(coast, EXPECT_COAST, "8방향으로 물에 닿은 땅이 %d칸이다" % EXPECT_COAST)
-	t.eq(coast_ortho, EXPECT_COAST_ORTHO, "직교로만 세면 %d칸이다" % EXPECT_COAST_ORTHO)
 	t.ok(coast > coast_ortho,
 		"그리고 둘이 실제로 다르다 — 모서리로만 물에 닿은 해변 %d칸이 8방향 규칙의 전부다" % (coast - coast_ortho))
-
-	# -- the narrowest place ------------------------------------------------------------------------
-	t.eq(_cut_of(grid), EXPECT_CUT, "섬의 최협 절단이 %d칸이다" % EXPECT_CUT)
 
 	# -- one island, and it is big enough to land on ------------------------------------------------
 	var min_region_floor := _min_region_floor()
@@ -238,53 +201,13 @@ func run(t) -> void:
 	t.eq(_max_roster(), Rules.SWORDSMAN_START_COUNT,
 		"그 최대 병력이 개막 표 그대로다 — 회차 중에 병력이 느는 길이 없다 (자가 점검)")
 
-	var comp_id := PackedInt32Array()
-	comp_id.resize(grid.passable.size())
-	comp_id.fill(-1)
-	var comp_size: Array = []
-	for tile0 in grid.passable.size():
-		if grid.passable[tile0] == 0 or comp_id[tile0] != -1:
-			continue
-		var members := 0
-		var stack := PackedInt32Array()
-		stack.append(tile0)
-		comp_id[tile0] = comp_size.size()
-		while not stack.is_empty():
-			var tt: int = stack[stack.size() - 1]
-			stack.resize(stack.size() - 1)
-			members += 1
-			var ttx := tt % grid.w
-			var tty := tt / grid.w
-			for k in Grid.NEIGHBOURS.size():
-				var nx := ttx + int(Grid.NEIGHBOURS[k][0])
-				var ny := tty + int(Grid.NEIGHBOURS[k][1])
-				if nx < 0 or ny < 0 or nx >= grid.w or ny >= grid.h:
-					continue
-				var nt := ny * grid.w + nx
-				if grid.passable[nt] != 0 and comp_id[nt] == -1:
-					comp_id[nt] = comp_size.size()
-					stack.append(nt)
-		comp_size.append(members)
-	t.eq(comp_size.size(), 1, "섬은 걸어서 하나로 이어져 있다 — 땅덩이가 하나다")
-	t.eq(int(comp_size[0]), EXPECT_LAND_REGION, "그 땅덩이가 %d칸 전부다" % EXPECT_LAND_REGION)
-
-	# **4.5**: every tile a boat can beach on sits in a region big enough to unload into. ⚠ It reads the
-	# COAST now and not the deleted `sendable` union — the two were the same set on every island this
-	# repo has shipped, and the coast is the one that still exists.
-	var too_small: Array = []
-	var min_region := -1
-	for tile in coast8.size():
-		if coast8[tile] == 0:
-			continue
-		var sz: int = comp_size[comp_id[tile]]
-		if min_region < 0 or sz < min_region:
-			min_region = sz
-		if sz < min_region_floor:
-			too_small.append(tile)
-	t.eq(too_small.size(), 0,
-		"상륙할 수 있는 모든 해안 칸이 %d칸 이상인 땅에 있다 (배 하나를 못 내려주는 좁은 곶이 없다) %s"
-		% [min_region_floor, str(too_small)])
-	t.ok(min_region >= min_region_floor, "가장 좁은 상륙지의 땅이 %d칸이다" % min_region)
+	# ⚠⚠ **THE FLOOD FILL AND ITS FOUR ROWS ARE DELETED** (02-08). They said 「the island is ONE walkable
+	# region」, 「that region is 76 tiles」, 「every beaching coast tile sits in a region of at least
+	# `min_region_floor`」 and 「the smallest such region is big enough」. **The satellite 2x2 block the
+	# 철광석 stands on does not touch the island**, so the board has two land regions by design — 설계 31
+	# settled that it is the island rather than a defect, and CONTEXT.md says outright that the ore
+	# cannot be walked to. ⚠ **Nothing measures the island's connectivity from here on**, so a resize
+	# that strands half the ground passes this file in silence.
 	_the_floor_actually_rejects_something(t, min_region_floor)
 
 	# -- the walker ---------------------------------------------------------------------------------
@@ -307,19 +230,17 @@ func run(t) -> void:
 	# plain arrival on the target 곡각 rather than a weapon's reach.
 	var reach := 1.0
 	var field := grid.flow_field(target)
-	var walker_pairs := 0
 	var walker_steps := 0
-	var unreached: Array = []
 	for tile in coast8.size():
 		if coast8[tile] == 0:
 			continue
 		var res := _reaches(grid, tile, target, reach, field)
-		walker_pairs += 1
 		walker_steps += int(res["steps"])
-		if not bool(res["ok"]):
-			unreached.append(tile)
-	t.eq(unreached.size(), 0, "배로 닿는 모든 해안에서 섬 안쪽까지 실제로 걸어간다 %s" % str(unreached))
-	t.eq(walker_pairs, EXPECT_COAST, "그 걷기를 해안 %d칸에서 전부 해 봤다 (자가 점검)" % EXPECT_COAST)
+	# ⚠⚠ **TWO ROWS ARE DELETED HERE AND ONE IS LEFT** (02-08). 「배로 닿는 모든 해안에서 섬 안쪽까지
+	# 실제로 걸어간다」 went because the satellite 2x2 block's four coast tiles cannot walk anywhere,
+	# which 설계 31 settled is the island rather than a defect; 「그 걷기를 해안 36칸에서 전부 해 봤다」
+	# went with `EXPECT_COAST`. ⚠ **What is left is much weaker than what went**: the total below is a
+	# SUM, so one crossing that works hides every coast tile that walks nowhere.
 	t.ok(walker_steps > 0, "그리고 그 걷기들은 실제로 칸을 넘었다 (총 %d칸)" % walker_steps)
 
 	_every_spawn_letter_is_a_beast(t)
@@ -389,15 +310,11 @@ func _every_spawn_letter_is_a_beast(t) -> void:
 
 # -- scanners ------------------------------------------------------------------------------------
 
-func _shape_errors(rows: Array, want_h: int, want_w: int) -> Array:
-	var out: Array = []
-	if rows.size() != want_h:
-		out.append("행 수 %d" % rows.size())
-	for y in rows.size():
-		var n := str(rows[y]).length()
-		if n != want_w:
-			out.append("%d행 %d자" % [y, n])
-	return out
+# ⚠⚠ **`_shape_errors`, `_count_char` AND `_cut_of` ARE DELETED WITH THE ROWS THAT CALLED THEM**
+#  (02-08). They walked the board for its row/column shape, for how many of one character it holds,
+#  and for the fewest passable tiles in any column. **The reimplementation discipline this file's
+#  header names went with them** — they were the from-scratch loops that let a literal be derived
+#  outside the engine instead of read back off the `Grid` under test.
 
 
 func _illegal_chars(rows: Array) -> Array:
@@ -409,27 +326,6 @@ func _illegal_chars(rows: Array) -> Array:
 				out.append("(%d,%d)='%s'" % [x, y, row[x]])
 	return out
 
-
-func _count_char(rows: Array, ch: String) -> int:
-	var n := 0
-	for y in rows.size():
-		n += str(rows[y]).count(ch)
-	return n
-
-
-## The narrowest cut, per the definition pinned in the first slice plan under "The islands".
-func _cut_of(grid: Grid) -> int:
-	var best := -1
-	for x in grid.w:
-		var n := 0
-		for y in grid.h:
-			if grid.passable[y * grid.w + x] != 0:
-				n += 1
-		if n == 0:
-			continue
-		if best == -1 or n < best:
-			best = n
-	return best
 
 
 ## The smallest passable region a landing tile may sit in without risking a silent stall. **Demand,

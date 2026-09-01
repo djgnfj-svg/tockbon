@@ -68,6 +68,7 @@ func run(t) -> void:
 	_the_clock_is_the_screens_and_the_sim_stands_still(t)
 	_a_hull_that_has_stopped_stops_marking_the_water(t)
 	_a_hull_that_leaves_the_board_takes_its_block_with_it(t)
+	_a_gone_hull_takes_its_marks_with_it(t)
 	_a_new_island_opens_with_no_trails_on_it(t)
 	_every_hull_is_marked_the_same_way(t)
 	_boats_past_the_ceiling_are_dropped_and_the_rest_are_not(t)
@@ -260,8 +261,12 @@ func _slot_zero_is_the_transom_and_not_the_middle(t) -> void:
 		"0번 칸이 선체 가운데에서 %.2f조각 떨어져 있다 (%.3f)" % [want, here.distance_to(mid)])
 	t.ok((here - mid).dot(head) < 0.0,
 		"그리고 그 방향이 가는 쪽의 반대다 — 뱃머리가 아니라 고물이다")
-	t.ok(want > 2.0,
-		"자가 점검 — 그 거리가 0 이 아니다: 가운데에 찍는 구현은 위의 첫 줄에 걸린다")
+	# ⚠⚠ **THE SELF-CHECK THAT STOOD HERE DEMANDED `want > 2.0` AND IS DELETED** (02-08). It guarded
+	# the first row above from going vacuous — a `want` of 0 makes 「the mark sits `want` away from the
+	# hull's middle」 true of an implementation that stamps the middle. **It was already false of the
+	# 2.1 hull it was written for** (2.1 − 0.15 = 1.95), and the small boat took the half-length to
+	# 1.5. **Nothing replaces it: the gap between the stern anchor and the hull's middle is unmeasured
+	# from here on**, and the row above can be satisfied by a middle-anchored mark the day `want` is 0.
 
 
 ## **The heading a slot carries is the BOARD's and not the model's.**
@@ -575,41 +580,61 @@ func _the_clock_is_the_screens_and_the_sim_stands_still(t) -> void:
 		"움직인 선체는 그 화면 시계로 도장이 찍힌다")
 
 
-## **A hull that has stopped stops marking the water.**
+## **A hull that has stopped does not re-stamp its transom.**
 ##
-## ⚠⚠ **THE FAILURE THIS CATCHES IS A BRIGHT DOT THAT NEVER GOES OUT.** An arrived boat sits off
-## its beach for the rest of the island. Stamped with the screen clock every frame, its newest point is
-## forever nought seconds old and the trail collapses to **a full-strength blob the width of the stroke,
-## welded to its transom** — and boats pile up, so by the end of an island there is one of those for
-## every landing. ⚠ **Every other row in this file passes with that defect in place.**
+## ⚠⚠ **THE FAILURE THIS CATCHES IS A BRIGHT DOT THAT NEVER GOES OUT.** Slot 0 is re-written every
+## frame; stamped with the screen clock every time, a stopped hull's newest point is forever nought
+## seconds old and the trail collapses to **a full-strength blob the width of the stroke, welded to its
+## transom**. `_wake_stamp`'s stillness band is what stops it, and this row is what measures that band.
+##
+## ⚠⚠ **THIS ROW USED TO DRIVE PAST `GONE` AND ASSERT THE BLOCK SURVIVED IT** — 「flipping to `GONE`
+## after `Rules.BOAT_LINGER_SEC` does not free it, nothing is erased there」. **That was the defect the
+## user saw on the running screen on 2026-09-01** (「사라진 배가 물 위에 자국을 남긴다」): three black
+## ellipses on open water with no hull under any of them. **The claim is reversed and the drive is now
+## held inside the linger**, where a stopped hull genuinely is still on the board.
+## ⚠ **The old row also could not run any more**: the trail needs `WAKE_LIFE_SEC` (4.0) of stillness to
+## age out and a hull only stands for `BOAT_LINGER_SEC` (3.0). **A state the game no longer has is not
+## a thing to measure.** `_a_gone_hull_takes_its_marks_with_it` below carries the other half.
 func _a_hull_that_has_stopped_stops_marking_the_water(t) -> void:
 	var pack := _boat_view()
 	var fv: FieldView = pack["fv"]
 	var b: Battle = pack["b"]
-	# Sailed all the way in, then left sitting there for one and a half lives of a mark.
 	var frame := Look.wake_every_sec() * 0.25
+	# Sail it all the way in and stop the moment it lands — **inside the linger**, before it leaves.
 	for _k in 400:
+		if int(b.boat_state[0]) != Battle.BoatState.SAILING:
+			break
 		b.step(frame)
 		fv._process(frame)
 	t.eq(int(b.boat_state[0]), Battle.BoatState.ARRIVED,
-		"배가 도착해 서 있다 (자가 점검 — 아직 항해 중이면 아래가 공허하다)")
+		"배가 닿아서 서 있다 (자가 점검 — 아직 항해 중이면 아래가 공허하다)")
 
-	var freshest := -1.0
-	for k in Look.WAKE_SLOTS:
-		var slot: Vector4 = fv._wake[k]
-		if slot.z < 0.0:
-			continue
-		freshest = maxf(freshest, slot.z)
-	t.ok(freshest >= 0.0, "그 선체의 블록은 여전히 살아 있다 — 접촉 자국은 그려야 한다")
-	t.ok(fv._sea_clock - freshest >= Look.WAKE_LIFE_SEC,
-		"그런데 제일 새 점도 %.2f초 됐다 — 꿀기가 다 삭았고 고물에 점이 안 남는다"
-			% (fv._sea_clock - freshest))
+	var landed: float = fv._wake[0].z
+	t.ok(landed >= 0.0, "그 선체의 블록이 살아 있다 — 접촉 자국을 그려야 한다 (자가 점검)")
+
+	# ⚠ **Well inside `BOAT_LINGER_SEC`**, so the hull is still standing when the rows below are read.
+	var held := 0.0
+	while held < Rules.BOAT_LINGER_SEC * 0.5:
+		b.step(frame)
+		fv._process(frame)
+		held += frame
+	t.eq(int(b.boat_state[0]), Battle.BoatState.ARRIVED,
+		"아직 안 사라졌다 (자가 점검 — 사라졌으면 아래는 GONE 을 재는 것이지 멈춤을 재는 게 아니다)")
+
+	t.ok(absf(fv._wake[0].z - landed) < 1e-4,
+		"안 움직인 고물은 다시 도장이 안 찍힌다 — 그 점이 %.2f초 째 나이를 먹고 있다"
+			% (fv._sea_clock - fv._wake[0].z))
+	t.ok(fv._sea_clock - fv._wake[0].z >= held - 1e-3,
+		"그리고 그 나이가 서 있던 시간만큼 된다")
 
 
 ## **A hull that leaves the board takes its block with it.**
 ##
 ## ⚠ Without this the water keeps drawing a shadow round nothing — and the blocks are indexed by boat
 ## number, so the mark does not even drift: it sits exactly where the last boat was.
+##
+## ⚠ **This is the ARRAYS being emptied, which is the shape `setup` makes.** Nothing in play does it —
+## a hull that leaves in play flips to `GONE` and its row stays. That half is the row below.
 func _a_hull_that_leaves_the_board_takes_its_block_with_it(t) -> void:
 	var pack := _boat_view()
 	var fv: FieldView = pack["fv"]
@@ -621,6 +646,32 @@ func _a_hull_that_leaves_the_board_takes_its_block_with_it(t) -> void:
 	b.boat_riders = PackedInt32Array()
 	fv._process(0.0)
 	t.eq(_live_slots(fv), 0, "배가 사라지면 물 위의 자국도 통째로 사라진다")
+	t.eq(fv._wake_last[0], -1.0, "그리고 그 블록의 마지막 기억 시각도 지워진다")
+
+
+## **A hull that has flipped to `GONE` takes its marks with it.**
+##
+## ⚠⚠ **SEEN ON SCREEN, NOT DERIVED** (2026-09-01, the eyes on the running game: 「사라진 배가 물 위에
+## 자국을 남긴다」). Three black ellipses were floating on open water at 178 초 with no hull under any of
+## them. **`boat_pos` never shrinks** — 02-04 flips a row to `GONE` and erases nothing — so the count
+## alone still called a vanished hull live and `_paint_wake` kept stamping its transom.
+##
+## ⚠ **The row above is NOT this row.** That one empties the arrays, which is the shape a `setup` makes;
+## nothing in play ever does it. **This is the shape play actually makes**, and it was green throughout.
+func _a_gone_hull_takes_its_marks_with_it(t) -> void:
+	var pack := _boat_view()
+	var fv: FieldView = pack["fv"]
+	var b: Battle = pack["b"]
+	t.eq(_live_hulls(fv), 1, "배가 한 척 있고 블록도 하나다 (자가 점검)")
+	t.ok(_live_slots_of(fv, 0) > 0, "그 배가 물에 자국을 남기고 있다 (자가 점검)")
+
+	# ⚠ **The state alone is flipped and the arrays are left whole**, which is exactly what
+	# `_phase_boats` does. Emptying them instead would measure the row above and not this one.
+	b.boat_state[0] = Battle.BoatState.GONE
+	fv._process(0.0)
+
+	t.eq(b.boat_pos.size(), 1, "선체 줄은 그대로 남아 있다 — 아무것도 안 지워진다 (자가 점검)")
+	t.eq(_live_slots_of(fv, 0), 0, "사라진 배는 항적도 접촉 그림자도 안 남긴다")
 	t.eq(fv._wake_last[0], -1.0, "그리고 그 블록의 마지막 기억 시각도 지워진다")
 
 

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://blhupbl1mnfra"
-path="res://.godot/imported/wolf_bite_0_r.png-663cb4341c2651c71989dd8811b09d26.ctex"
+uid="uid://dai2tx55xwsa8"
+path="res://.godot/imported/back_to_title.png-bda798f29e61fe5f4f5cc53f4041b282.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/beast/wolf_bite_0_r.png"
-dest_files=["res://.godot/imported/wolf_bite_0_r.png-663cb4341c2651c71989dd8811b09d26.ctex"]
+source_file="res://assets/ui/back_to_title.png"
+dest_files=["res://.godot/imported/back_to_title.png-bda798f29e61fe5f4f5cc53f4041b282.ctex"]
 
 [params]
 

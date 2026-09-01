@@ -224,6 +224,16 @@ func _process(delta: float) -> void:
 	# sub-steps and carries the leftover, so `step(dt)` and `step(dt/k)` k times still land on
 	# identical state — which is the property the restored multiplier would stand on.
 	battle.step(delta)
+	# ⚠⚠ **THE LOSS REACHES THE SCREEN HERE AND NOWHERE ELSE** (2026-09-01, the user: 「엔딩씬을
+	# 생각해봤는데 그냥 게임 오버 뜨면 될 거 같은데? 게임 오버 빨간 글씨고 딱 뜨고. 끝」 — *"I thought
+	# about the ending scene — I think just showing GAME OVER is enough. Red letters, it just appears,
+	# and that is the end."*).
+	# ⚠ **BELOW `step` and not above it**, so the frame the 성채 falls in is the frame the words go up.
+	# Read before the step, the screen would trail the sim by one frame forever — the shape 「screen
+	# changes but the sim doesn't」 names, wearing its inverse.
+	# ⚠ **The shell reads `lost`; the view never does.** `hud_view` holds a bool it was handed, so
+	# there is one reader of the loss condition and no pair to keep in step.
+	hud_view.set_over(battle.lost)
 
 
 ## ⚠ **`_release_hold` stood here and it is deleted** with the hold. It closed the island that had
@@ -242,6 +252,30 @@ func _unhandled_input(event: InputEvent) -> void:
 	# records the earlier draft citing that same `return` as an ADVANTAGE.
 	if run == null:
 		_title_input(event)
+		return
+	# ⚠⚠ **THE BOARD STOPS ANSWERING WHEN THE 성채 FALLS** (2026-09-01, the user: 「딱 뜨고. 끝」 — *"it
+	# just appears, and that is the end"*). `Battle.step` already returns early while `lost`, so the
+	# sim is frozen with no help from here; **the camera was not**, and a player left able to tilt,
+	# zoom, turn and pan a dead island is 「끝」 saying one thing while the hand is told another.
+	# ⚠ **One line above every branch rather than a test inside each**, the same argument the deleted
+	# hold guard made in this position: TAB, ESC, the tilt keys, the wheel and both drags each waved a
+	# press through on their own terms, and five guards are five chances to miss one.
+	# ⚠ **It is NOT a return in `_process`.** The views keep their own clocks and the island keeps
+	# drawing behind the words — that is the ticket's answer (「뒤에는 섬이 그대로 남고」), and a shell
+	# that stopped processing would freeze the picture rather than the play.
+	if battle != null and battle.lost:
+		# ⚠⚠ **ONE THING STILL PRESSES ON A LOST BOARD, AND IT IS THE WAY BACK** (2026-09-01, the user
+		# after seeing the words on the glass: 「그 게임오버 하고 타이틀로 돌아가는 버튼도 만들어줘」).
+		# **This reverses 티켓 02-03's own 「끝」**, which put a way back in its Out of scope.
+		# ⚠ **Inside the closed door and not above it.** Above, it would be one more branch competing
+		# with TAB, the wheel and both drags for a press on a LIVE board; here the board is already
+		# dead and this is the only sentence left that means anything.
+		# ⚠ **The rect comes from the view that drew it** — see `HudView.back_rect_px`, which is zero
+		# until the words are up, so there is no second 「is the screen showing」 test here.
+		if event is InputEventMouseButton:
+			var over_click := event as InputEventMouseButton
+			if over_click.pressed and over_click.button_index == MOUSE_BUTTON_LEFT 					and hud_view.back_rect_px().has_point(over_click.position):
+				_back_to_title()
 		return
 	# One line closes the door on all three inputs during a hold, instead of three state tests spread
 	# across the handlers below. It has to be here and not in them: during an outcome hold
@@ -395,6 +429,28 @@ func _title_input(event: InputEvent) -> void:
 		_quit_the_game()
 
 
+## **Back to the title from a lost island.** The exact inverse of `_start_run`, line for line.
+##
+## ⚠⚠ **`run = null` IS THE ONE THAT MATTERS.** `_unhandled_input` routes to `_title_input` on it and
+## `_process` returns on it, so nulling the run is what actually hands the machine back to the title —
+## the two `visible` lines are only what the player sees. **Set the flag and forget the screens and the
+## title is live under a drawn island; set the screens and forget the flag and a dead board keeps
+## eating presses behind a title nobody can press.**
+##
+## ⚠ **`bind(null)` and not `set_over(false)`.** `bind` already clears `_over` — that is its own
+## header's promise — so calling both would be two writers for one flag.
+##
+## ⚠⚠ **THE RUN IS DISCARDED AND NOTHING IS CARRIED OVER.** 시작하기 makes a fresh `Run`, so pressing it
+## after this is a new game and not a resumed one. **That is what 「타이틀로」 was asked for**, and if a
+## continue is ever wanted it is a different button with a different word on it.
+func _back_to_title() -> void:
+	run = null
+	battle = null
+	hud_view.bind(null)
+	field_view.show_board(false)
+	title_view.visible = true
+
+
 ## Closes the game. **One line, cut out into its own function for exactly the reason every `_paint_*`
 ## hook in `src/view/` is**: a net cannot drive `get_tree().quit()` and live to report anything —
 ## `SceneTree.quit()` stops the loop, every pending `await process_frame` in the runner is abandoned,
@@ -430,6 +486,12 @@ func _start_run() -> void:
 	# the one screen this week is about.** The press is what ends the title, not whichever screen the
 	# press happens to lead to, and this is the line the press owns.
 	title_view.visible = false
+	# ⚠⚠ **AND THE BOARD COMES BACK UP HERE** (2026-09-01). `_back_to_title` takes it down, and
+	# `field_view.setup` cannot put it back on its own — `_build_world` returns early once the world
+	# exists, so a second run would open onto a hidden island with every check about it green.
+	# ⚠ **Both visibility lines sit in this file and face each other**, which is what makes the pair
+	# readable: the shell owns which screen is up, and neither view decides it.
+	field_view.show_board(true)
 	# ⚠ **It was `_show_state()` until 2026-08-29**, so the run decided which screen a press led to.
 	# **There is one screen**, and the indirection went with the states it chose between.
 	_open_island()

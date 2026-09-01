@@ -1030,6 +1030,31 @@ func _shoulder_open(from_level: int, shoulder_tile: int) -> bool:
 	return absi(from_level - level_of(shoulder_tile)) <= Rules.MAX_CLIMB_LEVELS
 
 
+## **Whether a body standing on `from_tile` may land a blow on `to_tile`** — the level rule alone, and
+## the same threshold the climb uses. **A blow crosses no more 눈금 than a body does.**
+##
+## ⚠⚠ **DISTANCE CANNOT SEPARATE THE TWO CASES, AND THAT IS THE WHOLE REASON THIS IS A LEVEL TEST.**
+## Flat ground beside the plateau and a 계단 tread beside it are BOTH 1.414 조각 from the 조각 above —
+## one planar 조각 and one 조각 of rise against half a 조각 of rise, and the diagonal barely moves. What
+## differs is the 눈금 gap: 2 against 1. **A reach number that refuses the first refuses the second
+## too**, and lowering `Rules.REACH_BONUS` to try was measured losing 26 of 162 runs because nothing
+## could strike from a 계단 any more.
+##
+## ⚠⚠ **LEVELS ONLY — passability, the stair face and the diagonal's shoulders are deliberately NOT
+## asked, and a body that copies `can_step`'s body in here has changed the rule.** A blow is not a
+## step: a 검사 on the shore strikes a 늑대 standing in the surf beside him, and two bodies touching
+## across a wall corner can both see each other. **What the two share is `Rules.MAX_CLIMB_LEVELS`, read
+## and never re-typed** — one number with one owner, so retuning the climb retunes the blow with it.
+##
+## ⚠ **Symmetric, exactly as the climb is.** A one-way version would make the plateau a firing step
+## nothing could answer.
+func can_strike(from_tile: int, to_tile: int) -> bool:
+	var n := w * h
+	if from_tile < 0 or to_tile < 0 or from_tile >= n or to_tile >= n:
+		return false
+	return absi(level_of(from_tile) - level_of(to_tile)) <= Rules.MAX_CLIMB_LEVELS
+
+
 func is_passable(tx: int, ty: int) -> bool:
 	if tx < 0 or ty < 0 or tx >= w or ty >= h:
 		return false

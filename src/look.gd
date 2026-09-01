@@ -1292,10 +1292,13 @@ const WAKE_STERN_INSET_TILES := 0.15
 
 ## **How far a hull has to have moved for the water to call it moving, in 조각.**
 ##
-## ⚠⚠ **AN ARRIVED BOAT SITS OFF ITS BEACH FOR THE REST OF THE ISLAND**, and a trail whose newest
-## point is re-stamped every frame is forever nought seconds old: it collapses to **a full-strength
-## blob the width of the stroke, welded to the transom, that never goes out** — one per landing, and
-## they pile up. `FieldView._wake_stamp` freezes the stamp at the last moment the hull actually moved.
+## ⚠⚠ **AN ARRIVED BOAT STOPS DEAD AND STAYS PUT**, and a trail whose newest point is re-stamped every
+## frame is forever nought seconds old: it collapses to **a full-strength blob the width of the stroke,
+## welded to the transom, that never goes out.** `FieldView._wake_stamp` freezes the stamp at the last
+## moment the hull actually moved.
+## ⚠ **Unchanged by the hull leaving after `Rules.BOAT_LINGER_SEC`** (2026-09-01). A row that flipped to
+## `GONE` still holds its slot in the water's history — nothing is erased there either — so a stamp that
+## kept advancing would weld that blob to a boat the player can no longer see.
 ##
 ## ⚠ **A storage band and not a dial.** A `PackedVector4Array` holds 32-bit floats, so a stored
 ## coordinate differs from the one that was written in about its seventh digit; one frame of real
@@ -1995,11 +1998,54 @@ const BEAST_SPRITE_W_RATIO := 3.5
 ## 보상 없지 끝나면 카드보상으로 통일했잖아」) — the range bonus, the per-body flag and the panel's
 ## pick all went with it, so there is nothing left for a field mark to mark.)
 
-## A thin bar under the body. GAP is from the bottom of the body to the top of the bar.
-## ⚠⚠ **THE HP BAR IS DELETED AND ITS THREE CONSTANTS WITH IT** (2026-08-28, the user: 「체력바 없이」)
-## — `HP_BAR_W_PX`, `HP_BAR_H_PX`, `HP_BAR_GAP_PX`, and `hp_bar_origin_px` / `hp_bar_size_px` /
-## `hp_bar_colour` further down. **The sim still tracks HP** and still decides who dies; nothing on
-## screen says so, and the screen that will is designed rather than typed (`CLAUDE.md`).
+## ⚠⚠ **THE HP BAR IS BACK AND NOT ONE OF ITS OLD VALUES CAME WITH IT** (2026-09-01, the user:
+## 「체력바는 없다고 한 거는 그 당시 없는 거고 지금 추가하겠다는 거야」 — *"saying there was no HP bar
+## was about back then; now I am saying we add it"*). It was deleted 2026-08-28 (「체력바 없이」) and
+## took `HP_BAR_W_PX`, `HP_BAR_H_PX`, `HP_BAR_GAP_PX`, `hp_bar_origin_px`, `hp_bar_size_px` and
+## `hp_bar_colour` with it. **Two of those six names are back and both were measured again**, and
+## the height is not a constant at all any more — it rides the picture's own aspect through
+## `field_view._billboard_scale`, so a re-pulled picture cannot come out squashed.
+##
+## ⚠⚠ **IT IS TWO PICTURES AND NOT ONE, BECAUSE A BAR HAS TO SHRINK.** One loaded picture is a fixed
+## width; the fill is cropped with `region_rect` to `hp / max_hp` instead. **Both were pulled in
+## `tools/pixel/`** and neither is typed — `CLAUDE.md` carries the `draw_rect` failure by name.
+##
+## ⚠⚠ **THE FILL PICTURE IS THE FRAME'S TROUGH, CUT OUT OF THE SAME CANVAS**, which is the whole of
+## how the two register. The frame is 64 x 16 with its stone standing 3 px inside each edge and its
+## dark trough occupying x 7..56 and y 4..11 — **centred in the canvas on both axes** — and the fill
+## is exactly that 50 x 8 box. ⇒ **Both sprites hang at one anchor, centred, and line up with no
+## offset of their own**, and the fill's drawn width comes out of the two pictures' widths rather
+## than out of a third number here. **Re-pull either picture and that centring is what has to hold.**
+const HP_BAR_FRAME := "res://assets/ui/hp_bar_frame.png"
+const HP_BAR_FILL := "res://assets/ui/hp_bar_fill.png"
+
+## **How wide the whole 64 px frame picture is drawn, in world px** — the visible stone is 58/64 of it.
+##
+## ⚠ **Measured against the bodies it hangs over and nothing else.** `BEAST_TEX`'s 0.85 note records
+## the wolf's drawn ink at **20.9 px** and the man's at 1/1.42 of that, **14.7 px**. At 20.0 the bar
+## is the animal's own width and half again the man's, which is the widest it can be without reading
+## as a thing standing beside the body rather than over it.
+## ⚠⚠ **UNJUDGED ON SCREEN.** Nobody has looked at this number yet, and 「연출은 과할 정도로」 says an
+## undershoot costs a whole round — **so this is the first value, not a settled one.**
+const HP_BAR_W_PX := 20.0                # >= 12 (under it the trough is thinner than one texel drawn);
+                                         # <= 24 (past the wolf's own ink it overhangs the animal)
+
+## **The gap between a body's drawn TOP and the bottom of its bar**, in world px.
+## ⚠ The bar draws 5.0 px tall at `HP_BAR_W_PX` (16/64 of it), so 3.0 is a little over half its own
+## height — enough that `BODY_OUTLINE_SCALE`'s 4% black shell around the head does not touch the stone.
+const HP_BAR_LIFT_PX := 3.0
+
+## **The gap between the 성채's drawn ROOF and the bottom of its bar**, in world px.
+## ⚠ **Twice a body's, and not the same number.** A building is grown by `_outline` the same way a
+## body is, but it is `BUILD_SCALE` times a mesh rather than a 40 px card — its shell is thicker in
+## world units, and a bar sitting on the ridge would read as part of the roof.
+const HP_BAR_KEEP_LIFT_PX := 6.0
+
+## **How far in front of its frame the fill stands**, in 조각, along the camera's own axis.
+## ⚠⚠ **ALONG THE CAMERA AND NOT ALONG THE WORLD**, the same rule `BODY_OUTLINE_BACK_TILES` keeps:
+## both quads are billboards standing at one point, so 「in front」 has no world axis. ⚠ **The camera
+## is orthographic**, so this moves the fill in depth and not on screen at all.
+const HP_BAR_FILL_FRONT_TILES := 0.03
 
 ## ⚠⚠ **A BODY'S SHADOW IS ONE DISC ON THE GROUND** (2026-08-28, the user: 「그림자도 단순하게 아래
 ## 동그라미정도해줘」). A billboard's real cast shadow is the shadow of a flat card that turns to face
@@ -2140,6 +2186,60 @@ const TITLE_TILE_ALPHA := 0.14            # >= 0.06 or there is no background at
                                           # disabled button
 const TITLE_TILE_A_FREQ := 0.13
 const TITLE_TILE_B_FREQ := 0.19
+
+
+# ---------------------------------------------------------------------------------------------
+# The loss — GAME OVER, and it is ONE picture and ONE position
+# ---------------------------------------------------------------------------------------------
+
+## **The words GAME OVER, red, pulled in `tools/pixel/` and loaded** (2026-09-01, the user: *"I
+## thought about the ending scene — I think just showing GAME OVER is enough. Red letters, it just
+## appears, and that is the end."*). **The island stays behind it and the game stops there**, which is
+## the same day's answer.
+##
+## ⚠⚠ **THERE IS NO WIDTH CONSTANT HERE AND THAT IS THE WHOLE DESIGN.** The picture was cut to the
+## width it is drawn at — 640 px, half the 1280 canvas — so the file's own width IS the number and a
+## second copy of it cannot drift from the first. **Re-pull the picture at a different width and the
+## words simply come out that wide**; nothing in `src/` has to be told.
+## ⚠ It is drawn 1:1, and `textures/canvas_textures/default_texture_filter` is Nearest, so every texel
+## lands on exactly one canvas pixel. Scaling it here would be the one thing that undoes that.
+const GAME_OVER_TEX := "res://assets/ui/game_over.png"
+
+## **Where the picture's top-left corner goes**, from its own size and the canvas's.
+##
+## ⚠⚠ **Dead centre, and derived rather than written down.** `window/stretch/mode` is `canvas_items`,
+## so the canvas is 1280 x 720 whatever the window is doing and this answer survives a resize — the
+## risk the ticket named. A hand-written `Vector2(320, 290)` would be right for exactly one picture
+## and silently off-centre for the next one pulled.
+static func game_over_origin_px(tex_size: Vector2) -> Vector2:
+	return (viewport_size_px() - tex_size) * 0.5
+
+
+## **The picture on the button that takes a lost run back to the title.**
+##
+## ⚠⚠ **THIS REVERSES 티켓 02-03's OWN 「그대로 멈춘다」** (2026-09-01, the user, after seeing the screen:
+## 「그 게임오버 하고 타이틀로 돌아가는 버튼도 만들어줘」). That ticket wrote 「끝」 and put a way back in
+## its Out of scope; **the user reversed it themselves once the words were on the glass.**
+##
+## ⚠ **Made in pixellab, not typed.** A `draw_rect` plate with a `draw_string` label is exactly what the
+## island's grey button was, and this repo deleted that once already.
+const BACK_TO_TITLE_TEX := "res://assets/ui/back_to_title.png"
+
+## **How far under the GAME OVER lettering the button's top sits, in canvas px.**
+const BACK_TO_TITLE_GAP_PX := 28.0
+
+## **Where the button goes, as a rect, from the two pictures' own sizes.**
+##
+## ⚠⚠ **DERIVED FROM THE LETTERING AND NOT WRITTEN DOWN**, the same argument `game_over_origin_px`
+## makes: the words are centred by their own width, so a hand-typed y would drift the moment either
+## picture is re-pulled. **Centred on x, and hung under the words on y.**
+## ⚠ **It is a Rect2 and not a position**, because the shell hit-tests the very rectangle that was
+## drawn — a second rect written beside it is how a button ends up pressable somewhere it is not.
+static func back_to_title_rect_px(over_size: Vector2, button_size: Vector2) -> Rect2:
+	var over_at := game_over_origin_px(over_size)
+	var x := (viewport_size_px().x - button_size.x) * 0.5
+	var y := over_at.y + over_size.y + BACK_TO_TITLE_GAP_PX
+	return Rect2(Vector2(x, y), button_size)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -2603,31 +2703,39 @@ const BOAT_BOB_PHASE_PER_HULL := 1.0
 ## so raising the water carries the boat with it and only the difference lives here.
 ##
 ## ⚠⚠ **IT WAS 0 AND THE WHOLE BOAT SAT ON TOP OF THE WATER** (2026-08-30, measured on the running
-## game). **The model's origin is its KEEL** — `boat.glb`'s hull runs y from 0.00 to 0.62 — so at 0 the
+## game). **The model's origin is its KEEL** — the arriving hull runs y from 0.00 to 0.50 — so at 0 the
 ## entire hull stood above the surface and the boat read as resting ON the sea rather than in it.
 ##
-## ⚠ **Negative, and bounded at both ends.** At -0.20 the keel is 0.20 under and about a third of the
-## 0.62-deep hull is submerged. **Too little and it floats again; too much and the benches go under** —
-## the lowest seat in `BOAT_DECK_SLOTS` sits 0.4375 up, and the bob moves the whole hull
-## `BOAT_BOB_TILES` either way. `net_boats` holds both ends against those two constants.
+## ⚠ **Negative, and bounded at both ends.** At -0.20 the keel is 0.20 under and **40% of the 0.50-deep
+## hull is submerged**. **Too little and it floats again; too much and the benches go under** — the
+## lowest seat in `BOAT_DECK_SLOTS` sits 0.360 up, and the bob moves the whole hull `BOAT_BOB_TILES`
+## either way. `net_boats` holds both ends against those two constants.
+## ⚠⚠ **THE VALUE DID NOT MOVE WHEN THE HULL WAS SWAPPED ON 2026-09-01 AND THE FRACTION DID** — the
+## measurement above was 「about a third of a 0.62-deep hull」 against `boat.glb`, and the small hull is
+## shallower, so the same -0.20 puts proportionally more of it under. **Nothing retunes it here**: how
+## deep a boat should look is an eye's answer, and this round only changed which hull comes.
 const BOAT_DRAFT_TILES := -0.20
 
-## **The eight places a rider stands, in the hull's own local space, in tiles.**
+## **The four places a rider stands, in the hull's own local space, in tiles.**
 ##
-## ⚠⚠ **READ OFF THE MESH, ONE BENCH AT A TIME.** `boat_bench_0..3` sit at local x = −1.55, −0.55,
-## +0.45, +1.45 with their tops at y = 0.4375 (0.41 plus half of the 0.055 they are scaled to), and each
-## bench is a unit cube scaled along z by 0.582 / 0.813 / 0.820 / 0.622 — so the two seats on a bench are
-## at a quarter of that scale either side of its middle. **A single shared z would put the fore and aft
-## pairs off the ends of their own planks**, which is exactly the sort of thing that reads as「the wolves
-## are floating」 and gets blamed on the sprite.
+## ⚠⚠ **READ OFF THE MESH, ONE BENCH AT A TIME.** `boat_small.glb` is **one joined mesh with no named
+## parts**, so a bench is a run of `bs_bench` geometry that crosses the whole beam — there are two, and
+## the two narrow end posts wearing the same material are not benches. They sit at local x = −0.42 and
+## +0.42, their tops at y = 0.360, and they run 1.200 and 1.070 across the beam — so the two seats on a
+## bench are at a quarter of that width either side of its middle. **A single shared z would put the
+## fore and aft pairs off the ends of their own planks**, which is exactly the sort of thing that reads
+## as「the wolves are floating」 and gets blamed on the sprite.
+##
+## ⚠⚠ **EIGHT SEATS ON FOUR BENCHES -> FOUR ON TWO** (2026-09-01, with `Rules.BOAT_CAPACITY`). ⚠ **Not
+## the old table with four rows deleted**: the small hull's planks are elsewhere and are wider, so every
+## number here is new. **The seats are further apart than they were** — the tightest pair was 0.292 조각
+## and is now 0.535, which is what `boat_rider_shadow_r_tiles` reads.
 ##
 ## ⚠ `const X := PackedVector3Array([...])` is a parse error on 4.7 — see `Rules.UNITS` — so this is a
 ## plain const Array and its reader casts.
 const BOAT_DECK_SLOTS := [
-	Vector3(-1.55, 0.4375, -0.146), Vector3(-1.55, 0.4375, 0.146),
-	Vector3(-0.55, 0.4375, -0.203), Vector3(-0.55, 0.4375, 0.203),
-	Vector3(0.45, 0.4375, -0.205), Vector3(0.45, 0.4375, 0.205),
-	Vector3(1.45, 0.4375, -0.155), Vector3(1.45, 0.4375, 0.155),
+	Vector3(-0.42, 0.36, -0.3), Vector3(-0.42, 0.36, 0.3),
+	Vector3(0.42, 0.36, -0.2675), Vector3(0.42, 0.36, 0.2675),
 ]
 
 ## ⚠⚠ **`BOAT_RIDER_TEX` STOOD HERE AND IT IS DELETED** (2026-08-30). It named the four `wolf_h`
@@ -2679,6 +2787,13 @@ const BOAT_DECK_SLOTS := [
 ## the island against the island** — two judgements, and one number cannot hold both.
 ## ⚠⚠ **`BEAST_TEX`'s draw column DOES NOT REACH HERE EITHER, for the same reason** (2026-08-30). The
 ## wolf's 1.70 is how big it reads on grass; a rider sized off it would be 1.70 times over its bench.
+##
+## ⚠⚠ **EVERY MEASUREMENT ABOVE WAS TAKEN ON A DECK THAT NO LONGER ARRIVES** (2026-09-01). It was eight
+## riders on `boat.glb`'s four benches, 1.0 조각 apart, with a 0.292 조각 seat-to-seat gap — and the
+## seat-to-seat gap is what the 6x ceiling was reached against. The small hull seats **four on two
+## benches 0.84 조각 apart with a 0.535 조각 seat gap**, so the pair-overlap ceiling is not where it was.
+## ⚠ **The ratio is deliberately NOT retuned here.** Where it stops is an eye's answer on a running
+## screen, and this round only changed which hull comes.
 const BOAT_RIDER_W_RATIO := 2.70
 
 
@@ -2689,9 +2804,14 @@ const BOAT_RIDER_W_RATIO := 2.70
 ##
 ## ⚠⚠ **0.75 PUTS THE DISC WIDER THAN THE WOLF IS, AND THAT IS THE WHOLE POINT** — see
 ## `how-nets-lie`'s 「a shadow the size of its caster is not a shadow」, measured twice on two subjects.
-## The tightest gap is 0.292 조각, so the disc is 0.219 조각 across the radius: **0.438 조각 wide against
-## the widest rider's own 0.426 조각 of ink.** Under 0.5 it would sit entirely beneath the animal and
-## show nothing at all, which is exactly the failure that entry records.
+## Under 0.5 it would sit entirely beneath the animal and show nothing at all, which is exactly the
+## failure that entry records.
+## ⚠⚠ **THE LENGTHS THIS BOUGHT MOVED WITH THE HULL ON 2026-09-01, THE RATIO DID NOT.** On `boat.glb`
+## the tightest gap was 0.292 조각 and the disc came out 0.219 조각 in radius — 0.438 조각 wide against
+## the widest rider's own 0.426 조각 of ink. On the small hull the tightest gap is **0.535 조각**, so the
+## disc is **0.401 조각 in radius and 0.802 조각 wide** under the same 0.426 조각 of animal. **That is
+## nearly twice the ink instead of just over it**, and whether it still reads as a shadow rather than as
+## a mat is an eye's answer this round did not take.
 ## ⚠ **The two discs on one bench therefore overlap**, in the same measure the two wolves above them
 ## already do — see `BOAT_RIDER_W_RATIO`.
 const BOAT_RIDER_SHADOW_SEAT_RATIO := 0.75
@@ -2704,11 +2824,15 @@ const BOAT_RIDER_SHADOW_LIFT_TILES := 0.004
 ## about sixteen the extra triangles land inside one pixel.
 const BOAT_RIDER_SHADOW_SEGS := 16
 
-## ⚠⚠ **SIZE AND STRENGTH ARE ONE DECISION** (`how-nets-lie`, same entry). This disc covers about
+## ⚠⚠ **SIZE AND STRENGTH ARE ONE DECISION** (`how-nets-lie`, same entry). This disc covered about
 ## **13 times** the area of `COL_BODY_SHADOW`'s disc on the ground, so it is carried a little stronger
-## rather than left at the ground's alpha and spread thin.
-## ⚠ **It lands on planking that is already dark** — `boat.glb`'s deck albedo is 0.246 luminance and
-## the hull's is 0.069, and the gunwale casts a real shadow across some of it — so **this is one flat
+## rather than left at the ground's alpha and spread thin. ⚠⚠ **THE HULL SWAP OF 2026-09-01 TOOK THE
+## RADIUS 0.219 -> 0.401, WHICH IS ABOUT 44 TIMES THE GROUND DISC AND NOT 13** — see
+## `BOAT_RIDER_SHADOW_SEAT_RATIO`. **The alpha was not re-chosen for that**, and 「a little stronger」
+## was decided against the smaller disc.
+## ⚠ **It lands on planking that is already dark** — the arriving hull's deck albedo is 0.246 luminance
+## and its hull's is 0.069, **the same two values `boat.glb` carried** (the small boat's six materials
+## are the big boat's palette), and the gunwale casts a real shadow across some of it — so **this is one flat
 ## alpha over a surface whose brightness varies**, and where the gunwale's own shadow already falls the
 ## two darken together. **Nothing compensates for that**; it is a thing for eyes.
 ## ⚠ Alpha stays under the 0.45 `COL_BODY_SHADOW` names as the point a disc reads as a hole.

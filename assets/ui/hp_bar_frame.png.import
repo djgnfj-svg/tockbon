@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cuk6xft8jun6s"
-path="res://.godot/imported/spear_r.png-db7b7ee1c54eb08706076e71ea750c8f.ctex"
+uid="uid://dpirieqldegro"
+path="res://.godot/imported/hp_bar_frame.png-1170076599e006e4165ba4b5b5879c8b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/human/spear_r.png"
-dest_files=["res://.godot/imported/spear_r.png-db7b7ee1c54eb08706076e71ea750c8f.ctex"]
+source_file="res://assets/ui/hp_bar_frame.png"
+dest_files=["res://.godot/imported/hp_bar_frame.png-1170076599e006e4165ba4b5b5879c8b.ctex"]
 
 [params]
 

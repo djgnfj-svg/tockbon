@@ -1,7 +1,7 @@
 extends RefCounted
 ## **The beasts get off the boat and the fight happens.** 티켓 41, the 목~일 slice.
 ##
-## The claim under test is one sentence: **an arrived boat puts eight 늑대 on the landing ring as real
+## The claim under test is one sentence: **an arrived boat puts its 늑대 on the landing ring as real
 ## bodies, they walk at the 성채, blows take the numbers `Rules.UNITS` carries, death latches in a later
 ## phase than the blow, a dead 검사 stands again at the 성채, and the 성채 reaching zero loses the run.**
 ##
@@ -47,8 +47,8 @@ const ISLE_MUSTER := 7 + 4 * ISLE_W
 ## **The same board with no water at all**, so no beach ring exists and **no boat is ever born.**
 ##
 ## ⚠⚠ **THE BURN ROWS BELOW CANNOT BE MEASURED ON A BOARD WITH A COAST, AND THAT WAS MEASURED THE HARD
-## WAY.** Burning 240 HP with one 늑대 takes 119 seconds, and `BOAT_INTERVAL_SEC` is thirty — **three
-## more boats land during the row**, so 「it had not fallen yet」 was already false at half the time and
+## WAY.** Burning `KEEP_MAX_HP` with one 늑대 takes sixty seconds, and `BOAT_INTERVAL_SEC` is thirty —
+## **another boat lands during the row**, so 「it had not fallen yet」 was already false at half the time and
 ## the floor under the burn read as a defect in the burn. **A landlocked board is the only place one
 ## 늑대 is one 늑대.**
 ## ⚠ Same 조각 numbers as `ISLE`, so `ISLE_KEEP` and `ISLE_MUSTER` name the same places.
@@ -64,6 +64,69 @@ const LAND := [
 	"............",
 ]
 
+## **A 성채 standing on 눈금 2 with the flat ground hugging it and exactly one 계단 up** — the board
+## 티켓 02-01 is about, and the shape the shipped island has around its own house.
+##
+## ⚠⚠ **LANDLOCKED, FOR THE REASON `LAND` IS**: a coast launches boats, and every row below counts one
+## 늑대. ⚠ **No doorstep either** — `_on_the_plateau` hands `-1` as the muster, so nothing but the 늑대
+## being placed is ever on the board and a blow that lands cannot have come from a defender.
+const PLATEAU := [
+	"........",
+	"........",
+	"........",
+	"........",
+	"........",
+	"........",
+	"........",
+]
+## ⚠ Legend: `0` is 눈금 0, `1` is a 계단 tread, `2` is 눈금 2 — see `Grid.TIER_CHARS`.
+## ⚠⚠ **The 계단 is a SINGLE tread and it is west of the house, not beside the low ring**, so the two
+## cases the rule has to tell apart — flat ground hugging the plateau and a tread hugging it — are both
+## on this board at once.
+const PLATEAU_TIERS := [
+	"00000000",
+	"00000000",
+	"00022000",
+	"00122000",
+	"00000000",
+	"00000000",
+	"00000000",
+]
+const PLATEAU_W := 8
+## The 성채's four 조각 on `PLATEAU`, all four on 눈금 2 — the footprint the shipped island's keep has.
+const PLATEAU_KEEP := [
+	3 + 2 * PLATEAU_W,
+	4 + 2 * PLATEAU_W,
+	3 + 3 * PLATEAU_W,
+	4 + 3 * PLATEAU_W,
+]
+
+## **A 성채 on 눈금 0 walled in on every side by 눈금 2** — the one board where the doorstep exists and
+## has nowhere free beside it.
+##
+## ⚠⚠ **WALLED WITH HEIGHT AND NOT WITH WATER, DELIBERATELY.** A one-조각 island in a sea launches boats,
+## and a 늑대 unloading onto the 조각 the row is about to free would land in the same sub-step the
+## recruit does — `_phase_landings` runs before `_phase_muster`. **Landlocked, so the only thing that
+## can take that 조각 is the thing under test.**
+## ⚠ The house fills its own 조각 (`Battle.setup`), and a body may not climb two 눈금, so
+## `_free_tiles_from` can reach nothing at all from the doorstep.
+const BOXED := [
+	".....",
+	".....",
+	".....",
+	".....",
+	".....",
+]
+const BOXED_TIERS := [
+	"22222",
+	"22222",
+	"22022",
+	"22222",
+	"22222",
+]
+const BOXED_W := 5
+const BOXED_KEEP := 2 + 2 * BOXED_W
+
 ## Tolerance on an accumulated distance in 조각. Positions are summed one sub-step at a time.
 const NEAR := 1e-3
 ## Tolerance on an accumulated HP. Damage is subtracted whole, so this is float noise and nothing else.
@@ -73,6 +136,8 @@ const HP_NEAR := 1e-3
 func run(t) -> void:
 	_the_numbers_are_the_ones_that_were_chosen(t)
 	_the_reach_is_the_range_plus_the_bonus_and_the_window_holds(t)
+	_a_blow_crosses_no_more_notches_than_a_body_climbs(t)
+	_the_keep_cannot_be_burned_from_low_ground(t)
 	_the_keep_is_read_off_the_island_file(t)
 	_an_arrived_boat_puts_its_riders_on_the_board(t)
 	_beasts_pack_a_piece_and_never_overfill_it(t)
@@ -81,6 +146,9 @@ func run(t) -> void:
 	_the_blow_and_the_death_are_different_phases(t)
 	_a_dead_beast_lets_go_of_its_piece(t)
 	_a_dead_swordsman_stands_again_at_the_keep(t)
+	_the_keep_turns_out_a_new_swordsman(t)
+	_the_recruiting_stops_at_the_ceiling(t)
+	_a_recruit_with_nowhere_to_stand_keeps_its_clock(t)
 	_the_keep_burns_and_the_run_is_lost(t)
 	_a_lost_run_stops_the_clock(t)
 	_the_fight_is_the_same_at_any_frame_rate(t)
@@ -99,7 +167,15 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 	t.eq(Rules.REACH_BONUS, 1.75, "사거리 보너스는 1.75 다 — 162 판에서 잰 값이고 다시 안 잰다")
 	t.eq(Rules.REVIVE_SEC, 20.0, "죽은 검사는 20초 뒤에 다시 선다 (⚠ 사용자가 안 고른 임시값)")
 	t.eq(Rules.SWORDSMAN_START_COUNT, 4, "검사 넷으로 시작한다 (⚠ 사용자가 안 고른 임시값)")
-	t.eq(Rules.KEEP_MAX_HP, 240.0, "성채 체력은 240 이다")
+	# ⚠⚠ **TWENTY AND NINE ARE THE USER'S, AND THEY ARE NOT `REVIVE_SEC` AND `BLOCK_CAPACITY`** even
+	# though both pairs agree today. 티켓 02-09: 「일단 병사 뽑는 데 이십 초. 천장 아홉 개」.
+	t.eq(Rules.MUSTER_PERIOD_SEC, 20.0, "성채는 이십 초에 검사 하나를 내놓는다")
+	t.eq(Rules.MUSTER_CAP, 9, "그리고 아홉이 천장이다")
+	# ⚠⚠ **240 -> 120 ON 2026-09-01, WITH THE BOATLOAD** (the user: 「내려」). 240 was fifteen seconds
+	# of one undefended boat at `BOAT_CAPACITY` 8; at four the same arithmetic hit exactly
+	# `BOAT_INTERVAL_SEC` and 「a boat ignored whole loses you the run」 went false. **120 puts those
+	# fifteen seconds back.** See the burn rows below, which are what this pin protects.
+	t.eq(Rules.KEEP_MAX_HP, 120.0, "성채 체력은 120 이다")
 	t.eq(Rules.BOAT_RIDER_TYPE, Rules.WOLF, "배에 타고 오는 것은 늑대다")
 
 	# ⚠⚠ **HOW MANY BODIES STAND ON ONE 조각, AND IT IS PINNED HERE FOR THE REASON THIS FUNCTION EXISTS.**
@@ -199,6 +275,144 @@ func _the_reach_is_the_range_plus_the_bonus_and_the_window_holds(t) -> void:
 		"그 값이 sqrt(4 + 높이차²) 다 (얻은 값 %.4f)" % across)
 
 
+# == the keep has to be climbed to ====================================================================
+
+## **`Grid.can_strike` — a blow crosses no more 눈금 than a body climbs, and it asks nothing else.**
+##
+## ⚠⚠ **THE 눈금 GAP IS THE ONLY THING THAT SEPARATES THE TWO CASES, WHICH IS THE WHOLE CLAIM.** Flat
+## ground beside the plateau and a 계단 tread beside it are both about 1.4 조각 from the 조각 above, so
+## these rows drive the LEVELS and never a distance.
+func _a_blow_crosses_no_more_notches_than_a_body_climbs(t) -> void:
+	var g := Grid.new()
+	g.load_rows(PLATEAU, PLATEAU_TIERS)
+	var low := g.tile_index(2, 2)
+	var low2 := g.tile_index(1, 2)
+	var stair := g.tile_index(2, 3)
+	var high := g.tile_index(3, 2)
+	var high2 := g.tile_index(4, 2)
+	t.eq(g.level_of(low), 0, "낮은 조각이 눈금 0 이다 (자가 점검)")
+	t.eq(g.level_of(stair), 1, "계단 조각이 눈금 1 이다 (자가 점검)")
+	t.eq(g.level_of(high), 2, "고원 조각이 눈금 2 이다 (자가 점검)")
+
+	t.ok(g.can_strike(low, low2), "같은 눈금끼리는 때린다")
+	t.ok(g.can_strike(high, high2), "높은 눈금끼리도 때린다")
+	t.ok(g.can_strike(low, stair), "눈금 하나 차이는 때린다")
+	t.ok(g.can_strike(stair, high), "계단에서 고원을 때린다 — 이것이 사거리 값을 못 내리는 이유다")
+	t.ok(not g.can_strike(low, high), "눈금 둘 차이는 못 때린다 — 1층에서 성채를 못 태운다")
+	t.ok(not g.can_strike(high, low), "위에서 아래로도 못 때린다 — 고원이 사격대가 되지 않는다")
+	t.ok(not g.can_strike(low, -1), "격자 밖은 거절이다")
+	t.ok(not g.can_strike(-1, low), "반대쪽 끝도 거절이다")
+	t.ok(not g.can_strike(low, g.w * g.h), "격자 끝 너머도 거절이다")
+
+	# ⚠⚠ **THE ROWS THAT GO RED FOR A `can_strike` THAT IS `can_step` UNDER A NEW NAME.** Everything
+	# above is equally green for a copy of the walk rule, and the day somebody folds the two together a
+	# 검사 stops hitting what is standing in front of him. **Two places where walking is refused and
+	# striking must not be**: water, and a wall corner.
+	var sea := _grid(ISLE)
+	var shore := sea.tile_index(2, 2)
+	var surf := sea.tile_index(1, 2)
+	t.eq(sea.passable[surf], 0, "물 조각을 하나 잡았다 (자가 점검)")
+	t.ok(not sea.can_step(shore, surf), "거기로는 걸어 들어가지 못한다 (자가 점검)")
+	t.ok(sea.can_strike(shore, surf), "그런데 때리기는 한다 — 통행을 안 묻는다")
+
+	var corner := _grid([
+		"~~~~",
+		"~.~~",
+		"~~.~",
+		"~~~~",
+	])
+	var a := corner.tile_index(1, 1)
+	var b := corner.tile_index(2, 2)
+	t.ok(not corner.can_step(a, b), "양 어깨가 막힌 대각선은 걸어서 못 지난다 (자가 점검)")
+	t.ok(corner.can_strike(a, b), "그런데 때리기는 한다 — 어깨를 안 묻는다")
+
+
+## **A 늑대 on the flat ground hugging the 성채 cannot burn it, and one on the 계단 still can.**
+##
+## ⚠⚠ **BOTH HALVES OR NEITHER IS WORTH ANYTHING.** 「낮은 땅에서 못 태운다」 is green for a 성채
+## nothing can ever hurt, and that is the same defect inverted — a round that cannot be lost. **The
+## 계단 rows below are the floor**, and the last pair walks a 늑대 up there on its own feet so that
+## 「low ground has to climb」 is what is measured rather than 「low ground never wins」.
+func _the_keep_cannot_be_burned_from_low_ground(t) -> void:
+	var fixture := _on_the_plateau()
+	var g := fixture.grid
+	var low_ring := PackedInt32Array()
+	var stair_ring := PackedInt32Array()
+	var seen := {}
+	for k in fixture.keep_tiles.size():
+		var kt := int(fixture.keep_tiles[k])
+		var kx := kt % g.w
+		var ky := kt / g.w
+		for n in Grid.NEIGHBOURS.size():
+			var nx := kx + int(Grid.NEIGHBOURS[n][0])
+			var ny := ky + int(Grid.NEIGHBOURS[n][1])
+			if nx < 0 or ny < 0 or nx >= g.w or ny >= g.h:
+				continue
+			var nt := ny * g.w + nx
+			if seen.has(nt) or fixture.keep_tiles.has(nt):
+				continue
+			seen[nt] = true
+			if g.level_of(nt) == 0:
+				low_ring.append(nt)
+			elif g.level_of(nt) == 1:
+				stair_ring.append(nt)
+	t.eq(low_ring.size(), 11, "성채를 두른 1층 자리가 열하나다 (자가 점검)")
+	t.eq(stair_ring.size(), 1, "그리고 그중 계단이 하나다 (자가 점검)")
+
+	# **Every 자리, not a sample.** Eight of them hugged the shipped island's 성채 and all eight burned
+	# it; a row that probes one is green for a rule that only refuses one direction.
+	var stood := PackedInt32Array()
+	var in_gap := PackedInt32Array()
+	var targeted := PackedInt32Array()
+	var hurt := PackedInt32Array()
+	for i in low_ring.size():
+		var tile := int(low_ring[i])
+		var b := _on_the_plateau()
+		var who := b.land_beast(Rules.WOLF, tile)
+		if who < 0 or b._tile_of(b.enemy_pos[who]) != tile:
+			stood.append(tile)
+			continue
+		if not is_inf(b.keep_gap(b.enemy_pos[who])):
+			in_gap.append(tile)
+		b.step(Rules.SIM_SUBSTEP_SEC)
+		if int(b.enemy_target[who]) != Battle.TARGET_NONE:
+			targeted.append(tile)
+		if b.keep_hp < Rules.KEEP_MAX_HP:
+			hurt.append(tile)
+	t.eq(stood.size(), 0, "1층 자리 열하나에 늑대가 하나씩 실제로 섰다 (자가 점검) %s" % str(stood))
+	t.eq(in_gap.size(), 0, "그 자리에서는 때릴 성채 조각이 하나도 없다 %s" % str(in_gap))
+	t.eq(targeted.size(), 0, "그래서 아무도 성채를 안 겨눈다 %s" % str(targeted))
+	t.eq(hurt.size(), 0, "성채 체력이 한 점도 안 깎였다 %s" % str(hurt))
+
+	# ⚠ **The planar distance is IDENTICAL for the 계단**, which is why the rows above cannot be a
+	# distance rule wearing a level rule's name.
+	var s := _on_the_plateau()
+	var stair := int(stair_ring[0])
+	var climber := s.land_beast(Rules.WOLF, stair)
+	t.ok(climber >= 0, "계단 조각에 늑대를 세웠다 (자가 점검)")
+	t.eq(s._tile_of(s.enemy_pos[climber]), stair, "그 조각에 진짜로 섰다 (자가 점검)")
+	var gap := s.keep_gap(s.enemy_pos[climber])
+	t.ok(gap <= Rules.reach_of(Rules.WOLF) + Rules.EPS,
+		"계단에서는 성채까지 %.3f 조각이고 사거리 %.2f 안이다" % [gap, Rules.reach_of(Rules.WOLF)])
+	s.step(Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(s.enemy_target[climber]), Battle.TARGET_KEEP, "그리고 성채를 겨눈다")
+	t.ok(s.keep_hp < Rules.KEEP_MAX_HP, "한 대가 실제로 들어간다 (%.2f)" % s.keep_hp)
+
+	# **And it gets up there on its own feet.** ⚠ The budget is 40 조각 of walking at the table's own
+	# speed — far more than this board's route needs, so the row measures whether it climbs and never
+	# how fast.
+	var climb := _on_the_plateau()
+	var far := climb.grid.tile_index(0, 6)
+	var walker := climb.land_beast(Rules.WOLF, far)
+	t.ok(walker >= 0, "판 구석에서 한 마리 출발시킨다 (자가 점검)")
+	t.eq(climb.grid.level_of(climb._tile_of(climb.enemy_pos[walker])), 0, "1층에서 출발한다 (자가 점검)")
+	t.ok(is_inf(climb.keep_gap(climb.enemy_pos[walker])), "출발 자리에서는 성채를 못 때린다 (자가 점검)")
+	climb.step(40.0 / Rules.speed_of(Rules.WOLF))
+	t.eq(climb.grid.level_of(climb._tile_of(climb.enemy_pos[walker])), 1,
+		"걸려 두면 계단 위에 올라와 있다 — 낮은 땅이 못 이기는 게 아니라 올라와야 하는 것이다")
+	t.ok(climb.keep_hp < Rules.KEEP_MAX_HP, "그리고 성채를 때리기 시작한다 (%.2f)" % climb.keep_hp)
+
+
 ## **The 성채 is read out of the island file and it covers a footprint, not a corner.**
 func _the_keep_is_read_off_the_island_file(t) -> void:
 	var tiles := Islands.keep_tiles()
@@ -268,13 +482,13 @@ func _the_keep_is_read_off_the_island_file(t) -> void:
 ## **An arrived boat unloads, and what it unloads is bodies.**
 ##
 ## ⚠⚠ **BOTH HALVES, BECAUSE EITHER ALONE IS GREEN ON A LIE.** 「The rider count went to zero」 is true
-## of a boat that simply forgot its riders; 「eight bodies exist」 is true of a spawn loop that never
+## of a boat that simply forgot its riders; 「the bodies exist」 is true of a spawn loop that never
 ## read the boat. **The two are asserted against each other.**
 func _an_arrived_boat_puts_its_riders_on_the_board(t) -> void:
 	var b := _battle(ISLE)
 	b.step(Rules.BOAT_FIRST_SEC)
 	t.eq(b.boat_pos.size(), 1, "배가 한 척 떴다 (자가 점검)")
-	t.eq(int(b.boat_riders[0]), Rules.BOAT_CAPACITY, "여덟이 타 있다 (자가 점검)")
+	t.eq(int(b.boat_riders[0]), Rules.BOAT_CAPACITY, "넷이 타 있다 (자가 점검)")
 	t.eq(b.living_enemy_ids().size(), 0, "그리고 아직 판에 짐승이 하나도 없다")
 
 	# ⚠ **Stepped one sub-step at a time up to the landing and not a second past it.** Every 늑대 starts
@@ -294,7 +508,7 @@ func _an_arrived_boat_puts_its_riders_on_the_board(t) -> void:
 			wrong_type += 1
 		if absf(float(b.enemy_hp[i]) - Rules.hp_of(Rules.BOAT_RIDER_TYPE)) > HP_NEAR:
 			wrong_hp += 1
-	t.eq(wrong_type, 0, "여덟이 전부 늑대다")
+	t.eq(wrong_type, 0, "넷이 전부 늑대다")
 	t.eq(wrong_hp, 0, "그리고 전부 표가 준 체력으로 선다")
 
 	# They came off at the beach the boat was aimed at, not somewhere else on the island.
@@ -610,6 +824,151 @@ func _a_dead_swordsman_stands_again_at_the_keep(t) -> void:
 	t.ok(b.grid.holds(tile, 0), "그리고 그 조각을 제 이름으로 잡는다")
 
 
+# == the doorstep turns out new bodies ================================================================
+
+## **One more 검사 stands at the 성채 every `Rules.MUSTER_PERIOD_SEC`, with nothing on screen and nobody
+## pressing anything.** 티켓 02-09: the user deferred the picture by name and kept the rule.
+##
+## ⚠ **Landlocked** (`LAND`): a board with a coast lands 늑대 inside twenty seconds, and the row would
+## be measuring a fight instead of a clock.
+func _the_keep_turns_out_a_new_swordsman(t) -> void:
+	var b := _battle_on(_grid(LAND), _keep(), ISLE_MUSTER)
+	var opened := b.living_soldier_count()
+	t.eq(opened, Rules.SWORDSMAN_START_COUNT, "판이 시작 인원으로 열린다 (자가 점검)")
+	t.eq(b.muster_left, Rules.MUSTER_PERIOD_SEC, "그리고 시계가 꽉 찬 채로 열린다 — 첫 프레임에 안 나온다")
+
+	# ⚠⚠ **THE FLOOR, AND WITHOUT IT THE LINE BELOW IS GREEN FOR A BODY THAT APPEARS INSTANTLY.**
+	b.step(Rules.MUSTER_PERIOD_SEC - 0.2)
+	t.eq(b.living_soldier_count(), opened, "주기가 차기 전에는 아무도 안 늘어난다")
+
+	b.step(0.4)
+	var fresh := opened
+	t.eq(b.living_soldier_count(), opened + 1, "주기가 지나면 하나 늘어난다")
+	t.eq(b.army.type_id.size(), opened + 1, "명부에도 한 줄 늘었다")
+	t.eq(int(b.soldier_state[fresh]), Battle.SoldierState.ASHORE, "그 몸은 판 위에 서 있다")
+	t.eq(b.soldier_hp[fresh], b.army.max_hp_of(fresh), "그리고 체력이 꽉 차 있다")
+	var gap := _keep_gap(b, b.soldier_pos[fresh])
+	t.ok(gap <= 2.0, "선 자리가 성채 옆이다 (%.2f 조각)" % gap)
+	t.ok(b.grid.holds(b._tile_of(b.soldier_pos[fresh]), fresh), "그리고 그 조각을 제 이름으로 잡는다")
+	t.eq(int(b.army.slot_id[fresh]), Rules.MUSTER_SLOT, "성채가 뽑는 칸은 정해진 그 칸이다")
+	t.eq(int(b.army.type_id[fresh]), Rules.SWORDSMAN, "그래서 나오는 것은 검사다")
+	_columns_are_level(t, b, "새로 뽑은 뒤")
+
+	# ⚠ **The clock is spent by the body and starts over full** — measured by the next one's timing
+	# rather than by reading the field back, so a clock that reset to something else goes red here.
+	b.step(Rules.MUSTER_PERIOD_SEC - 1.0)
+	t.eq(b.living_soldier_count(), opened + 1, "시계가 처음부터 다시 간다 — 둘째가 바로 안 나온다")
+	b.step(2.0)
+	t.eq(b.living_soldier_count(), opened + 2, "그리고 한 주기 뒤에 둘째가 나온다")
+
+	# ⚠⚠ **NO DOORSTEP, NO RECRUITING.** Every net fixture in this repo but one hands the fight a board
+	# with no house, and a doorstep of -1 must be a refusal rather than a body standing at 조각 -1.
+	var c := _battle_on(_grid(LAND), _keep(), -1)
+	var rows := c.army.type_id.size()
+	c.step(Rules.MUSTER_PERIOD_SEC * 3.0)
+	t.eq(c.living_soldier_count(), rows, "문간이 없는 판에서는 아무도 안 뽑힌다")
+	t.eq(c.recruit(Rules.MUSTER_SLOT), -1, "직접 불러도 거절이다")
+	t.eq(c.army.type_id.size(), rows, "그리고 명부가 그대로다 — 아무것도 안 변했다")
+
+	# ⚠ **An unbound slot fields nobody, and the refusal happens before a single column grows.**
+	# Appending the columns first and asking `Army` second is the shape that leaves a row of type -1
+	# on the board: alive, countable, and with no stats and no picture.
+	var d := _battle_on(_grid(LAND), _keep(), ISLE_MUSTER)
+	var before := d.army.type_id.size()
+	t.eq(d.recruit(d.army.slot_count()), -1, "빈 칸은 아무도 안 내놓는다")
+	t.eq(d.army.type_id.size(), before, "명부가 그대로다")
+	t.eq(d.soldier_state.size(), before, "그리고 판 쪽 칸도 그대로다 — 반쯤 만들다 만 몸이 없다")
+	_columns_are_level(t, d, "거절당한 뒤")
+
+
+## **Nine and no more — and at the ceiling the clock does not quietly bank the ones it refuses.**
+func _the_recruiting_stops_at_the_ceiling(t) -> void:
+	var b := _battle_on(_grid(LAND), _keep(), ISLE_MUSTER)
+	# ⚠⚠ **THE OPENING WATCH IS STOOD FIRST, EXACTLY AS `Run` STANDS IT.** Left in reserve, the row
+	# would fill the ceiling with five bodies instead of nine and **the crowding around the house would
+	# never happen** — which is the one thing the ticket asks to be confirmed rather than assumed.
+	for i in b.army.type_id.size():
+		b.stand_at_keep(i)
+	var opened := b.living_soldier_count()
+	t.eq(b.ashore_ids().size(), opened, "시작 인원이 전부 성채 옆에 서 있다 (자가 점검)")
+	t.ok(opened < Rules.MUSTER_CAP,
+		"시작 인원이 천장보다 적다 (자가 점검 — %d < %d)" % [opened, Rules.MUSTER_CAP])
+
+	# ⚠ **Four periods past what the ceiling needs**: a row that stopped stepping the moment the
+	# ceiling was reached cannot tell a limit from a coincidence.
+	b.step(Rules.MUSTER_PERIOD_SEC * float(Rules.MUSTER_CAP + 4))
+	t.eq(b.living_soldier_count(), Rules.MUSTER_CAP, "천장에서 멈춘다")
+	t.eq(b.army.type_id.size(), Rules.MUSTER_CAP, "명부에도 그만큼뿐이다 — 못 선 몸이 뒤에 안 쌓였다")
+	_columns_are_level(t, b, "천장에서")
+
+	# ⚠⚠ **THE 성채's OWN 블록 ADMITS EIGHT AND NOT NINE** — the house fills one 조각 whole — so the
+	# ninth body has to stand FURTHER OUT rather than not stand at all. **Measured here rather than
+	# assumed**: a refusal would have left a row on the roster with nothing on the board, and the
+	# ceiling would still have read as nine.
+	t.eq(b.ashore_ids().size(), Rules.MUSTER_CAP, "아홉이 전부 판 위에 서 있다 — 아홉째도 밀려나 선다")
+	for i in b.soldier_state.size():
+		var tile := b._tile_of(b.soldier_pos[i])
+		t.ok(b.grid.holds(tile, i), "%d 번이 제 조각을 제 이름으로 잡는다" % i)
+		t.ok(_keep_gap(b, b.soldier_pos[i]) <= 4.0, "%d 번이 성채 언저리에 있다" % i)
+	# ⚠⚠ **THE BANK.** A clock counted to zero and parked there would spit a body out the instant the
+	# ceiling ever moved, and 「천장 아홉」 would be a delay instead of a limit.
+	t.eq(b.muster_left, Rules.MUSTER_PERIOD_SEC, "천장에서는 시계가 아예 안 돈다 — 하나도 안 쟁여 둔다")
+
+	# The direct door refuses too, and changes nothing when it does.
+	var rows := b.army.type_id.size()
+	t.eq(b.recruit(Rules.MUSTER_SLOT), -1, "천장에서는 직접 불러도 거절이다")
+	t.eq(b.army.type_id.size(), rows, "그리고 명부가 그대로다")
+	t.eq(b.soldier_state.size(), rows, "판 쪽 칸도 그대로다")
+
+
+## **Nowhere to stand is a retry, not a spend.** ⚠⚠ **THIS IS THE ROW THE CEILING DEPENDS ON**: if a
+## refused recruit reset the clock, the doorstep would hand out bodies at whatever rate the ground
+## happened to allow and 「천장 아홉」 would quietly become 「however many fit」.
+func _a_recruit_with_nowhere_to_stand_keeps_its_clock(t) -> void:
+	var g := Grid.new()
+	g.load_rows(BOXED, BOXED_TIERS)
+	var keep := PackedInt32Array()
+	keep.append(BOXED_KEEP)
+	var b := _battle_on(g, keep, BOXED_KEEP)
+	var opened := b.living_soldier_count()
+
+	b.step(Rules.MUSTER_PERIOD_SEC * 3.0)
+	t.eq(b.living_soldier_count(), opened, "설 자리가 없으면 아무도 안 선다")
+	t.ok(b.muster_left <= Rules.EPS,
+		"그런데 시계는 0 에 서서 기다린다 — 거절이 주기를 안 쓴다 (%.3f)" % b.muster_left)
+
+	# ⚠⚠ **THE INVERSION.** Open the ground and exactly ONE body appears on the next sub-step. A clock
+	# that had been banking would put three periods' worth out at once here; a clock that had been
+	# spending would make this body wait another twenty seconds.
+	b.grid.release_all(Battle.KEEP_UID)
+	b.step(Rules.SIM_SUBSTEP_SEC)
+	t.eq(b.living_soldier_count(), opened + 1, "자리가 나면 다음 서브스텝에 바로 하나 선다")
+	b.step(1.0)
+	t.eq(b.living_soldier_count(), opened + 1, "그리고 하나뿐이다 — 밀린 주기가 쏟아지지 않는다")
+	_columns_are_level(t, b, "막힌 판에서")
+
+
+## **Every column this file indexes by 검사 is the same length as the roster.** A column left short is
+## not a wrong number — it is an out-of-range read on the first sub-step that touches the new body.
+func _columns_are_level(t, b: Battle, when: String) -> void:
+	var rows := b.army.type_id.size()
+	var lens := {
+		"soldier_state": b.soldier_state.size(),
+		"soldier_order": b.soldier_order.size(),
+		"soldier_hp": b.soldier_hp.size(),
+		"soldier_target": b.soldier_target.size(),
+		"soldier_cool": b.soldier_cool.size(),
+		"soldier_revive": b.soldier_revive.size(),
+		"soldier_pos": b.soldier_pos.size(),
+		"_soldier_stale": b._soldier_stale.size(),
+		"_soldier_goal": b._soldier_goal.size(),
+		"_soldier_path": b._soldier_path.size(),
+		"_soldier_path_i": b._soldier_path_i.size(),
+	}
+	for name: String in lens:
+		t.eq(int(lens[name]), rows, "%s — %s 가 명부와 같은 길이다" % [when, name])
+
+
 # == the keep burns ===================================================================================
 
 ## **The 성채 takes the table's damage and the run is lost when it reaches zero.**
@@ -776,6 +1135,18 @@ func _at_the_keep() -> Battle:
 	var b := _battle_on(_grid(LAND), _keep(), ISLE_MUSTER)
 	b.land_beast(Rules.WOLF, b.grid.tile_index(4, 4))
 	return b
+
+
+## **The plateau board with its 성채 standing and nobody else on it.** See `PLATEAU`: landlocked so no
+## boat is born, and `-1` for the doorstep so no 검사 stands — a blow that lands here can only have
+## come from the 늑대 the row put there.
+func _on_the_plateau() -> Battle:
+	var g := Grid.new()
+	g.load_rows(PLATEAU, PLATEAU_TIERS)
+	var keep := PackedInt32Array()
+	for raw in PLATEAU_KEEP:
+		keep.append(int(raw))
+	return _battle_on(g, keep, -1)
 
 
 ## **Steps one sub-step at a time until the first boat has put everybody ashore.** Bounded, because a
