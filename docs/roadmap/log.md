@@ -3644,3 +3644,42 @@ from the other side — a body with no weapon — and the user asked for a bette
 ⚠ **The two definitions do not obviously agree**: 농부 holds a farm tool and still has to go alone, so
 **「moves alone」 and 「holds no weapon」 are not the same set.** ⇒ **Only 「holds a weapon ⇒ moves as a
 squad」 makes them agree, and nobody has said that.**
+
+### 마무리 — **티켓 일곱을 세웠고, 닫은 것은 0 이다**
+
+**The user closed the round with one instruction**: *"For now I think we should wrap up with what we
+have made so far ... just make the tickets properly."* (「일단 지금까지 만든거 해서 마무리해야할듯 ...
+티켓들을 잘 만들어주면됨」) ⇒ **The output of a round that wrote no code is tickets.**
+
+**And the last decision of the round**: *"Right, recruiting soldiers is the correct one."*
+(「그렇네 병사는 뽑는게 맞는데」) ⇒ **뽑기 stays and 「이벤트로 받는다」 does not replace it.**
+⚠ **뽑기 was already decided AND already built** — ticket `02-09` is `resolved` and `MUSTER_PERIOD_SEC`
+runs at 20 s. **The user was re-deciding something the repository already had.**
+
+| 새 티켓 | 무엇 | Type |
+|---|---|---|
+| **05-02** | 밭을 만들고 심고 물을 준다 | task |
+| **05-03** | 우물을 지으면 물을 안 길어도 된다 | task |
+| **05-04** | 요리 건물이 작물을 음식으로 바꾼다 | task |
+| **05-05** | 어디서 캐나 | grilling |
+| **05-06** | 걸어서 못 가는 철광석에 어떻게 가나 | grilling |
+| **03-05** | 단축키 1~4 로 부대를 등록한다 | task |
+| **03-06** | 무기를 들면 부대로만 움직이나 | grilling |
+| **03-07** | 이동이 재미있어야 한다 | grilling |
+| **04-04** | 맨손과 손에 든 것을 용어집에 세운다 | grilling |
+
+⚠ **Nine, not seven** — the count in the map's opening was written before 03-06 and 03-07 were split.
+
+**티켓 05-01 은 안 닫혔다.** Its bar is 「the user has said what eating changes」 and they have not.
+
+### ⚠⚠ 그물을 못 돌렸다
+
+**`tests/run_nets.ps1` is PowerShell and this container has no elevated shell**, the same as the other
+2026-09-01 round. **The last real measurement is 통과 1464 · 실패 21**, and **`src/` was not touched this
+session**, so the numbers should still hold. ⚠ **Not run is not passed.**
+
+### ⚠ 지도가 자기 자신과 어긋나 있었다
+
+**The map's ticket table said all nine of task 02's tickets were `open`; eight are `resolved` and one is
+`claimed`.** The opening section of the SAME file said 「여덟이 닫혔다」. **The ticket files were true and
+the table was corrected.**
