@@ -15,9 +15,15 @@ extends RefCounted
 ## **The gesture this serves** (2026-08-31, the user: 「tab 없이 그냥 캐릭터를 누르면 이동할 수 있는
 ## 칸들이 뜨고 눌러서 이동하는거임」):
 ##
-##  1. press a body   -> `pick`   — the reach lights up
-##  2. press a lit 조각 -> `order` — everybody picked walks there
+##  1. press a body  -> `pick`   — the reach lights up
+##  2. press a lit 칸 -> `order` — everybody picked walks there
 ##  3. press anything else -> `clear`
+##
+## ⚠⚠ **STEP 2 WAS A 조각 UNTIL 2026-09-01** (the user: "let us do it by the block"). **`order`,
+## `routes` and `route_points` take a 칸; `reach`, `can_reach` and the picture's mask are still 조각.**
+## Both units are bare `int` and a 조각 index passed as a 칸 lands on a real place somewhere else on
+## the board with nothing going red, so **every parameter and every local in here says which one it
+## is** — that naming is the only guard there is.
 ##
 ## ⚠⚠ **THE TAB THE USER MENTIONED WAS ALREADY IN THE GAME AND IT IS NOT A COMMIT KEY.** It is
 ## `field_view.set_pads_revealed`, held to show the whole board. **No reservation step was added** —
@@ -29,9 +35,24 @@ extends RefCounted
 ## Empty is 「nothing picked」 and is the resting state.
 var ids := PackedInt32Array()
 
-## **Every 조각 the picked bodies may stand on**, ascending. ⚠ **This is what lights up**, so it is a
-## standing test and not a walking one: a stair is walked THROUGH and never stood on, and a 조각 whose
-## 블록 already holds nine is not somewhere anybody may be sent.
+## **Every 조각 the picked bodies may be POINTED at**, ascending. ⚠ **This is what lights up**, and it
+## asks two things only: the 조각 is passable, and it is not a stair — a stair is walked THROUGH and
+## never stood on.
+##
+## ⚠⚠ **A FULL 칸 IS IN HERE, AND IT WAS NOT UNTIL 2026-09-01** (the user: "let's do it by block unit",
+## and "the order goes out even when it is full, and if the 칸 holds enemies they fight"). **The old
+## rule was written on this very line: 「a 조각 whose 블록 already holds nine is not somewhere anybody
+## may be sent」**, and `_standable` enforced it by asking `Grid.can_hold`. A 칸 holding nine went dark,
+## fell out of `reach_blocks`, and both `order` and the shell refused the press.
+##
+## ⚠⚠ **THIS IS 「WHERE MAY I POINT」 AND NOT 「WHERE MAY A BODY STAND」.** Those were one question until
+## that day and they are two now: `Grid.can_hold` is still the walker's admission test, `_seats` still
+## honours `Rules.BLOCK_CAPACITY`, and the surplus is seated in a neighbouring 칸 rather than the order
+## being refused.
+##
+## ⚠ **The capacity answer that used to live here was stale anyway.** `_build_reach` runs once, at
+## `pick_many`, and is never rebuilt — so the moment anybody walked, the lit set was answering a
+## question about a board that had moved on. Capacity now decides nothing about what lights.
 var reach := PackedInt32Array()
 
 ## `reach` again as a set, so `can_reach` is one lookup instead of a scan. **Rebuilt with `reach` and
@@ -39,9 +60,52 @@ var reach := PackedInt32Array()
 ## a press.
 var _in_reach := {}
 
-## The 조각 `routes` last answered for, and what it answered. **A hover asks for the same route many
-## frames running**, and a flow field per frame is the one cost in here worth not paying twice.
-var _route_tile := -1
+## **Every 칸 the picked bodies may be ORDERED onto**, ascending — `reach` collapsed through
+## `Grid.block_of` and deduped.
+##
+## ⚠⚠ **TWO NAMES, TWO UNITS, AND MIXING THEM GOES NOWHERE NEAR RED.** `reach` is 조각 and stays 조각:
+## the mask the picture reads (`field_view.set_reach`) is 조각-strided and the shader collapses four
+## texels into a 칸 by itself. **A 칸 index handed to a 조각-keyed reader lands on a real 조각 somewhere
+## else on the board** — a plausible number for the wrong place, which is this repo's own named false
+## green.
+##
+## ⚠ **A 칸 is in here when ANY of its 조각 is in `reach`**, which is the same union `reach` already is
+## across the picked bodies.
+var reach_blocks := PackedInt32Array()
+
+## `reach_blocks` again as a set, so `can_reach_block` is one lookup instead of a scan. **Rebuilt with
+## it and never separately**, for the reason `_in_reach` gives.
+var _in_reach_block := {}
+
+## **What `routes` last answered, and the two lists the answer is a function of** — the seats it drew
+## to, and the 조각 the bodies were standing on. **A hover asks for the same route many frames running**,
+## and the walk down a flow field is the one cost in here worth not paying twice.
+##
+## ⚠⚠ **IT WAS KEYED ON THE 칸 ALONE UNTIL 2026-09-01 AND THAT CACHE WAS A LIAR** (measured that day,
+## driving `Hand` headless with `.new()`). `_route_block` held the pressed 칸 and nothing else, so **the
+## preview and the press disagreed the moment anything moved**: hover a 칸, let nine bodies fill it,
+## hover again — the preview still ended on 조각 54 while `order` seated the 부대 on 조각 41. **Three
+## bodies, three wrong lines, and nothing anywhere went red.**
+##
+## ⚠⚠ **WHY THE OLD KEY WAS SOUND AND STOPPED BEING SOUND.** `_spread` — deleted the same day, see
+## `order` — read only `reach`, which is frozen at the pick, so its answer could not change while the
+## hand was held. **`_seats` reads LIVE occupancy** through `Grid.hold_count` and `Grid.block_hold_count`,
+## and that moves every frame: bodies walk, and `battle.gd` holds every 짐승 in `grid.reserved` too.
+## **The 칸 was still a good name for the question; it stopped being a name for the answer.**
+##
+## ⚠⚠ **THESE TWO ARE THE WHOLE OF WHAT THE LINES DEPEND ON, AND THAT IS WHY THE KEY IS COMPLETE.**
+## A line is `Grid.path_from` + `Grid.string_pull` over `Battle.field_to(dest)`, and a flow field reads
+## passability, level and stairs — **never `reserved`** — so the ground is the only other input, and the
+## ground does not move inside one island. **Seats plus starts pin the rest.**
+##
+## ⚠ **The starts are in here for a second staleness of the same cache.** Keyed on the 칸, a line built
+## while a body stood at the door kept every 조각 he had since walked past, so the drawn line ran
+## BACKWARDS from his feet to where he used to be. A moved start is now a miss, which is what it is.
+##
+## ⚠ **No sentinel, and none is needed.** `ids` is never empty when these are written, so a rested
+## `_route_starts` is empty and cannot equal a live one.
+var _route_seats := PackedInt32Array()
+var _route_starts := PackedInt32Array()
 var _routes: Array = []
 
 
@@ -51,6 +115,8 @@ func clear() -> void:
 	ids = PackedInt32Array()
 	reach = PackedInt32Array()
 	_in_reach = {}
+	reach_blocks = PackedInt32Array()
+	_in_reach_block = {}
 	_forget_routes()
 
 
@@ -98,6 +164,12 @@ func can_reach(tile: int) -> bool:
 	return _in_reach.has(tile)
 
 
+## **Whether the picked bodies may be ordered onto this 칸.** ⚠ **The 칸 twin of `can_reach`, not its
+## replacement** — the two take different units and both are live. See `reach_blocks`.
+func can_reach_block(block: int) -> bool:
+	return _in_reach_block.has(block)
+
+
 ## **Where the picked bodies stand right now**, one 조각 each and in `ids` order. ⚠ **A body whose
 ## position is off the board answers -1 rather than being dropped**, so this list and `ids` are always
 ## the same length and index the same body.
@@ -127,19 +199,33 @@ func body_at(battle: Battle, at_tiles: Vector2, radius: float) -> int:
 	return who
 
 
-## **Sends everybody picked to `tile`, and answers how many actually went.**
+## **Sends everybody picked onto `block`, and answers how many actually went.**
 ##
-## ⚠⚠ **ONE BODY GETS THE PRESSED 조각; MANY GET ONE 조각 EACH.** Nine bodies ordered onto the same
-## 조각 would be nine walk orders onto three slots, and six of them would stall against a full 조각
-## with no way for the player to see why. **`_spread` is the seam the 부대's own formation plugs into**
-## — the roadmap has 「아홉이 서는 모양」 already chosen as shape 6, and when it is built it replaces the
-## body of that one function and nothing else here.
-func order(battle: Battle, tile: int) -> int:
+## ⚠⚠ **`block` IS A 칸 AND IT WAS A 조각 UNTIL 2026-09-01** (the user: "let us do it by the block").
+## **A 조각 index handed in here compiles, runs, and seats the 부대 on the wrong quarter of the board.**
+## Callers convert with `Grid.block_of` before they get here, and the shell gates on `can_reach_block`
+## with the same converted number it passes.
+##
+## ⚠ **WHAT GOES OUT IS STILL 조각.** `Battle.order_walk` takes one square metre per body and is
+## untouched by this — `_seats` is the only thing in the game that crosses from the aimed 칸 to the
+## 조각 a body actually stands in.
+##
+## ⚠⚠ **ONE BODY DOES NOT GET 「THE PRESSED 조각」 ANY MORE, BECAUSE THERE ISN'T ONE.** With the ground
+## marks one per 칸 the press carries no sub-칸 information at all, so even a single body is seated by
+## `_seats` inside the 칸 rather than dropped on a square the player picked out.
+##
+## ⚠⚠ **`_spread` STOOD HERE AND IT IS DELETED** (2026-09-01). It handed out one DISTINCT 조각 per
+## body, spreading outward from the pressed 조각 — a contract a 칸 cannot use, because a 칸 is four
+## 조각 and holds nine bodies, so three of them share a 조각 and no distinct-조각 list can say so.
+## **`_seats` is the seam the 부대's own formation plugs into now** — the roadmap has the shape for
+## nine standing bodies already chosen as shape 6, and when it is built it replaces the body of that
+## one function and nothing else here.
+func order(battle: Battle, block: int) -> int:
 	if battle == null or battle.grid == null or ids.is_empty():
 		return 0
-	if not can_reach(tile):
+	if not can_reach_block(block):
 		return 0
-	var seats := _spread(battle, tile, ids.size())
+	var seats := _seats(battle, block, ids.size())
 	var sent := 0
 	for k in ids.size():
 		if k >= seats.size():
@@ -150,41 +236,68 @@ func order(battle: Battle, tile: int) -> int:
 	return sent
 
 
-## **The line each picked body would walk to `tile`** — one 조각 list per body, in `ids` order, and the
-## whole of the 이동선 the user asked to see before committing to it (2026-08-31: 「이동할때 이동선이
-## 미리 보였으면 좋겠네」).
+## **The line each picked body would walk onto `block`** — one 조각 list per body, in `ids` order, and
+## the whole of the 이동선 the user asked to see before committing to it (2026-08-31: "when moving, I
+## would like the movement line to be shown in advance").
+##
+## ⚠⚠ **THE INVARIANT, AND IT IS THE ONLY REASON THIS FUNCTION EXISTS: the last 조각 of body `k`'s line
+## is the 조각 `order` would send body `k` to, for the board as it stands at the moment of the call.**
+## Both go through one `_seats`, and **`routes` recomputes it every call rather than remembering it** —
+## so a press one frame after a hover reads the same occupancy the hover read. **A preview built any
+## other way is a promise the walk does not keep.**
+##
+## ⚠⚠ **`block` IS A 칸; THE LISTS THAT COME BACK ARE 조각.** The aim and the walk are in different
+## units and always were — this only moved the aim. See `order` for what a 조각 passed in here does.
 ##
 ## ⚠ **It is the SAME route the walk will take and not a straight line drawn between two points.** It
-## is built from `Grid.flow_field` and `Grid.string_pull`, which is what `Battle.order_walk` itself
-## calls — a preview drawn any other way is a promise the walk does not keep.
+## is built from `Battle.field_to` and `Grid.string_pull`, which is what `Battle.order_walk` itself
+## calls — **the same cached field, not a second one that happens to be equal.**
 ## ⚠ **An empty list for a body means 「it is already there」**, not 「it cannot get there」; `order`
-## refuses an unreachable 조각 before this is ever asked.
-func routes(battle: Battle, tile: int) -> Array:
+## refuses an unreachable 칸 before this is ever asked.
+##
+## ⚠⚠ **THE CACHE IS KEYED ON THE SEATS AND THE STARTS AND NOT ON THE 칸** (2026-09-01 — the 칸 key is
+## the defect this rewrite closes; the measurement and the wrong numbers are on `_route_seats`).
+## **Measured on the real island, 30x26 with 284 land 조각 and a 부대 of nine:**
+##
+## - `Grid.flow_field` **3.72 ms**, so nine bodies building their own is **37.6 ms a frame** — the old
+##   miss, and 2.2 frames of a 60 Hz budget. **Dropping the cache outright costs exactly that**, every
+##   frame, because `game.gd` asks for this line from `_process` and not only on a motion.
+## - Sharing `Battle.field_to` takes the field out of the miss: a rebuild is **9 x 0.43 ms = 3.9 ms**.
+## - A hit is `_seats` **0.030 ms** plus nine `_tile_of` **0.006 ms** — **0.04 ms**, and it is now
+##   honest, where the 0.0004 ms it used to cost was the price of the wrong answer.
+func routes(battle: Battle, block: int) -> Array:
 	if battle == null or battle.grid == null or ids.is_empty():
 		return []
-	if not can_reach(tile):
+	if not can_reach_block(block):
 		_forget_routes()
 		return []
-	if tile == _route_tile:
+	# ⚠⚠ **LIVE, BOTH OF THEM, BEFORE ANY CACHE IS CONSULTED.** These two ARE the key — computing them
+	# is what makes the key true, and skipping straight to a remembered answer is the whole bug.
+	var seats := _seats(battle, block, ids.size())
+	var starts := from_tiles(battle)
+	if seats == _route_seats and starts == _route_starts:
 		return _routes
-	var seats := _spread(battle, tile, ids.size())
 	var out: Array = []
 	for k in ids.size():
 		var line := PackedInt32Array()
 		if k < seats.size():
-			var here := _tile_of(battle, int(ids[k]))
+			var here := int(starts[k])
 			var dest := int(seats[k])
 			if here >= 0 and here != dest:
-				var raw := battle.grid.path_from(battle.grid.flow_field(dest), here, dest)
+				var raw := battle.grid.path_from(battle.field_to(dest), here, dest)
 				if raw.size() > 1:
 					line = battle.grid.string_pull(raw)
 		out.append(line)
-	_route_tile = tile
+	_route_seats = seats
+	_route_starts = starts
 	_routes = out
 	return out
 
 
 ## **The same routes as POINTS in 조각 units**, one list per picked body, and what the view draws.
+##
+## ⚠⚠ **`block` IS A 칸 GOING IN AND THE POINTS ARE 조각 COMING OUT**, which is `routes`' own split and
+## not a second one. **Nothing about the output changed on 2026-09-01** — only what is aimed at.
 ##
 ## ⚠⚠ **THE UNITS ARE `soldier_pos`'s OWN**, corner-anchored, so a caller turns one into world px with
 ## `Look.tile_point_px` exactly as it does for a body. **Anything that half-tiles them here instead
@@ -196,8 +309,8 @@ func routes(battle: Battle, tile: int) -> Array:
 ##
 ## ⚠ **A list of one point draws nothing**, which is exactly right for a body already standing on its
 ## destination.
-func route_points(battle: Battle, tile: int) -> Array:
-	var lines := routes(battle, tile)
+func route_points(battle: Battle, block: int) -> Array:
+	var lines := routes(battle, block)
 	if lines.is_empty():
 		return []
 	var w := battle.grid.w
@@ -221,15 +334,20 @@ func route_points(battle: Battle, tile: int) -> Array:
 	return out
 
 
-## **Floods out from the picked bodies and keeps every 조각 they may STAND on.**
+## **Floods out from the picked bodies and keeps every 조각 they may be POINTED at.**
+##
+## ⚠ **It said 「may STAND on」 until 2026-09-01**, when the capacity clause left `_standable` — a full
+## 칸 is now pointed at and ordered onto, and where those bodies end up standing is `_seats`' answer,
+## not this one.
 ##
 ## ⚠⚠ **THE FLOOD AND THE FILTER ARE TWO DIFFERENT TESTS AND THAT IS DELIBERATE.** A stair is walked
 ## across, so it stays in the flood and lets the way past it open; it is not stood on, so it is not in
 ## `reach`. Folding the two into one test would wall off every upper storey, because a stair is the
 ## only door there is.
 ##
-## ⚠ **The union, for a 부대.** A 조각 one member can reach lights even if another cannot — the order
-## then seats that member elsewhere, which `_spread` already does.
+## ⚠ **The union, for a 부대 — and it is the FLOOD that is the union now.** A 조각 one member can walk
+## to lights even if another cannot; the order then seats that member elsewhere, which `_seats` already
+## does. **The filter stopped being a union the day it stopped asking about bodies at all.**
 func _build_reach(battle: Battle) -> void:
 	var grid := battle.grid
 	var n := grid.w * grid.h
@@ -274,47 +392,130 @@ func _build_reach(battle: Battle) -> void:
 	_in_reach = {}
 	for k in reach.size():
 		_in_reach[int(reach[k])] = true
+	# ⚠ **The 칸 view of the same flood, built HERE and nowhere else.** Two containers that can
+	# disagree about the same fact is how a lit 칸 refuses a press — see `reach_blocks`.
+	reach_blocks = PackedInt32Array()
+	_in_reach_block = {}
+	for k in reach.size():
+		var bk := grid.block_of(int(reach[k]))
+		if bk < 0 or _in_reach_block.has(bk):
+			continue
+		_in_reach_block[bk] = true
+		reach_blocks.append(bk)
+	# ⚠ **Sorted rather than trusted to come out ascending.** Row-major 조각 order happens to hand back
+	# ascending 칸 today; that is a property of the loop above and not of the promise the field makes.
+	reach_blocks.sort()
 
 
-## **Whether anybody picked may end a walk on this 조각.** ⚠ **`can_hold` is asked per picked body and
-## not once**, because a body already standing there is admitted by a 조각 that is otherwise full —
-## and a hand holding that body must still see its own 조각 lit.
+## **Whether this 조각 may be pointed at: passable, and not a stair.** Two questions, and there is no
+## third one.
+##
+## ⚠⚠ **IT ASKED CAPACITY UNTIL 2026-09-01 AND THE USER TOOK THAT AWAY** ("let's do it by block unit",
+## and "the order goes out even when it is full, and if the 칸 holds enemies they fight"). **What stood
+## here was a `grid.can_hold(tile, id)` union over `ids`** — true when ANY picked body would be
+## admitted, so that a hand holding a body still saw its own otherwise-full 조각 lit. `Grid.can_hold`
+## folds in `block_has_room`, so that one clause is what made a 칸 holding nine go dark and the press
+## bounce.
+##
+## ⚠⚠ **THE CEILING DID NOT MOVE — THE LIGHTING DID.** `Rules.BLOCK_CAPACITY` is still nine,
+## `Grid.can_hold` is still what admits a walker at every step, and `_seats` is what decides who fits
+## and pushes the surplus into a neighbouring 칸. **Deleting this clause here without `_seats` in place
+## would have sent an order into a full 칸 that seated nobody and was then eaten by the stall-clear.**
+##
+## ⚠ **`battle` is still the parameter and not `grid`**, because `_build_reach` is the only caller and
+## the rest of this file passes `battle` — a second convention for one file is how a reader stops
+## trusting either.
 func _standable(battle: Battle, tile: int) -> bool:
 	var grid := battle.grid
 	if grid.passable[tile] != 1:
 		return false
 	if Grid.is_stair_level(grid.level_of(tile)):
 		return false
-	for k in ids.size():
-		if grid.can_hold(tile, int(ids[k])):
-			return true
-	return false
+	return true
 
 
-## **One seat per picked body, `ids`-aligned**, nearest the pressed 조각 first.
+## **One seat per picked body, `ids`-aligned: inside the pressed 칸 first, spilling into a
+## neighbouring 칸 only once the ceilings are used up.**
 ##
-## ⚠⚠ **THIS IS THE 부대's FORMATION SEAM AND IT IS DELIBERATELY THE DUMBEST ONE THAT WORKS.** It
-## takes the nearest standable 조각 outward from the press and hands them out in `ids` order. **The
-## shape the roadmap already chose (아홉이 서는 모양, 6번) replaces the body of this function** — every
-## caller above asks it the same question and none of them will need touching.
+## ⚠⚠ **A SEAT MAY REPEAT A 조각, AND THAT IS THE WHOLE REASON `_spread` COULD NOT BE KEPT.** That
+## function — deleted 2026-09-01, see `order` — handed out DISTINCT 조각, one per body. A 칸 is four
+## 조각 and holds nine bodies (`Rules.BLOCK_CAPACITY`), so
+## nine distinct 조각 inside one 칸 do not exist — three bodies stand in one 조각
+## (`Rules.TILE_CAPACITY`) and this returns that 조각 three times.
 ##
-## ⚠ **With one body it returns exactly the pressed 조각**, which is why the common case has no
-## rounding, no offset and no surprise: a single body goes precisely where it was told.
-func _spread(battle: Battle, tile: int, want: int) -> PackedInt32Array:
+## ⚠⚠ **THE HAND'S OWN BODIES ARE NOT COUNTED AS OCCUPANTS.** Everybody picked is being re-seated by
+## this very call, so a 부대 of nine standing on a 칸 and ordered onto that same 칸 has to find nine
+## seats there. Counting them would read the 칸 as full and push the whole 부대 out into the
+## neighbours — **the press would EVACUATE the 칸 it aimed at.** `Grid.can_hold` already admits a body
+## to the 조각 it is standing in for the same reason, seen from the walker's side.
+##
+## ⚠⚠ **THE SEATING INSIDE THE 칸 DOES NOT HONOUR WHICH QUARTER WAS PRESSED, AND THAT IS DELIBERATE.**
+## Once the ground marks are one per 칸 the player cannot aim below a 칸, so a press carries no sub-칸
+## information; reading the pressed 조각 here would make the destination depend on something the screen
+## has stopped showing.
+##
+## ⚠⚠ **THE WALK OUTWARD ASKS `Grid.can_step`, AND IT DID NOT UNTIL 2026-09-01.** It gated a spill on
+## `can_reach` alone — 「is that 조각 lit」 — and **two 조각 either side of a cliff are 8-way neighbours BY
+## NUMBER while no body may cross between them.** Measured that day, driving `Grid`/`Battle`/`Hand`
+## headless with `.new()`: a 12x6 board, columns 0-5 at level 0 and columns 6-11 at level 2 with one
+## stair 조각 at (6,2); twelve bodies ordered onto the upper 칸 3 seated nine upstairs and dropped the
+## surplus three on **조각 5, which is DOWNSTAIRS across the cliff edge**. The order went out, nothing
+## went red, and the three walked the long way round through the stair to a place nobody aimed at.
+##
+## ⚠⚠ **`can_step` IS THE WALKER'S OWN QUESTION AND NOT A SECOND ONE.** `Grid.flow_field`,
+## `Grid.path_from`, `Grid.string_pull` and `_build_reach`'s own flood all ask exactly it, so the spill
+## cannot come to disagree with the route drawn for it — **a second reachability rule that drifts from
+## the walker's is the named failure in `how-nets-lie`, not a hypothetical one.**
+##
+## ⚠ **The flood and the seating are two tests here, exactly as they are in `_build_reach`.** A stair is
+## walked THROUGH and never stood on, so it rides the queue and hands the walk on without ever taking a
+## body — folding the two into one test would seal the spill inside its own storey, because a stair is
+## the only door there is.
+##
+## ⚠ **WHICH neighbouring 칸 takes the overflow is BFS discovery order, and nobody has chosen it.** The
+## walk is the 8-way 조각 one `_spread` used, whose `dy`/`dx` table is an arbitrary tie-break inherited
+## rather than picked. ⚠ **The cliff gate narrows that walk; it does not choose inside it.**
+## **The 성채's 칸 seats eight and not nine** — `Grid.block_hold_count` counts the house as one body —
+## so the ninth body's destination is on screen every time.
+##
+## ⚠ **Fewer seats than bodies is not an error.** The bodies with no seat keep the one they have; the
+## caller stops at `seats.size()` and reports the smaller number.
+func _seats(battle: Battle, block: int, want: int) -> PackedInt32Array:
 	var out := PackedInt32Array()
-	if want <= 0:
-		return out
-	out.append(tile)
-	if want == 1:
+	if want <= 0 or battle == null or battle.grid == null:
 		return out
 	var grid := battle.grid
-	var taken := {tile: true}
+	# Room left AS SEATS ARE HANDED OUT, so two 조각 of one 칸 cannot each spend the whole 칸 ceiling.
+	var tile_room := {}
+	var block_room := {}
 	var queue := PackedInt32Array()
-	queue.append(tile)
+	var seen := {}
+	# ⚠ **Every 조각 of the pressed 칸 is a seed, so all four are served before anything outside it.**
+	# They sit at the head of the queue before the walk starts, which is what makes that true.
+	# ⚠ **A seed is not asked `can_step` — there is nothing to step FROM.** The 칸 is what the player
+	# aimed at, and `order` and `routes` both refused it already unless `can_reach_block` was true.
+	for raw in grid.tiles_of_block(block):
+		var t := int(raw)
+		if not _walk_holds(grid, t):
+			continue
+		seen[t] = true
+		queue.append(t)
 	var head := 0
 	while head < queue.size() and out.size() < want:
 		var cur := int(queue[head])
 		head += 1
+		# ⚠ **A stair rides the queue and takes nobody.** It is in here to hand the walk on, which is
+		# the same split `_build_reach` makes between its flood and its filter.
+		if can_reach(cur):
+			var bk := grid.block_of(cur)
+			if not tile_room.has(cur):
+				tile_room[cur] = _room_in_tile(grid, cur)
+			if not block_room.has(bk):
+				block_room[bk] = _room_in_block(grid, bk)
+			while out.size() < want and int(tile_room[cur]) > 0 and int(block_room[bk]) > 0:
+				out.append(cur)
+				tile_room[cur] = int(tile_room[cur]) - 1
+				block_room[bk] = int(block_room[bk]) - 1
 		var cx := cur % grid.w
 		var cy := cur / grid.w
 		for dy in [-1, 0, 1]:
@@ -326,17 +527,56 @@ func _spread(battle: Battle, tile: int, want: int) -> PackedInt32Array:
 				if nx < 0 or ny < 0 or nx >= grid.w or ny >= grid.h:
 					continue
 				var nt := ny * grid.w + nx
-				if taken.has(nt):
+				if seen.has(nt):
 					continue
-				if not can_reach(nt):
+				# ⚠⚠ **THE CLIFF GATE, AND IT IS THE WALKER'S OWN.** Without it a 조각 over a tier
+				# edge is a neighbour by arithmetic and the surplus lands where no body may go.
+				if not grid.can_step(cur, nt):
 					continue
-				taken[nt] = true
+				if not _walk_holds(grid, nt):
+					continue
+				seen[nt] = true
 				queue.append(nt)
-				if out.size() < want:
-					out.append(nt)
-	# ⚠ **A hand bigger than the room around the press is not an error.** The bodies with no seat
-	# simply keep the one they have — `order` stops at `seats.size()` and reports the smaller number.
 	return out
+
+
+## **Whether the spill's walk may hold this 조각 at all** — it is somewhere a picked body may be
+## pointed, or it is a stair the walk crosses to get somewhere that is.
+##
+## ⚠ **`can_reach` carries the flood from the bodies with it**, so a 조각 in a component none of them
+## can enter is refused here and never seated. **A stair is the one thing outside `reach` that is let
+## through**, for the reason `_build_reach`'s own header gives: it is the only door between storeys.
+func _walk_holds(grid: Grid, tile: int) -> bool:
+	if can_reach(tile):
+		return true
+	return grid.passable[tile] == 1 and Grid.is_stair_level(grid.level_of(tile))
+
+
+## **How many more bodies this 조각 would take, the hand's own not counted.** See `_seats` for why they
+## are not counted; `Rules.TILE_CAPACITY` is the ceiling.
+func _room_in_tile(grid: Grid, tile: int) -> int:
+	var n := grid.hold_count(tile)
+	for k in ids.size():
+		if grid.slot_of(tile, int(ids[k])) >= 0:
+			n -= 1
+	return Rules.TILE_CAPACITY - n
+
+
+## **How many more bodies this 칸 would take, the hand's own not counted.**
+##
+## ⚠ **A body mid-step holds two 조각 and must still count ONCE**, which is why the id is looked for
+## across the whole 칸 and the search stops at the first 조각 holding it — the same distinct-id contract
+## `Grid.block_hold_count` keeps on the other side of the subtraction.
+func _room_in_block(grid: Grid, block: int) -> int:
+	var n := grid.block_hold_count(block)
+	var tiles := grid.tiles_of_block(block)
+	for k in ids.size():
+		var who := int(ids[k])
+		for raw in tiles:
+			if grid.slot_of(int(raw), who) >= 0:
+				n -= 1
+				break
+	return Rules.BLOCK_CAPACITY - n
 
 
 ## The 조각 a body stands on, or -1 when it is off the board.
@@ -353,6 +593,9 @@ func _tile_of(battle: Battle, soldier_id: int) -> int:
 	return ty * battle.grid.w + tx
 
 
+## **Throws the remembered answer away.** ⚠ **Both lists together** — a kept `_route_starts` beside an
+## emptied `_route_seats` is a key that can half-match, and half a key is no key.
 func _forget_routes() -> void:
-	_route_tile = -1
+	_route_seats = PackedInt32Array()
+	_route_starts = PackedInt32Array()
 	_routes = []

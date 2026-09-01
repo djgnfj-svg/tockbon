@@ -1581,6 +1581,36 @@ func block_of(tile: int) -> int:
 	return int(tile / w / b) * ((w + b - 1) / b) + int((tile % w) / b)
 
 
+## **Every 조각 of one 칸, ascending — the inverse `block_of` never had.**
+##
+## ⚠⚠ **IT IS NOT ALWAYS FOUR, AND THAT IS WHY IT IS A FUNCTION AND NOT FOUR ADDITIONS.** A 칸 on the
+## last column or the last row of a board whose width or height is odd hangs off the board, and the
+## 조각 past the edge are simply absent from the list. **The same low-corner decode has been hand-copied
+## three times outside `src/`** — `.prototypes/nine/lab.gd`'s `_block_low_of` and `_tiles_of_block`, and
+## again in `move_probe.gd` — and a copy that disagrees with `block_of` counts a real, wrong 칸 with
+## nothing going red.
+##
+## ⚠ **Empty for a 칸 that is off the board**, which is the answer `block_of` gives as -1.
+func tiles_of_block(block: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var b := Rules.BLOCK_TILES
+	var per_row := (w + b - 1) / b
+	if block < 0 or per_row <= 0:
+		return out
+	var bx := (block % per_row) * b
+	var by := int(block / per_row) * b
+	for dy in b:
+		var ty := by + dy
+		if ty >= h:
+			continue
+		for dx in b:
+			var tx := bx + dx
+			if tx >= w:
+				continue
+			out.append(ty * w + tx)
+	return out
+
+
 ## **How many bodies stand in `block` right now — DISTINCT unit ids, never occupied slots.**
 ##
 ## ⚠⚠ **DISTINCT IDS IS A CORRECTNESS CONTRACT, NOT A TIDINESS ONE.** A body mid-step holds the 조각
@@ -1593,26 +1623,13 @@ func block_of(tile: int) -> int:
 ## is, and teaching it would put a battle constant inside the board.
 func block_hold_count(block: int) -> int:
 	var seen := {}
-	var b := Rules.BLOCK_TILES
-	var per_row := (w + b - 1) / b
-	if block < 0 or per_row <= 0:
-		return 0
-	var bx := (block % per_row) * b
-	var by := int(block / per_row) * b
 	var cap := Rules.TILE_CAPACITY
-	for dy in b:
-		var ty := by + dy
-		if ty >= h:
-			continue
-		for dx in b:
-			var tx := bx + dx
-			if tx >= w:
-				continue
-			var base := (ty * w + tx) * cap
-			for k in cap:
-				var id := reserved[base + k]
-				if id != -1:
-					seen[id] = true
+	for raw in tiles_of_block(block):
+		var base := int(raw) * cap
+		for k in cap:
+			var id := reserved[base + k]
+			if id != -1:
+				seen[id] = true
 	return seen.size()
 
 
@@ -1630,22 +1647,9 @@ func block_has_room(block: int, unit_id: int) -> bool:
 
 ## Whether `unit_id` already stands in any 조각 of `block`.
 func _block_holds(block: int, unit_id: int) -> bool:
-	var b := Rules.BLOCK_TILES
-	var per_row := (w + b - 1) / b
-	if block < 0 or per_row <= 0:
-		return false
-	var bx := (block % per_row) * b
-	var by := int(block / per_row) * b
-	for dy in b:
-		var ty := by + dy
-		if ty >= h:
-			continue
-		for dx in b:
-			var tx := bx + dx
-			if tx >= w:
-				continue
-			if slot_of(ty * w + tx, unit_id) >= 0:
-				return true
+	for raw in tiles_of_block(block):
+		if slot_of(int(raw), unit_id) >= 0:
+			return true
 	return false
 
 

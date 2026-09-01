@@ -710,7 +710,7 @@ func order_walk(soldier_id: int, tile: int) -> bool:
 	_clear_path(soldier_id)
 	var here := _tile_of(soldier_pos[soldier_id])
 	if here >= 0:
-		var raw := grid.path_from(_field_for(tile), here, tile)
+		var raw := grid.path_from(field_to(tile), here, tile)
 		if raw.size() > 1:
 			_soldier_path[soldier_id] = grid.string_pull(raw)
 			# Index 1: index 0 is the 조각 the body already stands on.
@@ -815,7 +815,7 @@ func _phase_orders(dt: float) -> void:
 				_soldier_stale[i] = 0
 			continue
 		soldier_pos[i] = _walk(i, was, _soldier_goal, i, army.speed_of(i) * dt,
-				_field_for(dest_tile), dest, 0.0, _soldier_path, _soldier_path_i, -1, dest_tile)
+				field_to(dest_tile), dest, 0.0, _soldier_path, _soldier_path_i, -1, dest_tile)
 		_soldier_stale[i] = 1
 		# Stuck: it did not move AND it is not part-way across a tile it still has to finish.
 		if soldier_pos[i].distance_to(was) <= Rules.EPS 				and was.distance_to(_soldier_goal[i]) <= Rules.EPS:
@@ -1056,7 +1056,7 @@ func _phase_movement(dt: float) -> void:
 		# ⚠ **Empty route columns.** A beast is never ordered, so it has no straightened route to walk —
 		# it descends the field, which is what `_next_goal` falls back to.
 		enemy_pos[e] = _walk(ENEMY_UID_BASE + e, here, _enemy_goal, e, speed,
-				_field_for(anchor), _point_of_tile(anchor), Rules.reach_of(int(enemy_type[e])),
+				field_to(anchor), _point_of_tile(anchor), Rules.reach_of(int(enemy_type[e])),
 				[], [], -1, anchor)
 		_enemy_stale[e] = 1
 
@@ -1530,7 +1530,19 @@ func _age_fields(dt: float) -> void:
 		_field_age.erase(key)
 
 
-func _field_for(tile: int) -> PackedInt32Array:
+## **The flow field that walks a body onto `tile`, built once and handed to everybody who asks.**
+##
+## ⚠⚠ **PUBLIC SINCE 2026-09-01, AND THE READER THAT MADE IT PUBLIC IS `Hand.routes`.** The 이동선 has
+## to be the SAME route the walk will take, so the preview and `order_walk` now descend the SAME field
+## rather than two fields that happen to be equal. **Measured on the real island: one field is 3.72 ms**
+## — a nine-body preview that built its own would spend 33 ms of a 16.7 ms frame.
+##
+## ⚠ **A field is a function of the ground and of nothing else.** `Grid.can_step` reads passability,
+## level and stairs, never `reserved` — so a field stays true however the bodies shuffle, which is what
+## makes caching it across frames sound while caching a SEAT across frames is not (see `Hand.routes`).
+## **`setup` empties this and `_age_fields` retires an entry after `FIELD_TTL`**, which is the whole of
+## its lifetime.
+func field_to(tile: int) -> PackedInt32Array:
 	if _fields.has(tile):
 		var cached: PackedInt32Array = _fields[tile]
 		return cached

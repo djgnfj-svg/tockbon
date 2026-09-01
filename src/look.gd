@@ -418,15 +418,21 @@ const PAD_ALL_LIGHTEN := 0.12           # how far the revealed 판 is pulled tow
 const PAD_HOVER_LIGHTEN := 0.55         # > PAD_ALL_LIGHTEN, same reason as the alphas
 const PAD_HOVER_LIFT := 0.06            # world units. **3x the 판's own 0.02 thickness**
 
-## ⚠⚠ **HOW FAR OUT THE 판 STOP BEING 조각 AND BECOME A 칸** (2026-08-29, the user: 「멀면 칸단위로
-## 하려고함 줌에따라」, then 「1번이 좋은데?」 picking the mechanism that MOVES the vertices). Below
-## `PAD_MERGE_ZOOM` a 칸 is one lump; above `PAD_APART_ZOOM` the four are separate; between them it is
-## a straight ramp. ⚠ **Zoom is bigger the CLOSER the camera is**, so the merged bound is the lower one.
-## ⚠ Chosen by eye in `.prototypes/merge/` against `ZOOM_MIN` 0.50 and the opening framing near 1.0;
-## **nobody has re-judged them in the game**, and they are the first thing to move if the change
-## happens too early or too late.
-const PAD_MERGE_ZOOM := 0.72
-const PAD_APART_ZOOM := 1.45
+## ⚠⚠ **THE TWO ZOOMS THAT DECIDED WHETHER A 판 WAS A 조각 OR A 칸 ARE DELETED** (2026-09-01).
+## `PAD_MERGE_ZOOM` 0.72 and `PAD_APART_ZOOM` 1.45 were the two ends of a ramp: below the first a 칸
+## was one lump, above the second its four 조각 stood apart, and `field_view.pad_merge()` — their only
+## reader, deleted with them — worked the blend out from the camera's own zoom. They came from
+## 2026-08-29 (the user: "far out I want it by the 칸, depending on the zoom", then "number 1 is the
+## good one, no?" picking the mechanism that MOVES the vertices), and were judged in
+## `.prototypes/merge/` rather than in the game.
+##
+## ⚠⚠ **THE MARK IS ONE PER 칸 AT EVERY ZOOM NOW, because the ORDER is** (2026-09-01, the user: "let
+## us do it by the 블록"). A ramp would put 280 조각 marks under a cursor that commands one of 70 칸 —
+## **the mark and the press counting different things is exactly what the 2026-08-29 reversal was made
+## to end**, and leaving these two in would have been that failure read backwards.
+## ⚠ **The six `PAD_*` values above were every one judged against a 조각-sized quad** and now cover four
+## times the area at the same alpha, and `PAD_HOVER_LIFT` lifts a 2x2 lump. **Nobody has looked at the
+## merged board yet.** They are the first thing to move once somebody has.
 
 ## **What a 판 the picked body may stand on is worth** (2026-08-31, the user: 「캐릭터를 누르면 이동할
 ## 수 있는 칸들이 뜨고 눌러서 이동하는거임」).

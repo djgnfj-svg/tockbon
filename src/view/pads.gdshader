@@ -75,6 +75,10 @@ float reach_at(float index) {
 varying float v_is_hover;
 varying float v_in_reach;
 varying vec3 v_tone;
+// **1 on a side wall that the merge buries inside the 칸, 0 on everything the player can see.**
+// Written in the vertex stage, read as a straight alpha kill in the fragment. **See the block above
+// `VERTEX.x` for what it is for and what was measured.**
+varying float v_inner_wall;
 
 void vertex() {
 	// ⚠ **A tolerance and not `==`.** The index arrives as a float through glTF's TEXCOORD_0 and the
@@ -131,6 +135,38 @@ void vertex() {
 	VERTEX.x += (UV2.x - 0.5) * merge;
 	VERTEX.z += (UV2.y - 0.5) * merge;
 	VERTEX.y += v_is_hover * hover_lift;
+	// ⚠⚠ **A 판 IS A 0.02-THICK SLAB, NOT A QUAD, AND THE MERGE PARKS FOUR OF ITS SIDE WALLS ON THE
+	// 칸's TWO MIDLINES** (2026-09-01). That is the whole of the dark hairline that split every merged
+	// mark in half. **Measured off `assets/terrain/island.glb`**: each 판 is a rounded outline at
+	// y 0.230 with a skirt dropping to y 0.210, and after the displacement above the four 판 of a 칸
+	// meet at exactly x = 0 and z = 0 — the tops abut with no overlap at all, but each pad's two
+	// INNER walls land on those midlines, where the pad opposite has parked its own two. The material
+	// is `cull_disabled` and `blend_mix` over `depth_draw_opaque`, so nothing is culled and nothing
+	// writes depth: **both walls blend on top of the tops, three layers of the same colour where
+	// there should be one.**
+	// ⚠ **A wall is 0.02 world units tall, so it lands on `0.02 * cos(pitch) * px-per-tile` of
+	// screen — under half a pixel far out and wider every step the camera comes in**, which is why
+	// it read as a 1-3 px hairline that got worse with the zoom.
+	// ⚠⚠ **THE VERTICAL JOIN HAS EXACTLY THE SAME DEFECT AND YAW 0 HIDES IT.** A wall standing in the
+	// plane x = const projects to zero screen width when the camera is not turned, so only the join
+	// between the near and far halves showed. **Measured on the turned board**: at yaw 0 the seam is
+	// on 93% of the marks scanned down and 1% scanned across; at yaw 45 it is on 69% and 61%, at the
+	// same 2.06x strength both ways.
+	// ⇒ **The two walls that the merge buries are given up.** `inward` is the way this 판 has to grow
+	// to reach its 칸's middle — +1 on an even index, -1 on an odd one — and a wall whose normal
+	// leans that way is a wall the merge is about to hide. **Checked against all 280 판 of the baked
+	// island**: the rule kills 2800 wall quads, of which 2240 are already zero-area after the merge
+	// and the other 560 are exactly the two midline walls of each 판. **It kills nothing that has
+	// area anywhere else, and it leaves no midline wall standing.**
+	// ⚠ **`* merge` IS WHAT KEEPS THE 조각 LOOK.** At merge 0 the four 판 stand apart and every one of
+	// those walls is the mark's own visible rim — this line must not touch them, and at merge 0 it
+	// does not. **The 조각 decision has flipped twice and this fix does not vote.**
+	// ⚠ **It rests on a 칸 being whole.** A 판 whose block-partner was never baked would lose the rim
+	// on that side — sub-pixel, and the outline of the island only bends by 칸, so all 280 판 have
+	// both partners. **Counted, not assumed.**
+	vec2 inward = 1.0 - 2.0 * mod(floor(mine), 2.0);
+	float is_wall = 1.0 - step(0.5, abs(NORMAL.y));
+	v_inner_wall = is_wall * step(0.0001, dot(NORMAL.xz, inward)) * merge;
 }
 
 void fragment() {
@@ -147,5 +183,8 @@ void fragment() {
 	// dark 판 out at exactly the strength where it starts to read.
 	vec3 target = tone >= 0.0 ? vec3(1.0) : vec3(0.0);
 	ALBEDO = mix(v_tone, target, abs(tone));
-	ALPHA = a;
+	// ⚠ **The kill is on the ALPHA and not a `discard`.** A wall quad's four corners all carry the
+	// same normal — the skirt is flat-shaded, one quad per outline segment, so the varying is
+	// constant across the quad and there is nothing for the interpolator to smear onto the top face.
+	ALPHA = a * (1.0 - v_inner_wall);
 }

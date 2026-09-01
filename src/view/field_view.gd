@@ -604,6 +604,11 @@ func pan_by(delta_screen: Vector2) -> void:
 ## ⚠ **It asks `screen_to_world_px` twice rather than re-deriving the old closed form.** The closed
 ## form was true of a square, unturned ground; asking the conversion itself stays true at every yaw,
 ## and there is then exactly one place where the screen-to-ground mapping is written down.
+##
+## ⚠⚠ **THIS USED TO TELL THE 판 AND IT DOES NOT ANY MORE** (2026-09-01). The zoom drove the merge
+## on a ramp, so the marks were 조각 up close and 칸 far out; **the merge is pinned at 1 now and the
+## camera has nothing left to say to them** — see `_adopt_the_pads`. Nothing else on that call was
+## ever a function of the zoom.
 func zoom_at(at: Vector2, factor: float) -> void:
 	var new_zoom := clampf(zoom * factor, Look.ZOOM_MIN, Look.ZOOM_MAX)
 	if new_zoom == zoom:
@@ -612,8 +617,6 @@ func zoom_at(at: Vector2, factor: float) -> void:
 	zoom = new_zoom
 	cam_px += before - screen_to_world_px(at)
 	_clamp_cam()
-	# ⚠ **The 판 merge with distance**, so every zoom is also a change to what they look like.
-	_tell_the_pads()
 
 
 ## Keeps the camera over the island. **It bounds the ground point at the MIDDLE of the screen**, not
@@ -939,6 +942,21 @@ func _adopt_the_pads() -> void:
 	mat.set_shader_parameter("hover_lift", Look.PAD_HOVER_LIFT)
 	mat.set_shader_parameter("reach_alpha", Look.PAD_REACH_ALPHA)
 	mat.set_shader_parameter("reach_lighten", Look.PAD_REACH_LIGHTEN)
+	# ⚠⚠ **ONE MARK PER 칸, ALWAYS — THE MERGE IS PINNED AND IS NO LONGER A CAMERA THING**
+	# (2026-09-01, the user: "let us do it by the 블록"). The order takes a 칸 now, so a board showing
+	# 280 조각 marks while the press commands one of 70 칸 is the mark-vs-order mismatch the
+	# 2026-08-29 reversal was made to END, read backwards. `Look.PAD_MERGE_ZOOM` 0.72 and
+	# `PAD_APART_ZOOM` 1.45 were the ramp's two ends and both are deleted with `pad_merge()`.
+	# ⚠ **This is a displacement, not a stack, so the alpha does NOT multiply.** The shader moves
+	# every vertex by its own `UV2` delta; measured off `assets/terrain/island.glb` on 2026-09-01,
+	# at merge 1 the four 판 of 칸 (2,1) span x -0.700..0.000 and 0.000..0.780 and the same in z —
+	# **each grows into its own quadrant and the four tile into one lump.** No re-bake is needed and
+	# none was done.
+	# ⚠⚠ **AND THE SHADER IS NOT EDITED, ON PURPOSE.** Its 조각 branch — `on_cell`, the
+	# `(1.0 - merge)` term and the `reach_at(UV.x)` side of the mix — is unreachable at merge 1 and
+	# is LEFT STANDING: **this decision has already flipped twice** (칸 on 2026-08-28, 조각 on
+	# 2026-08-29, 칸 today), and the 조각 look is one uniform away for as long as that branch lives.
+	mat.set_shader_parameter("merge", 1.0)
 	_pads.material_override = mat
 	# ⚠ **No shadow.** The 판 is a mark on the ground, and a mark that casts one reads as a slab
 	# floating over it — the same argument the summon ring's own material carried.
@@ -960,19 +978,21 @@ func _tell_the_pads() -> void:
 	_pads_mat.set_shader_parameter("show_reach", 1.0 if _reach_on else 0.0)
 	if _reach_tex != null:
 		_pads_mat.set_shader_parameter("reach_tex", _reach_tex)
-	# ⚠⚠ **The merge and the board's width go the same way as the hover**, because the shader needs all
-	# three to answer one question: what lights up. Far out a 칸 is one 판, so the whole 칸 lights.
-	_pads_mat.set_shader_parameter("merge", pad_merge())
+	# ⚠⚠ **The board's width goes the same way as the hover**, because the shader needs both to answer
+	# one question: what lights up. It is handed a 조각 index and decodes it with this stride, then
+	# collapses the four 조각 into their 칸 itself — which is why `set_hover_tile` and `set_reach`
+	# stay per-조각 while what appears on the ground is one mark per 칸.
+	# ⚠ **The merge is NOT written here any more** (2026-09-01). It is pushed once at adoption and
+	# never moves; pushing a constant on every mouse move said the camera still decided it.
 	if battle != null and battle.grid != null:
 		_pads_mat.set_shader_parameter("board_w", float(battle.grid.w))
 
 
-## **How far the 판 have merged at the camera's current distance**, 0 apart and 1 one-per-칸.
-##
-## ⚠ **The only reader is the shader**, and the only thing that moves it is the zoom -- which is why
-## `zoom_at` has to say so. **A merge that lagged the camera by a frame reads as the board sliding.**
-func pad_merge() -> float:
-	return clampf((Look.PAD_APART_ZOOM - zoom) / (Look.PAD_APART_ZOOM - Look.PAD_MERGE_ZOOM), 0.0, 1.0)
+## ⚠⚠ **`pad_merge()` STOOD HERE AND IT IS DELETED** (2026-09-01). It answered how far the 판 had
+## merged at the camera's current distance — 0 one-per-조각, 1 one-per-칸 — off the zoom and the two
+## bounds `Look.PAD_MERGE_ZOOM` / `PAD_APART_ZOOM`, which went with it. **The merge is 1 at every
+## zoom now**, pushed once in `_adopt_the_pads`, because the order takes a 칸 and the marks may not
+## count differently from the press.
 
 
 ## **Whether the whole board is showing.** The shell drives this off the reveal key being held —
@@ -3647,11 +3667,24 @@ func _g_disc(centre: Vector2, radius: float, col: Color) -> void:
 			centre + Vector2(cos(a1), sin(a1)) * radius, col)
 
 
-## **Lays every 이동선 on the ground**, one per picked body, plus a dot where each one ends.
+## **Lays every 이동선 on the ground**, one per picked body, plus a dot where the 부대 is going.
 ##
 ## ⚠ **Nothing here decides where the line goes.** The points arrive from `Hand.route_points` in tile
 ## units and this converts them to world px and draws — a view that worked its own route out would be
 ## a second copy of the walking rule, which is the defect shape `how-nets-lie` opens with.
+##
+## ⚠⚠ **THE LINE STOPS IN THE MIDDLE OF ITS 칸 AND NOT ON THE 조각 THE BODY SEATS IN** (2026-09-02).
+## `Hand._seats` hands back the 조각 a body will actually stand in, which is one QUARTER of the aimed
+## 칸 — so with the marks one per 칸 the line ended in a corner of the mark it was pointing at, half a
+## 칸 away from the middle of the thing the player had aimed at. **Measured on the screen**: the pale
+## 칸 spanned x 744..785 and y 299..329 and the round terminator sat at (750, 305), its top-left
+## corner. ⚠ **This does not re-derive the route.** Every point but the last is drawn exactly as it
+## arrives; only the tail is moved onto the middle of the 칸 that same last point already names, which
+## is the one thing the sim's answer and the screen disagreed about.
+##
+## ⚠ **ONE DOT PER 칸 AND NOT ONE PER BODY.** Nine 이동선 into one 칸 stacked nine discs of alpha 0.92
+## on one spot, and `_seats` can spill the surplus into a NEIGHBOURING 칸 — so a second dot appearing
+## is the picture telling the truth about a 부대 that is going to two places, not a duplicate.
 func _paint_move_lines() -> void:
 	if _move_lines.is_empty():
 		return
@@ -3664,10 +3697,15 @@ func _paint_move_lines() -> void:
 	# past the near one it would thin back to nothing at a zoom nobody uses.
 	var steady: float = clampf(1.0 / maxf(zoom, 0.01), Look.MOVE_LINE_ZOOM_MIN,
 		Look.MOVE_LINE_ZOOM_MAX)
+	# Where the lines end, one entry per DISTINCT 칸 middle, in the order the 부대 offered them.
+	var stops := PackedVector2Array()
 	for i in _move_lines.size():
 		var pts: PackedVector2Array = _move_lines[i]
 		if pts.size() < 2:
 			continue
+		var stop := _block_middle_tiles(pts[pts.size() - 1])
+		if not stops.has(stop):
+			stops.append(stop)
 		# ⚠ **Only the FIRST point wears the crowd offset.** The rest are 조각 middles and should be —
 		# the route is a list of 조각 and the body walks through their centres.
 		var from := Look.tile_point_px(pts[0])
@@ -3675,11 +3713,47 @@ func _paint_move_lines() -> void:
 			from += Look.crowd_offset_px(_crowd_slot_of(pts[0], int(_move_ids[i])),
 				Rules.TILE_CAPACITY)
 		for k in range(pts.size() - 1):
-			var to := Look.tile_point_px(pts[k + 1])
+			# ⚠ **The last leg runs to the 칸's middle**, which is 0.71 조각 from the seat it replaces
+			# and always inside that same 칸. **Moving the dot alone was tried on paper and dropped**:
+			# the dot's radius is 0.175 조각 at zoom 1 (`MOVE_LINE_END_PX` over `TILE_PX`), so a line
+			# still stopping at the seat would break off four of those short of its own terminator.
+			var to := Look.tile_point_px(stop if k == pts.size() - 2 else pts[k + 1])
 			_g_ribbon(from, to, Look.MOVE_LINE_HALF_PX * steady, Look.COL_MOVE_LINE)
 			from = to
-		_g_disc(Look.tile_point_px(pts[pts.size() - 1]), Look.MOVE_LINE_END_PX * steady,
+	for k in stops.size():
+		_g_disc(Look.tile_point_px(stops[k]), Look.MOVE_LINE_END_PX * steady,
 			Look.COL_MOVE_LINE_END)
+
+
+## **The middle of the 칸 a 조각 sits in, in `Hand.route_points`' own units** — corner-anchored, so
+## `Look.tile_point_px` turns it into world px exactly as it does for a body or a route point.
+##
+## ⚠⚠ **IT ASKS THE GRID RATHER THAN DIVIDING BY TWO.** `Grid.block_of`'s low-corner decode has been
+## hand-copied three times outside `src/` already and `Grid.tiles_of_block` carries the warning about
+## it; a fourth copy in here would be a 칸 middle that can disagree with the 칸 the press commands,
+## with nothing going red. **Averaging the 조각 the grid names also gets a truncated 칸 right** — a
+## board of odd width hangs its last column of 칸 off the edge, and the middle of the two 조각 that
+## exist is where the mark on the ground actually is. ⚠ This island is 30x26, so no 칸 is truncated
+## today and that clause is a guard rather than a measurement.
+##
+## ⚠ **The point handed in has to be a whole 조각.** Every route point but the first is one; the first
+## is a real `soldier_pos` and is never passed here.
+func _block_middle_tiles(at: Vector2) -> Vector2:
+	if battle == null or battle.grid == null:
+		return at
+	var grid := battle.grid
+	var tx := int(at.x)
+	var ty := int(at.y)
+	if tx < 0 or ty < 0 or tx >= grid.w or ty >= grid.h:
+		return at
+	var mates := grid.tiles_of_block(grid.block_of(ty * grid.w + tx))
+	if mates.is_empty():
+		return at
+	var sum := Vector2.ZERO
+	for k in mates.size():
+		var t := int(mates[k])
+		sum += Vector2(float(t % grid.w), float(t / grid.w))
+	return sum / float(mates.size())
 
 
 ## **One straight run of the line, CUT INTO PIECES along its length.**

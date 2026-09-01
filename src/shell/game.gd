@@ -209,8 +209,12 @@ func _process(delta: float) -> void:
 	# beside it says so — but a still cursor over a walking body is still a changing route, and the
 	# left-button drag moves the board under a still cursor too. **「the pointer has not moved」 never
 	# meant 「the route has not changed」.**
-	# ⚠ **It is cheap**: `Hand.routes` caches the 조각 list per destination, so this re-reads positions
-	# rather than rebuilding a flow field.
+	# ⚠⚠ **IT IS CHEAP, AND THE REASON IS NOT THE ONE THIS COMMENT GAVE UNTIL 2026-09-01.** It read
+	# 「`Hand.routes` caches the 조각 list per destination」 — a cache keyed on the destination 칸 alone,
+	# which is exactly the defect measured and closed that day: the seats move under a still cursor.
+	# **`Hand.routes` now recomputes the seating every call and remembers the LINES against it**, so a
+	# frame where nothing moved costs 0.04 ms and a frame where something did costs 3.9 ms — measured on
+	# the real island with a 부대 of nine.
 	_show_route(_pointer_at)
 	# ⚠ **No multiplier is handed down any more.** `speed-off-open-landing` deleted the ladder, so the
 	# sim and both views run on the bare frame delta — which is what every duration in `look.gd` was
@@ -642,8 +646,14 @@ func _on_tilt_key(key: InputEventKey) -> bool:
 ## 이동하는거임」, then 「esc를 하지 않는 이상 이동 우선으로 해줘야할듯한데」):
 ##
 ##  - **empty hand** -> a press on a body picks it, and its reach lights;
-##  - **full hand** -> a press on a lit 조각 is a walk, and a body standing there does not intercept it;
+##  - **full hand** -> a press on a lit 칸 is a walk, and a body standing there does not intercept it;
 ##  - **full hand, pressed anywhere else** -> nothing. **ESC is the only thing that lets go.**
+##
+## ⚠⚠ **THE WALK IS AIMED AT A 칸 AND IT WAS A 조각 UNTIL 2026-09-01** (the user: "let us do it by the
+## block"). **`_tile_at` still answers a 조각 and is not re-pointed** — the 칸 is made right here with
+## `Grid.block_of`, because `_tile_at`'s other callers, the hover among them, still want the square
+## metre. **Both are bare `int`s and passing the wrong one goes nowhere near red**, so the conversion
+## lives on one line with the name `block` on it.
 ##
 ## ⚠ **True means the press was consumed**, which is what tells `_end_press` it was not a pan — the
 ## same contract `_order_walk_at` had.
@@ -659,10 +669,13 @@ func _press_the_island(at: Vector2) -> bool:
 	# was that a picked body must stay re-pickable. **What it did on screen** is what killed it — a
 	# 조각 with somebody standing on it is a 조각 you may want to send another body TO, and the body
 	# test swallowed the press and picked the man already standing there instead. ⇒ **while the hand
-	# holds anybody, a press on a lit 조각 is a walk and nothing else looks at it.**
+	# holds anybody, a press on a lit 칸 is a walk and nothing else looks at it.**
 	if not hand.is_empty():
-		if tile >= 0 and hand.can_reach(tile):
-			var sent := hand.order(battle, tile)
+		# **The 조각 is a stop on the way to the 칸 and nothing more.** `_tile_at` says where the
+		# cursor is; this one line says what the order is aimed at, and every name below it is 칸.
+		var block := battle.grid.block_of(tile) if tile >= 0 else -1
+		if hand.can_reach_block(block):
+			var sent := hand.order(battle, block)
 			# ⚠⚠ **THE ORDER LETS GO, AND IT KEPT HOLD FOR ONE ROUND** (2026-08-31, the user:
 			# 「이동하면 그러면 그 이동관 관련은 꺼져야지」). The earlier line is kept because this repo
 			# records a flip: **it re-picked the same bodies** so a second command needed no second
@@ -703,16 +716,22 @@ func _let_go() -> void:
 
 
 ## **The 이동선 under the cursor, or nothing.** ⚠ **Nothing is drawn while the hand is empty or the
-## cursor is off the reach** — a route to a 조각 the press would refuse is a line the game will not
+## cursor is off the reach** — a route to a 칸 the press would refuse is a line the game will not
 ## walk.
+##
+## ⚠⚠ **IT ASKS THE SAME QUESTION `_press_the_island` ASKS, IN THE SAME UNIT.** Both convert the
+## cursor's 조각 to a 칸 with `Grid.block_of`, both gate on `can_reach_block`, and both hand that 칸 to
+## `Hand`. **The preview drawn from a different unit than the press would be a line to a place the
+## click does not go**, and neither side would go red saying so.
 func _show_route(at: Vector2) -> void:
 	if battle == null or hand.is_empty():
 		return
 	var tile := _tile_at(at)
-	if tile < 0 or not hand.can_reach(tile):
+	var block := battle.grid.block_of(tile) if tile >= 0 else -1
+	if not hand.can_reach_block(block):
 		field_view.set_move_lines([])
 		return
-	field_view.set_move_lines(hand.route_points(battle, tile), hand.ids)
+	field_view.set_move_lines(hand.route_points(battle, block), hand.ids)
 
 
 ## **A screen press in 조각 units, fractions and all.** ⚠ **Not `_tile_at` rounded** — `Hand.body_at`

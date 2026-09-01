@@ -17,6 +17,8 @@ mapping and does not care whether Godot imported the folder.
 | `shoot_field.gd` | the board at a run of camera angles and distances | `out/field/` |
 | `shoot_fx.gd` | one frame per effect, each also cropped in close | `out/fx/` |
 | `shoot_water.gd` | six seas, one island, one camera — the candidates go side by side | `out/water/` |
+| `shoot_pad_seam.gd` | the merged 판, with the reveal key up and down, at yaw 0 and yaw 45 | `out/pads/` |
+| `shoot_route_end.gd` | the 이동선's terminator against the 칸 it is aimed at | `out/pads/` |
 
 ⚠⚠ **THREE SHOOTERS WERE DELETED 2026-08-27 AND TWO OF THEM COULD NOT REACH THE ISLAND AT ALL.**
 `shoot_big.gd` answered one question about edges at 2560x1440 and the answer is already applied.
@@ -40,6 +42,7 @@ Godot_v4.7.1-stable_win64.exe --path . -s tools/shot/shoot_field.gd
 | `fx/` | aim · refuse · landing · blow · shards · death, each near and far |
 | `pieces/` | one piece at a time, bare and against the sea, plus the island from a ring of camera angles |
 | `water/` | every sea candidate the shader was tried with, numbered in the order they were judged |
+| `pads/` | the 판's two defects of 2026-09-02 — the dark seam down the middle of a merged mark, and the 이동선 ending in a corner. ⚠ **`pads/before/` is the same shots taken before the fix and is what the numbers were read off**, so it is a measurement and not a leftover |
 | `misc/` | one-off probes |
 
 ⚠⚠ **`out/loop/` (25 shots) AND `out/species/` (12 shots) WERE DELETED 2026-08-27, AND NEITHER CAN BE

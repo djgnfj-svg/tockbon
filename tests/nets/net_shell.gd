@@ -611,7 +611,13 @@ func _the_route_points_are_in_soldier_pos_units(t, game) -> void:
 	t.ok(far >= 0, "자가 점검 — 네 조각 넘게 떨어진 갈 수 있는 자리가 있다")
 	if far < 0:
 		return
-	var pts_all: Array = game.hand.route_points(b, far)
+	# ⚠⚠ **`route_points` TAKES A 칸 SINCE 2026-09-01** (the user: "let us do it by the block"). **`far`
+	# is still picked out of `reach`, which is still 조각** — the distance above is a 조각 distance and
+	# has to stay one. Only the aim is converted, exactly as `_show_route` converts it in the shell.
+	# ⚠ **A raw 조각 index passed here compiles and aims at a real 칸 somewhere else on the board**, so
+	# the conversion is written on its own line rather than inlined into the call.
+	var far_block := b.grid.block_of(far)
+	var pts_all: Array = game.hand.route_points(b, far_block)
 	t.eq(pts_all.size(), 1, "쥔 몸 하나에 선 하나다")
 	var pts: PackedVector2Array = pts_all[0]
 	t.ok(pts.size() >= 3, "그 선은 점 셋 이상이다 (가운데가 있어야 단위가 드러난다)")
@@ -628,7 +634,13 @@ func _the_route_points_are_in_soldier_pos_units(t, game) -> void:
 			fractional += 1
 	t.eq(fractional, 0, "뒤의 점도 전부 조각 눈금 위에 있다 — 반 조각이 섞여 있지 않다")
 	var last := pts[pts.size() - 1]
-	t.eq(int(last.y) * b.grid.w + int(last.x), far, "마지막 점이 명령할 그 조각이다")
+	# ⚠⚠ **THE UNIT OF THIS ROW CHANGED WITH THE ORDER, AND ITS LABEL SAYS SO.** It read 「마지막 점이
+	# 명령할 그 조각이다」 and pinned the 조각 exactly; a 칸 order cannot promise that, because `_seats`
+	# picks which of the 칸's four 조각 the body sits in and the press carries no sub-칸 information.
+	# **What the line still has to end in is the 칸 that was aimed at** — anywhere else and the preview
+	# is drawing a walk the press will not make.
+	var last_tile := int(last.y) * b.grid.w + int(last.x)
+	t.eq(b.grid.block_of(last_tile), far_block, "마지막 점이 명령할 그 칸 안이다")
 	game.hand.clear()
 
 
@@ -680,8 +692,13 @@ func _a_full_hand_moves_instead_of_picking(t, game, fs: FieldView) -> void:
 	b.soldier_order[mover] = -1
 	game._unhandled_input(_press(at))
 	game._unhandled_input(_release(at))
-	t.eq(int(b.soldier_order[mover]), target,
-		"몸이 선 조각을 눌러도 쥔 몸이 거기로 간다 — 그 자리의 몸이 대신 골라지지 않는다")
+	# ⚠⚠ **THE 칸 AND NOT THE 조각, SINCE 2026-09-01.** The press is aimed at a 조각 on screen — that is
+	# what `_tile_at` answers and it is deliberately not re-pointed — but the shell converts it with
+	# `Grid.block_of` before ordering, and `_seats` then picks which 조각 of that 칸 the body sits in.
+	# ⚠ **`soldier_order[mover]` was set to -1 two lines up, which is what keeps this row from being
+	# free**: `block_of(-1)` is -1, so a press that ordered nobody cannot pass it.
+	t.eq(b.grid.block_of(int(b.soldier_order[mover])), b.grid.block_of(target),
+		"몸이 선 조각을 눌러도 쥔 몸이 그 칸으로 간다 — 그 자리의 몸이 대신 골라지지 않는다")
 	t.ok(game.hand.is_empty(), "그리고 명령이었으므로 손을 놓는다 — 새로 고른 게 아니다")
 
 
@@ -829,7 +846,10 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 	var dest_at := Vector2.ZERO
 	for k in game.hand.reach.size():
 		var cand := int(game.hand.reach[k])
-		if cand == body_tile:
+		# ⚠⚠ **A DIFFERENT 칸 AND NOT ONLY A DIFFERENT 조각, SINCE 2026-09-01.** The order is aimed at a
+		# 칸 now, so a destination in the body's OWN 칸 would let a shell that ordered him where he
+		# already stands pass the row below — the unit is exactly what makes those two indistinguishable.
+		if b.grid.block_of(cand) == b.grid.block_of(body_tile):
 			continue
 		var at := fs.tile_to_screen_px(cand % b.grid.w, cand / b.grid.w)
 		# ⚠ **The round trip is the self-check.** A screen point that resolves to a different 조각
@@ -846,7 +866,11 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 	if dest >= 0 and walker >= 0:
 		game._unhandled_input(_press(dest_at))
 		game._unhandled_input(_release(dest_at))
-		t.eq(int(b.soldier_order[walker]), dest, "불이 들어온 조각을 누르면 그 몸이 거기로 간다")
+		# ⚠ **The 칸, for the reason the loop above now skips the body's own one.** `ordered2` was
+		# asserted to be 0 a few lines up, so every `soldier_order` is -1 going in and `block_of(-1)`
+		# is -1 — a press that ordered nobody cannot pass this.
+		t.eq(b.grid.block_of(int(b.soldier_order[walker])), b.grid.block_of(dest),
+			"불이 들어온 조각을 누르면 그 몸이 그 칸으로 간다")
 		t.eq(fs.cam_px, held, "그리고 명령한 누름도 카메라를 안 움직인다")
 		# ⚠⚠ **THE ROW ABOVE THIS ONE ASSERTED THE OPPOSITE FOR ONE ROUND** (2026-08-31, the user at
 		# the screen: 「이동하면 그러면 그 이동관 관련은 꺼져야지」). It read 「명령한 뒤에도 손은 그

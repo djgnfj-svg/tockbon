@@ -291,8 +291,9 @@ func _table() -> Dictionary:
 			# gives it a shader, and one uniform lights the 칸 the cursor is on.
 			"_adopt_the_pads": 0,
 			"_tell_the_pads": 0,
-			# 티켓 34: how far the 판 have merged, worked out from the zoom and pushed to the shader.
-			"pad_merge": 0,
+			# ⚠ 티켓 34's `pad_merge` STOOD HERE AND ITS FUNCTION IS GONE (2026-09-01). The merge is
+			# pinned at 1 — one mark per 칸 at every zoom — and is pushed once in `_adopt_the_pads`,
+			# so there is no longer a function for this row to name.
 			"set_pads_revealed": 0,
 			# **The pick's own three** (2026-08-31, the user: 「tab 없이 그냥 캐릭터를 누르면 이동할
 			# 수 있는 칸들이 뜨고 눌러서 이동하는거임」). `set_reach` writes the mask the 판 shader
@@ -303,6 +304,11 @@ func _table() -> Dictionary:
 			"set_move_lines": 0,
 			"_paint_move_lines": 0,
 			"_g_ribbon": 0,
+			# ⚠ **The line's TAIL, added 2026-09-02.** `Hand._seats` answers with the 조각 a body
+			# stands in — one quarter of the aimed 칸 — so the terminator landed in a corner of the
+			# very mark it was pointing at. This asks `Grid` where the middle of that 칸 is; it draws
+			# nothing itself, which is why it is 0 like every other name in this block.
+			"_block_middle_tiles": 0,
 			# **The white rim on the picked body** (2026-08-31, the user: 「내가 누른 캐릭이 티가
 			# 나야할듯함」). `set_picked` takes the ids in, `_put_pick_outline` places one rim from the
 			# body's own finished sprite, and `_rim_sprite` is that pool's own `_sprite`.

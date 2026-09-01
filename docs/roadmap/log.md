@@ -3519,3 +3519,136 @@ not sufficient** — there is no netcode, no host, no input sync.
 ⚠⚠ **12 월.** 사용자가 **「진짜 오래 걸리더라도 제대로 만들어 볼까, 십이 월 빼고」**와 **「개발 기간보단
 돈 벌어야지」**를 같은 세션에 말했다. **「12 월을 뺀다」는 말은 아직 안 나왔다.** ⚠ **이 줄은 두 번 뒤집힌
 적이 있고 사용자가 마지막에 한 말로만 정해진다 — 논쟁으로는 안 정해진다.**
+
+---
+
+## ✅✅ **The order stopped speaking in 조각, and one conversation settled every hand on the mouse — 2026-09-02**
+
+**The session opened as 「what should I do」 and ended with twelve tickets and a control layout that
+reverses a whole day of deletions.** ⚠ **One thing was built and verified — the 칸 order. Everything
+else on this page is a decision with no code under it.**
+
+### What the user asked, and the round it started
+
+The user ran the game, looked at it, and said three things at once:
+
+> ***"Hm — did we not scrap moving by 조각? And they just walk right past each other; if they are
+> roughly near each other they should fight. And the block-unit move we settled on, and dragging with
+> the left button to make a 부대 and move it — is none of that in?"***
+> (「음조각 단위로 이동하는거 폐기안했나? 그리고 너무 그냥 지나감 얼추 비슷하면 싸워야하는데 블록단위
+> 이동하기로한거랑 좌클로 드래그해서 부대로 만들어서 이동하는건 없나」)
+
+**All three were true and none had a ticket.** The 칸 decision had been made on 2026-09-01 and the
+glossary itself recorded that `Hand.order` still took a 조각.
+
+> ***"Drop 조각 — it moves by block unit now."*** (「조각 빼고 이제 블록단위로 이동할듯」)
+
+### ✅ **What was BUILT: the order takes a 칸**
+
+**Twelve steps, surveyed first and adversarially checked, then built and attacked by three verifiers.**
+
+| 무엇 | |
+|---|---|
+| **`Hand.order` · `routes` · `route_points`** | take a 칸. `_seats` replaced `_spread` and its seats **may repeat a 조각** — three bodies on one 조각, which `_spread` could not do |
+| **`Grid.tiles_of_block`** | the inverse `block_of` never had |
+| **`_standable`** | lost its `can_hold` clause — **an order goes out even onto a FULL 칸.** The one design change |
+| **판 자국** | pinned one-per-칸. `pad_merge()` and its two zoom constants are deleted |
+| **`tests/nets/net_hand.gd`** | new, and the first net that drives `Hand` at the sim seam |
+
+**검사 1476 통과 → 1567.** **실패는 4 그대로고 넷 다 이 라운드보다 오래됐다.**
+
+⚠⚠ **「284 → 71」은 땅의 수였지 자국의 수가 아니었다.** 실측하니 **자국은 280 → 70** 이다 — 계단 조각
+넷은 원래 자국이 없다. **화면에서 센 것은 자국 66 개, 하나가 48×32 px, 가장 넓은 줄에 아홉 개.**
+
+**Four defects were found by the verifiers and fixed in a second round**: the 이동선 disagreeing with
+the press (612 lines driven over all 68 lit 칸, **594 wrong → 0**), the overflow seating a body across a
+cliff, a **1~3 px dark hairline splitting every mark** where the merged quads met (alpha 1.55x on that
+one line), and the route's endpoint landing in a 칸's **corner** instead of its middle.
+
+### ⚠⚠ **Every hand on the mouse was settled in one conversation, and it reverses 2026-08-31 whole**
+
+**The user asked what other games do, and the answers moved the decision three times.**
+
+> ***"Hm, come to think of it — do we even need camera rotation?"*** (「근데 막상 이렇게 생각하니까
+> 카메라 회전이 필요할까?」)
+> ***"Does RimWorld also scroll the camera when you take the mouse to the very edge?"***
+> (「림월드도 마우스를 끝자락으로 가면 알아서 화면이 카메라가 이동되니?」)
+
+**RimWorld** pans with WASD, the arrow keys and the screen edge, its left button selects and box-drags,
+its right button moves, and **it has no camera rotation at all.** **Bad North** — this project's bar —
+turns with A/D, the mouse and the right stick. ⚠ **This island is a 3D board pitched at 40° with a
+second storey, one 계단, a 성채 and thirty-one pines**, so something is always behind something ⇒ the
+turn stays. **A/D could not take it because WASD had just taken the pan**, so it went to Q and E.
+
+> ***"I think it should turn in 90° steps with Q and E? A bit like Don't Starve? And when the mouse
+> goes to the edge there should be some movement. Thinking of putting QE on the turn and taking the
+> right mouse out? Rotating with the right mouse does not really have any advantage."***
+> (「QE로 한 구 십 도 단위로 돌아야 될 거 같은데? 살짝 굶주마처럼? ... 오른쪽 마우스로 회전을 하면
+> 뭔가 장점이 별로 없어서」)
+
+| Hand | What it does | |
+|---|---|---|
+| **Left, short** | pick one body | unchanged |
+| **Left, drag** | box-select the 부대 | **NEW** |
+| **Right** | order onto that 칸 | **NEW** — one job, so no threshold |
+| **Q · E** | turn 90°, four orientations | **RESURRECTED** (was 15° a notch) |
+| **WASD** · **screen edge** | pan the board | **RESURRECTED** |
+| **Wheel** · **R/F** | zoom · tilt | unchanged |
+
+⚠⚠ **ALL THREE OF THE 2026-08-31 DELETIONS COME BACK AND THE RIGHT-DRAG TURN GOES OUT IN THEIR PLACE.**
+**That is ONE reversal of one day's decision, not three** — and the right-drag turn was itself the
+user's own request on 2026-08-26, re-taken 2026-08-30, so **deleting it reverses a reversal.**
+⚠ **Ten tombstone comments across the shell and `look.gd` now lie.** They are rewritten with the
+reversal on them, never deleted.
+
+⚠⚠ **A live rule went with it**: a left press on empty ground now **clears** the 부대. It replaces the
+user's own 「esc를 하지 않는 이상 이동 우선」 — *"unless I press ESC the move stays the priority"* — which
+existed because **one button did both jobs.** ESC stays as a second way.
+
+### ✅ **Noticing and chasing were decided, and the numbers came out of measurement**
+
+> ***"They would chase a little bit; the wolf does not run away."***
+> (「약간만 쫒아갈듯 늑대가 도망가지는 않음」)
+> **And, asked whether an ordered 부대 stops for what it passes:** ***"it stops and fights, and when it
+> is over it carries on where it was going."***
+
+| 무엇 | 값 | 어디서 나왔나 |
+|---|---|---|
+| **검사 탐지** | **3.0 조각** | 칸의 대각선 2.828 을 올린 것 — **닿아 있는 칸까지만** 본다 |
+| **늑대 탐지** | **6.0, 그대로** | 표에 원래 있던 값. ⚠ **아무도 안 읽고 있었다**, 그리고 **칸 셋이라 넓다** |
+| **추격 목줄** | **2.0 조각 = 한 칸** | 검사가 늑대보다 **느려서**(3.2 대 4.0) 걷는 늑대는 애초에 못 잡는다 |
+
+⇒ **3.0 알아채고 · 2.0 쫓고 · 1.75 때린다.** **줄어드는 사다리라 언제나 사거리 안에서 끝난다.**
+
+⚠⚠ **「멈춰서 싸우고 다시 간다」가 계획에 없던 셋째 상태다.** 명령받은 몸은 `_phase_movement` 의 문지기
+아래 전부를 안 보므로, 추격은 그 아래에 있어야 하고 **「멈췄다가 다시 간다」는 추격도 명령도 아니다.**
+
+### ⚠ **The selection box is a picture, and it is not picked**
+
+**CLAUDE.md**: anything the player looks at is made in a tool. **Sixteen candidates were pulled locally
+in four families** — a plain L bracket, a doubled bracket, a notched one **that failed** (it came back
+a blob), and a thin full rectangle. **All sixteen are kept in `.candidates/selection_box/`.**
+
+⚠⚠ **The shape decides how it is built**: a corner bracket is **one picture rotated four times**, a full
+frame has to be **cut into four corners and four stretching edges** — and `tools/pixel/gen.py`'s `ui`
+preset already carries a measured note that 9-slice **misaligns the corners.**
+
+### ⚠ Three defects the 칸 order left behind, all measured, none fixed
+
+- **A 부대 split across two walking components** gets a body seated where it can never walk — `reach` is
+  a union flood. ⚠ Today's island is one piece; **the 철광석's detached 칸 is the shape that would bite**
+- **Pressing a FULL upper-storey 칸 seats the whole 부대 downstairs**, out of reach of what was pointed at
+- **A one-frame gap between the preview and the press** moves the destination by a whole 칸 — measured
+  **6 of 507 pairs, 1.2%**
+
+⚠ **And `net_hand` died at startup in one of three suite runs** (0xC0000409), scoring 통과 0 and dropping
+that run's total to 1476. **Run alone it is 91 통과.** Not diagnosed.
+
+### What this round produced
+
+> ***"Make tickets for everything that is not done, and then push."***
+> (「안한거 싹다 티켓으로 만들어줘 그리고나서 push 하고」)
+
+**티켓 열둘** — 태스크 03 이 넷에서 열둘이 됐고, **그중 지어진 것은 03-08 하나다.**
+**태스크 07 (몸이 서로를 알아채고 쫓는다) 이 새로 섰다.** ⚠⚠ **이 태스크는 모델이 자른 것이고 자르는 것은
+사용자의 몫이다** — 태스크 02 가 닫혀 있어서 두 티켓이 갈 데가 없었다.
