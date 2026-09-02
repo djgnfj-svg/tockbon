@@ -184,6 +184,10 @@ static func load_into(grid: Grid) -> void:
 	# 조각**, so the rule needs both and this is the one place that has both. ⚠ Set AFTER `load_rows`,
 	# which does not clear it — see `Grid.coast`.
 	grid.coast = coast()
+	# ⚠ **The resource 칸 come in with the board too** (ticket 05-05). The drawn island has none — its
+	# 54 props all stand on ground a body can walk on, which is what `Grid.set_resources` skips — so
+	# this line changes nothing today and is what a generated island will arrive through.
+	grid.set_resources(props())
 
 
 ## ⚠⚠ **THE ISLAND'S TIME LIMIT WAS DELETED 2026-08-27.** The loss it fed died on 2026-08-24 and the

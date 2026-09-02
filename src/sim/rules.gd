@@ -448,14 +448,18 @@ const BARRICADE_WOOD := 5
 const BARRICADE_HP := 30.0
 
 
-# --- 낚시 ------------------------------------------------------------------------------------------
-## **How long one catch takes, in seconds** (ticket 05-09; the number is 05-05's, which the user settled
-## with 「왜 몇 초까지는 너무 커 일단 대략적으로 네가 추천대로 정해 줘」 — *do not go down to seconds, set
-## it roughly as you recommend* ⇒ ten seconds a unit). **The same ten seconds gathering will use.**
-const FISH_SEC := 10.0
-## How many fish one catch puts in the 창고. ⚠ **What a GOOD spot is worth is not decided** — 05-09 lists
-## it as open, and the good spot needs a boat that does not exist yet.
-const FISH_PER_CATCH := 1
+# --- 채집과 낚시 ------------------------------------------------------------------------------------
+## **How long one unit takes to gather, in seconds — fish, wood, rock and ore alike** (ticket 05-05,
+## the user: 「왜 몇 초까지는 너무 커 일단 대략적으로 네가 추천대로 정해 줘」 — *do not go down to seconds,
+## set it roughly as you recommend* ⇒ ten seconds a unit).
+##
+## ⚠⚠ **ONE NUMBER FOR BOTH, AND THAT IS THE TICKETS' OWN WORD.** 05-09 says a catch takes 「a first
+## value like 05-05's ten seconds」, so fishing and gathering are the same ten seconds until somebody
+## says otherwise — **two constants holding one number is how they come to disagree.**
+const GATHER_SEC := 10.0
+## How many units one turn of the clock puts in the 창고. ⚠ **What a GOOD fishing spot is worth is not
+## decided** — 05-09 lists it as open, and the good spot needs a boat that does not exist yet.
+const GATHER_PER_TURN := 1
 
 
 # --- The telegraph -------------------------------------------------------------------------------

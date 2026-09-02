@@ -126,6 +126,18 @@ var passable := PackedByteArray()      # w*h, 1 = walkable (includes a ramp)
 ## ⚠⚠ **IT BLOCKS THE PLAYER TOO** (the user: 「네 편도 맞고」) — which is why it lives here, where both
 ## sides ask, and not in a beast-only rule.
 var built := PackedByteArray()
+## **w*h, which resource stands on each 조각** — 0 none, and otherwise an index into
+## `Store.KINDS` + 1. Ticket 05-05: 「나무가 무성한 칸 돌 칸 철광석 칸」.
+##
+## ⚠⚠ **A RESOURCE 칸 IS AN IMPASSABLE, DRY 조각 CARRYING A PROP, AND THAT IS THE WHOLE TEST.** The
+## hand-drawn island has 31 pines, 3 rocks and an ore standing on ground a body can WALK on — they are
+## 풍경 and were placed as 풍경 (2026-08-31: 「게임이 도는 동안 이것에 대해 정하는 것이 없다」). **A
+## generated island cuts its resource 칸 out of the walkable board and stands the same props on the
+## hole.** So passability is what tells the two apart, and no new letter and no new prop kind is needed.
+## ⚠ **Dry as well as impassable**, or the sea would be a resource the moment a prop washed into it.
+## ⚠ **Cleared by `load_rows`**, and filled by `set_resources` afterwards — the props live in the
+## island file beside the board, not in the letters.
+var resource := PackedByteArray()
 var water := PackedByteArray()         # w*h, 1 = water (includes a harbour)
 ## w*h, the tier level of each tile. **Every height in this game is derived from this one integer** —
 ## see `Rules.TIER_STEP_TILES` and `TIER_CHARS` above.
@@ -232,6 +244,8 @@ func load_rows(rows: Array, tiers: Array = []) -> void:
 	level.resize(n)
 	built = PackedByteArray()
 	built.resize(n)
+	resource = PackedByteArray()
+	resource.resize(n)
 	reserved = PackedInt32Array()
 	reserved.resize(n * Rules.TILE_CAPACITY)
 	reserved.fill(-1)
@@ -611,6 +625,57 @@ func _build_ring(reach: float) -> void:
 ## Whether any of the eight neighbours of `t` is water. ⚠ **Its own function and not folded into the
 ## bearing**: water on two exactly opposite sides sums to nothing, and a 조각 on a one-조각 isthmus is
 ## still coast.
+## **Reads the resource 칸 out of an island's props.** Called after `load_rows`, by whoever has the
+## props — `Islands.load_into` for the drawn island, and the generator's own loader when there is one.
+##
+## ⚠ **Every call starts from nothing**, so a board loaded twice does not keep a 칸 the second island
+## does not have.
+## ⚠ **A prop on walkable ground is scenery and is skipped in silence.** That is the drawn island's
+## whole prop list, and it is not an error — see `resource`.
+func set_resources(props: Array) -> void:
+	resource.fill(0)
+	for raw in props:
+		var prop: Dictionary = raw
+		var kind := String(prop.get("kind", ""))
+		var index := _resource_index(kind)
+		if index <= 0:
+			continue
+		var tx := int(prop.get("x", -1))
+		var ty := int(prop.get("y", -1))
+		if tx < 0 or ty < 0 or tx >= w or ty >= h:
+			continue
+		var t := ty * w + tx
+		if passable[t] != 0 or water[t] != 0:
+			continue
+		resource[t] = index
+
+
+## **Which kind stands on this 조각, as a `Store.KINDS` word, or an empty string.**
+func resource_at(t: int) -> String:
+	if t < 0 or t >= resource.size():
+		return ""
+	var index := int(resource[t])
+	if index <= 0 or index > Store.KINDS.size():
+		return ""
+	return String(Store.KINDS[index - 1])
+
+
+## **The prop kinds that are resources, mapped to their `Store.KINDS` slot plus one.**
+##
+## ⚠⚠ **THE PROP KIND AND THE STORE KIND ARE DIFFERENT WORDS AND THIS IS THE ONE PLACE THEY MEET.** A
+## pine is drawn as `tree_pine` and stored as `wood`; a rock and an ore happen to share their word.
+## Anything else — a bush, a stump — is scenery whatever it stands on.
+static func _resource_index(prop_kind: String) -> int:
+	match prop_kind:
+		"tree_pine":
+			return Store.index_of("wood") + 1
+		"rock":
+			return Store.index_of("rock") + 1
+		"ore":
+			return Store.index_of("ore") + 1
+	return 0
+
+
 ## **Whether a body standing here is on the water's edge** — passable, no wall on it, and touching
 ## water 8-way. Ticket 05-09: 「해안가 어디서나 할 수 있는데」 — *you can fish anywhere along the coast*.
 ##
