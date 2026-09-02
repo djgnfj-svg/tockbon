@@ -600,6 +600,13 @@ const CAM_ROAM_TILES := 20.0
 ## ⚠ **It takes nothing away.** A press that releases without travelling is still a walk order; only a
 ## press that MOVES becomes a look-around. ⚠ **Small on purpose**: a threshold big enough to be
 ## comfortable is a threshold that swallows short drags, and a hand that moves 6 px was never clicking.
+##
+## ⚠⚠ **THE NAME SAYS PAN AND IT GATES A BOX SINCE 2026-09-02** (ticket 03-12, the user: 「동작이 단순해야함
+## 왼쪽으로 드래그 왼쪽으로 칸누르기로 해야할듯」 — *"the actions must be simple — left drag, and left
+## press on a 칸"*). A left press that travels past this is a SELECTION BOX now; the pan is the keys' and
+## the edge band's, and no drag pans. Everything above about what a travelling press must not swallow
+## still holds — a click is still a click under it. **The rename is `naming`'s round, not 03-12's**, so
+## this is the glossary's own 「이름만 보면 / 실제로는」 trap, written down where it lives.
 const DRAG_PAN_THRESHOLD_PX := 6.0
 
 ## ⚠⚠ **FOUR CAMERA-TRAVEL CONSTANTS STOOD HERE, ALL FOUR WERE DELETED, AND ALL FOUR ARE BACK**
@@ -2341,6 +2348,62 @@ static func back_to_title_rect_px(over_size: Vector2, button_size: Vector2) -> R
 	return Rect2(Vector2(x, y), button_size)
 
 
+## **The selection box — the rectangle a left drag pulls over the island** (ticket 03-12, 2026-09-02, the
+## user: *"Drag to select and move them. There is no other method as good as that one."*).
+##
+## ⚠⚠ **A LOADED PICTURE, NOT A `draw_rect`.** The pulled `frame_01` candidate — a thin mint outline —
+## keyed from its white paper to alpha and cropped to its ink by `tools/pixel/keywhite.py`, once. It is
+## the orchestrator's default out of the five prototypes built that day; **the user has not picked it**,
+## and swapping it is one PNG through the same script (a bracket family would also change
+## `selection_box_pieces` to four rotations).
+## ⚠ **Its own size is the answer to 「how big is the picture」** — `HudView` reads `get_size()` off the
+## loaded texture, so a re-pulled picture of another size tiles itself with nothing told here.
+## ⚠ **No alpha normalisation.** The 64 px downsample peaks at alpha 0.72 and the user saw the
+## candidate at that strength; the file is that picture.
+const SELECTION_BOX_TEX := "res://assets/ui/selection_box.png"
+
+## **The side of the corner square cut from the picture, in picture px, drawn 1:1 on screen.** The
+## candidate's own `CORNER_PX`. A corner is never stretched; the edges between two corners are stretched
+## along their own side only, so the stroke's thickness stays the picture's whatever the rect's size.
+const SELECTION_BOX_CORNER_PX := 4.0
+
+## **The eight pieces the box is drawn from — `[src, dst]` pairs of `Rect2`, picture px to screen px** —
+## in this order: **TL, TR, BL, BR, top, bottom, left, right.** Pure and static, so a net drives it with
+## no tree and the HUD's hook is compared against exactly this.
+##
+## ⚠ **The picture's ink box IS the whole picture** (`keywhite.py` cropped it), so the four picture
+## anchors are its corners and `pic - corner` is where the far pieces start.
+## ⚠ **A span never goes negative.** The first box the shell hands over is 6 px on one axis and can be
+## 0 on the other, and a negative-sized `Rect2` drawn by `draw_texture_rect_region` flips the region —
+## the spans are floored at 0 and the corners simply overlap.
+static func selection_box_pieces(rect: Rect2, pic: Vector2, corner: float) -> Array:
+	var c := corner
+	# Picture px: the near corner squares start at the picture's origin, the far ones end at its end.
+	var px0 := 0.0
+	var py0 := 0.0
+	var px1 := pic.x - c
+	var py1 := pic.y - c
+	var mid_w := pic.x - 2.0 * c
+	var mid_h := pic.y - 2.0 * c
+	# Screen px: the same four anchors on the drag rect.
+	var sx0 := rect.position.x
+	var sy0 := rect.position.y
+	var sx1 := rect.end.x - c
+	var sy1 := rect.end.y - c
+	var span_w := maxf(rect.size.x - 2.0 * c, 0.0)
+	var span_h := maxf(rect.size.y - 2.0 * c, 0.0)
+	return [
+		[Rect2(px0, py0, c, c), Rect2(sx0, sy0, c, c)],
+		[Rect2(px1, py0, c, c), Rect2(sx1, sy0, c, c)],
+		[Rect2(px0, py1, c, c), Rect2(sx0, sy1, c, c)],
+		[Rect2(px1, py1, c, c), Rect2(sx1, sy1, c, c)],
+		[Rect2(px0 + c, py0, mid_w, c), Rect2(sx0 + c, sy0, span_w, c)],
+		[Rect2(px0 + c, py1, mid_w, c), Rect2(sx0 + c, sy1, span_w, c)],
+		[Rect2(px0, py0 + c, c, mid_h), Rect2(sx0, sy0 + c, c, span_h)],
+		[Rect2(px1, py0 + c, c, mid_h), Rect2(sx1, sy0 + c, c, span_h)],
+	]
+
+
 # ---------------------------------------------------------------------------------------------
 # Combat juice — the twelve effects. Forty-four values, and not one of them is a truth
 # ---------------------------------------------------------------------------------------------
@@ -2505,6 +2568,10 @@ const FX_GROUND_STEP_PX := 20.0
 ##
 ## ⚠ **Half-width, so the ribbon is twice this across.** Kept under half a 조각 — a line as wide as the
 ## 판 it crosses reads as another 판 rather than as a route over them.
+## ⚠⚠ **ONE LINE FOR THE 부대, SINCE 2026-09-02** (ticket 03-12, the user: 「이동이 하나로 떠야지 하나처럼」
+## — *"the move must show as ONE, as if they are one"*). `Hand.routes` still answers a route per body;
+## the shell hands the view only the `Hand.lead`'s — the walking body nearest the aimed 칸 — so nine
+## picked bodies draw one ribbon from one pair of feet, and the 부대 follows it.
 const MOVE_LINE_HALF_PX := 3.0
 
 ## ⚠⚠ **`PICK_BODY_TILES` STOOD HERE AND IT IS DELETED** (2026-09-02, the user: 「몸은 화면에서 잡자」

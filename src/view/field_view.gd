@@ -789,6 +789,8 @@ func tile_to_screen_px(tx: int, ty: int) -> Vector2:
 ## extent is the same foreshortening the camera applies to the upright card; the width is the card's
 ## world width, which an orthographic camera does not foreshorten.
 ## ⚠ Only living, ashore 검사 are in `_sprite_of_soldier`; 짐승 are not pickable, as before.
+## ⚠ **The rectangle itself is `_drawn_rect_of` since 03-12**, so the box (`bodies_in_rect_px`) and the
+## press read one arithmetic and cannot disagree about where a body is drawn.
 func body_at_px(at: Vector2) -> int:
 	var who := -1
 	var best := INF
@@ -798,27 +800,84 @@ func body_at_px(at: Vector2) -> int:
 		if k < 0 or k >= _sprites.size():
 			continue
 		var s := _sprites[k]
-		if not s.visible or s.texture == null:
+		var drawn := _drawn_rect_of(s, px_per_tile)
+		if drawn.size == Vector2.ZERO or not drawn.has_point(at):
 			continue
-		var xz := Vector2(s.position.x, s.position.z) * Look.TILE_PX
-		var half_tall := float(s.texture.get_height()) * s.scale.y * s.pixel_size * 0.5
-		var foot := world_to_screen_px(xz, s.position.y - half_tall)
-		var top := world_to_screen_px(xz, s.position.y + half_tall)
-		# One texel of this sprite on the glass, and where its ink starts and ends measured from the
-		# canvas centre the sprite is placed by. A picture never scanned spans its whole canvas.
-		var texel_px := s.scale.x * s.pixel_size * px_per_tile
-		var half_w := float(s.texture.get_width()) * 0.5
-		var span: Vector2i = _ink_cols.get(s.texture, Vector2i(0, s.texture.get_width() - 1))
-		var left := foot.x + (float(span.x) - half_w) * texel_px
-		var right := foot.x + (float(span.y) + 1.0 - half_w) * texel_px
-		var drawn := Rect2(left, top.y, right - left, foot.y - top.y)
-		if not drawn.has_point(at):
-			continue
-		var d := at.distance_to(foot)
+		var d := at.distance_to(_sprite_edge_px(s, -1.0))
 		if d < best:
 			best = d
 			who = int(raw_id)
 	return who
+
+
+## **The rectangle 검사 `sid` is drawn in on the glass, or an empty `Rect2` when no pooled sprite is his
+## this frame** (ticket 03-12). Public so a net can aim a box at a body's own picture.
+func drawn_rect_px(sid: int) -> Rect2:
+	if not _sprite_of_soldier.has(sid):
+		return Rect2()
+	var k := int(_sprite_of_soldier[sid])
+	if k < 0 or k >= _sprites.size():
+		return Rect2()
+	var px_per_tile := Look.VIEWPORT_W_PX / _visible_ground_px().x * Look.TILE_PX
+	return _drawn_rect_of(_sprites[k], px_per_tile)
+
+
+## **Every 검사 whose drawn picture overlaps `rect`, ascending by id** (ticket 03-12, 2026-09-02, the
+## user: *"Drag to select and move them. There is no other method as good as that one."*). The
+## selection box's whole hit test.
+##
+## ⚠ **`Rect2.intersects` and not containment**: a box that clips a body's edge catches him, which is
+## what the user tested in the lab. A purely horizontal 6 px drag is a rect of zero height, and
+## `intersects` still answers true when that row cuts a picture — the lab's `_bodies_in_rect` used the
+## same call.
+## ⚠ **Player-only by construction**: only ashore 검사 are in `_sprite_of_soldier`, so a box drawn
+## around a 늑대 and a 검사 answers the 검사 alone with no filter written here.
+func bodies_in_rect_px(rect: Rect2) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var px_per_tile := Look.VIEWPORT_W_PX / _visible_ground_px().x * Look.TILE_PX
+	for raw_id in _sprite_of_soldier:
+		var k := int(_sprite_of_soldier[raw_id])
+		if k < 0 or k >= _sprites.size():
+			continue
+		var drawn := _drawn_rect_of(_sprites[k], px_per_tile)
+		if drawn.size == Vector2.ZERO:
+			continue
+		if drawn.intersects(rect):
+			out.append(int(raw_id))
+	out.sort()
+	return out
+
+
+## **The screen rectangle one pooled body sprite is drawn in** — foot to top, the ink's own width — or
+## an empty `Rect2` for a sprite that is hidden or wears nothing. The body of `body_at_px`'s loop until
+## 03-12 cut it out so the box could read the same arithmetic; **the paragraphs on `body_at_px` are its
+## explanation**, and nothing about the numbers moved.
+##
+## ⚠ `px_per_tile` is passed in rather than read here, because every caller loops the pool and
+## `_visible_ground_px` is one answer per frame, not one per body.
+func _drawn_rect_of(s: Sprite3D, px_per_tile: float) -> Rect2:
+	if not s.visible or s.texture == null:
+		return Rect2()
+	var foot := _sprite_edge_px(s, -1.0)
+	var top := _sprite_edge_px(s, 1.0)
+	# One texel of this sprite on the glass, and where its ink starts and ends measured from the
+	# canvas centre the sprite is placed by. A picture never scanned spans its whole canvas.
+	var texel_px := s.scale.x * s.pixel_size * px_per_tile
+	var half_w := float(s.texture.get_width()) * 0.5
+	var span: Vector2i = _ink_cols.get(s.texture, Vector2i(0, s.texture.get_width() - 1))
+	var left := foot.x + (float(span.x) - half_w) * texel_px
+	var right := foot.x + (float(span.y) + 1.0 - half_w) * texel_px
+	return Rect2(left, top.y, right - left, foot.y - top.y)
+
+
+## **Where a pooled sprite's canvas centre column meets its bottom edge (`side` -1, the drawn foot) or
+## its top edge (`side` +1) on the glass.** The one owner of 「the foot」: `_drawn_rect_of` builds its
+## rectangle from both edges, and `body_at_px` breaks a tie between two overlapping pictures on the
+## nearer foot — written twice, the tie-break and the rectangle would drift apart by a texel.
+func _sprite_edge_px(s: Sprite3D, side: float) -> Vector2:
+	var xz := Vector2(s.position.x, s.position.z) * Look.TILE_PX
+	var half_tall := float(s.texture.get_height()) * s.scale.y * s.pixel_size * 0.5
+	return world_to_screen_px(xz, s.position.y + side * half_tall)
 
 
 ## Moves the camera by a SCREEN-space delta (mouse motion) and re-clamps. The ground under the cursor

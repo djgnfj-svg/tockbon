@@ -122,6 +122,12 @@ func _table() -> Dictionary:
 			# The body pick on the glass (ticket 03-16, 2026-09-02): it READS the pooled sprites and
 			# projects them through `world_to_screen_px`; it places nothing and draws nothing.
 			"body_at_px": 0,
+			# The selection box's hit test and the arithmetic it shares with the press (ticket 03-12,
+			# 2026-09-02): all four READ the pooled sprites and project them; none draws.
+			"drawn_rect_px": 0,
+			"bodies_in_rect_px": 0,
+			"_drawn_rect_of": 0,
+			"_sprite_edge_px": 0,
 			"world_to_tile": 0,
 			"pan_by": 0,
 			"zoom_at": 0,
@@ -389,6 +395,13 @@ func _table() -> Dictionary:
 			"_draw": 0,
 			"_paint_over": 1,
 			"_paint_back": 1,
+			# **The selection box** (ticket 03-12, 2026-09-02). `set_box` stores a rect and asks for a
+			# redraw; `_paint_box_piece` is the one leaf the eight pieces go through — exactly one
+			# `draw_texture_rect_region`, so a piece is a region of the pulled picture and never a
+			# typed stroke. ⚠ `_draw` stays 0: the box is drawn ABOVE the loss's early return, through
+			# its own leaf, or it would be a state with no picture.
+			"set_box": 0,
+			"_paint_box_piece": 1,
 		},
 		# ⚠ **`panel_view.gd` had its own block here and the FILE is deleted** (2026-08-29) with the
 		# verdict it drew.

@@ -75,12 +75,18 @@ class HudSpy extends HudView:
 	## it: the two are separate leaves, and one drawn without the other is the failure worth naming —
 	## words with no way back, or a button floating on a live board.
 	var backs := []
+	## **The selection box's eight pieces** (ticket 03-12, 2026-09-02) — `tex`, `src` and `dst` of every
+	## `_paint_box_piece` call, in the order the leaf was handed them. Compared whole against the pure
+	## `Look.selection_box_pieces`, which is the shape `how-nets-lie` prescribes: capture the argument
+	## at the hook and assert it equals what the pure function returns.
+	var boxes := []
 
 	func _draw() -> void:
 		buttons.clear()
 		enemies.clear()
 		overs.clear()
 		backs.clear()
+		boxes.clear()
 		seq = 0
 		super()
 		draws += 1
@@ -90,6 +96,9 @@ class HudSpy extends HudView:
 
 	func _paint_back(tex: Texture2D, at: Vector2) -> void:
 		backs.append({"seq": _bump(), "tex": tex, "at": at})
+
+	func _paint_box_piece(tex: Texture2D, src: Rect2, dst: Rect2) -> void:
+		boxes.append({"seq": _bump(), "tex": tex, "src": src, "dst": dst})
 
 	func _bump() -> int:
 		seq += 1
@@ -150,6 +159,8 @@ func run(t) -> void:
 	# read as covered and were not. **Wired at the very top on purpose**: the second builds a `Game` of
 	# its own and puts it in the tree, so it runs and lets go before the fixture below stands one up.
 	_speed_steps_survives_read_by_nobody(t)
+	# The selection box's pure half (03-12): eight rectangles from `Look` alone, no tree, no game.
+	_the_box_pieces_tile_the_rect(t)
 	await _one_press_reaches_the_first_island(t)
 	# ⚠⚠ **AT THE TOP, AND FOR THE REASON THE TERRAIN BLOCK BELOW SPELLS OUT**: a red row halfway down
 	# `run()` has twice abandoned everything after it, and 티켓 15's red is still standing. This builds
@@ -259,7 +270,7 @@ func run(t) -> void:
 
 	# 「지도에서 칸을 누르면 섬이 열린다」 — and the ring walks first. `_process(dt)` is called by hand
 	# because a headless frame is 6.9 ms and 0.45 s would be 66 frames of guessing.
-	t.ok(not game._panning, "판을 누르기 전에는 카메라를 안 끌고 있다 (자가 점검)")
+	t.ok(not game._boxing, "판을 누르기 전에는 상자를 안 끌고 있다 (자가 점검)")
 
 	# -- swap in the spies and re-open the island --------------------------------------------------
 	# ⚠ **`reward_view` used to be swapped in here too**, early, so item 4 could tell 「rebound」 from
@@ -317,6 +328,9 @@ func run(t) -> void:
 	game.set_process(false)
 	await t.pump_frames(2)
 
+	# The selection box's view half (03-12): the spy sees the eight pieces the pure function names.
+	await _the_box_reaches_the_hud_as_eight_pieces(t, hs)
+
 	# ⚠⚠ **THE PAN ROWS ARE CALLED HERE AND NOT DOWN BESIDE THE DRAG ROWS, AND THE REASON IS A HOLE
 	# IN THIS FILE.** Measured 2026-08-30: the terrain row below throws on a null `_terrain.mesh`, and
 	# a runtime error inside `run()` abandons everything after it — **so this file's whole camera
@@ -342,14 +356,14 @@ func run(t) -> void:
 	t.eq(fs._boats_used, 0, "첫 배가 뜨기 전에는 선체가 하나도 안 그려진다")
 
 	_the_pan_keys_move_the_camera_and_stop(t, game, fs)
-	_a_drag_looks_around_and_a_click_commands(t, game, fs)
+	await _a_drag_boxes_and_a_click_picks_or_orders(t, game, fs, hs)
 	# ⚠⚠ **THE CAMERA FUNCTIONS SIT HERE FOR THE REASON THE PARAGRAPH ABOVE GIVES**, and for
 	# no other: everything below the terrain block has been abandoned by a throw twice this session,
 	# and a row that quietly does not run is worse than a red. **The sim is frozen from here**, so the
 	# camera is the only thing moving and a `cam_px` that changed changed because of an input.
 	# ⚠ **After the drag rows, not before**: `_a_drag_...` leaves the yaw at its opening angle, and
 	# every direction row below reads `cam_px` axes that only line up with the screen at that yaw.
-	_the_right_button_orders_on_the_press_and_never_turns(t, game, fs)
+	_the_right_button_does_nothing(t, game, fs)
 	_q_and_e_turn_a_quarter(t, game, fs)
 	_the_edge_of_the_window_pans(t, game, fs)
 
@@ -574,12 +588,22 @@ func run(t) -> void:
 	# ⚠⚠ **THE ROW ON THIS GESTURE IS DELETED AND THE GESTURE IS KEPT** (02-08). It asserted the drag
 	# lands on `(-120.00, -160.06)` — the centred clamp of a 26 x 20 board, `((1040 - 1280) / 2,
 	# (800 - 1120.12) / 2)` — and the island loads 30 x 26. **What stopped being measured: that a press
-	# and a drag reach `pan_by` at all.** ⚠ The press/motion below stays because the row after it needs
-	# a drag to have been released; **it now asserts nothing on its own.**
+	# and a drag reach `pan_by` at all.** ⚠ The press/motion below stayed because the row after it needs
+	# a drag to have been released, and **it asserted nothing on its own** until 03-12.
+	# ⚠⚠ **UNDER THE ONE-BUTTON SHELL THIS IS A LIVE BOX-SELECT OVER THE ISLAND** (2026-09-02, 03-12),
+	# catching whoever is drawn under a 40 px square at the centre — and it runs BEFORE the eleven
+	# functions `run()` calls after it (the adversary found it). **So it is a row and not a parked
+	# gesture**: the camera does not move, the box comes down on the release, and then the hand is let
+	# go by hand so every function after this starts with the empty hand it was written against.
 	fs.cam_px = Vector2(300.0, 300.0)
 	game._unhandled_input(_press(Vector2(640.0, 360.0)))
 	game._unhandled_input(_motion(Vector2(680.0, 400.0), Vector2(40.0, 40.0)))
 	game._unhandled_input(_release(Vector2(680.0, 400.0)))
+	t.eq(fs.cam_px, Vector2(300.0, 300.0),
+		"끌기는 카메라를 안 민다 — 이 파일에서 처음으로 그렇게 말하는 줄이다")
+	t.eq(hs._box, Rect2(), "뗀 뒤에는 HUD 의 상자가 내려가 있다")
+	t.ok(not game._boxing, "그리고 셸도 상자를 끌고 있지 않다")
+	game._let_go()
 
 	fs.cam_px = Vector2(300.0, 300.0)
 	game._unhandled_input(_motion(Vector2(680.0, 400.0), Vector2(40.0, 40.0)))
@@ -601,6 +625,7 @@ func run(t) -> void:
 	# no end — see `game.gd`, where `_click_panel` used to be.
 	_the_route_points_are_in_soldier_pos_units(t, game)
 	_a_full_hand_moves_instead_of_picking(t, game, fs)
+	_a_body_on_a_dark_block_is_picked_not_ordered(t, game, fs)
 	_the_picked_body_wears_a_rim(t, game, fs)
 	_the_turn_flag_has_no_writers_left(t)
 
@@ -672,26 +697,24 @@ func _the_route_points_are_in_soldier_pos_units(t, game) -> void:
 	game.hand.clear()
 
 
-## **The right button walks onto a 조각 with another body drawn on it, and does not pick him.**
+## **A full hand pressing a 칸 with another body drawn on it walks there, and does not pick him.**
 ##
-## ⚠⚠ **THE SUBJECT WAS THE LEFT BUTTON'S MOVE-FIRST PRECEDENCE UNTIL 2026-09-02** (2026-08-31, the user
-## at the screen: 「이게 조각에 옮길 수가 있잖아? 같은 조각으로? 그때 살짝 불편하네? 이게 esc를 하지 않는
-## 이상 이동 우선으로 해줘야할듯한데」): a full hand pressing a lit 조각 walked, and the body standing
-## there did not intercept it. **The left button no longer carries that rule** (ticket 03-11) — on it a
-## press on a drawn body PICKS, full hand or not — and the walk moved to the right button, which never
-## asks `body_at_px` at all. **That is the split itself**, and this is the row that sees it: the same
-## point, the RIGHT button, and the body drawn there is not picked.
+## ⚠⚠ **THE SUBJECT IS THE LEFT BUTTON'S MOVE-FIRST PRECEDENCE, AND IT WAS FOR ONE DAY THE RIGHT
+## BUTTON'S** (2026-08-31, the user at the screen: 「이게 조각에 옮길 수가 있잖아? 같은 조각으로? 그때
+## 살짝 불편하네? 이게 esc를 하지 않는 이상 이동 우선으로 해줘야할듯한데」): a full hand pressing a lit 조각
+## walked, and the body standing there did not intercept it. **03-11 moved that rule to the right
+## button** and this row read 「the left button no longer carries that rule」 — **it does again, since
+## 2026-09-02 evening** (03-12, one button, the user: 「추천대로 ㅇㅇ」 — *"as recommended, yes"*): the
+## same point, the LEFT button, and the body drawn there is not picked.
 ##
 ## ⚠⚠ **THIS IS THE ONE ROW THE OLD ORDER PASSED AND THE SCREEN FAILED.** Until 2026-08-31 the press
 ## asked 「is there a body here」 first, and every check stayed green: picking worked, ordering worked,
 ## the reach lit. **What nothing measured is the two of them meeting** — pressing a 조각 that is BOTH a
 ## destination and somebody's spot — and that is the only case where the priority is visible at all.
-## ⇒ the destination is deliberately chosen to be another body's own 조각.
+## ⇒ the destination is deliberately chosen to be another body's own drawn foot.
 ##
-## ⚠ **Everything is taken off the board rather than typed.** Which 조각 a body stands on moves with the
+## ⚠ **Everything is taken off the board rather than typed.** Which 칸 a body stands on moves with the
 ## island, and a literal here would be measuring a fixture instead of the rule.
-## ⚠ **Both assertions are read between the two edges** — after `_rpress`, before `_rrelease` — because
-## a release-edge order would pass them read afterwards.
 func _a_full_hand_moves_instead_of_picking(t, game, fs: FieldView) -> void:
 	var b: Battle = game.battle
 	if b == null:
@@ -701,42 +724,126 @@ func _a_full_hand_moves_instead_of_picking(t, game, fs: FieldView) -> void:
 	if ashore.size() < 2:
 		return
 	var mover := int(ashore[0])
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
+	game._let_go()
 	game.hand.pick(b, mover)
-	var mine: Vector2 = b.soldier_pos[mover]
-	var my_tile := int(floor(mine.y)) * b.grid.w + int(floor(mine.x))
-	var target := -1
-	var at := Vector2.ZERO
-	for k in range(1, ashore.size()):
-		var p: Vector2 = b.soldier_pos[int(ashore[k])]
-		var tx := int(floor(p.x))
-		var ty := int(floor(p.y))
-		var tile := ty * b.grid.w + tx
-		# ⚠ **Somebody else's 조각 and not the mover's own.** Ordering a body onto the 조각 he already
-		# stands on is legal and would pass this row while measuring nothing.
-		if tile == my_tile or not game.hand.can_reach(tile):
-			continue
-		var scr := fs.tile_to_screen_px(tx, ty)
-		# ⚠ The round trip is the self-check: a point that resolves elsewhere would order elsewhere.
-		if game._tile_at(scr) != tile:
-			continue
-		target = tile
-		at = scr
-		break
-	t.ok(target >= 0, "자가 점검 — 다른 몸이 선 조각 중 화면에서 겨눌 수 있고 갈 수 있는 것이 있다")
-	if target < 0:
+	# ⚠ Painted AFTER the park, never before: `body_at_px` reads the pool as last painted against the
+	# camera as last placed.
+	_park(fs, Vector2.ZERO)
+	fs._paint_bodies()
+	fs._place_camera()
+	var my_block := b.grid.block_of(game._tile_at(_drawn_foot_px(fs, mover)))
+	var other := -1
+	var at := Vector2.INF
+	# ⚠ **Another body's drawn foot, in a lit 칸, and preferably NOT the mover's own 칸.** Ordering him
+	# onto the 칸 he already stands in is legal and would pass the order row while measuring less.
+	for prefer_other_block in [true, false]:
+		for k in range(1, ashore.size()):
+			var cand := int(ashore[k])
+			var foot := _drawn_foot_px(fs, cand)
+			if not foot.is_finite() or fs.body_at_px(foot) != cand:
+				continue
+			var block := b.grid.block_of(game._tile_at(foot))
+			if not game.hand.can_reach_block(block):
+				continue
+			if prefer_other_block and block == my_block:
+				continue
+			other = cand
+			at = foot
+			break
+		if other >= 0:
+			break
+	t.ok(other >= 0, "자가 점검 — 다른 몸이 선 칸 중 화면에서 그 몸으로 풀리고 갈 수 있는 것이 있다")
+	if other < 0:
 		return
-	b.soldier_order[mover] = -1
-	game._unhandled_input(_rpress(at))
-	# ⚠⚠ **THE 칸 AND NOT THE 조각, SINCE 2026-09-01.** The press is aimed at a 조각 on screen — that is
-	# what `_tile_at` answers and it is deliberately not re-pointed — but the shell converts it with
-	# `Grid.block_of` before ordering, and `_seats` then picks which 조각 of that 칸 the body sits in.
-	# ⚠ **`soldier_order[mover]` was set to -1 two lines up, which is what keeps this row from being
-	# free**: `block_of(-1)` is -1, so a press that ordered nobody cannot pass it.
-	t.eq(b.grid.block_of(int(b.soldier_order[mover])), b.grid.block_of(target),
-		"몸이 선 조각을 오른쪽으로 눌러도 쥔 몸이 그 칸으로 간다 — 그 자리의 몸이 대신 골라지지 않는다")
+	var target_block := b.grid.block_of(game._tile_at(at))
+	t.ok(game.hand.can_reach_block(target_block), "자가 점검 — 그 몸이 선 칸에 불이 들어와 있다")
+	game._unhandled_input(_press(at))
+	game._unhandled_input(_release(at))
+	# ⚠ **`soldier_order[mover]` was set to -1 above, which is what keeps this row from being free**:
+	# `block_of(-1)` is -1, so a press that ordered nobody cannot pass it.
+	t.eq(b.grid.block_of(int(b.soldier_order[mover])), target_block,
+		"몸이 선 조각을 왼쪽으로 눌러도 쥔 몸이 그 칸으로 간다 — 그 자리의 몸이 대신 골라지지 않는다")
 	t.ok(game.hand.is_empty(), "그리고 명령이었으므로 손을 놓는다 — 새로 고른 게 아니다")
-	game._unhandled_input(_rrelease())
+	t.ok(not game.hand.ids.has(other), "그 자리의 몸은 쥐어지지 않았다")
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
 
+
+## **A full hand pressing a body who stands on a DARK 칸 picks him — there is nothing to order there**
+## (03-12, arm 2 of `_press_the_island`; the user, 2026-09-02: 「추천대로 ㅇㅇ」).
+##
+## ⚠⚠ **THE FIXTURE STANDS A BODY ON THE 철광석's DETACHED 칸**, the one 칸 on this island no other body
+## can walk to — written by the four writes `place_ashore` makes, because that function refuses a body
+## already ASHORE. **The hand holding the other body cannot reach that 칸** (self-checked), so a press on
+## the drawn body there is arm 2 and not arm 1: with the arms swapped, or with arm 2 deleted, this
+## press KEEPS the hand instead of picking him, and the row goes red.
+## ⚠ **The body is put back the same four-write way** and repainted, so the rows after this one start
+## from the island they were written against.
+func _a_body_on_a_dark_block_is_picked_not_ordered(t, game, fs: FieldView) -> void:
+	var b: Battle = game.battle
+	if b == null:
+		return
+	var g := b.grid
+	var ashore := b.ashore_ids()
+	t.ok(ashore.size() >= 2, "자가 점검 — 섬에 몸이 둘 이상이다")
+	if ashore.size() < 2:
+		return
+	var mover := int(ashore[0])
+	var dark_id := int(ashore[1])
+	var old_pos: Vector2 = b.soldier_pos[dark_id]
+	var old_tile := g.tile_index(int(floor(old_pos.x)), int(floor(old_pos.y)))
+	# The 철광석's 칸: the one detached from the island, at (20, 22) on the loaded island file.
+	var dark_tile := g.tile_index(20, 22)
+	var dark_block := g.block_of(dark_tile)
+	t.eq(int(g.passable[dark_tile]), 1, "자가 점검 — 철광석 조각은 땅이다")
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
+	# The four writes `place_ashore` makes, by hand — see the header.
+	g.release_all(dark_id)
+	b.soldier_pos[dark_id] = Vector2(20.0, 22.0)
+	b._soldier_goal[dark_id] = Vector2(20.0, 22.0)
+	t.ok(g.hold(dark_id, dark_tile), "자가 점검 — 그 몸이 철광석 조각을 잡았다")
+	# The camera is centred on him so his foot is on the glass, and the glide is stepped once so the
+	# view draws him where the sim put him rather than sliding him in from the door (a move wider than
+	# a 칸 is drawn at its stand point at once — see `FieldView._advance_seat_glide`).
+	fs.cam_px = Look.tile_point_px(Vector2(20.0, 22.0)) - fs._visible_ground_px() * 0.5
+	fs._clamp_cam()
+	fs._advance_seat_glide(0.0)
+	fs._paint_bodies()
+	fs._place_camera()
+	var dark_foot := _drawn_foot_px(fs, dark_id)
+	t.ok(dark_foot.is_finite() and Rect2(Vector2.ZERO, Look.viewport_size_px()).has_point(dark_foot),
+		"자가 점검 — 그 몸의 발이 유리 위에 있다 %s" % str(dark_foot))
+	game._let_go()
+	t.ok(game.hand.pick(b, mover), "자가 점검 — 손이 다른 몸을 쥐었다")
+	t.ok(not game.hand.can_reach_block(dark_block), "자가 점검 — 철광석 칸은 쥔 손이 못 가는 칸이다")
+	t.eq(fs.body_at_px(dark_foot), dark_id, "자가 점검 — 그 점은 유리 위에서 그 몸으로 풀린다")
+	t.eq(g.block_of(game._tile_at(dark_foot)), dark_block, "자가 점검 — 그 발밑 땅이 철광석 칸이다")
+
+	game._unhandled_input(_press(dark_foot))
+	game._unhandled_input(_release(dark_foot))
+	t.eq(game.hand.ids, PackedInt32Array([dark_id]),
+		"어두운 칸에 선 몸을 누르면 그 몸을 쥔다 — 보낼 데가 없으니 고르기다")
+	t.eq(_ordered(b), 0, "아무도 안 간다")
+	t.eq(game.hand.reach.size(), g.tiles_of_block(dark_block).size(),
+		"그의 칸의 조각 %d개만 켜진다 — 하나의 교집합이다" % g.tiles_of_block(dark_block).size())
+	t.eq(game.hand.reach_blocks, PackedInt32Array([dark_block]), "켜진 칸은 철광석 칸 하나다 (%d)" % dark_block)
+
+	# Put back, repainted, and proven back.
+	game._let_go()
+	g.release_all(dark_id)
+	b.soldier_pos[dark_id] = old_pos
+	b._soldier_goal[dark_id] = old_pos
+	t.ok(g.hold(dark_id, old_tile), "자가 점검 — 그 몸이 제 조각을 되찾았다")
+	_park(fs, Vector2.ZERO)
+	fs._advance_seat_glide(0.0)
+	fs._paint_bodies()
+	fs._place_camera()
+	var back_foot := _drawn_foot_px(fs, dark_id)
+	t.ok(back_foot.is_finite() and fs.body_at_px(back_foot) == dark_id,
+		"자가 점검 — 제자리에 돌아온 몸이 제 발로 다시 풀린다")
 
 ## **The white rim on the body the hand is holding** (2026-08-31, the user: 「캐릭터 눌렀을때 살짝 내가
 ## 누른 캐릭에 흰색 테두리 ... 내가 누른 캐릭이 티가 나야할듯함」).
@@ -804,8 +911,8 @@ func _the_picked_body_wears_a_rim(t, game, fs: FieldView) -> void:
 ## keys were the only thing left in this file that needed one.
 
 
-## **A press that travels is a look-around; a press that does not is a pick — and a RIGHT press
-## commands.** 티켓 41, written onto by 03-11.
+## **A press that travels is a BOX; a press that does not picks, orders, or keeps — all on the left
+## button, and the right button does nothing.** 티켓 41, written onto by 03-11 and again by 03-12.
 ##
 ## ⚠⚠ **DRAGGING OVER THE ISLAND MOVED THE CAMERA NOWHERE, WHICH IS MOST OF THE OPENING SCREEN**
 ## (2026-08-30, measured on the running game with a negative control: the same ten-step drag moved the
@@ -813,19 +920,24 @@ func _the_picked_body_wears_a_rim(t, game, fs: FieldView) -> void:
 ## The order was issued on the press, so `_panning` never turned on — **the machinery was alive the whole
 ## time and the gesture never reached it.** On screen it reads as a broken mouse.
 ##
-## ⚠ **Both halves or neither.** A threshold that panned would be trivial to satisfy by deleting the
-## order; a threshold that ordered would be satisfied by deleting the pan. **The two rows below are the
+## ⚠⚠ **AND SINCE 2026-09-02 EVENING THE DRAG PANS NOTHING AT ALL** (ticket 03-12, the user: 「동작이
+## 단순해야함 왼쪽으로 드래그 왼쪽으로 칸누르기로 해야할듯」 — *"the actions must be simple — left drag,
+## and left press on a 칸"*). The drag is a SELECTION BOX: every 검사 drawn inside it is the 부대, an
+## empty box lets go, and the camera is the keys' and the band's. **The 「camera moves」 row flipped to
+## its opposite and the old row is rewritten, not kept beside it** — two rows asserting opposite
+## gestures is one of them lying.
+##
+## ⚠ **Both halves or neither.** A threshold that boxed would be trivial to satisfy by deleting the
+## click; a threshold that clicked would be satisfied by deleting the box. **The rows below are the
 ## same gesture measured on its two outcomes**, and each asserts what the OTHER one must not have done.
 ##
-## ⚠⚠ **「A CLICK COMMANDS」 WAS THE LEFT BUTTON'S UNTIL 2026-09-02 AND IT IS THE RIGHT BUTTON'S NOW**
-## (ticket 03-11, read from the user's StarCraft reference: the move goes out on the right button's DOWN
-## edge). The left pair on the lit 칸 became a let-go row, the order row became `_rpress` with its reads
-## BEFORE `_rrelease`, and the old sentence is written onto rather than kept beside the new one.
-## ⚠ **The pick is the left button's on an empty hand AND on a full one**: two rows below press a drawn
-## body while the hand already holds one — the same body's own foot, then another body's — because
-## every other pick in this file lands on an empty hand and the arm order in `_press_the_island` was
-## invisible to all of them.
-func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
+## ⚠⚠ **「A CLICK COMMANDS」 WAS THE LEFT BUTTON'S, THEN THE RIGHT'S FOR ONE DAY (03-11), AND IT IS THE
+## LEFT'S AGAIN** (03-12). The lit-칸 pair flipped back to the order, read AFTER the release — a left
+## order goes out when the button comes up, because until then the press may still become a box.
+## ⚠ **The full-hand-on-a-body rows are move-first**: a body standing on a lit 칸 does not intercept
+## the order, and re-picking a different body is by drag, by a press with an EMPTY hand, or by a
+## press on a body standing on a DARK 칸 (its own function).
+func _a_drag_boxes_and_a_click_picks_or_orders(t, game, fs: FieldView, hs: HudSpy) -> void:
 	var b: Battle = game.battle
 	# ⚠⚠ **THE PRESS POINT IS THE 조각 A BODY IS STANDING ON, NOT THE MIDDLE OF THE SCREEN.** A first
 	# draft used screen centre, and after the drag below had moved the camera that point was open water —
@@ -843,38 +955,140 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 	var on_land := fs.tile_to_screen_px(int(round(body.x)), int(round(body.y)))
 	t.eq(game._tile_at(on_land), body_tile, "자가 점검 — 그 화면 점이 몸이 선 조각으로 돌아온다")
 
-	# -- a drag: the camera moves and NOTHING is ordered ---------------------------------------------
+	# -- a drag: the camera does NOT move, a box goes up, and NOTHING is ordered -----------------------
 	for i in b.soldier_order.size():
 		b.soldier_order[i] = -1
+	game._let_go()
 	var before := fs.cam_px
 	game._unhandled_input(_press(on_land))
-	# ⚠ **Under the threshold first.** A one-pixel wobble must not turn a click into a pan, and without
+	# ⚠ **Under the threshold first.** A one-pixel wobble must not turn a click into a box, and without
 	# this row the threshold could be zero and every check below would still pass.
 	game._unhandled_input(_motion(on_land + Vector2(2.0, 0.0), Vector2(2.0, 0.0)))
-	t.eq(fs.cam_px, before, "문턱 아래로 움직인 것은 아직 이동이 아니다")
+	t.eq(fs.cam_px, before, "문턱 아래로 움직인 것은 카메라를 안 민다")
+	t.ok(not game._boxing and hs._box == Rect2(), "문턱 아래는 아직 상자가 아니다")
 	game._unhandled_input(_motion(on_land + Vector2(60.0, 40.0), Vector2(58.0, 40.0)))
-	t.ok(fs.cam_px.distance_to(before) > 1.0,
-		"문턱을 넘겨 끌면 땅 위에서도 카메라가 움직인다 (%.1f px)" % fs.cam_px.distance_to(before))
+	t.eq(fs.cam_px, before, "끌기는 더 이상 카메라를 안 민다 — 판은 키와 띠가 민다")
+	t.ok(game._boxing, "문턱을 넘겨 끌면 상자다")
+	t.eq(game._box, Rect2(on_land, Vector2(60.0, 40.0)), "상자는 누른 점에서 지금 점까지다")
+	t.eq(hs._box, game._box, "상자가 HUD 에 닿았다")
+	# ⚠ **The spy sees the picture, not only the state.** One frame is pumped while the box is up;
+	# `Game._process` is off, so only the views turn.
+	await t.pump_frames(1)
+	t.eq(hs.boxes.size(), 8, "끄는 동안 상자가 그려진다 — 여덟 조각")
 	game._unhandled_input(_release(on_land + Vector2(60.0, 40.0)))
-	var ordered := 0
-	for i in b.soldier_order.size():
-		if int(b.soldier_order[i]) >= 0:
-			ordered += 1
-	t.eq(ordered, 0, "그리고 끌기는 아무도 명령하지 않는다 — 보려고 움직인 것이지 보내려던 게 아니다")
+	t.eq(_ordered(b), 0, "그리고 끌기는 아무도 명령하지 않는다 — 고르려고 움직인 것이지 보내려던 게 아니다")
+	t.eq(hs._box, Rect2(), "떼면 상자가 내려간다")
+	t.ok(not game._boxing, "그리고 셸도 상자를 놓았다")
 
-	# -- a click: somebody is ordered and the camera does NOT move -----------------------------------
-	# ⚠ **Re-aimed, because the drag above moved the camera** — the same screen point is a different
-	# 조각 now, and this row is about a press on land.
+	# -- the release PICKS: a box around two drawn feet catches both --------------------------------
+	# ⚠ The pool is painted and the camera placed by hand, because nothing has moved the camera and
+	# the frame pumped above painted it against exactly this camera.
+	fs._paint_bodies()
+	fs._place_camera()
+	var foot_a := _drawn_foot_px(fs, sid)
+	t.ok(foot_a.is_finite(), "자가 점검 — 그 몸이 그려져 있다")
+	# The other body whose foot is furthest from the first, so the box is well over the threshold.
+	var other := -1
+	var foot_b := Vector2.INF
+	for raw in ashore:
+		var cand := int(raw)
+		if cand == sid:
+			continue
+		var foot := _drawn_foot_px(fs, cand)
+		if not foot.is_finite():
+			continue
+		if other < 0 or foot.distance_to(foot_a) > foot_b.distance_to(foot_a):
+			other = cand
+			foot_b = foot
+	t.ok(other >= 0, "자가 점검 — 그려진 둘째 몸이 있다 (%d)" % other)
+	var rect := Rect2()
+	var inside := PackedInt32Array()
+	if other >= 0:
+		rect = Rect2(foot_a, Vector2.ZERO).expand(foot_b).grow(1.0)
+		t.ok(rect.position.distance_to(rect.end) > Look.DRAG_PAN_THRESHOLD_PX,
+			"자가 점검 — 두 발 사이가 문턱보다 멀다 (%.1f px)" % rect.position.distance_to(rect.end))
+		inside = fs.bodies_in_rect_px(rect)
+		t.ok(inside.has(sid) and inside.has(other), "자가 점검 — 뷰가 그 상자 안에 둘을 그렸다고 답한다")
+		game._let_go()
+		game._unhandled_input(_press(rect.position))
+		game._unhandled_input(_motion(rect.end, rect.size))
+		game._unhandled_input(_release(rect.end))
+		t.ok(game.hand.ids.has(sid) and game.hand.ids.has(other), "상자 안에 그려진 둘이 다 잡힌다")
+		var not_ashore := 0
+		for k in game.hand.ids.size():
+			if int(b.soldier_state[int(game.hand.ids[k])]) != Battle.SoldierState.ASHORE:
+				not_ashore += 1
+		t.eq(not_ashore, 0, "쥔 몸은 전부 섬에 선 몸이다")
+		t.eq(game.hand.ids, inside, "쥔 목록이 뷰가 상자 안이라고 답한 목록 그대로다 — 더도 덜도 아니다")
+		t.ok(game.hand.reach.size() > 0, "그리고 갈 수 있는 자리가 깔린다 (%d 조각)" % game.hand.reach.size())
+		t.ok(fs._picked.has(sid), "뷰도 그 몸을 쥔 몸으로 안다 — 테두리가 선다")
+
+		# -- the same box pulled UP-LEFT catches the same bodies ---------------------------------------
+		# ⚠⚠ **EVERY OTHER DRAG IN THIS FILE GOES DOWN-RIGHT** (the verifier, 2026-09-02), so the `.abs()`
+		# on the shell's box was unmeasured: without it an up-left drag is a rect of negative size, the
+		# engine barks 「Rect2 size is negative」, `intersects` answers nobody, and the hand lets go.
+		game._let_go()
+		game._unhandled_input(_press(rect.end))
+		game._unhandled_input(_motion(rect.position, rect.position - rect.end))
+		game._unhandled_input(_release(rect.position))
+		t.eq(game.hand.ids, inside, "같은 상자를 왼쪽 위로 끌어도 같은 몸들이 잡힌다 — 끄는 방향은 상자가 아니다")
+
+		# -- a box REPLACES the hand — it does not add ---------------------------------------------------
+		# A third body OUTSIDE the box; when the whole watch is inside the two-feet box, a box around one
+		# foot alone is tried, and the row is skipped with its own self-check when even that catches all.
+		var third := -1
+		var rect2 := rect
+		var inside2 := inside
+		for try in 2:
+			if try == 1:
+				rect2 = Rect2(foot_a, Vector2.ZERO).grow(4.0)
+				inside2 = fs.bodies_in_rect_px(rect2)
+			for raw in ashore:
+				if not inside2.has(int(raw)):
+					third = int(raw)
+					break
+			if third >= 0:
+				break
+		t.ok(third >= 0, "자가 점검 — 상자 밖의 셋째 몸이 있다 (%d) — 없으면 아래는 건너뛴다" % third)
+		if third >= 0:
+			game.hand.pick(b, third)
+			t.eq(game.hand.ids, PackedInt32Array([third]), "자가 점검 — 손이 셋째 몸만 쥐고 있다")
+			game._unhandled_input(_press(rect2.position))
+			game._unhandled_input(_motion(rect2.end, rect2.size))
+			game._unhandled_input(_release(rect2.end))
+			t.eq(game.hand.ids, inside2, "몸이 든 상자는 쥔 것을 바꾼다 — 더하지 않는다")
+			t.ok(not game.hand.ids.has(third), "셋째 몸은 손에서 나갔다")
+
+	# -- an EMPTY box lets go — one of the two ways out ---------------------------------------------------
+	t.ok(not game.hand.is_empty(), "자가 점검 — 빈 상자를 끌기 전에 손이 차 있다")
+	_park(fs, Vector2(-99999.0, 0.0))
+	fs._paint_bodies()
+	fs._place_camera()
+	var mid_y := Look.VIEWPORT_H_PX * 0.5
+	var sea_a := Vector2(2.0, mid_y)
+	var sea_b := Vector2(62.0, mid_y)
+	t.ok(fs.body_at_px(sea_a) < 0 and fs.body_at_px(sea_b) < 0,
+		"자가 점검 — 서쪽 바다 위의 두 점에 그려진 몸이 없다")
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
+	game._unhandled_input(_press(sea_a))
+	game._unhandled_input(_motion(sea_b, sea_b - sea_a))
+	game._unhandled_input(_release(sea_b))
+	t.ok(game.hand.is_empty(), "아무도 안 든 상자는 손을 놓는다 — 놓는 두 길 중 하나다")
+	t.eq(game.hand.reach.size(), 0, "갈 수 있는 자리도 같이 꺼진다")
+	t.eq(_ordered(b), 0, "그리고 아무도 안 간다")
+	_park(fs, Vector2.ZERO)
+	fs._paint_bodies()
+	fs._place_camera()
+
+	# -- a click: somebody is picked and the camera does NOT move ------------------------------------
 	# ⚠⚠ **THE PICK IS AIMED AT THE DRAWN BODY AND NOT AT THE GROUND UNDER ITS 조각** (2026-09-02,
 	# ticket 03-16, the user: 「몸은 화면에서 잡자」 — *"let us pick the body on the glass"*). This point
 	# was `tile_to_screen_px` of the body's 조각 — the ground at its centre — and it picked only because
 	# the old ground pick had 0.8 조각 of slack; **a body stands UP from its feet, so the ground under
 	# the 조각 centre is a hair BELOW the drawn picture.** `net_pick` owns the rectangle at every yaw and
 	# pitch; this row only needs a press that is on the body, so it presses the drawn FOOT, read off the
-	# pooled sprite through the engine's own unproject. ⚠ The pool is painted and the camera placed by
-	# hand first, because nothing has pumped a frame since the drag above moved the camera.
-	fs._paint_bodies()
-	fs._place_camera()
+	# pooled sprite through the engine's own unproject.
 	var click_at := _drawn_foot_px(fs, sid)
 	t.ok(click_at.is_finite(), "자가 점검 — 그 몸이 그려져 있다")
 	# ⚠ **The same 칸, and not the same 조각, since 03-17.** A body at rest is drawn on its seat in the
@@ -892,16 +1106,12 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 	# asserted the opposite until that day — one press, one walk, nearest body answers — and the old
 	# row is rewritten rather than kept beside this one: two rows asserting opposite gestures is not a
 	# record, it is one of them lying.
-	var ordered2 := 0
-	for i in b.soldier_order.size():
-		if int(b.soldier_order[i]) >= 0:
-			ordered2 += 1
-	t.eq(ordered2, 0, "몸을 누른 것은 아직 명령이 아니다 — 고른 것이다")
+	t.eq(_ordered(b), 0, "몸을 누른 것은 아직 명령이 아니다 — 고른 것이다")
 	t.eq(game.hand.ids.size(), 1, "그리고 손이 그 몸 하나를 쥐고 있다")
 	t.ok(game.hand.reach.size() > 1, "갈 수 있는 자리가 깔렸다 (%d 조각)" % game.hand.reach.size())
 	t.ok(game.hand.can_reach(body_tile), "선 자리도 그중 하나다 — 제자리는 늘 설 수 있는 자리다")
 
-	# -- and the SECOND press, on a lit 조각, is the walk ---------------------------------------------
+	# -- and the SECOND press, on a lit 칸, is the walk — on the RELEASE -------------------------------
 	# ⚠ **The destination is taken from the reach itself and not typed.** A literal 조각 would measure
 	# a board this net does not own, and the island's shape has moved twice already.
 	var dest := -1
@@ -918,10 +1128,8 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 		# would order somebody somewhere else and this pair would still be green.
 		if game._tile_at(at) != cand:
 			continue
-		# ⚠⚠ **A point a body is drawn over is skipped** (03-11). The pick is read on the glass since
-		# 03-16, so a left press there PICKS whatever ground is under it — and the let-go row below
-		# would turn into its opposite. The pool was painted and the camera placed just above, and
-		# nothing has moved the camera since.
+		# ⚠ **Bare ground on purpose.** A body drawn there would not intercept the order either (that
+		# is the move-first rows below), but this pair is the plain case and stays plain.
 		if fs.body_at_px(at) >= 0:
 			continue
 		dest = cand
@@ -932,40 +1140,51 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 	# `hand.ids` afterwards would index an empty list — see the reversal note in `_order_the_island`.
 	var walker := int(game.hand.ids[0]) if not game.hand.is_empty() else -1
 	if dest >= 0 and walker >= 0:
-		# -- a LEFT pair on the lit 칸: not an order, a let-go (2026-09-02, the user's reversal) -------
-		# ⚠⚠ **THIS PAIR ASSERTED 「그 몸이 그 칸으로 간다」 UNTIL 03-11** — the walk on the left
-		# release. The walk is the right button's now, and a left press on ground with no body under it
-		# EMPTIES the hand (the glossary's 「빈 땅을 왼쪽으로 누르면 놓는다」). The old row is rewritten,
-		# not kept beside this one.
-		game._unhandled_input(_press(dest_at))
-		game._unhandled_input(_release(dest_at))
-		t.eq(_ordered(b), 0, "몸이 없는 불 들어온 칸을 왼쪽으로 누르면 아무도 안 간다 — 명령이 아니다")
-		t.ok(game.hand.is_empty(), "그 누름은 손을 놓는다 — 빈 땅을 왼쪽으로 누르면 놓는다 (2026-09-02)")
-		t.eq(fs.cam_px, held, "그리고 그 누름도 카메라를 안 움직인다")
-		game._unhandled_input(_press(click_at))
-		game._unhandled_input(_release(click_at))
-		t.ok(not game.hand.is_empty(), "자가 점검 — 다시 눌러 몸을 쥐었다")
-
-		# -- a FULL hand pressing a drawn body: the body arm is asked first ----------------------------
-		# ⚠⚠ **EVERY PICK IN THIS FILE LANDED ON AN EMPTY HAND UNTIL THESE ROWS**, so the order of the two
-		# arms in `_press_the_island` was unmeasured: swapped, a full hand pressing a body drops the 부대
-		# and picks nobody, with every other row green. ⚠ The point is self-checked to resolve to that
-		# body on the glass first, so a row on bare ground cannot stand in for a row on a body.
+		# -- the LEFT pair on the lit 칸: the order, and it goes out on the RELEASE ---------------------
+		# ⚠⚠ **THIS PAIR WAS A LET-GO FOR ONE DAY** (03-11, 2026-09-02 morning: the walk on the right
+		# button, and a left press on ground with no body under it emptied the hand). **It is the order
+		# again since that evening** (03-12), and the old row is rewritten, not kept beside this one.
 		for i in b.soldier_order.size():
 			b.soldier_order[i] = -1
-		t.eq(fs.body_at_px(click_at), sid,
-			"자가 점검 — 그 점은 유리 위에서 그 몸으로 풀린다 (맨땅 줄이 아니라 몸 팔의 줄이다)")
+		game._unhandled_input(_press(dest_at))
+		t.eq(_ordered(b), 0, "왼쪽 명령은 뗄 때 나간다 — 누른 채로는 아직 상자가 될 수 있다")
+		game._unhandled_input(_release(dest_at))
+		# ⚠ Every `soldier_order` is -1 going in and `block_of(-1)` is -1 — a press that ordered nobody
+		# cannot pass this.
+		t.eq(b.grid.block_of(int(b.soldier_order[walker])), b.grid.block_of(dest),
+			"불 들어온 칸을 왼쪽으로 누르고 떼면 그 몸이 그 칸으로 간다")
+		# ⚠⚠ **THE ROW ABOVE THIS ONE ASSERTED THE OPPOSITE FOR ONE ROUND** (2026-08-31, the user at
+		# the screen: 「이동하면 그러면 그 이동관 관련은 꺼져야지」). It read 「명령한 뒤에도 손은 그
+		# 몸을 놓지 않는다」. **The later word wins and the old row is rewritten, not kept beside it.**
+		t.ok(game.hand.is_empty(), "명령하고 나면 손을 놓는다 — 물어볼 것이 남지 않았다")
+		t.eq(game.hand.reach.size(), 0, "그래서 갈 수 있는 자리도 같이 꺼진다")
+		t.eq(fs.cam_px, held, "그리고 명령한 누름도 카메라를 안 움직인다")
+		for i in b.soldier_order.size():
+			b.soldier_order[i] = -1
+
+		# -- a FULL hand pressing a drawn body on LIT ground: move-first ---------------------------------
+		# ⚠⚠ **EVERY PICK IN THIS FILE LANDED ON AN EMPTY HAND UNTIL THESE ROWS**, so the order of the
+		# arms in `_press_the_island` was unmeasured. ⚠ The point is self-checked to resolve to that body
+		# on the glass first, and his 칸 self-checked lit, so a row on bare or dark ground cannot stand in
+		# for a row on a body on lit ground.
 		game._unhandled_input(_press(click_at))
 		game._unhandled_input(_release(click_at))
-		t.ok(not game.hand.is_empty(), "쥔 손으로 그려진 몸을 누르면 손을 놓지 않는다")
-		t.ok(game.hand.ids.size() == 1 and int(game.hand.ids[0]) == sid,
-			"그 몸을 다시 쥔다 — 몸 팔이 먼저 물어지고, 놓기는 그 뒤다")
-		t.eq(_ordered(b), 0, "그리고 아무도 안 간다")
+		t.ok(game.hand.ids.size() == 1 and int(game.hand.ids[0]) == sid, "자가 점검 — 빈 손으로 다시 눌러 몸을 쥐었다")
+		var own_block := b.grid.block_of(game._tile_at(click_at))
+		t.ok(game.hand.can_reach_block(own_block), "자가 점검 — 그 몸이 선 칸에 불이 들어와 있다")
+		t.eq(fs.body_at_px(click_at), sid,
+			"자가 점검 — 그 점은 유리 위에서 그 몸으로 풀린다 (맨땅 줄이 아니라 몸 위의 줄이다)")
+		game._unhandled_input(_press(click_at))
+		game._unhandled_input(_release(click_at))
+		t.eq(b.grid.block_of(int(b.soldier_order[sid])), own_block,
+			"쥔 손으로 제 몸을 눌러도 그 칸으로 가는 명령이다 — 다시 쥐는 게 아니다")
+		t.ok(game.hand.is_empty(), "그리고 명령이었으므로 손을 놓는다")
 		t.eq(fs.cam_px, held, "카메라도 그대로다")
-		# **Another body's foot, when the island has one.** The same-body row above already pins the
-		# arm order; this pair is the stronger claim that the pick REPLACES. ⚠ Skipped without a second
-		# drawn body, and the self-check row says so.
-		var other := -1
+		for i in b.soldier_order.size():
+			b.soldier_order[i] = -1
+		# **Another body's foot, when the island has one.** ⚠ Skipped without a second drawn body on lit
+		# ground, and the self-check row says so.
+		var other2 := -1
 		var other_foot := Vector2.INF
 		for raw in b.ashore_ids():
 			var cand_id := int(raw)
@@ -976,92 +1195,93 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 				continue
 			if fs.body_at_px(foot) != cand_id:
 				continue
-			other = cand_id
+			other2 = cand_id
 			other_foot = foot
 			break
-		t.ok(other >= 0, "자가 점검 — 유리 위에서 제 발로 풀리는 다른 몸이 있다 (%d) — 없으면 아래 둘은 건너뛴다" % other)
-		if other >= 0:
-			for i in b.soldier_order.size():
-				b.soldier_order[i] = -1
-			# ⚠ **The hand is filled through the sim right here, so this row stands on its own**: with
-			# the arms swapped the same-body row above has already emptied the hand, and a press on
-			# `other` from an EMPTY hand picks him and reads green for the wrong reason.
+		t.ok(other2 >= 0, "자가 점검 — 유리 위에서 제 발로 풀리는 다른 몸이 있다 (%d) — 없으면 아래는 건너뛴다" % other2)
+		if other2 >= 0:
+			# ⚠ **The hand is filled through the sim right here, so this row stands on its own**: the
+			# order above emptied it, and a press on `other2` from an EMPTY hand picks him and reads
+			# green for the wrong reason.
 			game.hand.pick(b, sid)
 			t.ok(game.hand.ids.size() == 1 and int(game.hand.ids[0]) == sid,
 				"자가 점검 — 다른 몸을 누르기 전에 손이 원래 몸을 쥐고 있다")
+			var other_block := b.grid.block_of(game._tile_at(other_foot))
+			t.ok(game.hand.can_reach_block(other_block), "자가 점검 — 그 몸이 선 칸에도 불이 들어와 있다")
 			game._unhandled_input(_press(other_foot))
 			game._unhandled_input(_release(other_foot))
-			t.ok(game.hand.ids.size() == 1 and int(game.hand.ids[0]) == other,
-				"쥔 손으로 다른 몸을 누르면 그 몸으로 바꿔 쥔다 — 한 번 누름, ESC 없이")
-			t.eq(_ordered(b), 0, "그리고 아무도 안 간다")
-			game._unhandled_input(_press(click_at))
-			game._unhandled_input(_release(click_at))
-			t.ok(game.hand.ids.size() == 1 and int(game.hand.ids[0]) == sid,
-				"자가 점검 — 원래 몸을 다시 쥐었다 (dest 는 그의 reach 에서 찾은 것이다)")
+			t.eq(b.grid.block_of(int(b.soldier_order[sid])), other_block,
+				"몸이 선 불 들어온 칸을 누르면 부대가 그 칸으로 간다 — 그 몸이 대신 골라지지 않는다")
+			t.ok(game.hand.is_empty(), "그리고 손을 놓는다")
+			t.ok(not game.hand.ids.has(other2), "그 몸은 쥐어지지 않았다")
+			for i in b.soldier_order.size():
+				b.soldier_order[i] = -1
 
-		# -- the RIGHT press is the walk, and it is read BEFORE the release ----------------------------
-		# ⚠⚠ **`soldier_order` IS READ BETWEEN THE TWO EDGES.** Read only after the release, a press-edge
-		# order and a release-edge order look identical; the whole reading 03-11 builds is the difference.
-		# ⚠ Every `soldier_order` is -1 going in and `block_of(-1)` is -1 — a press that ordered nobody
-		# cannot pass this.
+		# -- the RIGHT button does nothing — not an order, not a let-go ----------------------------------
+		# ⚠⚠ **IT ORDERED ON ITS PRESS FOR ONE DAY** (03-11) and these rows read `soldier_order` between
+		# its two edges to prove it. **It carries nothing since that evening** (03-12), and a green over a
+		# deleted rule is 03-11's own lesson in reverse — so the rows assert it does NOTHING, both edges.
+		game.hand.pick(b, sid)
+		var ids_before: PackedInt32Array = game.hand.ids.duplicate()
+		var reach_before: int = game.hand.reach.size()
 		for i in b.soldier_order.size():
 			b.soldier_order[i] = -1
 		game._unhandled_input(_rpress(dest_at))
-		t.eq(b.grid.block_of(int(b.soldier_order[walker])), b.grid.block_of(dest),
-			"불이 들어온 칸을 오른쪽으로 누르면 그 몸이 그 칸으로 간다 — 누르는 순간에, 떼기 전에")
-		t.eq(fs.cam_px, held, "그리고 명령한 누름도 카메라를 안 움직인다")
-		# ⚠⚠ **THE ROW ABOVE THIS ONE ASSERTED THE OPPOSITE FOR ONE ROUND** (2026-08-31, the user at
-		# the screen: 「이동하면 그러면 그 이동관 관련은 꺼져야지」). It read 「명령한 뒤에도 손은 그
-		# 몸을 놓지 않는다」. **The later word wins and the old row is rewritten, not kept beside it.**
-		t.ok(game.hand.is_empty(), "명령하고 나면 손을 놓는다 — 물어볼 것이 남지 않았다")
-		t.eq(game.hand.reach.size(), 0, "그래서 갈 수 있는 자리도 같이 꺼진다")
+		t.eq(_ordered(b), 0, "오른쪽은 아무것도 안 한다 — 명령도 놓기도 아니다 (누름)")
+		t.eq(game.hand.ids, ids_before, "손은 그대로다 (누름)")
+		t.eq(game.hand.reach.size(), reach_before, "갈 수 있는 자리도 그대로다 (누름)")
+		t.eq(fs.cam_px, held, "카메라도 그대로다 (누름)")
 		game._unhandled_input(_rrelease())
+		t.eq(_ordered(b), 0, "오른쪽은 아무것도 안 한다 — 명령도 놓기도 아니다 (떼기)")
+		t.eq(game.hand.ids, ids_before, "손은 그대로다 (떼기)")
+		t.eq(game.hand.reach.size(), reach_before, "갈 수 있는 자리도 그대로다 (떼기)")
+		t.eq(fs.cam_px, held, "카메라도 그대로다 (떼기)")
+		game._let_go()
 
-	# -- ESC lets go of a hand that is holding somebody ----------------------------------------------
-	# ⚠ **Re-picked first**, because the order above already emptied the hand and a key that clears an
+	# -- ESC lets go of a hand that is holding somebody — the other way out ------------------------------
+	# ⚠ **Re-picked first**, because the rows above emptied the hand and a key that clears an
 	# empty hand is a row that passes against a shell with no ESC branch at all.
 	game._unhandled_input(_press(click_at))
 	game._unhandled_input(_release(click_at))
 	t.ok(not game.hand.is_empty(), "자가 점검 — 다시 눌러 몸을 쥐었다")
 	game._unhandled_input(_key(KEY_ESCAPE))
-	t.ok(game.hand.is_empty(), "ESC 를 누르면 선택이 풀린다")
+	t.ok(game.hand.is_empty(), "ESC 가 놓는 다른 한 길이다 — 선택이 풀린다")
 	t.eq(game.hand.reach.size(), 0, "그리고 켜져 있던 자리도 같이 꺼진다")
 
 	# ⚠ **The self-check that keeps the rows honest**: the press point really is a 조각 a body can be
 	# sent to. On water every row above would be satisfied by a shell that does nothing at all.
 	t.ok(b.grid.passable[body_tile] != 0, "자가 점검 — 누른 자리가 걸을 수 있는 조각이다")
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
 
-
-## **The right button ORDERS on its press, turns nothing, and its release sends nobody** (2026-09-02,
-## ticket 03-11, read from the user's StarCraft reference: the move goes out on the right button's
-## DOWN edge, and the release only closes the gesture).
+## **The right button does NOTHING — not an order, not a pick, not a let-go, not a box, not a turn**
+## (2026-09-02 evening, ticket 03-12, the user: 「동작이 단순해야함 왼쪽으로 드래그 왼쪽으로 칸누르기로
+## 해야할듯」 — *"the actions must be simple — left drag, and left press on a 칸"*).
 ##
-## ⚠⚠ **THIS FUNCTION HAS MEASURED FOUR DIFFERENT GESTURES ON ONE BUTTON AND THE OLD ROWS ARE
+## ⚠⚠ **THIS FUNCTION HAS MEASURED FIVE DIFFERENT GESTURES ON ONE BUTTON AND THE OLD ROWS ARE
 ## REWRITTEN, NEVER KEPT BESIDE THE NEW ONES.** It measured a PAN (2026-08-30 morning, 「오른쪽이
 ## 끌어서 이동으로 해야할듯」), then a TURN the same day at the screen (「오른쪽 버튼은 카메라 회전으로
 ## 이해했어」), then **nothing at all** (2026-09-02, the user: 「오른쪽 마우스로 회전을 하면 뭔가 장점이
-## 별로 없어서」 — Q and E took the turn), and now **the move order** (2026-09-02, 03-11). Two sets
-## asserting opposite gestures is not a record, it is one of them lying.
+## 별로 없어서」 — Q and E took the turn), then **the move order on the DOWN edge** (2026-09-02, 03-11),
+## and now **nothing again** (03-12). Two sets asserting opposite gestures is not a record, it is one of
+## them lying.
 ##
-## ⚠⚠ **EVERY ORDER ROW READS `soldier_order` BETWEEN THE TWO EDGES.** Read only after the release, a
-## press-edge order and a release-edge order look identical, and the whole reading 03-11 builds is the
-## difference — so the reads sit after `_rpress` and before `_rrelease`, and the release is then sent
-## with a body re-picked as BAIT, to prove it adds nobody.
-## ⚠ **Its pick-first shape stays.** The two rows that were 「commands nobody」 certified nothing until
-## the hand held a body (2026-09-02, morning), and every `ordered == 0` row here still picks one first.
+## ⚠⚠ **03-11's OWN LESSON — THREE GREENS THAT CERTIFY A DELETED RULE — APPLIES IN REVERSE HERE**: no row
+## may stay green over a right press that no longer orders unless it asserts that it does nothing. So
+## every row is driven with the hand FULL and a destination the hand could reach, and asserts that the
+## press changed nothing; the same point is then pressed with the LEFT button as the positive control,
+## and the body goes — so the zeros above are not 「there was nothing to order」.
 ## ⚠ **Every let-go point is proven bare with `body_at_px` after a fresh paint** — the pick is read on
-## the glass since 03-16, and a drawn body under a let-go point turns the row into its opposite.
+## the glass since 03-16, and a drawn body under a KEEP point would turn arm 3 into arm 2.
 ##
 ## ⚠ **The camera is asked to stay PUT as well as to stay unturned.** The right button moved `cam_px`
-## on 2026-08-30 morning, and an order button that still panned would read as the oldest gesture
+## on 2026-08-30 morning, and a dead button that still panned would read as the oldest gesture
 ## surviving under the newest.
-func _the_right_button_orders_on_the_press_and_never_turns(t, game, fs: FieldView) -> void:
+func _the_right_button_does_nothing(t, game, fs: FieldView) -> void:
 	var b: Battle = game.battle
 	for i in b.soldier_order.size():
 		b.soldier_order[i] = -1
 
-	# ⚠ **Aimed at a 조각 a body is standing on, like the left button's pair.** On open water the
-	# "never picks" row would be satisfied by a shell that does nothing at all.
 	var ashore := b.ashore_ids()
 	t.ok(ashore.size() > 0, "자가 점검 — 판 위에 선 몸이 있다 (없으면 아래가 전부 공허하다)")
 	if ashore.is_empty():
@@ -1076,7 +1296,7 @@ func _the_right_button_orders_on_the_press_and_never_turns(t, game, fs: FieldVie
 	var body_tile := int(round(body.y)) * b.grid.w + int(round(body.x))
 	t.eq(game._tile_at(on_land), body_tile, "자가 점검 — 그 화면 점이 몸이 선 조각으로 돌아온다")
 
-	# **The hand is filled and a destination is found**, so every 「nobody was ordered」 row below is a
+	# **The hand is filled and a destination is found**, so every 「nothing changed」 row below is a
 	# row about a press that had somebody to order and did not.
 	game._let_go()
 	var picked := -1
@@ -1096,7 +1316,7 @@ func _the_right_button_orders_on_the_press_and_never_turns(t, game, fs: FieldVie
 		var at := fs.tile_to_screen_px(cand % b.grid.w, cand / b.grid.w)
 		if game._tile_at(at) != cand:
 			continue
-		# ⚠ **A point a body is drawn over is skipped**: a left press there PICKS, whatever the ground.
+		# ⚠ **A point a body is drawn over is skipped**: the positive control below is the plain case.
 		if fs.body_at_px(at) >= 0:
 			continue
 		dest = cand
@@ -1106,54 +1326,31 @@ func _the_right_button_orders_on_the_press_and_never_turns(t, game, fs: FieldVie
 	if dest < 0:
 		game._let_go()
 		return
-	# The filter above, as a row — a builder who drops it sees this and not a layout accident.
 	t.eq(fs.body_at_px(dest_at), -1, "자가 점검 — 그 점 위에 그려진 몸이 없다 (필터가 빠지면 여기서 보인다)")
 
-	# -- the press ALONE orders: the button is still held when the walk is read ----------------------
-	# ⚠ `squad` is a list of one until 03-12, and the row loops anyway.
+	# -- the press changes nothing, and neither does the release -----------------------------------------
 	var held := fs.cam_px
 	var held_yaw := fs.cam_yaw_deg
-	var squad: PackedInt32Array = game.hand.ids.duplicate()
+	var ids_before: PackedInt32Array = game.hand.ids.duplicate()
+	var reach_before: int = game.hand.reach.size()
 	game._unhandled_input(_rpress(dest_at))
-	var went := 0
-	for k in squad.size():
-		if b.grid.block_of(int(b.soldier_order[int(squad[k])])) == b.grid.block_of(dest):
-			went += 1
-	t.ok(squad.size() > 0 and went == squad.size(),
-		"오른쪽을 누르는 순간 부대가 그 칸으로 간다 — 단추는 아직 쥐고 있다 (%d / %d명)" % [went, squad.size()])
-	t.ok(game.hand.is_empty(), "그리고 누르는 순간 손을 놓는다")
-	t.eq(game.hand.reach.size(), 0, "갈 수 있는 자리도 같이 꺼진다")
-	t.ok(game._order_open, "자가 점검 — 오른쪽 몸짓이 아직 열려 있다: 위 줄들은 두 모서리 사이에서 읽었다")
+	t.eq(_ordered(b), 0, "오른쪽을 눌러도 아무도 안 간다 — 명령도 놓기도 아니다")
+	t.eq(game.hand.ids, ids_before, "손은 그대로다")
+	t.eq(game.hand.reach.size(), reach_before, "갈 수 있는 자리도 그대로 켜져 있다")
+	t.ok(not game._press_open and not game._boxing, "오른쪽은 누름도 상자도 안 연다")
+	t.ok(game.get("_order_open") == null, "오른쪽 깃발은 없다")
 	t.eq(fs.cam_px, held, "오른쪽을 누르는 것은 카메라를 안 움직인다")
 	t.ok(absf(fs.cam_yaw_deg - held_yaw) < 0.001, "그리고 판도 안 돌아간다 (%.2f°)" % fs.cam_yaw_deg)
-
-	# -- the release orders nobody a second time -------------------------------------------------------
-	# The hand is empty the instant the press lands, so a second order on the release would have
-	# nobody to send and the row would be free. **A body is re-picked by hand while the button is
-	# still held** — the bait — and the release then has somebody it could send, and does not.
-	game.hand.pick(b, picked)
-	t.ok(not game.hand.is_empty(), "자가 점검 — 단추를 쥔 채로 몸을 다시 쥐었다 (미끼)")
-	for i in b.soldier_order.size():
-		b.soldier_order[i] = -1
 	game._unhandled_input(_rrelease())
-	t.eq(_ordered(b), 0, "손을 떼는 것은 몸짓을 닫고 아무도 안 보낸다 — 여기서 두 번째 명령이 나갔으면 미끼가 갔다")
-	t.ok(not game.hand.is_empty(), "그리고 손을 떼는 것은 손을 놓지도 않는다")
-	t.ok(not game._order_open, "오른쪽 몸짓이 닫혔다")
+	t.eq(_ordered(b), 0, "떼도 아무도 안 간다")
+	t.eq(game.hand.ids, ids_before, "떼도 손은 그대로다")
+	t.eq(game.hand.reach.size(), reach_before, "떼도 갈 수 있는 자리는 그대로다")
+	t.eq(fs.cam_px, held, "떼도 카메라는 그대로다")
 
-	# -- no threshold on the right button, and nothing between the edges re-aims anything -------------
-	# ⚠⚠ **THE ORDER HAS ALREADY GONE OUT BEFORE THE 60 PX ARRIVE**, so 「aimed at the 칸 under the DOWN
-	# point」 is true by construction and the release point cannot enter into it. The row reads
-	# `soldier_order` right after the press, then moves, then slides the board with D, then releases.
-	game._let_go()
-	game.hand.pick(b, picked)
-	for i in b.soldier_order.size():
-		b.soldier_order[i] = -1
-	var walker := int(game.hand.ids[0])
+	# -- a held right button and 60 px of travel: no yaw, no pan, no box ---------------------------------
 	var before_yaw := fs.cam_yaw_deg
 	var before_px := fs.cam_px
 	game._unhandled_input(_rpress(dest_at))
-	t.eq(b.grid.block_of(int(b.soldier_order[walker])), b.grid.block_of(dest),
-		"누르는 순간 이미 그 칸으로 갔다 — 60px 가 오기 전이다")
 	game._unhandled_input(_motion(dest_at + Vector2(60.0, 40.0), Vector2(60.0, 40.0)))
 	# ⚠⚠ **THE NUMBER IS THE WHOLE ROW.** `Look.CAM_YAW_PER_PX_DEG` is 0.18 and still standing (the
 	# piece viewer reads it), so 60 px of drag through the deleted yaw arm would be **10.8°** — written
@@ -1161,28 +1358,21 @@ func _the_right_button_orders_on_the_press_and_never_turns(t, game, fs: FieldVie
 	t.ok(absf(fs.cam_yaw_deg - before_yaw) < 0.001,
 		"오른쪽을 쥔 채 60px 움직여도 판이 0.00° 돈다 — 그제는 10.8° 였다 (%.2f°)" % fs.cam_yaw_deg)
 	t.eq(fs.cam_px, before_px, "그러면서 카메라도 안 움직인다")
-	t.ok(not game._panning, "오른쪽 단추는 끌기를 안 연다 — 문턱이 0 인 게 아니라 읽는 곳이 없다")
+	t.ok(not game._boxing, "오른쪽은 상자도 안 연다 — 문턱이 0 인 게 아니라 읽는 곳이 없다")
 
 	# -- and the hover plate and the 이동선 both keep up under a held right button ---------------------
 	# ⚠⚠ **THEY FROZE FOR THE WHOLE LENGTH OF A RIGHT DRAG AND NOTHING SAID SO.** The turn's arm ended
 	# in an early `return`, and both of these sat below it; 03-10 deleted the arm, and this is the row
-	# that keeps them unfrozen. ⚠ **The 이동선 is measured on a hand re-picked while the button is held**
-	# — the order emptied the hand on the press, and an empty hand draws no line.
+	# that keeps them unfrozen. ⚠ **The 이동선 is ONE line since 03-12** — `Hand.lead` names the walking
+	# body nearest the 칸 and the view is handed his route alone.
 	var want_cell := int(fs._wash_cell[dest]) if dest < fs._wash_cell.size() else -1
 	game._unhandled_input(_motion(dest_at, Vector2(-60.0, -40.0)))
 	t.ok(want_cell >= 0, "자가 점검 — 그 조각에 판 자국이 하나 있다")
 	t.eq(fs._hover_cell, want_cell,
 		"오른쪽을 누른 채 움직여도 호버 자국이 커서를 따라간다 — 그 단추의 움직임을 읽는 곳이 없다")
-	game.hand.pick(b, picked)
-	game._unhandled_input(_motion(dest_at, Vector2.ZERO))
-	t.ok(fs._move_lines.size() > 0,
-		"그리고 다시 쥔 몸의 이동선도 그려진다 (%d 줄) — 같은 이른 return 이 둘 다 먹고 있었다"
-			% fs._move_lines.size())
-	# The re-picked body is the bait for the release below.
-	for i in b.soldier_order.size():
-		b.soldier_order[i] = -1
+	t.eq(fs._move_lines.size(), 1, "그리고 쥔 몸의 이동선도 그려진다 — 이동선은 한 줄이다")
 
-	# -- a release over ANOTHER 칸, on a board that has slid, orders nobody ----------------------------
+	# -- a release over ANOTHER 칸, on a board that has slid, still orders nobody --------------------------
 	# `far_at` is searched outward along (60, 40) until it resolves to a different 칸 (off the board
 	# counts as different), so the release point disagrees with the press point about the 칸; then D
 	# slides the board until even the PRESS point no longer resolves to `dest`.
@@ -1205,8 +1395,8 @@ func _the_right_button_orders_on_the_press_and_never_turns(t, game, fs: FieldVie
 	game._unhandled_input(_key_edge(KEY_D, false))
 	t.ok(slid, "자가 점검 — D 로 판을 밀어서 누른 점 밑이 다른 칸이 됐다")
 	game._unhandled_input(_rrelease())
-	t.eq(_ordered(b), 0, "판이 밀리고 다른 칸 위에서 떼도 아무도 안 간다 — 겨눌 것이 남아 있지 않았다")
-	t.ok(not game.hand.is_empty(), "그리고 떼는 것은 다시 쥔 몸을 놓지도 않는다")
+	t.eq(_ordered(b), 0, "판이 밀리고 다른 칸 위에서 떼도 아무도 안 간다 — 명령은 애초에 없었다")
+	t.ok(not game.hand.is_empty(), "그리고 떼는 것은 쥔 몸을 놓지도 않는다")
 
 	# **The release really ended nothing**, or a motion after it turns the board behind the player.
 	var after_yaw := fs.cam_yaw_deg
@@ -1222,10 +1412,9 @@ func _the_right_button_orders_on_the_press_and_never_turns(t, game, fs: FieldVie
 	t.eq(game._tile_at(dest_at), dest, "자가 점검 — 카메라를 되돌리니 그 점이 다시 그 조각이다")
 	t.eq(fs.body_at_px(dest_at), -1, "자가 점검 — 다시 그린 뒤에도 그 점 위에 몸이 없다")
 
-	# -- the LEFT button at the same point orders nobody and LETS GO -----------------------------------
-	# ⚠⚠ **REVERSED BY THE USER ON 2026-09-02** (the glossary's 「ESC 아니면 부대를 안 놓는다」 → 「빈 땅을
-	# 왼쪽으로 누르면 놓는다」). Until 03-11 this was the positive control — the left button sent the
-	# body from this very point. It sends nobody now and it empties the hand.
+	# -- the LEFT button at the same point is the POSITIVE CONTROL: the body goes -----------------------
+	# ⚠⚠ **03-11 DELETED THIS CONTROL AND 03-12 PUTS IT BACK.** Without it every zero above is also
+	# green for a hand that could not have ordered anybody from that point.
 	game._let_go()
 	game.hand.pick(b, picked)
 	for i in b.soldier_order.size():
@@ -1233,10 +1422,13 @@ func _the_right_button_orders_on_the_press_and_never_turns(t, game, fs: FieldVie
 	var left_px := fs.cam_px
 	game._unhandled_input(_press(dest_at))
 	game._unhandled_input(_release(dest_at))
-	t.eq(_ordered(b), 0, "같은 점을 왼쪽으로 누르면 아무도 안 간다 — 왼쪽은 명령의 어느 절반도 아니다")
-	t.ok(game.hand.is_empty(), "그리고 그 누름은 손을 놓는다 — 빈 땅을 왼쪽으로 누르면 놓는다 (2026-09-02)")
+	t.ok(_ordered(b) > 0 and b.grid.block_of(int(b.soldier_order[picked])) == b.grid.block_of(dest),
+		"같은 점을 왼쪽으로 누르면 몸이 간다 — 위의 0 들은 명령할 것이 없어서가 아니다")
+	t.ok(game.hand.is_empty(), "그리고 명령이었으므로 손을 놓는다")
 	t.eq(game.hand.reach.size(), 0, "갈 수 있는 자리도 같이 꺼진다")
 	t.eq(fs.cam_px, left_px, "그러면서 카메라는 안 움직인다")
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
 
 	# -- ESC still lets go ---------------------------------------------------------------------------
 	game.hand.pick(b, picked)
@@ -1244,14 +1436,14 @@ func _the_right_button_orders_on_the_press_and_never_turns(t, game, fs: FieldVie
 	game._unhandled_input(_key(KEY_ESCAPE))
 	t.ok(game.hand.is_empty(), "ESC 로도 여전히 놓는다 — 둘째 방법으로 남는다")
 
-	# -- the MISS itself: one row per class of nothing ------------------------------------------------
-	# ⚠⚠ **EVERY LET-GO ROW ABOVE AIMS AT A LIT 칸 INSIDE THE HAND'S REACH**, so a let-go narrowed to the
-	# reachable arm — the 2026-08-31 rule left standing for exactly the press that MISSES — passes all
-	# of them. These two are what separate the rule from its narrowing: the `dest_at` row above stays
-	# green under that narrowing and these two go red. ⚠ Parked at the western roam edge, where
-	# `Look.CAM_ROAM_TILES` of sea sit between the island and the glass, and searched along the middle
-	# row of the glass eastward: the first point OFF the board, and the first 조각 IN the grid whose 칸
-	# the hand refuses (water inside the grid, or a 조각 the flood never reached).
+	# -- the MISS itself: one row per class of nothing, and a full hand KEEPS --------------------------
+	# ⚠⚠ **EVERY ORDER ROW ABOVE AIMS AT A LIT 칸 INSIDE THE HAND'S REACH**, so a `_let_go()` put back
+	# into arm 3 — the 03-11 morning's rule — passes all of them. These two are what separate KEEP from
+	# its opposite: the `dest_at` order row stays green under that mutation and these two go red.
+	# ⚠ Parked at the western roam edge, where `Look.CAM_ROAM_TILES` of sea sit between the island and
+	# the glass, and searched along the middle row of the glass eastward: the first point OFF the board,
+	# and the first 조각 IN the grid whose 칸 the hand refuses (water inside the grid, or a 조각 the flood
+	# never reached).
 	_park(fs, Vector2(-99999.0, 0.0))
 	fs._paint_bodies()
 	fs._place_camera()
@@ -1293,14 +1485,17 @@ func _the_right_button_orders_on_the_press_and_never_turns(t, game, fs: FieldVie
 		game._let_go()
 		game.hand.pick(b, picked)
 		t.ok(not game.hand.is_empty(), "자가 점검 — %s 을 누르기 전에 손이 몸을 쥐고 있다" % what)
+		var kept_ids: PackedInt32Array = game.hand.ids.duplicate()
+		var kept_reach: int = game.hand.reach.size()
 		for i in b.soldier_order.size():
 			b.soldier_order[i] = -1
 		var miss_px := fs.cam_px
 		game._unhandled_input(_press(p))
 		game._unhandled_input(_release(p))
-		t.eq(game.hand.ids.size(), 0, "%s 을 왼쪽으로 누르면 손을 놓는다 — 빗나간 누름은 걷지도 쥐지도 않는다" % what)
-		t.eq(game.hand.reach.size(), 0, "%s — 갈 수 있는 자리도 같이 꺼진다" % what)
-		t.eq(_ordered(b), 0, "%s — 아무도 안 간다: 2026-08-31 의 「바다가 선택을 떨어뜨렸다」가 왼쪽 단추 위에서 다시 규칙이다" % what)
+		t.eq(game.hand.ids, kept_ids,
+			"%s 을 왼쪽으로 눌러도 손은 그대로다 — 2026-08-31 의 「ESC 아니면 이동 우선」이 한 단추 밑에서 다시 규칙이다" % what)
+		t.eq(game.hand.reach.size(), kept_reach, "%s — 갈 수 있는 자리도 그대로 켜져 있다" % what)
+		t.eq(_ordered(b), 0, "%s — 아무도 안 간다" % what)
 		t.eq(fs.cam_px, miss_px, "%s — 카메라는 안 움직인다" % what)
 	_park(fs, Vector2.ZERO)
 	fs._paint_bodies()
@@ -1316,30 +1511,30 @@ func _the_right_button_orders_on_the_press_and_never_turns(t, game, fs: FieldVie
 	t.eq(_ordered(b), 0, "빈 손으로 몸이 선 조각을 오른쪽으로 눌러도 아무도 안 간다")
 	t.ok(game.hand.is_empty(), "그리고 오른쪽은 그 몸을 쥐지도 않는다 — 고르기는 왼쪽의 것이다")
 
-	# -- both buttons down at once --------------------------------------------------------------------
-	# ⚠⚠ **A RIGHT PRESS IN THE MIDDLE OF A HELD LEFT PRESS MUST NOT LOSE THE ORDER**, and the left
-	# release afterwards must not add one: with one flag slot shared between the buttons the right
-	# press would overwrite `_press_at` and the left release would resolve somewhere else.
+	# -- both buttons down at once: the right one interrupts nothing ---------------------------------
+	# ⚠⚠ **A RIGHT PRESS IN THE MIDDLE OF A HELD LEFT PRESS MUST NOT CHANGE WHAT THE LEFT RELEASE
+	# DOES.** It ordered on its own edge for one day (03-11); it has no branch now, so the left release
+	# is the order and the right button is invisible to it.
 	game.hand.pick(b, picked)
 	for i in b.soldier_order.size():
 		b.soldier_order[i] = -1
-	walker = int(game.hand.ids[0])
+	var walker := int(game.hand.ids[0])
 	var both_px := fs.cam_px
 	game._unhandled_input(_press(dest_at))
 	game._unhandled_input(_rpress(dest_at))
-	t.eq(b.grid.block_of(int(b.soldier_order[walker])), b.grid.block_of(dest),
-		"왼쪽을 쥔 채 오른쪽을 누르면 몸이 그 칸으로 간다 — 오른쪽 떼기 전에 읽었다")
-	t.ok(game.hand.is_empty(), "그리고 손을 놓는다")
+	t.eq(_ordered(b), 0, "왼쪽을 쥔 채 오른쪽을 눌러도 아직 아무도 안 간다")
+	t.ok(not game.hand.is_empty(), "그리고 손도 그대로다")
+	t.ok(game._press_open, "왼쪽 누름은 그대로 열려 있다 — 오른쪽이 덮어쓰지 않는다")
 	game._unhandled_input(_rrelease())
 	game._unhandled_input(_release(dest_at))
-	t.eq(_ordered(b), 1, "그 뒤의 왼쪽 떼기는 명령을 더하지도 빼지도 않는다 — 몸이 없고 손이 비어서, 쥐지도 놓지도 않았다")
+	t.ok(_ordered(b) == 1 and b.grid.block_of(int(b.soldier_order[walker])) == b.grid.block_of(dest),
+		"오른쪽이 끼어들어도 왼쪽 떼기가 명령이다")
 	t.ok(not game._press_open, "왼쪽 누름도 닫혔다")
 	t.eq(fs.cam_px, both_px, "카메라는 그대로다")
 
 	game._let_go()
 	for i in b.soldier_order.size():
 		b.soldier_order[i] = -1
-
 
 ## **Q and E turn the board a quarter, the sweep is visible, and nothing else on the keyboard turns**
 ## (2026-09-02, the user: 「즉시 돌 거 같아. 도는 것이 보여」).
@@ -1526,6 +1721,31 @@ func _the_turn_flag_has_no_writers_left(t) -> void:
 			probe_hits += 1
 	t.eq(probe_hits, 1, "스캐너 자가 점검 — 진짜 쓰기 한 줄은 잡는다")
 
+	# **The second name: the right button's order flag** (03-11's `_order_open`, deleted by 03-12). The
+	# deletion is CHECKED here rather than assumed — a rename silently re-aims every row written with
+	# the old name, and a flag put back without saying so is what this second scan reddens on.
+	var re2 := RegEx.new()
+	re2.compile("^\\s*_order_open\\s*=")
+	var writes2 := 0
+	var mentions2 := 0
+	for raw in text.split("\n"):
+		var line := raw
+		var hash_at := line.find("#")
+		if hash_at >= 0:
+			line = line.substr(0, hash_at)
+		if re2.search(line) != null:
+			writes2 += 1
+		if raw.contains("_order_open"):
+			mentions2 += 1
+	t.eq(writes2, 0, "오른쪽 깃발을 쓰는 줄이 없고 이름은 무덤으로 남았다 — 쓰기 0줄")
+	t.ok(mentions2 > 0, "그 이름이 무덤으로 남아 있다 (%d줄) — 스캐너가 헛돌지 않는다" % mentions2)
+	var probe2 := "\tif x:\n\t\t_order_open = true\n"
+	var probe_hits2 := 0
+	for raw in probe2.split("\n"):
+		if re2.search(raw) != null:
+			probe_hits2 += 1
+	t.eq(probe_hits2, 1, "스캐너 자가 점검 — 오른쪽 깃발 쓰기 한 줄도 잡는다")
+
 
 ## **W, A, S and D hold a screen direction and the camera keeps travelling on the clock** (2026-08-30,
 ## the user: 「마우스 돌리다가 보이면 그때 가는 걸로」).
@@ -1694,7 +1914,7 @@ func _the_edge_of_the_window_pans(t, game, fs: FieldView) -> void:
 	# is a decision nobody has looked at on a screen yet, and this is where the two ends of it are
 	# written down.
 	var band := 28.0
-	t.ok(not game._press_open and not game._panning,
+	t.ok(not game._press_open and not game._boxing,
 		"자가 점검 — 시작할 때 열려 있는 누름이 없다 (있으면 띠가 통째로 잠긴다)")
 
 	# **The floor of everything below.** A `_process` that panned on any pointer position at all would
@@ -1941,16 +2161,17 @@ func _the_edge_of_the_window_pans(t, game, fs: FieldView) -> void:
 	t.ok(fs.cam_px.x > key_away.x + 0.5, "다시 누르면 다시 간다 (자가 점검 — 키가 죽은 게 아니다)")
 	game._unhandled_input(_key_edge(KEY_D, false))
 
-	# -- the band and a held button overlap, and the button wins — on BOTH buttons -------------------
-	# ⚠⚠ **THE GATE HAS TWO HALVES AND THEY GUARD DIFFERENT THINGS** (2026-09-02, 03-11 — `_edge_pan_dir`
-	# says which). The LEFT half is a defect guard: since 03-16 the pick is resolved on the glass at
-	# RELEASE, so a band that slid under a held left press would change which body is under the finger.
-	# The RIGHT half is a decision written down: the order has already gone out on the press, so what
-	# `_order_open` holds still is the rule that a held button does not travel the board. **Two pairs on
-	# one point**, each with its own flag self-checked as the only one set, so deleting either flag from
-	# the gate reddens its own row and neither row carries the other.
+	# -- the band and a held button overlap, and the LEFT button wins; the right one is dead -------------
+	# ⚠⚠ **THE GATE HAD TWO HALVES FOR ONE DAY AND IT IS ONE FLAG AGAIN** (2026-09-02, 03-11 then 03-12 —
+	# `_edge_pan_dir` says which). The LEFT half is a defect guard: since 03-16 the pick is resolved on
+	# the glass at RELEASE, so a band that slid under a held left press would change which body is under
+	# the finger — and since 03-12 the release is also the ORDER, aimed from the press point. The RIGHT
+	# half went with the right button's branch: **a dead button holds nothing still**, and the row that
+	# used to assert the band stood under a right press now asserts it slides. ⚠ A BOX lives inside a
+	# press and is held still by the press flag — there is no box clause in the gate to delete (the
+	# adversary measured `or _boxing` unreachable), so the box row is a regression row and says so.
 	# ⚠ It read 「the band and the walk order overlap, and the order wins」 until 03-11, with one LEFT
-	# pair that ordered on the release; that gesture is gone and the pair is rewritten, not kept.
+	# pair that ordered on the release; **that pair is back** (03-12), rewritten in place.
 	var b: Battle = game.battle
 	_park(fs, Vector2(-99999.0, 0.0))
 	var band_pt := _a_walkable_point_inside_a_band(game, b, fs)
@@ -1976,10 +2197,10 @@ func _the_edge_of_the_window_pans(t, game, fs: FieldView) -> void:
 		game._unhandled_input(_motion(mid, Vector2.ZERO))
 		return
 
-	# **LEFT pair — the `_press_open` half of the gate.**
+	# **LEFT pair — the `_press_open` gate, and the release is the order (03-09's row, back since 03-12).**
 	game._unhandled_input(_motion(band_pt, Vector2.ZERO))
 	game._unhandled_input(_press(band_pt))
-	t.ok(game._press_open and not game._panning and not game._order_open,
+	t.ok(game._press_open and not game._boxing,
 		"자가 점검 — 지금 띠를 붙들 수 있는 것은 왼쪽 누름 깃발뿐이다")
 	var pressed_at := fs.cam_px
 	game._process(0.2)
@@ -1987,8 +2208,9 @@ func _the_edge_of_the_window_pans(t, game, fs: FieldView) -> void:
 		"왼쪽을 누르고 있는 동안 띠가 카메라를 안 민다 — 03-16 부터 고르기는 뗄 때 유리에서 읽으므로, 밀린 띠는 손가락 밑의 몸을 바꾼다")
 	t.eq(game._tile_at(band_pt), band_tile, "그래서 뗄 때 겨누는 조각이 누를 때와 같은 조각이다")
 	game._unhandled_input(_release(band_pt))
-	t.ok(game.hand.is_empty(), "그리고 맨땅에서 왼쪽을 떼면 손을 놓는다 — 명령이 아니다")
-	t.eq(_ordered(b), 0, "아무도 안 간다")
+	t.ok(_ordered(b) > 0 and b.grid.block_of(int(b.soldier_order[band_body])) == b.grid.block_of(band_tile),
+		"띠 안에서 눌러도 몸은 그 칸으로 간다 — 가장자리가 명령을 안 삼킨다 (%d명)" % _ordered(b))
+	t.ok(game.hand.is_empty(), "그리고 명령이었으므로 손을 놓는다")
 	# ⚠ **The anti-vacuity row.** Everything above would also be green if `band_pt` simply were not in
 	# a band at all; this is what says it was.
 	var released := fs.cam_px
@@ -1996,28 +2218,47 @@ func _the_edge_of_the_window_pans(t, game, fs: FieldView) -> void:
 	t.ok(fs.cam_px.distance_to(released) > 0.5,
 		"손을 떼자마자 같은 자리에서 다시 민다 — 위의 정지는 그냥 띠 밖이어서가 아니다 (%.2f px)"
 			% fs.cam_px.distance_to(released))
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
 
-	# **RIGHT pair — the `_order_open` half.** The same camera, so the same 조각 under the same point.
+	# **RIGHT pair — a dead button.** The same camera, so the same 조각 under the same point.
+	# ⚠⚠ **IT HELD THE BAND STILL FOR ONE DAY** (03-11's `_order_open` half) and the row asserted
+	# stillness; the button has no branch now, so the band slides under it and the row says so.
 	_park(fs, Vector2(-99999.0, 0.0))
 	t.eq(game._tile_at(band_pt), band_tile, "자가 점검 — 같은 카메라라 같은 조각이다")
 	t.ok(game.hand.pick(b, band_body), "자가 점검 — 그 몸을 다시 쥐었다")
-	for i in b.soldier_order.size():
-		b.soldier_order[i] = -1
 	game._unhandled_input(_motion(band_pt, Vector2.ZERO))
 	game._unhandled_input(_rpress(band_pt))
-	t.ok(_ordered(b) > 0, "띠 안에서 오른쪽을 누르면 누르는 순간 몸이 간다 — 띠가 명령을 안 삼킨다 (%d명)" % _ordered(b))
-	t.ok(game._order_open and not game._press_open and not game._panning,
-		"자가 점검 — 지금 띠를 붙들 수 있는 것은 오른쪽 깃발뿐이다")
+	t.eq(_ordered(b), 0, "띠 안에서 오른쪽을 눌러도 아무도 안 간다")
+	t.ok(not game.hand.is_empty(), "그리고 손도 그대로다")
+	t.ok(not game._press_open and not game._boxing, "오른쪽은 누름도 상자도 안 연다")
+	pressed_at = fs.cam_px
+	game._process(0.2)
+	t.ok(fs.cam_px.distance_to(pressed_at) > 0.5,
+		"죽은 단추는 띠를 안 붙든다 — 오른쪽을 쥔 채로도 띠는 민다 (%.2f px)" % fs.cam_px.distance_to(pressed_at))
+	game._unhandled_input(_rrelease())
+	game._let_go()
+
+	# **A BOX in the band.** ⚠ **A regression row, not an inversion target**: it passes on `_press_open`
+	# alone, by design — a box lives inside a press, the gate has no box clause to delete, and the
+	# self-check names the flag that actually holds the band. The motion goes 12 px INWARD so the
+	# pointer stays on the glass and inside the band.
+	_park(fs, Vector2(-99999.0, 0.0))
+	var inward := (mid - band_pt).normalized() * 12.0
+	game._unhandled_input(_motion(band_pt, Vector2.ZERO))
+	game._unhandled_input(_press(band_pt))
+	game._unhandled_input(_motion(band_pt + inward, inward))
+	t.ok(game._boxing and game._press_open,
+		"자가 점검 — 상자를 끌고 있고, 그것을 붙드는 누름 깃발이 열려 있다")
 	pressed_at = fs.cam_px
 	game._process(0.2)
 	t.eq(fs.cam_px, pressed_at,
-		"오른쪽을 쥐고 있는 동안도 띠가 가만히 있다 — 명령은 이미 나갔고, 쥔 단추는 판을 안 옮긴다는 규칙이다")
-	game._unhandled_input(_rrelease())
+		"상자를 끄는 동안 띠가 카메라를 안 민다 — 붙드는 것은 누름 깃발이고 상자는 그 안에 산다")
+	game._unhandled_input(_release(band_pt + inward))
 	released = fs.cam_px
 	game._process(0.1)
 	t.ok(fs.cam_px.distance_to(released) > 0.5,
-		"오른쪽을 떼자마자 같은 자리에서 다시 민다 — 위의 정지도 띠 밖이어서가 아니다 (%.2f px)"
-			% fs.cam_px.distance_to(released))
+		"상자를 놓자마자 같은 자리에서 다시 민다 (%.2f px)" % fs.cam_px.distance_to(released))
 	# **Left as it was found**: the pointer back in the middle and no key down, so the rows after this
 	# one are not driven by a cursor this function parked.
 	game._unhandled_input(_motion(mid, Vector2.ZERO))
@@ -2135,8 +2376,8 @@ func _a_lost_board_stops_travelling(t) -> void:
 	# A press left open at the moment the 성채 falls: its release is swallowed by the closed door.
 	game._unhandled_input(_press(mid))
 	t.ok(game._press_open, "자가 점검 — 누름이 열려 있다")
-	# **And a right press open at the same moment — a REAL order, so the flag below is a real gesture**
-	# (03-11). ⚠ A right press on a 칸 the body cannot reach would open the flag and order nobody, and
+	# **And a LEFT press aimed at a real destination with the hand full — a press that WOULD order on its
+	# release** (03-12). ⚠ A press on a 칸 the body cannot reach would keep the hand and order nobody, and
 	# the dead-board rows below would then have nothing to prove; the aim is searched from the reach.
 	var ashore := b.ashore_ids()
 	t.ok(ashore.size() > 0, "자가 점검 — 판 위에 선 몸이 있다")
@@ -2156,9 +2397,9 @@ func _a_lost_board_stops_travelling(t) -> void:
 	for i in b.soldier_order.size():
 		b.soldier_order[i] = -1
 	if aimed >= 0:
-		game._unhandled_input(_rpress(aim_at))
-		t.ok(_ordered(b) > 0, "자가 점검 — 살아 있는 판에서 그 오른쪽 누름은 진짜 명령이었다 (%d명)" % _ordered(b))
-		t.ok(game._order_open, "자가 점검 — 오른쪽 몸짓이 열려 있다")
+		game._unhandled_input(_press(aim_at))
+		t.ok(game._press_open, "자가 점검 — 살아 있는 판에서 왼쪽 누름이 열렸다")
+		t.eq(_ordered(b), 0, "자가 점검 — 명령은 뗄 때 나간다: 누른 채로는 아직 아무도 안 간다")
 
 	b.keep_hp = 0.0
 	game._process(Rules.SIM_SUBSTEP_SEC)
@@ -2172,8 +2413,8 @@ func _a_lost_board_stops_travelling(t) -> void:
 	game._process(0.2)
 	t.eq(fs.cam_px, still, "삼켜진 손 떼기 뒤에도 그대로다")
 	t.ok(game._pan_held.is_empty(), "쥐고 있던 키가 통째로 놓였다")
-	t.ok(not game._press_open and not game._panning and not game._order_open,
-		"열려 있던 누름도, 오른쪽 몸짓도 같이 놓였다 — 걸린 채로 남으면 다음 섬의 띠가 통째로 죽는다")
+	t.ok(not game._press_open and not game._boxing and game.hud_view._box == Rect2(),
+		"열려 있던 누름도, 상자도 같이 놓였다 — 걸린 채로 남으면 다음 섬의 띠가 통째로 죽는다")
 
 	# ⚠⚠ **AND THE LAST ROW IS THE BAND WITH ITS OWN GATE ALREADY GONE.** The press flag was cleared
 	# two rows up, so the gesture gate is no longer what holds the band still — the cursor is sitting
@@ -2181,18 +2422,17 @@ func _a_lost_board_stops_travelling(t) -> void:
 	game._process(0.2)
 	t.eq(fs.cam_px, still, "가장자리에 둔 커서도 죽은 섬을 안 민다")
 
-	# -- 「끝」 on the right button: a press on the dead board orders nobody and opens nothing ---------
+	# -- 「끝」 on the left button: a click on the dead board orders nobody and opens nothing -------------
 	# ⚠ Re-picked by hand: `hand.pick` is a sim call, and the door is on the INPUT, not on the hand.
 	if aimed >= 0:
 		t.ok(game.hand.pick(b, int(ashore[0])), "자가 점검 — 죽은 판 위에서도 손은 sim 으로 몸을 쥘 수 있다")
 		for i in b.soldier_order.size():
 			b.soldier_order[i] = -1
-		game._unhandled_input(_rpress(aim_at))
-		t.eq(_ordered(b), 0, "끝 — 진 판을 오른쪽으로 눌러도 아무도 안 간다")
-		t.ok(not game._order_open, "그리고 오른쪽 몸짓도 안 열린다 — 누름이 _begin_order 에 닿지 않는다")
-		game._unhandled_input(_rrelease())
-		t.eq(_ordered(b), 0, "떼도 여전히 아무도 안 간다")
-		t.ok(not game._order_open, "떼도 여전히 닫혀 있다")
+		game._unhandled_input(_press(aim_at))
+		t.ok(not game._press_open, "끝 — 진 판을 왼쪽으로 눌러도 누름이 안 열린다")
+		game._unhandled_input(_release(aim_at))
+		t.eq(_ordered(b), 0, "끝 — 진 판을 왼쪽으로 눌러도 아무도 안 간다")
+		t.ok(not game._press_open, "떼도 여전히 닫혀 있다")
 
 	t.root.remove_child(game)
 	game.queue_free()
@@ -2200,6 +2440,7 @@ func _a_lost_board_stops_travelling(t) -> void:
 ## The right button's two edges. ⚠ **The release carries no position because the shell reads nothing
 ## on it: the order went out on the press** (2026-09-02, 03-11 — `_end_order` clears one flag and
 ## reads no point). It used to point at `_end_press`'s deleted `at` parameter for the same shape.
+## ⚠ **Kept after 03-12 retired the button**: a right press is still driven, to prove it does nothing.
 func _rpress(at: Vector2) -> InputEventMouseButton:
 	var ev := InputEventMouseButton.new()
 	ev.button_index = MOUSE_BUTTON_RIGHT
@@ -2340,9 +2581,11 @@ func _the_keep_falls_and_the_screen_says_so(t) -> void:
 	t.ok(not game._press_open, "진 직후에는 아무 누름도 열려 있지 않다 (자가 점검)")
 	game._unhandled_input(_press(Vector2(Look.VIEWPORT_W_PX * 0.5, Look.VIEWPORT_H_PX * 0.5)))
 	t.ok(not game._press_open, "진 뒤에 눌러도 누름이 안 열린다 — 죽은 섬을 돌리고 다닐 수 없다")
-	# The twin on the right button (03-11): the same door, one line above every branch.
+	# The twin on the right button: it did nothing on a live board either (03-12), so the row is that
+	# a right press on the dead board orders nobody — the same door, one line above every branch.
 	game._unhandled_input(_rpress(Vector2(Look.VIEWPORT_W_PX * 0.5, Look.VIEWPORT_H_PX * 0.5)))
-	t.ok(not game._order_open, "진 뒤에 오른쪽을 눌러도 몸짓이 안 열린다 — 같은 문이다")
+	t.eq(_ordered(b), 0, "진 뒤에 오른쪽을 눌러도 아무도 안 간다 — 산 판에서도 아무것도 안 하는 단추다")
+	t.ok(not game._press_open and not game._boxing, "그리고 어떤 몸짓도 안 열린다 — 같은 문이다")
 
 	# 「타이틀로」 — the one press that DOES land on a lost board (2026-09-01, the user: 「그 게임오버 하고
 	# 타이틀로 돌아가는 버튼도 만들어줘」). ⚠⚠ **This reverses 티켓 02-03's own 「끝」**, which named a way
@@ -2377,13 +2620,15 @@ func _the_keep_falls_and_the_screen_says_so(t) -> void:
 	# lost frame (the door above proves it), and `_process` is off on this fixture so `_pan_the_board`
 	# never drops them either — which leaves `_back_to_title` as the only line that can, and the one
 	# this row measures on its own (03-11).
-	game._order_open = true
 	game._press_open = true
+	game._boxing = true
+	game._box = Rect2(10.0, 10.0, 50.0, 50.0)
+	hs.set_box(game._box)
 	game._unhandled_input(_click(back_rect.get_center()))
 	t.ok(game.run == null, "단추를 누르면 회차가 버려진다 — 이게 셸을 타이틀로 되돌리는 그 한 줄이다")
 	t.ok(game.battle == null, "그리고 섬도 놓는다")
-	t.ok(not game._order_open and not game._press_open,
-		"돌아가는 길이 몸짓을 전부 놓는다 — 단추를 쥔 채 진 회차가 다음 회차에 깃발을 넘기지 않는다")
+	t.ok(not game._press_open and not game._boxing and game._box == Rect2() and hs._box == Rect2(),
+		"돌아가는 길이 상자까지 내린다 — 단추를 쥔 채 진 회차가 다음 회차에 깃발도 상자도 넘기지 않는다")
 	t.ok(game.title_view.visible, "타이틀이 올라온다")
 	t.ok(not hs._over, "게임 오버 글씨는 내려간다")
 	t.ok(not game.field_view._world.visible, "판도 화면에서 내려간다 — Node2D 의 visible 은 여기 안 닿는다")
@@ -2401,6 +2646,79 @@ func _the_keep_falls_and_the_screen_says_so(t) -> void:
 
 	t.root.remove_child(game)
 	game.queue_free()
+
+
+## **The eight pieces of the selection box, from `Look` alone** (ticket 03-12): four corners drawn 1:1
+## and four edges stretched along their own side, in the order TL, TR, BL, BR, top, bottom, left, right.
+##
+## ⚠⚠ **TYPED BY HAND, NEVER READ BACK OFF THE FUNCTION.** A 220 x 100 rect at (440, 345) over the
+## 54 x 54 picture with 4 px corners: the far picture anchor is 50, the edge strips are 46 long, the
+## far screen anchors are 656 and 441, and the spans are 212 and 92. Reading `SELECTION_BOX_CORNER_PX`
+## here would leave the row green for any corner size, which is the shape this file has measured.
+## ⚠ **And the degenerate first box.** The shell's first rect past the threshold is 6 px on one axis
+## and may be 0 on the other; a negative span would flip the region the leaf draws.
+func _the_box_pieces_tile_the_rect(t) -> void:
+	var pieces: Array = Look.selection_box_pieces(Rect2(440.0, 345.0, 220.0, 100.0), Vector2(54.0, 54.0), 4.0)
+	t.eq(pieces.size(), 8, "상자는 여덟 조각이다")
+	var want := [
+		[Rect2(0, 0, 4, 4), Rect2(440, 345, 4, 4)],
+		[Rect2(50, 0, 4, 4), Rect2(656, 345, 4, 4)],
+		[Rect2(0, 50, 4, 4), Rect2(440, 441, 4, 4)],
+		[Rect2(50, 50, 4, 4), Rect2(656, 441, 4, 4)],
+		[Rect2(4, 0, 46, 4), Rect2(444, 345, 212, 4)],
+		[Rect2(4, 50, 46, 4), Rect2(444, 441, 212, 4)],
+		[Rect2(0, 4, 4, 46), Rect2(440, 349, 4, 92)],
+		[Rect2(50, 4, 4, 46), Rect2(656, 349, 4, 92)],
+	]
+	var names := ["왼쪽 위 모서리", "오른쪽 위 모서리", "왼쪽 아래 모서리", "오른쪽 아래 모서리",
+		"위 변", "아래 변", "왼쪽 변", "오른쪽 변"]
+	for i in mini(pieces.size(), want.size()):
+		var got: Array = pieces[i]
+		t.eq(got[0], (want[i] as Array)[0], "%s — 그림에서 오려내는 자리" % names[i])
+		t.eq(got[1], (want[i] as Array)[1], "%s — 유리에 놓는 자리" % names[i])
+	var thin: Array = Look.selection_box_pieces(Rect2(100.0, 100.0, 6.0, 0.0), Vector2(54.0, 54.0), 4.0)
+	var negative := 0
+	for raw in thin:
+		var dst: Rect2 = (raw as Array)[1]
+		if dst.size.x < 0.0 or dst.size.y < 0.0:
+			negative += 1
+	t.eq(negative, 0, "6 px 첫 상자도 음수 크기가 없다")
+	t.eq(((thin[4] as Array)[1] as Rect2).size.x, 0.0, "그 상자의 위 변은 길이 0 이다")
+	t.eq(((thin[6] as Array)[1] as Rect2).size.y, 0.0, "그 상자의 왼쪽 변도 길이 0 이다")
+
+
+## **A box handed to the HUD reaches the leaf as exactly the eight pieces the pure function names**
+## (ticket 03-12). Captured on the hook and compared whole — the shape `how-nets-lie` prescribes,
+## because a `_draw` free to hand the leaf a bare `Rect2()` stayed green under 320 checks once.
+##
+## ⚠ **Every `dst` is held to the viewport with area**, so a box collapsed to nothing or laid off the
+## glass reddens here and not in somebody's eye. ⚠ **The picture is the loaded 54 x 54 file** — the
+## keyed and cropped `frame_01` — and a `tex` of any other size means the leaf was handed something
+## else.
+func _the_box_reaches_the_hud_as_eight_pieces(t, hs: HudSpy) -> void:
+	var rect := Rect2(440.0, 345.0, 220.0, 100.0)
+	hs.set_box(rect)
+	await t.pump_frames(2)
+	t.eq(hs.boxes.size(), 8, "상자 하나가 여덟 조각으로 후크에 닿는다")
+	var want: Array = Look.selection_box_pieces(rect, Vector2(54.0, 54.0), Look.SELECTION_BOX_CORNER_PX)
+	var wrong := 0
+	var dsts: Array[Rect2] = []
+	var sized := 0
+	for i in mini(hs.boxes.size(), want.size()):
+		var piece: Dictionary = hs.boxes[i]
+		if piece["src"] != (want[i] as Array)[0] or piece["dst"] != (want[i] as Array)[1]:
+			wrong += 1
+		dsts.append(piece["dst"] as Rect2)
+		var tex: Texture2D = piece["tex"]
+		if tex != null and tex.get_size() == Vector2(54.0, 54.0):
+			sized += 1
+	t.eq(wrong, 0, "조각 하나하나가 순수 함수의 답 그대로다 — 오려내는 자리도 놓는 자리도")
+	t.eq(sized, hs.boxes.size(), "상자 그림은 54x54 다 — 여덟 조각이 다 그 그림을 든다")
+	if not dsts.is_empty():
+		_rects_land_on_screen(t, "상자 조각", dsts)
+	hs.set_box(Rect2())
+	await t.pump_frames(2)
+	t.eq(hs.boxes.size(), 0, "빈 상자는 한 조각도 안 그린다")
 
 
 ## -- surface-2 readers: the pooled nodes the engine draws --------------------------------------------

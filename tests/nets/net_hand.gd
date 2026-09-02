@@ -149,6 +149,33 @@ const PLATEAU_PRESSED_TY := 2
 const PLATEAU_STAIR_TX := 3
 const PLATEAU_STAIR_TY := 2
 
+## **Two islands with open water between them — the 03-14 board, and the one the intersection is
+## measured on** (ticket 03-12, 2026-09-02, the user: 「이동이 하나로 떠야지 하나처럼」 — *"the move must
+## show as ONE, as if they are one"*). Land at x 1-4 and x 11-14 for y 1-6, water everywhere else.
+##
+## ⚠⚠ **A 부대 WITH A MEMBER ON EACH ISLAND LIGHTS NOTHING**, because the reach is what EVERY picked body
+## can reach. The union flood that stood until 03-12 lit both islands (48 조각) for that 부대 and `order`
+## sent all four — 03-14's defect 1, a 부대 split across two walking components. **The row below asserts
+## 0 where the union answered 48.**
+const TWO_ISLANDS := [
+	"~~~~~~~~~~~~~~~~",
+	"~....~~~~~~....~",
+	"~....~~~~~~....~",
+	"~....~~~~~~....~",
+	"~....~~~~~~....~",
+	"~....~~~~~~....~",
+	"~....~~~~~~....~",
+	"~~~~~~~~~~~~~~~~",
+]
+## The two land rectangles of `TWO_ISLANDS`, in 조각, inclusive. **Every expected count in the
+## intersection row is arithmetic on these six**, for the reason `SHORE_X0` gives.
+const WEST_X0 := 1
+const WEST_X1 := 4
+const EAST_X0 := 11
+const EAST_X1 := 14
+const Y0 := 1
+const Y1 := 6
+
 
 func run(t) -> void:
 	_the_lit_blocks_are_the_lit_tiles_collapsed(t)
@@ -161,6 +188,9 @@ func run(t) -> void:
 	_the_surplus_walks_down_the_stair_when_that_is_the_only_door(t)
 	_three_bodies_ordered_onto_a_block_land_in_three_pieces(t)
 	_an_order_writes_the_block_facing(t)
+	_a_split_squad_lights_only_what_everybody_can_reach(t)
+	_a_squad_on_one_island_still_lights_all_of_it(t)
+	_the_lead_is_the_walking_body_nearest_the_aimed_block(t)
 	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies half way still reports
 	# every check it managed first, in a shape a healthy net cannot be told from.
 	t.done()
@@ -891,3 +921,197 @@ func _orders_of(b: Battle, ids: PackedInt32Array) -> PackedInt32Array:
 	for k in ids.size():
 		out.append(int(b.soldier_order[int(ids[k])]))
 	return out
+
+
+# == the 부대 is one thing (03-12) ====================================================================
+
+## **A 부대 split across two islands lights nothing, and an order onto either island sends nobody.**
+##
+## ⚠⚠ **THIS IS 03-14's DEFECT 1, ANSWERED AS 「REFUSE FOR EVERYBODY」** (2026-09-02, the user: 「이동이
+## 하나로 떠야지 하나처럼」). The reach is the INTERSECTION of every picked body's flood since 03-12; the
+## union that stood before it lit both islands for this 부대 — 48 조각 — and `order` sent all four, two
+## of them to a 칸 they could never walk to. **Red on the union, and the number it asserts is 0.**
+##
+## ⚠⚠ **THE CONTROL COMES FIRST AND IT IS NOT DECORATION.** A `_build_reach` that lit nothing at all would
+## pass the 0 below; the two west bodies alone lighting exactly the west island is what says the 0 is
+## the intersection and not a dead flood. Both counts are arithmetic on the board's own constants.
+func _a_split_squad_lights_only_what_everybody_can_reach(t) -> void:
+	var b := _battle(TWO_ISLANDS, 4)
+	var g := b.grid
+	var west := PackedInt32Array()
+	var east := PackedInt32Array()
+	var misplaced := 0
+	for spot in [[0, WEST_X0 + 1, Y0 + 2], [1, WEST_X0 + 2, Y0 + 3],
+			[2, EAST_X0 + 1, Y0 + 2], [3, EAST_X0 + 2, Y0 + 3]]:
+		var id := int((spot as Array)[0])
+		var want_tile := g.tile_index(int((spot as Array)[1]), int((spot as Array)[2]))
+		if b.place_ashore(id, want_tile) != want_tile:
+			misplaced += 1
+		if id < 2:
+			west.append(id)
+		else:
+			east.append(id)
+	t.eq(misplaced, 0, "자가 점검 — 서쪽 섬에 둘, 동쪽 섬에 둘을 그 조각에 그대로 세웠다")
+
+	# **The water between the islands is water to the walker too**, or the rows below measure a board
+	# with a land bridge nobody drew. Asked of `Grid.can_step` — the flood's own test — from every west
+	# shore 조각 toward the first water column.
+	var crossings := 0
+	for y in range(Y0, Y1 + 1):
+		var shore := g.tile_index(WEST_X1, y)
+		for dy in [-1, 0, 1]:
+			var ny: int = y + int(dy)
+			if ny < 0 or ny >= g.h:
+				continue
+			if g.can_step(shore, g.tile_index(WEST_X1 + 1, ny)):
+				crossings += 1
+	t.eq(crossings, 0, "자가 점검 — 서쪽 물가에서 물로 건너가는 걸음이 하나도 없다 (두 섬 사이는 바다다)")
+
+	# -- the control: the west pair alone lights the whole west island ---------------------------------
+	var hand := Hand.new()
+	t.ok(hand.pick_many(b, west), "자가 점검 — 서쪽 둘을 쥐었다")
+	var west_tiles := (WEST_X1 - WEST_X0 + 1) * (Y1 - Y0 + 1)
+	var step := Rules.BLOCK_TILES
+	var west_blocks := (WEST_X1 / step - WEST_X0 / step + 1) * (Y1 / step - Y0 / step + 1)
+	t.eq(hand.reach.size(), west_tiles, "서쪽 둘만 쥐면 서쪽 섬이 다 켜진다 (%d 조각)" % west_tiles)
+	t.eq(hand.reach_blocks.size(), west_blocks,
+		"그리고 그 섬의 칸 %d개가 켜진다 — 판의 모양에서 나온 수다" % west_blocks)
+
+	# -- the 부대: two on each island, and nothing lights ------------------------------------------------
+	var all := PackedInt32Array()
+	all.append_array(west)
+	all.append_array(east)
+	t.ok(hand.pick_many(b, all), "자가 점검 — 넷을 쥐는 것 자체는 거절이 아니다")
+	t.eq(hand.ids.size(), 4, "넷을 다 쥔다")
+	t.eq(hand.reach.size(), 0, "갈라진 부대는 아무 데도 못 간다 — 교집합이다 (합집합이면 %d)" % (2 * west_tiles))
+	t.eq(hand.reach_blocks.size(), 0, "그래서 켜지는 칸도 하나도 없다")
+	var west_block := g.block_of(g.tile_index(WEST_X0 + 1, Y0 + 2))
+	t.ok(not hand.can_reach_block(west_block), "서쪽 몸이 선 칸도 거절이다 — 동쪽 둘이 못 가는 칸이다")
+	t.eq(hand.order(b, west_block), 0,
+		"명령은 아무도 안 보낸다 — 03-14 결함 1 의 sent = 4 가 0 이 됐다")
+	t.ok(hand.routes(b, west_block).is_empty(), "이동선도 하나도 안 나온다")
+
+
+## **Three bodies on ONE island light all of it — the intersection equals the union when nobody is cut
+## off.** The row that keeps the one above from being satisfied by a reach that is always empty.
+func _a_squad_on_one_island_still_lights_all_of_it(t) -> void:
+	var b := _battle(SHORE, 3)
+	var g := b.grid
+	var ids := PackedInt32Array()
+	var misplaced := 0
+	for spot in [[0, SHORE_X0 + 1, SHORE_Y0 + 1], [1, SHORE_X0 + 3, SHORE_Y0 + 2],
+			[2, SHORE_X0 + 6, SHORE_Y0 + 3]]:
+		var id := int((spot as Array)[0])
+		var want_tile := g.tile_index(int((spot as Array)[1]), int((spot as Array)[2]))
+		if b.place_ashore(id, want_tile) != want_tile:
+			misplaced += 1
+		ids.append(id)
+	t.eq(misplaced, 0, "자가 점검 — 셋이 한 섬의 세 조각에 섰다")
+	var hand := Hand.new()
+	t.ok(hand.pick_many(b, ids), "자가 점검 — 셋을 쥐었다")
+	var land_tiles := (SHORE_X1 - SHORE_X0 + 1) * (SHORE_Y1 - SHORE_Y0 + 1)
+	t.eq(hand.reach.size(), land_tiles,
+		"한 섬 위의 셋은 하나처럼 섬을 다 켠다 — 교집합이 합집합과 같다 (%d 조각)" % land_tiles)
+	var own := 0
+	for k in ids.size():
+		if hand.can_reach(_tile_under(b, int(ids[k]))):
+			own += 1
+	t.eq(own, ids.size(), "그리고 셋이 선 조각이 다 그 안에 있다")
+
+
+## **The 이동선's owner is the walking body nearest the aimed 칸** (03-12: 「이동이 하나로 떠야지
+## 하나처럼」 — ONE line for the 부대, and it is a real body's real route).
+##
+## ⚠⚠ **THE EXPECTED INDEX IS COMPUTED HERE FROM `soldier_pos` AND THE NET'S OWN `_block_middle`**, never
+## read back off `Hand`. ⚠ **The bodies are stood on three DIFFERENT 조각 at three different distances,
+## and the nearest is NOT index 0** — three bodies on one 조각 would tie, the tie-break is the smallest
+## `k`, and a `lead` that always answered 0 would then be green.
+func _the_lead_is_the_walking_body_nearest_the_aimed_block(t) -> void:
+	var b := _battle(FIELD, 3)
+	var g := b.grid
+	var pressed := g.block_of(g.tile_index(PRESSED_TX, PRESSED_TY))
+	var ids := PackedInt32Array()
+	var misplaced := 0
+	# Index 0 furthest, index 1 nearest, index 2 between — so the answer is 1 and not the first body.
+	for spot in [[0, HOME_TX, HOME_TY], [1, HOME_TX + 1, HOME_TY + 2], [2, HOME_TX, HOME_TY + 4]]:
+		var id := int((spot as Array)[0])
+		var want_tile := g.tile_index(int((spot as Array)[1]), int((spot as Array)[2]))
+		if b.place_ashore(id, want_tile) != want_tile:
+			misplaced += 1
+		ids.append(id)
+	t.eq(misplaced, 0, "자가 점검 — 셋이 서로 다른 세 조각에 섰다")
+	var hand := _squad(b, ids)
+	t.eq(hand.ids.size(), 3, "자가 점검 — 손이 셋을 쥐었다")
+	var middle := _block_middle(g, pressed)
+	var want_k := -1
+	var want_d := INF
+	for k in ids.size():
+		var d := (b.soldier_pos[int(ids[k])] as Vector2).distance_to(middle)
+		if d < want_d:
+			want_d = d
+			want_k = k
+	t.ok(want_k > 0, "자가 점검 — 가장 가까운 몸이 첫 몸이 아니다 (k = %d)" % want_k)
+	var lines: Array = hand.routes(b, pressed)
+	t.eq(lines.size(), 3, "자가 점검 — 셋 다 이동선이 있다")
+	var walkers := 0
+	for k in lines.size():
+		if (lines[k] as PackedInt32Array).size() > 1:
+			walkers += 1
+	t.eq(walkers, 3, "자가 점검 — 셋 다 걷는다 (겨눈 칸은 집에서 네 칸 떨어져 있다)")
+
+	var lead := hand.lead(b, pressed)
+	t.eq(lead, want_k, "이동선의 주인은 겨눈 칸에 가장 가까운 걷는 몸이다")
+	var pts_all: Array = hand.route_points(b, pressed)
+	if lead >= 0 and lead < pts_all.size():
+		var pts: PackedVector2Array = pts_all[lead]
+		t.eq(pts[0], b.soldier_pos[int(ids[lead])] as Vector2, "그 줄의 첫 점이 그 몸의 발밑이다")
+		var line: PackedInt32Array = lines[lead]
+		var last := pts[pts.size() - 1]
+		var last_tile := int(last.y) * g.w + int(last.x)
+		t.eq(last_tile, int(line[line.size() - 1]), "그 줄의 끝 조각이 routes 의 끝 조각이다")
+		t.eq(hand.order(b, pressed), 3, "자가 점검 — 셋이 간다")
+		t.eq(int(b.soldier_order[int(ids[lead])]), last_tile, "그 줄의 끝이 그 몸이 앉는 조각이다")
+
+	# -- a body already standing in the aimed 칸 is not the owner -------------------------------------
+	var b2 := _battle(FIELD, 3)
+	var g2 := b2.grid
+	var inside := g2.tiles_of_block(pressed)
+	var ids2 := PackedInt32Array()
+	var misplaced2 := 0
+	for spot in [[0, int(inside[0])], [1, g2.tile_index(HOME_TX, HOME_TY)],
+			[2, g2.tile_index(HOME_TX + 1, HOME_TY + 2)]]:
+		var id := int((spot as Array)[0])
+		var want_tile := int((spot as Array)[1])
+		if b2.place_ashore(id, want_tile) != want_tile:
+			misplaced2 += 1
+		ids2.append(id)
+	t.eq(misplaced2, 0, "자가 점검 — 하나는 겨눈 칸 안에, 둘은 멀리 섰다")
+	var hand2 := Hand.new()
+	t.ok(hand2.pick_many(b2, ids2), "자가 점검 — 셋을 쥐었다")
+	var lines2: Array = hand2.routes(b2, pressed)
+	t.ok(lines2.size() == 3 and (lines2[0] as PackedInt32Array).size() <= 1,
+		"자가 점검 — 칸 안의 몸은 안 걷는다 (줄 길이 %d)" % (lines2[0] as PackedInt32Array).size())
+	var lead2 := hand2.lead(b2, pressed)
+	t.ok(lead2 != 0, "이미 서 있는 몸은 주인이 아니다")
+	t.eq(lead2, 2, "먼 둘 중 가까운 쪽이 주인이다")
+
+	# -- nobody walks, no line ---------------------------------------------------------------------------
+	var b3 := _battle(FIELD, 3)
+	var g3 := b3.grid
+	var inside3 := g3.tiles_of_block(pressed)
+	var ids3 := PackedInt32Array()
+	var misplaced3 := 0
+	for k in 3:
+		if b3.place_ashore(k, int(inside3[k])) != int(inside3[k]):
+			misplaced3 += 1
+		ids3.append(k)
+	t.eq(misplaced3, 0, "자가 점검 — 셋이 겨눈 칸의 세 조각에 섰다")
+	var hand3 := Hand.new()
+	t.ok(hand3.pick_many(b3, ids3), "자가 점검 — 셋을 쥐었다")
+	var lines3: Array = hand3.routes(b3, pressed)
+	var walkers3 := 0
+	for k in lines3.size():
+		if (lines3[k] as PackedInt32Array).size() > 1:
+			walkers3 += 1
+	t.eq(walkers3, 0, "자가 점검 — 아무도 안 걷는다")
+	t.eq(hand3.lead(b3, pressed), -1, "아무도 안 걸으면 줄이 없다")

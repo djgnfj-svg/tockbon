@@ -9,6 +9,15 @@ extends RefCounted
 ## 「one body」 branch anywhere in this file to find and fix later, because there is no 「one body」 case
 ## — there is a list whose length happens to be 1.
 ##
+## ⚠⚠ **「THE REACH IS A UNION」 STOPPED BEING TRUE ON 2026-09-02** (ticket 03-12, the user: 「이동이 하나로
+## 떠야지 하나처럼」 — *"the move must show as ONE, as if they are one"*). **The reach is the INTERSECTION**:
+## the 조각 EVERY picked body can walk to, one flood per body ANDed in `_build_reach`. A 부대 split across
+## two walking components lights nothing and `order` sends nobody — 03-14's defect 1 answered as *refuse
+## for everybody*. **And 「the preview is one route per body」 is half true**: `routes` still answers one
+## line per body, and the shell draws ONE of them — the `lead`'s, the walking body nearest the aimed 칸.
+## The sentence above is kept because the list is still the whole extension; what changed is what is
+## computed over it.
+##
 ## ⚠ **Nothing here is a Node.** `.new()` builds it and a net drives 「pick → reach → order」 with no
 ## tree at all, which is the whole reason it sits in `sim/` and not in the shell that presses it.
 ##
@@ -69,8 +78,9 @@ var _in_reach := {}
 ## else on the board** — a plausible number for the wrong place, which is this repo's own named false
 ## green.
 ##
-## ⚠ **A 칸 is in here when ANY of its 조각 is in `reach`**, which is the same union `reach` already is
-## across the picked bodies.
+## ⚠ **A 칸 is in here when ANY of its 조각 is in `reach`.** That is a union over the 칸's four 조각 and
+## nothing else — `reach` itself has been the INTERSECTION across the picked bodies since 03-12
+## (2026-09-02); this line read 「the same union `reach` already is across the picked bodies」 until then.
 var reach_blocks := PackedInt32Array()
 
 ## `reach_blocks` again as a set, so `can_reach_block` is one lookup instead of a scan. **Rebuilt with
@@ -316,6 +326,42 @@ func routes(battle: Battle, block: int) -> Array:
 	return out
 
 
+## **The index into `ids` of the body whose 이동선 is drawn, or -1** (ticket 03-12, 2026-09-02, the user:
+## 「이동이 하나로 떠야지 하나처럼」 — *"the move must show as ONE, as if they are one"*).
+##
+## **The rule**: among every body whose line actually walks (`routes(...)[k].size() > 1`), the one whose
+## `soldier_pos` is nearest the aimed 칸's middle; ties go to the smallest `k`; nobody walking — everybody
+## already on the 칸, or the 칸 unreachable — is -1.
+##
+## ⚠⚠ **WHY A BODY AND NOT THE 부대's CENTROID.** The centroid can sit on water or on a 조각 no route
+## leaves from, and a line drawn from it would be a promise the walk does not keep. The lead's line is a
+## real body's real route: its first point is under a drawn body, its last 조각 is the seat `order` gives
+## that body, and `routes`' own invariant is kept whole. On screen that is one line from the nearest
+## 검사's feet to the 칸, and the 부대 follows it.
+## ⚠ **`routes` and `route_points` stay per body**; the shell picks `route_points(...)[lead]` and hands
+## the view that one line. **Nothing about the walk changed** — `order` still sends every body.
+func lead(battle: Battle, block: int) -> int:
+	var lines := routes(battle, block)
+	if lines.is_empty() or battle == null or battle.grid == null:
+		return -1
+	var middle := _block_middle(battle.grid, block)
+	var best := -1
+	var best_d := INF
+	for k in ids.size():
+		if k >= lines.size():
+			break
+		var line: PackedInt32Array = lines[k]
+		if line.size() <= 1:
+			continue
+		var d := (battle.soldier_pos[int(ids[k])] as Vector2).distance_to(middle)
+		# Strictly nearer, so an equal distance keeps the smaller `k` — the tie-break is the order the
+		# bodies were picked in and not the order the loop happened to visit them.
+		if d < best_d:
+			best_d = d
+			best = k
+	return best
+
+
 ## **The same routes as POINTS in 조각 units**, one list per picked body, and what the view draws.
 ##
 ## ⚠⚠ **`block` IS A 칸 GOING IN AND THE POINTS ARE 조각 COMING OUT**, which is `routes`' own split and
@@ -367,42 +413,31 @@ func route_points(battle: Battle, block: int) -> Array:
 ## `reach`. Folding the two into one test would wall off every upper storey, because a stair is the
 ## only door there is.
 ##
-## ⚠ **The union, for a 부대 — and it is the FLOOD that is the union now.** A 조각 one member can walk
-## to lights even if another cannot; the order then seats that member elsewhere, which `_seats` already
-## does. **The filter stopped being a union the day it stopped asking about bodies at all.**
+## ⚠⚠ **THE FLOOD IS THE INTERSECTION SINCE 2026-09-02** (ticket 03-12, the user: 「이동이 하나로 떠야지
+## 하나처럼」 — *"the move must show as one, as if they are one"*). **It was a union until then, and the
+## sentence that stood here — 「A 조각 one member can walk to lights even if another cannot; the order
+## then seats that member elsewhere」 — is the sentence 03-14 measured false**: a 부대 with a member on
+## the 철광석's detached 칸 lit the whole island for him, `order` sent him a walk he could never make, and
+## nothing went red. Now every body floods on its own and the floods are ANDed, so a split 부대 lights
+## nothing and `order` refuses for everybody — the 「하나처럼」 answer.
+##
+## ⚠⚠ **PER-BODY FLOODS, NOT A 「SAME COMPONENT」 TEST FROM ONE FLOOD.** `Grid.can_step` reads the shoulders
+## at the FROM level on a diagonal, so it is not symmetric across a level change; two bodies can each
+## reach a 조각 the other cannot. **Measured on the real island** (2026-09-02, 30 x 26): one flood
+## 1.02 ms; nine per-body floods plus the AND 9.73 ms — once, at `pick_many`, never per frame.
+## ⚠ **The opening 부대 lights exactly what it lit as a union**: the four 검사 at the 성채 door flood 276
+## 조각 identically, so intersection = union there. What goes dark is the split 부대, and only that.
 func _build_reach(battle: Battle) -> void:
 	var grid := battle.grid
 	var n := grid.w * grid.h
 	var seen := PackedByteArray()
 	seen.resize(n)
-	seen.fill(0)
-	var queue := PackedInt32Array()
+	seen.fill(1)
 	for k in ids.size():
-		var t := _tile_of(battle, int(ids[k]))
-		if t >= 0 and seen[t] == 0:
-			seen[t] = 1
-			queue.append(t)
-	var head := 0
-	while head < queue.size():
-		var cur := int(queue[head])
-		head += 1
-		var cx := cur % grid.w
-		var cy := cur / grid.w
-		for dy in [-1, 0, 1]:
-			for dx in [-1, 0, 1]:
-				if dx == 0 and dy == 0:
-					continue
-				var nx: int = cx + int(dx)
-				var ny: int = cy + int(dy)
-				if nx < 0 or ny < 0 or nx >= grid.w or ny >= grid.h:
-					continue
-				var nt := ny * grid.w + nx
-				if seen[nt] != 0:
-					continue
-				if not grid.can_step(cur, nt):
-					continue
-				seen[nt] = 1
-				queue.append(nt)
+		var mine := _flood_from(grid, _tile_of(battle, int(ids[k])))
+		for t in n:
+			if mine[t] == 0:
+				seen[t] = 0
 	var lit := PackedInt32Array()
 	for t in n:
 		if seen[t] == 0:
@@ -427,6 +462,48 @@ func _build_reach(battle: Battle) -> void:
 	# ⚠ **Sorted rather than trusted to come out ascending.** Row-major 조각 order happens to hand back
 	# ascending 칸 today; that is a property of the loop above and not of the promise the field makes.
 	reach_blocks.sort()
+
+
+## **One body's flood: every 조각 reachable from `seed` by 8-way `Grid.can_step`, as a byte per 조각.**
+## This was `_build_reach`'s own loop until 03-12 cut it out so it could run once per picked body.
+##
+## ⚠ **A seed of -1 answers all zeros**, so a body off the board empties the 부대's reach. It cannot
+## happen after `pick_many`'s ASHORE filter; it is the guard, and an all-ones answer here would light
+## the whole board for a body that is nowhere.
+## ⚠ **The stair rides the flood.** It is walked across, never stood on — `_standable` is what keeps it
+## out of `reach`, and folding that test in here would wall off every upper storey.
+func _flood_from(grid: Grid, seed: int) -> PackedByteArray:
+	var n := grid.w * grid.h
+	var seen := PackedByteArray()
+	seen.resize(n)
+	seen.fill(0)
+	if seed < 0 or seed >= n:
+		return seen
+	var queue := PackedInt32Array()
+	seen[seed] = 1
+	queue.append(seed)
+	var head := 0
+	while head < queue.size():
+		var cur := int(queue[head])
+		head += 1
+		var cx := cur % grid.w
+		var cy := cur / grid.w
+		for dy in [-1, 0, 1]:
+			for dx in [-1, 0, 1]:
+				if dx == 0 and dy == 0:
+					continue
+				var nx: int = cx + int(dx)
+				var ny: int = cy + int(dy)
+				if nx < 0 or ny < 0 or nx >= grid.w or ny >= grid.h:
+					continue
+				var nt := ny * grid.w + nx
+				if seen[nt] != 0:
+					continue
+				if not grid.can_step(cur, nt):
+					continue
+				seen[nt] = 1
+				queue.append(nt)
+	return seen
 
 
 ## **Whether this 조각 may be pointed at: passable, and not a stair.** Two questions, and there is no

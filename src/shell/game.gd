@@ -35,9 +35,15 @@ extends Node2D
 ##
 ## ⇒ **What the hand does on the island is command bodies**, and that is the one branch left in
 ## `_begin_press`. ⚠ **Since 2026-09-02 (03-11) that is two buttons**: the left picks a 부대 or lets
-## it go (`_press_the_island`), the right sends it (`_begin_order`, on the press). ⚠ **The island
-## stays UNCOMMITTED** — a `commit()` was put in `_open_island` to replace the button and it won the
-## island before its first frame; the reason is written there.
+## it go (`_press_the_island`), the right sends it (`_begin_order`, on the press).
+## ⚠⚠ **AND SINCE THE SAME EVENING IT IS ONE BUTTON AGAIN** (ticket 03-12, the user after trying the
+## drag in the lab: 「동작이 단순해야함 왼쪽으로 드래그 왼쪽으로 칸누르기로 해야할듯」 — *"the actions must
+## be simple — left drag, and left press on a 칸"*): **a left drag past the threshold BOXES every 검사
+## drawn inside it (`_box_the_island`), a short left press orders on a lit 칸, picks, or keeps
+## (`_press_the_island`), and the right button does nothing.** 03-11's two-button split lasted one day
+## and its lines are kept below as tombstones. ⚠ **The island stays UNCOMMITTED** — a `commit()` was put
+## in `_open_island` to replace the button and it won the island before its first frame; the reason is
+## written there.
 ##
 ## ⚠⚠ **TAB REVEALS THE 판 WHILE IT IS HELD** (2026-08-28, the user: 「마우스올리면 호버되도록해주고
 ## 특정버튼 눌러야 그 뜨게해줘 판이」). It is the only key here read on BOTH edges, because a
@@ -112,17 +118,26 @@ var field_view: FieldView = null
 var hud_view: HudView = null
 var title_view: TitleView = null
 
-## True while a left-button drag on the FIELD is moving the camera. ⚠ **It used to be mutually
-## exclusive with `_drag_soldier`** — a press grabbed a soldier XOR began a pan — and the soldier drag
-## is deleted, so a press that orders nobody is now always a pan.
-## ⚠ **「orders」 is the right button's word since 2026-09-02** (03-11): a left press that TRAVELS is a
-## pan, and one that does not picks or lets go. The left button orders nobody, ever.
+## **True while a left-button drag on the FIELD is pulling a selection box.** ⚠⚠ **IT WAS `_panning`
+## UNTIL 2026-09-02** (ticket 03-12, the user: 「동작이 단순해야함 왼쪽으로 드래그 왼쪽으로 칸누르기로
+## 해야할듯」): a press that travels past `Look.DRAG_PAN_THRESHOLD_PX` is a BOX now, and the pan is the
+## keys' and the edge band's (`_pan_the_board`). **The rename re-aims every row written with the old
+## name**, and `net_shell` was rewritten with it rather than patched.
+## ⚠ **It used to be mutually exclusive with `_drag_soldier`** — a press grabbed a soldier XOR began a
+## pan — and the soldier drag is deleted, so a press that ordered nobody was, until 03-12, always a pan.
+## ⚠ **「orders」 was the right button's word for one day** (03-11, 2026-09-02): a left press that
+## travelled was a pan, and one that did not picked or let go. That split is gone the same evening.
 ##
 ## ⚠ **The pan is NOT gated on the commit.** Camera pan and zoom stay live for the whole fight on
 ## purpose: they change nothing about what happens, and watching is the entire activity — removing
 ## them would turn 결정 4's 「pausing doesn't let me do anything more」 into 「and you cannot even
 ## look」. It is also the row that stops the post-commit checks from being satisfied by a dead screen.
-var _panning := false
+## **Still true of the keys and the band**, which is what carries the camera now.
+var _boxing := false
+## **The box as the shell knows it**, from `_press_at` to the last motion, in screen px, and `Rect2()`
+## while no box is up. ⚠ **`.abs()`ed on every motion**, so a drag up-and-left is a rect with a
+## positive size and the release reads one shape whichever way the hand went.
+var _box := Rect2()
 ## Where the left button went down, and whether it is still down with nothing decided yet.
 ##
 ## ⚠⚠ **THE ORDER MOVED FROM THE PRESS TO THE RELEASE, AND THAT IS THE WHOLE FIX.** It used to be
@@ -152,15 +167,13 @@ var _press_open := false
 ## the middle of a left drag overwrite `_press_at` and `_panning`. The right button does not go through
 ## `_begin_press` / `_end_press` at all.
 
-## **True from a right press to its release, and the only thing the release touches.**
-##
-## ⚠⚠ **THE ORDER DOES NOT WAIT FOR THE RELEASE** (2026-09-02, ticket 03-11, read from the user's
-## StarCraft reference — the move goes out on the right button's DOWN edge). It fires in `_begin_order`,
-## so this flag carries no 칸 and no point from one edge to the other: there is nobody left to read one,
-## and a field kept for nobody to read is the shape the `at` tombstone on `_end_press` names.
-## **What it holds is the edge band still** (`_edge_pan_dir`), because a held button does not travel
-## the board; it is dropped with the left pair by `_drop_the_gestures` when a board is lost or left.
-var _order_open := false
+## ⚠⚠ **`_order_open` STOOD HERE AND IT IS DELETED** (2026-09-02 evening, ticket 03-12, the user: 「동작이
+## 단순해야함 왼쪽으로 드래그 왼쪽으로 칸누르기로 해야할듯」). It was true from a right press to its release
+## — the right button's own flag for the one day (03-11) the move order lived on that button, fired in
+## `_begin_order` on the DOWN edge, so it carried no 칸 and no point; what it held was the edge band
+## still. **The right button carries nothing again**, so there is no gesture for the flag to name, and
+## `net_shell` scans this file for a write to `_order_open` the way it scans for `_turning` — the name
+## stays here as the tombstone that scan reads.
 
 ## **Whether the pointer is over this window, and whether this window has the focus.** ⚠⚠ **BOTH WERE
 ## DELETED WITH THE EDGE BAND ON 2026-08-31** (the user: 「화면 끝에 마우스 뒀을 때 이동되는 로직 ...
@@ -462,37 +475,35 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif click.button_index == MOUSE_BUTTON_WHEEL_DOWN and click.pressed:
 			_on_wheel(click.position, -1)
 		elif click.button_index == MOUSE_BUTTON_LEFT:
-			# **The left button picks or lets go on a release in place, and it is the only button that
-			# opens a PRESS at all** — see the tombstone where `_press_orders` stood. ⚠ The right button
-			# opens an ORDER, not a press (2026-09-02, 03-11), and it has its own two functions below.
+			# **The left button is the whole hand: a press opens, a release boxes or clicks** — see
+			# `_end_press`. It is the only button that opens a PRESS at all — see the tombstone where
+			# `_press_orders` stood. ⚠ The right button opened an ORDER for one day (2026-09-02, 03-11)
+			# and carries nothing again since that evening (03-12) — see the tombstone below.
 			if click.pressed:
 				_begin_press(click.position)
 			else:
 				_end_press()
-		elif click.button_index == MOUSE_BUTTON_RIGHT:
-			# **The right button carries the move order, on its DOWN edge** (2026-09-02, ticket 03-11,
-			# read from the user's StarCraft reference) — see `_begin_order`, where the walk goes out.
-			# The release closes the gesture and reads nothing, which is why it is handed no position.
-			if click.pressed:
-				_begin_order(click.position)
-			else:
-				_end_order()
-		# ⚠⚠ **THE RIGHT BUTTON'S TWO ARMS STOOD HERE AND BOTH ARE DELETED** (2026-09-02, the user:
-		# 「오른쪽 마우스로 회전을 하면 뭔가 장점이 별로 없어서」). **The two reversals they carried are
-		# kept rather than erased**, because deleting this branch is itself reversing a reversal:
+		# ⚠⚠ **THE `MOUSE_BUTTON_RIGHT` BRANCH STOOD HERE AND IT IS DELETED** (2026-09-02 evening, ticket
+		# 03-12). It called `_begin_order` on the press and `_end_order` on the release for the one day
+		# 03-11 put the move order on that button. **The right button's arms had already been deleted
+		# once that morning** (the user: 「오른쪽 마우스로 회전을 하면 뭔가 장점이 별로 없어서」), and **the
+		# reversals they carried are kept rather than erased**, because deleting this branch is itself
+		# reversing a reversal — now for the second time:
 		#
 		#  - 2026-08-26, the user: 「회전은 오른쪽 마우스 누르고 돌릴 수 있었으면 좋겠음」 — the yaw drag is born;
 		#  - 2026-08-30 morning: 「오른쪽이 끌어서 이동으로 해야할듯」 — it becomes a pan;
 		#  - 2026-08-30 at the screen: 「오른쪽 버튼은 카메라 회전으로 이해했어」 — the turn is re-taken;
 		#  - 2026-09-02 — **the turn moves onto Q and E and the button carries nothing.**
-		#  - 2026-09-02, ticket 03-11 — **the button carries the move order, on its DOWN edge** (the
-		#    `MOUSE_BUTTON_RIGHT` branch above; StarCraft, which the user named, orders on the press).
+		#  - 2026-09-02, ticket 03-11 — **the button carries the move order, on its DOWN edge**
+		#    (StarCraft, which the user named, orders on the press).
+		#  - 2026-09-02 evening, ticket 03-12, the user: 「동작이 단순해야함 왼쪽으로 드래그 왼쪽으로
+		#    칸누르기로 해야할듯」 — *"the actions must be simple — left drag, and left press on a 칸"*
+		#    — **the button carries nothing again.** One button does everything.
 		#
-		# ⚠ **What it made true by construction is now true by there being no branch**: the right
-		# button opens no press, so there is no release in place for `_end_press` to turn into a walk
-		# order. **That stops being an argument the day 03-11 puts the order on it.**
-		# ⚠ **That day is this one** (2026-09-02). What keeps the right button out of `_end_press` now is
-		# that it has its own branch — `_begin_order` / `_end_order` — and never enters `_begin_press`.
+		# ⚠ **What is true by there being no branch**: the right button opens no press and no order, so
+		# a right press cannot command, cannot pick, cannot let go and cannot hold the band still.
+		# `net_shell` drives a right press and asserts exactly that — a green over a deleted rule is
+		# 03-11's own lesson, applied in reverse.
 	elif event is InputEventMouseMotion:
 		var motion := event as InputEventMouseMotion
 		# ⚠⚠ **THE POINTER IS RECORDED HERE, AND IT HAS TWO READERS.** It was the edge pan's line and
@@ -529,14 +540,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		# and would be a picture of a decision already made.
 		_show_route(motion.position)
 		# ⚠ **The summon aim used to sit above the pan and consume every motion while a slot was
-		# armed** (deleted 2026-08-28). With it gone a motion on the field is a pan or it is nothing.
+		# armed** (deleted 2026-08-28). With it gone a motion on the field is a box or it is nothing.
 		# **The threshold, and it is measured from the press point rather than accumulated per motion.**
 		# ⚠ A sum of `relative` would let a hand that wanders out and back cross the threshold without
-		# ever being far from where it started, which is a click that turns into a pan under the user.
-		if _press_open and not _panning 				and motion.position.distance_to(_press_at) > Look.DRAG_PAN_THRESHOLD_PX:
-			_panning = true
-		if _panning:
-			field_view.pan_by(motion.relative)
+		# ever being far from where it started, which is a click that turns into a box under the user.
+		if _press_open and not _boxing \
+				and motion.position.distance_to(_press_at) > Look.DRAG_PAN_THRESHOLD_PX:
+			_boxing = true
+		# ⚠⚠ **`field_view.pan_by(motion.relative)` STOOD HERE AND IT IS DELETED** (2026-09-02, ticket
+		# 03-12). A press that travels pulls a BOX now — from the press point to this motion, `.abs()`ed
+		# so the hand may go any way — and hands it to the HUD on every motion, which is what puts the
+		# picture under the cursor while it is being pulled. **No drag pans**: the camera is the keys'
+		# and the band's, and `pan_by` keeps its one caller in `_pan_the_board`.
+		if _boxing:
+			_box = Rect2(_press_at, motion.position - _press_at).abs()
+			hud_view.set_box(_box)
 
 
 ## The title screen's whole input table. Motion lights the slot under the cursor; a left press either
@@ -675,12 +693,13 @@ func _start_run() -> void:
 ## ⚠ **And since 03-11 (2026-09-02) it ORDERS, and still never gets here**: it has its own
 ## `_begin_order`, so a right press in the middle of a left drag cannot overwrite `_press_at`.
 func _begin_press(at: Vector2) -> void:
-	# ⚠ **Nothing is ordered and nothing is panned here.** Both are decided by what happens next — see
+	# ⚠ **Nothing is ordered and nothing is boxed here.** Both are decided by what happens next — see
 	# `_press_open`. A press that resolves to neither (no battle, no walkable 조각 under it) still ends
-	# as a pan, which is what a press on open water has always done.
+	# as a click that does nothing, which is what a press on open water with an empty hand does.
 	_press_at = at
 	_press_open = true
-	_panning = false
+	_boxing = false
+	_box = Rect2()
 
 
 ## ⚠⚠ **`_turning` AND `_turn_from` STOOD HERE, WERE DELETED ONCE, CAME BACK, AND ARE DELETED AGAIN.**
@@ -709,78 +728,61 @@ func _begin_press(at: Vector2) -> void:
 ## ⚠ **The right button ends nothing now** (2026-09-02) — there is one caller and it is the left
 ## release.
 ## ⚠ **Written onto the same day** (03-11): the right button ends its own flag, in `_end_order`, and
-## still has no caller here.
+## still has no caller here. ⚠ **And written onto the same evening** (03-12): `_end_order` is deleted
+## with the button's branch, and this release is where a box CLOSES as well as where a click lands.
 func _end_press() -> void:
-	# **A press that never travelled is a click, and a click commands.** ⚠ **Ordered from the point the
-	# button went DOWN and not from where it came up** — a hand that shifts two pixels while clicking
-	# would otherwise command a different 조각 than the one it pressed on.
-	# ⚠ **「commands」 meant a walk until 2026-09-02** (03-11); the walk is the right button's, and what
-	# a left click does here is pick a body or let go — resolved from the DOWN point for the same reason.
+	# **A press that travelled is a box; a press that did not is a click.** ⚠ **The click is resolved
+	# from the point the button went DOWN and not from where it came up** — a hand that shifts two
+	# pixels while clicking would otherwise command a different 조각 than the one it pressed on.
+	# ⚠⚠ **THE BOX IS READ AS THE LAST MOTION LEFT IT, NOT FROM THE RELEASE EVENT'S OWN POINT** (03-12).
+	# This release carries no `at` — deleted 2026-08-30 as unread — and a release one pixel from the
+	# last motion changes nothing a player can see; the motion branch has already handed that same
+	# rect to the HUD, so what is boxed is what was drawn.
+	# ⚠ **「commands」 meant a walk, then (03-11, for one day) a pick or a let-go, and it is the whole
+	# hand again** (03-12): `_press_the_island` orders on a lit 칸, picks, or keeps.
 	# ⚠⚠ **NOTHING HERE ASKS WHICH BUTTON, AND THAT IS WHAT KEEPS THE RIGHT ONE FROM COMMANDING.**
 	# Only the left press ever reaches `_begin_press`, so `_press_open` is already the answer to
 	# 「was this a press that may command」 — see the tombstone where `_press_orders` stood.
-	# ⚠ **Still true on 2026-09-02, for a changed reason** (03-11): the right button commands now, but on
-	# its own branch — `_begin_order` — and it never enters this function or `_begin_press`, so nothing
-	# here has to ask which button it is.
-	if _press_open and not _panning and battle != null:
-		_press_the_island(_press_at)
+	if _press_open and battle != null:
+		if _boxing:
+			_box_the_island(_box)
+		else:
+			_press_the_island(_press_at)
 	_press_open = false
-	_panning = false
+	_boxing = false
+	_box = Rect2()
+	# **The box comes down on every release, box or click.** A box left standing after the hand let go
+	# of the button would be a picture of a gesture that has ended.
+	hud_view.set_box(Rect2())
 
 
-## **The right button went down: the 부대 is sent, now.**
-##
-## ⚠⚠ **THE ORDER FIRES HERE, ON THE DOWN EDGE, AND NOT ON THE RELEASE** (2026-09-02, ticket 03-11,
-## read from the user's StarCraft reference — the game the user named issues the move on the right
-## button's press). What that makes true by construction: **the 칸 the 이동선 was drawn to at the
-## instant of the press is the 칸 ordered** — `_show_route` and this function walk the identical
-## `_tile_at` → `Grid.block_of` → `can_reach_block` chain on the identical camera, in the same frame —
-## and **nothing between the two edges can re-aim anything, because the release has nothing left to
-## aim.** A 60 px drag, a D pan, a band slide: all arrive after the walk has gone out.
-##
-## ⚠⚠ **THE WALK IS AIMED AT A 칸 AND IT WAS A 조각 UNTIL 2026-09-01** (the user: "let us do it by the
-## block"). **`_tile_at` still answers a 조각 and is not re-pointed** — the 칸 is made right here with
-## `Grid.block_of`, because `_tile_at`'s other callers, the hover among them, still want the square
-## metre. **Both are bare `int`s and passing the wrong one goes nowhere near red**, so the conversion
-## lives on one line with the name `block` on it. (This paragraph moved here from `_press_the_island`
-## with the arm it describes.)
-##
-## ⚠ **`_order_open` is set FIRST, before the battle guard**: the band holds still for the length of any
-## right press, water included, exactly as it does for any left press — see `_edge_pan_dir`.
-## ⚠ **ESC needs no line here.** A right press that ordered has already let go; one that ordered nobody
-## (a 칸 the hand cannot reach) kept the hand, and ESC empties it exactly as before.
-func _begin_order(at: Vector2) -> void:
-	_order_open = true
-	if battle == null:
-		return
-	var tile := _tile_at(at)
-	# **The 조각 is a stop on the way to the 칸 and nothing more.** `_tile_at` says where the cursor
-	# is; this one line says what the order is aimed at, and every name below it is 칸.
-	var block := battle.grid.block_of(tile) if tile >= 0 else -1
-	# ⚠ **The bool is not read and not stored.** 「consumed」 told `_end_press` a left press was not a
-	# pan; the right button has no second gesture competing for its press, so nobody would read it.
-	_order_the_island(block)
-
-
-## **The right button came up: the gesture closes, and nothing else happens.**
-##
-## ⚠⚠ **IT ORDERS NOTHING, BECAUSE THE ORDER WENT OUT ON THE PRESS** — see `_begin_order`. It reads no
-## position (which is why the nets' `_rrelease()` carries none), no `_panning` and no threshold:
-## **the right button's motion is read by nothing**, which is how 「no travel gate on the right
-## button」 is true by construction rather than by a constant nobody consulted.
-func _end_order() -> void:
-	_order_open = false
+## ⚠⚠ **`_begin_order` AND `_end_order` STOOD HERE AND BOTH ARE DELETED** (2026-09-02 evening, ticket
+## 03-12, the user: 「동작이 단순해야함 왼쪽으로 드래그 왼쪽으로 칸누르기로 해야할듯」). They were the right
+## button's two edges for the one day (03-11) the move order lived on it: the press set `_order_open`,
+## converted the point to a 칸 with `Grid.block_of` and called `_order_the_island` — **on the DOWN edge**,
+## read from the user's StarCraft reference, so the 칸 the 이동선 was drawn to at the instant of the press
+## was the 칸 ordered and nothing between the edges could re-aim it; the release cleared the flag and
+## read nothing. **What they knew that outlives them is kept on `_order_the_island`**: the aim is a 칸
+## made on one line with `Grid.block_of`, and `body_at_px` is never asked in front of an order.
 
 
 ## **Sends the 부대 the hand is holding onto `block`, and lets go.** True when somebody actually went.
 ##
 ## **This is the full-hand arm of `_press_the_island`, moved out whole** (2026-09-02, ticket 03-11) —
-## it is the right button's only job, and the left button no longer has it.
-## ⚠ **An empty hand answers false through `can_reach_block`**: the right button never picks and never
-## lets go of nothing. **`body_at_px` is not called here** — a body drawn on the destination does not
-## intercept the order, which is the split itself.
-## ⚠ **A 칸 the hand cannot reach keeps the hand.** That is the 2026-08-31 rule surviving on the button
-## the order moved to; it is not re-decided here (ticket 03-11, Out of scope).
+## it was the right button's only job for one day, and **it is the left button's again since that
+## evening** (03-12): `_press_the_island`'s first arm calls it on a short press over a lit 칸.
+## ⚠ **An empty hand answers false through `can_reach_block`**: an order never picks and never lets go
+## of nothing. **`body_at_px` is not called here** — a body drawn on the destination does not intercept
+## the order, which is move-first (2026-08-31, the user: 「이동 우선으로」), the arm order in
+## `_press_the_island` carries it, and the user re-chose it for one button (03-12, 「추천대로 ㅇㅇ」).
+## ⚠ **A 칸 the hand cannot reach keeps the hand.** That is the 2026-08-31 rule; under one button it is
+## `_press_the_island`'s third arm, and this function simply answers false.
+##
+## ⚠⚠ **THE WALK IS AIMED AT A 칸 AND IT WAS A 조각 UNTIL 2026-09-01** (the user: "let us do it by the
+## block"). **`_tile_at` still answers a 조각 and is not re-pointed** — the 칸 is made by the caller with
+## `Grid.block_of`, because `_tile_at`'s other callers, the hover among them, still want the square
+## metre. **Both are bare `int`s and passing the wrong one goes nowhere near red**, so the conversion
+## lives on one line with the name `block` on it, in every caller.
 func _order_the_island(block: int) -> bool:
 	if battle == null:
 		return false
@@ -804,12 +806,14 @@ func _order_the_island(block: int) -> bool:
 ## flag to the next run. ⚠ **`_start_run` gets no call**: the only path into it is the title, and the
 ## only path from a run to the title is `_back_to_title` — a third call for symmetry would be a second
 ## writer for one fact.
-## ⚠ **What a latched `_order_open` costs is not a stale order** — the release orders nothing — **it
-## is the band**, exactly the way a latched `_press_open` already could cost it.
+## ⚠ **What a latched `_order_open` cost was not a stale order** — the release ordered nothing — **it
+## was the band**, exactly the way a latched `_press_open` already could cost it. The flag is deleted
+## (03-12) and the box takes its place here: a box held through a lost run must not stand on the title.
 func _drop_the_gestures() -> void:
 	_press_open = false
-	_panning = false
-	_order_open = false
+	_boxing = false
+	_box = Rect2()
+	hud_view.set_box(Rect2())
 
 
 # --- the camera keys ------------------------------------------------------------------------------
@@ -843,9 +847,9 @@ func _on_pan_key(key: InputEventKey) -> bool:
 ## ⚠⚠ **TWO SOURCES, ONE `pan_by`.** The keys and the edge band are added as screen-space velocities
 ## and spent once — a second `pan_by` call in the same frame clamps twice, and a camera already
 ## sitting on the roam edge would then eat one of the two inputs with nothing on screen saying so.
-## ⚠ **The left drag still calls `pan_by` from the input handler**, so a hand that drags while W is
-## held is genuinely two calls. **This claim is about the two CLOCKED sources**, which is all one
-## frame's `_process` has to sum.
+## ⚠ **The left drag called `pan_by` from the input handler until 03-12** (2026-09-02), so a hand that
+## dragged while W was held was genuinely two calls. **The drag is a box now and pans nothing**, which
+## leaves this function `pan_by`'s ONE caller — the two clocked sources, summed and spent once.
 ##
 ## ⚠⚠ **IT OBEYS 「끝」, AND THAT IS NOT A NEW DECISION** (2026-09-01, the user: 「딱 뜨고. 끝」).
 ## `_unhandled_input` closes the whole board on `battle.lost`, so **a key release during GAME OVER is
@@ -971,13 +975,22 @@ func _on_tilt_key(key: InputEventKey) -> bool:
 ## Deleting either flag from the gate reddens its own band row in `net_shell`, and neither row carries
 ## the other.
 ##
+## ⚠⚠ **AND ARGUED ABOUT AGAIN THE SAME EVENING (03-12): THE GATE IS ONE FLAG.** The right half went with
+## the right button's branch. The left half is `_press_open` ALONE — **the `_panning` clause is dropped,
+## not renamed to `_boxing`**: `_boxing` is only ever set while `_press_open` is true and the two clear
+## together, so an `or _boxing` here is unreachable (measured by the adversary, 2026-09-02) — a mutation
+## deleting it could redden nothing, and a row claiming to guard it would be the vacuous control
+## `how-nets-lie` names. **A box is held still by the press flag it lives inside.** ⚠ StarCraft scrolls
+## when a box is dragged to the screen edge; this holds still, exactly as a held press did. **Not
+## decided, not built** — out of 03-12's scope, and written here rather than found later.
+##
 ## ⚠ **The focus flag is NOT read here** — it gates the whole summed velocity one level up, because a
 ## focus loss stops the keys too. `_pointer_inside` is this function's own: a cursor that has left the
 ## window says nothing about a keyboard.
 func _edge_pan_dir() -> Vector2:
 	if not _pointer_inside:
 		return Vector2.ZERO
-	if _press_open or _panning or _order_open:
+	if _press_open:
 		return Vector2.ZERO
 	# ⚠ **The window's own constants and not `get_viewport_rect()`.** Headless the window is 64x64 and
 	# every screen position this shell is driven with is in `look.gd`'s 1280x720 — asking the real
@@ -1062,14 +1075,41 @@ func _notification(what: int) -> void:
 ## stays as the second way; ticket 03-04's Answer and `a-left-press-on-nothing-keeps-the-hand` in
 ## `docs/design/` carry the reversal.
 ##
-## ⚠ **The 조각 → 칸 conversion paragraph moved to `_begin_order`** with the arm that makes the 칸; this
-## function reads no 조각 at all now.
+## ⚠⚠ **THE THIRD ERA, THE SAME EVENING — ONE BUTTON AGAIN** (2026-09-02, ticket 03-12; the user reversed
+## the split after trying the drag in the lab: 「동작이 단순해야함 왼쪽으로 드래그 왼쪽으로 칸누르기로
+## 해야할듯」, and answered the two rules below 「추천대로 ㅇㅇ」 — *"as recommended, yes"*). **Five arms,
+## in this order, and the order is a rule**:
 ##
-## ⚠ **True means the press was consumed**, which is what tells `_end_press` it was not a pan — the
-## same contract `_order_walk_at` had.
+##  1. **full hand + lit 칸 → ORDER** (`_order_the_island`), and a drawn body standing on that 칸 does
+##     not intercept it — move-first, the 2026-08-31 「이동 우선으로」 standing;
+##  2. **full hand + drawn body on a DARK 칸 → PICK** him — there is nothing to order there;
+##  3. **full hand + anything else → KEEP** — dark ground, water, off the board leave ids, reach and
+##     orders untouched. The 2026-08-31 rule is live again under one button, because one button carries
+##     two jobs again, which is the reason the fork doc gave for it; letting go is ESC or an empty box;
+##  4. **empty hand + drawn body → PICK** him;
+##  5. **empty hand + ground → nothing.**
+##
+## **The two older tables stay above.** The 03-11 era's let-go on nothing (the same day's morning) is
+## the one this era reverses back, and the fork doc's `Status:` line carries the second reversal.
+##
+## ⚠ **The 조각 → 칸 conversion paragraph lives on `_order_the_island`** with the arm that makes the 칸;
+## arm 1 below makes it on one line.
+##
+## ⚠ **True means the press was consumed** — an order, a pick — which was what told `_end_press` it was
+## not a pan; the release no longer reads it, and it is kept as the honest answer to 「did this press do
+## anything」 for whoever drives the function straight.
 func _press_the_island(at: Vector2) -> bool:
 	if battle == null:
 		return false
+	# **Arm 1 — a full hand on a lit 칸 is an order, whoever is drawn on it.** ⚠⚠ **`body_at_px` IS
+	# NOT ASKED FIRST**, and that order is the rule: asked first, a body standing on a 칸 you meant to
+	# send the 부대 TO would be picked instead — the exact thing the user felt on 2026-08-31 (「이게 조각에
+	# 옮길 수가 있잖아? 같은 조각으로? 그때 살짝 불편하네?」) and re-chose for one button (03-12). The row
+	# that catches the swap presses a body standing on a lit 칸 with the hand full.
+	var tile := _tile_at(at)
+	var block := battle.grid.block_of(tile) if tile >= 0 else -1
+	if not hand.is_empty() and hand.can_reach_block(block):
+		return _order_the_island(block)
 	# ⚠⚠ **A FULL HAND MOVES; AN EMPTY HAND PICKS. THE BODY TEST CAME FIRST FOR ONE ROUND AND IT IS
 	# REVERSED** (2026-08-31, the user at the screen: 「이게 조각에 옮길 수가 있잖아? 같은 조각으로?
 	# 그때 살짝 불편하네? 이게 esc를 하지 않는 이상 이동 우선으로 해줘야할듯한데」).
@@ -1087,6 +1127,11 @@ func _press_the_island(at: Vector2) -> bool:
 	# **The body test is FIRST again on this button**, and this time nothing stands behind it that it
 	# could swallow.
 	#
+	# ⚠⚠ **AND THE SAME EVENING THE BODY TEST IS SECOND AGAIN** (ticket 03-12): the right button is
+	# retired, the order is arm 1 above, and this line runs only after a lit 칸 has been refused — so a
+	# body on lit ground is walked TO, and a body on a dark 칸 is picked. The 2026-08-31 sentence two
+	# paragraphs up is the rule once more, chosen for one button by the user (「추천대로 ㅇㅇ」).
+	#
 	# **The body is found on the glass and not on the ground** (2026-09-02, the user: 「몸은 화면에서
 	# 잡자」 — *"let us pick the body on the glass"*, ticket 03-16). This line read
 	# `hand.body_at(battle, _point_at(at), Look.PICK_BODY_TILES)` — the press turned into a ground point
@@ -1095,37 +1140,64 @@ func _press_the_island(at: Vector2) -> bool:
 	# drew each body and nothing else does**, so it answers; the pick itself is still `Hand.pick`, a sim
 	# fact a net drives with `.new()`.
 	var who := field_view.body_at_px(at)
-	if who >= 0:
-		# **A full hand re-picks here** — `pick_many` calls `clear()` first — so one press swaps the
-		# 부대 without ESC in between, and no line is needed for it.
-		# ⚠⚠ **THE ARM ORDER IS A RULE, NOT A TIDINESS: `body_at_px` FIRST, THE LET-GO SECOND.** With the
-		# let-go below asked first, this same press would drop the 부대 and pick nobody, so a player
-		# could never change what the hand holds without ESC in between — and every pick that lands on
-		# an EMPTY hand stays green over it. `net_shell`'s full-hand-on-a-body rows (the same body's own
-		# foot, then another body's) are what pin the order.
+	# **Arm 2 — a full hand on a drawn body standing on a DARK 칸 picks him.** The 칸 he stands on
+	# cannot be ordered (arm 1 refused it), so there is nothing for the press to intercept and it picks.
+	# ⚠ **Arms 2 and 4 are one `hand.pick` line each with a different guard, and they are written as
+	# two arms anyway** — the order between arm 1 and this one is the rule the swap mutation tests, and
+	# a merged arm would hide it.
+	# ⚠ **`pick_many` calls `clear()` first**, so one press swaps the 부대 without ESC in between.
+	if who >= 0 and not hand.is_empty():
 		var picked := hand.pick(battle, who)
 		_tell_the_view()
 		return picked
-	# ⚠⚠ **A PRESS THAT CANNOT BE A WALK KEEPS THE HAND, AND ESC IS THE ONLY WAY TO LET GO** (the user,
-	# 2026-08-31, same sentence: 「esc를 하지 않는 이상」). **The sea used to drop the selection here** —
-	# which meant a hand aimed a little wide lost the body it had, and the player had to pick him again
-	# to try the same order twice.
+	# **Arm 3 — a full hand on anything else KEEPS the hand.** ⚠⚠ **A PRESS THAT CANNOT BE A WALK KEEPS
+	# THE HAND, AND ESC IS THE ONLY WAY TO LET GO** (the user, 2026-08-31: 「esc를 하지 않는 이상 이동
+	# 우선으로」). **The sea used to drop the selection here** — which meant a hand aimed a little wide
+	# lost the body it had, and the player had to pick him again to try the same order twice.
 	#
-	# ⚠⚠ **REVERSED BY THE USER ON 2026-09-02** — the glossary's 「ESC 아니면 부대를 안 놓는다」 → 「빈
-	# 땅을 왼쪽으로 누르면 놓는다」 (*"a left press on empty ground lets go"*). The rule above existed
-	# because ONE button did both jobs; with the walk on the right button a wide press costs nothing,
-	# and StarCraft — which the user named — clears on a click on nothing. **ESC stays as the second
-	# way.** The old line is kept above rather than erased, because this repo records a flip.
+	# ⚠⚠ **REVERSED BY THE USER ON 2026-09-02 MORNING** (03-11) — the glossary's 「ESC 아니면 부대를 안
+	# 놓는다」 → 「빈 땅을 왼쪽으로 누르면 놓는다」 (*"a left press on empty ground lets go"*): the rule
+	# existed because ONE button did both jobs; with the walk on the right button a wide press cost
+	# nothing, and StarCraft — which the user named — clears on a click on nothing. A `_let_go()` stood
+	# on this line for that day.
 	#
-	# ⚠⚠ **NO 칸, NO `_tile_at`, NO `can_reach_block` IN FRONT OF THIS LINE.** 「nothing」 is anything
-	# `body_at_px` answers -1 for — lit ground, dark ground, water, off the board — one rule and no
-	# special case for the sea. A let-go gated on the reachable 칸 is the 2026-08-31 rule left standing
-	# for the one press the reversal exists for, the press that MISSES, and it passes every lit-칸 row;
-	# `net_shell`'s two miss rows (off the board, and a 칸 the hand refuses) are what catch it.
+	# ⚠⚠ **AND REVERSED BACK THE SAME EVENING** (03-12, the user: 「추천대로 ㅇㅇ」 — *"as recommended,
+	# yes"*): the right button is retired, one button carries two jobs again, and the reason above is
+	# live again. **Letting go is ESC or a drag whose box catches nobody** (StarCraft's own shape) —
+	# never this line. A `_let_go()` put back here is what `net_shell`'s two KEEP rows (off the board,
+	# and a 칸 the hand refuses) catch, while the lit-칸 order row stays green over it.
 	if not hand.is_empty():
-		_let_go()
-		return true
+		return false
+	# **Arm 4 — an empty hand on a drawn body picks him.** The pick is a sim fact (`Hand.pick`); only
+	# 「which body is under the finger」 is the view's (03-16).
+	if who >= 0:
+		var picked := hand.pick(battle, who)
+		_tell_the_view()
+		return picked
+	# **Arm 5 — an empty hand on ground is nothing.**
 	return false
+
+
+## **A left drag ended: every 검사 drawn inside the box becomes the 부대, or the hand lets go.** True
+## when somebody was boxed (ticket 03-12, 2026-09-02, the user: *"Drag to select and move them. There
+## is no other method as good as that one."*).
+##
+## ⚠ **The hit test is the view's** (`FieldView.bodies_in_rect_px`) — the box is a rectangle on the
+## glass and only the view knows where each body is DRAWN; the pick itself is `Hand.pick_many`, a sim
+## fact. **A full hand is replaced**, not added to: `pick_many` clears first, and a box that adds is out
+## of 03-12's scope (03-05's shift).
+## ⚠ **A box that catches nobody lets go** — the lab's rule, tested by the user, and one of the two
+## ways a hand is emptied under one button (the other is ESC).
+func _box_the_island(rect: Rect2) -> bool:
+	if battle == null:
+		return false
+	var got := field_view.bodies_in_rect_px(rect)
+	if got.is_empty():
+		_let_go()
+		return false
+	var picked := hand.pick_many(battle, got)
+	_tell_the_view()
+	return picked
 
 
 ## **The one place the view is told what the hand is holding.** ⚠ Both halves go together on purpose:
@@ -1141,6 +1213,10 @@ func _tell_the_view() -> void:
 
 
 ## **Drops the selection and puts the board back to rest.**
+## ⚠ **Four callers since 03-12, and the plan said three**: ESC, `_box_the_island` on an empty box,
+## `_open_island`, and `_order_the_island` — which the plan did not count and which has called this
+## since 2026-08-31 (an order has nothing left to hold). `_press_the_island` no longer calls it — a
+## short press with a full hand keeps the hand.
 func _let_go() -> void:
 	hand.clear()
 	_tell_the_view()
@@ -1150,11 +1226,16 @@ func _let_go() -> void:
 ## cursor is off the reach** — a route to a 칸 the press would refuse is a line the game will not
 ## walk.
 ##
-## ⚠⚠ **IT ASKS THE SAME QUESTION `_begin_order` ASKS, IN THE SAME UNIT.** Both convert the cursor's
-## 조각 to a 칸 with `Grid.block_of`, both gate on `can_reach_block`, and both hand that 칸 to `Hand`.
-## **The preview drawn from a different unit than the press would be a line to a place the click does
-## not go**, and neither side would go red saying so. ⚠ It read `_press_the_island` until 2026-09-02
-## (03-11); that function reads no 칸 any more, and the order it asked about is the right button's.
+## ⚠⚠ **IT ASKS THE SAME QUESTION `_press_the_island`'s FIRST ARM ASKS, IN THE SAME UNIT.** Both convert
+## the cursor's 조각 to a 칸 with `Grid.block_of`, both gate on `can_reach_block`, and both hand that 칸
+## to `Hand`. **The preview drawn from a different unit than the press would be a line to a place the
+## click does not go**, and neither side would go red saying so. ⚠ It named `_begin_order` for one day
+## (03-11); that function is deleted and the order is the left press's again (03-12).
+##
+## ⚠⚠ **ONE LINE FOR THE 부대, SINCE 03-12** (2026-09-02, the user: 「이동이 하나로 떠야지 하나처럼」 —
+## *"the move must show as ONE, as if they are one"*). `Hand.lead` names the walking body nearest the
+## aimed 칸, and only his route is handed to the view — its first point under his drawn feet, its last
+## 조각 the seat `order` gives him. Nobody walking (everybody already on the 칸) draws nothing.
 func _show_route(at: Vector2) -> void:
 	if battle == null or hand.is_empty():
 		return
@@ -1163,7 +1244,12 @@ func _show_route(at: Vector2) -> void:
 	if not hand.can_reach_block(block):
 		field_view.set_move_lines([])
 		return
-	field_view.set_move_lines(hand.route_points(battle, block), hand.ids)
+	var k := hand.lead(battle, block)
+	if k < 0:
+		field_view.set_move_lines([])
+		return
+	field_view.set_move_lines([hand.route_points(battle, block)[k]],
+		PackedInt32Array([int(hand.ids[k])]))
 
 
 ## ⚠⚠ **`_point_at` STOOD HERE AND IT IS DELETED** (2026-09-02, ticket 03-16). It answered a screen
@@ -1252,3 +1338,5 @@ func _on_wheel(at: Vector2, notch: int) -> void:
 #    — the whole summon gesture, deleted with the start button it was authored in front of.
 #    ⇒ **`_press_the_island` is the only hit test a field press gets now.** ⚠ A LEFT press, since
 #    2026-09-02 (03-11): the right button's `_order_the_island` asks no hit test at all.
+#    ⚠ And since the same evening (03-12) a left RELEASE has two: `_press_the_island` for a click and
+#    `_box_the_island` for a drag — the right button asks nothing because it has no branch.
