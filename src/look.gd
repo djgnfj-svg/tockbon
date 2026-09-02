@@ -522,9 +522,20 @@ const SEAT_PITCH_TILES := Rules.BLOCK_TILES / 3.0
 
 ## **How fast a resting body's drawn point slides onto its seat, in 조각 per second.** ~3, so the 0.7
 ## 조각 from a 조각 centre to the 칸's middle takes a quarter of a second — a slide, not a pop, and not
-## a drift either. ⚠ **Only at rest**: a walking body is drawn exactly where the sim says, so this never
-## lags a walk. `FieldView._seat_glide` is the one piece of state it moves.
+## a drift either. ⚠ **Only at rest**: a walking body is drawn at the sim's point plus the seat offset
+## it left with (`SEAT_OFFSET_MAX_TILES`), so this never lags a walk. `FieldView._seat_glide` is the
+## one piece of state it moves.
 const SEAT_GLIDE_TILES_PER_S := 3.0
+
+## **How far from the sim's own point a WALKING body may be drawn, in 조각** — half a 칸. A body at rest
+## is drawn on its seat, up to 0.94 조각 from the 조각 centre the sim has it on, and when it is ordered
+## it keeps that offset for the whole walk so it leaves from where it stood and stays apart from the
+## bodies it shared a 조각 with (2026-09-02, the user: 「on a move order they depart as if newly spawned」
+## and 「the characters overlap when moving」). Half a 칸 is the most any seat is from its 조각 centre
+## with room to spare; anything past it is not a seat the body was standing on but a place the view
+## was told to draw it, and carrying that across the island would be the screen doing a thing the sim
+## did not. `FieldView._seat_offset` is the table it bounds.
+const SEAT_OFFSET_MAX_TILES := Rules.BLOCK_TILES * 0.5
 
 
 ## **The hills** (2026-08-24, the user: 「뭔가 대각선으로 올라가는 건 있나 혹시? 뭔가 지금 너무 딱딱해서

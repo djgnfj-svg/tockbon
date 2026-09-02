@@ -229,6 +229,7 @@ func _table() -> Dictionary:
 			# strokes.
 			"_advance_seat_glide": 0,
 			"_glided": 0,
+			"_offset_after": 0,
 			"_drawn_of": 0,
 			"_hide_unused": 0,
 			# The effect SIMULATION — carried across the move unchanged, still 0 draws each.

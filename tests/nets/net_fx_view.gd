@@ -69,6 +69,9 @@ func run(t) -> void:
 	_three_wolves_off_one_boat_are_drawn_apart(t)
 	_the_lattice_does_not_swing_with_the_camera(t)
 	_a_body_coming_to_rest_glides_to_its_seat(t)
+	_an_ordered_body_leaves_from_its_seat_and_carries_it(t)
+	_three_bodies_sharing_a_piece_walk_apart(t)
+	_a_body_that_never_rested_walks_on_the_sim_point_and_an_offset_is_bounded(t)
 	_the_lattice_turns_with_the_order_facing(t)
 	_the_move_line_leaves_from_under_the_drawn_body_mid_glide(t)
 	_the_readers_themselves(t)
@@ -826,14 +829,18 @@ func _the_lattice_does_not_swing_with_the_camera(t) -> void:
 			"요 %d 도에서도 아홉이 같은 땅 위 아홉 점이다 (최대 %.5f 조각)" % [int(yaw), worst])
 
 
-## **From walking to resting the body glides to its seat; while walking it tracks the sim exactly; a
-## body that left the pool and came back does not glide in from where it used to be.**
+## **From walking to resting the body glides to its seat; while walking it tracks the sim plus the seat
+## offset it left with; a body that left the pool and came back does not glide in from where it used
+## to be.**
 ##
-## ⚠⚠ **THE GLIDE IS THE ONLY VIEW-SIDE STATE THIS TICKET ADDS** and it is keyed on the body's string
-## key, not the pool slot (amendment 2). Three things are read: the first resting frame moves the drawn
-## point by exactly `SEAT_GLIDE_TILES_PER_S` times the frame, it reaches the seat within the frames the
-## distance needs and not in one, and after the body has been out of the pool the first frame back is
-## AT its stand point.
+## ⚠⚠ **THE GLIDE AND ITS OFFSET ARE THE ONLY VIEW-SIDE STATE THIS TICKET ADDS** and both are keyed on
+## the body's string key, not the pool slot (amendment 2). Three things are read: the first resting
+## frame moves the drawn point by exactly `SEAT_GLIDE_TILES_PER_S` times the frame, it reaches the seat
+## within the frames the distance needs and not in one, and after the body has been out of the pool the
+## first frame back is AT its stand point.
+## ⚠⚠ **THE WALKING ROW BELOW ASSERTED 「sim 의 자리에 정확히」 UNTIL 2026-09-02**, and that rule was the
+## snap the user saw on every move order (『새로 생성되는 느낌으로 출발함』). It now asserts the sim's point
+## PLUS the offset the body was standing with, and that the sim's point alone is NOT where it is drawn.
 func _a_body_coming_to_rest_glides_to_its_seat(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
 	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN]), [])
@@ -843,16 +850,26 @@ func _a_body_coming_to_rest_glides_to_its_seat(t) -> void:
 	fv._process(0.0)
 	var seat0 := _block_middle_world(b, g.tile_index(NINE_TX, NINE_TY))
 	t.ok(_spot_of(fv, 0).distance_to(seat0) < 0.01, "선 채로 열리면 첫 프레임에 자리 위다 (자가 점검)")
+	# The seat is the 칸's middle, (+0.5, +0.5) from this 조각's centre: that is the offset the body
+	# carries out when it walks.
+	var seat_offset := _spot_of(fv, 0) - _world(b.soldier_pos[0])
+	t.ok(seat_offset.length() > 0.5,
+		"자가 점검 — 자리는 조각 가운데에서 %.3f 조각 떨어져 있다" % seat_offset.length())
 
-	# Walking: an order is out and the position is off any 조각 centre — drawn at the sim's own point.
-	# The body is a third of a 조각 short of the 조각 it will stop on, the way a walk's last sub-step is.
+	# Walking: an order is out and the position is off any 조각 centre — drawn at the sim's own point
+	# plus the seat offset. The body is a third of a 조각 short of the 조각 it will stop on, the way a
+	# walk's last sub-step is.
 	var far := g.tile_index(NINE_TX + 4, NINE_TY)
 	b.soldier_order[0] = far
 	b.soldier_pos[0] = Vector2(NINE_TX + 1.7, NINE_TY)
 	fv._process(1.0 / 60.0)
-	var walk_want := Look.tile_point_px(b.soldier_pos[0]) / Look.TILE_PX
+	var walk_want := _world(b.soldier_pos[0]) + seat_offset
 	t.ok(_spot_of(fv, 0).distance_to(walk_want) < 1e-4,
-		"걷는 몸은 sim 의 자리에 정확히 그려진다 (%.3f, %.3f)" % [_spot_of(fv, 0).x, _spot_of(fv, 0).y])
+		"걷는 몸은 sim 의 자리에 서 있던 자리 오프셋을 더한 곳에 그려진다 (%.3f, %.3f)"
+			% [_spot_of(fv, 0).x, _spot_of(fv, 0).y])
+	t.ok(_spot_of(fv, 0).distance_to(_world(b.soldier_pos[0])) > 0.5,
+		"그리고 sim 의 자리 그대로가 아니다 — 오프셋을 버리는 그림은 여기서 물린다 (%.3f 조각)"
+			% _spot_of(fv, 0).distance_to(_world(b.soldier_pos[0])))
 
 	# Arrival one 칸 east: the sim puts it on a 조각 centre with no order, the view glides to the seat.
 	var dest := g.tile_index(NINE_TX + 2, NINE_TY)
@@ -912,6 +929,161 @@ func _a_body_coming_to_rest_glides_to_its_seat(t) -> void:
 	t.ok(_spot_of(fv, 0).distance_to(back) < 1e-4,
 		"다시 선 몸은 첫 프레임에 새 자리 위다 — 옛 자리에서 미끄러져 오지 않는다 (%.3f 조각)"
 			% _spot_of(fv, 0).distance_to(back))
+
+
+## **An ordered body leaves from where it was DRAWN standing, walks the whole way carrying that seat
+## offset, and eases onto its new seat with no jump at either end** — the two defects the user saw on
+## 2026-09-02, driven through the real sim (`order_walk` + `step`) and not by writing `soldier_pos`.
+##
+## The body stands on the north-west 조각 of a 칸 whose centre seat is taken, so it holds the north edge
+## middle: 0.527 조각 from the 조각 centre the sim has it on (`Grid.seat_fits_piece` gives it that seat).
+## Before this rule the first walking frame drew it on the sim's point — a 0.5 조각 jump north-to-south
+## while the walk went east.
+## ⚠ **0.11 and not 0.06**: a frame of walking is `speed × dt` = 0.053 조각 and a frame of glide is 0.05;
+## the bound has to admit either and refuse the 0.5 snap, and nothing in between exists to confuse it.
+## ⚠ Mutation: make `_glided` answer `at` for a walking body and the first-frame row, the whole-walk row
+## and the arrival row all redden.
+func _an_ordered_body_leaves_from_its_seat_and_carries_it(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN, Rules.SWORDSMAN]), [])
+	var g := b.grid
+	var tiles := g.tiles_of_block(g.block_of(g.tile_index(NINE_TX, NINE_TY)))
+	var nw := int(tiles[0])
+	var se := int(tiles[3])
+	_ashore(b, 0, Vector2(float(se % g.w), float(se / g.w)))
+	_ashore(b, 1, Vector2(float(nw % g.w), float(nw / g.w)))
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	var rest := _spot_of(fv, 1)
+	var offset := rest - _world(b.soldier_pos[1])
+	t.ok(absf(offset.length() - 0.527) < 0.01,
+		"자가 점검 — 가장자리 자리는 제 조각 가운데에서 0.527 조각 떨어져 있다 (%.3f)" % offset.length())
+	var dest := g.tile_index(NINE_TX + 6, NINE_TY)
+	t.ok(b.order_walk(1, dest), "자가 점검 — 명령이 받아들여졌다")
+	var dt := 1.0 / 60.0
+	var sim_before: Vector2 = b.soldier_pos[1]
+	b.step(dt)
+	fv._process(dt)
+	t.ok(b.soldier_pos[1].distance_to(sim_before) > 0.01,
+		"자가 점검 — sim 은 첫 프레임에 움직였다 (%.3f 조각)" % b.soldier_pos[1].distance_to(sim_before))
+	var first := _spot_of(fv, 1).distance_to(rest)
+	t.ok(first <= 0.11,
+		"명령 첫 프레임에 그려진 몸은 서 있던 자리에서 0.11 조각 이내로만 움직인다 — 조각 가운데로 튀지 않는다 (%.3f)" % first)
+
+	# The whole walk: every walking frame is the sim's point plus that one offset, and no frame — walking,
+	# arriving or settling — moves the drawn point more than a frame's worth.
+	var worst_gap := 0.0
+	var worst_step := first
+	var walking_frames := 0
+	var frames := 1
+	var prev := _spot_of(fv, 1)
+	var settled := 0
+	while frames < 900 and settled < 3:
+		b.step(dt)
+		fv._process(dt)
+		frames += 1
+		var spot := _spot_of(fv, 1)
+		if int(b.soldier_order[1]) >= 0:
+			walking_frames += 1
+			worst_gap = maxf(worst_gap, spot.distance_to(_world(b.soldier_pos[1]) + offset))
+		worst_step = maxf(worst_step, spot.distance_to(prev))
+		settled = settled + 1 if int(b.soldier_order[1]) < 0 and spot.distance_to(prev) < 1e-6 else 0
+		prev = spot
+	t.ok(walking_frames > 30, "자가 점검 — 걷는 프레임이 %d 이었다 (30 보다 많다)" % walking_frames)
+	t.ok(worst_gap < 0.01,
+		"걷는 내내 그려진 점은 sim 의 자리 더하기 떠날 때의 오프셋이다 (최대 어긋남 %.4f 조각)" % worst_gap)
+	t.ok(int(b.soldier_order[1]) < 0 and frames < 900, "자가 점검 — %d 프레임 안에 도착해 멈췄다" % frames)
+	t.ok(worst_step <= 0.11,
+		"떠나서 도착해 자리에 앉기까지 한 프레임에 0.11 조각 넘게 움직인 적이 없다 (최대 %.4f)" % worst_step)
+	var seat := _world(fv._stand_point(b.soldier_pos[1], 1, true))
+	t.ok(_spot_of(fv, 1).distance_to(seat) < 1e-3,
+		"그리고 새 자리에 정확히 선다 (%.4f 조각)" % _spot_of(fv, 1).distance_to(seat))
+	t.ok(seat.distance_to(_world(b.soldier_pos[1])) > 0.5,
+		"자가 점검 — 새 자리도 조각 가운데가 아니다 (%.3f 조각)" % seat.distance_to(_world(b.soldier_pos[1])))
+
+
+## **Three bodies sharing one 조각 are drawn apart while they walk**, not only once they stand — the
+## user's 「캐릭터가 움직일때 겹친다」. The three take three seats at rest (the north, west and east edge
+## middles); ordered to one 조각 they walk the same route at the same speed, so the sim has them on ONE
+## point every sub-step, and the offsets are the only thing keeping three bodies on screen.
+## ⚠ Mutation: make `_glided` answer `at` for a walking body — the three collapse onto one point.
+func _three_bodies_sharing_a_piece_walk_apart(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN, Rules.SWORDSMAN, Rules.SWORDSMAN]), [])
+	var g := b.grid
+	var nw := int(g.tiles_of_block(g.block_of(g.tile_index(NINE_TX, NINE_TY)))[0])
+	for i in 3:
+		_ashore(b, i, Vector2(float(nw % g.w), float(nw / g.w)))
+	t.eq(g.hold_count(nw), 3, "자가 점검 — 셋이 한 조각을 잡고 있다")
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	t.eq(_distinct(_body_spots(fv)), 3, "자가 점검 — 서 있는 셋은 세 자리에 따로 그려진다")
+	var dest := g.tile_index(NINE_TX + 6, NINE_TY)
+	for i in 3:
+		t.ok(b.order_walk(i, dest), "자가 점검 — %d 번의 명령이 받아들여졌다" % i)
+	var dt := 1.0 / 60.0
+	for _f in 6:
+		b.step(dt)
+		fv._process(dt)
+	var sim_spread := 0.0
+	var moved := 1e9
+	for i in 3:
+		moved = minf(moved, b.soldier_pos[i].distance_to(Vector2(float(nw % g.w), float(nw / g.w))))
+		for j in 3:
+			sim_spread = maxf(sim_spread, b.soldier_pos[i].distance_to(b.soldier_pos[j]))
+	t.ok(moved > 0.1 and sim_spread < 0.01,
+		"자가 점검 — 셋 다 걷는 중이고 sim 은 셋을 한 점에 두고 있다 (움직임 %.3f, 퍼짐 %.4f)" % [moved, sim_spread])
+	var spots := _body_spots(fv)
+	t.eq(spots.size(), 3, "자가 점검 — 걷는 셋이 그려졌다")
+	var nearest := 1e9
+	for i in spots.size():
+		for j in spots.size():
+			if i != j:
+				nearest = minf(nearest, (spots[i] as Vector2).distance_to(spots[j] as Vector2))
+	t.eq(_distinct(spots), 3, "걷는 셋은 세 점에 따로 그려진다 — 한 점에 겹치지 않는다")
+	t.ok(nearest > 0.3,
+		"그리고 서로 %.3f 조각 넘게 떨어져 있다 — 서 있을 때만큼" % nearest)
+
+
+## **A body that never rested walks on the sim's own point, and the offset a body carries out is bounded
+## to half a 칸** — the two edges of the rule. The first is a wolf off its boat: no seat was ever drawn,
+## so there is nothing to carry. The second is the 「further than a seat」 guard: the glide entry is written
+## a 조각 and a half off the sim's point by hand (the `_seat_glide` table is the agreed seam), and the
+## body leaves carrying half a 칸 of it and no more.
+## ⚠ Mutation: drop the `limit_length` in `_offset_after` and the bound row reddens at 1.45; default the
+## missing offset to the stand point's own offset and the never-rested row does.
+func _a_body_that_never_rested_walks_on_the_sim_point_and_an_offset_is_bounded(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var g_pos := Vector2(NINE_TX, NINE_TY)
+	var dt := 1.0 / 60.0
+	# Never rested: ordered and stepped before the view has drawn a single frame.
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN]), [])
+	_ashore(b, 0, g_pos)
+	var fv := _view_of(b, rows)
+	t.ok(b.order_walk(0, b.grid.tile_index(NINE_TX + 6, NINE_TY)), "자가 점검 — 명령이 받아들여졌다")
+	b.step(dt)
+	fv._process(dt)
+	t.ok(int(b.soldier_order[0]) >= 0 and b.soldier_pos[0].distance_to(g_pos) > 0.01,
+		"자가 점검 — 첫 프레임부터 걷고 있다")
+	t.ok(_spot_of(fv, 0).distance_to(_world(b.soldier_pos[0])) < 1e-4,
+		"한 번도 선 적 없는 몸은 sim 의 자리 그대로 걷는다 — 들고 나갈 오프셋이 없다 (%.4f 조각)"
+			% _spot_of(fv, 0).distance_to(_world(b.soldier_pos[0])))
+
+	# Bounded: the resting entry is pushed 1.5 조각 off by hand, the body leaves carrying 1.0.
+	var b2 := _battle_of(rows, _army_of([Rules.SWORDSMAN]), [])
+	_ashore(b2, 0, g_pos)
+	var fv2 := _view_of(b2, rows)
+	fv2._process(0.0)
+	fv2._seat_glide["s0"] = g_pos + Vector2(1.5, 0.0)
+	fv2._process(dt)
+	var off_rest := _spot_of(fv2, 0).distance_to(_world(b2.soldier_pos[0]))
+	t.ok(off_rest > 1.2, "자가 점검 — 쉬는 몸이 조각 가운데에서 %.3f 조각 벗어나 그려져 있다" % off_rest)
+	t.ok(b2.order_walk(0, b2.grid.tile_index(NINE_TX + 6, NINE_TY)), "자가 점검 — 명령이 받아들여졌다")
+	b2.step(dt)
+	fv2._process(dt)
+	var carried := _spot_of(fv2, 0).distance_to(_world(b2.soldier_pos[0]))
+	t.ok(absf(carried - Look.SEAT_OFFSET_MAX_TILES) < 1e-3,
+		"반 칸 넘게 벗어난 자리는 반 칸 (%.1f 조각) 까지만 들고 떠난다 (%.3f)" % [Look.SEAT_OFFSET_MAX_TILES, carried])
 
 
 ## **The lattice TURNS with the 칸's facing, and a re-face glides the resting bodies to the turned
@@ -1079,6 +1251,12 @@ func _block_middle_world(b: Battle, tile: int) -> Vector2:
 		var tt := int(tiles[k])
 		sum += Vector2(float(tt % g.w), float(tt / g.w))
 	return Look.tile_point_px(sum / float(tiles.size())) / Look.TILE_PX
+
+
+## A sim point (`soldier_pos` units) in the ground-plane units `_spot_of` reads — the same arithmetic
+## `_block_middle_world` does, so an offset measured between a spot and a sim point is in these units.
+func _world(p: Vector2) -> Vector2:
+	return Look.tile_point_px(p) / Look.TILE_PX
 
 
 ## Where soldier `i` is drawn this frame, on the ground plane — through the view's own soldier → sprite

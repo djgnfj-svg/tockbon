@@ -232,8 +232,8 @@ var _sprite_of_soldier := {}
 ## glide from — so bodies placed by hand in a net read their seat immediately, and the slide only plays
 ## on a walk → rest transition the view has watched. **A key is dropped the frame its body leaves the
 ## pool**, so a body that dies and stands again does not slide in from where it fell.
-## ⚠ **Walking bodies track the sim exactly** and only overwrite their entry; a falling body is drawn
-## at its entry and never moves it.
+## ⚠ **Walking bodies track the sim plus their seat offset** (`_seat_offset`) and only overwrite
+## their entry; a falling body is drawn at its entry and never moves it.
 ## ⚠⚠ **`_advance_seat_glide` IS THE ONLY WRITER AND IT RUNS BEFORE ANYTHING IS PAINTED** (the 03-17
 ## bounce). It stood inside `_put_walker` for one round, and the 이동선 — painted BEFORE the bodies so it
 ## lies under their shadows — read the frame's target instead: on the first resting frame the line's
@@ -241,6 +241,26 @@ var _sprite_of_soldier := {}
 ## table is rebuilt whole every frame from the sim's lists, so every reader in the frame — the line, the
 ## body, the shadow, the bar — reads one point, and a body that left the pool is simply not in it.
 var _seat_glide := {}
+## **Where each living body is drawn RELATIVE to the sim's own point** — body key → `Vector2`, in
+## `soldier_pos` units, the second half of the glide and rebuilt in the same pass. At rest it is simply
+## `_seat_glide[key] − at`: the seat's offset from the 조각 centre once the glide has settled, and the
+## in-flight gap before. **Walking, it is FROZEN at the value it had on the last resting frame**, and the
+## body is drawn at `at + offset` for the whole walk.
+##
+## ⚠⚠ **WITHOUT THIS THE FIRST WALKING FRAME SNAPPED THE BODY ONTO THE 조각 CENTRE** (2026-09-02, the
+## user: 「그냥 딱 이동하게 하면 새로 생성되는 느낌으로 출발함 그냥 그자리에서 병사가 이동하는게 아니라」
+## — *"on a move order they depart as if newly spawned, not the soldier walking from where he stood"*).
+## A body at rest is drawn on its seat, 0.53–0.71 조각 from the 조각 centre the sim has it on; the walk's
+## first sub-step moved the sim a tenth of a 조각 and the drawn point the whole seat gap, in a direction
+## that had nothing to do with the walk. **And every body sharing a 조각 was drawn on the one sim point
+## while it walked** (「캐릭터가 움직일때 겹친다」 — *"the characters overlap when moving"*): three bodies
+## on one 조각 spread onto three seats at rest and collapsed onto one point the moment they moved.
+## Carrying the offset keeps them apart by exactly what kept them apart at rest.
+## ⚠ **Bounded by `Look.SEAT_OFFSET_MAX_TILES`**, and **a body that never rested has none** — it is
+## drawn on the sim's point, which is where a wolf walking off its boat has always been drawn.
+## ⚠ **The sim never reads this.** Reservation, capacity and arrival are all on the sim's own point;
+## this is the picture's memory of where the body was standing, and nothing else.
+var _seat_offset := {}
 ## **기법 17's black copies, one per body, in their own pool.** ⚠⚠ **A parallel pool and not a child
 ## node**, because the body sprites are recycled by index across frames: a child would be carried to
 ## whichever body reused that slot, and the outline would be right by accident. **Index `i` of this
@@ -455,6 +475,7 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	# ⚠ **The glide forgets every body too.** It holds drawn POINTS on the last island's board, and a
 	# 검사 carried across would otherwise slide in from a place on a different island.
 	_seat_glide = {}
+	_seat_offset = {}
 	# ⚠ **And the water forgets every hull.** The blocks are indexed by boat number, so island 2's
 	# first boat would otherwise open wearing island 1's first boat's trail.
 	_wake = _wake_empty()
@@ -2539,8 +2560,8 @@ func _clock_of(b: Dictionary, anim: int) -> float:
 ## be an empty trough riding a corpse down — the one thing 「깎인 것만 뜬다」 was chosen to avoid.
 ##
 ## ⚠⚠ **`drawn` IS WHERE THE BODY IS DRAWN THIS FRAME, ALREADY GLIDED** (2026-09-02, ticket 03-17) —
-## `_drawn_of`'s answer: the seat on the 칸's lattice for a body at rest, the sim's own point for one
-## walking, and the point in between while it slides. **This function moves nothing**; the glide stepped
+## `_drawn_of`'s answer: the seat on the 칸's lattice for a body at rest, the sim's own point plus the
+## seat offset it left with for one walking, and the point in between while it slides. **This function moves nothing**; the glide stepped
 ## in `_advance_seat_glide` before the 이동선 was laid, so the line under the feet and the feet agree.
 ## ⚠ **The `slot` parameter stood here and it is deleted** with the per-조각 ring it indexed.
 func _put_walker(key: String, type_id: int, drawn: Vector2, is_enemy: bool,
@@ -2581,7 +2602,10 @@ func _flash_of(key: String) -> float:
 ## an entry, a body still falling keeps the one it had, and anything else is gone.
 ##
 ## ⚠ **A body with no entry is drawn AT its stand point** — that is the first frame in the pool, and
-## why bodies stood by hand in a net read their seat at once. ⚠ **Walking, the entry IS the sim's point.**
+## why bodies stood by hand in a net read their seat at once. ⚠ **Walking, the entry is the sim's point
+## plus the body's `_seat_offset`**, frozen at what it was on the last resting frame; the offset is
+## rewritten only at rest, from the entry this pass just produced, so the two tables cannot disagree
+## about a body.
 ## ⚠ **At rest the step is `Look.SEAT_GLIDE_TILES_PER_S` a second, and only across a 칸's width or
 ## less.** The glide is the hand-off from the last walking point to the seat — under a 조각 to the far
 ## seat, under two between two seats of one 칸 re-faced — and a target further off than a whole 칸 was
@@ -2589,26 +2613,48 @@ func _flash_of(key: String) -> float:
 ## that slid ten 조각 across the island for that would be the screen doing a thing the sim did not.
 func _advance_seat_glide(delta: float) -> void:
 	var next := {}
+	var offsets := {}
 	if battle != null and army != null and battle.grid != null:
 		for raw_id in battle.living_enemy_ids():
 			var e := int(raw_id)
 			var key := "e%d" % e
-			next[key] = _glided(key, battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e,
-				_resting_enemy(e), delta)
+			var resting := _resting_enemy(e)
+			next[key] = _glided(key, battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e, resting, delta)
+			offsets[key] = _offset_after(key, battle.enemy_pos[e], next[key], resting)
 		for raw_id in battle.ashore_ids():
 			var i := int(raw_id)
 			var key := "s%d" % i
-			next[key] = _glided(key, battle.soldier_pos[i], i, _resting_soldier(i), delta)
+			var resting := _resting_soldier(i)
+			next[key] = _glided(key, battle.soldier_pos[i], i, resting, delta)
+			offsets[key] = _offset_after(key, battle.soldier_pos[i], next[key], resting)
 		for key: String in _body:
 			if float((_body[key] as Dictionary)["dying"]) > 0.0 and not next.has(key):
 				next[key] = _seat_glide.get(key, (_body[key] as Dictionary)["last"])
 	_seat_glide = next
+	_seat_offset = offsets
+
+
+## **The seat offset a body carries out of this frame**: at rest, where it was just drawn relative to
+## the sim's point, bounded to `Look.SEAT_OFFSET_MAX_TILES`; walking, whatever it carried in — a body
+## that never rested carries zero. ⚠ **The clamp is applied where the offset is WRITTEN, at rest, and
+## not where it is read**, so a resting body drawn further off than the bound (the glide's own
+## 「further than a 칸 → stand」 rule keeps that under 2 조각, but a body's first walking frame is what
+## the player sees) leaves at the bound and never further.
+func _offset_after(key: String, at: Vector2, drawn: Vector2, resting: bool) -> Vector2:
+	if resting:
+		return (drawn - at).limit_length(Look.SEAT_OFFSET_MAX_TILES)
+	return _seat_offset.get(key, Vector2.ZERO)
 
 
 ## One body's drawn point for this frame, from last frame's entry and where it is to stand now.
+## ⚠⚠ **A WALKING BODY IS `at` PLUS ITS `_seat_offset`, NEVER `at` ALONE** — `at` alone is the snap
+## the user saw on every move order (see `_seat_offset`). A body with no offset entry walks on the sim's
+## point, which is the same thing.
 func _glided(key: String, at: Vector2, unit_id: int, resting: bool, delta: float) -> Vector2:
+	if not resting:
+		return at + _seat_offset.get(key, Vector2.ZERO)
 	var stand := _stand_point(at, unit_id, resting)
-	if not resting or not _seat_glide.has(key):
+	if not _seat_glide.has(key):
 		return stand
 	var from: Vector2 = _seat_glide[key]
 	if from.distance_to(stand) > float(Rules.BLOCK_TILES):
@@ -2643,8 +2689,9 @@ func _drawn_of(key: String, at: Vector2, unit_id: int, resting: bool) -> Vector2
 ## ⚠ **A resting body with NO seat is drawn on its 조각 centre**, which is `at` itself. That is a body
 ## stood by writing `soldier_pos` without `Grid.hold` — `net_pick` does it — and drawing it at the
 ## middle would put a body somewhere the reservation table says nobody is.
-## ⚠ **Walking it is `at`, exactly**, so the glide never lags a walk; `_resting_soldier` and
-## `_resting_enemy` are the two rest tests and the caller passes the answer in.
+## ⚠ **Walking it is `at`, exactly** — `_glided` adds the body's `_seat_offset` on top, so the drawn
+## point never lags a walk and never snaps at its start; `_resting_soldier` and `_resting_enemy` are
+## the two rest tests and the caller passes the answer in.
 func _stand_point(at: Vector2, unit_id: int, resting: bool) -> Vector2:
 	if not resting or battle == null or battle.grid == null or battle.grid.w <= 0:
 		return at
