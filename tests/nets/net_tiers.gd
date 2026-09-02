@@ -714,9 +714,12 @@ const ACROSS_THE_WALL := 2.2360679775
 ##
 ## ⚠⚠ **THIS SAID 「the enemy is a LION because its detect is the smallest on the table」 AND IT WAS
 ## STALE BEFORE THE LION WAS DELETED** (2026-08-31). `Rules.LION` appears nowhere in this file's code
-## — the fixture below is built with an EMPTY enemy list. **The reason the note gave is still the
-## right reason to be careful**: a body with a wide detect radius walks down the stair to meet the
-## wolves, and then the row measures which of them moved rather than the climb.
+## — the fixture below is built with an EMPTY enemy list, and **that emptiness is the whole of what
+## keeps it a climb measurement.** Since 2026-09-02 (ticket 07-01) every row of `UNITS` carries a live
+## detect radius — 검사 3.0, 늑대 6.0, read by `Battle._phase_targeting` — and a 늑대 walks at the
+## 검사 it notices, so the day a body of the other side stands on this board the row measures a chase
+## rather than the climb. ⚠ **The fixture is safe only while its enemy list stays empty**, which is
+## why it stays green; it is not safe because detection is narrow, and it never was.
 const CLIMB_ROWS := [
 	"~~~~~~~~~~~~~~",
 	"~............~",

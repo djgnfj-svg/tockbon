@@ -53,8 +53,12 @@ extends RefCounted
 ##  · **The strict walker (`EXPECT_STRICT_UNREACHED`, `_reserve_all`, `_a_nearer_enemy_exists`)** — it
 ##    reserved every enemy tile at once, the way a live `battle.setup` does, and reported the (tile,
 ##    enemy) pairs that jammed. ⚠ **Its finding outlives it and is the reason a jam is not a stall**:
-##    soldiers carry `Rules.NO_DETECT`, so `_nearest_enemy` always targets the CLOSEST living enemy —
-##    a blocker nearer than the target is fought first, dies, frees its tile, and the path opens.
+##    `_nearest_enemy`'s reach tier always targets the CLOSEST living enemy it can strike — a blocker
+##    nearer than the target is fought first, dies, frees its tile, and the path opens. ⚠ **This said
+##    「soldiers carry `Rules.NO_DETECT`」 until 2026-09-02** — the 검사's detect went to 3.0 in ticket
+##    07-01 — and the reason still holds because the detect tier sits BELOW the reach tier: a 검사
+##    aims at what he merely notices only when nothing at all is in reach, so the blocker in front of
+##    him is still what he swings at.
 ##    ⚠⚠ **It had ZERO subjects the moment the spawns went** and both of its rows would have passed
 ##    on empty loops, which is this repo's named false green.
 ##

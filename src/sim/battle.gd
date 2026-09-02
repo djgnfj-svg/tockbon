@@ -987,26 +987,50 @@ func _phase_landings() -> void:
 ## so a defender who has closed is what it is fighting — and without this order eight 늑대 would stand
 ## in a line of swordsmen hammering the wall behind them.
 ##
+## ⚠⚠ **TWO TIERS SINCE 2026-09-02, AND THE REACH TIER IS THE OLD RULE UNCHANGED** (ticket 07-01, the
+## user watching a 검사 and a 늑대 pass within two 조각 of each other and walk on). **A body it can
+## strike inside `reach_of` beats everything; for a 늑대 the 성채 inside `reach_of` comes next; and only
+## then — new — the nearest body inside `detect_of`**, which is aim and walk and never a blow.
+## ⚠⚠ **THE DETECT TIER SITS BELOW THE WALL, AND THAT IS THE USER'S ANSWER** (2026-09-02, answer 1 on
+## 07-01: 「추천댜로 ㅇㅇ」 — *"as recommended, yes"*): a 늑대 that can already hit the house keeps
+## hitting it, and a defender three 조각 off is seen only by a 늑대 still walking. Written 검사-first
+## the loss condition leaves the board — one defender near the house stops every wave — and
+## `net_fight`'s 「늑대가 벽에 붙었으면 벽을 지킨다」 is the tripwire that reddens on it.
+## ⚠ **`Grid.can_strike` guards the reach tier ONLY, through `_can_hit`.** Without it a body aims at
+## the nearer thing it cannot hit and never swings at the further thing it can — a 검사 on the plateau
+## with a 늑대 below at 1.414 and one on the 계단 at 1.5 would stand aiming down forever. The detect
+## tier does NOT carry it: a body it cannot strike is still a body it notices, walks at and faces.
+##
 ## ⚠ **A 검사 never targets the 성채.** It is his.
+## ⚠ **Reach is read per BODY (`army.reach_of(i)`) and detect per TYPE (`Rules.detect_of`).** Harmless
+## while no per-body detect exists — 07-01 refused a new column — but the day 장비칸 gives a body its
+## own radius, the detect read below is the one that has to move to `Army`, or a body's own number is
+## silently the type's.
 func _phase_targeting() -> void:
 	for i in soldier_state.size():
 		if int(soldier_state[i]) != SoldierState.ASHORE:
 			soldier_target[i] = TARGET_NONE
 			continue
-		soldier_target[i] = _nearest_enemy(soldier_pos[i], army.reach_of(i))
+		var hit := _nearest_enemy(soldier_pos[i], army.reach_of(i), true)
+		if hit >= 0:
+			soldier_target[i] = hit
+		else:
+			soldier_target[i] = _nearest_enemy(soldier_pos[i], Rules.detect_of(int(army.type_id[i])), false)
 
 	for e in enemy_type.size():
 		if enemy_alive[e] == 0:
 			enemy_target[e] = TARGET_NONE
 			continue
-		var reach := Rules.reach_of(int(enemy_type[e]))
-		var who := _nearest_soldier(enemy_pos[e], reach)
+		var ty := int(enemy_type[e])
+		var reach := Rules.reach_of(ty)
+		var who := _nearest_soldier(enemy_pos[e], reach, true)
 		if who >= 0:
 			enemy_target[e] = who
 		elif keep_gap(enemy_pos[e]) <= reach + Rules.EPS:
 			enemy_target[e] = TARGET_KEEP
 		else:
-			enemy_target[e] = TARGET_NONE
+			# `TARGET_NONE` when nobody is inside the radius — the scan's own answer.
+			enemy_target[e] = _nearest_soldier(enemy_pos[e], Rules.detect_of(ty), false)
 
 
 ## Everyone walks toward their target and **stops the instant it is in reach**. Without that one
@@ -1037,23 +1061,50 @@ func _phase_movement(dt: float) -> void:
 			_settle(i, goal)
 			_soldier_stale[i] = 0
 
-	# ⚠⚠ **THE BEASTS WALK AT THE 성채 AND AT NOTHING ELSE**, which is 티켓 41's 「늑대가 무엇을 향해
-	# 걷나 — 성채」 whole. **They do not chase a 검사**: a body in reach stops them, and a body out of
-	# reach is something they walk past. ⚠ That is the ticket's rule and not a simplification of a
-	# richer one — there is no detect radius in this path, and `UNITS`' detect column has no reader.
+	# ⚠⚠ **THE BEASTS WALK AT THE 성채, OR AT THE 검사 THEY NOTICED** (ticket 07-01, 2026-09-02). Until
+	# then this said 「at the 성채 and at nothing else … there is no detect radius in this path, and
+	# `UNITS`' detect column has no reader」 — 티켓 41's 「늑대가 무엇을 향해 걷나 — 성채」 whole. The
+	# user watched a 늑대 walk past a 검사 two 조각 off and reversed it; `Rules.detect_of` is the
+	# reader now and `_phase_targeting` is where the choice is made. **This phase only obeys the column.**
+	# ⚠⚠ **THE TARGET CHOICE AND THIS GATE CHANGED IN ONE EDIT, AND THE GAME DOES NOT RUN BETWEEN THE
+	# TWO HALVES.** Before, ANY target but `TARGET_NONE` was 「stand」. Widening the choice alone would
+	# freeze every 늑대 six 조각 short of the 검사 it just noticed — and stop it walking at the 성채 too.
 	# ⚠ **`keep_level` is -1 for every one of them.** Nothing starts high this round — see the column
 	# block at the top of this file for why that is a decision rather than a gap.
 	var anchor := -1 if keep_tiles.is_empty() else int(keep_tiles[0])
 	for e in enemy_type.size():
 		if enemy_alive[e] == 0:
 			continue
-		var speed := Rules.speed_of(int(enemy_type[e])) * dt
+		var ty := int(enemy_type[e])
+		var reach := Rules.reach_of(ty)
+		var speed := Rules.speed_of(ty) * dt
 		var here: Vector2 = enemy_pos[e]
 		var e_goal: Vector2 = _enemy_goal[e]
-		# **Something is in reach, or there is nowhere to be**: finish the 조각 already reserved, then
-		# stand. ⚠ **Finishing it is not tidiness** — stopping mid-조각 holds BOTH for the rest of the
-		# island, which halves a doorway with nothing on screen to explain it.
-		if int(enemy_target[e]) != TARGET_NONE or anchor < 0:
+		var tgt := int(enemy_target[e])
+		# **Where this body walks, as a 조각 and the point it stops short of** — or -1 for 「stand」.
+		#  · `TARGET_KEEP`: it is at the wall. Stand.
+		#  · a 검사 already inside `reach_of`: stand — strikable or not, which is what keeps a 늑대 under
+		#    a plateau standing at 1.732 rather than pacing (`net_fight`, the [stands] row of 07-01).
+		#  · a 검사 further off: walk at him, the same `_walk` the 성채 path takes, his 조각 as the key.
+		#    ⚠ A route that passes the house stops at the house — the next targeting pass finds the
+		#    wall in reach and the wall outranks the detect tier. That is answer 1's consequence.
+		#  · nothing, with a 성채 on the board: walk at the 성채 — the rule before this ticket.
+		#  · nothing, and no 성채: stand. ⚠⚠ **`anchor < 0` alone is no longer 「stand」** — a board
+		#    with no house is exactly the board the complaint was measured on, and a careless edit that
+		#    keeps the old test freezes the 늑대 there with its target set.
+		var to_tile := -1
+		var to_pt := OFFMAP
+		if tgt >= 0:
+			if _dist(here, soldier_pos[tgt]) > reach + Rules.EPS:
+				to_pt = soldier_pos[tgt]
+				to_tile = _tile_of(to_pt)
+		elif tgt == TARGET_NONE and anchor >= 0:
+			to_tile = anchor
+			to_pt = _point_of_tile(anchor)
+		# **Standing**: finish the 조각 already reserved, then stand. ⚠ **Finishing it is not tidiness**
+		# — stopping mid-조각 holds BOTH for the rest of the island, which halves a doorway with nothing
+		# on screen to explain it.
+		if to_tile < 0:
 			if here.distance_to(e_goal) > Rules.EPS:
 				enemy_pos[e] = _glide(here, e_goal, speed)
 			elif _enemy_stale[e] != 0:
@@ -1062,9 +1113,10 @@ func _phase_movement(dt: float) -> void:
 			continue
 		# ⚠ **Empty route columns.** A beast is never ordered, so it has no straightened route to walk —
 		# it descends the field, which is what `_next_goal` falls back to.
+		# ⚠ **A field to a 조각 this body cannot reach is `UNREACHABLE` everywhere but the seed**, so
+		# `step_toward` finds no cheaper neighbour and the body stands — the queue at a neck, not a spin.
 		enemy_pos[e] = _walk(ENEMY_UID_BASE + e, here, _enemy_goal, e, speed,
-				field_to(anchor), _point_of_tile(anchor), Rules.reach_of(int(enemy_type[e])),
-				[], [], -1, anchor)
+				field_to(to_tile), to_pt, reach, [], [], -1, to_tile)
 		_enemy_stale[e] = 1
 
 
@@ -1100,6 +1152,13 @@ func _phase_movement(dt: float) -> void:
 ## ⚠ **The ready test carries `EPS` rather than being `<= 0.0`.** The clock is a sum of sub-steps against
 ## a period that divides it exactly, so the last bit decides whether a blow lands on the 60th sub-step or
 ## the 61st — and a bare comparison there is a coin flip that changes an outcome.
+##
+## ⚠⚠ **BOTH BODY BLOWS GO THROUGH `_can_hit` SINCE 2026-09-02** (ticket 07-01, the user's answer 2) —
+## the 눈금 guard the 성채 blow got in 02-01 through `keep_gap`, brought to the body blow. Until then a
+## 늑대 on the flat hit a 검사 on 눈금 2 at 1.414, and the gap was unreachable in play only because a
+## beast never walked at a body; **the chase is what walks it there**, so the guard lands in the same
+## edit as the chase or 눈금 2 stops being safe ground. ⚠ **The 성채 blow is untouched** — `keep_gap`
+## already carries `can_strike`.
 func _phase_attacks(dt: float) -> void:
 	for i in soldier_state.size():
 		if int(soldier_state[i]) != SoldierState.ASHORE:
@@ -1110,7 +1169,7 @@ func _phase_attacks(dt: float) -> void:
 			continue
 		if enemy_alive[tgt] == 0:
 			continue
-		if _dist(soldier_pos[i], enemy_pos[tgt]) > army.reach_of(i) + Rules.EPS:
+		if not _can_hit(soldier_pos[i], enemy_pos[tgt], army.reach_of(i)):
 			continue
 		enemy_hp[tgt] = float(enemy_hp[tgt]) - army.damage_of(i)
 		soldier_cool[i] = army.period_of(i)
@@ -1131,7 +1190,7 @@ func _phase_attacks(dt: float) -> void:
 		else:
 			if int(soldier_state[etgt]) != SoldierState.ASHORE:
 				continue
-			if _dist(enemy_pos[e], soldier_pos[etgt]) > reach + Rules.EPS:
+			if not _can_hit(enemy_pos[e], soldier_pos[etgt], reach):
 				continue
 			soldier_hp[etgt] = float(soldier_hp[etgt]) - Rules.damage_of(ty)
 		enemy_cool[e] = Rules.period_of(ty)
@@ -1467,21 +1526,46 @@ func _dist(a: Vector2, b: Vector2) -> float:
 ##  · **Nearest is Euclidean and ties go to the SMALLER index.** A tie broken by iteration order makes
 ##    two runs from identical state diverge with every check about them green.
 ##  · ⚠ **An enemy's movement scan and its target scan were different sets, and here they are different
-##    QUESTIONS**: a beast walks at the 성채 and never at a body, so nothing can ask the flow field for a
-##    path to something unreachable and freeze the whole island doing it.
+##    QUESTIONS.** ⚠⚠ **This line said 「a beast walks at the 성채 and never at a body, so nothing can
+##    ask the flow field for a path to something unreachable」 — and since 2026-09-02 (ticket 07-01)
+##    THAT IS NO LONGER TRUE.** A 늑대 on the beach walks at a 검사 it noticed, who may stand on a 눈금
+##    it cannot climb to. What keeps that from freezing the island: a field to an unreachable 조각 is
+##    `UNREACHABLE` everywhere but the seed, `step_toward` finds no cheaper neighbour, and `_walk`
+##    returns `here` — the body stands where it is, which is the queue at a neck and not a spin.
+##    `net_fight`'s [stands] row of 07-01 measures it rather than argues it.
+
+## **Whether a body at `a` can land a blow on a body at `b` with `reach`**: the 눈금 gap through
+## `Grid.can_strike` on the two 조각, and the 3D distance through `_dist`, in one place.
+##
+## ⚠⚠ **ONE PLACE, FOR THE REASON `Rules.reach_of` IS ONE PLACE** (ticket 07-01, the user's answer 2,
+## 2026-09-02). The reach tier of both target scans and both body blows in `_phase_attacks` read this,
+## so choosing and landing cannot disagree — the shape `keep_gap` already gave the 성채 blow in 02-01.
+## Two copies of the strike rule drift, and the drift is a body aiming at what it cannot hit.
+## ⚠ **`can_strike` is an absolute gap**, so a 검사 above cannot hit down either — 02-01's 「위에서
+## 아래로도 못 때린다」 holds body against body.
+func _can_hit(a: Vector2, b: Vector2, reach: float) -> bool:
+	return grid.can_strike(_tile_of(a), _tile_of(b)) and _dist(a, b) <= reach + Rules.EPS
+
 
 ## **The nearest living beast within `reach` of `p`, or `TARGET_NONE`.** Ties go to the lower index.
 ##
 ## ⚠ **`< best` and never `<= best`**, which is the whole of the tie-break: the loop runs upward, so a
 ## later body has to be strictly nearer to displace an earlier one.
-func _nearest_enemy(p: Vector2, reach: float) -> int:
+## ⚠ **`must_strike` is the reach tier's flag** — admission through `_can_hit`, the 눈금 included —
+## and off it is the detect tier's bare distance. A flag and not a twin function, so the tie-break and
+## the loop are written once.
+func _nearest_enemy(p: Vector2, reach: float, must_strike: bool) -> int:
 	var who := TARGET_NONE
 	var best := INF
 	for e in enemy_type.size():
 		if enemy_alive[e] == 0:
 			continue
-		var d := _dist(p, enemy_pos[e])
-		if d > reach + Rules.EPS:
+		var q: Vector2 = enemy_pos[e]
+		var d := _dist(p, q)
+		if must_strike:
+			if not _can_hit(p, q, reach):
+				continue
+		elif d > reach + Rules.EPS:
 			continue
 		if d < best:
 			best = d
@@ -1489,16 +1573,20 @@ func _nearest_enemy(p: Vector2, reach: float) -> int:
 	return who
 
 
-## **The nearest 검사 standing on the island within `reach` of `p`, or `TARGET_NONE`.** Same tie-break,
-## and it is the same rule rather than a mirror of one: see `_nearest_enemy`.
-func _nearest_soldier(p: Vector2, reach: float) -> int:
+## **The nearest 검사 standing on the island within `reach` of `p`, or `TARGET_NONE`.** Same tie-break
+## and same flag, and it is the same rule rather than a mirror of one: see `_nearest_enemy`.
+func _nearest_soldier(p: Vector2, reach: float, must_strike: bool) -> int:
 	var who := TARGET_NONE
 	var best := INF
 	for i in soldier_state.size():
 		if int(soldier_state[i]) != SoldierState.ASHORE:
 			continue
-		var d := _dist(p, soldier_pos[i])
-		if d > reach + Rules.EPS:
+		var q: Vector2 = soldier_pos[i]
+		var d := _dist(p, q)
+		if must_strike:
+			if not _can_hit(p, q, reach):
+				continue
+		elif d > reach + Rules.EPS:
 			continue
 		if d < best:
 			best = d
