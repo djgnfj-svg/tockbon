@@ -23,6 +23,25 @@ page, and it says the true thing.**
 | `blend/props.blend` | Six trees · a stump · rock · stone (a pebble) · the 철광석. ⚠⚠ **The bush is NOT here** — it is a picture, `assets/props/flat/lp_bush_v*.png`, drawn by `src/view/prop_card.gdshader`. **A prop kind is a node in this file OR a PNG in that folder, and the mesh wins**, so moving a thing from 3D to 2D is deleting it from here |
 | `blend/boat_small.blend` | The small boat |
 
+## ⚠⚠ Four rules the code pairs with GEOMETRY, and nothing can check them but an eye
+
+**The bake used to be a Python file and `src/` cited it by name in fourteen places.** Those citations
+were repointed here on 2026-09-03; the rules themselves did not move, they simply stopped being code.
+**Each of these is a number or an order written down in `src/` whose other half is the way a part is
+actually CUT in `blend/island.blend`** — change one side and the game and the picture disagree with
+nothing going red.
+
+| The code says | The geometry has to match |
+|---|---|
+| `Grid.STAIR_MOUTH_ORDER` — west, east, north, south, lowest 조각 index first | Which side of a corner staircase is its MOUTH. Get it wrong and the body walks ACROSS the treads instead of up them — 2026-08-28, the user: 「계단 이동할때 뚫는거 같은데」 |
+| `Rules.STAIR_TREADS` = 6 | How many steps are cut into the staircase part |
+| `Rules.TIER_STEP_TILES`, and `level_h` in `island.json` | How tall one 눈금 is in the mesh. Disagree and every body sinks into the ground |
+| `Rules.BLOCK_TILES` = 2, and the outline turning on even tiles only | The parts are 2.0 wide. **The day a part stops being 2x2, `Grid.block_of` is wrong and nothing else is** |
+
+⚠ **The water was baked at 0 and the game raised its sea to `SEA_Y_TILES` = +0.075** (2026-08-28, the
+user: 「물 높이를 좀 더 올려줄래?」). The exported waterline and the drawn one are half a tile apart on
+purpose; `look.gd` carries the note.
+
 ## The loop
 
 1. **Open the `.blend`** — `bpy.ops.wm.open_mainfile(filepath=...)` through the MCP, or by hand.

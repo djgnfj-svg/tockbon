@@ -116,7 +116,7 @@ const NO_DETECT := -1.0
 ## How tall one tier stands, in tiles. Everything below is derived from it and the number is not
 ## repeated anywhere else.
 ## ⚠⚠ **LOWERED 2.0 -> 1.0 (2026-08-27), and it was a LIE being corrected, not a balance change.**
-## The mesh has always been the source of the board: `island_build.py` writes `level_h` into
+## The mesh has always been the source of the board: the bake writes `level_h` into
 ## `island.json` and it is **0.5 — half a tile per notch**, which the user restated as 「한 층이 한 칸,
 ## 계단은 반 칸」 — ⚠ **the user's own words, unchanged; the 2026-08-27 swap makes those 칸 today's 조각.** This constant said one notch was a whole tile, so **the sim measured every height at
 ## exactly twice what the ground the player looks at actually stands.** A body on the plateau computed
@@ -171,7 +171,7 @@ const TILE_CAPACITY := 3
 ## live again as a second name for the same thing; the glossary carries the pair.
 ##
 ## ⚠⚠ **THE GAME CODE HAD NO NAME FOR A 블록 UNTIL THIS LINE.** It was Blender's unit only —
-## `island_build.py`'s `PIECES`, where **`S = 2.0` and the outline may only turn on even tiles**. That
+## the island's own parts, where **the piece is 2.0 wide and the outline may only turn on even tiles**. That
 ## is exactly what makes `Grid.block_of` a shift rather than a lookup: a 블록 is the four 조각 whose
 ## coordinates share a top-left even pair, and nothing has to be exported to say so.
 ##
@@ -205,7 +205,7 @@ const STEP_COST_DIAG := 14
 ## ⚠⚠ **HOW MANY TREADS BLENDER CUTS INTO ONE STAIR 칸, AND THE FEET HAVE TO LAND ON THEM**
 ## (2026-08-28, the user, watching a body climb: 「계단을 캐릭이 뚫고감 이건 근본적인문제인데」).
 ##
-## **The stair was drawn as steps and walked as a ramp.** `tools/blender/island_build.py`'s `stair()`
+## **The stair was drawn as steps and walked as a ramp.** The staircase part in `blend/island.blend`
 ## cuts `TREADS = 6` steps with a nosing into the 칸's own mesh, and `Grid.surface_h` returned a
 ## straight line from the bottom of the run to the top — so a body walked the *average* of the steps,
 ## sinking into every tread and floating over every riser. **Both files carried a comment saying the
@@ -213,7 +213,7 @@ const STEP_COST_DIAG := 14
 ##
 ## ⚠ **The steps win and the ramp loses**, because the picture is what the user chose over several
 ## rounds (「큐브형투처럼 블록 블록이 있었으면 좋겠는데」) and because a ramp cannot be drawn as a stair.
-## ⚠ **6 IS DUPLICATED IN `island_build.py` AS `TREADS`** and Blender cannot read this file. That is the
+## ⚠ **6 IS DUPLICATED IN THE STAIRCASE PART OF `blend/island.blend`** and Blender cannot read this file. That is the
 ## same shape `TIER_STEP_TILES` / `level_h` already has, and it is written down rather than assumed.
 const STAIR_TREADS := 6
 

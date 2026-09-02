@@ -86,7 +86,7 @@ static func land_chars() -> String:
 
 ## ⚠⚠ **WHICH SIDE OF A CORNER STAIR IS ITS MOUTH, WHEN MORE THAN ONE FACES THE FLOOR BELOW.**
 ## West, then east, then north, then south — and **the order itself is arbitrary; that it is the SAME
-## order in `tools/blender/island_build.py` is not.** The staircase's geometry is cut along the axis
+## order the staircase in `blend/island.blend` was CUT along is not.** Its geometry runs along the axis
 ## this picks, and the feet climb along the axis this picks; a disagreement puts the body walking
 ## across the treads instead of up them (2026-08-28, the user: 「계단 이동할때 뚫는거 같은데」).
 ## ⚠ **Blender cannot read this file.** The pairing is written down here and there, the same way
@@ -333,7 +333,7 @@ func height_at(p: Vector2) -> float:
 ## may, or the rounding that keeps the sim reproducible would be quietly undone.
 ##
 ## ⚠ **A stair run spans exactly one storey however long it is**, so tile `i` of `n` carries the slice
-## from `i/n` to `(i+1)/n` of the climb — the identical arithmetic `island_build.py` uses.
+## from `i/n` to `(i+1)/n` of the climb — the identical arithmetic the staircase part was cut with.
 ##
 ## ⚠⚠ **AND THE TREADS ARE MODELLED NOW** (2026-08-28, the user, watching a body climb: 「계단을 캐릭이
 ## 뚫고감 이건 근본적인문제인데 왜그럴까?」). This function returned a straight RAMP and the mesh is cut
@@ -393,7 +393,7 @@ func stair_run_of(t: int) -> Array:
 ## (2026-08-27, the user: 「계단이라는 블록이 있어야할듯」). Two tiles side by side at the same step
 ## carry the same index and therefore the same height, which is what makes a wide stair one
 ## staircase rather than two beside each other. **`surface_h` needed no change for it.**
-## ⚠⚠ **This mirrors `stair_runs()` in `tools/blender/island_build.py` and the two must agree** — one
+## ⚠⚠ **This mirrors how the staircase parts were CUT in `blend/island.blend`, and the two must agree** — one
 ## draws the surface and one says where the feet go. If you change the shape of a run in one, change it
 ## in the other in the same edit.
 func _build_runs() -> void:
@@ -426,12 +426,16 @@ func _build_runs() -> void:
 			# ⚠⚠ **A CORNER STAIR MEETS THE FLOOR ON TWO SIDES AND ONLY ONE OF THEM CAN BE THE MOUTH**
 			# (2026-08-28, the user: 「계단 이동할때 뚫는거 같은데」). This used to keep the LAST mouth
 			# the loops happened to find — the group is walked off a stack, so which tile came last was
-			# not even stable — and `island_build.py` picked its own by a different rule. **The result
+			# not even stable — and the bake picked its own by a different rule. **The result
 			# was a staircase drawn climbing west-to-east while the feet climbed south-to-north**: the
 			# body walked across the treads instead of up them, which is exactly「뚫는다」.
 			# ⇒ **The mouth is chosen deterministically and by the same rule in both files**: the
 			# lowest tile index wins, and among its own sides `STAIR_MOUTH_ORDER` decides.
-			# ⚠⚠ **`island_build.py`'s `lowside` mirrors this and the two must move together.** It is
+			# ⚠⚠ **THE OTHER HALF OF THIS PAIR IS GEOMETRY AND NOT CODE, AND THAT IS THE HARD PART.** It
+			# used to live in a Python bake called `lowside`; the bake was deleted on 2026-08-31 once the
+			# originals existed (`docs/manual/blender.md`), so **the mouth this picks now has to match
+			# the way the staircase parts are actually cut in `blend/island.blend`** — which nothing can
+			# check but an eye. It is
 			# the third pair in this pattern, after `TIER_STEP_TILES`/`level_h` and `STAIR_TREADS`.
 			var mouth := Vector2i(-99, -99)
 			var mouth_dir := Vector2i.ZERO
@@ -456,7 +460,7 @@ func _build_runs() -> void:
 			if mouth_dir == Vector2i.ZERO or not has_head:
 				continue
 			var ax := Vector2i(-mouth_dir.x, -mouth_dir.y)
-			## The cross axis, 90 degrees from the climb — the same one `island_build.py` picks.
+			## The cross axis, 90 degrees from the climb — the same one the staircase part is cut along.
 			var perp := Vector2i(-ax.y, ax.x)
 			## Each tile's place in the block: `x` along the climb, `y` across it.
 			var cells := {}
@@ -1815,7 +1819,7 @@ func hold_count(tile: int) -> int:
 ## 블록 ceiling and not a 조각 one** — see `Rules.BLOCK_CAPACITY`.
 ##
 ## ⚠ **A shift and not a lookup, and that is only sound because the island is built in 2x2 pieces**
-## whose outline may turn on even tiles only (`island_build.py`: `S = 2.0`). **The day a piece stops
+## whose outline may turn on even tiles only (the parts in `blend/island.blend` are 2.0 wide). **The day a piece stops
 ## being 2x2, this function is wrong and nothing else is** — which is why the size is
 ## `Rules.BLOCK_TILES` rather than a bare 2 in here.
 

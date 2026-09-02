@@ -70,7 +70,7 @@ const WATER_SHADER := "res://src/view/water.gdshader"
 ## second copy of the water's — the two answer different questions and share no uniform.
 const PADS_SHADER := "res://src/view/pads.gdshader"
 ## The name Blender gives the 판 object inside `island.glb`. ⚠ **Both sides spell it once**: the
-## export names it in `tools/blender/island_build.py` and this is the only place the game reads it.
+## export out of `blend/island.blend` names it, and this is the only place the game reads it.
 const PADS_NODE := "pads"
 
 
@@ -341,7 +341,7 @@ func _build_world() -> void:
 	# quad per tile used to lie over the ground here. The user's word on it was 「위에 노드만 살짝 얹은
 	# 느낌이어서 너무 별로」 and 「너무 흰색이 너무 잘 보여」 — and it could not be fixed in place: a flat
 	# quad cannot bend with a surface `COAST_WOB` and a `BEVEL` have already curved, and every quad was
-	# the same rectangle. **`tools/blender/island_build.py` paints each piece's own flat interior
+	# the same rectangle. **The bake paints each piece's own flat interior
 	# lighter instead**, so the mat IS the walking surface, wears that piece's own wobble, and needs no
 	# colour of its own. ⚠ **The mask below survives** — the HOVER still wears it.
 
@@ -1121,8 +1121,9 @@ func _stand_h(p: Vector2) -> float:
 ##
 ## ⚠⚠ **Nothing here generates terrain any more, and that is the point.** 569 lines of noise, stepped
 ## heights, shore fades and skirts stood here and the user rejected the picture they made six times
-## (2026-08-26). The shape is now authored — `tools/blender/island_build.py` builds it and exports
-## `assets/terrain/island.glb`, and this function's whole job is to put that file on screen.
+## (2026-08-26). The shape is now authored — `blend/island.blend` holds it and an export out of that
+## file writes `assets/terrain/island.glb`, and this function's whole job is to put that file on
+## screen. See `docs/manual/blender.md`.
 ##
 ## ⚠ **The mesh carries its own colour in VERTEX COLOURS**, so there is no palette here either. What
 ## decides how the island looks lives in the Blender script, next to the shape it belongs to.
@@ -1277,8 +1278,8 @@ func _rebuild_terrain() -> void:
 ##
 ## ⚠⚠ **THE 판 IS A SECOND OBJECT IN THE SAME FILE** (2026-08-28). It spent one day welded into the
 ## island's own mesh, where the hover had nothing to raise and nothing to hide — which is exactly why
-## the mark went missing for a round. `tools/blender/island_build.py` exports it beside the island and
-## this is where the game picks it up.
+## the mark went missing for a round. The export out of `blend/island.blend` writes it beside the
+## island and this is where the game picks it up.
 ##
 ## ⚠ **A missing `pads` node is not an error.** The island file is baked by hand; a build from before
 ## the split simply has no such child, and every writer below checks for null rather than this

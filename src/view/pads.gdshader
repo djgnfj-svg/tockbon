@@ -6,7 +6,7 @@ render_mode unshaded, cull_disabled, depth_draw_opaque, blend_mix;
 // ⚠⚠ **THE 판 IS ITS OWN OBJECT AGAIN** (2026-08-28, the user: 「마우스올리면 호버되도록해주고
 // 특정버튼 눌러야 그 뜨게해줘 판이」). It spent one day baked into the island's own mesh, where it
 // could be neither hidden nor lit one at a time — there was no node to touch, which is why the hover
-// mark went missing for a whole round. `tools/blender/island_build.py` exports it beside the island
+// mark went missing for a whole round. The bake out of `blend/island.blend` exports it beside the island
 // now, and this shader is what decides when any of it is visible.
 //
 // ⚠⚠ **EVERY 판 CARRIES ITS 조각's INDEX IN `UV.x`**, written by the Blender run as `ty * W + tx` —

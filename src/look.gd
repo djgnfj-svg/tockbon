@@ -565,7 +565,8 @@ const HILL_AMP_TILES := 2.60
 ##
 ## ⚠⚠ **The shape they made is now the BAKE's promise, not this file's.** A rung about two tiles wide,
 ## the coast reading as sand rather than as pale grass, a cliff that undulates less than a meadow: none
-## of that is measured anywhere any more. `tools/blender/island_build.py` either honours it or does not.
+## of that is measured anywhere any more. **The bake either honours it or does not**, and the bake is
+## now `blend/island.blend` opened by hand — see `docs/manual/blender.md`.
 
 ## ⚠⚠ **How wide the open sea is, in tiles, and it exists because the board turns.** The terrain mesh
 ## runs `WATER_MARGIN_TILES` past the grid, which was enough while the view was a screen-aligned
@@ -912,8 +913,8 @@ const COL_WATER := Color(0.430, 0.590, 0.660)
 ## ⚠ **The REASONING they carried is not deleted, because it is not about these numbers.** Bad North's
 ## rule is *borders, not textures*, and which edges differ is what carries the information: same-height
 ## neighbour barely there, a step strong because that is where a body can and cannot walk, the sea edge
-## strongest of all. **That rule now has to be honoured by the bake**, and `tools/blender/island_build.py`
-## is where it is either obeyed or quietly dropped.
+## strongest of all. **That rule now has to be honoured by the bake**, and the bake is `blend/island.blend`
+## — where it is either obeyed or quietly dropped. See `docs/manual/blender.md`.
 
 
 # Bodies. Friend and foe are told apart by COLOUR; the unit type is told apart by SIZE and by how
@@ -959,7 +960,8 @@ const COL_ENEMY := Color(1.0, 0.420, 0.361)
 
 ## ⚠⚠ **`COL_WASH` AND `COL_WASH_RIM` ARE DELETED (2026-08-28) AND THE MAT IS STILL THERE.** They
 ## coloured a white quad laid over every walkable tile. **The mat is baked into the island now** — the
-## bake paints each piece's own flat interior lighter (`PAD_LIGHTEN` in `island_build.py`), so the mat
+## bake paints each piece's own flat interior lighter — the lightening lives in `blend/island.blend`
+## and its old name there was `PAD_LIGHTEN` — so the mat
 ## is the walking surface itself and has no colour of its own to name here. The user's words that
 ## killed them: 「위에 노드만 살짝 얹은 느낌이어서 너무 별로」·「너무 흰색이 너무 잘 보여」.
 ## ⚠ **What survives below shapes the HOVER's mask**, which is still drawn at runtime.
@@ -1110,8 +1112,8 @@ const WATER_FOAM_LIP_WOB := 0.80
 ## 「왜 저게 흔색 이 거품이 딱 붙질 못할까」). **The bake measures the coastline where the shore crosses
 ## `SEA_Z = -0.45`, and the game's water plane is not there any more** — `SEA_Y_TILES` was raised to
 ## +0.075 the same day, on the user's 「물 높이를 좀 더 올려줄래?」. Half a tile of height between the
-## line the sea was told about and the line the sea actually draws itself at, and `island_build.py`
-## still says in its own comment that the water sits at 0. **A raised sea swallows more of the shore's
+## line the sea was told about and the line the sea actually draws itself at, and **the island in
+## `assets/terrain/island.glb` was baked with the water at 0**. **A raised sea swallows more of the shore's
 ## roll, so the REAL waterline climbs inward up that roll while the exported one stays out at the hem.**
 ## ⇒ the white line stood a third of a tile out to sea all the way round, on every side at once, which
 ## is the shape the user kept seeing and no amount of shader work could reach.
