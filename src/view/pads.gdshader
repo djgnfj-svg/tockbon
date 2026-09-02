@@ -152,6 +152,11 @@ void vertex() {
 	// between the near and far halves showed. **Measured on the turned board**: at yaw 0 the seam is
 	// on 93% of the marks scanned down and 1% scanned across; at yaw 45 it is on 69% and 61%, at the
 	// same 2.06x strength both ways.
+	// ⚠⚠ **THE HAND CANNOT REACH YAW 45 ANY MORE** (2026-09-02): Q and E turn a quarter and the
+	// free-rotating right drag is deleted, so a player's board stands at 0, 90, 180 or 270.
+	// **The measurement stands and the angle is now an instrument's** — the two pad shooters turn 45°
+	// on purpose to photograph exactly this. It is written on rather than deleted: a number measured
+	// at an angle is still a measurement when the angle stops being walkable.
 	// ⇒ **The two walls that the merge buries are given up.** `inward` is the way this 판 has to grow
 	// to reach its 칸's middle — +1 on an even index, -1 on an odd one — and a wall whose normal
 	// leans that way is a wall the merge is about to hide. **Checked against all 280 판 of the baked

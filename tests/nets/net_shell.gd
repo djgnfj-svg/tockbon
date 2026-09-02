@@ -155,6 +155,11 @@ func run(t) -> void:
 	# `run()` has twice abandoned everything after it, and 티켓 15's red is still standing. This builds
 	# its own `Game` and lets go of it, so it cannot be one of the rows that quietly stops running.
 	await _the_keep_falls_and_the_screen_says_so(t)
+	# ⚠ **Two more that build their own `Game` and let go of it**, put here for the same reason: each
+	# needs a shell nothing else has touched — one that has never seen a mouse motion, and one that is
+	# taken to GAME OVER with a key held down.
+	await _a_shell_that_never_saw_the_mouse_pans_nothing(t)
+	await _a_lost_board_stops_travelling(t)
 
 	var game := QuitGame.new()
 
@@ -319,14 +324,34 @@ func run(t) -> void:
 	# It reports as 「41 passed」 either way, which is exactly the shape `tests/README` warns about.
 	# ⚠ **The red itself is 티켓 15's and is not touched here**; what is done is putting the new rows
 	# where they actually run. **Frozen sim above, so the pan is the only thing moving.**
+	# ⚠⚠ **THIS ROW STOOD FAR BELOW AND IT WAS GREEN ON A STALE PAINT** (moved 2026-09-02). It read
+	# `fs._boats_used` **after the camera rows had hand-driven `game._process` through ten seconds of
+	# sim** — the first boat is long afloat by then, and the only reason the row passed is that nothing
+	# had repainted the field since. **03-10's sweep rows call `fs._process` by hand**, the paint went
+	# fresh, and the row went red for the fixture rather than for the shell.
+	# ⇒ **Moved to where its own claim is true**: a battle two frames old, before anything here has
+	# advanced the clock. ⚠ **`fs._process` has run on the pumped frames above**, so this reads a
+	# painted frame and not a leftover.
+	# ⚠⚠ **THIS ROW READ `fs._hulls_used` AND THAT FIELD WAS DELETED WITH THE PLAYER'S BOATS**
+	# (2026-08-28). It did not go red — **it threw, and a runtime error abandons the rest of `run()`** —
+	# and its subject is gone too: nobody presses to make a boat any more. **Re-aimed at the subject
+	# that replaced it**: the beasts' hulls are `_boats_used`, and the claim that survives is the same
+	# one — **before the first boat's clock there is nothing to draw.**
+	t.ok(game.battle.elapsed < Rules.BOAT_FIRST_SEC,
+		"자가 점검 — 이 섬의 시계가 아직 첫 배 앞이다 (%.3f초)" % game.battle.elapsed)
+	t.eq(fs._boats_used, 0, "첫 배가 뜨기 전에는 선체가 하나도 안 그려진다")
+
+	_the_pan_keys_move_the_camera_and_stop(t, game, fs)
 	_a_drag_looks_around_and_a_click_commands(t, game, fs)
-	# ⚠⚠ **THE TWO NEW CAMERA FUNCTIONS SIT HERE FOR THE REASON THE PARAGRAPH ABOVE GIVES**, and for
+	# ⚠⚠ **THE CAMERA FUNCTIONS SIT HERE FOR THE REASON THE PARAGRAPH ABOVE GIVES**, and for
 	# no other: everything below the terrain block has been abandoned by a throw twice this session,
 	# and a row that quietly does not run is worse than a red. **The sim is frozen from here**, so the
 	# camera is the only thing moving and a `cam_px` that changed changed because of an input.
 	# ⚠ **After the drag rows, not before**: `_a_drag_...` leaves the yaw at its opening angle, and
 	# every direction row below reads `cam_px` axes that only line up with the screen at that yaw.
-	_the_right_button_turns_and_never_commands(t, game, fs)
+	_the_right_button_turns_nothing_and_commands_nobody(t, game, fs)
+	_q_and_e_turn_a_quarter(t, game, fs)
+	_the_edge_of_the_window_pans(t, game, fs)
 
 	var b: Battle = game.battle
 	# ⚠ **An `events` row stood here and the list went with the fight** (2026-08-29). It proved the
@@ -372,13 +397,8 @@ func run(t) -> void:
 	# reaches for now, and **nothing measures whether the start button overlaps them** — `net_slots`
 	# only checks the boxes against each other and against the viewport. That is a real hole, not a
 	# tidy deletion.
-	# ⚠⚠ **THIS ROW READ `fs._hulls_used` AND THAT FIELD WAS DELETED WITH THE PLAYER'S BOATS**
-	# (2026-08-28). It did not go red — **it threw, and a runtime error abandons the rest of `run()`**,
-	# so this was the SECOND landmine in this function after the terrain one above. The subject is gone
-	# too: nobody presses to make a boat any more.
-	# ⇒ **Re-aimed at the subject that replaced it.** The beasts' hulls are `_boats_used`, and the
-	# claim that survives is the same one: **before the first boat's clock there is nothing to draw.**
-	t.eq(fs._boats_used, 0, "첫 배가 뜨기 전에는 선체가 하나도 안 그려진다")
+	# ⚠⚠ **THE `_boats_used` ROW MOVED UP OUT OF HERE** (2026-09-02) — see the camera block above,
+	# which is where 「before the first boat's clock」 is actually still true.
 	# ⚠⚠ **THE 0.87912 ROW IS DELETED** (02-08). It was hand arithmetic on a 26 x 20 board —
 	# `1280 / (26 * 40 * 1.40)` — and the island loads 30 x 26. **What stopped being measured: the
 	# opening zoom's actual VALUE.** The row underneath keeps the half of it that carries no literal,
@@ -534,8 +554,9 @@ func run(t) -> void:
 	# THAT HAD NOT EXECUTED IN MONTHS**, and it was written by reasoning rather than by running: the
 	# terrain throw above abandoned `run()` before any of this. It is deleted rather than re-argued.
 	# **The literal is whatever the round now measures**, and if it is wrong it will say so.
-	# ⚠ **The travel itself was measured in `_the_pan_keys_move_the_camera_and_stop`, which is deleted
-	# with the keys it drove** (2026-08-31). The centred literal, by hand:
+	# ⚠ **The travel itself is measured in `_the_pan_keys_move_the_camera_and_stop` again** — that
+	# function was deleted with the keys it drove (2026-08-31) and came back with them (2026-09-02),
+	# and it is called above this block. The centred literal, by hand:
 	# ((1040 - 1280) / 2, (800 - 1120.12) / 2) = **(-120.00, -160.06)**.
 	# ⚠ The y half moved on 2026-08-25 when the pitch divisor was corrected from cosine to sine; it
 	# read -69.95, which was the wrong span reaching the clamp.
@@ -575,6 +596,7 @@ func run(t) -> void:
 	_the_route_points_are_in_soldier_pos_units(t, game)
 	_a_full_hand_moves_instead_of_picking(t, game, fs)
 	_the_picked_body_wears_a_rim(t, game, fs)
+	_the_turn_flag_has_no_writers_left(t)
 
 	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
 	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
@@ -893,20 +915,26 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 	t.ok(b.grid.passable[body_tile] != 0, "자가 점검 — 누른 자리가 걸을 수 있는 조각이다")
 
 
-## **The right button TURNS the board and commands nobody** (2026-08-30, the user at the screen:
-## 「오른쪽 버튼은 카메라 회전으로 이해했어」).
+## **The right button turns NOTHING and commands nobody** (2026-09-02, the user: 「오른쪽 마우스로
+## 회전을 하면 뭔가 장점이 별로 없어서」 — *"rotating with the right mouse does not really have any
+## advantage"*).
 ##
-## ⚠⚠ **THIS FUNCTION MEASURED A PAN FOR ONE ROUND** (「오른쪽이 끌어서 이동으로 해야할듯」, the same
-## day, earlier). **The later word wins** and the old rows are rewritten rather than kept beside the
-## new ones — two sets asserting opposite gestures is not a record, it is one of them lying.
+## ⚠⚠ **THIS FUNCTION HAS MEASURED THREE DIFFERENT GESTURES ON ONE BUTTON AND THE OLD ROWS ARE
+## REWRITTEN, NEVER KEPT BESIDE THE NEW ONES.** It measured a PAN (2026-08-30 morning, 「오른쪽이
+## 끌어서 이동으로 해야할듯」), then a TURN the same day at the screen (「오른쪽 버튼은 카메라 회전으로
+## 이해했어」), and now **nothing at all** — Q and E carry the turn. Two sets asserting opposite
+## gestures is not a record, it is one of them lying.
 ##
-## ⚠⚠ **THE ROWS ARE THE SAME GESTURE MEASURED ON ITS TWO OUTCOMES.** A right button that turned but
-## also ordered would pass the turn row; one that ordered nothing but never turned would pass the order
-## row. **Neither row is worth anything alone.**
+## ⚠⚠ **THE TWO 「COMMANDS NOBODY」 ROWS CERTIFIED NOTHING UNTIL TODAY.** They ran over a **provably
+## empty hand** — the function wiped every order and never picked anything, and the function before it
+## ends on ESC — so a shell that started ordering on the right button would have left both of them
+## green. ⇒ **the hand holds a body here, the point is a 칸 that body can be sent to, and the left
+## button is fired at the same point at the end to prove the order was there to be given.**
 ##
-## ⚠ **The camera is asked to stay PUT as well as to turn.** The right button moved `cam_px` this
-## morning, and a turn that also panned would read as the old gesture surviving under the new one.
-func _the_right_button_turns_and_never_commands(t, game, fs: FieldView) -> void:
+## ⚠ **The camera is asked to stay PUT as well as to stay unturned.** The right button moved `cam_px`
+## on 2026-08-30 morning, and a dead button that still panned would read as the oldest gesture
+## surviving under the newest.
+func _the_right_button_turns_nothing_and_commands_nobody(t, game, fs: FieldView) -> void:
 	var b: Battle = game.battle
 	for i in b.soldier_order.size():
 		b.soldier_order[i] = -1
@@ -923,36 +951,72 @@ func _the_right_button_turns_and_never_commands(t, game, fs: FieldView) -> void:
 	var body_tile := int(round(body.y)) * b.grid.w + int(round(body.x))
 	t.eq(game._tile_at(on_land), body_tile, "자가 점검 — 그 화면 점이 몸이 선 조각으로 돌아온다")
 
-	# -- a right click in place: nothing turns and nobody is sent ------------------------------------
+	# **The hand is filled and a destination is found**, so every 「nobody was ordered」 row below is a
+	# row about a press that had somebody to order and did not.
+	game._let_go()
+	var picked := false
+	for raw in ashore:
+		if game.hand.pick(b, int(raw)):
+			picked = true
+			break
+	t.ok(picked, "자가 점검 — 손이 몸 하나를 쥐었다 (빈 손이면 아래 두 줄이 공허하다)")
+	var dest := -1
+	var dest_at := Vector2.ZERO
+	for k in game.hand.reach.size():
+		var cand := int(game.hand.reach[k])
+		if b.grid.block_of(cand) == b.grid.block_of(body_tile):
+			continue
+		var at := fs.tile_to_screen_px(cand % b.grid.w, cand / b.grid.w)
+		if game._tile_at(at) != cand:
+			continue
+		dest = cand
+		dest_at = at
+		break
+	t.ok(dest >= 0, "자가 점검 — 화면에서 겨눌 수 있는, 보낼 수 있는 칸이 있다")
+	if dest < 0:
+		game._let_go()
+		return
+
+	# -- a right click on a 칸 the hand could be sent to: nothing turns and nobody is sent ------------
 	var held := fs.cam_px
 	var held_yaw := fs.cam_yaw_deg
-	game._unhandled_input(_rpress(on_land))
+	game._unhandled_input(_rpress(dest_at))
 	game._unhandled_input(_rrelease())
 	t.eq(fs.cam_px, held, "오른쪽을 제자리에서 누르고 떼면 카메라가 안 움직인다")
 	t.ok(absf(fs.cam_yaw_deg - held_yaw) < 0.001,
-		"그리고 판도 안 돌아간다 — 안 움직인 끌기는 회전이 아니다 (%.2f°)" % fs.cam_yaw_deg)
+		"그리고 판도 안 돌아간다 (%.2f°)" % fs.cam_yaw_deg)
 	var ordered := 0
 	for i in b.soldier_order.size():
 		if int(b.soldier_order[i]) >= 0:
 			ordered += 1
-	t.eq(ordered, 0, "그리고 아무도 명령받지 않는다 — 오른쪽은 절대 보내지 않는다")
+	t.eq(ordered, 0, "보낼 수 있는 칸을 오른쪽으로 눌러도 아무도 명령받지 않는다")
+	t.ok(not game.hand.is_empty(), "그리고 손도 안 놓는다 — 오른쪽은 명령의 어느 절반도 아니다")
 
-	# -- a right drag: the board turns, by the pixels the hand travelled ------------------------------
-	# ⚠ **The expected yaw is `Look.CAM_YAW_PER_PX_DEG` times the HORIZONTAL travel and nothing else** —
-	# the vertical 40 px of the same motion must not reach the camera, or a stray diagonal tilts the
-	# board as well as turning it.
+	# -- a 60 px right drag turns 0.00°, and it turned 10.8° until today ------------------------------
+	# ⚠⚠ **THE NUMBER IS THE WHOLE ROW.** `Look.CAM_YAW_PER_PX_DEG` is 0.18 and still standing (the
+	# piece viewer reads it), so 60 px of drag through the deleted arm would be **10.8°** — written out
+	# by hand here rather than read off the constant, because a row that asks the constant what to
+	# expect is green whatever the constant says.
 	var before_yaw := fs.cam_yaw_deg
 	var before_px := fs.cam_px
-	game._unhandled_input(_rpress(on_land))
-	game._unhandled_input(_motion(on_land + Vector2(60.0, 40.0), Vector2(60.0, 40.0)))
-	var want := fmod(before_yaw + 60.0 * Look.CAM_YAW_PER_PX_DEG + 360.0, 360.0)
-	t.ok(absf(fs.cam_yaw_deg - want) < 0.001,
-		"오른쪽으로 60px 끌면 판이 %.2f° 로 돌아간다 (%.2f°)" % [want, fs.cam_yaw_deg])
-	t.eq(fs.cam_px, before_px, "그러면서 카메라는 안 움직인다 — 돌리기는 이동이 아니다")
-	# **The other way comes back**, which is the row that stops both directions turning one way.
-	game._unhandled_input(_motion(on_land, Vector2(-60.0, -40.0)))
-	t.ok(absf(fs.cam_yaw_deg - fmod(before_yaw + 360.0, 360.0)) < 0.001,
-		"되돌리면 정확히 제자리로 돌아온다 (%.2f°)" % fs.cam_yaw_deg)
+	game._unhandled_input(_rpress(dest_at))
+	game._unhandled_input(_motion(dest_at + Vector2(60.0, 40.0), Vector2(60.0, 40.0)))
+	t.ok(absf(fs.cam_yaw_deg - before_yaw) < 0.001,
+		"오른쪽으로 60px 끌어도 판이 0.00° 돈다 — 어제는 10.8° 였다 (%.2f°)" % fs.cam_yaw_deg)
+	t.eq(fs.cam_px, before_px, "그러면서 카메라도 안 움직인다")
+
+	# -- and the hover plate and the 이동선 both keep up under a held right button ---------------------
+	# ⚠⚠ **THEY FROZE FOR THE WHOLE LENGTH OF A RIGHT DRAG AND NOTHING SAID SO.** The turn's arm ended
+	# in an early `return`, and both of these sat below it. **Deleting the arm un-freezes them**, which
+	# is a fix this ticket gets for free — and this is the row that keeps it.
+	var want_cell := int(fs._wash_cell[dest]) if dest < fs._wash_cell.size() else -1
+	game._unhandled_input(_motion(dest_at, Vector2(-60.0, -40.0)))
+	t.ok(want_cell >= 0, "자가 점검 — 그 조각에 판 자국이 하나 있다")
+	t.eq(fs._hover_cell, want_cell,
+		"오른쪽을 누른 채 움직여도 호버 자국이 커서를 따라간다 — 끌기가 끝날 때까지 얼지 않는다")
+	t.ok(fs._move_lines.size() > 0,
+		"그리고 이동선도 같이 그려진다 (%d 줄) — 같은 이른 return 이 둘 다 먹고 있었다"
+			% fs._move_lines.size())
 	game._unhandled_input(_rrelease())
 	ordered = 0
 	for i in b.soldier_order.size():
@@ -960,24 +1024,815 @@ func _the_right_button_turns_and_never_commands(t, game, fs: FieldView) -> void:
 			ordered += 1
 	t.eq(ordered, 0, "끌고 나서도 아무도 명령받지 않는다")
 
-	# **The release really ended it**, or the next motion turns the board behind the player's back.
+	# **The release really ended nothing**, or a motion after it turns the board behind the player.
 	var after_yaw := fs.cam_yaw_deg
-	game._unhandled_input(_motion(on_land + Vector2(120.0, 80.0), Vector2(120.0, 80.0)))
+	game._unhandled_input(_motion(dest_at + Vector2(120.0, 80.0), Vector2(120.0, 80.0)))
 	t.ok(absf(fs.cam_yaw_deg - after_yaw) < 0.001,
-		"오른쪽을 뗀 뒤의 움직임은 판을 안 돌린다 (%.2f°)" % fs.cam_yaw_deg)
+		"오른쪽을 뗀 뒤의 움직임도 판을 안 돌린다 (%.2f°)" % fs.cam_yaw_deg)
+
+	# -- ⚠⚠ THE POSITIVE CONTROL: the same point, the LEFT button, and somebody IS sent ---------------
+	# Without this every 「nobody was ordered」 row above is equally true of a shell that cannot order at
+	# all, which is exactly the state those rows were in until today.
+	var walker := int(game.hand.ids[0]) if not game.hand.is_empty() else -1
+	game._unhandled_input(_press(dest_at))
+	game._unhandled_input(_release(dest_at))
+	var sent := 0
+	for i in b.soldier_order.size():
+		if int(b.soldier_order[i]) >= 0:
+			sent += 1
+	t.ok(sent > 0 and walker >= 0,
+		"같은 점을 왼쪽으로 누르면 몸이 간다 — 위의 0 들은 명령할 것이 없어서가 아니다 (%d명)" % sent)
+	game._let_go()
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
 
 
-## ⚠⚠ **`_the_edge_of_the_window_pans` AND `_a_walkable_point_inside_a_band` STOOD HERE AND BOTH ARE
-## DELETED** (2026-08-31, the user: 「그것도 지워줘」). They measured the edge band the user asked for
-## on 2026-08-30 (「wasd 보다는 마우스가 끝으로 가면 자동으로 이동이 맞을듯」): that a parked pointer
-## panned and kept panning, that the distance was the frame's own delta, that the band was 28 px wide
-## at BOTH ends, that it ramped with depth, that a corner was not normalised, that a pointer off the
-## glass was nothing rather than the deepest point, that alt-tab and a mouse-exit each stopped it with
-## their own flag, and that a press near the edge still commanded the 조각 under the finger.
+## **Q and E turn the board a quarter, the sweep is visible, and nothing else on the keyboard turns**
+## (2026-09-02, the user: 「즉시 돌 거 같아. 도는 것이 보여」).
 ##
-## ⚠ **The band is gone from `game.gd`, so every row above would now be green on an empty shell** —
-## which is why they are deleted rather than inverted. `_park` survives: the drag rows above use it.
+## ⚠⚠ **THE SWEEP IS PUMPED BY CALLING THE FIELD'S OWN `_process` BY HAND.** `Game._process` does not
+## tick its children — the engine does — and this net stops the shell's clock precisely so it never
+## guesses frame counts. **A row here that pumped engine frames would be measuring the machine.**
+## ⚠ **Every loop is bounded.** A sweep that never settles hangs the runner rather than reddening,
+## and a hung net has its whole count taken out of the passes with nothing added to the failures.
+func _q_and_e_turn_a_quarter(t, game, fs: FieldView) -> void:
+	fs.cam_yaw_deg = 0.0
+	fs._yaw_remaining = 0.0
 
+	# **One press, one frame: the board is partway round.** This is the row the user's choice lives in.
+	game._unhandled_input(_key_edge(KEY_E, true))
+	fs._process(0.02)
+	t.ok(fs.cam_yaw_deg > 0.001 and fs.cam_yaw_deg < 89.999,
+		"E 를 한 번 누르고 한 프레임이면 판이 0 과 90 사이다 — 도는 것이 보인다 (%.2f°)"
+			% fs.cam_yaw_deg)
+	_settle(fs)
+	t.ok(absf(fs.cam_yaw_deg - 90.0) < 0.001,
+		"그리고 정확히 90 에 앉는다 (%.6f°)" % fs.cam_yaw_deg)
+
+	# **A held E is one quarter and not a spin.** OS auto-repeat delivers `pressed = true, echo = true`
+	# many times a second, and a quarter per repeat rolls the board over.
+	var before := fs.cam_yaw_deg
+	for _r in 5:
+		game._unhandled_input(_key_edge(KEY_E, true, true))
+	_settle(fs)
+	t.ok(absf(fs.cam_yaw_deg - before) < 0.001,
+		"자동 반복은 0° 를 더한다 — 눌러 둔 E 가 판을 안 돌린다 (%.2f°)" % fs.cam_yaw_deg)
+	# ⚠ **And the release turns nothing either.** Unlike the pan keys, this is one action and not a
+	# state held for as long as a key is — a release arm here would double every press.
+	game._unhandled_input(_key_edge(KEY_E, false))
+	_settle(fs)
+	t.ok(absf(fs.cam_yaw_deg - before) < 0.001, "손을 떼는 것도 0° 다 (%.2f°)" % fs.cam_yaw_deg)
+
+	# **Q is the other way.** Without this row both keys could turn the same way.
+	game._unhandled_input(_key_edge(KEY_Q, true))
+	game._unhandled_input(_key_edge(KEY_Q, false))
+	_settle(fs)
+	t.ok(absf(fs.cam_yaw_deg) < 0.001,
+		"Q 는 반대로 돈다 — E 한 번 뒤의 Q 한 번은 제자리다 (%.6f°)" % fs.cam_yaw_deg)
+
+	# **The tilt keys and the wheel still do not turn the board**, which is what stops one key doing
+	# two things — the same claim the wheel's own row makes, aimed at the keys beside Q and E.
+	var yaw := fs.cam_yaw_deg
+	var pitch := fs.cam_pitch_deg
+	game._unhandled_input(_key(KEY_R))
+	game._unhandled_input(_key(KEY_F))
+	_settle(fs)
+	t.ok(absf(fs.cam_yaw_deg - yaw) < 0.001, "R 과 F 는 판을 안 돌린다 (%.2f°)" % fs.cam_yaw_deg)
+	t.ok(absf(fs.cam_pitch_deg - pitch) < 0.001, "그리고 기울기도 제자리로 돌아왔다 (자가 점검)")
+
+	# -- ⚠⚠ THE HOVER PLATE FOLLOWS A KEYBOARD TURN, WITH THE CURSOR NEVER MOVING --------------------
+	# `set_hover_tile` had exactly ONE call site — the motion branch — and **a key press is not a
+	# motion**. One press of E left the white plate on the 조각 the cursor used to be over, a quarter
+	# of the board away, until the hand moved. **The 이동선 never had that problem** because `_process`
+	# rebuilds it from the remembered pointer every frame; this is the row that puts the plate beside
+	# it. ⚠ **Not one motion event is sent after the aim below** — that is the whole claim.
+	var b: Battle = game.battle
+	var ashore := b.ashore_ids()
+	t.ok(ashore.size() > 0, "자가 점검 — 판 위에 선 몸이 있다")
+	if ashore.is_empty():
+		return
+	# ⚠⚠ **THE AIM HAS TO CARRY A 판 자국 AT BOTH ANGLES, AND A FIRST DRAFT DID NOT.** Aimed at a
+	# body's own 조각, the point landed on bare ground after the quarter turn — so the row read 「the
+	# plate goes dark」, which a shell that blanked it every frame would also pass. **The point is
+	# searched for instead**: padded before the turn, padded after it, and a different 조각.
+	var at := _a_point_padded_at_both_quarters(game, fs)
+	t.ok(at.x >= 0.0,
+		"자가 점검 — 돌기 전후로 다 자국이 있는 화면 점을 찾았다 (없으면 아래가 공허하다)")
+	if at.x < 0.0:
+		return
+	game._unhandled_input(_motion(at, Vector2.ZERO))
+	var tile_before: int = game._tile_at(at)
+	var cell_before := fs._hover_cell
+	t.ok(tile_before >= 0 and cell_before >= 0,
+		"자가 점검 — 커서가 섬 위에 있고 자국이 하나 켜져 있다 (조각 %d, 자국 %d)"
+			% [tile_before, cell_before])
+	game._unhandled_input(_key_edge(KEY_E, true))
+	game._unhandled_input(_key_edge(KEY_E, false))
+	_settle(fs)
+	var tile_after: int = game._tile_at(at)
+	t.ok(tile_after >= 0 and tile_after != tile_before,
+		"자가 점검 — 90 도 돌고 나면 같은 화면 점이 다른 조각이다 (%d → %d)"
+			% [tile_before, tile_after])
+	game._process(1.0 / 60.0)
+	var want_cell := int(fs._wash_cell[tile_after])
+	t.ok(want_cell >= 0 and want_cell != cell_before,
+		"자가 점검 — 그 새 조각에도 자국이 있고 앞의 것과 다른 자국이다 (%d → %d)"
+			% [cell_before, want_cell])
+	t.eq(fs._hover_cell, want_cell,
+		"키로 돌린 뒤에도 자국이 커서 밑 조각으로 옮겨간다 — 손이 안 움직여도 따라온다")
+
+	fs.cam_yaw_deg = Look.CAM_YAW_DEG
+	fs._yaw_remaining = 0.0
+
+
+## **A screen point that sits on a 판 자국 at this yaw AND a quarter round from it**, or `(-1, -1)`.
+##
+## ⚠ **Searched over SCREEN points and not over 조각**, because the same 조각 is somewhere else on the
+## glass after a turn — what has to hold still is the cursor, which is a screen point.
+## ⚠⚠ **It turns the board four times and leaves it where it found it.** Four quarters is a whole
+## turn, so the caller's board is back at the angle it handed over.
+func _a_point_padded_at_both_quarters(game, fs: FieldView) -> Vector2:
+	var w := Look.VIEWPORT_W_PX
+	var h := Look.VIEWPORT_H_PX
+	var pts: Array[Vector2] = []
+	var tiles: Array[int] = []
+	for iy in 12:
+		for ix in 20:
+			var p := Vector2(w * (float(ix) + 0.5) / 20.0, h * (float(iy) + 0.5) / 12.0)
+			var tile: int = game._tile_at(p)
+			if tile < 0 or tile >= fs._wash_cell.size() or int(fs._wash_cell[tile]) < 0:
+				continue
+			pts.append(p)
+			tiles.append(tile)
+	_turn_one_quarter(game, fs)
+	var found := Vector2(-1.0, -1.0)
+	for k in pts.size():
+		var tile: int = game._tile_at(pts[k])
+		if tile < 0 or tile == tiles[k] or tile >= fs._wash_cell.size():
+			continue
+		if int(fs._wash_cell[tile]) < 0:
+			continue
+		found = pts[k]
+		break
+	for _n in 3:
+		_turn_one_quarter(game, fs)
+	return found
+
+
+## One press of E, run out. ⚠ Through the shell's own key path, so the searcher cannot find a point
+## the row it feeds could not reach.
+func _turn_one_quarter(game, fs: FieldView) -> void:
+	game._unhandled_input(_key_edge(KEY_E, true))
+	game._unhandled_input(_key_edge(KEY_E, false))
+	_settle(fs)
+
+
+## Runs a sweep out on the real field, bounded. ⚠ **Never 「while not settled」** — see the header.
+func _settle(fs: FieldView) -> void:
+	for _n in 60:
+		if fs._yaw_remaining == 0.0:
+			return
+		fs._process(1.0 / 60.0)
+
+
+## **The right button writes nothing in the shell any more**, read out of the file's own text.
+##
+## ⚠⚠ **A DELETION NEEDS A CHECK THAT THE THING IS GONE**, not only that what is left still passes: the
+## rows that drove the yaw drag were rewritten in the same edit that deleted it, so a green round says
+## nothing about whether the arm is still there. **`_turning` was its only flag** and this counts the
+## writes of it — one line of the scan, and it goes red the day somebody puts the drag back without
+## saying so.
+func _the_turn_flag_has_no_writers_left(t) -> void:
+	var text := FileAccess.get_file_as_string("res://src/shell/game.gd")
+	t.ok(text.length() > 0, "자가 점검 — 셸의 원문을 실제로 읽었다 (%d자)" % text.length())
+	var re := RegEx.new()
+	re.compile("^\\s*_turning\\s*=")
+	var writes := 0
+	var mentions := 0
+	for raw in text.split("\n"):
+		var line := raw
+		var hash_at := line.find("#")
+		if hash_at >= 0:
+			line = line.substr(0, hash_at)
+		if re.search(line) != null:
+			writes += 1
+		if raw.contains("_turning"):
+			mentions += 1
+	t.eq(writes, 0, "셸에 _turning 을 쓰는 줄이 하나도 안 남았다")
+	# ⚠ **The scanner's own self-check.** `not found` is satisfied by a typo, a renamed file or an
+	# empty string; this says the name is still in the file — as a tombstone — so the scan is looking
+	# at something.
+	t.ok(mentions > 0, "그러면서 그 이름은 무덤으로 남아 있다 (%d줄) — 스캐너가 헛돌지 않는다" % mentions)
+	# ⚠ **And the scanner catches a write when there is one to catch**, or the row above passes for a
+	# regular expression that can never match.
+	var probe := "\tif x:\n\t\t_turning = click.pressed\n"
+	var probe_hits := 0
+	for raw in probe.split("\n"):
+		if re.search(raw) != null:
+			probe_hits += 1
+	t.eq(probe_hits, 1, "스캐너 자가 점검 — 진짜 쓰기 한 줄은 잡는다")
+
+
+## **W, A, S and D hold a screen direction and the camera keeps travelling on the clock** (2026-08-30,
+## the user: 「마우스 돌리다가 보이면 그때 가는 걸로」).
+##
+## ⚠⚠ **THIS FUNCTION WAS DELETED WITH THE KEYS ON 2026-08-31 AND IT IS BACK** (2026-09-02). **What it
+## measures is not restored unchanged**: the old rows all sat on a `_pan_keys` vector that was added
+## to and subtracted from, and the shell holds one flag per key now — so the echo row and the
+## two-keys row below are pointed at a different mechanism with the same claim.
+##
+## ⚠⚠ **HELD STATE, NOT ONE STEP PER EVENT, AND EVERY ROW HERE TURNS ON THAT.** The press is sent once
+## and the camera is expected to keep moving across frames; the release is sent and it is expected to
+## stop. **A shell that panned once per event passes nothing below** — and a shell that never read the
+## release passes the first half and fails the last.
+##
+## ⚠ **`game._process(dt)` by hand and never a pumped frame.** Headless deltas are whatever the machine
+## gives, and the pan is a rate — a row that read the real frame delta would be measuring the test
+## runner. The sim's own clock is stopped by the caller before this, so nothing else moves.
+func _the_pan_keys_move_the_camera_and_stop(t, game, fs: FieldView) -> void:
+	# ⚠⚠ **PARKED AT THE WESTERN ROAM EDGE, WITH SMALL FRAMES, AND BOTH ARE MEASURED RATHER THAN
+	# TASTE.** `CAM_PAN_KEY_PX_PER_SEC` crosses a large share of this island's east-west range in a
+	# quarter of a second — **a first draft of this row using 0.25 s frames from the middle hit the
+	# stop on its second frame and the rate rows below both read 0.0.** Starting at the far edge with
+	# 1/20 s frames leaves the stop many frames away, which is where a rate can be measured at all.
+	_park(fs, Vector2(-99999.0, 0.0))
+	var start := fs.cam_px
+
+	# Nothing held: frames pass and the camera stands still. **The floor of every row below** — a
+	# `_process` that panned unconditionally would move here and nothing else would notice.
+	game._process(0.05)
+	t.eq(fs.cam_px, start, "아무 키도 안 눌렀으면 프레임이 지나도 카메라가 그대로다")
+
+	game._unhandled_input(_key_edge(KEY_D, true))
+	game._process(0.05)
+	var after_d := fs.cam_px
+	t.ok(after_d.x > start.x + 1.0,
+		"D 를 누르고 있으면 카메라가 동쪽으로 간다 (%.2f → %.2f)" % [start.x, after_d.x])
+	t.ok(absf(after_d.y - start.y) < 0.001, "그동안 세로로는 안 움직인다")
+
+	# **Still down: it keeps going.** One event, two frames — this is what separates a hold from a step.
+	game._process(0.05)
+	t.ok(fs.cam_px.x > after_d.x + 1.0,
+		"키를 그대로 두면 다음 프레임에도 계속 간다 (%.2f → %.2f)" % [after_d.x, fs.cam_px.x])
+
+	# **The rate is the delta's**, so twice the time is twice the distance. A pan that ignored `delta`
+	# would move the same amount for both, and this is the only row that can see it.
+	var mark := fs.cam_px
+	game._process(0.02)
+	var slow := fs.cam_px.x - mark.x
+	mark = fs.cam_px
+	game._process(0.04)
+	var fast := fs.cam_px.x - mark.x
+	t.ok(slow > 0.5, "짧은 프레임에도 실제로 움직였다 (%.2f) — 0이면 아래가 공허하다" % slow)
+	t.ok(fast > slow * 1.5,
+		"움직인 거리가 프레임 시간에 비례한다 (0.02초에 %.1f, 0.04초에 %.1f)" % [slow, fast])
+
+	# **The release stops it.** ⚠ Without this a held key pans for the rest of the island.
+	game._unhandled_input(_key_edge(KEY_D, false))
+	var stopped := fs.cam_px
+	game._process(0.05)
+	t.eq(fs.cam_px, stopped, "손을 떼면 멈춘다")
+
+	# **A repeat is not a second key.** OS auto-repeat delivers `pressed = true, echo = true` many
+	# times a second. ⚠ **The shell holds a FLAG per key now**, so an echo writes the same `true` again
+	# — but a handler rewritten to add would pass every other row in this function and only this one
+	# would see it.
+	game._unhandled_input(_key_edge(KEY_A, true))
+	mark = fs.cam_px
+	game._process(0.02)
+	var one_key := mark.x - fs.cam_px.x
+	for _r in 5:
+		game._unhandled_input(_key_edge(KEY_A, true, true))
+	mark = fs.cam_px
+	game._process(0.02)
+	var with_echo := mark.x - fs.cam_px.x
+	t.ok(absf(with_echo - one_key) < 0.01,
+		"자동 반복이 와도 속도가 그대로다 (%.2f · %.2f)" % [one_key, with_echo])
+	t.ok(one_key > 1.0, "그리고 A 는 서쪽으로 간다 (자가 점검 — 0이면 위가 공허하다)")
+	game._unhandled_input(_key_edge(KEY_A, false))
+
+	# **Two keys are two axes**, and releasing one leaves the other running — the failure a handler
+	# that WROTE the whole direction instead of holding one flag per key would have.
+	# ⚠ **The SOUTH-west corner and not the north-west one.** W looks north, so parked against the
+	# northern stop this pair reads 0.0 on the y axis and says nothing about either key — measured.
+	_park(fs, Vector2(-99999.0, 99999.0))
+	game._unhandled_input(_key_edge(KEY_W, true))
+	game._unhandled_input(_key_edge(KEY_D, true))
+	mark = fs.cam_px
+	game._process(0.03)
+	t.ok(fs.cam_px.x > mark.x + 1.0 and fs.cam_px.y != mark.y,
+		"W 와 D 를 같이 누르면 두 축이 다 움직인다")
+	game._unhandled_input(_key_edge(KEY_D, false))
+	mark = fs.cam_px
+	game._process(0.03)
+	t.ok(absf(fs.cam_px.x - mark.x) < 0.001 and fs.cam_px.y != mark.y,
+		"D 만 떼면 가로는 멎고 W 는 계속 간다")
+	game._unhandled_input(_key_edge(KEY_W, false))
+
+	# **W and S together cancel**, which is the other half of 「a flag per key」: an axis written whole
+	# would leave whichever key arrived last driving the board.
+	# ⚠⚠ **BOTH STOPS OR ONLY ONE OF THE TWO WINNERS IS CAUGHT.** Parked against the north stop a W
+	# that won would be eaten by the clamp and this would read 0.0 either way; parked against the
+	# south stop the same is true of S. **The pair is what pins it.**
+	for corner in [Vector2(-99999.0, -99999.0), Vector2(-99999.0, 99999.0)]:
+		_park(fs, corner as Vector2)
+		game._unhandled_input(_key_edge(KEY_W, true))
+		game._unhandled_input(_key_edge(KEY_S, true))
+		mark = fs.cam_px
+		game._process(0.05)
+		t.eq(fs.cam_px, mark, "W 와 S 를 같이 누르면 서로 지워서 안 움직인다 (세로 %.0f 쪽 끝에서)"
+			% (corner as Vector2).y)
+		game._unhandled_input(_key_edge(KEY_W, false))
+		game._unhandled_input(_key_edge(KEY_S, false))
+
+	# **It stops at the roam edge and does not run out to sea forever.**
+	# ⚠⚠ **NO LITERAL IS BORROWED FROM `net_camera` HERE.** Its clamp rows drive a bare `FieldView` at
+	# zoom 1.0 on the 48 x 32 default; this net drives the real shell, which surveys its own zoom on
+	# the island that actually loaded. **The shape carries and the numbers do not.**
+	_park(fs, Vector2(-99999.0, 0.0))
+	start = fs.cam_px
+	game._unhandled_input(_key_edge(KEY_D, true))
+	for _f in 40:
+		game._process(0.25)
+	var edge := fs.cam_px
+	game._process(0.25)
+	t.ok(fs.cam_px.distance_to(edge) < 0.001, "계속 눌러도 바다 테두리에서 멈춘다 (%.2f)" % edge.x)
+	t.ok(edge.x > start.x + Look.TILE_PX,
+		"자가 점검 — 멈추기까지 실제로 한 조각보다 훨씬 멀리 갔다: 못 움직이는 카메라가 아니다")
+	game._unhandled_input(_key_edge(KEY_D, false))
+	# ⚠ **The anti-vacuity half, and it reads no bound at all.** The other way still moves, so what
+	# stopped the camera above is a wall on that side and not a pan that quietly died.
+	game._unhandled_input(_key_edge(KEY_A, true))
+	game._process(0.05)
+	t.ok(fs.cam_px.x < edge.x - 1.0,
+		"반대로 누르면 그 자리에서 다시 움직인다 — 멈춘 것은 테두리지 죽은 카메라가 아니다 (%.2f)"
+			% fs.cam_px.x)
+	game._unhandled_input(_key_edge(KEY_A, false))
+
+
+## **The pointer parked against a side of the window pans the camera, and that is the other way it
+## travels** (2026-08-30, the user: 「wasd 보다는 마우스가 끝으로 가면 자동으로 이동이 맞을듯」).
+##
+## ⚠⚠ **THIS FUNCTION AND `_a_walkable_point_inside_a_band` WERE DELETED ON 2026-08-31** (the user:
+## 「그것도 지워줘」) **AND BOTH ARE BACK** (2026-09-02), with the band and in the same reversal as the
+## keys. The rows are the ones that were deleted: that a parked pointer pans and keeps panning, that
+## the distance is the frame's own delta, that the band is 28 px wide at BOTH ends, that it ramps with
+## depth, that a corner is not normalised, that a pointer off the glass is nothing rather than the
+## deepest point, that alt-tab and a mouse-exit each stop it with their own flag, and that a press near
+## the edge still commands the 조각 under the finger.
+##
+## ⚠⚠ **DRIVEN THE WAY THE OS DRIVES IT — a motion event, then frames — AND NOTHING HERE READS THE
+## `Input` SINGLETON.** Headless there is no cursor to move, so a shell that polled the singleton
+## would be unmeasurable. **The position comes off the motion event**, which is why this can be
+## measured at all.
+##
+## ⚠ **`game._process(dt)` by hand and never a pumped frame**, same as the pan keys: the edge is a
+## rate, and a row that read the machine's own frame delta would be measuring the runner.
+func _the_edge_of_the_window_pans(t, game, fs: FieldView) -> void:
+	var w := Look.VIEWPORT_W_PX
+	var h := Look.VIEWPORT_H_PX
+	var mid := Vector2(w * 0.5, h * 0.5)
+	# ⚠⚠ **A LITERAL AND DELIBERATELY NOT `Look.CAM_EDGE_PAN_BAND_PX`, AND THIS WAS MEASURED.** The
+	# first draft read the constant, so the band-width rows below moved their own sample points
+	# whenever the constant moved — **widening the band to 200 px in `look.gd` left this net entirely
+	# green.** A check that reads the number it is checking is not measuring the number.
+	# ⚠ **It will redden when somebody retunes the band, and that is what it is for**: the band width
+	# is a decision nobody has looked at on a screen yet, and this is where the two ends of it are
+	# written down.
+	var band := 28.0
+	t.ok(not game._press_open and not game._panning,
+		"자가 점검 — 시작할 때 열려 있는 누름이 없다 (있으면 띠가 통째로 잠긴다)")
+
+	# **The floor of everything below.** A `_process` that panned on any pointer position at all would
+	# move here, and no other row in this file would see it.
+	_park(fs, Vector2(-99999.0, -99999.0))
+	game._unhandled_input(_motion(mid, Vector2.ZERO))
+	var still := fs.cam_px
+	game._process(0.1)
+	t.eq(fs.cam_px, still, "커서가 화면 한가운데면 프레임이 지나도 카메라가 안 움직인다")
+
+	# -- the right edge: it starts, it keeps going, it is a rate, and leaving stops it ----------------
+	_park(fs, Vector2(-99999.0, 0.0))
+	var start := fs.cam_px
+	game._unhandled_input(_motion(Vector2(w - 1.0, mid.y), Vector2.ZERO))
+	game._process(0.1)
+	t.ok(fs.cam_px.x > start.x + 1.0,
+		"커서를 오른쪽 끝에 두면 카메라가 동쪽으로 간다 (%.2f → %.2f)" % [start.x, fs.cam_px.x])
+	t.ok(absf(fs.cam_px.y - start.y) < 0.001, "그동안 세로로는 안 움직인다")
+
+	# **One event, two frames.** This is what separates a pointer that is HELD at the edge from a shell
+	# that panned once because a motion arrived.
+	var after := fs.cam_px
+	game._process(0.1)
+	t.ok(fs.cam_px.x > after.x + 1.0,
+		"커서를 그대로 두면 다음 프레임에도 계속 간다 (%.2f → %.2f)" % [after.x, fs.cam_px.x])
+
+	# **The rate is the frame's**, so twice the time is twice the distance. An edge pan that ignored
+	# `delta` would move the same amount for both.
+	var mark := fs.cam_px
+	game._process(0.02)
+	var slow := fs.cam_px.x - mark.x
+	mark = fs.cam_px
+	game._process(0.04)
+	var fast := fs.cam_px.x - mark.x
+	t.ok(slow > 0.5, "짧은 프레임에도 실제로 움직였다 (%.2f) — 0이면 아래가 공허하다" % slow)
+	t.ok(fast > slow * 1.5,
+		"움직인 거리가 프레임 시간에 비례한다 (0.02초에 %.1f, 0.04초에 %.1f)" % [slow, fast])
+
+	# **Moving the pointer inside stops it.** ⚠ Without this the camera pans for the rest of the island
+	# after one brush of the edge.
+	game._unhandled_input(_motion(mid, Vector2.ZERO))
+	var stopped := fs.cam_px
+	game._process(0.1)
+	t.eq(fs.cam_px, stopped, "커서를 안쪽으로 옮기면 멈춘다")
+
+	# -- the other three sides, each against its own stop ---------------------------------------------
+	_park(fs, Vector2(99999.0, 0.0))
+	start = fs.cam_px
+	game._unhandled_input(_motion(Vector2(0.0, mid.y), Vector2.ZERO))
+	game._process(0.1)
+	t.ok(fs.cam_px.x < start.x - 1.0,
+		"왼쪽 끝은 서쪽으로 — 오른쪽과 반대다 (%.2f → %.2f)" % [start.x, fs.cam_px.x])
+
+	_park(fs, Vector2(0.0, 99999.0))
+	start = fs.cam_px
+	game._unhandled_input(_motion(Vector2(mid.x, 0.0), Vector2.ZERO))
+	game._process(0.1)
+	t.ok(fs.cam_px.y < start.y - 1.0,
+		"위쪽 끝은 북쪽으로 간다 (%.2f → %.2f)" % [start.y, fs.cam_px.y])
+	t.ok(absf(fs.cam_px.x - start.x) < 0.001, "그동안 가로로는 안 움직인다")
+
+	_park(fs, Vector2(0.0, -99999.0))
+	start = fs.cam_px
+	game._unhandled_input(_motion(Vector2(mid.x, h - 1.0), Vector2.ZERO))
+	game._process(0.1)
+	t.ok(fs.cam_px.y > start.y + 1.0,
+		"아래쪽 끝은 남쪽으로 — 위와 반대다 (%.2f → %.2f)" % [start.y, fs.cam_px.y])
+
+	# -- the band has a WIDTH, and it is 28 px on BOTH sides of the window -----------------------------
+	# ⚠⚠ **BOTH ENDS OR THE CONSTANT IS UNPINNED.** The inside row alone stays green with a band the
+	# width of the screen; the outside row alone stays green with no band at all. ⚠ **And both SIDES**:
+	# a band computed from one edge only would leave one of these two pairs entirely green.
+	_park(fs, Vector2(-99999.0, 0.0))
+	game._unhandled_input(_motion(Vector2(w - band + 1.0, mid.y), Vector2.ZERO))
+	var lip_from := fs.cam_px
+	game._process(0.1)
+	var at_lip := fs.cam_px.x - lip_from.x
+	t.ok(at_lip > 0.5, "오른쪽 띠 안쪽 입술(27px)에서도 실제로 움직인다 (%.2f px)" % at_lip)
+	var outside := fs.cam_px
+	game._unhandled_input(_motion(Vector2(w - band - 1.0, mid.y), Vector2.ZERO))
+	game._process(0.1)
+	t.eq(fs.cam_px, outside,
+		"29px 안쪽이면 안 움직인다 — 오른쪽 띠가 실제로 %dpx 다" % int(band))
+
+	_park(fs, Vector2(99999.0, 0.0))
+	game._unhandled_input(_motion(Vector2(band - 1.0, mid.y), Vector2.ZERO))
+	lip_from = fs.cam_px
+	game._process(0.1)
+	t.ok(lip_from.x - fs.cam_px.x > 0.5,
+		"왼쪽 띠 안쪽 입술(27px)에서도 움직인다 (%.2f px)" % (lip_from.x - fs.cam_px.x))
+	outside = fs.cam_px
+	game._unhandled_input(_motion(Vector2(band + 1.0, mid.y), Vector2.ZERO))
+	game._process(0.1)
+	t.eq(fs.cam_px, outside, "29px 안쪽이면 안 움직인다 — 왼쪽 띠도 %dpx 다" % int(band))
+
+	# -- the ramp: deeper is faster, and the lip is 0.30 of the top speed ------------------------------
+	# ⚠⚠ **THE EXPECTED RATIO IS COMPUTED BY HAND HERE AND NOT READ OUT OF `look.gd`.** At the glass
+	# the depth is 1.0 and the ramp is 1.0; one pixel inside the lip the depth is 1/28, so the ramp is
+	# `0.30 + 0.70 * 1/28` = **0.325**. Reading `CAM_EDGE_PAN_LIP_FACTOR` here would leave the row
+	# green for every value the constant could take, which is the shape this file has already measured.
+	_park(fs, Vector2(-99999.0, 0.0))
+	game._unhandled_input(_motion(Vector2(w, mid.y), Vector2.ZERO))
+	mark = fs.cam_px
+	game._process(0.02)
+	var deep := fs.cam_px.x - mark.x
+	_park(fs, Vector2(-99999.0, 0.0))
+	game._unhandled_input(_motion(Vector2(w - band + 1.0, mid.y), Vector2.ZERO))
+	mark = fs.cam_px
+	game._process(0.02)
+	var shallow := fs.cam_px.x - mark.x
+	t.ok(deep > 0.5, "자가 점검 — 유리 끝에서 실제로 움직인다 (%.3f)" % deep)
+	t.ok(absf(shallow / deep - 0.325) < 0.005,
+		"입술 속도가 맨 끝의 0.325 배다 — 0.30 에서 1.0 까지 곧게 오른다 (%.3f / %.3f)"
+			% [shallow, deep])
+
+	# -- a corner is two edges, and the result is NOT normalised --------------------------------------
+	_park(fs, Vector2(-99999.0, -99999.0))
+	game._unhandled_input(_motion(Vector2(w, h), Vector2.ZERO))
+	mark = fs.cam_px
+	game._process(0.02)
+	var corner := fs.cam_px - mark
+	t.ok(corner.x > 0.5 and corner.y > 0.5,
+		"구석에서는 두 축이 다 움직인다 (%.3f, %.3f)" % [corner.x, corner.y])
+	_park(fs, Vector2(-99999.0, -99999.0))
+	game._unhandled_input(_motion(Vector2(w, mid.y), Vector2.ZERO))
+	mark = fs.cam_px
+	game._process(0.02)
+	var side_x := fs.cam_px.x - mark.x
+	# ⚠⚠ **THE DECISION THIS ROW HOLDS**: the keys are deliberately un-normalised (W and D together
+	# travel 1.41x), and the edge matches them. **Normalise the corner and this row reddens** — the
+	# corner's horizontal speed would fall to 1/√2 of a side's.
+	t.ok(absf(corner.x - side_x) < 0.01,
+		"구석에서도 가로 속도가 변 하나일 때와 똑같다 — 정규화하지 않는다 (%.3f · %.3f)"
+			% [corner.x, side_x])
+
+	# -- off the glass entirely is nothing, not「as deep as it goes」 ----------------------------------
+	_park(fs, Vector2(-99999.0, 0.0))
+	game._unhandled_input(_motion(Vector2(w + 40.0, mid.y), Vector2.ZERO))
+	var gone := fs.cam_px
+	game._process(0.1)
+	t.eq(fs.cam_px, gone, "창 밖으로 나간 커서는 카메라를 안 민다 — 가장 깊은 지점이 아니라 없는 것이다")
+
+	# -- ONE frame, ONE `pan_by`: the two clocked sources are summed ------------------------------------
+	# ⚠⚠ **THIS IS THE ROW THE SINGLE CALL LIVES OR DIES ON.** Two `pan_by` calls in one frame are
+	# indistinguishable from one summed call while nothing clamps — `pan_by` is linear — so the first
+	# pair below says the two sources ADD, and the pair after it puts them against each other at a
+	# stop, which is the one place a second clamp can be seen.
+	# ⚠ **The left drag still calls `pan_by` from the input handler and is out of this claim**: what is
+	# measured is that the two CLOCKED sources cost one call between them.
+	_park(fs, Vector2(-99999.0, 0.0))
+	game._unhandled_input(_motion(mid, Vector2.ZERO))
+	game._unhandled_input(_key_edge(KEY_D, true))
+	mark = fs.cam_px
+	game._process(0.02)
+	var key_only := fs.cam_px.x - mark.x
+	game._unhandled_input(_key_edge(KEY_D, false))
+	game._unhandled_input(_motion(Vector2(w, mid.y), Vector2.ZERO))
+	mark = fs.cam_px
+	game._process(0.02)
+	var band_only := fs.cam_px.x - mark.x
+	game._unhandled_input(_key_edge(KEY_D, true))
+	mark = fs.cam_px
+	game._process(0.02)
+	var both := fs.cam_px.x - mark.x
+	game._unhandled_input(_key_edge(KEY_D, false))
+	t.ok(key_only > 1.0 and band_only > 1.0,
+		"자가 점검 — 키만으로도 띠만으로도 실제로 움직인다 (%.2f · %.2f)" % [key_only, band_only])
+	t.ok(absf(band_only - key_only) < 0.01,
+		"띠의 맨 끝 속도가 키의 속도와 같다 — 900 이 두 벌 있는 게 아니다 (%.2f · %.2f)"
+			% [band_only, key_only])
+	t.ok(absf(both - (key_only + band_only)) < 0.01,
+		"둘을 같이 쓰면 정확히 둘을 더한 만큼 간다 (%.2f + %.2f = %.2f)"
+			% [key_only, band_only, both])
+
+	# **Against each other, at the stop.** The summed velocity is exactly zero, so the camera does not
+	# move at all. ⚠⚠ **Two `pan_by` calls would move it**: the eastward one is eaten by the clamp and
+	# the westward one then travels from the clamped point — a camera sitting on the roam edge eating
+	# one of its two inputs with nothing on screen saying so.
+	_park(fs, Vector2(99999.0, 0.0))
+	game._unhandled_input(_motion(Vector2(0.0, mid.y), Vector2.ZERO))
+	game._unhandled_input(_key_edge(KEY_D, true))
+	var at_stop := fs.cam_px
+	game._process(0.05)
+	t.eq(fs.cam_px, at_stop,
+		"동쪽 끝에서 D 와 왼쪽 띠가 맞서면 한 프레임이 통째로 0 이다 — 클램프를 두 번 지나지 않는다")
+	game._unhandled_input(_key_edge(KEY_D, false))
+	# ⚠ **The anti-vacuity half**: the same pointer, with no key, does move west from that stop.
+	mark = fs.cam_px
+	game._process(0.05)
+	t.ok(fs.cam_px.x < mark.x - 1.0,
+		"키를 떼면 같은 자리에서 띠가 서쪽으로 민다 — 위의 0 은 죽은 띠가 아니다 (%.2f)" % fs.cam_px.x)
+
+	# -- alt-tab, and the pointer leaving the window ---------------------------------------------------
+	_park(fs, Vector2(-99999.0, 0.0))
+	game._unhandled_input(_motion(Vector2(w - 1.0, mid.y), Vector2.ZERO))
+	mark = fs.cam_px
+	game._process(0.02)
+	t.ok(fs.cam_px.x > mark.x + 0.5, "자가 점검 — 지금 실제로 밀고 있다 (아니면 아래가 전부 공허하다)")
+	game._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	var away := fs.cam_px
+	game._process(0.2)
+	t.eq(fs.cam_px, away, "창이 포커스를 잃으면 멈춘다 — 알트탭 하는 동안 섬이 계속 흐르지 않는다")
+	game._notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
+	game._process(0.02)
+	t.ok(fs.cam_px.x > away.x + 0.1, "돌아오면 다시 간다 — 멈춘 게 아니라 멈춰 세운 것이다")
+
+	game._notification(Node.NOTIFICATION_WM_MOUSE_EXIT)
+	var left := fs.cam_px
+	game._process(0.2)
+	t.eq(fs.cam_px, left, "커서가 창을 아예 벗어나면 멈춘다")
+	# ⚠⚠ **THE ROW THAT KEEPS THE TWO FLAGS APART.** One flag for both causes would let a focus event
+	# clear a mouse exit it knows nothing about — alt-tab back with the cursor still outside, and the
+	# island starts travelling again.
+	game._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	game._notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
+	var both_flags := fs.cam_px
+	game._process(0.2)
+	t.eq(fs.cam_px, both_flags, "포커스가 돌아와도 커서가 밖이면 안 움직인다 — 깃발 둘이 서로를 안 지운다")
+	game._notification(Node.NOTIFICATION_WM_MOUSE_ENTER)
+	game._process(0.02)
+	t.ok(fs.cam_px.x > both_flags.x + 0.1, "커서가 창으로 돌아오면 다시 간다")
+
+	# -- ⚠⚠ THE FOCUS FLAG GATES THE KEYS TOO, AND IT DID NOT WHEN THE BAND WAS DELETED ----------------
+	# The two flags were read by the band ALONE, and a focus loss delivers no key-up — **so a held W
+	# travelled the whole time the player was away**, while the Done-when row said nothing moves. This
+	# pair is the key half, measured on its own with the pointer parked harmlessly in the middle.
+	_park(fs, Vector2(-99999.0, 0.0))
+	game._unhandled_input(_motion(mid, Vector2.ZERO))
+	game._unhandled_input(_key_edge(KEY_D, true))
+	mark = fs.cam_px
+	game._process(0.02)
+	t.ok(fs.cam_px.x > mark.x + 0.5, "자가 점검 — 키만으로 지금 실제로 가고 있다")
+	game._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	var key_away := fs.cam_px
+	game._process(0.2)
+	t.eq(fs.cam_px, key_away, "키를 누른 채 알트탭하면 카메라가 선다 — 띠만의 깃발이 아니다")
+	# ⚠⚠ **AND THE KEY IS DROPPED, NOT MERELY SILENCED.** The release lands on whatever took the
+	# focus, so a flag left set would start travelling again the moment the window came back.
+	game._notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
+	game._process(0.2)
+	t.eq(fs.cam_px, key_away, "돌아와도 그 키는 다시 안 민다 — 못 본 손 떼기를 기다리지 않는다")
+	game._unhandled_input(_key_edge(KEY_D, true))
+	game._process(0.02)
+	t.ok(fs.cam_px.x > key_away.x + 0.5, "다시 누르면 다시 간다 (자가 점검 — 키가 죽은 게 아니다)")
+	game._unhandled_input(_key_edge(KEY_D, false))
+
+	# -- the band and the walk order overlap, and the order wins ---------------------------------------
+	# ⚠⚠ **A CLICK NEAR THE EDGE MUST STILL COMMAND, AND THE 조각 IT COMMANDS MUST BE THE ONE UNDER THE
+	# FINGER.** `_end_press` resolves `_press_at` against the camera as it stands at RELEASE — so a
+	# camera that slid between the press and the release sends the body somewhere the player never
+	# pointed at. **The shell holds the edge still for the length of a press**, and these rows are that.
+	# ⚠ **The gate is restored as it was and is not re-decided here** — see `_edge_pan_dir`, which
+	# records that 03-04 and 03-11 are where it is next argued about.
+	var b: Battle = game.battle
+	_park(fs, Vector2(-99999.0, 0.0))
+	var band_pt := _a_walkable_point_inside_a_band(game, b)
+	t.ok(band_pt.x >= 0.0, "자가 점검 — 가장자리 띠 안에 걸을 수 있는 조각이 있다 (없으면 아래가 공허하다)")
+	if band_pt.x < 0.0:
+		return
+	var band_tile: int = game._tile_at(band_pt)
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
+	# ⚠ **The hand has to be holding somebody**, because a press on a 조각 with an EMPTY hand picks
+	# rather than orders — see `_press_the_island`, whose two arms this row only ever walks one of.
+	game._let_go()
+	var pick_ok := false
+	for raw in b.ashore_ids():
+		if not game.hand.pick(b, int(raw)):
+			continue
+		if game.hand.can_reach_block(b.grid.block_of(band_tile)):
+			pick_ok = true
+			break
+	t.ok(pick_ok, "자가 점검 — 그 띠 안 칸까지 보낼 수 있는 몸을 쥐었다")
+	if not pick_ok:
+		game._let_go()
+		game._unhandled_input(_motion(mid, Vector2.ZERO))
+		return
+	game._unhandled_input(_motion(band_pt, Vector2.ZERO))
+	game._unhandled_input(_press(band_pt))
+	var pressed_at := fs.cam_px
+	game._process(0.2)
+	t.eq(fs.cam_px, pressed_at,
+		"누르고 있는 동안은 가장자리가 카메라를 안 민다 — 누른 조각이 뗄 때까지 그 자리에 있다")
+	t.eq(game._tile_at(band_pt), band_tile, "그래서 뗄 때 겨누는 조각이 누를 때와 같은 조각이다")
+	game._unhandled_input(_release(band_pt))
+	var sent := 0
+	for i in b.soldier_order.size():
+		if int(b.soldier_order[i]) >= 0:
+			sent += 1
+	t.ok(sent > 0, "그리고 띠 안에서 눌러도 몸은 그 칸으로 간다 — 가장자리가 명령을 안 삼킨다")
+	# ⚠ **The anti-vacuity row, and it comes last on purpose.** Everything above would also be green if
+	# `band_pt` simply were not in a band at all; this is what says it was.
+	var released := fs.cam_px
+	game._process(0.1)
+	t.ok(fs.cam_px.distance_to(released) > 0.5,
+		"손을 떼자마자 같은 자리에서 다시 민다 — 위의 정지는 그냥 띠 밖이어서가 아니다 (%.2f px)"
+			% fs.cam_px.distance_to(released))
+	# **Left as it was found**: the pointer back in the middle and no key down, so the rows after this
+	# one are not driven by a cursor this function parked.
+	game._unhandled_input(_motion(mid, Vector2.ZERO))
+	game._let_go()
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
+
+
+## Walks the four bands looking for a screen point that `_tile_at` answers with a walkable 조각, and
+## answers `(-1, -1)` when the island's own shape puts none of it under a band.
+##
+## ⚠ **Searched rather than written down as a literal**, because where the island sits under the band
+## moves with the island file, the zoom and the roam bound — and a literal point would go quietly
+## wrong on the next island rather than reddening.
+func _a_walkable_point_inside_a_band(game, b: Battle) -> Vector2:
+	var w := Look.VIEWPORT_W_PX
+	var h := Look.VIEWPORT_H_PX
+	var inset := 2.0
+	for edge in 4:
+		for step in 80:
+			var f := float(step) / 79.0
+			var p := Vector2.ZERO
+			if edge == 0:
+				p = Vector2(w - inset, 20.0 + f * (h - 40.0))
+			elif edge == 1:
+				p = Vector2(inset, 20.0 + f * (h - 40.0))
+			elif edge == 2:
+				p = Vector2(20.0 + f * (w - 40.0), inset)
+			else:
+				p = Vector2(20.0 + f * (w - 40.0), h - inset)
+			var tile: int = game._tile_at(p)
+			if tile >= 0 and int(b.grid.passable[tile]) != 0:
+				return p
+	return Vector2(-1.0, -1.0)
+
+
+## **A shell that has never seen the mouse pans nowhere** (2026-09-02).
+##
+## ⚠⚠ **`_pointer_at` STARTED AT `(0, 0)` FOR A DAY AND THE BAND'S GUARD IS `< 0.0`.** The origin is
+## harmless to the 이동선, which is what brought the field back on 2026-09-01 — and it is **1.0 deep on
+## both band axes**, so with the band restored every run would pan north-west at 1.41 x the top speed
+## from its first frame until the hand moved. This is the row that pins the sentinel.
+##
+## ⚠ **A FRESH shell and not the fixture above**, which has been fed motions since its second row.
+func _a_shell_that_never_saw_the_mouse_pans_nothing(t) -> void:
+	var game := QuitGame.new()
+	t.root.add_child(game)
+	await t.pump_frames(2)
+	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
+	game.set_process(false)
+	await t.pump_frames(2)
+	var fs: FieldView = game.field_view
+	t.ok(game._pointer_at.x < 0.0 and game._pointer_at.y < 0.0,
+		"움직임을 한 번도 못 본 셸의 커서는 유리 밖에 있다 %s" % str(game._pointer_at))
+	var start := fs.cam_px
+	for _f in 5:
+		game._process(0.2)
+	t.eq(fs.cam_px, start, "그래서 1초가 지나도 카메라가 한 픽셀도 안 움직인다")
+	# ⚠ **The anti-vacuity half.** One motion into a band and the same shell does pan — so the
+	# stillness above is the sentinel and not a pan that was never wired.
+	game._unhandled_input(_motion(Vector2(Look.VIEWPORT_W_PX, Look.VIEWPORT_H_PX * 0.5), Vector2.ZERO))
+	game._process(0.05)
+	t.ok(fs.cam_px.distance_to(start) > 0.5,
+		"움직임 한 번이 오면 같은 셸이 실제로 민다 (%.2f px)" % fs.cam_px.distance_to(start))
+	t.root.remove_child(game)
+	game.queue_free()
+
+
+## **A lost island stops travelling, and it stops for good** (2026-09-01, the user: 「딱 뜨고. 끝」).
+##
+## ⚠⚠ **THE CLOCKED PAN IS THE ONE INPUT THAT DOES NOT ARRIVE AS AN EVENT.** `_unhandled_input`
+## returns early on `battle.lost`, so **a key release during GAME OVER is swallowed** and a shell that
+## only gated the input handler would latch the pan on for the life of the process — the band needs no
+## event at all, so a cursor left near an edge slides a dead island and is still sliding when the next
+## one opens.
+##
+## ⚠ **`_press_open` latches by the identical route**, and once latched it kills the band permanently
+## through the gesture gate. **Same clear, same line**, and this function opens a press on purpose so
+## the row is not empty.
+func _a_lost_board_stops_travelling(t) -> void:
+	var game := QuitGame.new()
+	t.root.add_child(game)
+	await t.pump_frames(2)
+	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
+	game.set_process(false)
+	await t.pump_frames(2)
+	var fs: FieldView = game.field_view
+	var b: Battle = game.battle
+	var mid := Vector2(Look.VIEWPORT_W_PX * 0.5, Look.VIEWPORT_H_PX * 0.5)
+
+	# The key and the band, each live on a board that has not lost yet — the floor of everything below.
+	# ⚠ **The key is measured with the cursor in the middle and the band with no key down**, so
+	# neither self-check is carried by the other.
+	_park(fs, Vector2(-99999.0, 0.0))
+	game._unhandled_input(_motion(mid, Vector2.ZERO))
+	game._unhandled_input(_key_edge(KEY_D, true))
+	var mark := fs.cam_px
+	game._process(0.02)
+	t.ok(fs.cam_px.x > mark.x + 0.5, "자가 점검 — 살아 있는 판에서는 키가 민다")
+	game._unhandled_input(_key_edge(KEY_D, false))
+	# ⚠ **The cursor is left in the band from here on**, because a motion sent after the loss is
+	# swallowed by the same door — the band has to be aimed before the 성채 falls or the last row is
+	# a row about a cursor in the middle of the screen.
+	game._unhandled_input(_motion(Vector2(Look.VIEWPORT_W_PX, mid.y), Vector2.ZERO))
+	mark = fs.cam_px
+	game._process(0.02)
+	t.ok(fs.cam_px.x > mark.x + 0.5, "자가 점검 — 띠도 민다")
+	game._unhandled_input(_key_edge(KEY_D, true))
+	# A press left open at the moment the 성채 falls: its release is swallowed by the closed door.
+	game._unhandled_input(_press(mid))
+	t.ok(game._press_open, "자가 점검 — 누름이 열려 있다")
+
+	b.keep_hp = 0.0
+	game._process(Rules.SIM_SUBSTEP_SEC)
+	t.ok(b.lost, "성채가 무너져서 졌다 (자가 점검)")
+
+	# ⚠ **The key is still down as far as the OS is concerned**, and the release below is swallowed.
+	var still := fs.cam_px
+	game._process(0.2)
+	t.eq(fs.cam_px, still, "진 판은 안 흐른다 — 누른 채로 진 키가 남은 회차 내내 밀지 않는다")
+	game._unhandled_input(_key_edge(KEY_D, false))
+	game._process(0.2)
+	t.eq(fs.cam_px, still, "삼켜진 손 떼기 뒤에도 그대로다")
+	t.ok(game._pan_held.is_empty(), "쥐고 있던 키가 통째로 놓였다")
+	t.ok(not game._press_open and not game._panning,
+		"열려 있던 누름도 같이 놓였다 — 걸린 채로 남으면 다음 섬의 띠가 통째로 죽는다")
+
+	# ⚠⚠ **AND THE LAST ROW IS THE BAND WITH ITS OWN GATE ALREADY GONE.** The press flag was cleared
+	# two rows up, so the gesture gate is no longer what holds the band still — the cursor is sitting
+	# in the right-hand band and the only thing left stopping it is 「끝」.
+	game._process(0.2)
+	t.eq(fs.cam_px, still, "가장자리에 둔 커서도 죽은 섬을 안 민다")
+
+	t.root.remove_child(game)
+	game.queue_free()
 
 ## The right button's two edges. ⚠ **The release carries no position and the shell reads none** — see
 ## `_end_press`, whose `at` parameter was deleted the day the right button started using it.
@@ -1273,6 +2128,19 @@ func _rects_land_on_screen(t, label: String, rects: Array[Rect2]) -> void:
 func _key(code: int) -> InputEventKey:
 	var ev := InputEventKey.new()
 	ev.pressed = true
+	ev.keycode = code
+	return ev
+
+
+## The same event with an edge and an echo flag on it.
+##
+## ⚠⚠ **`_key` ALONE CANNOT MEASURE A HELD KEY AND THAT IS WHY THIS EXISTS.** It builds
+## `pressed = true` and nothing else — no release edge and no `echo` flag — so a WASD row written
+## against it measures the press half and **stays green over a camera that never stops.**
+func _key_edge(code: int, pressed: bool, echo: bool = false) -> InputEventKey:
+	var ev := InputEventKey.new()
+	ev.pressed = pressed
+	ev.echo = echo
 	ev.keycode = code
 	return ev
 

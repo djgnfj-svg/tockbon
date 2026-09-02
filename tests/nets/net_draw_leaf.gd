@@ -121,6 +121,10 @@ func _table() -> Dictionary:
 			"zoom_at": 0,
 			"_clamp_cam": 0,
 			"turn_by": 0,
+			# The 90° sweep Q and E ask for (2026-09-02). `turn_notch` adds to what is owed and
+			# `_sweep_the_yaw` pays a frame's share of it off through `turn_by` — neither draws.
+			"turn_notch": 0,
+			"_sweep_the_yaw": 0,
 			"tilt_by": 0,
 			"_place_camera": 0,
 			# The landscape: one mesh, built by SurfaceTool — no canvas stroke anywhere in it.

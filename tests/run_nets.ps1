@@ -55,8 +55,10 @@ $tmp = [System.IO.Path]::GetTempPath()
 # **A brand-new `class_name` file is invisible to `--headless --script`.** Measured twice on 4.7.1: the net
 #  that references it dies with `Parse error` and `Nonexistent function 'new' in base 'GDScript'` — and that
 #  shape does NOT reach the runner's zero-check detector, because the net never gets as far as `run()`.
-#  Only the stderr verdict below turns it red, so the round goes red for a reason that reads like broken code
-#  and is actually a missing import.
+#  ⚠⚠ **「Only the stderr verdict below turns it red」 was true until 2026-09-02 and is not any more.**
+#  That shape prints `[net] 0 passed` at exit code 0, so `Get-CheckCount` reddens it as well — measured live
+#  this round on a net whose stdout was 97 bytes and whose exit code was 0. **Two verdicts fire on it now.**
+#  Either way the round goes red for a reason that reads like broken code and is actually a missing import.
 #  **`--script` does not re-import on its own** (a rule file said it did, for two days, and four agents lost a
 #  round to it; that wrong line is gone now and this comment is what replaced it). Every plan that adds a class file walks into this, so the guard lives here rather than in
 #  someone's memory.
@@ -167,6 +169,34 @@ function Get-Abandoned([string]$stderr) {
     return ,$out
 }
 
+# **HOW MANY CHECKS THE NET REPORTED, read off the runner's own summary line.**
+#
+# ⚠⚠ **The predicate this serves is 「it ran no checks」, NOT 「there is no summary line」.**
+#  `run_nets.gd` prints its summary on **every** path that reaches its end — the path where the filter
+#  selected nothing and the loop body never ran once included. So a net that measured nothing still prints
+#  `[net] 0 passed` and exits 0, and a guard written on the line's ABSENCE reads that line and stays grey.
+#  The severed `await` this shape was measured on is recorded in `run_nets.gd`'s own header, and
+#  `how-nets-lie` holds the rounds where a whole net's count left the total without a red.
+# **The two summary shapes carry the total in different places**: `[net] N passed` ran N checks,
+#  `[net] N failed / M` ran M.
+# ⚠ **Not the pass count.** A net whose every check failed also passes 0, and calling that 「ran no
+#  checks」 would put a false label on a net that ran all of them — which is the failure this whole file
+#  is built against.
+#
+# ⚠⚠ **WRITTEN AND NOT RUN, 2026-09-02** (ticket 03-15). This function and the two verdicts that call it
+#  were written on a box with no `pwsh` and no `powershell` on it, so **not one line of it has executed.**
+#  The round that decided it ran through a stand-in that mirrors this wrapper's two jobs and is not this
+#  file. **Whoever next runs a round on Windows is the first person to run this.**
+function Get-CheckCount([string]$text) {
+    $n = 0
+    if ($text -match '\[net\]\s+(\d+)\s+passed') {
+        $n = [int]$Matches[1]
+    } elseif ($text -match '\[net\]\s+(\d+)\s+failed\s*/\s*(\d+)') {
+        $n = [int]$Matches[2]
+    }
+    return $n
+}
+
 # -- The net list. **The folder is scanned — it is never a hand-maintained list**, because a list someone forgets
 #    to add to is a net that silently stops running.
 $netFiles = Get-ChildItem -Path (Join-Path $root "tests\nets") -Filter "net_*.gd" | Sort-Object Name
@@ -275,6 +305,24 @@ if ($Serial) {
         Write-Host ""
         Write-Host "[침묵사] stderr에 선언되지 않은 출력이 $($noise.Count)줄 있다." -ForegroundColor Red
         foreach ($n in $noise) { Write-Host "  | $n" -ForegroundColor Red }
+        $exitCode = 1
+    }
+    # **NOT the same guard as `$ranNothing` below, and the difference is the whole of what it can see.**
+    #  One process runs every filtered net here and prints ONE summary for the batch, so this count is the
+    #  batch's and never a net's. ⇒ **It fires only when the WHOLE batch ran nothing.** A single net
+    #  vanishing inside a batch that still reported is invisible to it.
+    # ⚠⚠ **Measured, 2026-09-02**: `net_hand` and `net_islands` in one process with `net_hand`'s class
+    #  unresolvable printed `[net] 21 passed` at exit code 0 — `net_islands`' whole count, `net_hand`'s 91
+    #  checks gone, and this guard silent. **The parallel path catches that one; this path cannot.**
+    # ⚠ **Do not go hunting for the fix here.** One summary line carries one number for the batch, so a
+    #  per-net loss may not be recoverable from it at all. What is left is still worth having: the narrowed
+    #  run somebody actually reaches for to chase a vanished net is `-Serial` on that one net, and there the
+    #  batch IS the net.
+    # ⚠ A batch of zero cannot reach this at all: a filter matching no net already exited above, and this
+    #  side strips `net_` before matching while the engine side does not, so the engine's set is a superset.
+    if ((Get-CheckCount $stdout) -eq 0) {
+        Write-Host ""
+        Write-Host "[빈그물] 검사를 하나도 안 돌렸다 — 이 라운드는 아무것도 재지 않았다." -ForegroundColor Red
         $exitCode = 1
     }
     $sw.Stop()
@@ -432,7 +480,16 @@ foreach ($j in ($jobs | Sort-Object Net)) {
     # `$j.TimedOut` is read FIRST and on its own: a killed process's exit code is not dependable, and its
     #  stdout can carry a clean `[net] N passed` flushed before whatever loop it later hung in.
     $timedOut = [bool]$j.PSObject.Properties['TimedOut'] -and $j.TimedOut
-    $bad = $timedOut -or ($j.Proc.ExitCode -ne 0) -or ($noise.Count -gt 0)
+    # **A net that reported no checks at all is red, and it is the one shape here with no other door.**
+    #  Every neighbour on `$bad` covers something else: this net exits 0, it was not killed, and a boot that
+    #  dies before the first check leaves stderr empty so the noise verdict never fires either. What is left
+    #  is a grey 「통과 0」 row under a green wrapper, with that whole net's count quietly gone from the total
+    #  — and nothing in this round re-derives the total, so the number reads exactly like a whole one.
+    # ⚠ **`$timedOut` keeps its own net's verdict.** A killed process flushed whatever it had reached, and
+    #  the reason for its red is that we killed it, not what it printed. Stacking a second reason on that row
+    #  would name the wrong cause, so it is excluded rather than joined.
+    $ranNothing = (-not $timedOut) -and ((Get-CheckCount $stdout) -eq 0)
+    $bad = $timedOut -or ($j.Proc.ExitCode -ne 0) -or ($noise.Count -gt 0) -or $ranNothing
     if ($timedOut) {
         # A hung net's own count is meaningless — it reports whatever it reached before it stopped. Counting
         #  it into the round total would let a hang *raise* the number and read as progress.
@@ -457,6 +514,11 @@ foreach ($j in ($jobs | Sort-Object Net)) {
         # Put the reason at the TOP. A hung net that flushed some output first would otherwise print its
         #  partial failures and nothing saying the round never let it finish.
         $failLines = @(("x net_{0}: [시간초과] {1:N0}초 안에 안 끝났다 — 죽여서 빨강으로 만들었다. 멈춘 그물은 느린 그물이 아니다" -f $j.Net, $NetTimeoutSec)) + $failLines
+    }
+    if ($ranNothing) {
+        # Without this the row goes red carrying no reason at all: no `x ` line, no noise, nothing under the
+        #  header but the output path. A red whose cause is not printed is read as somebody else's problem.
+        $failLines = @(("x net_{0}: [빈그물] 검사를 하나도 안 돌렸다 — 이 그물의 통과 수 전부가 이 라운드 합계에서 조용히 빠졌다" -f $j.Net)) + $failLines
     }
 
     if ($bad) {

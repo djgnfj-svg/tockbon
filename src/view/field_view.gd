@@ -85,6 +85,26 @@ var zoom := 1.0
 ## fight, is 티켓 07, which is open precisely because turning IS the hand moving.
 var cam_yaw_deg := Look.CAM_YAW_DEG
 
+## **How many degrees of turn are still OWED**, signed. Q adds −90, E adds +90, and `_process` pays it
+## off a frame's worth at a time through `turn_by`.
+##
+## ⚠⚠ **REMAINING, AND NEVER A TARGET ANGLE.** `turn_by` wraps with `fmod(yaw + deg, 360.0)` and a
+## stored target does not wrap with it: **from yaw 270 an E press targets 360**, the step that would
+## reach it comes back through `fmod` as 0, the remainder becomes 360 again, and **the board spins for
+## ever.** Simulated exactly before it was written: 0, 90 and 180 settle in 14 frames and 270 is still
+## turning at frame 2000. ⚠ Wrapping the target instead is not the fix either — from 270 with a target
+## of 0 the remainder is −270 and the board sweeps three quarters the wrong way.
+## ⇒ **Nothing here is ever compared against an absolute angle**, so nothing can cross 360. Two
+## presses inside one sweep add up, Q then E cancels, and the last step is the exact remainder, so the
+## yaw lands ON the notch rather than near it.
+##
+## ⚠⚠ **IT IS ALSO WHAT KEEPS THE INSTRUMENTS WORKING.** Four live tools call `turn_by` directly on a
+## `FieldView` that is inside a real tree with `_process` running — two of them turn 45° on purpose to
+## photograph a seam measured at that angle. **A sweep that pulled the yaw toward a target would drag
+## every one of them back at 409°/s.** A direct `turn_by` leaves this at zero, the sweep stays idle,
+## and nothing that is not a key press is touched.
+var _yaw_remaining := 0.0
+
 ## How far the camera is tilted, in degrees off the horizon. **A runtime float like `cam_yaw_deg` and
 ## like `zoom`** — `Look.CAM_PITCH_DEG` is only where it starts. ⚠ Every conversion between the screen
 ## and the ground reads THIS and not the constant, or a tilted view answers a press with the tile the
@@ -384,6 +404,10 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	# grid that just loaded, and a constant could only ever answer it for one map size.
 	zoom = Look.survey_zoom_of(_map_tiles().x, _map_tiles().y)
 	cam_yaw_deg = Look.CAM_YAW_DEG
+	# ⚠ **A sweep in flight does not survive an island opening.** Without this, the quarter still owed
+	# when the last board closed would go on being paid onto the new one, off the angle `setup` just
+	# said the board opens at.
+	_yaw_remaining = 0.0
 	cam_pitch_deg = Look.CAM_PITCH_DEG
 	# ⚠⚠ **THE OPENING FRAME IS CENTRED HERE AND IT USED TO BE THE CLAMP THAT DID IT.** This was
 	# `cam_px = Vector2.ZERO` followed by `_clamp_cam()`, and it worked only because the clamp pinned
@@ -449,6 +473,9 @@ func _process(delta: float) -> void:
 	# ⚠ **After the tick and not before it.** Every remembered point is stamped with `_sea_clock`,
 	# and a stamp taken before the tick is a frame behind the hull the same frame is about to draw.
 	_paint_wake()
+	# ⚠ **Above `_place_camera` and not below it.** The sweep writes `cam_yaw_deg`, and the camera is
+	# placed from that field — a frame that placed first would draw every sweep one frame behind.
+	_sweep_the_yaw(delta)
 	_place_camera()
 	# ⚠ **The buffer is opened BEFORE the bodies and flushed after them.** A body's shadow is painted
 	# from inside `_paint_bodies` — it is a per-body fact, and that is the one loop with a body's
@@ -673,6 +700,38 @@ func turn_by(deg: float) -> void:
 	_clamp_cam()
 
 
+## **Asks for a notch of turn and returns immediately** — the board arrives over the next few frames.
+## Q hands this −`Look.CAM_YAW_SNAP_DEG` and E hands it +.
+##
+## ⚠⚠ **THIS IS THE ONLY WRITER OF `_yaw_remaining` OUTSIDE THE SWEEP ITSELF**, and that is what keeps
+## a direct `turn_by` — which four instruments make on a live tree — from being dragged anywhere.
+## ⚠ **It ADDS rather than replacing**, so two quick presses turn a half and neither is eaten mid-way;
+## Q then E cancels to nothing rather than leaving the board off a notch.
+func turn_notch(deg: float) -> void:
+	_yaw_remaining += deg
+
+
+## **Pays off one frame's share of the turn that is owed** (2026-09-02, the user choosing the sweep
+## over an instant snap: 「즉시 돌 거 같아. 도는 것이 보여」).
+##
+## ⚠ **The step is scaled by the frame's own delta**, so `_process(0.0)` moves nothing — which is what
+## lets every net that hand-sets `cam_yaw_deg` and then calls `_process` keep its number.
+## ⚠ **The last step is the exact remainder**, so the yaw lands on the notch instead of near it and the
+## next press starts from a whole quarter.
+func _sweep_the_yaw(delta: float) -> void:
+	if _yaw_remaining == 0.0:
+		return
+	# ⚠ **A sweep of 0.0 s is the INSTANT turn**, which is the other half of the choice the user made
+	# by looking — the whole remainder is paid on the first frame. Written as a branch rather than as a
+	# division, because dividing by the duration is `inf` and `inf * 0.0` is `nan`.
+	var share := absf(_yaw_remaining)
+	if Look.CAM_YAW_SWEEP_SEC > 0.0:
+		share = Look.CAM_YAW_SNAP_DEG / Look.CAM_YAW_SWEEP_SEC * delta
+	var step := clampf(_yaw_remaining, -share, share)
+	_yaw_remaining -= step
+	turn_by(step)
+
+
 ## Tilts the camera and keeps the ground point at the MIDDLE of the screen where it was — the same
 ## promise `turn_by` makes, and for the same reason: the vertical span changes with the pitch, so a
 ## tilt that only wrote the angle would slide the island under the cursor.
@@ -694,8 +753,8 @@ func tilt_by(deg: float) -> void:
 ## from the board the shell was reading.** Measured against `Camera3D.unproject_position` on island 0:
 ## a press aimed at the tile actually under the cursor landed a **mean of 18.6 tiles** away.
 ## ⚠ **It is not symmetric and cannot be absorbed into the yaw**: `cam_yaw_deg` is the player's, the
-## right-button drag writes it (Q and E did too until 2026-08-31), and 0 has to be the view the flat
-## board had.
+## turn keys write it — the right-button drag did from 2026-08-26 until it was deleted on 2026-09-02,
+## and Q and E carry it again — and 0 has to be the view the flat board had.
 func _place_camera() -> void:
 	if _cam == null:
 		return

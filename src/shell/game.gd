@@ -58,12 +58,49 @@ var battle: Battle = null
 ## verbs. **A selection rule written here would be a rule no net can reach.**
 var hand := Hand.new()
 
-## ⚠⚠ **`_pan_keys` STOOD HERE AND IT IS DELETED** (2026-08-31, the user: 「wasd 도 지워줘」). It was
-## the WASD direction held down, written on each key's two edges and spent by `_process` against the
-## frame's own delta — **held state and never one step per event**, because a key that panned per
-## event moves at the OS's auto-repeat rate.
-## ⚠ **The left-button drag is the only thing that moves the camera now.** The edge band went the
-## same day, and the keys followed it.
+## **The four pan keys and the SCREEN direction each one asks for.** ⚠⚠ **`_pan_keys` STOOD HERE, WAS
+## DELETED, AND THE KEYS ARE BACK IN A DIFFERENT SHAPE** (2026-08-31, the user: 「wasd 도 지워줘」;
+## restored 2026-09-02 because the selection box takes the left drag and there is then no hand left to
+## push the board with). **The deletion is kept rather than erased** — this repo records a flip.
+##
+## ⚠⚠ **THE SIGNS ARE THE MOUSE DRAG'S, NOT THE CAMERA'S.** `pan_by` takes the delta a DRAG would
+## deliver, and dragging the ground rightwards moves the view LEFT — so 「look right」 is a negative x
+## and 「look north」 is a positive y. Getting this backwards is a control that works and feels wrong,
+## which no check catches; the one thing that pins it is that a key, the band and a drag all go
+## through the same call.
+##
+## ⚠ **One table and not four branches**: a fifth key is one row here, and the direction lives beside
+## the key rather than in a handler that has to be kept in step with a list of fields.
+var _pan_dirs := {
+	KEY_W: Vector2(0.0, 1.0),
+	KEY_S: Vector2(0.0, -1.0),
+	KEY_A: Vector2(1.0, 0.0),
+	KEY_D: Vector2(-1.0, 0.0),
+}
+
+## **Which of those keys are down right now** — one held flag per key, and the pan direction is
+## DERIVED from them every frame.
+##
+## ⚠⚠ **HELD STATE AND NOT ONE STEP PER EVENT, AND THE DIFFERENCE IS THE WHOLE FEATURE.** A key that
+## panned once per event would move the camera at the OS's auto-repeat rate — a pause, then a stutter,
+## then a speed nobody chose and that differs per machine. **Panning is continuous or it is not
+## panning**, and 「looking around for a boat」 is the one thing the camera has to be good at
+## (2026-08-30, the user: 「마우스 돌리다가 보이면 그때 가는 걸로」).
+##
+## ⚠⚠ **FLAGS, AND NEITHER `+=`/`-=` NOR A WHOLE WRITTEN VECTOR.** Writing the vector whole loses the
+## other axis the moment two keys are held and one is let go; **adding and subtracting cannot be
+## cleared**, and a release swallowed by a closed door then leaves the camera travelling for the life
+## of the process. A flag is SET, so a repeat writes the same `true` twice and **an OS auto-repeat
+## echo cannot stack a second direction** — which is why there is no `echo` branch in `_on_pan_key`.
+##
+## ⚠⚠ **A NET CAN DRIVE THIS AND COULD NOT DRIVE `Input.is_key_pressed`.** The alternative was polling
+## the input singleton from `_process`; headless, nothing can put a key down in it, so the whole
+## feature would be unmeasurable — and `tests/README` already records half an input suite going green
+## while the other half was dead.
+##
+## ⚠ **Diagonals are NOT normalised**, deliberately: W and D together move the camera 1.41 times as
+## fast, which is what a drag already does — a mouse moving diagonally covers more ground too.
+var _pan_held := {}
 
 ## ⚠⚠ **`reward_view` AND `refit_view` STOOD HERE AND BOTH ARE DELETED** (2026-08-28, the user:
 ## 「고르는 창도 이제 필요 없는데 왜있지? 이것도 제거」 · 「둘 다 지우면 돼」) — the three-card screen
@@ -95,22 +132,50 @@ var _press_open := false
 ## drag back on the right button). It said whether the press in flight commands a body on a release in
 ## place, and it existed for exactly one reason: **both buttons opened the same press**, so something
 ## had to tell them apart without keeping a button index.
-## ⚠ **The right button no longer opens a press at all** — it turns the board — so this flag could
+## ⚠ **The right button no longer opens a press at all** — it turned the board — so this flag could
 ## only ever be `true`, and a gate that can only be true is not a gate, it is a deleted branch waiting
 ## to be noticed. **What kept the right button from commanding is now the wiring itself.**
+## ⚠⚠ **AND SINCE 2026-09-02 THE RIGHT BUTTON DOES NOTHING AT ALL** — the yaw drag went to Q and E, so
+## it is not that the button is busy turning, it is that the shell has no right-button branch left.
+## **03-11 is what picks it up**, and the flag it needs is this one.
 
-## ⚠⚠ **`_pointer_inside` AND `_window_focused` STOOD HERE AND BOTH ARE DELETED**
-## (2026-08-31, the user: 「화면 끝에 마우스 뒀을 때 이동되는 로직 ... 그것도 지워줘」). They were the two
-## flags that stopped the camera sliding while the player alt-tabbed away, and they existed for the
-## edge pan and for nothing else. **The edge pan is gone, so what read them is gone** — the
-## left-button drag and the right-button turn are the whole camera now.
+## **Whether the pointer is over this window, and whether this window has the focus.** ⚠⚠ **BOTH WERE
+## DELETED WITH THE EDGE BAND ON 2026-08-31** (the user: 「화면 끝에 마우스 뒀을 때 이동되는 로직 ...
+## 그것도 지워줘」) **and both come back with it** (2026-09-02). The old line said they existed for the
+## edge pan and for nothing else; **that is no longer true of the focus flag** — see below.
+##
+## ⚠⚠ **A CAMERA THAT KEEPS SLIDING WHILE THE USER ALT-TABS IS THE CLASSIC VERSION OF THIS BUG.** The
+## pointer's last known position stays in the band for as long as the player is away, so without these
+## two the island would still be travelling when they came back.
+##
+## ⚠⚠ **THE TWO ARE READ AT DIFFERENT HEIGHTS, AND THAT IS THE 2026-09-02 CORRECTION.** The band alone
+## read both when they were deleted, so **a held W kept panning through an alt-tab** — a focus loss
+## delivers no key-up, and 「nothing moves while the window is away」 was simply not what the flags did.
+## ⇒ **`_window_focused` gates the WHOLE summed velocity** in `_pan_the_board`, and it also drops every
+## held key, because the release that ends a hold arrives at a window that is not listening.
+## **`_pointer_inside` stays the band's own**: a pointer off the window says nothing about a keyboard.
+##
+## ⚠ **TWO FLAGS AND NOT ONE**, because the two causes end independently: alt-tab back with the
+## pointer still outside the window must not resume the band, and one flag would let a focus event
+## clear a mouse-exit it knows nothing about.
+## ⚠ **Both start true**, which is safe only because `_pointer_at` starts off-screen — nothing pans
+## until a real motion arrives and says where the pointer is.
+var _pointer_inside := true
+var _window_focused := true
 
 ## **Where the pointer was last seen.** ⚠⚠ **IT WENT WITH THE EDGE PAN ON 2026-08-31 AND CAME BACK ON
-## 2026-09-01**, when `pick-then-move` merged onto the branch that had deleted it. It is not the edge
-## pan's field any more: **`_process` rebuilds the 이동선 from it every frame**, because the picked body
-## walks and the board slides under a cursor that never moved. ⚠ **The motion handler is its only
-## writer**, exactly as before.
-var _pointer_at := Vector2.ZERO
+## 2026-09-01**, when `pick-then-move` merged onto the branch that had deleted it. **It has two readers
+## now**: `_process` rebuilds the 이동선 from it every frame, because the picked body walks and the
+## board slides under a cursor that never moved, and the edge band asks where the cursor is parked.
+## ⚠ **The motion handler is its only writer**, exactly as before.
+##
+## ⚠⚠ **IT STARTS OFF-SCREEN AND THAT IS THE SAFE DIRECTION, AND IT SPENT A DAY AT THE ORIGIN**
+## (2026-09-01 to 2026-09-02). `(0, 0)` is harmless to a route and is **1.0 deep on BOTH band axes**,
+## so a shell that had never seen a motion pans north-west at 1.41 x the top speed from its first
+## frame. `(-1, -1)` is outside every band, and the band's own guard is 「off the glass is nothing」.
+## The alternative — starting at the middle — would be a made-up pointer position that happens to be
+## harmless on one screen size.
+var _pointer_at := Vector2(-1.0, -1.0)
 
 ## ⚠⚠ **`_hold_sec` STOOD HERE AND IT IS DELETED** (2026-08-29) with the verdict. It held the last
 ## frame of a finished island on screen before the next `setup()` emptied the view's effect drawers —
@@ -195,20 +260,24 @@ func _open_island() -> void:
 func _process(delta: float) -> void:
 	if run == null:
 		return
-	# ⚠⚠ **A PAN WAS SPENT HERE EVERY FRAME AND IT IS DELETED** (2026-08-31). Two screen-space
-	# velocities — the WASD keys and the window's edge band — were summed and pushed through ONE
-	# `field_view.pan_by` above the `battle == null` guard, so the camera kept working on a frame the
-	# sim was not running. **Both sources are gone**, and the drag that replaced them moves the camera
-	# from `_unhandled_input` rather than from the clock, so nothing needs a per-frame call.
+	# ⚠⚠ **A PAN WAS SPENT HERE EVERY FRAME, IT WAS DELETED ON 2026-08-31, AND IT IS BACK**
+	# (2026-09-02). The old line said 「both sources are gone ... nothing needs a per-frame call」;
+	# **both sources are back**, and the drag that replaced them is being taken away by the selection
+	# box. ⚠ **It stays ABOVE the `battle == null` guard**, so the camera keeps working on a frame the
+	# sim is not running — looking around is exactly the thing that must not stop being possible.
 	# ⚠ **`pan_by` still ends in the clamp** — that is the drag's bound too, and it is untouched.
+	_pan_the_board(delta)
 	# ⚠⚠ **THE 이동선 IS REBUILT EVERY FRAME AND NOT ONLY ON MOTION.** Its first point is the picked
 	# body's OWN position, and that body walks — built once on hover, the line stayed anchored where he
 	# used to be and trailed behind him across the island.
 	# ⚠⚠ **THIS IS WHY `_pointer_at` CAME BACK** (2026-09-01, merging `pick-then-move` onto the branch
-	# that deleted the edge pan). The pan deleted above was its only other reader, and the tombstone
-	# beside it says so — but a still cursor over a walking body is still a changing route, and the
-	# left-button drag moves the board under a still cursor too. **「the pointer has not moved」 never
-	# meant 「the route has not changed」.**
+	# that deleted the edge pan). The edge band had been its only reader and it went with the band —
+	# but a still cursor over a walking body is still a changing route, and the left-button drag moves
+	# the board under a still cursor too. **「the pointer has not moved」 never meant 「the route has not
+	# changed」.** ⚠ **The band is back above this line and reads it again** (2026-09-02), which is why
+	# the field starts off the glass rather than at the origin — see where it is declared.
+	# ⚠ **The route is rebuilt AFTER the pan and not before it**, so the line is drawn against the
+	# camera this frame ends on rather than the one it began on.
 	# ⚠⚠ **IT IS CHEAP, AND THE REASON IS NOT THE ONE THIS COMMENT GAVE UNTIL 2026-09-01.** It read
 	# 「`Hand.routes` caches the 조각 list per destination」 — a cache keyed on the destination 칸 alone,
 	# which is exactly the defect measured and closed that day: the seats move under a still cursor.
@@ -216,6 +285,15 @@ func _process(delta: float) -> void:
 	# frame where nothing moved costs 0.04 ms and a frame where something did costs 3.9 ms — measured on
 	# the real island with a 부대 of nine.
 	_show_route(_pointer_at)
+	# ⚠⚠ **AND THE HOVER PLATE IS RE-ASKED EVERY FRAME TOO, SINCE 2026-09-02.** `set_hover_tile` had
+	# exactly one call site — the motion branch — and **a keyboard turn produces no motion event**, so
+	# one press of E left the white plate sitting on the 조각 the cursor used to be over, a quarter of
+	# the board away, until the hand moved. The 이동선 above never had that problem because it is built
+	# from the remembered pointer every frame; this is the plate joining it.
+	# ⚠ **It is a different thing from a plate under a HELD right button**, which is a stream of real
+	# motion events and was frozen by an early `return` instead.
+	# ⚠ **Below the pan and not above it**, so the plate answers for the camera this frame ends on.
+	field_view.set_hover_tile(_tile_at(_pointer_at))
 	# ⚠ **No multiplier is handed down any more.** `speed-off-open-landing` deleted the ladder, so the
 	# sim and both views run on the bare frame delta — which is what every duration in `look.gd` was
 	# budgeted against in the first place. `set_time_scale` and `set_speed` are gone rather than being
@@ -264,6 +342,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	# ⚠ **One line above every branch rather than a test inside each**, the same argument the deleted
 	# hold guard made in this position: TAB, ESC, the tilt keys, the wheel and both drags each waved a
 	# press through on their own terms, and five guards are five chances to miss one.
+	# ⚠ **「both drags」 is ONE drag since 2026-09-02** — the right button's yaw drag is deleted and the
+	# turn keys took it — and the argument is unchanged: one line above every branch.
 	# ⚠ **It is NOT a return in `_process`.** The views keep their own clocks and the island keeps
 	# drawing behind the words — that is the ticket's answer (「뒤에는 섬이 그대로 남고」), and a shell
 	# that stopped processing would freeze the picture rather than the play.
@@ -272,8 +352,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		# after seeing the words on the glass: 「그 게임오버 하고 타이틀로 돌아가는 버튼도 만들어줘」).
 		# **This reverses 티켓 02-03's own 「끝」**, which put a way back in its Out of scope.
 		# ⚠ **Inside the closed door and not above it.** Above, it would be one more branch competing
-		# with TAB, the wheel and both drags for a press on a LIVE board; here the board is already
-		# dead and this is the only sentence left that means anything.
+		# with TAB, the wheel and the left drag for a press on a LIVE board; here the board is already
+		# dead and this is the only sentence left that means anything. ⚠ **It read 「both drags」 until
+		# 2026-09-02**, when the right button's yaw drag was deleted.
 		# ⚠ **The rect comes from the view that drew it** — see `HudView.back_rect_px`, which is zero
 		# until the words are up, so there is no second 「is the screen showing」 test here.
 		if event is InputEventMouseButton:
@@ -323,16 +404,24 @@ func _unhandled_input(event: InputEvent) -> void:
 		if key.keycode == KEY_ESCAPE and key.pressed and not key.echo:
 			_let_go()
 			return
-		# ⚠⚠ **THE WASD BRANCH STOOD HERE AND IT IS DELETED** (2026-08-31). It was read on BOTH edges,
-		# like TAB and unlike everything left in this handler, and it sat ABOVE the `not key.pressed`
-		# return for that reason — a held key never told it was released pans forever. **TAB is the
-		# only two-edged key left.**
+		# ⚠⚠ **THE WASD BRANCH STOOD HERE, WAS DELETED ON 2026-08-31, AND IT IS BACK** (2026-09-02).
+		# The old line closed with 「TAB is the only two-edged key left」; **it is not — this is the
+		# other one**, and it is read on BOTH edges for the reason that line already gave: a held key
+		# never told it was released pans forever. **That is why it sits ABOVE the `not key.pressed`
+		# return** — below it, only the press would ever be seen.
+		if _on_pan_key(key):
+			return
 		if not key.pressed:
 			return
 		# ⚠⚠ **Tilting is not gated on anything**, on purpose — 티켓 07 asks whether a hand may move
 		# the board mid-fight, and gating it before the question is decided would answer it by
 		# omission (2026-08-24, the user: 「3D 회전 회전 버튼이 내가 돌려봐야 될 듯」).
-		# ⚠ **The turn keys stood beside the tilt here and are deleted** — see `_on_tilt_key`.
+		# ⚠⚠ **THE TURN KEYS STOOD BESIDE THE TILT HERE, WERE DELETED, AND ARE BACK** (2026-08-31, the
+		# user: 「QE 이거 기능제거해줘」; restored 2026-09-02 turning a QUARTER instead of 15°). **They
+		# are their own handler again** rather than living inside the tilt's, which is the shape they
+		# had before the deletion — see `_on_turn_key`.
+		if _on_turn_key(key):
+			return
 		_on_tilt_key(key)
 		return
 	if event is InputEventMouseButton:
@@ -341,8 +430,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		# the user: 「마우스 휠이 회전 오른쪽이 끌어서 이동으로 해야할듯」; the same day at the screen,
 		# reversing it: 「마우스 휠이 확대 축소가 맞고, 오른쪽 버튼은 카메라 회전으로 이해했어」).
 		# **The later word wins and the earlier one is kept here rather than erased.**
-		# ⚠ **The yaw drag went back onto the right button** — see `_turning`. Q and E turned by a notch
-		# beside it for one week and are deleted (2026-08-31); the drag is the only turn left.
+		# ⚠⚠ **THE YAW DRAG WENT BACK ONTO THE RIGHT BUTTON AND IS NOW DELETED** (2026-09-02, the
+		# user: 「오른쪽 마우스로 회전을 하면 뭔가 장점이 별로 없어서」). Q and E turned by a notch
+		# beside it for one week, were deleted with it in between, and **are the only turn now** — the
+		# right button carries no camera at all, which is what frees it for the move order.
 		if click.button_index == MOUSE_BUTTON_WHEEL_UP and click.pressed:
 			_on_wheel(click.position, 1)
 		elif click.button_index == MOUSE_BUTTON_WHEEL_DOWN and click.pressed:
@@ -354,35 +445,37 @@ func _unhandled_input(event: InputEvent) -> void:
 				_begin_press(click.position)
 			else:
 				_end_press()
-		elif click.button_index == MOUSE_BUTTON_RIGHT:
-			# ⚠⚠ **RIGHT-DRAG TURNS THE BOARD. IT PANNED FOR ONE ROUND AND THAT IS REVERSED**
-			# (2026-08-30 morning, the user: 「오른쪽이 끌어서 이동으로 해야할듯」; the same day at the
-			# screen: 「오른쪽 버튼은 카메라 회전으로 이해했어」). **The later word wins.**
-			# ⚠ **It does not go through `_begin_press` at all**, which is what makes 「a right drag
-			# over the island never commands a body」 true by construction rather than by a flag: the
-			# right button opens no press, so there is no release in place for `_end_press` to turn
-			# into a walk order.
-			_turning = click.pressed
-			_turn_from = click.position
+		# ⚠⚠ **THE RIGHT BUTTON'S TWO ARMS STOOD HERE AND BOTH ARE DELETED** (2026-09-02, the user:
+		# 「오른쪽 마우스로 회전을 하면 뭔가 장점이 별로 없어서」). **The two reversals they carried are
+		# kept rather than erased**, because deleting this branch is itself reversing a reversal:
+		#
+		#  - 2026-08-26, the user: 「회전은 오른쪽 마우스 누르고 돌릴 수 있었으면 좋겠음」 — the yaw drag is born;
+		#  - 2026-08-30 morning: 「오른쪽이 끌어서 이동으로 해야할듯」 — it becomes a pan;
+		#  - 2026-08-30 at the screen: 「오른쪽 버튼은 카메라 회전으로 이해했어」 — the turn is re-taken;
+		#  - 2026-09-02 — **the turn moves onto Q and E and the button carries nothing.**
+		#
+		# ⚠ **What it made true by construction is now true by there being no branch**: the right
+		# button opens no press, so there is no release in place for `_end_press` to turn into a walk
+		# order. **That stops being an argument the day 03-11 puts the order on it.**
 	elif event is InputEventMouseMotion:
 		var motion := event as InputEventMouseMotion
-		# ⚠⚠ **THE POINTER IS RECORDED HERE, AND THE 이동선 IS ITS ONLY READER NOW.** It was the edge
-		# pan's line and was deleted with it (2026-08-31); it came back on 2026-09-01 for the route,
-		# which `_process` rebuilds every frame because the picked body walks. **It sits above the
-		# turn's early return** so a yaw drag does not leave the route reading a stale cursor.
+		# ⚠⚠ **THE POINTER IS RECORDED HERE, AND IT HAS TWO READERS.** It was the edge pan's line and
+		# was deleted with it (2026-08-31); it came back on 2026-09-01 for the 이동선, which `_process`
+		# rebuilds every frame because the picked body walks, and the band reads it again (2026-09-02).
+		# **It used to sit above the turn's early return** so a yaw drag did not leave the route
+		# reading a stale cursor; that return is gone with the drag.
 		_pointer_at = motion.position
-		# ⚠⚠ **THE YAW DRAG SITS ABOVE EVERYTHING ELSE**, because a turning drag is neither a hover
-		# nor a pan.
-		# ⚠ **Horizontal travel only.** Adding the vertical axis to the tilt here was tried on paper
-		# and dropped: R and F step the tilt, and a drag that changed two things at once made every
-		# accidental diagonal a lost camera the user then had to fix by hand.
-		# ⚠ **Measured from the LAST motion and not from the press point**, so the yaw follows the hand
-		# continuously — a delta taken from the press would re-apply the whole travel on every event.
-		if _turning:
-			var dx := motion.position.x - _turn_from.x
-			_turn_from = motion.position
-			field_view.turn_by(dx * Look.CAM_YAW_PER_PX_DEG)
-			return
+		# ⚠⚠ **THE YAW DRAG STOOD HERE, ABOVE EVERYTHING ELSE, AND IT IS DELETED** (2026-09-02, the
+		# user: 「오른쪽 마우스로 회전을 하면 뭔가 장점이 별로 없어서」). It read the HORIZONTAL travel
+		# only — a drag that changed two things at once made every accidental diagonal a lost camera —
+		# and it measured from the LAST motion rather than from the press point, so the yaw followed
+		# the hand continuously.
+		# ⚠⚠ **IT ENDED IN AN EARLY `return`, AND FOUR THINGS BELOW WERE FROZEN FOR THE LENGTH OF A
+		# TURN**: the hover plate, the 이동선, the left drag's pan threshold, and a left pan already in
+		# flight. **The first two coming back is a fix this ticket gets for free.** ⚠ **The fourth is
+		# new behaviour nobody asked for** — a left pan and a right press can now run together. It is
+		# harmless while the right button does nothing, **and it stops being harmless the day 03-11
+		# puts the move order on it**, which is why it is written here rather than found there.
 		# The panel is asked here too, and not only on press: a drag begun on the field before the
 		# panel opened must not keep panning (or sending) behind it once it does — `panel_active()`
 		# becoming true mid-drag is what `_begin_press` alone cannot catch.
@@ -530,8 +623,10 @@ func _start_run() -> void:
 ## 배드노스 보니까 손이 놀면 안될듯」, 2026-08-25). It sits above the pan because the pan is the
 ## fall-through that means 「the press hit nothing」, and a press that ordered somebody hit something.
 ## ⚠⚠ **THE `orders` PARAMETER IS GONE** (2026-08-30). It told the two buttons apart while both of
-## them opened this same gesture; **the right button turns the board now and never gets here**, so the
+## them opened this same gesture; **the right button turned the board and never got here**, so the
 ## only caller left is the left press and the only value it ever passed was `true`.
+## ⚠ **The right button turns nothing since 2026-09-02** and still never gets here — what changed is
+## the reason, not the fact.
 func _begin_press(at: Vector2) -> void:
 	# ⚠ **Nothing is ordered and nothing is panned here.** Both are decided by what happens next — see
 	# `_press_open`. A press that resolves to neither (no battle, no walkable 조각 under it) still ends
@@ -541,22 +636,20 @@ func _begin_press(at: Vector2) -> void:
 	_panning = false
 
 
-## ⚠⚠ **`_turning` AND `_turn_from` WERE DELETED ON 2026-08-30 AND THEY ARE BACK THE SAME DAY.** The
-## line that removed them is kept because this repo records a flip and does not erase the old one:
+## ⚠⚠ **`_turning` AND `_turn_from` STOOD HERE, WERE DELETED ONCE, CAME BACK, AND ARE DELETED AGAIN.**
+## Every line is kept because this repo records a flip and does not erase the old one:
 ##
 ##  - 2026-08-26, the user: 「회전은 오른쪽 마우스 누르고 돌릴 수 있었으면 좋겠음」 — the yaw drag is born;
 ##  - 2026-08-30 morning, the user: 「마우스 휠이 회전 오른쪽이 끌어서 이동으로 해야할듯」 — the turn
 ##    moves onto the wheel and these two fields are deleted;
 ##  - 2026-08-30 at the screen, the user: 「마우스 휠이 확대 축소가 맞고, 오른쪽 버튼은 카메라 회전으로
-##    이해했어」 — **reversed, and the later word wins.**
+##    이해했어」 — reversed, and they come back;
+##  - 2026-09-02, the user: 「오른쪽 마우스로 회전을 하면 뭔가 장점이 별로 없어서」 — **the drag is
+##    deleted and Q and E carry the turn.** ⚠ **Deleting it is reversing a reversal**, which is why
+##    the three lines above are not cut.
 ##
-## ⚠ **`Look.CAM_YAW_PER_PX_DEG` is read again.** Its tombstone said it was left standing rather than
-## deleted because re-deriving a measured per-pixel yaw costs a round; one round later that is exactly
-## what it saved.
-##
-## **Two plain fields and no state machine**: a drag is a button and a previous point.
-var _turning := false
-var _turn_from := Vector2.ZERO
+## ⚠ **`Look.CAM_YAW_PER_PX_DEG` is left standing again**, and no longer for this file: the piece
+## viewer drags a piece around by it, and that reader is live.
 
 
 ## Ends whichever gesture was in flight, and **dropping the pan is all that is left**.
@@ -564,8 +657,10 @@ var _turn_from := Vector2.ZERO
 ## ⚠ **Two gestures ended here before it and both are deleted**: the soldier drag that authored a
 ## landing (2026-08-25), and the held summon press (2026-08-28).
 ## ⚠⚠ **THE `at` PARAMETER IS GONE** (2026-08-30). It was kept unread as the shell's own release
-## signature; **the right button now ends the same gesture and its release position is unread too**,
-## so the parameter had become a value two callers had to invent for nobody to read.
+## signature; **the right button ended the same gesture and its release position was unread too**, so
+## the parameter had become a value two callers had to invent for nobody to read.
+## ⚠ **The right button ends nothing now** (2026-09-02) — there is one caller and it is the left
+## release.
 func _end_press() -> void:
 	# **A press that never travelled is a click, and a click commands.** ⚠ **Ordered from the point the
 	# button went DOWN and not from where it came up** — a hand that shifts two pixels while clicking
@@ -581,24 +676,98 @@ func _end_press() -> void:
 
 # --- the camera keys ------------------------------------------------------------------------------
 
-## ⚠⚠ **`_on_pan_key` STOOD HERE AND IT IS DELETED** (2026-08-31, the user: 「wasd 도 지워줘」). It
-## turned W/A/S/D into a held screen direction, **adding on the press and subtracting on the release**
-## rather than writing the whole vector — writing it whole loses the other axis the moment two keys
-## are held and one is let go.
-## ⚠ **Its signs were the mouse drag's, not the camera's**, and that is the one thing worth carrying
-## forward: `pan_by` takes the delta a DRAG delivers, so 「look right」 is a NEGATIVE x. The drag is
-## now the only caller and it never had to convert.
+## **WASD, held, as a screen direction.** True when the key was one of the four, which is what tells
+## `_unhandled_input` the event is spent.
+##
+## ⚠⚠ **`_on_pan_key` STOOD HERE, WAS DELETED ON 2026-08-31, AND IT IS BACK** (the user: 「wasd 도
+## 지워줘」; restored 2026-09-02). **Its old shape is not restored with it**: it added on the press and
+## subtracted on the release, and the tombstone's reason for that — a whole written vector loses the
+## other axis — is right about the whole write and wrong about the sum. ⇒ **A flag per key**, which
+## loses no axis AND can be dropped in one line when a run ends or the window goes away. See
+## `_pan_held`, where both failures are written down.
+##
+## ⚠ **There is no `echo` branch and there does not need to be.** A repeat writes the same `true` a
+## second time; the old `+=` form needed the guard because a repeat added a second direction.
+## ⚠ **The keycode is asked BEFORE anything else**, so an echoing R is not swallowed here on its way
+## to the tilt.
+func _on_pan_key(key: InputEventKey) -> bool:
+	if not _pan_dirs.has(key.keycode):
+		return false
+	if key.pressed:
+		_pan_held[key.keycode] = true
+	else:
+		_pan_held.erase(key.keycode)
+	return true
+
+
+## **The frame's whole camera travel, summed from the two clocked sources and spent once.**
+##
+## ⚠⚠ **TWO SOURCES, ONE `pan_by`.** The keys and the edge band are added as screen-space velocities
+## and spent once — a second `pan_by` call in the same frame clamps twice, and a camera already
+## sitting on the roam edge would then eat one of the two inputs with nothing on screen saying so.
+## ⚠ **The left drag still calls `pan_by` from the input handler**, so a hand that drags while W is
+## held is genuinely two calls. **This claim is about the two CLOCKED sources**, which is all one
+## frame's `_process` has to sum.
+##
+## ⚠⚠ **IT OBEYS 「끝」, AND THAT IS NOT A NEW DECISION** (2026-09-01, the user: 「딱 뜨고. 끝」).
+## `_unhandled_input` closes the whole board on `battle.lost`, so **a key release during GAME OVER is
+## swallowed** — and the band needs no event at all, so a cursor left near an edge would slide a dead
+## island and still be sliding when the next one opens. ⇒ **the held keys and the press flags are
+## dropped wholesale here**, rather than the pan merely being skipped: skipping leaves `_press_open`
+## latched, and a latched press kills the band permanently through the gesture gate below.
+func _pan_the_board(delta: float) -> void:
+	if battle != null and battle.lost:
+		_pan_held.clear()
+		_press_open = false
+		_panning = false
+		return
+	# ⚠⚠ **THE FOCUS FLAG GATES THE WHOLE SUM AND NOT ONLY THE BAND.** A focus loss delivers no
+	# key-up, so a held W panned right through an alt-tab while this test lived inside the band alone.
+	if not _window_focused:
+		return
+	var keys := Vector2.ZERO
+	for code: int in _pan_held:
+		keys += _pan_dirs[code] as Vector2
+	var vel := keys * Look.CAM_PAN_KEY_PX_PER_SEC + _edge_pan_dir() * Look.CAM_EDGE_PAN_PX_PER_SEC
+	if vel != Vector2.ZERO:
+		field_view.pan_by(vel * delta)
+
+
+## **Q and E turn the board a QUARTER, and the sweep starts on this very frame** (2026-09-02, the user
+## on being shown the two choices: 「즉시 돌 거 같아. 도는 것이 보여」 — *"it starts turning right away,
+## and the turning is visible."*). ⚠ **The user named Don't Starve for the 90° feel.**
+##
+## **Returns whether it took the key**, the same contract `_on_tilt_key` has.
+##
+## ⚠⚠ **IT ASKS FOR A NOTCH RATHER THAN TURNING.** `field_view.turn_notch` adds to what the board still
+## owes and the view pays it off frame by frame — **two quick presses turn a half** instead of one of
+## them being eaten in the middle of the other's sweep.
+## ⚠⚠ **The `echo` guard is not optional.** OS auto-repeat on a held key delivers
+## `pressed = true, echo = true` many times a second, and a quarter per repeat spins the board.
+## ⚠ **Ungated, exactly as the tilt is** — 티켓 07 asks whether a hand may move the board mid-fight,
+## and gating it before that is decided would answer it by omission.
+func _on_turn_key(key: InputEventKey) -> bool:
+	if key.echo:
+		return false
+	if key.keycode == KEY_Q:
+		field_view.turn_notch(-Look.CAM_YAW_SNAP_DEG)
+		return true
+	if key.keycode == KEY_E:
+		field_view.turn_notch(Look.CAM_YAW_SNAP_DEG)
+		return true
+	return false
 
 
 ## R stands the camera up toward looking straight down, F lays it over toward the horizon — one notch
 ## each. **Returns whether it took the key**, which is the honest answer to 「did this handler consume
 ## the event」 and what every net that drives a key reads.
 ##
-## ⚠⚠ **Q AND E WERE THE KEYBOARD'S TURN AND THEY ARE DELETED** (2026-08-31, the user: 「QE 이거
-## 기능제거해줘」). They stood here from 2026-08-24 (「3D 회전 회전 버튼이 내가 돌려봐야 될 듯」) and
-## called the same `turn_by` the right-button drag calls. **The drag is untouched and is now the only
-## way a player turns the board** — `Look.CAM_YAW_STEP_DEG` is left standing for the shot tool, which
-## turns the camera itself. The tilt keys were never asked to go and did not.
+## ⚠⚠ **Q AND E WERE THE KEYBOARD'S TURN, THEY WERE DELETED, AND THEY ARE BACK** (2026-08-31, the
+## user: 「QE 이거 기능제거해줘」; restored 2026-09-02). They stood here from 2026-08-24 (「3D 회전 회전
+## 버튼이 내가 돌려봐야 될 듯」) and called the same `turn_by` the right-button drag called. **The drag
+## is what is deleted now, and they are the only way a player turns the board** — see `_on_turn_key`,
+## which is where they live rather than inside this function. The tilt keys were never asked to go and
+## did not.
 ##
 ## ⚠⚠ **The `echo` guard is not optional.** OS auto-repeat on a held key delivers
 ## `pressed = true, echo = true` many times a second, and a tilt per repeat rolls the camera over.
@@ -619,18 +788,99 @@ func _on_tilt_key(key: InputEventKey) -> bool:
 	return false
 
 
-# --- the edge pan is DELETED ----------------------------------------------------------------------
+# --- the edge pan -----------------------------------------------------------------------------------
 
-## ⚠⚠ **`_edge_pan_dir` AND `_edge_ramp` STOOD HERE AND BOTH ARE DELETED** (2026-08-31, the user:
-## 「그것도 지워줘」). The pointer parked in a 28 px band against a side of the window slid the camera
-## that way, faster the deeper it sat, and it was the user's own on 2026-08-30 (「wasd 보다는 마우스가
-## 끝으로 가면 자동으로 이동이 맞을듯」) — **a week later they asked for it out.**
+## **The pointer parked against a side of the window pans the camera that way, for as long as it stays
+## there** (2026-08-30, the user: 「wasd 보다는 마우스가 끝으로 가면 자동으로 이동이 맞을듯」).
 ##
-## ⚠ **What it took with it**: the band's three constants in `look.gd`, the remembered pointer, the
-## alt-tab and mouse-exit flags with the `_notification` that set them, and the rows in `net_shell`
-## that measured all of it. **Nothing about the walk order changed** — the band used to hold itself
-## still for the length of a press so a click near the edge still commanded the 조각 under the finger,
-## and with no band there is nothing left to hold still.
+## ⚠⚠ **`_edge_pan_dir` AND `_edge_ramp` STOOD HERE, BOTH WERE DELETED, AND BOTH ARE BACK**
+## (2026-08-31, the user: 「그것도 지워줘」; restored 2026-09-02 with the keys, in one reversal, because
+## the selection box takes the left drag). **What went with the band came back with it**: the three
+## constants in `look.gd`, the off-glass sentinel on the remembered pointer, the alt-tab and
+## mouse-exit flags with the `_notification` that sets them, and the rows in `net_shell`.
+##
+## Answers a SCREEN-space direction whose axes each run 0..1, spent by `_pan_the_board` against the
+## frame's own delta exactly as the keys are. **Zero means the edge is asking for nothing.**
+##
+## ⚠⚠ **THE SIGNS ARE `_on_pan_key`'S, WHICH ARE THE MOUSE DRAG'S.** `pan_by` takes the delta a DRAG
+## would deliver, so 「look east」 is a NEGATIVE x — the pointer on the right edge therefore answers
+## -1, the same number D answers. Getting this backwards is a control that works and feels wrong, and
+## the one thing that pins it is that all three inputs go through the one call.
+##
+## ⚠⚠ **A CORNER IS TWO EDGES AND THE RESULT IS NOT NORMALISED**, so a corner travels 1.41 times as
+## fast as a side. **That matches the keys and it matches a mouse drag**, both of which are
+## deliberately un-normalised — a diagonal drag covers more ground and so does this.
+##
+## ⚠⚠ **IT ANSWERS ZERO WHILE A BUTTON GESTURE IS IN FLIGHT, AND THAT IS THE WALK ORDER'S PROTECTION.**
+## The band overlaps ground a body gets ordered onto; with the camera sliding between the press and the
+## release, `_end_press` would resolve `_press_at` against a camera that had moved and command a
+## different 조각 than the one under the finger. **Holding still for the length of a press is what
+## keeps a click near the edge a click.** ⚠ It costs nothing a drag wanted: a drag is already panning.
+## ⚠⚠ **THAT GATE IS RESTORED AS IT WAS AND IS NOT RE-DECIDED HERE.** It was written when the left
+## button both panned and ordered; 03-04 makes the left drag a box and 03-11 moves the order onto the
+## right button, and **whichever of those lands is where this gate is next argued about.**
+##
+## ⚠ **The focus flag is NOT read here** — it gates the whole summed velocity one level up, because a
+## focus loss stops the keys too. `_pointer_inside` is this function's own: a cursor that has left the
+## window says nothing about a keyboard.
+func _edge_pan_dir() -> Vector2:
+	if not _pointer_inside:
+		return Vector2.ZERO
+	if _press_open or _panning:
+		return Vector2.ZERO
+	# ⚠ **The window's own constants and not `get_viewport_rect()`.** Headless the window is 64x64 and
+	# every screen position this shell is driven with is in `look.gd`'s 1280x720 — asking the real
+	# viewport would put the whole band in a place nothing ever points at.
+	var w := Look.VIEWPORT_W_PX
+	var h := Look.VIEWPORT_H_PX
+	# **Off the glass entirely is not「as deep as it goes」, it is nothing.** A pointer dragged out past
+	# the frame still delivers motions, and clamping its depth instead would pan at full speed for as
+	# long as it stayed out there. ⚠ **It is also what makes `_pointer_at`'s opening `(-1, -1)` mean
+	# 「nothing」** — at the origin this guard passes and both axes read as fully deep.
+	if _pointer_at.x < 0.0 or _pointer_at.y < 0.0 or _pointer_at.x > w or _pointer_at.y > h:
+		return Vector2.ZERO
+	var band := Look.CAM_EDGE_PAN_BAND_PX
+	var dir := Vector2.ZERO
+	if _pointer_at.x < band:
+		dir.x = _edge_ramp((band - _pointer_at.x) / band)
+	elif _pointer_at.x > w - band:
+		dir.x = -_edge_ramp((_pointer_at.x - (w - band)) / band)
+	if _pointer_at.y < band:
+		dir.y = _edge_ramp((band - _pointer_at.y) / band)
+	elif _pointer_at.y > h - band:
+		dir.y = -_edge_ramp((_pointer_at.y - (h - band)) / band)
+	return dir
+
+
+## How much of the top speed a pointer `depth` of the way through the band gets: the lip's fraction at
+## the inner lip, 1.0 hard against the window's edge. **`Look.CAM_EDGE_PAN_LIP_FACTOR` is the whole
+## shape** — at 1.0 this returns 1.0 everywhere and the band is flat.
+func _edge_ramp(depth: float) -> float:
+	var lip := Look.CAM_EDGE_PAN_LIP_FACTOR
+	return lip + (1.0 - lip) * clampf(depth, 0.0, 1.0)
+
+
+## **Alt-tab, and the pointer leaving the window.** Both stop the edge pan, and neither can be seen
+## from an input event — they are the two ways a pointer stops being where `_pointer_at` says it is.
+##
+## ⚠⚠ **THIS IS THE ONLY `_notification` IN THE REPO**, and without it the camera slides while the
+## player is alt-tabbed away.
+## ⚠ **This is not a reader of the `Input` singleton**, so a net drives it the same way it drives every
+## other input here: by calling the method with the notification the engine would have sent.
+## ⚠ **Application focus AND window focus.** They are two different notifications and either one can
+## arrive alone; watching only one leaves the other alt-tab still sliding.
+## ⚠⚠ **A FOCUS LOSS ALSO DROPS EVERY HELD KEY**, because that is the one event a key-up cannot follow:
+## the release lands on whatever took the focus, and a flag left set pans the island on the way back.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_MOUSE_EXIT:
+		_pointer_inside = false
+	elif what == NOTIFICATION_WM_MOUSE_ENTER:
+		_pointer_inside = true
+	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		_window_focused = false
+		_pan_held.clear()
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_WM_WINDOW_FOCUS_IN:
+		_window_focused = true
 
 
 ## **Sends the body under the player's command to the tile that was pressed.** True when somebody was
@@ -758,7 +1008,8 @@ func _tile_at(at: Vector2) -> int:
 ##
 ## ⚠⚠ **THE WHEEL WAS MOVED ONTO THE TURN ON 2026-08-30 AND MOVED BACK THE SAME DAY** (the user, at
 ## the screen: 「마우스 휠이 확대 축소가 맞고」). The right button's yaw drag came back with it — see
-## the block where `_turning` is declared, which carries all three of the user's words in order.
+## the tombstone where `_turning` was declared, which carries all four of the user's words in order,
+## the 2026-09-02 one that deleted the drag included.
 ##
 ## ⚠⚠ **SHIFT+WHEEL IS DELETED AND IT WAS NEVER THE USER'S.** While the bare wheel turned the board,
 ## a previous builder pinned the zoom to SHIFT+wheel and wrote down that the pairing was **unowned** —
@@ -768,8 +1019,10 @@ func _tile_at(at: Vector2) -> int:
 ##
 ## ⚠ **R/F is untouched.** It is the keyboard's tilt and goes through the same `tilt_by` the rest of
 ## the shell does — a second path to one state, never a second state.
-## ⚠⚠ **Q/E stood beside it as the keyboard's turn and is deleted** (2026-08-31, the user: 「QE 이거
-## 기능제거해줘」). **The right button's drag is the only turn.**
+## ⚠⚠ **Q/E STOOD BESIDE IT AS THE KEYBOARD'S TURN, WAS DELETED, AND IS BACK** (2026-08-31, the user:
+## 「QE 이거 기능제거해줘」; restored 2026-09-02 at a quarter a press). The line that closed this —
+## 「the right button's drag is the only turn」 — **is the half that stopped being true**: the drag is
+## deleted and Q and E are the only turn.
 ##
 ## ⚠ **The zoom keeps the world point under the cursor fixed** (`field_view.zoom_at`).
 ## ⚠ **`notch` and not a factor**: the caller has a wheel direction and this is the one place that

@@ -79,11 +79,14 @@ func _run() -> void:
 # --- mode: can a player find a hull by looking around ------------------------------------------------
 
 ## ⚠⚠ **THIS SCANNED WITH WASD UNTIL 2026-08-31**, when the user had the pan keys deleted from the
-## shell along with the window's edge band. **The camera is panned directly now, at the keys' old
-## 900 px a second and for the same durations**, so the frames this mode saves are the same frames.
+## shell along with the window's edge band. **The camera is panned directly**, at the keys' own speed
+## and for the same durations, so the frames this mode saves are the same frames.
+## ⚠⚠ **IT CARRIED ITS OWN `900.0` WHILE THE CONSTANT WAS DELETED AND IT READS THE CONSTANT AGAIN**
+## (2026-09-02, restored with the keys). **The repo holds one 900** — a second copy is a tool whose
+## pictures fork from the game the first time the speed is tuned.
 ## ⚠ **The signs are `pan_by`'s, which are the DRAG's**: north is a POSITIVE y here, exactly as W
-## answered `(0, 1)` before.
-const PAN_PX_PER_SEC := 900.0
+## answers `(0, 1)`.
+const PAN_PX_PER_SEC := Look.CAM_PAN_KEY_PX_PER_SEC
 
 func _find() -> void:
 	await _until(6.2)
