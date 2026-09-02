@@ -1,4 +1,7 @@
-# 섬 하나를 지킨다 — 12월 **데모**까지
+# 섬 하나를 지킨다 — 12 월 **얼리액세스 출시**까지
+
+⚠⚠ **제목의 「데모」가 2026-09-02 에 「얼리액세스 출시」가 됐다.** 이 파일의 옛 줄에서 「데모」는 그때의
+뜻으로 읽는다.
 
 ⚠⚠ **2026-08-28 저녁에 낱말 둘이 자리를 맞바꿨다. 이 파일의 옛 줄은 옛 뜻으로 읽어야 한다.**
 그날 아침까지 **「해안선」은 땅의 윤곽**이었고 **바위에 붙은 흰 선은 「물가」**였다. 저녁에 뒤집혔다 —
@@ -15,6 +18,226 @@
 ⚠⚠ **2026-08-27 에 이 파일에서 「무엇을 할 것인가」가 떨어져 나갔다.** 주간 목표는 이제
 [roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
+
+## ✅✅ **The release got a shape, a fold rule, and a win condition — 2026-09-02, second round**
+
+⚠⚠ **This is the SECOND round of 2026-09-02.** The section below it is the first one, which turned
+December from a demo into an Early Access release. **This one gives that release its dates, decides what
+「fold it」 actually means, and puts a win condition into a game that had only a loss condition.**
+
+**Nothing was built. The nets were run**: `1679 pass · 4 fail`, which is exactly what tickets 03-09 and
+03-10 promised. **The four reds predate this round.** ⚠ The runner's new guards ran for the first time
+and caught three things — one abandoned function in `net_camera` and engine barking in `net_camera`,
+`net_fx_view` and `net_wake`. **All three were measured to be identical on the pre-merge commit**, so the
+merge introduced none of them.
+
+### 1. The Early Access target was confirmed, and 「fold it」 was attached to it
+
+> *"So the thing I am wondering now — let us pin the roadmap down. RimWorld came out through Early
+> Access, and I think it is right that we aim for Early Access as the monthly target too. Yes, and then
+> if it is not popular we fold it."*
+> (「자 그럼 궁금한 게 이제 로드맵 좀 지정을 해서 림월드가 그 얼리액세스로 나왔을 때처럼 우리도
+> 얼리액세스를 월 목표로 한 게 맞을 거 같은데? 응 그러다가 인기 없으면 접고」)
+
+### 2. ⚠⚠ **The RimWorld parallel is false in a specific way, and the user caught it first**
+
+> *"We go with wishlists, but I would guess RimWorld had few wishlists too?"*
+> (「위시리스트로 하는데 림월드도 위시리스트 적었을 거 같은데?」)
+
+**They were right, and for a bigger reason than they said.** RimWorld did not enter Steam Early Access
+cold — **it entered with 2 years 8 months of direct sales and 120,000 paying players behind it**, plus a
+CA$268,132 Kickstarter from 9,498 backers in 2013. **Wishlists were never its signal.** Tynan Sylvester's
+own store text at EA entry: *"The game is already fully playable, balanced, and generally free of bugs.
+Over 120,000 players have been enjoying it since our Kickstarter in October 2013."*
+
+⇒ **「Do what RimWorld did」 is not available to this repo.** The sources are in
+`docs/reference/2026-09-02-rimworld-early-access-fold-signals-and-steam-page-cost.md`.
+
+### 3. The user's second objection killed the pre-launch fold entirely
+
+> *"But other games succeeded even with few wishlists, in the end. And our game feels like one that needs
+> some time too."*
+> (「다른 게임들은 위시리스트가 적어도 돼서 성공한 게임들 있잖아, 결국에. 우리 게임도 시간이 좀 필요한
+> 게임 같은데.」)
+
+**Confirmed by measurement**: Vampire Survivors entered Early Access with **~90 wishlists**, no launch
+tweet and asset-store art, and made **~$1.5M in one month.** Stardew Valley refused Early Access on
+purpose and sold 830,000 copies in six weeks.
+
+Then the objection that settled it:
+
+> *"But then we have to keep developing during that time, do we not? And we have to market too, no? It
+> just does not make sense."*
+> (「그럼 그때 동안 또 계속 개발해야 될 거 아니야. 안 그래? 마케팅도 해야 되는 아니야? 그냥 말이 안
+> 돼서.」)
+
+⚠⚠ **The user is correct and this is the load-bearing line of the round.** A fold decision read BEFORE
+the store build ships cannot save anything, because the build is being made through the whole waiting
+period either way. **A pre-launch number can cancel the launch; it cannot un-spend the weeks.**
+
+### 4. ⇒ **The fold decision moved AFTER release, and it reads SALES, not wishlists**
+
+> *"Let us ship it and look at the sales figures."* (「내고 판매량 보자」)
+
+⚠⚠ **This reverses the 「3,000 wishlists」 line agreed two messages earlier** (「그래 3000으로 하니까
+괜찮네」). **3,000 is Chris Zukowski's number for a page that has had six months of trying everything**,
+and this page will have had two months of nothing — a quiet Coming Soon page's first two weeks have a
+median of **149** wishlists across 57 games. **Reading 3,000 against a quiet page measures 「we did not
+market」, not 「nobody wants it」.**
+⚠ **Zukowski's own answer to a bad pre-launch number is not to cancel either** — it is *"release it
+cheaply and move on."* And Valve's own position (Erik Peterson, devcom 2023) is that **purchases, not
+wishlists, are the gold standard.**
+
+### 5. The dates, in the user's own words
+
+> *"Register the wishlist page at the end of September, get the game done by the end of October, carry it
+> to the end of November — let us watch for two months, two months. While marketing too. Though I do not
+> know what to say marketing is."*
+> (「구 월 말에 위시 페이지 등록하고 시 월 말에 게임 일단 십일 월 말까지 보내 이 개월 보자 이 개월.
+> 마케팅까지 하면서. 마케팅은 뭐라 할지 모르겠네.」)
+
+| When | What |
+|---|---|
+| **End of September** | **Store page registered.** The $100 is paid here |
+| **End of October** | **The game is built.** Making stops being the thing that fills a week |
+| **October + November** | **The two months that get watched, with marketing running** |
+| **December** | **Early Access release** |
+
+⚠⚠ **Marketing is named and undefined.** The user said outright they do not know what it means, and
+**nothing in this repo has ever decided it.** It is not a ticket, not a task and not a week — it is a
+hole with a date on it.
+⚠ **Earlier in the same round the user had agreed to take NO weeks for marketing**; this line puts
+marketing into October and November. **The later line wins, and what it costs is unmeasured.**
+
+### 6. ⚠⚠ **Steam's actual cost, measured** — it is $100 and the rest is paperwork
+
+> *"So you pay a hundred dollars to register the page? Why, it seems that is the only thing you pay."*
+> (「아니 그러니까 페이지 등록하는데 백 달러 낸다고? 왜 그것만 내긴 하나 보네.」)
+
+| | |
+|---|---|
+| **The fee** | **$100 USD per app, per title, not per account.** Steam Direct |
+| **Refund** | **Not refundable, but recoupable once the app reaches $1,000 Adjusted Gross Revenue.** Never released means never recouped |
+| **The Coming Soon page** | **Free, collects wishlists, no maximum time.** Minimum two weeks live before release |
+| **The wait** | **30 days between paying the fee and being able to release** ⇒ paying at end of September clears a December release |
+| **Mandatory but free** | A bank account in the same legal name, the tax questionnaire, entity identification, the three-part content survey including a generative-AI disclosure. **Germany's age rating is issued free by Valve** |
+| **Only other cash** | Possible VAT/GST on the fee itself |
+
+⚠ **The paperwork is not money, it is time, and nobody has scheduled it.** It gates the end-of-September
+registration as hard as the art does.
+
+### 7. ✅✅ **The game got a win condition — a boss on a timer**
+
+> *"A boss that comes at one particular time at the end — kill it and you clear."*
+> (「마지막 한 특정 시간 오는 보스를 잡으면 클리어.」)
+
+⚠⚠ **This is the first win condition this game has ever had.** Measured the same round: the fight code
+carries `lost` and **has no `won` at all.** 「A winnable round」 is item one of the thin five and it was
+the one item with nothing under it.
+⚠ **The recommendation was to survive a set number of waves instead** — rejected, because the boss slot
+has stood empty since the lion was deleted on 2026-08-31 and a new body costs 124 pictures. **The user
+took the expensive one on purpose.**
+
+### 8. The boss is a DRAGON, and it is drawn new
+
+> *"A dragon. I am going to generate it new, a dragon."* (「드래곤. 새로 뽑을 거야, 드래곤.」)
+
+⚠⚠ **This repo holds exactly two body sets** — `assets/beast/wolf_h` and `assets/human/man`. A dragon is
+neither, so **it is 124 new pictures (four directions × thirty-one)**, and the user chose that knowing
+the number.
+
+**And then the user stopped the questioning, correctly:**
+
+> *"This does not need deciding right now. Decide the system — you only need to fix that a boss comes."*
+> (「이건 지금 정할 필요가 없잖아. 시스템 정해 ... 보스가 온다는 것만 정해 놓으면 되잖아」)
+
+⇒ **Whether the dragon walks or flies is NOT decided, on purpose.** The question was asked and the user
+ruled it premature. ⚠ **Do not treat 「walks」 as settled** — the only movement rule in this game is the
+flow field, and flying is a rule that does not exist yet.
+
+### 9. ⚠⚠ **The model deleted eight weeks of the map on its own, and the user put them back**
+
+**What happened**: the previous session's opening note said *「the week table below has not been redrawn
+for this decision. Weeks 4 through 11 are wholly 「what gets cut」」*. **The model executed that line
+without asking**, folded chunks 4, 5 and 7, and redrew weeks 4-14 around the thin five.
+
+> ***"No. The gathering tree goes in too, and the turret can go, I think. Beast types go in, golems go in,
+> the wooden boat goes in, the new land goes in — right? You keep removing things on your own authority.
+> Do not. The amount developed over these weeks is considerable to begin with. We can make it. So do not
+> cut things as you please. We are building it with AI in the first place."***
+> (「아니. 채집 트리든 들어가고 포탑은 없어져 거 같고. 짐승 종류 들어가고 골렘 들어가고 나무비 들어가고
+> 소땅 들어가는데? 자꾸 니 멋대로 뭔 걸 없애는데. 그러지 마. 애초에 이 주 동안 개발한 양도 꽤 되고. 만들
+> 수 있어. 그니까 네가 뭐 대로 좀 빼지 마. 애초에 AI로 만들고 있는데.」)
+
+**Restored**: 채집과 테크트리 · 짐승 종류 · 골렘과 땅 넓히기 · 나무 배 · 새 땅.
+**Actually cut, and only this**: **포탑.**
+
+⚠⚠ **Two failures, and the second is the one that matters.**
+**1** — A line in a doc that says 「this has not been redrawn」 is a note that it is UNDONE, **not
+permission to do it.** The 「what gets cut」 list it pointed at was written by a previous round and **the
+user never chose it.**
+**2** — **The scope was cut on a throughput estimate that was never measured.** The user's answer is that
+this repo is built with AI and that two weeks closed nine tickets. ⇒ **Do not size a week against a
+human-hands guess.**
+
+⚠ **`planning-principles` is the doc this belongs beside** — the failure was judging a direction by
+assumed capacity rather than by measured output.
+
+### 10. ⚠⚠ **The user played it and found two defects the nets had no opinion about**
+
+**The game was launched from this folder's own binary and the user pressed things.** Two came back, and
+neither is in any net.
+
+> ***"There is a bug where movement does not quite work once you have turned the angle. Make a ticket
+> for it. It rather feels like fine-grained checking is not being done."***
+> (「이거 각도 꺾었을때 살짝 이동이 안되는 버그 있음 티켓으로 만들어 놓고 뭔가 세세하게 체크를 안하는거
+> 같긴하네」)
+
+> ***"It does move by 칸, but the characters ought to fill in starting from the centre and that is not
+> really working. Please check."***
+> (「칸으로 이동되는데 이게 뭔가 중앙부터 캐릭터가 채워져야하는데 잘 안되더라 확인 부탁함」)
+
+⚠⚠ **The criticism is correct and the second bug proves it.** `03-08` and `03-10` were closed the day
+before with 800 driven presses and twenty mutations, nineteen of which reddened a row. **The corner-fill
+defect is readable straight out of the source** — `Hand._seats` seeds from `Grid.tiles_of_block`, which
+returns the four 조각 in raster order, and each 조각 fills to `Rules.TILE_CAPACITY` (3) before the next.
+⇒ **nine bodies fill NW, NE, SW and leave SE empty.** Nobody read it, because nobody ran anything the
+ticket had not named.
+
+**`03-16`** holds the turn defect — ⚠ **nothing is measured**, and a probe written to measure it was
+thrown away without producing a number (it read `game.field_view` on the frame it added the node, and
+`Game` builds its children in `_ready`). **`03-17`** holds the corner fill, and **retires old ticket 63
+「아홉이 서는 모양」 into itself** — that shape was decided 2026-08-31 (a 3x3 grid across the 칸 that
+turns to face the camera) and never installed.
+
+### 11. **Task 08 — the map is generated fresh every run**
+
+> ***"And we need an algorithm where the map is always newly generated."***
+> (「그리고 맵이 항상 새롭게 생성되는 알고리즘 필요함」)
+
+⚠⚠ **The roguelike's 「different every time」 does not exist in this game at all.** There is one island
+and it is a file.
+
+| What stands in the way | Measured |
+|---|---|
+| **The island is read from a file, not written in code** | The letter grid was deleted from `islands.gd` on 2026-08-26 **on the user's instruction** |
+| **One Blender run writes both halves** | `island_build.py` → the 5 MB mesh AND the walk data. *"They cannot disagree, because nothing writes one without the other"* |
+| ✅ **But the parts already exist separately** | `pieces.glb`, 8 KB — twelve sets from 2026-08-29 ⇒ **what varies per run is the arrangement, not the geometry** |
+
+⚠ **`08-01` is `Type: grilling`** — four things are unanswered and a generator built before them builds
+the wrong island: **what varies · how much · does the drawn island survive · is there a seed.**
+⚠⚠ **The island standing now is the only one the user has ever passed by eye** (2026-08-30). A generator
+that replaces it throws that away.
+
+### 12. The game's name is not `tockbon`, and it is decided in September
+
+> *"Decide it again in September."* (「구 월에 다시 정함」)
+
+⚠⚠ **`tockbon` is a folder name and nobody ever chose it.** It is `config/name` in the project file and
+it appears in no design doc. **A store page cannot be registered without a name, and the name is baked
+into the store address afterwards** — so this is a September blocker, not a September nicety.
+
+---
 
 ## ✅✅ **December stopped being a demo, the soldier stopped being summoned, and the game got a part 2 — 2026-09-02**
 
