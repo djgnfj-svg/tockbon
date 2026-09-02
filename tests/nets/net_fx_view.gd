@@ -822,6 +822,9 @@ func _the_lattice_turns_with_the_order_facing(t) -> void:
 	t.ok(_max_unmatched(want, turned) < 0.01,
 		"45도 방향을 쓴 칸의 아홉은 안 돌린 아홉을 칸 가운데 둘레로 45도 돌린 점들이다 (최대 어긋남 %.4f)"
 			% _max_unmatched(want, turned))
+	# ⚠ `_max_unmatched` is a one-way nearest-neighbour and not a matching: nine bodies stacked on a
+	# subset of the turned points would read 0. The distinct count is the other half.
+	t.eq(_distinct(turned), Rules.BLOCK_CAPACITY, "그리고 돌린 아홉이 아홉 자리에 따로 그려진다")
 	# ⚠ 0.2 and not more: a square's corner is only 0.276 조각 from the nearest point of the same square
 	# turned 45° (the turned edge middle), so that is the whole of the visible difference — and it is
 	# 0.000 with the facing ignored.
@@ -853,6 +856,7 @@ func _the_lattice_turns_with_the_order_facing(t) -> void:
 	t.ok(frames > 1 and frames < 120,
 		"%d 프레임 뒤 아홉이 안 돌린 아홉 자리에 다 선다" % frames)
 	t.ok(_max_unmatched(base, _sorted_spots(fv)) < 1e-3, "그리고 정확히 그 점들이다")
+	t.eq(_distinct(_sorted_spots(fv)), Rules.BLOCK_CAPACITY, "되돌린 아홉도 아홉 자리에 따로 그려진다")
 
 
 ## **The 이동선 leaves from under the DRAWN body, mid-glide included.** The route's first point is the
