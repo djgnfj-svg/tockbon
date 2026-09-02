@@ -219,6 +219,11 @@ func _table() -> Dictionary:
 			"_resting_soldier": 0,
 			"_resting_enemy": 0,
 			"_on_a_piece_centre": 0,
+			# The glide — one frame's step of every body's drawn point, and its two readers. State, not
+			# strokes.
+			"_advance_seat_glide": 0,
+			"_glided": 0,
+			"_drawn_of": 0,
 			"_hide_unused": 0,
 			# The effect SIMULATION — carried across the move unchanged, still 0 draws each.
 			"_map_tiles": 0,

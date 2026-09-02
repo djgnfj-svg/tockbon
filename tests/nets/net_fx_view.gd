@@ -66,6 +66,8 @@ func run(t) -> void:
 	_three_wolves_off_one_boat_are_drawn_apart(t)
 	_the_lattice_does_not_swing_with_the_camera(t)
 	_a_body_coming_to_rest_glides_to_its_seat(t)
+	_the_lattice_turns_with_the_order_facing(t)
+	_the_move_line_leaves_from_under_the_drawn_body_mid_glide(t)
 	_the_readers_themselves(t)
 	_every_row_wears_its_own_picture(t)
 	_the_wolf_ashore_wears_the_picture_that_was_chosen(t)
@@ -782,6 +784,132 @@ func _a_body_coming_to_rest_glides_to_its_seat(t) -> void:
 	t.ok(_spot_of(fv, 0).distance_to(back) < 1e-4,
 		"다시 선 몸은 첫 프레임에 새 자리 위다 — 옛 자리에서 미끄러져 오지 않는다 (%.3f 조각)"
 			% _spot_of(fv, 0).distance_to(back))
+
+
+## **The lattice TURNS with the 칸's facing, and a re-face glides the resting bodies to the turned
+## points** — the user's answer 「격자는 명령 방향으로」 read back off the pool. `net_hand` proves the facing
+## is WRITTEN; this is the row that proves the view READS it.
+##
+## ⚠⚠ **A 45° facing is the only one that can be SEEN to turn** (06-ranks-wide's own finding: a square
+## lattice turned a quarter is the same nine points), so the facing here is (1, 1) normalised. **The
+## expected points are the UNTURNED fixture's own nine, rotated 45° about the 칸's middle** — a control
+## fixture and `Vector2.rotated`, never `Look.seat_point_tiles` read back at itself. The corner seat
+## that stands at (+0.667, −0.667) from the middle unturned stands at (0, −0.943) turned: 0.722 조각.
+## ⚠ Mutation: pin `fwd` in `Look.seat_point_tiles` to (0, 1) and every row here but the self-checks
+## reddens.
+func _the_lattice_turns_with_the_order_facing(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var plain := _nine_on_one_block(rows)
+	var fv0 := _view_of(plain, rows)
+	fv0._process(0.0)
+	var base := _sorted_spots(fv0)
+	t.eq(base.size(), Rules.BLOCK_CAPACITY, "자가 점검 — 안 돌린 대조군 아홉이 그려졌다")
+
+	var b := _nine_on_one_block(rows)
+	var g := b.grid
+	var block := g.block_of(g.tile_index(NINE_TX, NINE_TY))
+	var middle := _block_middle_world(b, g.tile_index(NINE_TX, NINE_TY))
+	b.block_face[block] = Vector2(1.0, 1.0).normalized()
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	var turned := _sorted_spots(fv)
+	t.eq(turned.size(), Rules.BLOCK_CAPACITY, "자가 점검 — 돌린 쪽 아홉이 그려졌다")
+	if base.size() < Rules.BLOCK_CAPACITY or turned.size() < Rules.BLOCK_CAPACITY:
+		return
+	var want := []
+	for raw in base:
+		want.append(middle + ((raw as Vector2) - middle).rotated(PI / 4.0))
+	t.ok(_max_unmatched(want, turned) < 0.01,
+		"45도 방향을 쓴 칸의 아홉은 안 돌린 아홉을 칸 가운데 둘레로 45도 돌린 점들이다 (최대 어긋남 %.4f)"
+			% _max_unmatched(want, turned))
+	# ⚠ 0.2 and not more: a square's corner is only 0.276 조각 from the nearest point of the same square
+	# turned 45° (the turned edge middle), so that is the whole of the visible difference — and it is
+	# 0.000 with the facing ignored.
+	t.ok(_max_unmatched(base, turned) > 0.2,
+		"그리고 그것은 안 돌린 아홉과 다른 점들이다 — 돌지 않는 격자는 여기서 물린다 (%.3f)"
+			% _max_unmatched(base, turned))
+	var corner_turned := middle + Vector2(0.0, -Look.SEAT_PITCH_TILES * sqrt(2.0))
+	var corner_plain := middle + Vector2(Look.SEAT_PITCH_TILES, -Look.SEAT_PITCH_TILES)
+	t.ok(_min_dist(turned, corner_turned) < 0.01,
+		"모서리 자리 하나가 가운데에서 북쪽으로 0.943 조각 위에 선다 (%.4f)" % _min_dist(turned, corner_turned))
+	t.ok(_min_dist(turned, corner_plain) > 0.2,
+		"안 돌렸을 때의 그 모서리 (+0.667, −0.667) 에는 아무도 없다 (%.3f)" % _min_dist(turned, corner_plain))
+
+	# The re-face: the same bodies, the lattice turned back — they GLIDE to the new points.
+	b.block_face[block] = Vector2(0.0, 1.0)
+	var dt := 1.0 / 60.0
+	fv._process(dt)
+	var first := _sorted_spots(fv)
+	t.ok(_max_unmatched(base, first) > 0.1, "방향을 바꾼 첫 프레임에는 아직 새 자리에 없다 — 튀지 않는다")
+	var stepped := 0.0
+	for k in Rules.BLOCK_CAPACITY:
+		stepped = maxf(stepped, _min_dist(first, turned[k] as Vector2))
+	t.ok(stepped <= Look.SEAT_GLIDE_TILES_PER_S * dt + 1e-4,
+		"그 프레임에 몸마다 미끄러진 거리가 한 프레임치 이하다 (%.4f)" % stepped)
+	var frames := 1
+	while frames < 120 and _max_unmatched(base, _sorted_spots(fv)) > 1e-3:
+		fv._process(dt)
+		frames += 1
+	t.ok(frames > 1 and frames < 120,
+		"%d 프레임 뒤 아홉이 안 돌린 아홉 자리에 다 선다" % frames)
+	t.ok(_max_unmatched(base, _sorted_spots(fv)) < 1e-3, "그리고 정확히 그 점들이다")
+
+
+## **The 이동선 leaves from under the DRAWN body, mid-glide included.** The route's first point is the
+## sim's 조각 centre; the body at rest is drawn on its seat and, for a quarter second after arriving, is
+## on its way there — and the line has to start where the sprite IS this frame, not where it is going.
+## ⚠ Read on a mid-glide frame on purpose: at rest and settled the target and the drawn point are one
+## point and a line reading either passes. The floor is the row that says the body is still gliding.
+## ⚠ Mutation: make `_paint_move_lines` read `_stand_point` (the target) again and the equality reddens
+## by the whole glide gap.
+func _the_move_line_leaves_from_under_the_drawn_body_mid_glide(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN]), [])
+	var g := b.grid
+	_ashore(b, 0, Vector2(NINE_TX, NINE_TY))
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	# Walk, then arrive one 칸 east — the same hand-off the glide row drives.
+	b.soldier_order[0] = g.tile_index(NINE_TX + 4, NINE_TY)
+	b.soldier_pos[0] = Vector2(NINE_TX + 1.7, NINE_TY)
+	fv._process(1.0 / 60.0)
+	var dest := g.tile_index(NINE_TX + 2, NINE_TY)
+	b.soldier_pos[0] = Vector2(NINE_TX + 2, NINE_TY)
+	b._soldier_goal[0] = b.soldier_pos[0]
+	b.soldier_order[0] = -1
+	g.release_all(0)
+	g.hold(0, dest)
+	# The hover: a route from where the body now stands, two 조각 east.
+	var line := PackedVector2Array([Vector2(NINE_TX + 2, NINE_TY), Vector2(NINE_TX + 4, NINE_TY),
+		Vector2(NINE_TX + 6, NINE_TY)])
+	var ids := PackedInt32Array([0])
+	fv.set_move_lines([line], ids)
+	fv._process(1.0 / 60.0)
+	var target := _block_middle_world(b, dest)
+	var spot := _spot_of(fv, 0)
+	t.ok(spot.distance_to(target) > 0.1,
+		"자가 점검 — 이 프레임의 몸은 아직 자리로 미끄러지는 중이다 (%.3f 조각 남음)" % spot.distance_to(target))
+	var verts := _verts_of(fv._g_v, fv._g_c, Look.COL_MOVE_LINE)
+	t.ok(verts.size() >= 2, "자가 점검 — 이동선이 바닥에 놓였다 (%d 정점)" % verts.size())
+	if verts.size() < 2:
+		return
+	# The ribbon's first triangle is (p0 − side, p0 + side, p1 + side): the first two vertices straddle
+	# the line's own start.
+	var start: Vector2 = ((verts[0] as Vector2) + (verts[1] as Vector2)) * 0.5
+	t.ok(start.distance_to(spot) < 0.01,
+		"이동선의 첫 점이 이 프레임에 그려진 몸의 발밑이다 (어긋남 %.3f 조각)" % start.distance_to(spot))
+	t.ok(start.distance_to(target) > 0.1,
+		"그리고 몸이 갈 자리가 아니다 — 목표를 읽는 선은 여기서 물린다 (%.3f)" % start.distance_to(target))
+	fv.set_move_lines([])
+
+
+## The largest distance from any point of `want` to its nearest point in `got` — 0 when the two sets
+## are the same points in any order, and large when one point has no partner.
+func _max_unmatched(want: Array, got: Array) -> float:
+	var worst := 0.0
+	for raw in want:
+		worst = maxf(worst, _min_dist(got, raw as Vector2))
+	return worst
 
 
 ## The 조각 the nine-body fixtures stand on: (14, 6) is the north-west 조각 of the 칸 14..15 x 6..7.
