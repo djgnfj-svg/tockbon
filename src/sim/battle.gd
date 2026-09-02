@@ -78,6 +78,13 @@ const STORE_UID := ENEMY_UID_BASE - 2
 ## count of living beasts still green — and the run would simply never be losable.
 const TARGET_NONE := -1
 const TARGET_KEEP := -2
+## **A 바리케이트 as a target: `TARGET_WALL_BASE - index`** (ticket 09-02).
+##
+## ⚠⚠ **A THIRD KIND OF TARGET, AND IT IS ENCODED FOR THE SAME REASON `TARGET_KEEP` IS A CONSTANT.**
+## 「I am hitting wall 2」, 「I am hitting the 성채」 and 「I am hitting nothing」 have to be three values a
+## reader cannot confuse, and a body index is a non-negative number — so the walls run downward from a
+## number no roster will reach. **Read it back with `wall_of_target`, never by hand.**
+const TARGET_WALL_BASE := -1000
 
 ## A flow field older than this is thrown away and rebuilt on the next request. The grid is 1536
 ## tiles (`boat-and-landing`'s 48 x 32), so one BFS is ~1536 operations and twenty units at 2 Hz is
@@ -218,6 +225,15 @@ var store: Store = null
 ## ⚠ **The 조각 it stands on is filled like the 성채's**, so nothing walks into the building — see
 ## `setup`'s note on `grid.fill` for why a building takes the whole 조각 or is not a wall.
 var store_tile := -1
+
+# --- the 바리케이트 ---------------------------------------------------------------------------------
+## **One 조각 per wall the player has raised, and its health beside it** (ticket 09-02).
+##
+## ⚠⚠ **A DEAD WALL LEAVES ITS ROW BEHIND, TILE -1.** The same rule the beast rows keep: a 늑대 walking
+## at wall 2 holds `TARGET_WALL_BASE - 2`, and compacting the list would renumber every wall under every
+## target that names one, with nothing to bark about it.
+var barricade_tiles := PackedInt32Array()
+var barricade_hp := PackedFloat32Array()
 
 # --- the 성채, and the only way this island is lost ------------------------------------------------
 ## Every 조각 the 성채 covers, handed in by `setup` from the island file. **Empty is a real board**: a
@@ -423,6 +439,9 @@ func setup(grid: Grid, army: Army, spawns: Array,
 	# raiding lands and something has to be carried home, this is the line that says so.
 	store = Store.new()
 	store_tile = -1
+	# ⚠ **Per island.** A wall is a thing standing on one board; nothing carries it to the next.
+	barricade_tiles = PackedInt32Array()
+	barricade_hp = PackedFloat32Array()
 	# resize on a fresh array zero-fills, so nobody has charged yet. **Per island for free**: a
 	# `Battle` is new every island, so 「몸당 섬당 한 번」 needs no reset anywhere else.
 	soldier_pos = []
@@ -928,6 +947,139 @@ func store_doorstep() -> PackedInt32Array:
 	return out
 
 
+## **The wall index a target names, or -1 when it names something else.** ⚠ **The only reader of
+## `TARGET_WALL_BASE`'s arithmetic** — see that constant for why it is not done by hand.
+func wall_of_target(value: int) -> int:
+	if value > TARGET_WALL_BASE:
+		return -1
+	var k := TARGET_WALL_BASE - value
+	if k < 0 or k >= barricade_tiles.size():
+		return -1
+	# ⚠ **A wall that has already fallen answers -1 too.** Its row stays for the numbering's sake, and
+	# every caller here reads `barricade_tiles[k]` as a 조각 — a -1 read as one lands somewhere real.
+	if int(barricade_tiles[k]) < 0:
+		return -1
+	return k
+
+
+## **Raises a 바리케이트 on one 조각, paid for out of the 창고.** Ticket 09-02.
+##
+## (2026-09-02, the user: 「성벽이지」 · 「네 편도 맞고」 · 「체력과 갖고 있고 깎여서 영 이 되면
+## 사라집니다」 · 「일단 나무로」.)
+##
+## ⚠⚠ **A WALL MAY SEAL THE ISLAND AND THAT IS THE POINT.** Nothing here asks whether the island stays
+## walkable: the user's answer is that a beast with no way through **breaks the wall**, so a sealed
+## island is a fight and not an error. ⚠ **It blocks the player's own 부대 too** — 「네 편도 맞고」.
+##
+## ⚠ **Refused on a 조각 something is standing in**, because `Grid.can_hold` lets a body keep the 조각
+## it already holds: raising a wall under somebody would leave that body inside a wall, able to stand
+## there and unable to come back once it left.
+##
+## ⚠⚠ **NOBODY CALLS THIS YET.** 「Build here」 is an order the player gives and that order is not built
+## — 03-11 gave the right button to movement and the user then took the right button away entirely, so
+## which gesture raises a wall is undecided. **This is the door it will come through.**
+func place_barricade(tile: int) -> bool:
+	if grid == null or store == null:
+		return false
+	if tile < 0 or tile >= grid.passable.size():
+		return false
+	if grid.passable[tile] == 0 or grid.is_built(tile):
+		return false
+	if grid.hold_count(tile) > 0:
+		return false
+	if tile == store_tile:
+		return false
+	for k in keep_tiles.size():
+		if int(keep_tiles[k]) == tile:
+			return false
+	if store.count("wood") < Rules.BARRICADE_WOOD:
+		return false
+	store.take("wood", Rules.BARRICADE_WOOD)
+	grid.set_built(tile, true)
+	barricade_tiles.append(tile)
+	barricade_hp.append(Rules.BARRICADE_HP)
+	_forget_routes()
+	return true
+
+
+## **The wall standing on this 조각, or -1.** ⚠ **A dead wall's row holds -1** and is skipped here.
+func barricade_at(tile: int) -> int:
+	for k in barricade_tiles.size():
+		if int(barricade_tiles[k]) == tile and tile >= 0:
+			return k
+	return -1
+
+
+## **Takes health off a wall, and takes the wall down at zero** (「영 이 되면 사라집니다」).
+## Answers what was actually dealt, which is 0 for a wall that is already gone.
+func damage_barricade(k: int, amount: float) -> float:
+	if k < 0 or k >= barricade_hp.size() or int(barricade_tiles[k]) < 0:
+		return 0.0
+	var before := float(barricade_hp[k])
+	var dealt: float = minf(before, maxf(0.0, amount))
+	barricade_hp[k] = before - dealt
+	if float(barricade_hp[k]) <= 0.0:
+		barricade_hp[k] = 0.0
+		var tile := int(barricade_tiles[k])
+		grid.set_built(tile, false)
+		# ⚠ **The row stays and its 조각 becomes -1**, so every target naming this wall reads a dead
+		# wall rather than the wall that used to be numbered after it. See `barricade_tiles`.
+		barricade_tiles[k] = -1
+		for e in enemy_target.size():
+			if int(enemy_target[e]) == TARGET_WALL_BASE - k:
+				enemy_target[e] = TARGET_NONE
+			if int(enemy_swing_at[e]) == TARGET_WALL_BASE - k:
+				enemy_swing_at[e] = TARGET_NONE
+		_forget_routes()
+	return dealt
+
+
+## **Throws away every cached field and every straightened route.**
+##
+## ⚠⚠ **A WALL CHANGES WHAT IS WALKABLE, AND BOTH OF THOSE ARE ANSWERS TO THAT QUESTION FROM BEFORE.**
+## `_fields` holds a flow field per target 조각 and a body's `_soldier_path` is a route straightened
+## against the board as it was — leave either and a body walks THROUGH a wall raised while it was on
+## its way, along a route nothing will re-check.
+func _forget_routes() -> void:
+	_fields = {}
+	_field_age = {}
+	for i in _soldier_path.size():
+		_clear_path(i)
+
+
+## **A wall to break, or `TARGET_NONE`** — the answer to 「길이 없으면 바리게이트 부시는거」.
+##
+## ⚠⚠ **ONLY WHEN THE 성채 CANNOT BE REACHED AT ALL.** The user's rule has two halves and the first one
+## is 「find another path」: a beast that can still get to the house goes round, and only a beast the
+## walls have sealed off turns on them. **The test is the flow field's own answer** — `UNREACHABLE` at
+## the beast's 조각 in the field to the 성채 — so it is the same walk the beast would have taken and
+## not a second opinion about it.
+## ⚠ **The nearest wall by straight line**, ties to the lower index. Nobody chose which wall a boxed-in
+## beast picks; the list order is the answer until somebody does.
+func _wall_to_break(from: Vector2) -> int:
+	if barricade_tiles.is_empty() or keep_tiles.is_empty() or grid == null:
+		return TARGET_NONE
+	var here := _tile_of(from)
+	if here < 0:
+		return TARGET_NONE
+	var field := field_to(int(keep_tiles[0]))
+	if here >= field.size() or int(field[here]) != Grid.UNREACHABLE:
+		return TARGET_NONE
+	var best := -1
+	var best_d := 1.0e30
+	for k in barricade_tiles.size():
+		var tile := int(barricade_tiles[k])
+		if tile < 0:
+			continue
+		var d: float = from.distance_to(_point_of_tile(tile))
+		if d < best_d - Rules.EPS:
+			best_d = d
+			best = k
+	if best < 0:
+		return TARGET_NONE
+	return TARGET_WALL_BASE - best
+
+
 ## **허기 wears down, a hungry body goes to eat, and a body at zero loses 체력 until it dies.**
 ## Ticket 05-07 — (2026-09-02, the user: 「허기라는 값이 있어가지고 그게 이제 천천히 닳아서 ... 영이 되면
 ## 이제 체력이 깎이는 거지」, and 「알아서 먹지」 — *they eat on their own*.)
@@ -1225,7 +1377,14 @@ func _phase_targeting() -> void:
 			enemy_target[e] = TARGET_KEEP
 		else:
 			# `TARGET_NONE` when nobody is inside the radius — the scan's own answer.
-			enemy_target[e] = _nearest_soldier(enemy_pos[e], Rules.detect_of(ty), false)
+			var seen := _nearest_soldier(enemy_pos[e], Rules.detect_of(ty), false)
+			# ⚠⚠ **AND WHEN IT SEES NOBODY, THE WALL** (ticket 09-02, the user: 「길이 막혀 막히면 다시
+			# 길을 찾거나 그 바리게이트를 부시거나 ... 갈 길이 없으면 바리게이트 부시는거」). **The
+			# 「find another path」 half needs no code at all**: a wall is refused by `Grid.can_step`, so
+			# the flow field already routes round it. This branch is only the other half — a beast the
+			# walls have sealed off from the 성채. ⚠ **It cannot fire on a board with no wall on it**,
+			# which is every board in the game today.
+			enemy_target[e] = seen if seen >= 0 else _wall_to_break(enemy_pos[e])
 
 
 ## Everyone walks toward their target and **stops the instant it is in reach**. Without that one
@@ -1293,6 +1452,15 @@ func _phase_movement(dt: float) -> void:
 			if _dist(here, soldier_pos[tgt]) > reach + Rules.EPS:
 				to_pt = soldier_pos[tgt]
 				to_tile = _tile_of(to_pt)
+		elif wall_of_target(tgt) >= 0:
+			# ⚠ **The field is built TO the wall's own 조각 even though nothing may enter it.**
+			# `flow_field` plants its seed whatever the target's passability — the note in that
+			# function — so the field spreads out from the wall and the beast descends it to the
+			# 조각 beside. It stops at `reach` like everything else.
+			var wall_tile := int(barricade_tiles[wall_of_target(tgt)])
+			if _dist(here, _point_of_tile(wall_tile)) > reach + Rules.EPS:
+				to_pt = _point_of_tile(wall_tile)
+				to_tile = wall_tile
 		elif tgt == TARGET_NONE and anchor >= 0:
 			to_tile = anchor
 			to_pt = _point_of_tile(anchor)
@@ -1405,7 +1573,15 @@ func _phase_attacks(dt: float) -> void:
 		if etgt == TARGET_KEEP:
 			if keep_gap(enemy_pos[e]) > reach + Rules.EPS:
 				continue
+		elif wall_of_target(etgt) >= 0:
+			# ⚠ **Straight-line reach, the same question `TARGET_KEEP` asks.** A wall is a thing on the
+			# board and not a body, so `_can_hit`'s 눈금 guard — which is about two bodies on different
+			# storeys — has nothing to say about it.
+			if _dist(enemy_pos[e], _point_of_tile(int(barricade_tiles[wall_of_target(etgt)]))) > reach + Rules.EPS:
+				continue
 		else:
+			if etgt < 0 or etgt >= soldier_state.size():
+				continue
 			if int(soldier_state[etgt]) != SoldierState.ASHORE:
 				continue
 			if not _can_hit(enemy_pos[e], soldier_pos[etgt], reach):
@@ -1439,6 +1615,14 @@ func _land_enemy_blow(e: int) -> void:
 		if keep_gap(enemy_pos[e]) > reach + Rules.EPS:
 			return
 		keep_hp -= Rules.damage_of(ty)
+	elif wall_of_target(etgt) >= 0:
+		var wk := wall_of_target(etgt)
+		if _dist(enemy_pos[e], _point_of_tile(int(barricade_tiles[wk]))) > reach + Rules.EPS:
+			return
+		# ⚠ **A wall that fell during the 0.4 s of the swing answers 0 and the blow still counts** —
+		# the beast swung and connected with what was there when it started; `damage_barricade` is
+		# what says there was nothing left to take.
+		damage_barricade(wk, Rules.damage_of(ty))
 	else:
 		if etgt < 0 or etgt >= soldier_state.size():
 			return

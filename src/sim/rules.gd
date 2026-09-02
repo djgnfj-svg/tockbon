@@ -437,6 +437,17 @@ const HUNGER_MEAL := 45.0
 const EAT_RANGE_TILES := 1.6
 
 
+# --- the 바리케이트 -------------------------------------------------------------------------------
+## **What a 바리케이트 is built of and how much of it** (ticket 09-02, the user: 「일단 나무로」).
+## ⚠⚠ **THE USER DID NOT GIVE THIS NUMBER AND SAID SO** — 「몇 초까지는 너무 커」 covers every cost in
+## this game so far. **It is the builder's first value.** ⚠ Nothing gathers wood yet (05-05), so today
+## the only way to pay for one is to put wood in the 창고 by hand, which is what the nets do.
+const BARRICADE_WOOD := 5
+## **A 바리케이트's health** (「체력과 갖고 있고 깎여서 영 이 되면 사라집니다」). ⚠ **Also the builder's
+## number.** A 늑대 deals `damage_of(WOLF)` a swing, so this is a handful of swings and not a siege.
+const BARRICADE_HP := 30.0
+
+
 # --- The telegraph -------------------------------------------------------------------------------
 ## ⚠ **`LION_WINDUP_SEC` stood here and it is deleted** (2026-08-29). It was 0.6 — how long the heavy
 ## attack DECLARED itself before landing. **The telegraph is the reason a heavy attack is fair**, and

@@ -114,6 +114,18 @@ const NEIGHBOURS := [
 var w: int = 0
 var h: int = 0
 var passable := PackedByteArray()      # w*h, 1 = walkable (includes a ramp)
+## **w*h, 1 where the PLAYER has built a wall** — the 바리케이트 (ticket 09-02, the user: 「성벽이지」).
+##
+## ⚠⚠ **A SECOND LAYER AND NOT A HOLE PUNCHED IN `passable`.** The terrain letters are the island and
+## a wall is a thing standing ON it: written into `passable`, a wall would also move `beach_ring` (where
+## boats may land), the main landmass and the stair runs, and taking it down again would have to undo
+## all three from memory. **Here it is one byte that `can_step` and `can_hold` consult**, and every rule
+## downstream — the flow field, the straightened route, `Hand`'s reach, the seating — asks one of those
+## two and inherits it.
+## ⚠ **Cleared by `load_rows`**, like every other board-sized column: a new island has no walls on it.
+## ⚠⚠ **IT BLOCKS THE PLAYER TOO** (the user: 「네 편도 맞고」) — which is why it lives here, where both
+## sides ask, and not in a beast-only rule.
+var built := PackedByteArray()
 var water := PackedByteArray()         # w*h, 1 = water (includes a harbour)
 ## w*h, the tier level of each tile. **Every height in this game is derived from this one integer** —
 ## see `Rules.TIER_STEP_TILES` and `TIER_CHARS` above.
@@ -218,6 +230,8 @@ func load_rows(rows: Array, tiers: Array = []) -> void:
 	water.resize(n)
 	level = PackedByteArray()
 	level.resize(n)
+	built = PackedByteArray()
+	built.resize(n)
 	reserved = PackedInt32Array()
 	reserved.resize(n * Rules.TILE_CAPACITY)
 	reserved.fill(-1)
@@ -1008,6 +1022,10 @@ func can_step(from_tile: int, to_tile: int) -> bool:
 		return false
 	if passable[to_tile] == 0:
 		return false
+	# ⚠ **The wall is asked here and not by the walkers.** `flow_field`, `path_from`, `string_pull` and
+	# `Hand`'s flood all come through this one function, so a 바리케이트 blocks every one of them at once.
+	if built[to_tile] == 1:
+		return false
 	var from_level := level_of(from_tile)
 	if absi(from_level - level_of(to_tile)) > Rules.MAX_CLIMB_LEVELS:
 		return false
@@ -1056,6 +1074,10 @@ func _stair_face_open(from_tile: int, to_tile: int, dx: int, dy: int) -> bool:
 ## same argument `_water_step_open`'s header makes, one rule over.
 func _shoulder_open(from_level: int, shoulder_tile: int) -> bool:
 	if passable[shoulder_tile] == 0:
+		return false
+	# ⚠ **A wall corner is walked through without this.** The shoulders get the same two questions the
+	# destination gets, and a 바리케이트 is one of them — see `built`.
+	if built[shoulder_tile] == 1:
 		return false
 	return absi(from_level - level_of(shoulder_tile)) <= Rules.MAX_CLIMB_LEVELS
 
@@ -1801,7 +1823,26 @@ func _block_holds(block: int, unit_id: int) -> bool:
 ## Whether one more body would fit in `tile`. **Both ceilings, and the 블록 one is the new half**
 ## (2026-08-31): a 조각 with a free slot in a full 블록 answers false.
 func has_room(tile: int) -> bool:
+	if tile >= 0 and tile < built.size() and built[tile] == 1:
+		return false
 	return _free_slot(tile) >= 0 and block_has_room(block_of(tile), -1)
+
+
+## **Raises or takes down the wall on one 조각.** Answers false for a 조각 off the board.
+##
+## ⚠ **It does not ask whether anything is standing there** — `Battle.place_barricade` owns that, along
+## with what it costs and how much health it has. **This is the one byte and nothing else.**
+func set_built(tile: int, on: bool) -> bool:
+	if tile < 0 or tile >= built.size():
+		return false
+	built[tile] = 1 if on else 0
+	return true
+
+
+func is_built(tile: int) -> bool:
+	if tile < 0 or tile >= built.size():
+		return false
+	return built[tile] == 1
 
 
 ## Whether this unit may stand in `tile` — it already does, or there is room for it.
@@ -1812,6 +1853,11 @@ func has_room(tile: int) -> bool:
 func can_hold(tile: int, unit_id: int) -> bool:
 	if slot_of(tile, unit_id) >= 0:
 		return true
+	# ⚠ **After the 「it already stands here」 line, deliberately.** A wall raised on a body already
+	# standing there would otherwise make that body unable to hold its own 조각 and it would be evicted
+	# by arithmetic — `Battle.place_barricade` refuses an occupied 조각, and this is the second net.
+	if tile >= 0 and tile < built.size() and built[tile] == 1:
+		return false
 	return _free_slot(tile) >= 0 and block_has_room(block_of(tile), unit_id)
 
 
