@@ -3823,14 +3823,16 @@ func _fx_step(delta: float) -> void:
 			float(battle.soldier_hp[i]), float(battle.soldier_cool[i]), int(army.type_id[i]),
 			_aim_of(int(battle.soldier_target[i]), battle.enemy_pos, battle.soldier_pos[i]),
 			"e%d" % int(battle.soldier_swing_at[i]) if int(battle.soldier_swing_at[i]) >= 0 else "",
-			int(battle.soldier_blows[i])])
+			int(battle.soldier_blows[i]),
+			int(battle.soldier_starving[i])])
 	for e in battle.enemy_alive.size():
 		var living := battle.enemy_alive[e] != 0
 		rows.append(["e%d" % e, living, living, battle.enemy_pos[e],
 			float(battle.enemy_hp[e]), float(battle.enemy_cool[e]), int(battle.enemy_type[e]),
 			_aim_of(int(battle.enemy_target[e]), battle.soldier_pos, battle.enemy_pos[e]),
 			"s%d" % int(battle.enemy_swing_at[e]) if int(battle.enemy_swing_at[e]) >= 0 else "",
-			int(battle.enemy_blows[e])])
+			int(battle.enemy_blows[e]),
+			0])
 
 	for raw_row in rows:
 		var row: Array = raw_row
@@ -3844,6 +3846,9 @@ func _fx_step(delta: float) -> void:
 		var aim: Vector2 = row[7]
 		var victim: String = row[8]
 		var blows: int = row[9]
+		# **1 while the sim is taking this body's health for 허기 rather than for a blow** (05-07).
+		# ⚠ **Beasts always answer 0** — nothing starves them.
+		var starving: bool = int(row[10]) != 0
 		# ⚠⚠ **THE DRAWN POINT, NOT THE SIM'S, IS WHAT THE LEGS AND THE FACING READ** (2026-09-02). A body
 		# that has arrived glides to its seat over half a second (`_seat_glide`) while the sim's point
 		# stands still — measured off `here` it read as standing, and BREATHED while it slid. Walking,
@@ -3922,12 +3927,16 @@ func _fx_step(delta: float) -> void:
 		# landing a third of a second into the swing, a body hit in its wind-up dropped the picture
 		# of a blow the sim still landed: damage dealt, no sword seen. `_body_tex` decides which of
 		# the two is on top — the swing until its blow has landed, the flinch after.
-		if hp < float(b["hp"]) - Rules.EPS:
+		if hp < float(b["hp"]) - Rules.EPS and not starving:
 			b["hurt"] = _anim_sec(type_id, Look.Anim.HURT)
 			# ⚠ **The flinch is triggered by health falling and everything else by the blow landing**,
 			# the same sub-step. **Health is the honest signal for「I was hurt」** — it is true
-			# even for damage nothing swung for, and the day something like that exists this line is
-			# already right.
+			# even for damage nothing swung for.
+			# ⚠⚠ **AND THAT DAY CAME, AND IT NEEDED THE ONE EXCEPTION ABOVE** (2026-09-02, ticket
+			# 05-07). 허기 takes health every sub-step it is at zero, so a starving body would flinch
+			# on EVERY frame until it fell — a body being beaten by nothing, for half a minute.
+			# **`soldier_starving` is the sim saying which kind of drop this is**, and it is a column
+			# rather than a guess here because only the sim knows.
 		# ⚠⚠ **The fall starts where the body was standing, not where the sim says it is.** A beast's
 		# position is OFFMAP by the time this runs.
 		if bool(b["alive"]) and not alive:

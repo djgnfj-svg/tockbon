@@ -414,9 +414,27 @@ const APTITUDE_MAX := 10
 ## put 「태어날 때 0~3 무작위」 to the user and the answer was 「네」. ⚠ Below `APTITUDE_MAX` or a newborn
 ## could open at the top of a scale it is meant to climb.
 const APTITUDE_BORN_MAX := 3
-## What a body's 허기 is filled to at birth. **The drain is ticket 05-07's and is not written anywhere yet**;
-## today every body holds this number for the whole run, and the panel prints it.
+## What a body's 허기 is filled to at birth, and the ceiling a meal fills it back to.
 const HUNGER_MAX := 100.0
+## **How fast 허기 wears down, per second** (ticket 05-07, 2026-09-02, the user: 「허기라는 값이 있어가지고
+## 그게 이제 천천히 닳아서」). At this rate a full body empties in about four minutes.
+## ⚠⚠ **THE USER DID NOT GIVE THIS NUMBER AND SAID SO** — 「몇 초까지는 너무 커」, *a matter of seconds is
+## far too big*. **It is the builder's first value and it is meant to be changed on screen**, which is the
+## only place a pace like this can be judged.
+const HUNGER_DRAIN_PER_SEC := 0.4
+## **How fast 체력 drains once 허기 is at zero, per second** (「영이 되면 이제 체력이 깎이는 거지」). A 검사
+## holds `UNITS`' hp, so starving kills in under a minute once it starts. ⚠ **Also the builder's number.**
+const STARVE_HP_PER_SEC := 2.0
+## **The 허기 at which a body goes to the 창고 on its own** (「배고프면은 식량 창고를 만들어놔서 알아서 가서
+## 먹는 걸로 하자」 — *when hungry they go and eat by themselves*). ⚠ **Above zero on purpose**: a body that
+## only set off at zero would already be losing 체력 by the time it started walking.
+const HUNGER_SEEK := 40.0
+## **What one meal puts back.** ⚠ **Not the whole bar** — a body that ate once and was full for another
+## four minutes would make one fish worth a quarter of an hour of walking to fetch it.
+const HUNGER_MEAL := 45.0
+## **How close to the 창고 a body has to be to eat, in 조각.** The 창고 holds its own 조각 like the 성채
+## does, so a body stands BESIDE it — this is the reach across that one step, with the diagonal in it.
+const EAT_RANGE_TILES := 1.6
 
 
 # --- The telegraph -------------------------------------------------------------------------------

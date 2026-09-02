@@ -67,6 +67,9 @@ const ENEMY_UID_BASE := 1 << 20
 ## of the three carrying a rule about buildings.
 ## ⚠ **It is never released.** `release_all` is per-id and nothing in this file names this one.
 const KEEP_UID := ENEMY_UID_BASE - 1
+## **The 창고's own id, one below the 성채's** (ticket 05-08). A building holds its whole 조각 and has to
+## be able to release it again when it is moved, and two buildings sharing an id could not.
+const STORE_UID := ENEMY_UID_BASE - 2
 
 ## What `soldier_target` and `enemy_target` hold when they are not naming a body.
 ##
@@ -193,6 +196,28 @@ var soldier_swing_at := PackedInt32Array()
 var soldier_blows := PackedInt32Array()
 ## Seconds until a DEAD body stands again at the 성채. **Only read while `soldier_state` is DEAD.**
 var soldier_revive := PackedFloat32Array()
+## **1 while this body is losing 체력 to 허기 rather than to a blow** (ticket 05-07).
+##
+## ⚠⚠ **IT EXISTS BECAUSE THE PICTURE READS A DROP IN HEALTH AS A FLINCH.** The simulation keeps no
+## event list — 피격 is 「health went down」, read one frame against the last — so a starving body would
+## flinch on every frame it starved, forever, and the flinch cancels nothing but looks like being
+## beaten by something invisible. **`field_view` reads this column and skips the flinch while it is 1.**
+## ⚠ **It is not 「hungry」.** A body at zero 허기 with full health is starving; one at 40 walking to the
+## 창고 is not. The column says only 「this drop was hunger」.
+var soldier_starving := PackedByteArray()
+
+# --- the 창고, and everything gathered ---------------------------------------------------------------
+## **Everything stacked, by kind** (ticket 05-08). ⚠ **Never null after `setup`** — an empty 창고 and no
+## 창고 at all are told apart by `store_tile`, not by this.
+var store: Store = null
+## **The 조각 the 창고 stands on, or -1 when none has been built.**
+##
+## ⚠⚠ **A RUN OPENS WITH NO 창고 AND THAT IS THE USER'S ANSWER** (2026-09-02, asked whether it stands on
+## the first run or has to be built: 「지어야 되고」 — *it has to be built*). So -1 is the normal state of
+## a fresh island, and every reader has to mean it.
+## ⚠ **The 조각 it stands on is filled like the 성채's**, so nothing walks into the building — see
+## `setup`'s note on `grid.fill` for why a building takes the whole 조각 or is not a wall.
+var store_tile := -1
 
 # --- the 성채, and the only way this island is lost ------------------------------------------------
 ## Every 조각 the 성채 covers, handed in by `setup` from the island file. **Empty is a real board**: a
@@ -392,6 +417,12 @@ func setup(grid: Grid, army: Army, spawns: Array,
 	soldier_blows.resize(roster)
 	soldier_revive = PackedFloat32Array()
 	soldier_revive.resize(roster)
+	soldier_starving = PackedByteArray()
+	soldier_starving.resize(roster)
+	# ⚠ **A fresh 창고 per island, and no building yet.** The counts do not cross islands today; when
+	# raiding lands and something has to be carried home, this is the line that says so.
+	store = Store.new()
+	store_tile = -1
 	# resize on a fresh array zero-fills, so nobody has charged yet. **Per island for free**: a
 	# `Battle` is new every island, so 「몸당 섬당 한 번」 needs no reset anywhere else.
 	soldier_pos = []
@@ -534,6 +565,9 @@ func step(dt: float) -> void:
 		# ⚠⚠ **THE ORDER IS A CONTRACT AND NOT AN IMPLEMENTATION DETAIL**, and every line of it was
 		# paid for once:
 		#
+		#  · ⚠⚠ **HUNGER FIRST, AND IT IS FIRST FOR TWO REASONS.** It can send a body to the 창고,
+		#    and an order written after `_phase_orders` would sit unwalked for a whole sub-step; and
+		#    it can take a body's last health, which `_phase_deaths` further down is what answers.
 		#  · **Orders before movement, and movement skips whoever orders moved** — falling through
 		#    walks one body twice in a sub-step, at double speed and toward two different places.
 		#  · **Boats before landings**, so a hull that reaches the shore on this sub-step unloads on
@@ -549,6 +583,7 @@ func step(dt: float) -> void:
 		#    invisible in final state.**
 		#  · **The muster last**, so a body that died this sub-step starts its own clock this sub-step
 		#    and not on the next one.
+		_phase_hunger(Rules.SIM_SUBSTEP_SEC)
 		_phase_orders(Rules.SIM_SUBSTEP_SEC)
 		_phase_boats(Rules.SIM_SUBSTEP_SEC)
 		_phase_landings()
@@ -602,6 +637,11 @@ func place_ashore(soldier_id: int, near_tile: int) -> int:
 	# The opening watch and a revival are the same call, so a wound healed in one and not the other is
 	# not a shape this file can have. **`soldier_hp` is 0 until this line runs** — see `setup`.
 	soldier_hp[soldier_id] = army.max_hp_of(soldier_id)
+	# ⚠ **허기 refills here too, and for the same reason** (ticket 05-07). A body that starved to death
+	# and stood again at zero 허기 would start dying on its first sub-step back — the revival would be
+	# a formality. **Standing whole is one sentence and this is where it is written.**
+	army.hunger[soldier_id] = Rules.HUNGER_MAX
+	soldier_starving[soldier_id] = 0
 	soldier_target[soldier_id] = TARGET_NONE
 	soldier_cool[soldier_id] = 0.0
 	# ⚠ **A swing a body died in the middle of does not land on its next life.** `soldier_blows` is
@@ -840,6 +880,122 @@ func keep_gap(p: Vector2) -> float:
 ##    search `place_ashore` still uses — a keep standing on the aimed tile still lands somebody beside it.
 ##  · **The append order was the press order**, and two boats aimed at one tile arrived on the same
 ##    sub-step: whoever unloaded first took the target tile.
+
+
+## **Builds the 창고 on one 조각, or answers false.** Ticket 05-08.
+##
+## ⚠⚠ **A BUILDING TAKES THE WHOLE 조각 OR IT IS NOT A WALL**, which is the rule `setup` writes for the
+## 성채 one function up: `grid.fill` and never `grid.hold`, because a 조각 admits `Rules.TILE_CAPACITY`
+## bodies and a house holding one slot would leave the rest free to walk into. **So a body eats from
+## the 조각 BESIDE the 창고**, the same way it will gather from beside a resource 칸.
+##
+## ⚠ **One 창고 an island.** A second call moves it rather than making two — 「one building」 is the
+## user's own word for it, and two piles of fish is a different game.
+## ⚠⚠ **NOBODY CALLS THIS YET.** 「Build here」 is an order the player gives and that order is task 09's
+## (「내가 건물을 짓는건 조각단위로 해야할듯」). This is the door it will come through, and the nets are
+## what open it today.
+func place_store(tile: int) -> bool:
+	if grid == null:
+		return false
+	if tile < 0 or tile >= grid.passable.size():
+		return false
+	if grid.passable[tile] == 0 or grid.hold_count(tile) > 0:
+		return false
+	if store_tile >= 0:
+		grid.release_all(STORE_UID)
+	store_tile = tile
+	grid.fill(STORE_UID, tile)
+	return true
+
+
+## **Every 조각 a body may stand on to eat from the 창고** — its walkable neighbours, ascending.
+## ⚠ **Empty for an island with no 창고**, and for one walled in on every side.
+func store_doorstep() -> PackedInt32Array:
+	var out := PackedInt32Array()
+	if grid == null or store_tile < 0:
+		return out
+	var sx := store_tile % grid.w
+	var sy := store_tile / grid.w
+	for k in Grid.NEIGHBOURS.size():
+		var nx: int = sx + int(Grid.NEIGHBOURS[k][0])
+		var ny: int = sy + int(Grid.NEIGHBOURS[k][1])
+		if nx < 0 or ny < 0 or nx >= grid.w or ny >= grid.h:
+			continue
+		var nt := ny * grid.w + nx
+		if grid.passable[nt] == 1:
+			out.append(nt)
+	out.sort()
+	return out
+
+
+## **허기 wears down, a hungry body goes to eat, and a body at zero loses 체력 until it dies.**
+## Ticket 05-07 — (2026-09-02, the user: 「허기라는 값이 있어가지고 그게 이제 천천히 닳아서 ... 영이 되면
+## 이제 체력이 깎이는 거지」, and 「알아서 먹지」 — *they eat on their own*.)
+##
+## ⚠⚠ **NOBODY FEEDS ANYBODY.** There is no cook, no delivery and no order to eat: a body below
+## `Rules.HUNGER_SEEK` walks to the 창고 itself and eats what is stacked there. **That is the first
+## order in this game a body gives itself** — every other one comes from the hand.
+##
+## ⚠⚠ **A SELF-ORDER NEVER OVERRIDES THE PLAYER'S.** A body already carrying an order, or already
+## fighting something, is left alone and goes on starving. **Whether an eating body should drop what it
+## was doing was never asked** (05-07's own 「not decided」), and taking a 부대 out of a fight to eat is
+## not a thing to decide on the builder's own — so the cautious half is what is built.
+##
+## ⚠ **The drain runs for a body that is ASHORE and nothing else.** A body in reserve or dead is not
+## on the island to be hungry on, and a corpse counting down to a revival must not starve while it
+## waits — its 체력 is 0 already and `_phase_deaths` would find it every sub-step.
+func _phase_hunger(dt: float) -> void:
+	if army == null:
+		return
+	var doorstep := store_doorstep()
+	for i in soldier_state.size():
+		if i >= army.hunger.size():
+			break
+		if int(soldier_state[i]) != SoldierState.ASHORE:
+			soldier_starving[i] = 0
+			continue
+		var hunger := float(army.hunger[i]) - Rules.HUNGER_DRAIN_PER_SEC * dt
+		if hunger < 0.0:
+			hunger = 0.0
+		army.hunger[i] = hunger
+		# **Eating comes before starving**, so a body that reaches the 창고 on the sub-step it would
+		# have started losing health does not lose any.
+		if hunger < Rules.HUNGER_MAX - Rules.EPS and store_tile >= 0 and store != null:
+			var reach: float = (soldier_pos[i] as Vector2).distance_to(_point_of_tile(store_tile))
+			if reach <= Rules.EAT_RANGE_TILES and store.take_meal() != "":
+				hunger = minf(Rules.HUNGER_MAX, hunger + Rules.HUNGER_MEAL)
+				army.hunger[i] = hunger
+		# ⚠ **`starving` is the health drop's own flag and is cleared every sub-step it does not
+		# happen**, so a body that ate mid-fall stops being 「starving」 on the frame it stops falling.
+		soldier_starving[i] = 0
+		if hunger <= 0.0:
+			soldier_hp[i] = maxf(0.0, float(soldier_hp[i]) - Rules.STARVE_HP_PER_SEC * dt)
+			soldier_starving[i] = 1
+			continue
+		if hunger > Rules.HUNGER_SEEK:
+			continue
+		# **Off to eat.** Only a body with nothing else to do, and only when there is something to eat
+		# — walking to an empty 창고 is a body abandoning its post for nothing.
+		if store_tile < 0 or store == null or not store.has_food():
+			continue
+		if int(soldier_order[i]) >= 0 or int(soldier_target[i]) != TARGET_NONE:
+			continue
+		if doorstep.is_empty():
+			continue
+		var here: Vector2 = soldier_pos[i]
+		if here.distance_to(_point_of_tile(store_tile)) <= Rules.EAT_RANGE_TILES:
+			continue
+		# ⚠ **The nearest doorstep 조각 by straight line, and ties go to the lower index** — the list
+		# is sorted, so the same board and the same body always pick the same 조각.
+		var best := -1
+		var best_d := 1.0e30
+		for k in doorstep.size():
+			var d: float = here.distance_to(_point_of_tile(int(doorstep[k])))
+			if d < best_d - Rules.EPS:
+				best_d = d
+				best = int(doorstep[k])
+		if best >= 0:
+			order_walk(i, best)
 
 
 func _phase_orders(dt: float) -> void:
