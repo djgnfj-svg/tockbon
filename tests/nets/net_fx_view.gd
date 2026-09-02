@@ -48,6 +48,7 @@ func run(t) -> void:
 	# The selection box on the ground (ticket 03-12, rebuilt 2026-09-02) — at the top for the same reason.
 	_the_box_is_laid_on_the_ground(t)
 	_the_box_climbs_the_tier(t)
+	_the_box_is_built_once_a_frame_and_bounded(t)
 	_a_bar_appears_only_once_something_is_hurt(t)
 	_the_fill_drains_from_the_right_and_never_moves_its_left(t)
 	_the_keep_wears_its_bar_over_its_own_roof(t)
@@ -97,10 +98,15 @@ func run(t) -> void:
 ## its vertex arrays prove what was built, and the border hits unprojected through the SAME camera
 ## prove it lies under the rect and not somewhere the projection invented.
 ##
-## ⚠ **The vertex counts are typed by hand for `SELECTION_BOX_STEP_PX` 8**: an 80 x 40 rect is 10 x 5
+## ⚠ **The vertex counts are typed by hand for the step rule `max(SELECTION_BOX_STEP_PX 8,
+## ceil(longer side / SELECTION_BOX_MAX_CELLS 24))`** (the bound came 2026-09-02 with the lag fix): an
+## 80 x 40 rect's longer side would take 10 cells of 8 px, under the bound, so its step stays 8 — 10 x 5
 ## cells, 2 triangles each = 300 fill vertices; its border is 2 × 10 + 2 × 5 = 30 hits, a 6-vertex
 ## ribbon piece per hit and a 6-vertex cap per corner = 204. Reading the step here would keep the row
-## green for any step, which is the shape `how-nets-lie` names.
+## green for any step, which is the shape `how-nets-lie` names. The rect that crosses the bound is
+## `_the_box_is_built_once_a_frame_and_bounded`'s.
+## ⚠ **`set_box` builds nothing on its own since the lag fix** — it marks, and the frame's `_process`
+## builds — so every `set_box` here is followed by a `_process(0.0)`, the same frame the game pays.
 ## ⚠ **The yaw row is what says 「on the ground, not on the glass」**: a box built from screen
 ## coordinates has the same world points at every yaw, and one laid on the terrain does not.
 func _the_box_is_laid_on_the_ground(t) -> void:
@@ -110,8 +116,9 @@ func _the_box_is_laid_on_the_ground(t) -> void:
 	t.eq(im.get_surface_count(), 0, "상자를 주기 전에는 면이 하나도 없다 (자가 점검)")
 	var rect := Rect2(600.0, 340.0, 80.0, 40.0)
 	fv.set_box(rect)
+	fv._process(0.0)
 	t.eq(fv._box, rect, "판이 준 상자를 그대로 들고 있다")
-	t.eq(im.get_surface_count(), 2, "상자 하나가 두 면으로 커밋된다 — 채움과 테두리")
+	t.eq(im.get_surface_count(), 2, "상자 하나가 프레임에 두 면으로 커밋된다 — 채움과 테두리")
 	if im.get_surface_count() < 2:
 		return
 	var fill_v: PackedVector3Array = im.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
@@ -174,6 +181,7 @@ func _the_box_is_laid_on_the_ground(t) -> void:
 
 	# **An empty rect brings it down**: no surface, no hit.
 	fv.set_box(Rect2())
+	fv._process(0.0)
 	t.eq(im.get_surface_count(), 0, "빈 상자는 면이 하나도 없다")
 	t.eq(fv._box_hits.size(), 0, "테두리 점도 하나도 없다")
 
@@ -195,6 +203,7 @@ func _the_box_climbs_the_tier(t) -> void:
 		for dx in 2:
 			b.grid.level[(tv.y + dy) * b.grid.w + tv.x + dx] = 2
 	fv.set_box(rect)
+	fv._process(0.0)
 	if fv._box_mesh.mesh.get_surface_count() < 2:
 		t.ok(false, "상자가 두 면으로 커밋됐다 (자가 점검)")
 		return
@@ -214,6 +223,70 @@ func _the_box_climbs_the_tier(t) -> void:
 	t.ok(on_high > 0, "채움의 꼭짓점 %d 개가 2층 위에 놓인다 — 네 모서리로 편 한 장이면 0 이다" % on_high)
 	t.ok(on_low > 0, "그리고 %d 개는 아래 땅에 남는다 — 상자가 층을 걸쳐 있다" % on_low)
 	t.eq(elsewhere, 0, "그 둘 말고 다른 높이의 꼭짓점은 없다 — 조각마다 제 땅을 읽었다")
+
+
+## **Three rects in one frame are one rebuild, and a rect across the whole glass is a bounded grid**
+## (2026-09-02, the user: 「렉이 겁나걸리네 드래그좀 한다고?」 — *"it lags like crazy — just from
+## dragging?"*). The shell hands a rect on every mouse motion; `set_box` only marks, and the frame's
+## `_process` builds once. **The counter `_box_rebuilds` is the instrument**, because a surface count
+## reads 2 after one rebuild and after three alike — and its own literal `1` is what catches the
+## counter going dead.
+##
+## ⚠ **The literals are typed by hand for `SELECTION_BOX_STEP_PX` 8 and `SELECTION_BOX_MAX_CELLS` 24**:
+## a 1280 x 720 rect takes step max(8, ceil(1280 / 24)) = 54 px, so 24 x 14 cells — 2016 fill vertices,
+## 76 border hits, 76 ribbon pieces and 4 caps = 480 vertices; at step 8 it would be 86,400. A 220 x 100
+## rect takes step 10, so 22 x 10 cells = 1320. Reading the constants here would keep the row green
+## with the bound deleted.
+## ⚠ **The last line prints two wall-clocks and asserts nothing about them** — wall-clock is not
+## asserted in this repo; the numbers are for the eye reading the round, taken on this arena and not
+## on the real island (`FieldView._rebuild_box` carries the island's).
+func _the_box_is_built_once_a_frame_and_bounded(t) -> void:
+	var pack := _quiet_view()
+	var fv: FieldView = pack["fv"]
+	var im: ImmediateMesh = fv._box_mesh.mesh
+	var built: int = fv._box_rebuilds
+	fv.set_box(Rect2(600.0, 340.0, 80.0, 40.0))
+	fv.set_box(Rect2(600.0, 340.0, 120.0, 60.0))
+	fv.set_box(Rect2(600.0, 340.0, 160.0, 80.0))
+	t.eq(fv._box_rebuilds - built, 0, "상자 셋을 한 프레임 안에 주면 아직 하나도 안 짓는다")
+	t.eq(im.get_surface_count(), 0, "그래서 면도 아직 없다")
+	fv._process(0.0)
+	t.eq(fv._box_rebuilds - built, 1, "프레임이 돌면 한 번 짓는다 — 셋이 아니라")
+	t.eq(im.get_surface_count(), 2, "그리고 두 면이 선다")
+	if im.get_surface_count() < 2:
+		return
+	var fill_v: PackedVector3Array = im.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	t.eq(fill_v.size(), 1200, "지어진 것은 마지막 상자다 — 160 x 80 은 걸음 8 로 20 x 10 칸, 꼭짓점 1200")
+	fv._process(0.0)
+	t.eq(fv._box_rebuilds - built, 1, "상자도 카메라도 안 바뀐 프레임은 다시 안 짓는다")
+
+	# **The bound**: a rect across the whole glass.
+	fv.set_box(Rect2(0.0, 0.0, 1280.0, 720.0))
+	fv._process(0.0)
+	t.eq(fv._box_rebuilds - built, 2, "유리 전체 상자도 한 프레임에 한 번이다")
+	if im.get_surface_count() < 2:
+		t.ok(false, "유리 전체 상자가 두 면으로 섰다 (자가 점검)")
+		return
+	fill_v = im.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var line_v: PackedVector3Array = im.surface_get_arrays(1)[Mesh.ARRAY_VERTEX]
+	t.eq(fill_v.size(), 2016, "유리 전체 상자는 걸음 54 px 로 24 x 14 칸이다 — 꼭짓점 2016 (걸음 8 이면 86,400)")
+	t.eq(fv._box_hits.size(), 76, "테두리 점은 일흔여섯이다 — 위아래 스물넷씩, 양옆 열넷씩")
+	t.eq(line_v.size(), 480, "테두리는 띠 일흔여섯 조각과 모서리 마개 넷 — 꼭짓점 480")
+
+	# **The wall-clock, printed and not asserted.** `_rebuild_box` is timed on its own so the number is
+	# the box's and not the frame's.
+	var t0 := Time.get_ticks_usec()
+	fv._rebuild_box()
+	var full_us := Time.get_ticks_usec() - t0
+	fv.set_box(Rect2(530.0, 310.0, 220.0, 100.0))
+	fv._process(0.0)
+	fill_v = im.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	t.eq(fill_v.size(), 1320, "220 x 100 상자는 걸음 10 px 로 22 x 10 칸 — 꼭짓점 1320")
+	t0 = Time.get_ticks_usec()
+	fv._rebuild_box()
+	var mid_us := Time.get_ticks_usec() - t0
+	print("  ~ 상자 한 번 짓기 (이 판 %d x %d, 재지 않고 적기만 한다): 1280 x 720 %.2f ms · 220 x 100 %.2f ms"
+		% [ARENA_W, ARENA_H, full_us / 1000.0, mid_us / 1000.0])
 
 
 ## ⚠⚠ **`HILL_AMP_TILES` IS 2.60 AND A TIER IS 2.00, AND THAT SOUNDS FATAL. IT IS NOT, AND THE

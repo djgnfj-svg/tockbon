@@ -2398,13 +2398,24 @@ const SELECTION_BOX_HALF_W_TILES := 0.035
 ## named for it. ⚠ Tuned by eye, first value.
 const SELECTION_BOX_FILL_ALPHA := 0.28
 
-## **Screen px between two terrain samples of the box**, across the fill's grid and along its border
-## alike — one constant, because the outline runs on the grid's own border hits. 8 px is about a quarter
-## of a 조각 at the opening zoom, so no piece of the tint can span more than one step of the terrain
-## and the tint climbs the 2층 face instead of diving under it. ⚠ **The cost is a projection per sample
-## per rebuild**: a 220 x 100 rect is 28 x 13 = 364 ray walks, and a rect across the whole glass is
-## 161 x 91 = 14,651 — that ceiling has not been measured on the real island. ⚠ Tuned by eye, first value.
+## **The finest screen px between two terrain samples of the box**, across the fill's grid and along its
+## border alike — one constant, because the outline runs on the grid's own border hits. 8 px is about a
+## quarter of a 조각 at the opening zoom, so no piece of the tint can span more than one step of the
+## terrain and the tint climbs the 2층 face instead of diving under it. ⚠ **The step GROWS past this for
+## a big rect** — see `SELECTION_BOX_MAX_CELLS`, which is what keeps a rect across the whole glass from
+## costing 14,651 projections. ⚠ Tuned by eye, first value.
 const SELECTION_BOX_STEP_PX := 8.0
+
+## **The most cells the box's grid has along its longer side.** The sample step is
+## `max(SELECTION_BOX_STEP_PX, ceil(longer side / this))`, so a small rect keeps the 8 px step and a
+## rect across the whole glass is at most 24 x 24 cells — 24 x 14 on a 1280 x 720 rect, a 54 px step.
+## ⚠⚠ **This exists because the user felt it** (2026-09-02: 「렉이 겁나걸리네 드래그좀 한다고?」 — *"it
+## lags like crazy — just from dragging?"*): at the 8 px step a full-glass rect was 14,651 projections
+## per rebuild, measured at 1.73 s on the real island, and the shell asked for a rebuild on every mouse
+## motion. **What the bound costs**: at the opening zoom a 54 px cell is 1.8 조각 across, so the tint's
+## climb up a 2층 face is a slant over one cell rather than a wall — `FieldView._rebuild_box` says what
+## one rebuild costs now. ⚠ First value, not seen on the glass.
+const SELECTION_BOX_MAX_CELLS := 24
 
 ## **Draws above the ground layer's 1** — the fill must sit over the bodies' shadows and the 이동선 as
 ## well as over the 판, and between transparent layers that is sort order and not depth (see

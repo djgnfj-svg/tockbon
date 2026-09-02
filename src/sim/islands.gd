@@ -40,6 +40,12 @@ const BOARD_PATH := "res://assets/terrain/island.json"
 ## the file each time would be work nobody asked for, and a `static var` is the only place a static
 ## class can keep it.
 static var _board: Dictionary = {}
+## **The two height numbers of the file, read out once beside it.** `ground_h` is asked per 조각 the
+## press walk crosses and per sample the selection box takes — a few thousand times a second under a
+## drag — and each ask was two dictionary reads through two more calls (measured 2026-09-02 at ~1 µs
+## a call, most of a box sample's cost). Filled by `_load`, and by nothing else.
+static var _base_h := 0.0
+static var _level_h := 1.0
 
 
 ## ⚠⚠ **A missing or broken file is a HARD failure, not a silent fallback.** A default board here would
@@ -53,6 +59,8 @@ static func _load() -> Dictionary:
 	var parsed: Variant = JSON.parse_string(text)
 	assert(parsed is Dictionary, "island.json is not an object")
 	_board = parsed as Dictionary
+	_base_h = float(_board.get("base_h", 0.0))
+	_level_h = float(_board.get("level_h", 1.0))
 	return _board
 
 
@@ -192,8 +200,8 @@ static func load_into(grid: Grid) -> void:
 ## ⚠ Disagree and every body sinks into the ground — which is exactly what happened the first time the
 ## mesh was loaded.
 static func ground_h(level: int) -> float:
-	var b := _load()
-	return base_h() + float(level) * float(b.get("level_h", 1.0))
+	_load()
+	return _base_h + float(level) * _level_h
 
 
 ## **How far the mesh's level-0 top sits above y = 0.** Not a design value — it is whatever the Blender
@@ -203,7 +211,8 @@ static func ground_h(level: int) -> float:
 ## zero, and adding a mesh's offset to a walking rule would make the rule depend on how the art was
 ## authored. Anything that puts a THING ON the drawn ground adds this on top — see `field_view._stand_h`.
 static func base_h() -> float:
-	return float(_load().get("base_h", 0.0))
+	_load()
+	return _base_h
 
 
 ## Every enemy on the island, as `{"type_id": int, "tile": int}` with `tile` a row-major index.

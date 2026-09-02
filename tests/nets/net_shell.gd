@@ -964,14 +964,18 @@ func _a_drag_boxes_and_a_click_picks_or_orders(t, game, fs: FieldView, hs: HudSp
 	t.ok(game._boxing, "문턱을 넘겨 끌면 상자다")
 	t.eq(game._box, Rect2(on_land, Vector2(60.0, 40.0)), "상자는 누른 점에서 지금 점까지다")
 	t.eq(fs._box, game._box, "상자가 판에 닿았다")
-	# ⚠ **The mesh, not only the state.** `set_box` commits at once — no frame is pumped — and the two
-	# surfaces are the tint and its edge; what they hold is `net_fx_view`'s to measure.
+	# ⚠ **The mesh, not only the state.** `set_box` marks and the field's own frame commits (since the
+	# 2026-09-02 lag fix — once a frame, however many motions came in), so the field's `_process` is
+	# called by hand here; the two surfaces are the tint and its edge, and what they hold is
+	# `net_fx_view`'s to measure.
+	fs._process(0.0)
 	t.eq(fs._box_mesh.mesh.get_surface_count(), 2,
 		"끄는 동안 상자가 땅 위에 그려진다 — 채움 한 면, 테두리 한 면")
 	game._unhandled_input(_release(on_land + Vector2(60.0, 40.0)))
 	t.eq(_ordered(b), 0, "그리고 끌기는 아무도 명령하지 않는다 — 고르려고 움직인 것이지 보내려던 게 아니다")
 	t.eq(fs._box, Rect2(), "떼면 상자가 내려간다")
-	t.eq(fs._box_mesh.mesh.get_surface_count(), 0, "그리고 땅 위의 면도 지워진다")
+	fs._process(0.0)
+	t.eq(fs._box_mesh.mesh.get_surface_count(), 0, "그리고 다음 프레임에 땅 위의 면도 지워진다")
 	t.ok(not game._boxing, "그리고 셸도 상자를 놓았다")
 
 	# -- the release PICKS: a box around two drawn feet catches both --------------------------------

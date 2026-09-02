@@ -566,7 +566,9 @@ func _process(delta: float) -> void:
 	# ⚠ **After the sweep and the placement**: the box is laid on the ground under a screen rect, so a
 	# turn while the button is held (Q/E stay live during a press) moves the ground under it, and the
 	# rebuild has to read the yaw this frame draws with — see `set_box`.
-	if _box.size != Vector2.ZERO and _box_cam != _box_cam_key():
+	# ⚠⚠ **THIS IS THE ONLY PLACE THE BOX IS REBUILT WHILE THE GAME RUNS** — once a frame at most,
+	# whether the shell handed over one rect or twelve since the last one. See `set_box`.
+	if _box_dirty or (_box.size != Vector2.ZERO and _box_cam != _box_cam_key()):
 		_rebuild_box()
 	# ⚠ **The buffer is opened BEFORE the bodies and flushed after them.** A body's shadow is painted
 	# from inside `_paint_bodies` — it is a per-body fact, and that is the one loop with a body's
@@ -696,12 +698,17 @@ func screen_to_world_px(at: Vector2, ground_h: float = 0.0) -> Vector2:
 ##
 ## ⚠ **Off the board there is no surface**, so an off-grid 조각 is stepped over rather than read as a
 ## top at height 0 — that is the same answer the rung walk gave, whose rungs never reached 0.
-func screen_to_terrain_px(at: Vector2) -> Vector2:
+##
+## `steps` is how many rungs the descent is cut into — `TERRAIN_PICK_STEPS` for a press, and **1 for
+## the selection box's hits** (`_box_hit`), which is the same walk over the same 조각 in one segment
+## instead of 48 and costs a sixteenth of it. ⚠ Not a second, cheaper answer: the rung count bounds
+## how the work is cut and does not move the answer, and `_box_hit` carries the measurement.
+func screen_to_terrain_px(at: Vector2, steps: int = TERRAIN_PICK_STEPS) -> Vector2:
 	var ceiling := Look.terrain_height_ceiling()
-	var step := ceiling / float(TERRAIN_PICK_STEPS)
+	var step := ceiling / float(steps)
 	var h_hi := ceiling
 	var w_hi := screen_to_world_px(at, h_hi)
-	for _i in TERRAIN_PICK_STEPS:
+	for _i in steps:
 		var h_lo := h_hi - step
 		var w_lo := screen_to_world_px(at, h_lo)
 		var met := _ground_met(w_hi, h_hi, w_lo, h_lo)
@@ -4318,9 +4325,18 @@ func _g_ribbon(a: Vector2, b: Vector2, half: float, col: Color) -> void:
 ##
 ## ⚠ **Its own mesh, not the per-frame decal buffer.** `_g_tri` writes into `_g_v`, which `_fx_begin`
 ## clears every frame — a box there would cost its projections sixty times a second whether or not
-## anything moved. This mesh is rebuilt on exactly two events: the rect changed (`set_box`) or the
-## camera did (`_process`, through `_box_cam_key`). `Look.SELECTION_BOX_STEP_PX` says what one rebuild
-## costs.
+## anything moved. This mesh is rebuilt **at most once a frame, in `_process`**, and only when the rect
+## changed since the last build (`set_box` marks it) or the camera did (`_box_cam_key`).
+##
+## ⚠⚠ **IT WAS REBUILT ON EVERY MOUSE MOTION AND THE USER FELT IT** (2026-09-02: 「렉이 겁나걸리네
+## 드래그좀 한다고?」 — *"it lags like crazy — just from dragging?"*). Three things were wrong at once,
+## measured headless on the real island at the opening camera: **`set_box` rebuilt at once**, so a
+## frame with several motion events paid several rebuilds; **every sample went through the 48-rung
+## press walk** at 112 µs a point; and **the 8 px step was unbounded**, so a rect across the glass was
+## 14,651 samples. A 220 x 100 rect cost **58.3 ms** a rebuild and a full-glass rect **1,731 ms**.
+## ⇒ The rebuild is coalesced into `_process`; a sample is the same walk cut into ONE segment
+## (`_box_hit`); and the step grows past 8 px so the grid is never more than
+## `Look.SELECTION_BOX_MAX_CELLS` across. **After**: the numbers `_rebuild_box` carries.
 ##
 ## ⚠ **Two surfaces in one `ImmediateMesh`, fill first**: surface 0 is the tint, surface 1 the ribbon,
 ## so the edge is drawn over the area. Both are read by `net_fx_view` — buffers prove geometry was built,
@@ -4335,18 +4351,26 @@ var _box_mesh: MeshInstance3D = null
 var _box_hits := PackedVector3Array()
 ## The four camera fields the mesh was last built against — see `_box_cam_key`. Empty until built.
 var _box_cam := []
+## **The rect changed since the mesh was last built.** Set by `set_box`, spent by `_rebuild_box`; the
+## frame's `_process` is the one reader.
+var _box_dirty := false
+## **How many times the mesh has been rebuilt since the view was made.** Read by nothing in the game —
+## it is the counter `net_fx_view` reads to prove three rects in one frame are one rebuild, because a
+## surface count cannot tell one rebuild from three.
+var _box_rebuilds := 0
 var _b_v := PackedVector3Array()
 var _b_c := PackedColorArray()
 
 
-## **The shell says where the box is, or that there is none.** Returns on no change because the motion
-## branch hands a rect on every mouse event, and a rebuild per unchanged rect would be the projections
-## above for nothing.
+## **The shell says where the box is, or that there is none.** Stores the rect and marks it — the
+## rebuild is `_process`'s, once a frame, so the motion branch may hand over a rect on every mouse
+## event and the frame pays for the last one only. Returns on no change so a repeated rect does not
+## even mark.
 func set_box(rect: Rect2) -> void:
 	if rect == _box:
 		return
 	_box = rect
-	_rebuild_box()
+	_box_dirty = true
 
 
 ## The four fields every screen-to-ground conversion reads. ⚠ **These and not `_cam.transform`**:
@@ -4357,14 +4381,34 @@ func _box_cam_key() -> Array:
 
 
 ## Where one screen px meets the landscape, in world 조각, lifted off the ground like every other mark.
+##
+## **The press's own walk, cut into one segment instead of 48.** The near-to-far rule is the whole of
+## why a press is a walk (see `screen_to_terrain_px`), and the box needs the same rule — a sample
+## answered by 「take the sea-level point, read its height, ask again」 settles on the hidden land behind
+## a 2층 cliff, which is the defect that header measured at 60 of 180 조각. **So the box does not take
+## the cheap way; it takes the exact way with the rungs removed.** Measured 2026-09-02 on 625 screen
+## points over the real island at the opening camera: one segment and 48 rungs answer **within 0.00012
+## world px** of each other, at **~7 µs** a point against **~112 µs**. ⚠ There is no cliff-edge error
+## to state, because there is no approximation.
 func _box_hit(at: Vector2) -> Vector3:
-	var w := screen_to_terrain_px(at)
+	var w := screen_to_terrain_px(at, 1)
 	return Vector3(w.x / Look.TILE_PX, _ground_y_px(w), w.y / Look.TILE_PX)
 
 
 ## Rebuilds both surfaces from the current rect and camera. An empty rect leaves the mesh with no
 ## surfaces — ⚠ an `ImmediateMesh` surface with zero vertices is an error, so nothing is begun for it.
+##
+## **What one rebuild costs** (measured headless 2026-09-02 on the real island at the opening camera,
+## after the three fixes the section header names): **220 x 100 → 2.7 ms · 1280 x 720 → 3.2 ms**, from
+## 58.3 and 1,731. `net_fx_view`'s timing row prints the same two rebuilds on its arena every round.
+## ⚠ **The 0.3 ms and 2 ms the two were asked to come under are NOT met, and the floor is measured**: a
+## sample is ~6 µs (two `screen_to_world_px` at 1.2 µs and a one-segment walk over some six 조각 at
+## 0.65 µs each) and a vertex ~0.17 µs, in GDScript. A 220 x 100 rect is 253 samples at the 10 px step
+## the bound gives it, so 1.5 ms before a vertex is laid. **Fewer samples is the only lever left**, and
+## that is `Look.SELECTION_BOX_STEP_PX` and `Look.SELECTION_BOX_MAX_CELLS` — a tuning, not a rebuild.
 func _rebuild_box() -> void:
+	_box_dirty = false
+	_box_rebuilds += 1
 	_box_hits = PackedVector3Array()
 	_box_cam = _box_cam_key()
 	if _box_mesh == null:
@@ -4374,10 +4418,14 @@ func _rebuild_box() -> void:
 	if _box.size == Vector2.ZERO:
 		return
 	# The grid of hits: `nx` x `ny` cells, `(nx + 1) x (ny + 1)` corners, row-major from the top-left.
+	# **The step is the finest one until the rect's longer side would take more than
+	# `SELECTION_BOX_MAX_CELLS` of it**, and grows with the rect from there — see that constant.
 	# ⚠ At least one cell on each axis, so the 6 px first box (0 px on one axis) still builds — its
 	# cells are zero-area and its ribbon is a stroke, which is what a 6 x 0 drag looks like.
-	var nx := maxi(1, int(ceil(_box.size.x / Look.SELECTION_BOX_STEP_PX)))
-	var ny := maxi(1, int(ceil(_box.size.y / Look.SELECTION_BOX_STEP_PX)))
+	var step := maxf(Look.SELECTION_BOX_STEP_PX,
+		ceil(maxf(_box.size.x, _box.size.y) / float(Look.SELECTION_BOX_MAX_CELLS)))
+	var nx := maxi(1, int(ceil(_box.size.x / step)))
+	var ny := maxi(1, int(ceil(_box.size.y / step)))
 	var hits := PackedVector3Array()
 	hits.resize((nx + 1) * (ny + 1))
 	for j in ny + 1:
@@ -4433,10 +4481,15 @@ func _box_commit(im: ImmediateMesh) -> void:
 	_b_c.clear()
 
 
+## Three appends written out rather than a `for p in [a, b, c]`: the array that loop builds is an
+## allocation per triangle, and a full-glass box is 800 of them a rebuild.
 func _box_tri(a: Vector3, b: Vector3, c: Vector3, col: Color) -> void:
-	for p in [a, b, c]:
-		_b_v.append(p)
-		_b_c.append(col)
+	_b_v.append(a)
+	_b_v.append(b)
+	_b_v.append(c)
+	_b_c.append(col)
+	_b_c.append(col)
+	_b_c.append(col)
 
 
 ## One thin quad from `a` to `b`, its width perpendicular to the run in the ground plane — so a piece
