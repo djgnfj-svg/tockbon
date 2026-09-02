@@ -19,6 +19,53 @@
 [roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ⏳ **The blow lands where the sword is — 2026-09-02, night, a background session on `worktree-anim-match`; not merged**
+
+**The round opened with the user asking for the game to be launched from `main`** (「음 메인에서 게임
+켜줘볼래?」), and then, watching it:
+
+> ***"This — the game's animation and the code's action do not match."***
+> (「이거 게임 애니메이션하고 코드적 액션이 안맞음」)
+
+The code was read before anything was touched, and **three places disagreed**, the first being the one
+on screen: the sim dealt the damage the instant the cooldown ran out and the picture started its
+eight-frame swing FROM that instant, so the victim flinched and its bar fell on the striker's first
+frame, the sword reaching out a third of a second later. Second, a hit zeroed the striker's own swing —
+and since the damage was already dealt, two bodies trading blows kept showing damage with no sword.
+Third, a body arriving at a 칸 glides to its seat while the sim's point stands still, and the legs were
+measured off the sim's point, so it breathed while it slid. The assessment was reported and stopped there.
+
+> ***"Can you match those up?"*** (「그것좀 맞춰줄 수 있나?」)
+
+### 1. What was built — the sim got a swing, and the picture fires on the landing
+
+- **`Rules.SWING_LAND_SEC` = 0.4 s, 24 sub-steps exactly.** A ready body with a target in reach starts a
+  swing: cooldown → period, swing clock → 0.4, the target locked. The damage lands when the clock runs
+  out, on the locked target, only if it is still alive, standing and in reach; a whiff still costs the
+  period. `soldier_blows` / `enemy_blows` count landed blows and only rise.
+- **Decided here, not asked: a body hit mid-swing still lands its blow.** Cancelling would stun-lock —
+  the 2.0 s 늑대 would interrupt the 2.4 s 검사 every time. Written on the constant.
+- The view keeps starting the strip on the cooldown rise and **moved the flash, shards, number and
+  hit-stop to a `*_blows` rise**; the flinch no longer hides a swing whose blow has not landed; legs and
+  facing read the drawn point.
+- 0.4 s sits on the fourth attack frame, inside the lunge's hold window (0.365–0.528 s); `net_fight`
+  holds the constant inside that window.
+
+### 2. Measured
+
+**Suite 3161 / 4 → 3187 / 4**, the same four reds; `fight` 297 → 323; the game ran 600 frames without
+a script error. ⚠ **Nobody looked at the screen** — `verify-look` did not run, and the user's word is the
+one `Done when` line still open. The glossary said the attack strip was four frames; the code says
+eight, so the glossary was corrected.
+
+### 3. The user closed it
+
+> ***"Hm, if it is fixed then wrap up."*** (「음 수정했으면 마무리 하고」)
+
+Ticket **03-19** stands `claimed` under task 03 beside 03-16 and 03-17, the other two defects the user
+found on screen the same day. **The branch is pushed and not merged** — this session ran as a background
+job in a worktree, as the 03-02 session did, and merging is the user's.
+
 ## ✅✅ **The two defects the user found on screen were built and closed — 2026-09-02, a session run alongside the third to fifth rounds, merged last (PR 17)**
 
 ⚠⚠ **This is the THIRD round of 2026-09-02, and the first of the day that wrote code.** The two rounds
