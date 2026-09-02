@@ -19,6 +19,31 @@
 [roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅ **The 성채 stopped turning out soldiers on a clock — 2026-09-02, third round**
+
+⚠⚠ **This is the THIRD round of 2026-09-02**, after the one below it. **One thing was built, and it is a
+deletion.**
+
+> The user: *"delete the automatic soldier generation — the code."* (「자동 병사 생성 지워줘 코드들」)
+> **And when it was done:** *"if that is all, wrap up."* (「음 다했으면 마무리」)
+
+**What went**: `Rules.MUSTER_PERIOD_SEC` and `Battle.muster_left`, and the block at the end of
+`_phase_muster` that called `recruit` when the clock hit zero. **What stayed**: `Battle.recruit`,
+`MUSTER_CAP` 9, `MUSTER_SLOT` — the door, without the clock. ⚠ **Nothing in `src/` calls the door
+today**, because 02-09's picture was deferred on 2026-09-01 and never built. **Revival is untouched**
+— it is not generation, it is a dead body coming back.
+
+⚠⚠ **This overturns 02-09's 「이십 초에 하나」 of 2026-09-01.** The ticket stays `resolved` and the
+reversal is written onto it. **What replaces the clock is not decided** — not the button, not the price.
+
+**Measured**: nets 1679 → 1691 pass, 4 fail before and after (`net_boats` 1 · `net_fx_view` 2 ·
+`net_shell` 1, all predating this round). `net_fight` 285 → 297. **The deletion is measured by a row
+that steps sixty seconds and expects nobody new; a mutation that recruits every sub-step turned 9 rows
+red.** ⚠ The first cut took `setup`'s boat and beast resets with it — caught by 45 reds, restored.
+
+⚠ **On branch `worktree-drop-auto-muster`, pushed, not merged.** The harness this ran under forbids
+merging into `main`; the merge is the user's.
+
 ## ✅✅ **The release got a shape, a fold rule, and a win condition — 2026-09-02, second round**
 
 ⚠⚠ **This is the SECOND round of 2026-09-02.** The section below it is the first one, which turned

@@ -189,15 +189,6 @@ var keep_hp := 0.0
 ## here off `keep_tiles`, which is **two answers to 「where does a 검사 appear」** — and they would have
 ## disagreed the first time the 성채 moved off level ground, one body on the plateau and one below it.
 var muster_tile := -1
-## **Seconds until the 성채 turns out one more 검사.** Reset to `Rules.MUSTER_PERIOD_SEC` by a recruit
-## that actually landed, and by nothing else.
-##
-## ⚠⚠ **IT IS CLAMPED AT ZERO AND HELD FULL AT THE CEILING, AND THOSE ARE TWO DIFFERENT REFUSALS.**
-## A doorstep with nowhere free leaves this at zero and asks again next sub-step — one body pending,
-## never a queue. **At the ceiling it does not run at all**: counted to zero and parked there, the
-## roster would bank a body the moment the ceiling ever moved, and 「천장 아홉」 would be a delay rather
-## than a limit.
-var muster_left := 0.0
 ## **The island's verdict, and this week there is exactly one.** 티켓 41: 「이기는 조건 — 이번 주에
 ## 없다」, so there is no `Outcome` enum and no WON. ⚠ **A one-member enum every reader compares against
 ## is a branch that always takes the same arm**, which is the shape `Run` was caught carrying twice.
@@ -311,11 +302,8 @@ func setup(grid: Grid, army: Army, spawns: Array,
 	keep_tiles = keep
 	muster_tile = muster
 	keep_hp = 0.0 if keep.is_empty() else Rules.KEEP_MAX_HP
-	# Every time, for the same reason `_substep_acc` is: a reused `Battle` carrying the previous
-	# island's clock would open the next one with a 검사 half turned out.
-	# ⚠ **A FULL period and not zero** — an island that opened at zero would hand out a body on its
-	# first sub-step, and the opening roster is `add_starting_force`'s to decide, not the doorstep's.
-	muster_left = Rules.MUSTER_PERIOD_SEC
+	# ⚠ **No muster clock is reset here any more** — the 성채's twenty-second clock was deleted on
+	# 2026-09-02 (the user: 「자동 병사 생성 지워줘」). The opening roster is `add_starting_force`'s.
 
 	if grid == null or grid.w <= 0 or grid.h <= 0:
 		# Not swallowed: a battle on an unloaded grid has no tiles, so every unit would stand still
@@ -1173,12 +1161,11 @@ func _phase_deaths() -> void:
 				enemy_target[e2] = TARGET_NONE
 
 
-## **A dead 검사 counts down and stands again at the 성채 — and the 성채 turns out new ones.**
+## **A dead 검사 counts down and stands again at the 성채.**
 ##
-## ⚠⚠ **TWO CLOCKS' WORTH OF RULE IN ONE PHASE, ON PURPOSE.** Both events put a body on the doorstep
-## through `stand_at_keep`, both are counted in `Rules.SIM_SUBSTEP_SEC`, and a second phase would be a
-## second place that decides who is standing beside the house. ⚠ **`Rules.REVIVE_SEC` and
-## `Rules.MUSTER_PERIOD_SEC` are still two numbers** and neither is written as the other.
+## ⚠⚠ **THE 성채 NO LONGER TURNS OUT NEW ONES HERE** (2026-09-02, the user: 「자동 병사 생성 지워줘」).
+## The twenty-second clock that followed this loop is deleted with `Rules.MUSTER_PERIOD_SEC`; a new
+## body stands only when something calls `recruit`, and nothing in `src/` does today.
 ##
 ## ⚠⚠ **「죽으면 영영 죽는다」 WAS OVERTURNED 2026-08-30** — the user weighed both and chose revival.
 ## **Death is a loss of TIME now**, and `Rules.REVIVE_SEC` is the whole of what it costs.
@@ -1203,24 +1190,7 @@ func _phase_muster(dt: float) -> void:
 		if stand_at_keep(i) < 0:
 			soldier_state[i] = SoldierState.DEAD
 
-	# --- and the 성채 turns out a NEW one ------------------------------------------------------------
-	# ⚠⚠ **AFTER THE LOOP AND NEVER INSIDE IT.** `recruit` appends a row to every column this function
-	# has just been walking; appending mid-loop is the shape that skips a row or visits one twice.
-	# ⚠ **The same phase and not a new one, because it is the same clock**: a countdown of its own
-	# stepped anywhere else would be a second clock, and the seams between two clocks are where this
-	# project's defects have come from.
-	if living_soldier_count() >= Rules.MUSTER_CAP:
-		muster_left = Rules.MUSTER_PERIOD_SEC
-		return
-	muster_left = maxf(muster_left - dt, 0.0)
-	if muster_left > Rules.EPS:
-		return
-	# ⚠ **Nowhere to stand is a retry, not a spend** — the clock stays at zero and asks again next
-	# sub-step, the same answer a revival gets. Resetting it here instead would make the ceiling
-	# 「however many happen to fit」 with nothing on screen to say so.
-	if recruit(Rules.MUSTER_SLOT) < 0:
-		return
-	muster_left = Rules.MUSTER_PERIOD_SEC
+
 ## --- THE SHOVE AND THE CHARGE: DELETED 2026-08-27 --------------------------------------------------
 ## `_shove_victims`, `_shove` and the `_charged` column are gone with `Rules.SPECIES_SHOVE`. The table
 ## had been `[]` since 2026-08-26: its two rows were 다람쥐's pull and 소's charge, and both species

@@ -105,9 +105,8 @@ const PLATEAU_KEEP := [
 ## has nowhere free beside it.
 ##
 ## ⚠⚠ **WALLED WITH HEIGHT AND NOT WITH WATER, DELIBERATELY.** A one-조각 island in a sea launches boats,
-## and a 늑대 unloading onto the 조각 the row is about to free would land in the same sub-step the
-## recruit does — `_phase_landings` runs before `_phase_muster`. **Landlocked, so the only thing that
-## can take that 조각 is the thing under test.**
+## and a 늑대 unloading onto the 조각 the row is about to free could take it before the recruit is
+## called. **Landlocked, so the only thing that can take that 조각 is the thing under test.**
 ## ⚠ The house fills its own 조각 (`Battle.setup`), and a body may not climb two 눈금, so
 ## `_free_tiles_from` can reach nothing at all from the doorstep.
 const BOXED := [
@@ -148,7 +147,7 @@ func run(t) -> void:
 	_a_dead_swordsman_stands_again_at_the_keep(t)
 	_the_keep_turns_out_a_new_swordsman(t)
 	_the_recruiting_stops_at_the_ceiling(t)
-	_a_recruit_with_nowhere_to_stand_keeps_its_clock(t)
+	_a_recruit_with_nowhere_to_stand_is_refused(t)
 	_the_keep_burns_and_the_run_is_lost(t)
 	_a_lost_run_stops_the_clock(t)
 	_the_fight_is_the_same_at_any_frame_rate(t)
@@ -167,10 +166,10 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 	t.eq(Rules.REACH_BONUS, 1.75, "사거리 보너스는 1.75 다 — 162 판에서 잰 값이고 다시 안 잰다")
 	t.eq(Rules.REVIVE_SEC, 20.0, "죽은 검사는 20초 뒤에 다시 선다 (⚠ 사용자가 안 고른 임시값)")
 	t.eq(Rules.SWORDSMAN_START_COUNT, 4, "검사 넷으로 시작한다 (⚠ 사용자가 안 고른 임시값)")
-	# ⚠⚠ **TWENTY AND NINE ARE THE USER'S, AND THEY ARE NOT `REVIVE_SEC` AND `BLOCK_CAPACITY`** even
-	# though both pairs agree today. 티켓 02-09: 「일단 병사 뽑는 데 이십 초. 천장 아홉 개」.
-	t.eq(Rules.MUSTER_PERIOD_SEC, 20.0, "성채는 이십 초에 검사 하나를 내놓는다")
-	t.eq(Rules.MUSTER_CAP, 9, "그리고 아홉이 천장이다")
+	# ⚠⚠ **NINE IS THE USER'S, AND IT IS NOT `BLOCK_CAPACITY`** even though the two agree today. 티켓
+	# 02-09: 「천장 아홉 개」. ⚠ **The twenty beside it is gone** — `MUSTER_PERIOD_SEC` was deleted with the
+	# automatic muster on 2026-09-02 (the user: 「자동 병사 생성 지워줘」), so there is no period to pin.
+	t.eq(Rules.MUSTER_CAP, 9, "검사는 아홉이 천장이다")
 	# ⚠⚠ **240 -> 120 ON 2026-09-01, WITH THE BOATLOAD** (the user: 「내려」). 240 was fifteen seconds
 	# of one undefended boat at `BOAT_CAPACITY` 8; at four the same arithmetic hit exactly
 	# `BOAT_INTERVAL_SEC` and 「a boat ignored whole loses you the run」 went false. **120 puts those
@@ -826,24 +825,29 @@ func _a_dead_swordsman_stands_again_at_the_keep(t) -> void:
 
 # == the doorstep turns out new bodies ================================================================
 
-## **One more 검사 stands at the 성채 every `Rules.MUSTER_PERIOD_SEC`, with nothing on screen and nobody
-## pressing anything.** 티켓 02-09: the user deferred the picture by name and kept the rule.
+## **`recruit` stands one more 검사 beside the 성채 — and NOTHING ELSE DOES.**
+##
+## ⚠⚠ **THE TWENTY-SECOND CLOCK IS DELETED** (2026-09-02, the user: 「자동 병사 생성 지워줘」). Until then
+## the 성채 turned out a body every `MUSTER_PERIOD_SEC` with nobody pressing anything; now a body appears
+## only when the door is called, and today nothing in `src/` calls it (티켓 02-09 deferred the picture).
+## **The first check below is the deletion itself**: time alone must stand nobody.
 ##
 ## ⚠ **Landlocked** (`LAND`): a board with a coast lands 늑대 inside twenty seconds, and the row would
-## be measuring a fight instead of a clock.
+## be measuring a fight instead of the door.
 func _the_keep_turns_out_a_new_swordsman(t) -> void:
 	var b := _battle_on(_grid(LAND), _keep(), ISLE_MUSTER)
 	var opened := b.living_soldier_count()
 	t.eq(opened, Rules.SWORDSMAN_START_COUNT, "판이 시작 인원으로 열린다 (자가 점검)")
-	t.eq(b.muster_left, Rules.MUSTER_PERIOD_SEC, "그리고 시계가 꽉 찬 채로 열린다 — 첫 프레임에 안 나온다")
 
-	# ⚠⚠ **THE FLOOR, AND WITHOUT IT THE LINE BELOW IS GREEN FOR A BODY THAT APPEARS INSTANTLY.**
-	b.step(Rules.MUSTER_PERIOD_SEC - 0.2)
-	t.eq(b.living_soldier_count(), opened, "주기가 차기 전에는 아무도 안 늘어난다")
+	# ⚠⚠ **THE FLOOR, AND IT IS THE WHOLE POINT.** Sixty seconds is three of the old periods; a clock
+	# that survived anywhere in the sim puts three bodies here.
+	b.step(60.0)
+	t.eq(b.living_soldier_count(), opened, "육십 초가 지나도 아무도 안 늘어난다 — 자동 생성이 없다")
+	t.eq(b.army.type_id.size(), opened, "명부도 그대로다")
 
-	b.step(0.4)
-	var fresh := opened
-	t.eq(b.living_soldier_count(), opened + 1, "주기가 지나면 하나 늘어난다")
+	var fresh := b.recruit(Rules.MUSTER_SLOT)
+	t.eq(fresh, opened, "문을 부르면 하나 나온다, 명부의 다음 줄로")
+	t.eq(b.living_soldier_count(), opened + 1, "산 검사가 하나 늘었다")
 	t.eq(b.army.type_id.size(), opened + 1, "명부에도 한 줄 늘었다")
 	t.eq(int(b.soldier_state[fresh]), Battle.SoldierState.ASHORE, "그 몸은 판 위에 서 있다")
 	t.eq(b.soldier_hp[fresh], b.army.max_hp_of(fresh), "그리고 체력이 꽉 차 있다")
@@ -854,20 +858,15 @@ func _the_keep_turns_out_a_new_swordsman(t) -> void:
 	t.eq(int(b.army.type_id[fresh]), Rules.SWORDSMAN, "그래서 나오는 것은 검사다")
 	_columns_are_level(t, b, "새로 뽑은 뒤")
 
-	# ⚠ **The clock is spent by the body and starts over full** — measured by the next one's timing
-	# rather than by reading the field back, so a clock that reset to something else goes red here.
-	b.step(Rules.MUSTER_PERIOD_SEC - 1.0)
-	t.eq(b.living_soldier_count(), opened + 1, "시계가 처음부터 다시 간다 — 둘째가 바로 안 나온다")
-	b.step(2.0)
-	t.eq(b.living_soldier_count(), opened + 2, "그리고 한 주기 뒤에 둘째가 나온다")
+	# ⚠ **No clock between two calls** — the second body stands in the same sub-step as the call.
+	t.eq(b.recruit(Rules.MUSTER_SLOT), opened + 1, "바로 다시 부르면 둘째가 바로 나온다 — 기다리는 시계가 없다")
+	t.eq(b.living_soldier_count(), opened + 2, "산 검사가 둘 늘었다")
 
 	# ⚠⚠ **NO DOORSTEP, NO RECRUITING.** Every net fixture in this repo but one hands the fight a board
 	# with no house, and a doorstep of -1 must be a refusal rather than a body standing at 조각 -1.
 	var c := _battle_on(_grid(LAND), _keep(), -1)
 	var rows := c.army.type_id.size()
-	c.step(Rules.MUSTER_PERIOD_SEC * 3.0)
-	t.eq(c.living_soldier_count(), rows, "문간이 없는 판에서는 아무도 안 뽑힌다")
-	t.eq(c.recruit(Rules.MUSTER_SLOT), -1, "직접 불러도 거절이다")
+	t.eq(c.recruit(Rules.MUSTER_SLOT), -1, "문간이 없는 판에서는 불러도 거절이다")
 	t.eq(c.army.type_id.size(), rows, "그리고 명부가 그대로다 — 아무것도 안 변했다")
 
 	# ⚠ **An unbound slot fields nobody, and the refusal happens before a single column grows.**
@@ -881,7 +880,7 @@ func _the_keep_turns_out_a_new_swordsman(t) -> void:
 	_columns_are_level(t, d, "거절당한 뒤")
 
 
-## **Nine and no more — and at the ceiling the clock does not quietly bank the ones it refuses.**
+## **Nine and no more — the door refuses past the ceiling, and a refusal leaves no row behind.**
 func _the_recruiting_stops_at_the_ceiling(t) -> void:
 	var b := _battle_on(_grid(LAND), _keep(), ISLE_MUSTER)
 	# ⚠⚠ **THE OPENING WATCH IS STOOD FIRST, EXACTLY AS `Run` STANDS IT.** Left in reserve, the row
@@ -894,11 +893,15 @@ func _the_recruiting_stops_at_the_ceiling(t) -> void:
 	t.ok(opened < Rules.MUSTER_CAP,
 		"시작 인원이 천장보다 적다 (자가 점검 — %d < %d)" % [opened, Rules.MUSTER_CAP])
 
-	# ⚠ **Four periods past what the ceiling needs**: a row that stopped stepping the moment the
-	# ceiling was reached cannot tell a limit from a coincidence.
-	b.step(Rules.MUSTER_PERIOD_SEC * float(Rules.MUSTER_CAP + 4))
+	# ⚠ **Four calls past what the ceiling needs**: a row that stopped calling the moment the ceiling
+	# was reached cannot tell a limit from a coincidence.
+	var stood := 0
+	for _n in Rules.MUSTER_CAP + 4:
+		if b.recruit(Rules.MUSTER_SLOT) >= 0:
+			stood += 1
+	t.eq(stood, Rules.MUSTER_CAP - opened, "천장까지만 받는다 — 그 뒤의 부름은 전부 거절이다")
 	t.eq(b.living_soldier_count(), Rules.MUSTER_CAP, "천장에서 멈춘다")
-	t.eq(b.army.type_id.size(), Rules.MUSTER_CAP, "명부에도 그만큼뿐이다 — 못 선 몸이 뒤에 안 쌓였다")
+	t.eq(b.army.type_id.size(), Rules.MUSTER_CAP, "명부에도 그만큼뿐이다 — 거절이 줄을 안 남겼다")
 	_columns_are_level(t, b, "천장에서")
 
 	# ⚠⚠ **THE 성채's OWN 블록 ADMITS EIGHT AND NOT NINE** — the house fills one 조각 whole — so the
@@ -910,41 +913,36 @@ func _the_recruiting_stops_at_the_ceiling(t) -> void:
 		var tile := b._tile_of(b.soldier_pos[i])
 		t.ok(b.grid.holds(tile, i), "%d 번이 제 조각을 제 이름으로 잡는다" % i)
 		t.ok(_keep_gap(b, b.soldier_pos[i]) <= 4.0, "%d 번이 성채 언저리에 있다" % i)
-	# ⚠⚠ **THE BANK.** A clock counted to zero and parked there would spit a body out the instant the
-	# ceiling ever moved, and 「천장 아홉」 would be a delay instead of a limit.
-	t.eq(b.muster_left, Rules.MUSTER_PERIOD_SEC, "천장에서는 시계가 아예 안 돈다 — 하나도 안 쟁여 둔다")
 
-	# The direct door refuses too, and changes nothing when it does.
+	# The door refuses at the ceiling, and changes nothing when it does.
 	var rows := b.army.type_id.size()
-	t.eq(b.recruit(Rules.MUSTER_SLOT), -1, "천장에서는 직접 불러도 거절이다")
+	t.eq(b.recruit(Rules.MUSTER_SLOT), -1, "천장에서는 불러도 거절이다")
 	t.eq(b.army.type_id.size(), rows, "그리고 명부가 그대로다")
 	t.eq(b.soldier_state.size(), rows, "판 쪽 칸도 그대로다")
 
 
-## **Nowhere to stand is a retry, not a spend.** ⚠⚠ **THIS IS THE ROW THE CEILING DEPENDS ON**: if a
-## refused recruit reset the clock, the doorstep would hand out bodies at whatever rate the ground
-## happened to allow and 「천장 아홉」 would quietly become 「however many fit」.
-func _a_recruit_with_nowhere_to_stand_keeps_its_clock(t) -> void:
+## **Nowhere to stand is a refusal, and the same call succeeds the moment there is room.** A door that
+## appended the row first and looked for a 조각 second would leave a body on the roster, counted against
+## the ceiling, and never on the board.
+func _a_recruit_with_nowhere_to_stand_is_refused(t) -> void:
 	var g := Grid.new()
 	g.load_rows(BOXED, BOXED_TIERS)
 	var keep := PackedInt32Array()
 	keep.append(BOXED_KEEP)
 	var b := _battle_on(g, keep, BOXED_KEEP)
 	var opened := b.living_soldier_count()
+	var rows := b.army.type_id.size()
 
-	b.step(Rules.MUSTER_PERIOD_SEC * 3.0)
-	t.eq(b.living_soldier_count(), opened, "설 자리가 없으면 아무도 안 선다")
-	t.ok(b.muster_left <= Rules.EPS,
-		"그런데 시계는 0 에 서서 기다린다 — 거절이 주기를 안 쓴다 (%.3f)" % b.muster_left)
+	t.eq(b.recruit(Rules.MUSTER_SLOT), -1, "설 자리가 없으면 거절이다")
+	t.eq(b.living_soldier_count(), opened, "아무도 안 섰다")
+	t.eq(b.army.type_id.size(), rows, "명부에도 안 올랐다 — 거절이 줄을 안 남긴다")
+	_columns_are_level(t, b, "막힌 판에서 거절당한 뒤")
 
-	# ⚠⚠ **THE INVERSION.** Open the ground and exactly ONE body appears on the next sub-step. A clock
-	# that had been banking would put three periods' worth out at once here; a clock that had been
-	# spending would make this body wait another twenty seconds.
+	# ⚠⚠ **THE INVERSION.** Open the ground and the same call stands exactly one body.
 	b.grid.release_all(Battle.KEEP_UID)
-	b.step(Rules.SIM_SUBSTEP_SEC)
-	t.eq(b.living_soldier_count(), opened + 1, "자리가 나면 다음 서브스텝에 바로 하나 선다")
-	b.step(1.0)
-	t.eq(b.living_soldier_count(), opened + 1, "그리고 하나뿐이다 — 밀린 주기가 쏟아지지 않는다")
+	t.ok(b.recruit(Rules.MUSTER_SLOT) >= 0, "자리가 나면 같은 부름이 하나 세운다")
+	t.eq(b.living_soldier_count(), opened + 1, "산 검사가 하나 늘었다")
+	t.eq(b.army.type_id.size(), rows + 1, "명부에 한 줄 늘었다")
 	_columns_are_level(t, b, "막힌 판에서")
 
 
