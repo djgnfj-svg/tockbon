@@ -2991,8 +2991,10 @@ func _gd_files_under(dir: String) -> Array:
 	return out
 
 
-## ⚠ `_refusal_marks` is deleted with the ring capture it filtered — `net_slots` counts refusals off
-## `field_view._fx` directly, which never depended on a hook.
+## ⚠ `_refusal_marks` is deleted with the ring capture it filtered. ⚠⚠ **THE SENTENCE THAT STOOD HERE
+## NAMED TWO THINGS THAT DO NOT EXIST** — 「`net_slots` counts refusals off `field_view._fx` directly」
+## (found 2026-09-03): there is no `net_slots` in this folder and `_fx` was deleted from `field_view`
+## the same day, having been written by nothing since 2026-08-29. **Nothing counts refusals today.**
 
 
 ## Everybody standing on the island, as army ids. **Off the sim and never off the sprite pool** — the

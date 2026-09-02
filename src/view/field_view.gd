@@ -83,7 +83,6 @@ var rows: Array = []
 
 # --- its own clock. Unchanged by the move: an effect ages in seconds whatever draws it -------------
 
-var _fx: Array = []
 var _body: Dictionary = {}
 
 
@@ -464,9 +463,6 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	self.battle = battle
 	self.army = army
 	self.rows = rows
-	# **Both drawers are emptied here.** Without it island 2 opens with island 1's explosions still in
-	# flight over bodies that no longer exist, and every id in them means a different unit now.
-	_fx = []
 	# ⚠⚠ **THE AIR IS EMPTIED WHEN A BOARD LOADS, AND `_body` DELIBERATELY IS NOT.** A mark carries its
 	# own frozen position, so one left over from the last island would hang in the air over this one at
 	# a place nothing happened. **The body rows survive because a 검사 carries across islands.**
@@ -3482,7 +3478,14 @@ func _paint_wake() -> void:
 # --- the body clocks, carried across the move unchanged ----------------------------------------------
 ## ⚠⚠ **Everything below this line is the file as it was.** The effects were never drawing code: they
 ## are a little simulation of their own with its own clock, and moving the picture into 3D did not
-## touch one line of it. That is why `_fx` is still filling every frame while nothing paints it.
+## touch one line of it.
+## ⚠⚠ **THIS SAID `_fx` WAS 「still filling every frame while nothing paints it」 AND THAT WAS FALSE**
+## (found 2026-09-03 by reading the file rather than by anything going red). Nothing had appended to it
+## since the twelve effects were deleted on 2026-08-29 — it was declared, emptied once per board, and
+## read by nobody. **The array is gone and this sentence is what is left of it**, because a comment
+## that describes a thing the code stopped doing is the failure this repository keeps a whole document
+## about. ⚠ `_fx_layer` · `_fx_step` · `_fx_begin` · `_fx_flush` are NOT this — they are the live fx
+## buffers `GLOSSARY.md` names as a measuring surface, and they only share the first three letters.
 
 
 ## Called by `game.gd` whenever a slot is armed or disarmed, whenever the cursor moves with one armed,
