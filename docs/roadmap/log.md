@@ -125,6 +125,49 @@ Task 09 carries one line saying the turret, if it returns, returns there. ⚠ **
 the turret went on 2026-09-02** — the second round already took it out of the 건설 chunk (「포탑은
 없어져도 될 거 같고」); this round took it off the parked list too.
 
+### 8. ⚠⚠ The body became the unit — 03-02 · 03-06 · 03-07 in one round
+
+> The user: ***"3-2, 3-6, 3-7 — let us brainstorm these."*** (「3-2 3-6 3-7 이게 프레인 스토밍」)
+
+**03-07 folded first**: ***"Hm, let us close the 「movement is not fun」 ticket — this is a problem for when
+the island has grown, and we proceed when it comes up."*** (「이동 재없다던 티켓 닫자 -> 이건 섬이 커졌을때
+문제고 생겼을떄 진행」)
+
+**Then the question 03-06 held — does a weapon make a body move only as a squad — got an answer that
+was not about weapons at all:**
+
+> ***"The 부대 is a bit ambiguous — the concept has gone vague, so it needs thought. In practice moving
+> them one at a time has become the norm, so this is going to be a game where each character, each
+> soldier, becomes a bit precious."***
+> (「이게 부대라ㅡㄴ ㄴ개념이 애매해져서 곰니해야함 사실상 하나씩 옮기는게 정설이 되ㅕㄴ서 말이지 그래서
+> 캐릭하나하나가 병사하나하나가 좀 소중해지는 게임이 될듯함」)
+>
+> ***"The 부대 is a bit ambiguous — for now, manage each character one by one."***
+> (「부대가 살짝 애매함 일단 캐릭터 하나하나 관리하는걸로 해야할듯함」)
+
+| Asked | Answered |
+|---|---|
+| Is 부대 just what the hand holds, or a named group behind hotkeys 1~4 | ***"A bit ambiguous — manage each one by one for now."*** — **left open**; 03-05 waits |
+| What shows when a body is pressed | ***"Name, trait, HP should show for now."*** (「이름 특성 체력으로 일단 떠야함」) |
+| Over the body, or a panel in a corner | ***"A panel in a corner."*** (「화면 구석 판으로」) |
+| Where names come from | ***"Draw them from a list."*** (「이름은 목록에서 뽑자」) |
+| Does the 병사 / 일반병 split survive when every body moves alone | ***"It does not."*** (「안 남는다」) |
+| What shows when several are picked | ***"The count and the first body."*** (「고른 수랑 첫 몸으로」) |
+
+⚠⚠ **What this overturns**: **「일반병」 of 2026-09-01 died in a day** — its defining line was 「moves
+alone」 and now every body does. **The body is one kind**; what it holds (04-04) and its 특성 (11-01) say
+what it is good at. ⚠ **What it does NOT overturn**: the price of gathering — a body sent out is a body
+not defending — which is the sentence both dead games died on, and it survives the split's death.
+
+**Written**: 03-02 from open-and-undecided to decided (five rows) · 03-06 resolved with the answer ·
+03-07 folded · 04-04 told 일반병 is dead · task 03's table (and its stale 「open」 on 03-09 · 03-10, which
+the map already had as resolved) · task 05's split section overturned in place · the glossary's 부대
+note, new 이름 row, two reversal rows and one dead word.
+
+> The user closed the round: ***"OK — update the documents like this, split the new things out into
+> tickets, fix existing documents where they are wrong, and then wrap up."***
+> (「ㅇㅋ 이대로 문서들 업데이트 새로운건 티켓으로 뺴고 기존에 있던 문서가 잘못됬으면 수정하고 그리고 마무리」)
+
 ## ✅ **The 성채 stopped turning out soldiers on a clock — 2026-09-02, third round**
 
 ⚠⚠ **This is the THIRD round of 2026-09-02**, after the one below it. **One thing was built, and it is a
