@@ -19,6 +19,207 @@
 [roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅✅ **The generated island got its rules — 2026-09-02, fourth round**
+
+⚠⚠ **This is the FOURTH round of 2026-09-02**, after the deletion below it. **Nothing was built and no
+net was run — the round was fifteen questions and fifteen answers**, and the answers are in ticket 08-01
+word for word. **This section keeps the quotations and what they overturned.**
+
+> The user opened with: ***"Look at the ticket, ask what has to be asked, and let us make the ticket
+> concrete."*** (「티켓보고 물어봐야하는것들 물어봐서 티켓 구체화하자」)
+
+### 1. The grilling shape changed mid-round: two questions per round, not one
+
+> ***"Hm, the size stays the same | and ask two questions at a time."***
+> (「음 크기는 같은걸로하자 | 그리고 질문 2개씩 해줘」)
+
+**The `grilling` skill said 「one question is the round」 since 2026-09-01.** The user asked for two after
+three single-question rounds. ⚠ **The skill file was not edited this round** — the reading is kept in
+memory and the skill is corrected when the user says so.
+
+### 2. What was decided, in order
+
+| Asked | Answered |
+|---|---|
+| What varies — outline only, or trees, rocks and 성채 too | ***"All three."*** (「셋다」) |
+| Does the drawn island stay as run one | ***"Generated from the first run."*** (「첫 판부터 생성」) |
+| Does the size vary | ***"Hm, let us keep the size the same."*** (「음 크기는 같은걸로하자」) — and later ***"that island needs widening a bit"*** (「그 섬을 조금더 넓혀야할듯」) |
+| A seed, or fresh every time | ***"Let us have a seed."*** (「시드로 두자」) |
+| Is the 성채 always on the plateau | ***"On the second storey."*** (「2층으로」) |
+| One harbour side, or several | ***"Harbour? There is no such thing — they just come from anywhere. You see them coming and respond."*** (「항구? 그런건 없는데 그냥 어디서드지 오는거임 미리보고 대응해야지」) |
+| Is the ore on a detached block like now | ***"One ore is mandatory, and the rest — rock, tree — must have at least one each."*** (「철광석 1개는 무조건 있어야하고 나머지 돌 나무는 1개 무조건 있는걸로해서 만들어야할듯」) |
+| — the user's own question — | ***"Is this a random seed? Or is it that some rules are set and it builds itself automatically?"*** (「이게 랜덤 시드인가? 어느정도 규약을 정하고 자동으로 만들어지는건가?」) — **answered: both. Rules fixed, seed picks one island inside them** |
+| One stair or more | ***"Between 1 and 3."*** (「1~3 사이」) |
+| Trees in one forest or scattered | ***"It should go like this — a 칸 thick with trees, a rock 칸, an ore 칸."*** (「이게 나무가 무성한 칸 돌 칸 철광석 칸 이렇게 행햐할듯」) |
+| Is the ore 칸 joined to the island | ***"It has to be attached to the island."*** (「섬에 부텅야함」) |
+| How many tree and rock 칸 | ***"Trees 1~3, rocks 1~3, ore 1~2 — set for now."*** (「나무 1~3 돌 1~3 철 1~2 로 일단 지정」) |
+| Can bodies walk on a resource 칸 | ***"Blocked."*** (「막힌다」) |
+| Is the barricade the 성벽 or a sixth building | ***"It'd be one of the buildings you can build."*** (「지을 수 있는 건물중에 하나일듯」) |
+| One plateau or two | ***"Second storeys 1~2, but every second storey must include a stair."*** (「이층은 1~2개 하지만 모든 2층은 계단을 포함해야함」) |
+| How far the 성채 stands from the coast | ***"3 칸 or more from every side."*** (「모든변에서 3칸이상」) |
+
+### 3. ⚠⚠ Two things said in passing opened a task of their own
+
+> ***"Hm, and the buildings I build should be per 조각, yeah. We should widen the island and build
+> barricades to block what comes."***
+> (「음 그리고 내가 건물을 짓는건 조각단위로 해야할듯 ㅇㅇ 섬을 더 넓히고 바리게이트를 지어서 오는걸 막아야할듯」)
+
+**Task 09 stood on that sentence** — buildings per 조각, and a barricade as the first thing the player
+places. ⚠ **Per 조각 disagrees with the command unit (칸, 03-08) and the resource unit (칸, 08-02).** The
+user said it and the reason was not asked; **09-01 is `Type: grilling`** and asks five things — is it the
+성벽, does it block bodies, does it break, what does it cost, what does it look like.
+
+### 4. ⚠⚠ What was overturned, and one thing that was NOT
+
+- **The ore's detached block** (the user's own placement of 2026-08-31) → **on the island, 1~2.** Ticket
+  05-06 「how is the ore reached」 dissolved: there is nothing to reach
+- **The glossary's 「ore: one per island」** → 1~2
+- **「trees and rocks are scenery」** → **resource 칸**, one kind per 칸, blocking, gathered from beside
+- ⚠ **「no harbour」 is NOT a code reversal — measured after the round.** The beasts' boats already depart
+  from open sea and aim at `Grid.beach_ring`, every beach around the island. The `H` in `island.json` is
+  the file's outer rim, 108 조각, and nothing in `src/` routes from it. **The word died; the code was
+  already there.** ⚠ The model told the user mid-round that the boat code would need changing — **that
+  was wrong, and the ticket says so.**
+
+### 5. The user closed it
+
+> ***"Good, let us add the tickets like this, if that is everything."*** (「좋이 ㅣ렇게 해서 티켓 추가하자 ㅇㅇ 다 됬으면」)
+
+**Written**: 08-01 rewritten from `grilling` to `task` with the fifteen rows · 08-02 new · task 09 and
+09-01 new · 05-06 resolved · 06-02 half-answered · the map's opening, task table and subtask tables ·
+the glossary's three new rows, three reversal rows and one dead word.
+
+### 6. ⚠⚠ The user asked for three more, and two of them are on the thin release's cut list
+
+> ***"Is there a ticket for prisoners arriving? There is no UI that comes up when you press one either,
+> and no ticket for traits yet? I mean to make them all."***
+> (「이거 포로 오는것도 티켓있나? 눌렀을떄 뜨는 UI도 없고 특성도 아직 티켓이 없나? 다 만들어두려고」)
+
+**Measured**: **prisoners had no ticket** — the word lived in this log (second round, section 3) and in the
+map's cut list only. **The press-to-see UI is ticket 03-02**, open since 2026-08-31, with 「what is shown」
+undecided and the HUD function still `pass`. **Traits had no ticket, no task and no glossary row beyond
+the 특성 line** — 05-04 says so in its own body.
+
+**Stood**: **task 10 — 몸이 온다** with 10-01 (what brings a body), 10-02 (prisoners on the beasts' boat),
+10-03 (capture the fallen), all `Type: grilling` · **task 11 — 특성** with 11-01 (what a trait is) ·
+03-02 got the two new candidates (traits, born-with numbers) and the user's name for it · the glossary
+got 포로 and 포획 rows.
+
+⚠⚠ **포획 and 특성 are both on the second round's 「What is cut」 list for the thin December release.**
+**The tickets stand because the user asked for them; no week is attached, and attaching one is the
+user's** — the same shape as tasks 07, 08 and 09. ⚠ **No week was moved and nothing was cut.**
+
+⚠ **Measured while writing 10-01**: **there is no way a body arrives today.** The third round deleted the
+twenty-second clock, 02-09's recruit picture was deferred on 2026-09-01, and `Battle.recruit` has zero
+callers in `src/`. **A run starts with what `setup` seats and never grows.**
+
+### 7. The turret went, for now, toward building
+
+> ***"Let us delete that turret ticket for now — it will probably gather under the building side
+> later."*** (「그 포탑 ㄴ티켓은 지우자 일단 아마 나중에 건축쪽으로 해서 모일듯」)
+
+**Measured**: **there was no turret ticket folder.** The turret lived in two parked lines on the map —
+the 2026-08-31 시안 table row 「연구대·포탑 ⏸」 and the user-decides row D 「연구대·포탑을 언제 꺼내나」 —
+and the four 시안 from 2026-08-31 are not on disk. **Both lines lost the turret; 연구대 stays in both.**
+Task 09 carries one line saying the turret, if it returns, returns there. ⚠ **This is the second time
+the turret went on 2026-09-02** — the second round already took it out of the 건설 chunk (「포탑은
+없어져도 될 거 같고」); this round took it off the parked list too.
+
+### 8. ⚠⚠ The body became the unit — 03-02 · 03-06 · 03-07 in one round
+
+> The user: ***"3-2, 3-6, 3-7 — let us brainstorm these."*** (「3-2 3-6 3-7 이게 프레인 스토밍」)
+
+**03-07 folded first**: ***"Hm, let us close the 「movement is not fun」 ticket — this is a problem for when
+the island has grown, and we proceed when it comes up."*** (「이동 재없다던 티켓 닫자 -> 이건 섬이 커졌을때
+문제고 생겼을떄 진행」)
+
+**Then the question 03-06 held — does a weapon make a body move only as a squad — got an answer that
+was not about weapons at all:**
+
+> ***"The 부대 is a bit ambiguous — the concept has gone vague, so it needs thought. In practice moving
+> them one at a time has become the norm, so this is going to be a game where each character, each
+> soldier, becomes a bit precious."***
+> (「이게 부대라ㅡㄴ ㄴ개념이 애매해져서 곰니해야함 사실상 하나씩 옮기는게 정설이 되ㅕㄴ서 말이지 그래서
+> 캐릭하나하나가 병사하나하나가 좀 소중해지는 게임이 될듯함」)
+>
+> ***"The 부대 is a bit ambiguous — for now, manage each character one by one."***
+> (「부대가 살짝 애매함 일단 캐릭터 하나하나 관리하는걸로 해야할듯함」)
+
+| Asked | Answered |
+|---|---|
+| Is 부대 just what the hand holds, or a named group behind hotkeys 1~4 | ***"A bit ambiguous — manage each one by one for now."*** — **left open**; 03-05 waits |
+| What shows when a body is pressed | ***"Name, trait, HP should show for now."*** (「이름 특성 체력으로 일단 떠야함」) |
+| Over the body, or a panel in a corner | ***"A panel in a corner."*** (「화면 구석 판으로」) |
+| Where names come from | ***"Draw them from a list."*** (「이름은 목록에서 뽑자」) |
+| Does the 병사 / 일반병 split survive when every body moves alone | ***"It does not."*** (「안 남는다」) |
+| What shows when several are picked | ***"The count and the first body."*** (「고른 수랑 첫 몸으로」) |
+
+⚠⚠ **What this overturns**: **「일반병」 of 2026-09-01 died in a day** — its defining line was 「moves
+alone」 and now every body does. **The body is one kind**; what it holds (04-04) and its 특성 (11-01) say
+what it is good at. ⚠ **What it does NOT overturn**: the price of gathering — a body sent out is a body
+not defending — which is the sentence both dead games died on, and it survives the split's death.
+
+**Written**: 03-02 from open-and-undecided to decided (five rows) · 03-06 resolved with the answer ·
+03-07 resolved without an answer, to re-open when the island grows (⚠ `net_process` allows only
+open · claimed · resolved · superseded, so 「folded」 is a word in the body, never a `Status:`) · 04-04
+told 일반병 is dead · task 03's table (and its stale 「open」 on 03-09 · 03-10, which
+the map already had as resolved) · task 05's split section overturned in place · the glossary's 부대
+note, new 이름 row, two reversal rows and one dead word.
+
+> The user closed the round: ***"OK — update the documents like this, split the new things out into
+> tickets, fix existing documents where they are wrong, and then wrap up."***
+> (「ㅇㅋ 이대로 문서들 업데이트 새로운건 티켓으로 뺴고 기존에 있던 문서가 잘못됬으면 수정하고 그리고 마무리」)
+
+### 9. ⚠⚠ Fifth round, same day — bodies, the barricade, and gathering, twenty-nine questions
+
+> The user: ***"Brainstorming on what brings a body, the barricade, and gathering / fishing / farming
+> would be good."*** (「몸의개기랑 바리게이트 그리고 채집낚시농사 관련 브레인스토밍이 좋을듯」)
+> Then: ***"Three questions at a time — let us finish each quickly. Three at a time."*** (「질문 한 번에
+> 세 개씩 해줘 각각 빨리빨리 끝내자. 질문 세 개씩」) — **the round shape went from two to three.**
+
+**Bodies**: ***"For now there is one — prisoners — and for the time being we go with prisoners
+alone."*** (「일단 포로가 하나고 당분간은 포로 하나로 하고」) · freed when that boat's wolves are all dead,
+by sending the 부대 to the boat's beach 칸 — ***"let us make it simple for now; I am curious about that
+loop."*** (「일단 단순하게 만들자. 그 루프가 일단 궁금하고」) · ⚠⚠ ***"I do not think the boat-disappearing
+logic is needed — we should be able to break the boat and use it too. Kill the boat's wolves, go to the
+boat, rescue the prisoner."*** (「배가 사라지는 로직이 필요가 없을 같은게 배도 부셔서 사용할 수 있어야 될
+것 같아 ... 포로 구출하기」) — **02-04 overturned; the boat stays.** Left undecided by the user's own
+word: tied or walking (「현재 모르겠어」), ride or break (「개연성이 없는데?」), whether an untouched boat
+stays (「남아있어야 될 거 같은데?」).
+
+**Barricade**: ***"It is the wall. When a monster's way is blocked it finds another path or breaks the
+barricade — with no way through, it breaks it."*** (「성벽이지 ... 길이 막혀 막히면 다시 길을 찾거나 그
+바리게이트를 부시거나 ... 갈 길이 없으면 바리게이트 부시는거」) · blocks our side too (「네 편도 맞고」) ·
+***"It has HP and when that is worn to zero it disappears."*** (「체력과 갖고 있고 깎여서 영 이 되면
+사라집니다」) · wood (「일단 나무로」). **09-01 resolved, 09-02 builds it.**
+
+**Gathering, fishing, farming**: ⚠⚠ ***"If they do not eat, they die."*** (「먹으면 안먹으면 죽는거지」)
+— **food is survival, not the buff 05-01 had assumed** · ***"a hunger value that slowly wears down …
+at zero, 체력 is cut"*** (「허기라는 값이 ... 천천히 닳아서 ... 영이 되면 체력이 깎이는 거지」) · HP drains
+then death (「체력이 줄다가 죽고」) · ***"They eat on their own — build a food store and they go and eat
+by themselves."*** (「알아서 먹지. 배고프면은 식량 창고를 만들어놔서 알아서 가서 먹는 걸로 하자」) · one
+building for everything (「같은 건물이지. 같은 건물이지」), built not given (「지어야 되고」) · by kind,
+fish first (「종류별로 따로 쌓여야 될 거 같은데? ... 처음에는 그냥 물고기 하나만」) · potato and wheat
+(「감자 밀」) · fields anywhere on land (「밭은 둘 다 돼. 땅이면 돼」), by December (「십이 월까지 밭도
+하는 거야」) · fishing anywhere on the coast with visible good spots two 칸 out that need a boat (「해안가
+어디서나 ... 좋은 포인트가 눈에 보여야 ... 두 칸 밖에 배 타고 나가야」) · the same boat as week 9 (「십육
+번도 맞은」) · a 칸 never runs out (「계속 나와야 될 거 같아」) · numbers left rough on purpose — ***"why
+go down to seconds, too fine; set them roughly as you recommended"*** (「왜 몇 초까지는 너무 커 일단
+대략적으로 네가 추천대로 정해 줘」) ⇒ **10 s a gather, 30 s a field step, first values** · 허기 on the
+panel's fourth line (「십사 번 추천대로」) · the four field steps need a body, growth is time (「추천대로
+가봐자」).
+
+⚠⚠ **The roadmap moved**: ***"Twenty-two needs a bit of a roadmap change"*** (「이 십 이 번 질문이 조금
+로드맵 수정이 좀 필요한거지」) → as recommended: **boat-building goes to week 4, sailing out stays week 9.**
+
+> The user closed it: ***"Write it like that — that, that, that. Yes."*** (「이대로 한 번 저거 저거 저거 적. 어」)
+
+**Written**: 10-01 · 09-01 · 05-01 · 05-05 resolved with answers · 10-02 answered so far with the three
+undecided · 05-02 its three questions · 02-04 overturned in place · 03-02 a fourth line · 08-01 a fishing
+spot rule · **new: 05-07 허기 · 05-08 창고 · 05-09 낚시 · 09-02 바리케이트** · the map's week 4 and 9 rows,
+chunk 7, task rows 05 · 09 · 10 and their subtask tables · the glossary's 허기 · 창고 · 낚시 자리 rows,
+바리케이트 and 포로 rewritten, three reversal rows.
+
 ## ✅ **The 성채 stopped turning out soldiers on a clock — 2026-09-02, third round**
 
 ⚠⚠ **This is the THIRD round of 2026-09-02**, after the one below it. **One thing was built, and it is a
