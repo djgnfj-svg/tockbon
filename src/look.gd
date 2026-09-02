@@ -2489,14 +2489,14 @@ const FX_GROUND_STEP_PX := 20.0
 ## 판 it crosses reads as another 판 rather than as a route over them.
 const MOVE_LINE_HALF_PX := 3.0
 
-## **How near a press has to land to count as pressing a BODY** rather than the ground under it, in
-## 조각. ⚠ **A distance and not a 조각 test**: bodies stand up to three to a 조각 and off its centre,
-## so 「the body whose 조각 you pressed」 refuses presses that visibly hit somebody and accepts presses
-## that visibly missed.
-## ⚠ **A body is drawn standing UP from its feet**, so a press aimed at the chest lands past the feet
-## on the ground behind them. This is generous on purpose for that reason, and it is the first number
-## to move if picking feels sticky or slippery.
-const PICK_BODY_TILES := 0.8
+## ⚠⚠ **`PICK_BODY_TILES` STOOD HERE AND IT IS DELETED** (2026-09-02, the user: 「몸은 화면에서 잡자」
+## — *"let us pick the body on the glass"*, ticket 03-16). It was 0.8 조각 — how near a ground point had
+## to land to a body's `soldier_pos` to count as pressing the body — and its own paragraph said why it
+## was generous: 「a press aimed at the chest lands past the feet on the ground behind them」. **That
+## sentence was the defect.** Behind the feet is screen-up, screen-up turns with the yaw, and at pitch
+## 20° the chest lands 2.75 times the body's height behind — no number here reaches it. The body is
+## picked by its DRAWN rectangle now (`FieldView.body_at_px`), whose size is the sprite's own, so there
+## is no pick radius to tune and this constant has no reader. **Not retuned — deleted.**
 
 ## **The white rim around the body the hand is holding** (2026-08-31, the user: 「캐릭터 눌렀을때 살짝
 ## 내가 누른 캐릭에 흰색 테두리 ... 내가 누른 캐릭이 티가 나야할듯함」).

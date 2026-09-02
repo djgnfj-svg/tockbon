@@ -46,11 +46,24 @@ extends Node2D
 ## Kept because `_rounded_square` is gone but the baked picture wants the same corner it drew.
 const CORNER_SEGMENTS := 6
 
-## How many rungs `screen_to_terrain_px` walks down the view ray. **The height step is this divided
-## into `Look.terrain_height_ceiling()`**, so at pitch 40 one rung slides the ground point about 3.6
-## world px — under a tenth of a tile, which is the resolution a press is answered to. Raising it buys
-## precision nobody can press to; lowering it lets a thin ridge fall between two rungs.
+## How many rungs `screen_to_terrain_px` cuts the view ray's descent into. **The height step is this
+## divided into `Look.terrain_height_ceiling()`**, so at pitch 40 one rung slides the ground point about
+## 5 world px along the ground.
+##
+## ⚠⚠ **SINCE 2026-09-02 THE RUNG IS NOT THE RESOLUTION A PRESS IS ANSWERED TO** (ticket 03-16). It
+## was: the walk answered AT a rung, so every surface that sat between two rungs was answered 0.07 조각
+## up the screen, and a 2층 조각's far edge was skipped clean. **Now every 조각 the ray crosses between
+## two rungs is tested against the ray's own height where it enters and leaves it**, so the answer is
+## exact at any count and no ridge can fall between rungs. **48 stays by the ticket's decision** — the
+## count bounds how the work is cut, and it does not move the answer.
 const TERRAIN_PICK_STEPS := 48
+## How far into a 조각 the ground point is set when the ray meets that 조각's FACE rather than its top,
+## as a fraction of the way from the entry point to the 조각's centre. The entry point sits exactly on
+## the edge shared with the 조각 in front, and `world_to_tile` floors — so a face hit answered on the edge
+## itself would name whichever of the two 조각 the last bit of the float fell into. **The face belongs to
+## the taller 조각**, which is what the player is looking at, and this nudge is what makes the floor say
+## so. Below the 0.02 조각 a net can tell from an edge.
+const FACE_HIT_INSET := 0.001
 
 const WATER_SHADER := "res://src/view/water.gdshader"
 ## ⚠ **The 판's own shader.** It is a second material on a second object inside `island.glb`, not a
@@ -186,6 +199,18 @@ var _hover_cell := -1
 var _wash_cell := PackedInt32Array()
 var _sprites: Array[Sprite3D] = []
 var _sprites_used := 0
+## **Which pooled sprite each living, ashore 검사 is wearing this frame** — soldier id to index into
+## `_sprites`. Rebuilt by `_paint_bodies` every frame and read by `body_at_px`, which is how a press
+## finds a body by where it is DRAWN (2026-09-02, the user: 「몸은 화면에서 잡자」 — *"let us pick the
+## body on the glass"*).
+##
+## ⚠⚠ **THE INDEX IS `_sprites_used - 1` RIGHT AFTER `_put_walker`, WHICH IS THE SAME CONVENTION
+## `_put_outline` STANDS ON.** A walker takes exactly one sprite from the pool, and the bar it wears
+## comes from `_bars`, not from here — so the last sprite handed out IS the body's. **Recorded in the
+## one loop that draws the 검사** rather than derived here from `soldier_pos`, because a body mid-sway or
+## mid-lunge is picked where it is drawn, and only the paint knows where that is.
+## ⚠ **짐승, riders and a body still falling are not in here** — none of them is pickable, as before.
+var _sprite_of_soldier := {}
 ## **기법 17's black copies, one per body, in their own pool.** ⚠⚠ **A parallel pool and not a child
 ## node**, because the body sprites are recycled by index across frames: a child would be carried to
 ## whichever body reused that slot, and the outline would be right by accident. **Index `i` of this
@@ -577,20 +602,98 @@ func screen_to_world_px(at: Vector2, ground_h: float = 0.0) -> Vector2:
 ## `TERRAIN_PICK_STEPS` is a COUNT and the height step is derived from it, so a shallow pitch (where
 ## one step of height slides the ground point a long way) costs the same work as a steep one instead of
 ## costing an unbounded amount.
+##
+## ⚠⚠ **IT ANSWERED AT A RUNG UNTIL 2026-09-02, AND EVERY 2층 PRESS WAS 0.071 조각 UP THE SCREEN**
+## (ticket 03-16, measured against the engine's own ray). The rung is `5.02 / 48 = 0.1046` of height;
+## the 1층 top at 0.21 sits 0.001 above a rung and the 2층 top at 1.21 sits 0.0596 above one, so the
+## first rung at or below the 2층 top was already 2.84 world px past it along the ground. **Two things
+## came of that**: in the far 0.071 조각 of every 2층 조각 the neighbour answered, and **at a 2층 덩어리's
+## far cliff edge the ray stepped clean over the top and fell to the 1층 land 1.19 조각 behind it** —
+## the 「ledge skip」 the ticket named as a suspect, and it was real.
+## ⇒ **Between two consecutive rungs, every 조각 the ground segment crosses is walked in order, and
+## for each the ray's height where it ENTERS and where it LEAVES that 조각 is compared with the 조각's
+## own top.** Top between the two: the ray met that top, and the answer is the ray at exactly that
+## height — over that 조각 by construction. Top above the entry height: the ray met that 조각's FACE, and
+## the answer is the entry point set a hair inside it (`FACE_HIT_INSET`). Otherwise the ray cleared it
+## and the walk goes on. **The rung count no longer moves the answer** — see `TERRAIN_PICK_STEPS`.
+##
+## ⚠⚠ **TWO WORDINGS THAT WERE TRIED ON PAPER AND ARE WRONG** (`adversary`, 2026-09-02), so nobody
+## re-tries them: 「snap the rung's point to the found 조각's top」 moves the point 0.071 조각 further
+## along the ground, so a press inside the last 0.071 of a 2층 조각 snaps past its far edge onto the
+## hidden 1층 behind and answers height 1.21 over a 0.21 surface; 「test only the 조각 newly entered
+## between the two rungs」 reads the low land at a far cliff edge and the skip survives. **The 조각 that
+## owns the top is the one the ray was over at the HIGHER rung, and during the 0.22 s sweep the segment
+## can cross a corner** — so every crossed 조각 is walked, not one.
+##
+## ⚠ **Off the board there is no surface**, so an off-grid 조각 is stepped over rather than read as a
+## top at height 0 — that is the same answer the rung walk gave, whose rungs never reached 0.
 func screen_to_terrain_px(at: Vector2) -> Vector2:
 	var ceiling := Look.terrain_height_ceiling()
 	var step := ceiling / float(TERRAIN_PICK_STEPS)
-	var h := ceiling
+	var h_hi := ceiling
+	var w_hi := screen_to_world_px(at, h_hi)
 	for _i in TERRAIN_PICK_STEPS:
-		var world := screen_to_world_px(at, h)
-		var tile := world_to_tile(world)
-		if _ground_h(tile.x, tile.y) >= h:
-			return world
-		h -= step
+		var h_lo := h_hi - step
+		var w_lo := screen_to_world_px(at, h_lo)
+		var met := _ground_met(w_hi, h_hi, w_lo, h_lo)
+		if met.is_finite():
+			return met
+		h_hi = h_lo
+		w_hi = w_lo
 	# Under every hill on the board: the ray reached sea level without meeting anything, so the sea is
 	# what it hit. **Not `0.0`** — the water is a surface at `TERRAIN_H_WATER` like any other, and
 	# answering on the plane below it would put a press on open sea a fifth of a tile off.
 	return screen_to_world_px(at, Look.TERRAIN_H_WATER)
+
+
+## **Where the ray's ground segment from `w_hi` (at height `h_hi`) to `w_lo` (at `h_lo`) first meets
+## the landscape, in world px — or `Vector2.INF` when it clears every 조각 it crosses.** The half of
+## `screen_to_terrain_px` that walks 조각; see its header for what it replaced and why.
+##
+## The 조각 are walked in the order the ray crosses them, and the ray's height is linear along the
+## segment — `screen_to_world_px` is linear in its height — so the height at any point of it is a lerp
+## between the two ends. ⚠ **A 조각 the segment only grazes at a corner (a zero-length crossing) is
+## skipped**: there is no length of ray over it for a top to lie under.
+func _ground_met(w_hi: Vector2, h_hi: float, w_lo: Vector2, h_lo: float) -> Vector2:
+	if battle == null or battle.grid == null:
+		return Vector2.INF
+	var p0 := w_hi / Look.TILE_PX
+	var d := (w_lo - w_hi) / Look.TILE_PX
+	var tx := int(floor(p0.x))
+	var ty := int(floor(p0.y))
+	var step_x := 1 if d.x > 0.0 else -1
+	var step_y := 1 if d.y > 0.0 else -1
+	# How far along the segment (0..1) the next x line and the next y line are crossed, and how much
+	# further each whole 조각 costs. An axis the segment does not move along is never crossed.
+	var t_dx := INF if d.x == 0.0 else absf(1.0 / d.x)
+	var t_dy := INF if d.y == 0.0 else absf(1.0 / d.y)
+	var t_x := INF if d.x == 0.0 else ((float(tx) + (1.0 if d.x > 0.0 else 0.0)) - p0.x) / d.x
+	var t_y := INF if d.y == 0.0 else ((float(ty) + (1.0 if d.y > 0.0 else 0.0)) - p0.y) / d.y
+	var t_in := 0.0
+	while t_in < 1.0:
+		var t_out := minf(minf(t_x, t_y), 1.0)
+		var on_board := tx >= 0 and ty >= 0 and tx < battle.grid.w and ty < battle.grid.h
+		if on_board and t_out > t_in:
+			var top := _ground_h(tx, ty)
+			var h_in := lerpf(h_hi, h_lo, t_in)
+			if top >= h_in:
+				# The ray is already under this 조각's top as it arrives: it met the FACE, and the face is
+				# this 조각's — see `FACE_HIT_INSET` for why the point is pushed off the shared edge.
+				var p_in := p0 + d * t_in
+				var centre := Vector2(float(tx) + 0.5, float(ty) + 0.5)
+				return (p_in + (centre - p_in) * FACE_HIT_INSET) * Look.TILE_PX
+			if top >= lerpf(h_hi, h_lo, t_out):
+				# The top lies between the entry and exit heights: the ray met it. The ray at exactly the
+				# top's height is over this 조각 by construction.
+				return (p0 + d * ((h_hi - top) / (h_hi - h_lo))) * Look.TILE_PX
+		if t_x < t_y:
+			tx += step_x
+			t_x += t_dx
+		else:
+			ty += step_y
+			t_y += t_dy
+		t_in = t_out
+	return Vector2.INF
 
 
 func world_to_tile(world: Vector2) -> Vector2i:
@@ -613,6 +716,58 @@ func world_to_screen_px(world: Vector2, ground_h: float = 0.0) -> Vector2:
 ## The forward of `screen_to_terrain_px`: where a tile's own surface lands on the glass.
 func tile_to_screen_px(tx: int, ty: int) -> Vector2:
 	return world_to_screen_px(Look.tile_point_px(Vector2(tx, ty)), _ground_h(tx, ty))
+
+
+## **Which 검사 is drawn under the screen point `at`, or -1** (2026-09-02, the user: 「몸은 화면에서
+## 잡자」 — *"let us pick the body on the glass"*). The answer is the soldier id whose drawn picture —
+## foot to top, the sprite's own width — contains the press; **when two pictures contain it, the one
+## whose drawn foot is nearest the press**, which is the front-most body and the one the eye picks.
+##
+## ⚠⚠ **THE PRESS USED TO BE ANSWERED ON THE GROUND AND IT MISSED AT TWO OF THE FOUR YAWS** (ticket
+## 03-16, measured 2026-09-02). The shell turned the press into a ground point and `Hand.body_at`
+## measured its distance to `soldier_pos` — but a body is drawn standing UP from its feet, so a press on
+## the chest lands on the ground `h / tan(pitch)` 조각 BEHIND the feet, and screen-up is a world direction
+## that turns with the yaw: at 0° and 270° it cancelled a half-조각 origin error in that conversion, at
+## 90° and 180° it added to it, and chest and head presses picked nobody. At pitch 20° the factor is
+## 2.75 and no radius on the ground reaches a head at any yaw. **Both `Hand.body_at` and the constant
+## it read are deleted**; the question 「which body is under the finger」 lives here now.
+##
+## ⚠⚠ **IT READS THE POOLED SPRITES THE VIEW ITSELF PLACED** — position, scale, texture, visible, the
+## agreed measuring surface in `GLOSSARY.md` — and projects them through `world_to_screen_px`, so the
+## rectangle IS the picture: the pitch, the yaw, the zoom, the crowd offset, the idle sway and the
+## `_pitch_stretch` are all already inside the sprite's own fields. **No new constant** — the sprite's
+## size is the pick area, and when 03-17 moves a body onto its lattice seat the pick follows the drawing
+## by construction.
+## ⚠ **Sprite px per 조각 across is read off `_visible_ground_px`**, the one place the zoom becomes a
+## ground span, rather than written as `zoom * TILE_PX` a second time here.
+## ⚠ **The foot and the top go through `world_to_screen_px` at their own heights**, so the vertical
+## extent is the same foreshortening the camera applies to the upright card; the width is the card's
+## world width, which an orthographic camera does not foreshorten.
+## ⚠ Only living, ashore 검사 are in `_sprite_of_soldier`; 짐승 are not pickable, as before.
+func body_at_px(at: Vector2) -> int:
+	var who := -1
+	var best := INF
+	var px_per_tile := Look.VIEWPORT_W_PX / _visible_ground_px().x * Look.TILE_PX
+	for raw_id in _sprite_of_soldier:
+		var k := int(_sprite_of_soldier[raw_id])
+		if k < 0 or k >= _sprites.size():
+			continue
+		var s := _sprites[k]
+		if not s.visible or s.texture == null:
+			continue
+		var xz := Vector2(s.position.x, s.position.z) * Look.TILE_PX
+		var half_tall := float(s.texture.get_height()) * s.scale.y * s.pixel_size * 0.5
+		var half_wide_px := float(s.texture.get_width()) * s.scale.x * s.pixel_size * 0.5 * px_per_tile
+		var foot := world_to_screen_px(xz, s.position.y - half_tall)
+		var top := world_to_screen_px(xz, s.position.y + half_tall)
+		var drawn := Rect2(foot.x - half_wide_px, top.y, half_wide_px * 2.0, foot.y - top.y)
+		if not drawn.has_point(at):
+			continue
+		var d := at.distance_to(foot)
+		if d < best:
+			best = d
+			who = int(raw_id)
+	return who
 
 
 ## Moves the camera by a SCREEN-space delta (mouse motion) and re-clamps. The ground under the cursor
@@ -1997,6 +2152,9 @@ func _paint_bodies() -> void:
 			_crowd_slot_of(battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e), false,
 			_hp_frac(float(battle.enemy_hp[e]), Rules.hp_of(ety)))
 
+	# ⚠ **Emptied here and not on the empty path above**, so a frame with no island leaves the last
+	# frame's map standing — and the last frame's sprites are hidden, which `body_at_px` reads.
+	_sprite_of_soldier = {}
 	for raw_id in battle.ashore_ids():
 		var i := int(raw_id)
 		# ⚠ **`army.max_hp_of` and not `Rules.hp_of` off the row.** There is no `hp` column in the
@@ -2004,6 +2162,9 @@ func _paint_bodies() -> void:
 		_put_walker("s%d" % i, int(army.type_id[i]), battle.soldier_pos[i], false,
 			_crowd_slot_of(battle.soldier_pos[i], i), _picked.has(i),
 			_hp_frac(float(battle.soldier_hp[i]), army.max_hp_of(i)))
+		# The sprite `_put_walker` just took is this body's — see `_sprite_of_soldier` for why the
+		# index is read here and nowhere else.
+		_sprite_of_soldier[i] = _sprites_used - 1
 
 	# ⚠⚠ **THE ONE PLACE A BODY THE SIM HAS ALREADY DROPPED IS STILL DRAWN** (2026-08-31). Both lists
 	# above hold the living only — `living_enemy_ids`'s own header says a corpse must not be left on

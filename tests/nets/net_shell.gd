@@ -841,7 +841,18 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 	# -- a click: somebody is ordered and the camera does NOT move -----------------------------------
 	# ⚠ **Re-aimed, because the drag above moved the camera** — the same screen point is a different
 	# 조각 now, and this row is about a press on land.
-	var click_at := fs.tile_to_screen_px(int(round(body.x)), int(round(body.y)))
+	# ⚠⚠ **THE PICK IS AIMED AT THE DRAWN BODY AND NOT AT THE GROUND UNDER ITS 조각** (2026-09-02,
+	# ticket 03-16, the user: 「몸은 화면에서 잡자」 — *"let us pick the body on the glass"*). This point
+	# was `tile_to_screen_px` of the body's 조각 — the ground at its centre — and it picked only because
+	# the old ground pick had 0.8 조각 of slack; **a body stands UP from its feet, so the ground under
+	# the 조각 centre is a hair BELOW the drawn picture.** `net_pick` owns the rectangle at every yaw and
+	# pitch; this row only needs a press that is on the body, so it presses the drawn FOOT, read off the
+	# pooled sprite through the engine's own unproject. ⚠ The pool is painted and the camera placed by
+	# hand first, because nothing has pumped a frame since the drag above moved the camera.
+	fs._paint_bodies()
+	fs._place_camera()
+	var click_at := _drawn_foot_px(fs, body)
+	t.ok(click_at.is_finite(), "자가 점검 — 그 몸이 그려져 있다")
 	t.eq(game._tile_at(click_at), body_tile, "자가 점검 — 다시 겨눈 점도 그 조각이다")
 	var held := fs.cam_px
 	game._unhandled_input(_press(click_at))
@@ -2048,6 +2059,25 @@ func _flat_sprites(fv: FieldView) -> Array:
 
 ## The sprite standing at a world-px point, matched on the ground plane (x, z) — a body's height is
 ## its own business (it depends on the picture's aspect), the tile it stands on is the sim's.
+## **Where the body standing at `at_tiles` (a `soldier_pos`) has its drawn FOOT on the glass**, a hair
+## inside the picture — or `Vector2.INF` when no body sprite stands within 0.6 조각 of that place.
+## Read off the pooled sprite and the engine's `unproject_position`, never off the view's own forward
+## projection, so a press aimed here does not share a defect with the pick that answers it.
+func _drawn_foot_px(fv: FieldView, at_tiles: Vector2) -> Vector2:
+	var want := at_tiles + Vector2(0.5, 0.5)
+	var best := 0.6
+	var found: Sprite3D = null
+	for s: Sprite3D in _body_sprites(fv):
+		var d := Vector2(s.position.x, s.position.z).distance_to(want)
+		if d < best:
+			best = d
+			found = s
+	if found == null or found.texture == null:
+		return Vector2.INF
+	var half_tall := float(found.texture.get_height()) * found.scale.y * found.pixel_size * 0.5
+	return fv._cam.unproject_position(found.position - Vector3(0.0, half_tall - 0.02, 0.0))
+
+
 func _sprite_at_xz(list: Array, world_px: Vector2) -> Sprite3D:
 	for s: Sprite3D in list:
 		if absf(s.position.x - world_px.x / Look.TILE_PX) < 0.001 \

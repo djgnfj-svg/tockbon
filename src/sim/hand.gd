@@ -180,23 +180,15 @@ func from_tiles(battle: Battle) -> PackedInt32Array:
 	return out
 
 
-## **Which body a press landed on, or -1.** ⚠ **Nearest wins and the radius is a real distance**, not
-## 「the body whose 조각 you pressed」: bodies stand three to a 조각 and off its centre, so a 조각 test
-## would refuse a press that visibly hit somebody.
-##
-## ⚠ **The press point is in tile units**, which is what `soldier_pos` is in. The shell converts.
-func body_at(battle: Battle, at_tiles: Vector2, radius: float) -> int:
-	if battle == null:
-		return -1
-	var who := -1
-	var best := radius
-	for raw_id in battle.ashore_ids():
-		var i := int(raw_id)
-		var d: float = (battle.soldier_pos[i] as Vector2).distance_to(at_tiles)
-		if d <= best:
-			best = d
-			who = i
-	return who
+## ⚠⚠ **`body_at` STOOD HERE AND IT IS DELETED** (2026-09-02, the user: 「몸은 화면에서 잡자」 —
+## *"let us pick the body on the glass"*, ticket 03-16). It answered 「which body did a press land on」
+## as the nearest `soldier_pos` within a radius of a ground point in 조각 units, and its header said
+## 「the shell converts」 — **the shell converted into the other 조각 convention, half a 조각 off, and
+## nothing measured it** (this function appeared in no net at all). A body is drawn standing UP from its
+## feet, so the ground under a press on the chest is behind the feet by `h / tan(pitch)` 조각 in a
+## direction that turns with the board — **no radius on the ground answers a head at pitch 20°.**
+## ⇒ `FieldView.body_at_px` answers from the drawn picture. **`pick` stays**: the pick is still a sim
+## fact; only 「which body is under the finger」 moved to the glass.
 
 
 ## **Sends everybody picked onto `block`, and answers how many actually went.**

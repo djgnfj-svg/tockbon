@@ -114,8 +114,14 @@ func _table() -> Dictionary:
 			# actually goes through; the other two are its forward, written here so the six copies
 			# under `tools/` could stop each carrying a private one.
 			"screen_to_terrain_px": 0,
+			# The 조각 walk between two of its rungs (ticket 03-16, 2026-09-02) — arithmetic on the
+			# ground heights, no stroke.
+			"_ground_met": 0,
 			"world_to_screen_px": 0,
 			"tile_to_screen_px": 0,
+			# The body pick on the glass (ticket 03-16, 2026-09-02): it READS the pooled sprites and
+			# projects them through `world_to_screen_px`; it places nothing and draws nothing.
+			"body_at_px": 0,
 			"world_to_tile": 0,
 			"pan_by": 0,
 			"zoom_at": 0,
