@@ -170,6 +170,56 @@ note, new 이름 row, two reversal rows and one dead word.
 > tickets, fix existing documents where they are wrong, and then wrap up."***
 > (「ㅇㅋ 이대로 문서들 업데이트 새로운건 티켓으로 뺴고 기존에 있던 문서가 잘못됬으면 수정하고 그리고 마무리」)
 
+### 9. ⚠⚠ Fifth round, same day — bodies, the barricade, and gathering, twenty-nine questions
+
+> The user: ***"Brainstorming on what brings a body, the barricade, and gathering / fishing / farming
+> would be good."*** (「몸의개기랑 바리게이트 그리고 채집낚시농사 관련 브레인스토밍이 좋을듯」)
+> Then: ***"Three questions at a time — let us finish each quickly. Three at a time."*** (「질문 한 번에
+> 세 개씩 해줘 각각 빨리빨리 끝내자. 질문 세 개씩」) — **the round shape went from two to three.**
+
+**Bodies**: ***"For now there is one — prisoners — and for the time being we go with prisoners
+alone."*** (「일단 포로가 하나고 당분간은 포로 하나로 하고」) · freed when that boat's wolves are all dead,
+by sending the 부대 to the boat's beach 칸 — ***"let us make it simple for now; I am curious about that
+loop."*** (「일단 단순하게 만들자. 그 루프가 일단 궁금하고」) · ⚠⚠ ***"I do not think the boat-disappearing
+logic is needed — we should be able to break the boat and use it too. Kill the boat's wolves, go to the
+boat, rescue the prisoner."*** (「배가 사라지는 로직이 필요가 없을 같은게 배도 부셔서 사용할 수 있어야 될
+것 같아 ... 포로 구출하기」) — **02-04 overturned; the boat stays.** Left undecided by the user's own
+word: tied or walking (「현재 모르겠어」), ride or break (「개연성이 없는데?」), whether an untouched boat
+stays (「남아있어야 될 거 같은데?」).
+
+**Barricade**: ***"It is the wall. When a monster's way is blocked it finds another path or breaks the
+barricade — with no way through, it breaks it."*** (「성벽이지 ... 길이 막혀 막히면 다시 길을 찾거나 그
+바리게이트를 부시거나 ... 갈 길이 없으면 바리게이트 부시는거」) · blocks our side too (「네 편도 맞고」) ·
+***"It has HP and when that is worn to zero it disappears."*** (「체력과 갖고 있고 깎여서 영 이 되면
+사라집니다」) · wood (「일단 나무로」). **09-01 resolved, 09-02 builds it.**
+
+**Gathering, fishing, farming**: ⚠⚠ ***"If they do not eat, they die."*** (「먹으면 안먹으면 죽는거지」)
+— **food is survival, not the buff 05-01 had assumed** · ***"a hunger value that slowly wears down …
+at zero, 체력 is cut"*** (「허기라는 값이 ... 천천히 닳아서 ... 영이 되면 체력이 깎이는 거지」) · HP drains
+then death (「체력이 줄다가 죽고」) · ***"They eat on their own — build a food store and they go and eat
+by themselves."*** (「알아서 먹지. 배고프면은 식량 창고를 만들어놔서 알아서 가서 먹는 걸로 하자」) · one
+building for everything (「같은 건물이지. 같은 건물이지」), built not given (「지어야 되고」) · by kind,
+fish first (「종류별로 따로 쌓여야 될 거 같은데? ... 처음에는 그냥 물고기 하나만」) · potato and wheat
+(「감자 밀」) · fields anywhere on land (「밭은 둘 다 돼. 땅이면 돼」), by December (「십이 월까지 밭도
+하는 거야」) · fishing anywhere on the coast with visible good spots two 칸 out that need a boat (「해안가
+어디서나 ... 좋은 포인트가 눈에 보여야 ... 두 칸 밖에 배 타고 나가야」) · the same boat as week 9 (「십육
+번도 맞은」) · a 칸 never runs out (「계속 나와야 될 거 같아」) · numbers left rough on purpose — ***"why
+go down to seconds, too fine; set them roughly as you recommended"*** (「왜 몇 초까지는 너무 커 일단
+대략적으로 네가 추천대로 정해 줘」) ⇒ **10 s a gather, 30 s a field step, first values** · 허기 on the
+panel's fourth line (「십사 번 추천대로」) · the four field steps need a body, growth is time (「추천대로
+가봐자」).
+
+⚠⚠ **The roadmap moved**: ***"Twenty-two needs a bit of a roadmap change"*** (「이 십 이 번 질문이 조금
+로드맵 수정이 좀 필요한거지」) → as recommended: **boat-building goes to week 4, sailing out stays week 9.**
+
+> The user closed it: ***"Write it like that — that, that, that. Yes."*** (「이대로 한 번 저거 저거 저거 적. 어」)
+
+**Written**: 10-01 · 09-01 · 05-01 · 05-05 resolved with answers · 10-02 answered so far with the three
+undecided · 05-02 its three questions · 02-04 overturned in place · 03-02 a fourth line · 08-01 a fishing
+spot rule · **new: 05-07 허기 · 05-08 창고 · 05-09 낚시 · 09-02 바리케이트** · the map's week 4 and 9 rows,
+chunk 7, task rows 05 · 09 · 10 and their subtask tables · the glossary's 허기 · 창고 · 낚시 자리 rows,
+바리케이트 and 포로 rewritten, three reversal rows.
+
 ## ✅ **The 성채 stopped turning out soldiers on a clock — 2026-09-02, third round**
 
 ⚠⚠ **This is the THIRD round of 2026-09-02**, after the one below it. **One thing was built, and it is a
