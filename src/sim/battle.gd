@@ -901,7 +901,7 @@ func keep_gap(p: Vector2) -> float:
 ## ⚠⚠ **WHAT THE PLAYER'S CROSSING KNEW, each line a defect that was paid for once:**
 ##
 ##  · **A soldier aboard an outbound boat was `is_hittable` and shared the boat's position**, so a
-##    crow could already hit one and the tracer had somewhere to land. A crossing that is untargetable
+##    ranged enemy could already hit one and the tracer had somewhere to land. A crossing that is untargetable
 ##    is a crossing with no tension in it.
 ##  · **`TRANSIT` counted as 「still in the fight」 for the verdict.** Collapsing that to ASHORE threw
 ##    away the last crossing on an island where everything ashore had just died — one sub-step before
@@ -1862,8 +1862,8 @@ func _phase_muster(dt: float) -> void:
 ##  · **Writing a status was an OVERWRITE, never an accumulate.** Folding a magnitude onto itself lets
 ##    six fast blows rebuild a mine that was measured and rejected.
 ##  · **EVERY SOURCE FOR ONE BLOW WAS RESOLVED BEFORE ANYTHING WAS WRITTEN, AND THE STRONGEST WON.**
-##    Written one after the other, a 까마귀 in a full bleed set bit for 0.5 s where a 늑대 in the same
-##    set bit for 1.5 — **the crow was penalised by its own passive.**
+##    Written one after the other, a fast attacker in a full bleed set bit for 0.5 s where a slow one
+##    in the same set bit for 1.5 — **the fast one was penalised by its own passive.**
 ##  · **What a blow leaves rode ONE line with the same victims** — the primary and the splash list,
 ##    resolved once, never walked a second time per effect.
 ##  · **Only the allied blow left anything.** `_hit_soldiers` had no twin, so an enemy could never
@@ -1878,8 +1878,8 @@ func _phase_muster(dt: float) -> void:
 ## `stop_dist` of `stop_at`.
 ##
 ## The per-tile loop is not an optimisation: with one tile per call a 0.5 s frame caps every unit at
-## 2 tiles/s regardless of its speed row, so the ranged types and the crow would quietly lose their
-## speed advantage the moment a probe stepped in anything but tiny increments.
+## 2 tiles/s regardless of its speed row, so a fast row would quietly lose its speed advantage the
+## moment a probe stepped in anything but tiny increments.
 ##
 ## `goals` is a plain Array on purpose — a `PackedVector2Array` is copy-on-write and a write through
 ## a parameter would land in a copy, leaving every unit re-requesting the same first step forever.

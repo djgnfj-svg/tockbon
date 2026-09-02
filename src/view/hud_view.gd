@@ -49,11 +49,8 @@ extends Node2D
 
 
 ## ⚠⚠ **`TYPE_LABELS` IS DELETED and the words are a COLUMN of `Rules.UNITS` now.** It was a second
-## table indexed by the same ids, and the split showed on screen: 까마귀 stood in it twice, because the
-## player's ranged row borrowed the enemy crow's body while the CROW row was the enemy species itself.
-## That duplicate was user-approved as an interim (2026-08-24: 「구지? 그냥 까마귀라고 하면 되는거
-## 아니야?」) and the five-species roster is what dissolves it — **at the cause, by there being one
-## table.**
+## table indexed by the same ids, and one name could stand in it twice — **one table ends that at the
+## cause.**
 ##
 ## `type_label` stays as the one call site everything already reads (`panel_view` names soldiers in the
 ## reward list, `refit_view` labels the beast strip), so nothing outside this line moved.

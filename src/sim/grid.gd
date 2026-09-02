@@ -6,7 +6,7 @@ extends RefCounted
 ##
 ## **Movement is a flow field and never a greedy descent.** Greedy 8-way descent was measured stalling
 ## on five of twenty-six dock-to-enemy pairs on these three grids, so a walker that "obviously works"
-## silently freezes on island 2's north-east crow and everything inside island 3's ring. The first-slice
+## silently freezes on parts of those boards. The first-slice
 ## plan records the measurement under "What two adversarial passes broke".
 ##
 ## **The coastline is open, not docked, and landing is a DENYLIST.** `boat-and-landing`, section 3,
@@ -146,7 +146,7 @@ var water := PackedByteArray()         # w*h, 1 = water (includes a harbour)
 ## "may a body stand here"; whether a body may *cross between* two tiles it could both stand on is
 ## `can_step`. Folding the height into `passable` would make one byte answer two questions, and this
 ## repo has already paid for a name whose sense changed under it (티켓 15: four checks became shells
-## when 소 and 까마귀 moved sides).
+## when species moved sides).
 var level := PackedByteArray()
 ## The stair runs of this board, `tile -> [axis, index, length]`. ⚠ **Derived from `level` and cached,
 ## never loaded**: it is a restatement of the board, so a second source for it could disagree with the

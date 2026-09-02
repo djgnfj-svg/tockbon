@@ -5035,6 +5035,91 @@ holds 12. `net_names` 58 · `net_panel` 662 · **suite 3161 pass / 4 fail on the
 - **`--headless --import` keys on mtime**: a copied png keeps its source's mtime and is not re-imported.
   Two plates were photographed wearing the wrong picture before this was found.
 
+---
+
+## ⚠⚠ **The alarm rings and you sail home — the loop that gave the base its reason — 2026-09-02, eighth round**
+
+**No code was written and none could be.** This round ran in the remote container, which **has no Godot
+binary**, so the game was never launched and **no net was run**. ⚠ **The commits are on
+`claude/misc-cleanup-k61sy1`, not on `main`** — the harness pinned the branch, so the wrap-up rule
+「straight to main」 could not be followed.
+
+### The round in one line
+
+**The user could not picture the base defending itself while the player was away** — *"the picture of the
+base being defended automatically while I am out just does not come together, and I think that is the
+problem"* (「내가 나가 있을 때 기지가 자동으로 지켜지는 그림이 잘 안 그려지는 게 문제인 거 같아」).
+**The answer they found themselves was an alarm**, and it became 태스크 12.
+
+### What the user decided, in their own words
+
+| 무엇 | 사용자 |
+|---|---|
+| **A 특성 both pushes a value and changes what a body does** | *"No — both of those work. Both are possible from the start."* (「그거 두 개 다 되는 거지 ... 이르게 두 개 다 가능한 걸로 하는 거지」) |
+| **A 특성 is 특이사항 — an oddity this body has** | *"A trait is that sort of thing, right? Some oddity — being good at some dish, or not sleeping at night."* (「특성은 그런 거지? 뭔가 특이사항 ...」) |
+| **Sleep is out; night is probably in; seasons are out** | *"The sleeping-at-night one, take it out ... but night itself I think would be good, the mood would be nice ... let us drop seasons."* (「밤에 잠을 잤는 건 그냥 해본 소리로 빼야 될 듯 ... 밤이 되는 거는 또 이제 그게 좋을 거 같긴 해 ... 계절은 빼자」) ⚠ **Temperature was raised and left undecided** |
+| **The home island keeps running while the player is away** | *"No — it should keep moving. The island runs on its own."* (「그것도 계속 움직여야지. 섬은 섬대로 또 움직이는 거임」) |
+| **Both boards can be looked at** | *"You can see it. You can."* (「볼 수 있지. 볼 수 있는데 볼 수 있지」) — the recommendation was one key between them |
+| **The first enemy is vikings and pirates, not wolves** | *"Wolves just coming is too much of a stretch. I think the first arrivals should be vikings ... we were pirates, and we settled on an island."* (「늑대가 오는 게 너무 개연성이 떨어져서. 처음 오는 걸 바이킹으로 만들어 될 거 같기도 하고 ... 우리가 해적이었고」) |
+| **What is taken from outside is bone and hide, and special ore** | *"What you catch out there is beasts — bone, hide, that sort of thing."* (「나가서 잡는 거는 이제 짐승, 뼈, 가죽, 뭐 이런 것들」) |
+| **A wave is announced before it comes, the first one included** | *"Before a wave comes, give a clear signal, so the time left can be spent farming outside."* (「웨이브가 오기 전에 확실한 신호를 주자 ...」) and *"not wolves just turning up at the start either — you are farming and it says a pack of wolves arrives in one minute"* (「처음에도 무작정 늑대가 오는 게 아니라 ...」) |
+| **The loop matters more than any number in it** | *"More than that, this loop — the alarm rings and you come back — is what matters. This was really good. It came together in my head."* (「이것보다 방금 내가 말한 알람이 울리고 돌아오는 이 루프가 중요함 ... 되게 좋았어. 그려졌어 머리에」) |
+| **A wave arrives slowly, not all at once** | *"Rather than several at once, I think they will come slowly, spread out over time."* (「여러 척이 한 번에 온다기보다는 천천히 시간을 두고 올 거 같아」) |
+| **The crow will not be built** | *"I am not making the crow. Delete anything to do with it."* (「까마귀는 안 만들 거야. 관련된 거 지워주고」) |
+
+### ⚠⚠ **The base nearly stopped being the game, and the alarm is what saved it**
+
+The user spotted the contradiction themselves: **if the good things are all outside, the base is a
+warehouse, and a warehouse is not worth defending** — *"then the reason to defend the base fades a bit.
+Should we go adventure-only? Drop defending the base?"* (「기지를 지키는 이유가 조금 퇴색해 되는데 ...
+어드벤처 하나로 갈까? 기지를 지키는 걸 빼고?」).
+
+**It was not answered by argument.** The recommendation was to keep the base because everything standing
+today is the defending half — 성채, the boats, game over — and the user moved straight past it to the
+real blocker (who defends while I am out), which **reads as keeping it**. ⚠ **They never said 「keep it」
+in so many words**, so this is a reading and the next round may correct it.
+
+**What dissolved the blocker was a measurement, not an idea**: a 검사 already notices a 늑대 at 3.0 조각
+and fights with no order (07-01, built the day before). The user had raised a turret one sentence
+earlier and put it down on hearing this — *"Do I have to build a turret before I leave? Ah — the auto
+defence."* (「포탑을 만들어 놓고 가야 되나? 아 자동방어라」). ⚠ **The turret is undecided, not cut.**
+
+### ⚠⚠ **태스크 12 reverses a decision from 2026-08-30**
+
+> The user, 2026-08-30: *"Not noticing is the right call ... you spot it while turning the mouse, and you
+> go then."* (「안 알아채는 게 맞겠다 ... 마우스 돌리다가 보이면 그때 가는 걸로」)
+
+**That line is the whole reason `Rules.BOAT_SPEED_TILES` is 1.2**: with no arrow and no alarm the
+crossing had to last long enough for a panning player to find it — 22 조각 at 1.2 조각/s is **18.3
+seconds**, chosen against Bad North. **An alarm spends that reason.** The number does not have to move;
+what moves is why it is what it is. **The old line is recorded on the task, not deleted.**
+
+### What the crow cleanup actually was
+
+**The crow row left `src/` on 2026-08-31; what stayed was archaeology in the comments** — the nine-species
+radius table, the tombstones of the deleted rows, a bleed-set example that penalised a 까마귀, the spawn
+letters `B` `C` `L`, and gait-squash figures measured across five species. The user, twice: *"Clear it
+out ... you are telling me old stuff is left in the comments. Delete it."* (「일단은 치우라고 ... 주석이나
+이런 것들이 옛날 게 남았다는 거잖아. 지우라고」).
+
+**Seven files, seventy-four comment lines, zero code lines** — `git diff` carries no non-comment change.
+**The rule applied**: a dead species' name is gone wherever it was only history; where it derived a
+number that is live today the derivation stays with the name taken out (`REACH_BONUS` 1.75,
+`BEAST_SPRITE_W_RATIO` 3.5, the missing-picture fallback in `BEAST_TEX`).
+
+### Still open — the user answers these
+
+**How many minutes the warning is** (one and five were both said, for different waves) · **how many
+boats one wave is and how far apart they land** · **how long the crossing to the expedition island
+takes** · **what happens when the alarm rings and the player cannot get home** · **whether night goes
+in** · **whether temperature goes in** · **whether the turret goes in** · **how many 특성 exist, how many
+one body carries, and whether bad ones are labelled.**
+
+⚠ **The user closed with 「I will carry on tomorrow while tidying the tickets」** (「내일 티켓 정리하면서
+진행할게」), so the next round starts from 태스크 12 and not from a fresh question.
+
+---
+
 ## ⚠⚠ **A night with no engine: seven tickets built and not one line of it verified — 2026-09-03**
 
 **The user was going to bed and asked what could be run overnight.** The answer had to start with a

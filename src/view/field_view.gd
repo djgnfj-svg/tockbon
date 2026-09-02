@@ -2379,7 +2379,7 @@ func _put_ground_shadow(centre_px: Vector2, half_px: float) -> void:
 ## cannot end up wearing three different things.
 ##
 ## ⚠⚠ **`is_enemy` IS GONE, and its absence is the point.** The argument existed because one table row
-## served two species — the player's ranged slot borrowed the enemy crow's row — so a row had to
+## served two species — the player's ranged slot borrowed an enemy row — so a row had to
 ## answer with two pictures depending on who asked. `Rules.UNITS` has a row per species now, so there
 ## is nothing left for it to select between. Which side a body is on still reaches the screen, through
 ## `Look.body_colour_of`; it is a TINT and not a different animal.
@@ -2408,7 +2408,7 @@ func _beast_tex(type_id: int, head: Vector2) -> Texture2D:
 ## body walking exactly diagonally reads better side-on than head-on.
 ## ⚠⚠ **THE TWO-PICTURE ROWS MOVED FROM WORLD `head.x` TO SCREEN RIGHT** (2026-08-30). At the opening
 ## yaw the two are the same axis, so nothing changed on the screen the user is looking at; **turned,
-## the swordsman, the bear and the crow used to face backwards** and now do not. It is one rule because
+## the two-picture rows used to face backwards** and now do not. It is one rule because
 ## two rules in one picker is how the wolf and the man end up disagreeing about which way is right.
 func _facing_index(type_id: int, head: Vector2) -> int:
 	var right := head.dot(_ground_right())
@@ -2963,8 +2963,8 @@ var _sea_clock := 0.0
 ## ⚠⚠ **THE FRAME'S BOTTOM IS NOT THE WOLF'S FEET.** `east.png` and `west.png` carry 25 empty rows
 ## under the animal, `south.png` 23 and `north.png` 11 — out of 92. Footed by the frame, a wolf hangs
 ## **0.26 조각 above the ground it stands on**, and it hangs a DIFFERENT amount per picture, so it
-## rises and falls as it turns. ⚠ **Every other body picture measures 0**, so this costs the swordsman,
-## the bear and the crow nothing at all.
+## rises and falls as it turns. ⚠ **Every other body picture measures 0**, so this costs the swordsman
+## nothing at all.
 ## ⚠ **Once, at load**, and the answer cannot change while the game runs.
 ##
 ## ⚠⚠ **KEYED BY THE TEXTURE AND NOT BY INDEX.** A parallel array in the picture pool's own shape would

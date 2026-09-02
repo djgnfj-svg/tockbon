@@ -1535,20 +1535,9 @@ const COL_SLOT_OFF := Color(0.420, 0.420, 0.440)
 # Bodies — an outline, a centre dot, nothing between
 # ---------------------------------------------------------------------------------------------
 
-## Indexed by the unit type id in rules.gd, and **one entry per row of `UNITS`** — nine now, and a
-## sixth body standing on a five-entry array is an index off the end that stops the island drawing at
-## all. Radius as a fraction of one tile. AT TILE_PX = 40 THESE ARE, IN ORDER:
-##   0 SQUIRREL     0.22 ->  8.8 px
-##   1 WOLF         0.35 -> 14.0 px
-##   2 COW          0.45 -> 18.0 px
-##   3 BEAR         0.50 -> 20.0 px
-##   4 CROW         0.28 -> 11.2 px
-##   5 SPEARMAN     0.35 -> 14.0 px
-##   6 ARCHER       0.25 -> 10.0 px
-##   7 SHIELDBEARER 0.40 -> 16.0 px
-##   8 LION         0.55 -> 22.0 px
-## ⚠ **Four of the nine are transplants** — the wolf, the crow, the archer and the shieldbearer carry
-## the exact ratios their pre-rename rows had, for the reason `Rules.UNITS`' own header gives.
+## Indexed by the unit type id in rules.gd, and **one entry per row of `UNITS`** — two now, and a
+## third body standing on a two-entry array is an index off the end that stops the island drawing at
+## all. Radius as a fraction of one tile.
 ## Nothing here changes what happens, which is why body size is in this file and not in rules.gd.
 ##
 ## ⚠⚠ **HALVED 2026-08-25 — the row above is what these WERE** (the user: ***"타일 하나가 크고 그 안에
@@ -1567,15 +1556,9 @@ const COL_SLOT_OFF := Color(0.420, 0.420, 0.440)
 ## ⚠⚠ **SET FROM ONE RULE, 2026-08-25: FOUR WOLVES STAND IN ONE TILE** (the user: ***"칸에 병사가
 ## 4마리정도 들어간걸 기준 한번 만들어볼래?"***). Four bodies in a tile is a 2x2, so a wolf may be at
 ## most **0.5 tiles across** and the ratio is half of that. 0.22 leaves a hair of gap so four wolves
-## read as four rather than as one blob. Every other species is that same 1.29x off the row before it,
-## so the herd keeps the proportions the user already judged: **the bear is still 0.62 across and
-## still takes a tile to itself**, which is what a bear is for.
-## ⚠⚠ **FIVE, in `Rules.UNITS` order since the sides swapped**: 검사 · 늑대 · 곰 · 까마귀 · 사자.
-## **The swordsman takes the shieldbearer's 0.245** — it is the same drawing at the same scale, and a
-## new number here would change how big a body reads for a reason nobody chose.
-## ⚠⚠ **THIS WAS FIVE NUMBERS AND IT IS TWO** (2026-08-31), with 곰 0.31 · 까마귀 0.174 · 사자 0.342
-## leaving alongside their rows. **The 1.29x ladder they sat on is recorded in the note above and the
-## three values are here**, so a beast coming back does not have its size re-guessed by eye.
+## read as four rather than as one blob.
+## ⚠⚠ **TWO, in `Rules.UNITS` order**: 검사 · 늑대. **The swordsman's 0.245 is the drawing's own
+## scale** — a new number here would change how big a body reads for a reason nobody chose.
 const BODY_RADIUS_RATIO := [0.245, 0.22]
 
 
@@ -1613,14 +1596,9 @@ const BEAST_WOLF_H_U := "res://assets/beast/wolf_h/north.png"
 ## **mixing two canvases is a measured defect** — 티켓 48: 「캔버스가 프레임마다 다르면 몸이 뛰고
 ## 떠오른다」. ⇒ **The wolf walks unanimated until H is given its own strips**, which is one row of the
 ## table below and nothing else.
-## ⚠⚠ **THE BEAR'S AND THE CROW'S FOUR PICTURES STOOD HERE AND ARE DELETED WITH THEIR ROWS**
-## (2026-08-31, the user: *"take out the bear, crow and lion code — there is only the wolf"*).
-## **`bear_l/r.png` and `crow_l/r.png` are off disk too**, because a picture no row names is a file
-## nobody dares remove later.
-## ⚠ **They were the last TWO-picture rows in the table.** Every row left names four, which is why
-## `net_fx_view`'s 「a two-picture row never answers with a head-on picture」 lost its subject in the
-## same edit — the guarantee stands in `beast_facings`, and **nothing measures it until a species with
-## two pictures exists again.**
+## ⚠ **Every row names four pictures**, which is why `net_fx_view`'s 「a two-picture row never answers
+## with a head-on picture」 has no subject — the guarantee stands in `beast_facings`, and **nothing
+## measures it until a species with two pictures exists.**
 
 ## ⚠⚠ **THE PLAYER, since 2026-08-26.** ⚠⚠ **AND THE DRAWING WAS REPLACED 2026-08-31.** What stood
 ## here was `sword_r/_l.png`, a 33 x 40 side-on chibi drawn back when the humans were the enemy; the
@@ -1649,8 +1627,7 @@ const HUMAN_MAN_U := "res://assets/human/man/up.png"
 ## table below starts at `WALK`. **All three stopped being true when the breathing strips arrived** —
 ## the swordsman and the wolf each declare eight idle frames.
 ## ⚠ **The fallback those lines were protecting is untouched.** A row that declares 0 idle frames
-## still wears its standing picture through `beast_frame_path`, so the bear, the crow and the lion are
-## drawn by exactly the same call and changed by nothing.
+## still wears its standing picture through `beast_frame_path`.
 ## ⚠⚠ **`BITE` WAS THE THIRD MEMBER AND IT IS `ATTACK` NOW** (2026-08-31, the user:
 ## 「물기 때리기 -> 그냥 공격이라는 것으로」). **A 검사 does not bite.** One word for what every
 ## species does when it swings is what lets `_body_tex` stay free of species names.
@@ -1870,10 +1847,10 @@ const BEAST_FRAME_SEC := 0.12
 ## ⚠⚠ **ONE ROW PER `Rules.UNITS` ROW, AND IT IS THE WHOLE OF HOW A SPECIES IS DRAWN:** the pictures
 ## it wears, the strips it animates with, and how big it is drawn against everything else.
 ## This replaces `field_view._beast_tex`'s `if` chain, and with it the `is_enemy` argument that chain
-## needed. **That argument existed only because two species shared one row** — 소 and 까마귀 were the
-## enemy's rows while the player's two slots borrowed their bodies, so one row had to answer with two
-## different pictures depending on who was asking. Split the rows and there is nothing for it to point
-## at: **one row, one picture**, and the argument going away is the structural proof the move landed.
+## needed. **That argument existed only because two species shared one row**, so one row had to answer
+## with two different pictures depending on who was asking. Split the rows and there is nothing for it
+## to point at: **one row, one picture**, and the argument going away is the structural proof the move
+## landed.
 ##
 ## ⚠⚠ **THE FIRST COLUMN IS A LIST AND ITS LENGTH SAYS HOW MANY WAYS THE SPECIES CAN FACE**
 ## (2026-08-30, 티켓 25's substance). It was two slots, right and left, and **two slots cannot hold the
@@ -1969,11 +1946,9 @@ const BEAST_TEX := [
 	# than he is). **0.85 is what this file ships**; the rest are written down because the user asked to
 	# see them and may want one instead.
 	[[BEAST_WOLF_H_R, BEAST_WOLF_H_L, BEAST_WOLF_H_D, BEAST_WOLF_H_U], WOLF_ANIM_FRAMES, 0.85],
-	# ⚠⚠ **THREE ROWS STOOD HERE — 곰, 까마귀 AND THE LION'S EMPTY ONE — AND ALL THREE ARE DELETED**
-	# (2026-08-31). **The lion's was `[[], NO_ANIM_FRAMES, 1.0]`**, the one row with no picture at all,
-	# and `field_view` drew the plain rounded shape for it. ⚠ **That fallback is now unreachable and it
-	# is kept anyway**: it is what a row with a missing file lands on, and the day the boss is drawn it
-	# is what stands there while the art is being chosen.
+	# ⚠ **A row with no pictures at all lands on the plain rounded shape `field_view` draws.** That
+	# fallback is unreachable today and kept anyway: it is what a row with a missing file lands on, and
+	# the day the boss is drawn it is what stands there while the art is being chosen.
 ]
 
 const _TEX_COL_PICS := 0
@@ -2077,15 +2052,13 @@ const BEAST_SPRITE_W_RATIO := 3.5
 ## 캐릭터가 너무 커. 계속 플래시게임 같은 문제가 있거든」). **6.0 is kept in this comment because the
 ## user judges this by eye and has moved it in both directions before.**
 ##
-## **The wolf goes 84 px -> 49 px, 2.1 tiles -> 1.23.** Measured across all nine rows at 3.5: squirrel
-## 31x25, wolf 49x34, cow 63x44, bear 70x60, crow 39x26, spearman 49x52, archer 35x42, shieldbearer
-## 56x64, lion 44x44.
+## **The wolf goes 84 px -> 49 px, 2.1 tiles -> 1.23** — 49x34 at 3.5.
 ##
 ## ⚠⚠ **A TIER IS THE NEW CEILING AND IT IS WHAT CHOSE THE VALUE'S UPPER HALF.** Bodies are
 ## camera-facing panels; a panel standing taller than the wall behind it hides the wall, and 티켓 19's
 ## whole point is that the wall is readable. One tier is 2 tiles = 80 px. **At 6.0 the tallest drawn
-## body was the shieldbearer at 110 px — 1.37 tiers, taller than the thing it stands in front of. At
-## 3.5 he is 64 px, 0.80 of a tier**, so a body never covers a boundary it is standing at.
+## body was 110 px — 1.37 tiers, taller than the thing it stands in front of. At
+## 3.5 it is 64 px, 0.80 of a tier**, so a body never covers a boundary it is standing at.
 ##
 ## ⚠ **Chosen at the TOP of the 40-50 px band, deliberately.** The user's history on this axis is two
 ## complaints of *too small* (34 px, then 56) against one of *too big*, and this repo has written down
@@ -2618,23 +2591,6 @@ const GAIT_PERIOD_TILES := 0.7        # one cycle every 28 px
 ## 0.1125 puts every body back to the displacement it had before that raise**, and that is the whole
 ## derivation — no new number was chosen by eye.
 ##
-## ⚠⚠ **THE px FIGURES THAT STOOD HERE DESCRIBED TODAY AND NOT 0.45, WHICH IS THE OPPOSITE OF WHAT
-## THEY WERE READ AS.** They were 「crow 2.0 · ranged 2.2 · melee 2.8 · bison 3.2 · lion 4.4」 against
-## species names from the nine-row table that died with the side swap. Re-measured at 0.20 with the
-## five rows that exist: 까마귀 1.9 · 늑대 2.5 · 검사 2.7 · 곰 3.5 · 사자 3.8 px — **so 0.20 was already
-## producing roughly those numbers, and「bring the stale figures back」would have changed nothing.**
-## ⇒ **What moved this was the user at the screen, not the arithmetic.**
-##
-## **Measured at 0.1125, max displacement of one edge — half-width first, half-height second:**
-## 까마귀 1.10 / 0.73 · 사자 1.23 / 1.23 (no picture, drawn as a square) · 검사 1.54 / 1.87 ·
-## 곰 1.95 / 1.66 · 늑대 2.36 / 2.36 px. ⚠ **The wolf is the largest because its own draw column is
-## 1.70** — see `BEAST_TEX` — so it barely moved while everything else halved.
-##
-## ⚠⚠ **THIS CONTRADICTS A MEASUREMENT THAT IS STILL TRUE AND THE CONTRADICTION IS DELIBERATE.** The
-## old note said 「the crow sits exactly on the 2.0 px floor; at 0.12 all five bodies were at or under
-## it, which would have made this item invisible」 — and at 0.1125 four of the five are under 2.0 px.
-## **The user looked at the screen and called it too much anyway**, which outranks a floor nobody has
-## re-measured since the bodies, the species table and the camera all changed.
 ## ⚠⚠ **0.1125 -> 0.0, THE GAIT SQUASH IS OFF** (2026-08-31, the user at the screen: 「that springy
 ## up-and-down animation — just get rid of it. It will be fine without it. It looks far too strange」).
 ## **This is the SECOND time the same motion was cut back and the first cut did not settle it**: it went

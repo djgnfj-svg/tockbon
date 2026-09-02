@@ -17,7 +17,7 @@ class_name Islands
 ##
 ## Legend (unchanged — `grid.gd` reads these same characters):
 ##   `~` water · `H` harbour (water a boat may sail from) · `.` land · `#` inland hole ·
-##   `^` coastal cliff · `/` ramp · `W` `B` `C` `L` land with a wolf / bear / crow / lion on it
+##   `^` coastal cliff · `/` ramp · `W` land with a wolf on it
 ##
 ## ⚠⚠ **TIER BOARD — THE CHARACTER IS A NOTCH, NOT A STOREY, AND WRITING THE PLATEAU AS `1` BREAKS
 ## THE ISLAND IN SILENCE.** `grid.gd` reads these through `TIER_CHARS` / `TIER_LEVELS`:
@@ -239,12 +239,9 @@ static func spawns() -> Array:
 ## **One row per letter that puts a body on the ground: the character, and the `Rules.UNITS` row it
 ## is.** ⚠⚠ **THIS IS THE ONE PLACE A SPAWN LETTER IS BOUND TO ANYTHING.** `grid.land_chars()` reads
 ## this table, so **a letter that spawns a body is walkable ground by construction**.
-## ⚠⚠ **`B` · `C` · `L` STOOD HERE AND ALL THREE ARE DELETED** (2026-08-31) with the rows they bound
-## to — 곰 · 까마귀 · 사자. **The shipped island never used any of them**: its own letters are `H`,
-## `~` and `.`, and even `W` is unused because the beasts come by boat.
-## ⚠ **A letter here makes its tile walkable by construction** (`grid.land_chars()` reads this), so
-## three letters leaving means three characters that no longer make ground. **Nothing on the board
-## used them, so nothing on the board changed.**
+## ⚠ **A letter here makes its tile walkable by construction** (`grid.land_chars()` reads this).
+## **The shipped island uses `H`, `~` and `.` only**, and even `W` is unused because the beasts come
+## by boat.
 const SPAWN_ROWS := [
 	["W", Rules.WOLF],
 ]
