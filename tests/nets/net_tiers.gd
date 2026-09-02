@@ -335,8 +335,11 @@ func _the_feet_land_on_the_treads(t) -> void:
 ## **A body then walked ACROSS the treads instead of up them**, which is what 「뚫는다」 looks like.
 ##
 ## ⚠ **The order itself is arbitrary and the agreement is not.** `Grid.STAIR_MOUTH_ORDER` puts west
-## first; `island_build.py` walks `("w", "e", "n", "s")` and keeps the FIRST hit. This row pins the
-## sim's half — the Blender half is pinned by its own comment and by the picture.
+## first, and the bake walked the same four sides and kept the FIRST hit. This row pins the sim's half.
+## ⚠⚠ **THE OTHER HALF IS NO LONGER CODE** (2026-09-03). The bake was a Python file until 2026-08-31,
+## when it was deleted in favour of the `.blend` originals — so **what this row has to agree with is now
+## the way the staircase is actually CUT in `blend/island.blend`, and nothing can diff that but an eye.**
+## `docs/manual/blender.md` carries the pair as a table.
 ##
 ## ⚠ Mutation: keep the LAST mouth instead of the first, or drop the lowest-tile tie-break, and the
 ## axis flips on this board.
