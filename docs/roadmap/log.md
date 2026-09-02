@@ -160,7 +160,9 @@ what it is good at. ⚠ **What it does NOT overturn**: the price of gathering �
 not defending — which is the sentence both dead games died on, and it survives the split's death.
 
 **Written**: 03-02 from open-and-undecided to decided (five rows) · 03-06 resolved with the answer ·
-03-07 folded · 04-04 told 일반병 is dead · task 03's table (and its stale 「open」 on 03-09 · 03-10, which
+03-07 resolved without an answer, to re-open when the island grows (⚠ `net_process` allows only
+open · claimed · resolved · superseded, so 「folded」 is a word in the body, never a `Status:`) · 04-04
+told 일반병 is dead · task 03's table (and its stale 「open」 on 03-09 · 03-10, which
 the map already had as resolved) · task 05's split section overturned in place · the glossary's 부대
 note, new 이름 row, two reversal rows and one dead word.
 
