@@ -173,12 +173,12 @@ static func _attempt(rng: Rng) -> Dictionary:
 		serves.append(plateaus[pi])
 	var budget := rng.between(plateaus.size(), STAIRS_MAX)
 	while stairs.size() < budget:
-		var pi := rng.below(plateaus.size())
-		var extra := _pick_door(rng, land, plateaus, plateaus[pi], stairs)
+		var which := rng.below(plateaus.size())
+		var extra := _pick_door(rng, land, plateaus, plateaus[which], stairs)
 		if extra < 0:
 			break
 		stairs.append(extra)
-		serves.append(plateaus[pi])
+		serves.append(plateaus[which])
 
 	# -- the 성채 ---------------------------------------------------------------------------------
 	var keep_pool := PackedInt32Array()
@@ -212,20 +212,23 @@ static func _attempt(rng: Rng) -> Dictionary:
 	for kind in ["ore", "rock", "tree"]:
 		for _n in int(counts[kind]):
 			var pool := PackedInt32Array()
-			for b in _sorted_keys(land):
-				if not banned.has(b) and not blocked.has(b):
-					pool.append(b)
+			for free_block in _sorted_keys(land):
+				if not banned.has(free_block) and not blocked.has(free_block):
+					pool.append(free_block)
 			var placed := false
 			while pool.size() > 0 and not placed:
 				var pick := rng.below(pool.size())
-				var b := int(pool[pick])
+				var cut := int(pool[pick])
 				pool.remove_at(pick)
-				blocked[b] = true
+				# ⚠⚠ **CUT FIRST, THEN ASK THE WHOLE BOARD.** A resource 칸 is a hole, and whether a
+				# hole splits the island is not a question about the hole — it is a question about
+				# every other 조각. **The cut is undone when the answer is no.**
+				blocked[cut] = true
 				if _one_walking_piece(_grid_of(_paint(land, plateaus, stairs, blocked))):
-					res_of[b] = kind
+					res_of[cut] = kind
 					placed = true
 				else:
-					blocked.erase(b)
+					blocked.erase(cut)
 			if not placed:
 				return {}
 
