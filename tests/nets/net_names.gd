@@ -8,6 +8,14 @@ extends RefCounted
 ## name** (two bodies alike on screen with nothing barking) and **a name column that drifts from the other
 ## columns** — `recruit` and `add_starting_force` are the only writers of `type_id`, and a `names` array one
 ## row short indexes the wrong body forever, silently. Both are measured below.
+##
+## **Round 2 of the same ticket adds the two columns beside `names`** — five aptitudes (적성) and a hunger
+## (허기) per body — and **the run seed** that makes the aptitudes reproducible. The failures this half
+## guards: an aptitude column whose stride drifts from five (body 1's 요리 reads body 0's 벌목), a birth roll
+## outside 0..`APTITUDE_BORN_MAX` (「요리 7/10」 on a newborn), and **a seed set AFTER `add_starting_force`** —
+## the four starting bodies are recruited inside that call, so a late seed leaves the only four bodies the game
+## has non-deterministic while an `Army`-only net stays green. ⇒ The determinism rows drive `Run`, never a
+## bare `Army`.
 
 
 func run(t) -> void:
@@ -15,6 +23,9 @@ func run(t) -> void:
 	_the_list(t)
 	_the_order(t)
 	_the_army_names_every_body(t)
+	_the_aptitude_words_and_scale(t)
+	_the_army_rolls_every_body(t)
+	_the_seed_through_run(t)
 	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies half way still reports every
 	# check it managed first, in a shape a healthy net cannot be told from.
 	t.done()
@@ -120,3 +131,97 @@ func _the_army_names_every_body(t) -> void:
 	var b := Army.new()
 	b.add_starting_force()
 	t.eq(b.name_of(0), a.name_of(0), "다른 군대의 첫 몸도 첫 이름이다 — 쓴 목록은 군대마다다")
+
+
+## True when `v` is a legal birth roll: `0 .. Rules.APTITUDE_BORN_MAX` inclusive. **Inverted below before it
+## is trusted** — the two neighbours just outside the range must be refused, or the range row measures nothing.
+static func _born_roll_ok(v: int) -> bool:
+	return v >= 0 and v <= Rules.APTITUDE_BORN_MAX
+
+
+## The five words, their order, and the two scales — **literals, because the user said them**: 「요리 · 제작 ·
+## 낚시 · 채광 · 벌목」, 「영에서 십이고」, and 「네」 to a birth roll of 0~3. The panel reads the words from
+## `Rules.APTITUDES` at draw time and prints `/APTITUDE_MAX`, so a word retyped elsewhere or a scale that moved
+## would put a different panel on screen with every count row still green.
+## ⚠ Mutation: swap two words → the order row; `APTITUDE_BORN_MAX := 10` → the 「낳는 최대는 열보다 작다」 row.
+func _the_aptitude_words_and_scale(t) -> void:
+	t.eq(Rules.APTITUDES, ["요리", "제작", "낚시", "채광", "벌목"], "적성 다섯 낱말과 그 순서 (리터럴 — 사용자의 말)")
+	t.eq(Rules.APTITUDES.size(), 5, "적성은 다섯이다 (리터럴)")
+	t.eq(Rules.APTITUDE_MAX, 10, "적성의 눈금 끝은 열이다 (리터럴 — 「영에서 십이고」)")
+	t.eq(Rules.APTITUDE_BORN_MAX, 3, "태어날 때 최대는 셋이다 (리터럴 — 「0~3 무작위」에 「네」)")
+	t.ok(Rules.APTITUDE_BORN_MAX < Rules.APTITUDE_MAX, "낳는 최대는 열보다 작다 — 아니면 범위 검사가 아무것도 못 잰다")
+	t.eq(Rules.HUNGER_MAX, 100.0, "허기의 가득은 100 이다 (리터럴)")
+	# The instrument, inverted first.
+	t.ok(_born_roll_ok(0), "계기 자가 점검: 0 은 통과한다")
+	t.ok(_born_roll_ok(Rules.APTITUDE_BORN_MAX), "계기 자가 점검: 낳는 최대 그 자체는 통과한다")
+	t.ok(not _born_roll_ok(-1), "계기 자가 점검: -1 은 걸린다")
+	t.ok(not _born_roll_ok(Rules.APTITUDE_BORN_MAX + 1), "계기 자가 점검: 낳는 최대 더하기 하나는 걸린다")
+	# Defense: no body has any, and the panel prints that stored truth rather than a sample.
+	var nonzero := 0
+	for ty in Rules.UNITS.size():
+		if Rules.defense_of(ty) != 0.0:
+			nonzero += 1
+	t.eq(Rules.UNITS.size(), 2, "몸의 표는 두 줄이다 (자가 점검 — 방어력 줄이 둘을 다 돌았다는 뜻)")
+	t.eq(nonzero, 0, "모든 줄의 방어력이 0.0 이다 — 아직 아무 몸도 방어력을 안 가진다")
+
+
+## `Army` rolls five aptitudes and fills one hunger for every body on both paths that add a row, and neither
+## column falls out of step with `type_id`. ⚠ Mutation: drop the five appends from `recruit` → the size rows;
+## `randi_range(0, 10)` → the range row (with near certainty over twenty-five rolls); return `aptitudes[i + k]`
+## from `aptitude_of` → the stride row.
+func _the_army_rolls_every_body(t) -> void:
+	var a := Army.new()
+	t.eq(a.aptitudes.size(), 0, "새 군대는 적성 칸이 비어 있다 (자가 점검)")
+	t.eq(a.hunger.size(), 0, "새 군대는 허기 칸이 비어 있다 (자가 점검)")
+	a.add_starting_force()
+	var n5 := Rules.APTITUDES.size()
+	t.eq(a.aptitudes.size(), n5 * a.type_id.size(), "시작 병력 뒤 적성 칸 길이가 몸 수의 다섯 배다")
+	t.eq(a.hunger.size(), a.type_id.size(), "시작 병력 뒤 허기 칸 길이가 몸 수와 같다")
+	var id := a.recruit(0)
+	t.ok(id >= 0, "한 몸을 더 뽑았다 (자가 점검)")
+	t.eq(a.aptitudes.size(), n5 * a.type_id.size(), "뽑은 뒤에도 적성 칸 길이가 몸 수의 다섯 배다")
+	t.eq(a.hunger.size(), a.type_id.size(), "뽑은 뒤에도 허기 칸 길이가 몸 수와 같다")
+	var out_of_range := 0
+	var stride_wrong := 0
+	var not_full := 0
+	for i in a.type_id.size():
+		for k in n5:
+			var v := a.aptitude_of(i, k)
+			if not _born_roll_ok(v):
+				out_of_range += 1
+			# The accessor and the flat column agree on where body `i`'s `k`-th aptitude lives.
+			if v != int(a.aptitudes[i * n5 + k]):
+				stride_wrong += 1
+		if a.hunger_of(i) != Rules.HUNGER_MAX:
+			not_full += 1
+	t.eq(out_of_range, 0, "모든 적성이 태어날 때 0..낳는 최대 안에 있다")
+	t.eq(stride_wrong, 0, "aptitude_of(i, k) 는 평평한 칸의 i×5+k 를 읽는다 — 보폭이 다섯이다")
+	t.eq(not_full, 0, "모든 몸의 허기가 가득(HUNGER_MAX)이다 — 여기서는 아무것도 안 깎는다")
+
+
+## **The seed, and it is measured through `Run`.** `Run.new()` draws a seed; `restart(s)` takes one; the army is
+## seeded BEFORE `add_starting_force`, so two runs on seed 7 roll the same twenty aptitudes for the same four
+## bodies, and seed 8 rolls different ones. A bare `Army` seeded by hand would stay green with the seed line
+## moved below `add_starting_force` in `run.gd` — which is exactly the defect this guards.
+## ⚠ Mutation: move `army.seed(seed)` under `army.add_starting_force()` → the 「같은 시드, 같은 스무 적성」 row;
+## ignore `seed_in` and always draw → the same row plus the read-back row.
+func _the_seed_through_run(t) -> void:
+	var r1 := Run.new()
+	t.ok(r1.seed >= 0, "시드 없이 열면 하나를 뽑는다 — -1 (뽑아라는 표) 이 그대로 남아 있지 않다")
+	r1.restart(7)
+	t.eq(r1.seed, 7, "restart(7) 뒤 Run.seed 가 7 을 돌려준다")
+	t.eq(r1.army.type_id.size(), 4, "시작 병력은 넷이다 (자가 점검 — 스무 적성이 재려면)")
+	t.eq(r1.army.aptitudes.size(), 20, "넷의 적성은 스물이다 (리터럴)")
+	var r2 := Run.new()
+	r2.restart(7)
+	t.eq(r2.army.aptitudes, r1.army.aptitudes, "같은 시드 7 로 두 번 열면 스무 적성이 똑같다")
+	var r3 := Run.new()
+	r3.restart(8)
+	t.eq(r3.seed, 8, "restart(8) 뒤 Run.seed 가 8 을 돌려준다")
+	t.ok(r3.army.aptitudes != r1.army.aptitudes, "시드 8 은 시드 7 과 다른 스무 적성을 준다")
+	# Names do not move with the seed: the list is handed out in order regardless, so the two columns are
+	# independent — a seed that also reordered names would be a second rule nobody asked for.
+	t.eq(r3.army.names, r1.army.names, "시드가 달라도 이름 순서는 같다 — 이름은 목록 순서, 적성만 시드다")
+	# A no-seed restart draws again; two draws are allowed to coincide, so only 「not the sentinel」 is pinned.
+	r3.restart()
+	t.ok(r3.seed >= 0, "시드 없이 다시 열어도 하나를 뽑는다")

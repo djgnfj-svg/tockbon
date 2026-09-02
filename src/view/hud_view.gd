@@ -74,7 +74,7 @@ var _tex_back: Texture2D = load(Look.BACK_TO_TITLE_TEX) as Texture2D
 ## sim's own container is one aliasing bug away from writing it.
 var _picked := PackedInt32Array()
 
-## **The plate under the four lines.** Pulled in a tool and loaded, for the reason `_tex_over` gives.
+## **The plate under the fifteen lines.** Pulled in a tool and loaded, for the reason `_tex_over` gives.
 var _tex_panel: Texture2D = load(Look.PANEL_TEX) as Texture2D
 
 ## Resolved once and kept, and STATIC because panel_view needs the same face — the explanation for
@@ -171,12 +171,23 @@ func set_over(over: bool) -> void:
 ## `net_shell` still measures that the bind happened. ⚠ **`_over` and not `battle.lost`** — see
 ## `set_over`; the shell owns which screen is up.
 ##
-## **And the panel, while the hand holds somebody** (03-02). The plate goes down first, then the four
-## lines `Look.PANEL_LABELS` names, each as 「label value」 with one space between — the value is the
-## first held body's name (with 「x N」 when the hand holds more), blank, live 체력 as 「current/max」,
-## and blank again; 특성 and 허기 fill in when 11-01 and 05-07 land. ⚠ **The first id the hand holds is
-## shown, alive or not** — `Hand` never prunes a dead body, so 「체력 0/max」 is the panel's honest
-## resting state after a picked body dies, until 03-14 prunes the hand.
+## **And the panel, while the hand holds somebody** (03-02, layout A 「세 칸」). The plate goes down
+## first, then **fifteen lines**: the name line across the top — the first held body's name, with
+## 「x N」 when the hand holds more — and three columns under it, each a head word on its own line
+## with its values under it as 「label value」, one space between:
+##
+## | column | lines | read off |
+## |---|---|---|
+## | 상태 | 「체력 현재/최대」 · 「허기 N」 · 「특성 」 | `Battle.soldier_hp` / `Army.max_hp_of` · `Army.hunger_of` · nothing yet (11-01) |
+## | 능력치 | 「공격력 N」 · 「방어력 N」 · 「공격간격 N.N초」 | `Army.damage_of` · `Rules.defense_of` · `Army.period_of` |
+## | 적성 | one 「<word> N/최대」 per row of `Rules.APTITUDES` | `Army.aptitude_of` / `Rules.APTITUDE_MAX` |
+##
+## ⚠ **The 「특성 」 line is painted with its blank value**, so the count is fifteen whether or not
+## a body has a word there — a count that moved with the data would be a net that cannot pin it.
+## ⚠ **The first id the hand holds is shown, alive or not** — `Hand` never prunes a dead body, so
+## 「체력 0/max」 is the panel's honest resting state after a picked body dies, until 03-14 prunes the
+## hand. ⚠ **`Look.PANEL_LABELS` is read by position, in its own order** — the name line, then the
+## 상태 four, the 능력치 four, then the 적성 head; the five aptitude words are `Rules.APTITUDES`'s.
 ## ⚠ **The origin is laid out from `Look.PANEL_SIZE_PX` and not from the picture's size** — the plate
 ## is pulled AT that size and the net asserts it is; a layout that re-fitted itself to the file would
 ## hide a wrongly-sized plate under green checks.
@@ -186,18 +197,38 @@ func _draw() -> void:
 		var ascent := font.get_ascent(Look.PANEL_FONT_PX)
 		var origin := Look.panel_origin_px(Look.PANEL_SIZE_PX)
 		var id := int(_picked[0])
+		var army: Army = battle.army
+		var labels: Array = Look.PANEL_LABELS
 		# ⚠ `who`, not `name` — a Node already has a `name`, and a shadowed member is a warning on
 		# stderr, which the runner counts as red.
-		var who: String = battle.army.name_of(id)
+		var who: String = army.name_of(id)
 		if _picked.size() > 1:
 			who += " x %d" % _picked.size()
-		var hp := "%d/%d" % [int(battle.soldier_hp[id]), int(battle.army.max_hp_of(id))]
-		var values := [who, "", hp, ""]
+		var status := [
+			str(labels[1]),
+			"%s %d/%d" % [str(labels[2]), int(battle.soldier_hp[id]), int(army.max_hp_of(id))],
+			"%s %d" % [str(labels[3]), int(army.hunger_of(id))],
+			"%s " % str(labels[4]),
+		]
+		var stats := [
+			str(labels[5]),
+			"%s %d" % [str(labels[6]), int(army.damage_of(id))],
+			"%s %d" % [str(labels[7]), int(Rules.defense_of(int(army.type_id[id])))],
+			"%s %.1f초" % [str(labels[8]), army.period_of(id)],
+		]
+		var aptitudes := [str(labels[9])]
+		for k in Rules.APTITUDES.size():
+			aptitudes.append("%s %d/%d" % [str(Rules.APTITUDES[k]), army.aptitude_of(id, k),
+				Rules.APTITUDE_MAX])
 		_paint_panel(_tex_panel, origin)
-		for i in values.size():
-			_paint_line("%s %s" % [str(Look.PANEL_LABELS[i]), str(values[i])],
-				Look.panel_line_baseline_px(origin, i, ascent), font, Look.PANEL_FONT_PX,
-				Look.COL_PANEL_TEXT)
+		_paint_line("%s %s" % [str(labels[0]), who], Look.panel_line_baseline_px(origin, 0, ascent),
+			font, Look.PANEL_FONT_PX, Look.COL_PANEL_TEXT)
+		var columns := [status, stats, aptitudes]
+		for c in columns.size():
+			var column: Array = columns[c]
+			for l in column.size():
+				_paint_line(str(column[l]), Look.panel_cell_baseline_px(origin, c, l, ascent), font,
+					Look.PANEL_FONT_PX, Look.COL_PANEL_TEXT)
 	if not _over or _tex_over == null:
 		return
 	_paint_over(_tex_over, Look.game_over_origin_px(_tex_over.get_size()))

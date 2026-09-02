@@ -2160,7 +2160,9 @@ const COL_BODY_SHADOW := Color(0.05, 0.06, 0.10, 0.30)  # alpha <= 0.45, over wh
 # The panel — what is picked, in one corner (03-02)
 # ---------------------------------------------------------------------------------------------
 
-## **The plate the picked body's four lines sit on**, pulled in a tool and loaded — never a `draw_rect`.
+## **The plate the picked body's fifteen lines sit on**, pulled in a tool and loaded — never a
+## `draw_rect`. Layout A 「세 칸」 (03-02 round 2): crimson, alpha 0.8, one name line across the top
+## and three columns under it — 상태 · 능력치 · 적성, the user's own order.
 ## ⚠⚠ **Pulled AT `PANEL_SIZE_PX` and asserted to be that size** (`net_panel`): the layout below is
 ## not re-fitted to whatever picture arrives, so a plate pulled at another size goes red rather than
 ## quietly shifting every baseline.
@@ -2173,16 +2175,34 @@ const PANEL_FONT := "res://assets/font/Galmuri14.ttf"
 const PANEL_FONT_PX := 15
 
 ## Inside the plate: the padding on every side and the pitch from one baseline to the next.
-## ⚠ `PANEL_SIZE_PX.y` is `2 * PANEL_PAD_PX + PANEL_LABELS.size() * PANEL_LINE_PX` — 92 — and the
-## plate is pulled at exactly that. Change one and the other must follow.
-const PANEL_PAD_PX := 8
+## ⚠ **Pad 12, not 8** — measured on the plate: its inner bevel highlight runs x, y = 6..9 at a
+## luminance of 0.82 against text at 0.935, so ink starting at 8 sits on the bevel by two pixels and
+## no check reads it. The plate is not sized from these any more: seven baselines at this pitch end
+## at 141 of 168 under the top pad, and the rest of the height is the plate's own.
+const PANEL_PAD_PX := 12
 const PANEL_LINE_PX := 19
-const PANEL_SIZE_PX := Vector2(160, 92)
+const PANEL_SIZE_PX := Vector2(480, 180)
 
-## The four labels, in the order the lines are drawn (2026-09-02, the user: 「이름 특성 체력으로 일단
-## 떠야함」, then 허기 the same day). ⚠ Not `PackedStringArray` — a `const` packed array does not parse
-## on 4.7.1; every read casts to `String`.
-const PANEL_LABELS := ["이름", "특성", "체력", "허기"]
+## **Where each of the three columns starts**, in plate pixels from the plate's left edge: the pad,
+## then two steps of 150. Column widths are therefore 150 · 150 · 156 — the widest line the panel
+## can be asked to hold in each (「이름 <widest name> x 40」 at the top, 「공격간격 NN.N초」 in the
+## middle) is measured against those in `net_panel`. ⚠ Plain `Array` — a `const` packed array does
+## not parse on 4.7.1; every read casts to `int`.
+const PANEL_COL_X_PX := [12, 162, 312]
+
+## **The ten typed labels the panel prints, in the order they are drawn** (2026-09-02, the user:
+## 「적성 특성 능력치라 그렇게 해서 나눠서 보이게 해줄래」 · 「상태는 그 HP랑 그런 거 있잖아. HP 허기」 ·
+## 「왼쪽부터 상태, 능력치, 적성」): the name line, then column 상태 (three under its head), column
+## 능력치 (three under its head), then the head of column 적성. ⚠⚠ **The five aptitude words are
+## NOT here** — `Rules.APTITUDES` owns them, and `HudView._draw` reads that table at draw time. A
+## `const` here that concatenated it in would be the cross-`class_name` const `rules.gd` already
+## records as a trap, and a retyped copy would be the same five words in two files.
+## ⚠ 「공격간격」, not 「공격속도」 — the number is `Rules.period_of`, SECONDS BETWEEN blows, so a
+## bigger number is a slower body; under 「속도」 it would read backwards the day a second row is
+## picked. ⚠ Not `PackedStringArray` — a `const` packed array does not parse on 4.7.1; every read
+## casts to `String`.
+const PANEL_LABELS := ["이름", "상태", "체력", "허기", "특성", "능력치", "공격력", "방어력", "공격간격",
+	"적성"]
 
 ## Which corner the plate sits in. **Bottom-left is where the build starts** — the 시안 round
 ## photographs the winner in all four and the user's answer lands here.
@@ -2210,12 +2230,23 @@ static func panel_origin_px(size: Vector2) -> Vector2:
 			return far
 
 
-## **The BASELINE of line `line`**, which is the point `draw_string` takes — nothing is added inside
-## the leaf. `ascent_px` is `font.get_ascent(PANEL_FONT_PX)`, computed once in `_draw` and computed
-## the same way by the net, so the first baseline sits one ascent under the top padding.
+## **The BASELINE of full-width line `line`**, which is the point `draw_string` takes — nothing is
+## added inside the leaf. `ascent_px` is `font.get_ascent(PANEL_FONT_PX)`, computed once in `_draw`
+## and computed the same way by the net, so the first baseline sits one ascent under the top padding.
+## Under layout A only the name line (line 0) is full-width; the columns are placed by
+## `panel_cell_baseline_px` below.
 static func panel_line_baseline_px(origin: Vector2, line: int, ascent_px: float) -> Vector2:
 	return origin + Vector2(float(PANEL_PAD_PX),
 		float(PANEL_PAD_PX) + ascent_px + float(line * PANEL_LINE_PX))
+
+
+## **The BASELINE of line `line` of column `col`** — `PANEL_COL_X_PX[col]` across, and one pitch
+## under the name line: line 0 of a column is the column's head, on the same baseline as
+## `panel_line_baseline_px(origin, 1, ascent_px)`. Every column baseline the net records is compared
+## to this one function, so a column drawn one pitch off cannot hide.
+static func panel_cell_baseline_px(origin: Vector2, col: int, line: int, ascent_px: float) -> Vector2:
+	return origin + Vector2(float(int(PANEL_COL_X_PX[col])),
+		float(PANEL_PAD_PX) + ascent_px + float((1 + line) * PANEL_LINE_PX))
 
 # ---------------------------------------------------------------------------------------------
 # Panel — reward pick, win, lose, restart
