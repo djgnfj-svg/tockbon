@@ -89,6 +89,30 @@ user said it and the reason was not asked; **09-01 is `Type: grilling`** and ask
 09-01 new · 05-06 resolved · 06-02 half-answered · the map's opening, task table and subtask tables ·
 the glossary's three new rows, three reversal rows and one dead word.
 
+### 6. ⚠⚠ The user asked for three more, and two of them are on the thin release's cut list
+
+> ***"Is there a ticket for prisoners arriving? There is no UI that comes up when you press one either,
+> and no ticket for traits yet? I mean to make them all."***
+> (「이거 포로 오는것도 티켓있나? 눌렀을떄 뜨는 UI도 없고 특성도 아직 티켓이 없나? 다 만들어두려고」)
+
+**Measured**: **prisoners had no ticket** — the word lived in this log (second round, section 3) and in the
+map's cut list only. **The press-to-see UI is ticket 03-02**, open since 2026-08-31, with 「what is shown」
+undecided and the HUD function still `pass`. **Traits had no ticket, no task and no glossary row beyond
+the 특성 line** — 05-04 says so in its own body.
+
+**Stood**: **task 10 — 몸이 온다** with 10-01 (what brings a body), 10-02 (prisoners on the beasts' boat),
+10-03 (capture the fallen), all `Type: grilling` · **task 11 — 특성** with 11-01 (what a trait is) ·
+03-02 got the two new candidates (traits, born-with numbers) and the user's name for it · the glossary
+got 포로 and 포획 rows.
+
+⚠⚠ **포획 and 특성 are both on the second round's 「What is cut」 list for the thin December release.**
+**The tickets stand because the user asked for them; no week is attached, and attaching one is the
+user's** — the same shape as tasks 07, 08 and 09. ⚠ **No week was moved and nothing was cut.**
+
+⚠ **Measured while writing 10-01**: **there is no way a body arrives today.** The third round deleted the
+twenty-second clock, 02-09's recruit picture was deferred on 2026-09-01, and `Battle.recruit` has zero
+callers in `src/`. **A run starts with what `setup` seats and never grows.**
+
 ## ✅ **The 성채 stopped turning out soldiers on a clock — 2026-09-02, third round**
 
 ⚠⚠ **This is the THIRD round of 2026-09-02**, after the one below it. **One thing was built, and it is a
