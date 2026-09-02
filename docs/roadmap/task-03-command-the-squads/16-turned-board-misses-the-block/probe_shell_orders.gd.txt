@@ -1,0 +1,182 @@
+extends SceneTree
+## Ticket 03-16, shell half: a real `Game` in the tree. (1) a body is pressed where it is DRAWN
+## (the pooled Sprite3D's centre, unprojected by the engine) — does the hand pick it, at each yaw?
+## (2) with a body in hand, every reachable 칸's centre is pressed where it is drawn — does the
+## order land in that 칸? Tracks the id actually in hand, not a guessed one.
+
+
+func _initialize() -> void:
+	await _run()
+	quit(0)
+
+
+func _run() -> void:
+	var game := Game.new()
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	ev.position = Look.title_slot_hit_rect_px(0).get_center()
+	game._unhandled_input(ev)
+	await process_frame
+	await process_frame
+	var fv: FieldView = game.field_view
+	var g: Grid = game.battle.grid
+	var b: Battle = game.battle
+	print("C: run started, yaw %.1f zoom %.4f, soldiers ashore %d" % [fv.cam_yaw_deg, fv.zoom, b.ashore_ids().size()])
+	game.set_process(false)   # freeze the sim so bodies do not walk between press and read
+	fv.set_process(true)      # but keep painting / sweeping the camera
+
+	for yaw_target in [0.0, 90.0, 180.0, 270.0]:
+		await _turn_to(game, fv, yaw_target)
+		_body_pick(game, fv, b, "yaw %3d" % int(fv.cam_yaw_deg))
+		_orders(game, fv, g, b, "yaw %3d" % int(fv.cam_yaw_deg))
+
+	root.remove_child(game)
+	game.free()
+
+
+func _turn_to(game: Game, fv: FieldView, yaw_target: float) -> void:
+	var guard := 0
+	while absf(fmod(fv.cam_yaw_deg - yaw_target + 720.0, 360.0)) > 0.001 and guard < 8:
+		var key := InputEventKey.new()
+		key.pressed = true
+		key.keycode = KEY_E
+		game._unhandled_input(key)
+		var n := 0
+		while (fv._yaw_remaining != 0.0 or n == 0) and n < 120:
+			await process_frame
+			n += 1
+		guard += 1
+	await process_frame
+	await process_frame
+
+
+## Every drawn soldier sprite: press its drawn centre, press its drawn feet. Which body does the
+## hand pick, and how far (in tiles) is the pick point from the body's sim position?
+func _body_pick(game: Game, fv: FieldView, b: Battle, label: String) -> void:
+	var tried := 0
+	var picked_centre := 0
+	var picked_feet := 0
+	var wrong_body := 0
+	var worst_d := 0.0
+	var dists := []
+	for k in fv._sprites_used:
+		var s: Sprite3D = fv._sprites[k]
+		if not s.visible:
+			continue
+		# match this sprite to a soldier standing within 0.6 tile of its foot
+		var foot_xz := Vector2(s.position.x, s.position.z)
+		var who := -1
+		var best := 0.6
+		for raw in b.ashore_ids():
+			var i := int(raw)
+			var p: Vector2 = b.soldier_pos[i] + Vector2(0.5, 0.5)
+			var d := p.distance_to(foot_xz)
+			if d < best:
+				best = d
+				who = i
+		if who < 0:
+			continue
+		tried += 1
+		var tall := float(s.texture.get_height()) * s.scale.y / Look.TILE_PX if s.texture != null else 0.5
+		var centre_scr: Vector2 = fv._cam.unproject_position(s.position)
+		var feet_scr: Vector2 = fv._cam.unproject_position(s.position - Vector3(0.0, tall * 0.5, 0.0))
+		# centre press
+		game.hand.clear()
+		game._tell_the_view()
+		var gp: Vector2 = game._point_at(centre_scr) - Vector2(0.5, 0.5)
+		var d_c: float = gp.distance_to(b.soldier_pos[who])
+		dists.append(d_c)
+		worst_d = maxf(worst_d, d_c)
+		_press_release(game, centre_scr)
+		var got := -1
+		if not game.hand.is_empty():
+			picked_centre += 1
+			got = int(game.hand.ids[0])
+			if not game.hand.has(who):
+				wrong_body += 1
+		var crowd_t: Vector2 = foot_xz - ((b.soldier_pos[who] as Vector2) + Vector2(0.5, 0.5))
+		var shift: Vector2 = gp - (b.soldier_pos[who] as Vector2)
+		print("   body %d at %s: drawn foot offset from its tile centre %s (%.2f tile, world); ground point under the sprite centre is offset %s (%.2f tile) — along screen-down %.2f, screen-right %.2f; picked %s" % [
+			who, b.soldier_pos[who], crowd_t, crowd_t.length(), shift, shift.length(),
+			shift.dot(fv._ground_down()), shift.dot(fv._ground_right()),
+			("body %d" % got) if got >= 0 else "NOBODY"])
+		# feet press
+		game.hand.clear()
+		game._tell_the_view()
+		_press_release(game, feet_scr)
+		if not game.hand.is_empty():
+			picked_feet += 1
+	var mean := 0.0
+	for d in dists:
+		mean += d
+	mean /= maxf(1.0, float(dists.size()))
+	print("C4 %s body press: %d drawn bodies; press on sprite CENTRE picked %d (of them a different body %d); press on FEET picked %d; ground point under the centre press is %.2f tile from the body (mean), worst %.2f (pick radius %.2f)" % [
+		label, tried, picked_centre, wrong_body, picked_feet, mean, worst_d, Look.PICK_BODY_TILES])
+
+
+func _orders(game: Game, fv: FieldView, g: Grid, b: Battle, label: String) -> void:
+	# pick one body reliably: press at its feet
+	var sid := -1
+	for raw in b.ashore_ids():
+		sid = int(raw)
+		break
+	if sid < 0:
+		print("C3 %s: nobody ashore" % label)
+		return
+	var tried := 0
+	var wrong := 0
+	var refused := 0
+	var wrong_list := []
+	var per_row := (g.w + 1) / 2
+	game.hand.clear()
+	game.hand.pick(b, sid)
+	game._tell_the_view()
+	var reach_blocks: PackedInt32Array = game.hand.reach_blocks.duplicate()
+	for blk in reach_blocks:
+		var tiles := g.tiles_of_block(blk)
+		var hmax := -99.0
+		for t2 in tiles:
+			hmax = maxf(hmax, fv._ground_h(t2 % g.w, t2 / g.w))
+		var cx := (blk % per_row) * 2 + 1.0
+		var cy := (blk / per_row) * 2 + 1.0
+		var sp: Vector2 = fv._cam.unproject_position(Vector3(cx, hmax, cy))
+		if sp.x < 0.0 or sp.y < 0.0 or sp.x >= Look.VIEWPORT_W_PX or sp.y >= Look.VIEWPORT_H_PX:
+			continue
+		game.hand.clear()
+		game.hand.pick(b, sid)
+		game._tell_the_view()
+		var in_hand := int(game.hand.ids[0])
+		tried += 1
+		_press_release(game, sp)
+		var dest: int = b.soldier_order[in_hand]
+		if not game.hand.is_empty():
+			refused += 1   # the press was not accepted as a walk (hand still held)
+			if wrong_list.size() < 8:
+				wrong_list.append("blk %d REFUSED (tile_at→%d, block %d)" % [blk, game._tile_at(sp), g.block_of(game._tile_at(sp))])
+			continue
+		var got_blk := g.block_of(dest) if dest >= 0 else -1
+		if got_blk != blk:
+			wrong += 1
+			var hit_blk := g.block_of(game._tile_at(sp))
+			var why := "hidden centre: press hit block %d (level %d, in front)" % [hit_blk, g.level_of(game._tile_at(sp))] if hit_blk != blk else "press hit the right block, seats spilled to %d" % got_blk
+			if wrong_list.size() < 8:
+				wrong_list.append("blk %d(L%d)→%d — %s" % [blk, g.level_of(int(tiles[0])), got_blk, why])
+	print("C3 %s orders: %d reachable 칸 pressed at their drawn centre — landed in a different 칸 %d, refused %d %s" % [
+		label, tried, wrong, refused, wrong_list])
+
+
+func _press_release(game: Game, at: Vector2) -> void:
+	var down := InputEventMouseButton.new()
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.pressed = true
+	down.position = at
+	game._unhandled_input(down)
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.pressed = false
+	up.position = at
+	game._unhandled_input(up)

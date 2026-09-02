@@ -1,0 +1,176 @@
+extends SceneTree
+## 03-16: the two halves checked SEPARATELY against the engine, at settled yaw 0/90/180/270, on a
+## real Game in the tree (the real Camera3D the FieldView places, root viewport 1280x720).
+##  H1 forward : Camera3D.unproject_position(tile surface point)  vs  FieldView.tile_to_screen_px
+##  H2 inverse : for screen points spread over the WHOLE glass (not tile centres), an engine ray
+##               (project_ray_origin / project_ray_normal) is marched finely against the same
+##               flat-topped block terrain (_ground_h per tile), first hit wins; its tile is compared
+##               with the shell's press path game._tile_at(screen) and with screen_to_terrain_px.
+##  H3 plane   : engine ray ∩ plane y=h  vs  screen_to_world_px(at, h), random h, random screen point.
+
+const YAWS := [0.0, 90.0, 180.0, 270.0]
+
+
+func _initialize() -> void:
+	await _run()
+	quit(0)
+
+
+func _run() -> void:
+	var game := Game.new()
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	ev.position = Look.title_slot_hit_rect_px(0).get_center()
+	game._unhandled_input(ev)
+	await process_frame
+	var fv: FieldView = game.field_view
+	var g: Grid = game.battle.grid
+	game.set_process(false)
+	fv.set_process(true)
+	print("viewport %s  cam orthogonal=%s size=%.3f" % [fv._cam.get_viewport().get_visible_rect().size, fv._cam.projection == Camera3D.PROJECTION_ORTHOGONAL, fv._cam.size])
+	for zoom_name in ["survey", "ZOOM_MAX"]:
+		for yaw_target in YAWS:
+			await _turn_to(game, fv, yaw_target)
+			if zoom_name == "ZOOM_MAX":
+				fv.zoom = Look.ZOOM_MAX
+				var map_px := Vector2(float(g.w), float(g.h)) * Look.TILE_PX
+				fv.cam_px = map_px * 0.5 - fv._visible_ground_px() * 0.5
+				fv._clamp_cam()
+			else:
+				fv.zoom = Look.survey_zoom_of(g.w, g.h)
+				var map_px := Vector2(float(g.w), float(g.h)) * Look.TILE_PX
+				fv.cam_px = map_px * 0.5 - fv._visible_ground_px() * 0.5
+				fv._clamp_cam()
+			await process_frame
+			await process_frame
+			_h1_forward(fv, g, "%s yaw %3d" % [zoom_name, int(round(fv.cam_yaw_deg))])
+			_h3_plane(fv, "%s yaw %3d" % [zoom_name, int(round(fv.cam_yaw_deg))])
+			_h2_inverse(game, fv, g, "%s yaw %3d" % [zoom_name, int(round(fv.cam_yaw_deg))])
+	root.remove_child(game)
+	game.free()
+
+
+func _turn_to(game: Game, fv: FieldView, yaw_target: float) -> void:
+	var guard := 0
+	while absf(fmod(fv.cam_yaw_deg - yaw_target + 720.0, 360.0)) > 0.001 and guard < 8:
+		var key := InputEventKey.new()
+		key.pressed = true
+		key.keycode = KEY_E
+		game._unhandled_input(key)
+		var n := 0
+		while (fv._yaw_remaining != 0.0 or n == 0) and n < 120:
+			await process_frame
+			n += 1
+		guard += 1
+	await process_frame
+	await process_frame
+
+
+func _h1_forward(fv: FieldView, g: Grid, label: String) -> void:
+	var worst := 0.0
+	var worst_at := Vector2i.ZERO
+	var n := 0
+	var far := 0   # samples further than 300 px from the screen centre
+	for ty in g.h:
+		for tx in g.w:
+			if g.water[g.tile_index(tx, ty)] != 0:
+				continue
+			var world := Look.tile_point_px(Vector2(tx, ty))
+			var h: float = fv._ground_h(tx, ty)
+			var eng: Vector2 = fv._cam.unproject_position(Vector3(world.x / Look.TILE_PX, h, world.y / Look.TILE_PX))
+			var d := eng.distance_to(fv.tile_to_screen_px(tx, ty))
+			if eng.distance_to(Vector2(640.0, 360.0)) > 300.0:
+				far += 1
+			if d > worst:
+				worst = d
+				worst_at = Vector2i(tx, ty)
+			n += 1
+	print("H1 %-18s engine unproject vs tile_to_screen_px: worst %.5f px at tile %s over %d land tiles (%d of them >300 px from screen centre)" % [label, worst, worst_at, n, far])
+
+
+func _h3_plane(fv: FieldView, label: String) -> void:
+	var worst := 0.0
+	for i in 500:
+		var at := Vector2(randf() * Look.VIEWPORT_W_PX, randf() * Look.VIEWPORT_H_PX)
+		var h := randf() * 2.5 - 0.5
+		var o: Vector3 = fv._cam.project_ray_origin(at)
+		var d: Vector3 = fv._cam.project_ray_normal(at)
+		if absf(d.y) < 1e-6:
+			continue
+		var t := (h - o.y) / d.y
+		var hit := o + d * t
+		var eng := Vector2(hit.x, hit.z) * Look.TILE_PX
+		worst = maxf(worst, eng.distance_to(fv.screen_to_world_px(at, h)))
+	print("H3 %-18s engine ray∩plane(y=h) vs screen_to_world_px(at,h): worst %.4f world px (500 random points/heights)" % [label, worst])
+
+
+## Fine engine-ray march against the block terrain. Step 0.01 tile along the ray.
+func _engine_terrain_tile(fv: FieldView, g: Grid, at: Vector2) -> Vector2i:
+	var o: Vector3 = fv._cam.project_ray_origin(at)
+	var d: Vector3 = fv._cam.project_ray_normal(at)
+	var ceiling := Look.terrain_height_ceiling()
+	# start where the ray crosses the ceiling
+	var t0 := (ceiling - o.y) / d.y
+	var p := o + d * t0
+	var step := 0.01
+	var guard := 0
+	while p.y > Look.TERRAIN_H_WATER - 0.01 and guard < 200000:
+		var tx := int(floor(p.x))
+		var ty := int(floor(p.z))
+		var gh := 0.0
+		if tx >= 0 and ty >= 0 and tx < g.w and ty < g.h:
+			gh = fv._ground_h(tx, ty)
+		else:
+			gh = 0.0
+		if p.y <= gh:
+			return Vector2i(tx, ty)
+		p += d * step
+		guard += 1
+	# sea
+	var t := (Look.TERRAIN_H_WATER - o.y) / d.y
+	var s := o + d * t
+	return Vector2i(int(floor(s.x)), int(floor(s.z)))
+
+
+func _h2_inverse(game: Game, fv: FieldView, g: Grid, label: String) -> void:
+	var total := 0
+	var land := 0
+	var miss := 0
+	var block_miss := 0
+	var far_miss := 0
+	var edge := 0     # misses where the engine hit is within 0.05 tile of a tile edge (rounding band)
+	var samples := []
+	# a 64 x 36 lattice over the whole glass, jittered
+	for j in 36:
+		for i in 64:
+			var at := Vector2((i + randf()) * Look.VIEWPORT_W_PX / 64.0, (j + randf()) * Look.VIEWPORT_H_PX / 36.0)
+			var eng_tile := _engine_terrain_tile(fv, g, at)
+			if eng_tile.x < 0 or eng_tile.y < 0 or eng_tile.x >= g.w or eng_tile.y >= g.h:
+				continue
+			var eng_t := g.tile_index(eng_tile.x, eng_tile.y)
+			if g.water[eng_t] != 0:
+				continue
+			land += 1
+			total += 1
+			var got: int = game._tile_at(at)
+			if got != eng_t:
+				miss += 1
+				if got >= 0 and g.block_of(got) != g.block_of(eng_t):
+					block_miss += 1
+				if at.distance_to(Vector2(640.0, 360.0)) > 300.0:
+					far_miss += 1
+				# where did the engine ray land inside its tile?
+				var w := fv.screen_to_terrain_px(at) / Look.TILE_PX
+				var fx: float = w.x - floor(w.x)
+				var fy: float = w.y - floor(w.y)
+				if minf(minf(fx, 1.0 - fx), minf(fy, 1.0 - fy)) < 0.13:
+					edge += 1
+				if samples.size() < 4:
+					var gx := got % g.w if got >= 0 else -1
+					var gy := got / g.w if got >= 0 else -1
+					samples.append("at %s engine→(%d,%d) L%d, shell→(%d,%d) L%d" % [at.round(), eng_tile.x, eng_tile.y, g.level_of(eng_t), gx, gy, g.level_of(got) if got >= 0 else -1])
+	print("H2 %-18s engine-ray tile vs game._tile_at over the glass: %d land hits, differ %d (block differs %d; >300 px from centre %d; within 0.13 tile of a tile edge %d) e.g. %s" % [label, land, miss, block_miss, far_miss, edge, samples])

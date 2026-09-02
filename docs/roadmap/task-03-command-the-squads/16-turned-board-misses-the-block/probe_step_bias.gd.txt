@@ -1,0 +1,51 @@
+extends SceneTree
+## The height-step quantisation bias of screen_to_terrain_px, per level, measured directly:
+## engine unproject of each land tile's centre → screen_to_terrain_px → offset from the true centre,
+## resolved along screen-down. Pure seam, real island.
+
+
+func _initialize() -> void:
+	var fv := FieldView.new()
+	var g := Grid.new()
+	Islands.load_into(g)
+	var army := Army.new()
+	var b := Battle.new()
+	b.setup(g, army, [])
+	fv.setup(b, army, Islands.rows())
+	var ceiling := Look.terrain_height_ceiling()
+	var step := ceiling / FieldView.TERRAIN_PICK_STEPS
+	for lv in [0, 1, 2]:
+		var h := Islands.ground_h(lv)
+		var k := ceili((ceiling - h) / step)
+		var below := ceiling - k * step
+		print("L%d surface %.4f: first walk rung at or below it is rung %d = %.4f, gap %.4f height = %.2f world px = %.3f tile along screen-up" % [
+			lv, h, k, below, h - below, (h - below) * Look.TILE_PX / tan(deg_to_rad(fv.cam_pitch_deg)),
+			(h - below) / tan(deg_to_rad(fv.cam_pitch_deg))])
+	for yaw: float in [0.0, 90.0, 180.0, 270.0]:
+		fv.cam_yaw_deg = yaw
+		fv._clamp_cam()
+		var by_level := {}
+		for ty in g.h:
+			for tx in g.w:
+				var t := g.tile_index(tx, ty)
+				if g.water[t] != 0:
+					continue
+				var centre := Look.tile_point_px(Vector2(tx, ty))
+				var s := fv.tile_to_screen_px(tx, ty)
+				var w := fv.screen_to_terrain_px(s)
+				if fv.world_to_tile(w) != Vector2i(tx, ty):
+					continue   # hidden behind the storey; counted elsewhere
+				var d := (w - centre).dot(fv._ground_down())
+				var lv := g.level_of(t)
+				if not by_level.has(lv):
+					by_level[lv] = [0, 0.0, 0.0]
+				by_level[lv][0] += 1
+				by_level[lv][1] += d
+				by_level[lv][2] = minf(by_level[lv][2], d)
+		var line := "yaw %3d bias along screen-down (world px, negative = up-screen): " % int(yaw)
+		for lv in by_level.keys():
+			var r: Array = by_level[lv]
+			line += "L%d n=%d mean %.2f min %.2f | " % [lv, r[0], r[1] / r[0], r[2]]
+		print(line)
+	fv.free()
+	quit(0)
