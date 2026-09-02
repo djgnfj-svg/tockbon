@@ -2175,10 +2175,11 @@ const PANEL_FONT := "res://assets/font/Galmuri14.ttf"
 const PANEL_FONT_PX := 15
 
 ## Inside the plate: the padding on every side and the pitch from one baseline to the next.
-## ⚠ **Pad 12, not 8** — measured on the plate: its inner bevel highlight runs x, y = 6..9 at a
-## luminance of 0.82 against text at 0.935, so ink starting at 8 sits on the bevel by two pixels and
-## no check reads it. The plate is not sized from these any more: seven baselines at this pitch end
-## at 141 of 168 under the top pad, and the rest of the height is the plate's own.
+## ⚠ **Pad 12, not 8.** The first reason written here (a bevel highlight at 6..9, luminance 0.82) was
+## measured on the wrong file — on `panel.png` the highlight is x, y = 5..6 and the flat field starts at 7,
+## so 8 would clear it by one pixel and 12 clears it by six. `net_panel` pins the 12 as a literal, and
+## the picture itself would not redden a smaller pad. The plate is not sized from these any more: seven
+## baselines at this pitch end at 141 of 168 under the top pad, and the rest of the height is the plate's own.
 const PANEL_PAD_PX := 12
 const PANEL_LINE_PX := 19
 const PANEL_SIZE_PX := Vector2(480, 180)
