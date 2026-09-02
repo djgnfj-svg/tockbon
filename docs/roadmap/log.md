@@ -113,6 +113,18 @@ user's** — the same shape as tasks 07, 08 and 09. ⚠ **No week was moved and 
 twenty-second clock, 02-09's recruit picture was deferred on 2026-09-01, and `Battle.recruit` has zero
 callers in `src/`. **A run starts with what `setup` seats and never grows.**
 
+### 7. The turret went, for now, toward building
+
+> ***"Let us delete that turret ticket for now — it will probably gather under the building side
+> later."*** (「그 포탑 ㄴ티켓은 지우자 일단 아마 나중에 건축쪽으로 해서 모일듯」)
+
+**Measured**: **there was no turret ticket folder.** The turret lived in two parked lines on the map —
+the 2026-08-31 시안 table row 「연구대·포탑 ⏸」 and the user-decides row D 「연구대·포탑을 언제 꺼내나」 —
+and the four 시안 from 2026-08-31 are not on disk. **Both lines lost the turret; 연구대 stays in both.**
+Task 09 carries one line saying the turret, if it returns, returns there. ⚠ **This is the second time
+the turret went on 2026-09-02** — the second round already took it out of the 건설 chunk (「포탑은
+없어져도 될 거 같고」); this round took it off the parked list too.
+
 ## ✅ **The 성채 stopped turning out soldiers on a clock — 2026-09-02, third round**
 
 ⚠⚠ **This is the THIRD round of 2026-09-02**, after the one below it. **One thing was built, and it is a
