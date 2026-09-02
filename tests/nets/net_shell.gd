@@ -446,8 +446,14 @@ func run(t) -> void:
 	for raw_i in ashore:
 		var i: int = raw_i
 		var st := int(b.army.type_id[i])
-		var s := _sprite_at_xz(bodies, Look.tile_point_px(b.soldier_pos[i]))
-		if s == null:
+		# ⚠ **Through the view's own body → sprite map and not by matching the 조각 centre** (03-17): a
+		# body at rest is drawn on its seat in the 칸, not on its 조각's middle, so the old
+		# `_sprite_at_xz(bodies, tile_point_px(soldier_pos))` read found nobody. The map is what the
+		# press reads too, since 03-16.
+		var s: Sprite3D = null
+		if fs._sprite_of_soldier.has(i):
+			s = fs._sprites[int(fs._sprite_of_soldier[i])]
+		if s == null or not bodies.has(s):
 			body_bad += 1
 			continue
 		# A textured body wears `beast_tint(side colour)`; the bare rounded square wears the colour
@@ -841,8 +847,24 @@ func _a_drag_looks_around_and_a_click_commands(t, game, fs: FieldView) -> void:
 	# -- a click: somebody is ordered and the camera does NOT move -----------------------------------
 	# ⚠ **Re-aimed, because the drag above moved the camera** — the same screen point is a different
 	# 조각 now, and this row is about a press on land.
-	var click_at := fs.tile_to_screen_px(int(round(body.x)), int(round(body.y)))
-	t.eq(game._tile_at(click_at), body_tile, "자가 점검 — 다시 겨눈 점도 그 조각이다")
+	# ⚠⚠ **THE PICK IS AIMED AT THE DRAWN BODY AND NOT AT THE GROUND UNDER ITS 조각** (2026-09-02,
+	# ticket 03-16, the user: 「몸은 화면에서 잡자」 — *"let us pick the body on the glass"*). This point
+	# was `tile_to_screen_px` of the body's 조각 — the ground at its centre — and it picked only because
+	# the old ground pick had 0.8 조각 of slack; **a body stands UP from its feet, so the ground under
+	# the 조각 centre is a hair BELOW the drawn picture.** `net_pick` owns the rectangle at every yaw and
+	# pitch; this row only needs a press that is on the body, so it presses the drawn FOOT, read off the
+	# pooled sprite through the engine's own unproject. ⚠ The pool is painted and the camera placed by
+	# hand first, because nothing has pumped a frame since the drag above moved the camera.
+	fs._paint_bodies()
+	fs._place_camera()
+	var click_at := _drawn_foot_px(fs, sid)
+	t.ok(click_at.is_finite(), "자가 점검 — 그 몸이 그려져 있다")
+	# ⚠ **The same 칸, and not the same 조각, since 03-17.** A body at rest is drawn on its seat in the
+	# 칸's 3x3 lattice, up to 0.94 조각 from its 조각's centre and possibly over the neighbouring 조각 of
+	# the same 칸 — so the ground under the drawn foot is that 칸's, and 「that 조각」 stopped being a
+	# thing the drawing promises. The row's own point is a press on LAND, which this still proves.
+	t.eq(b.grid.block_of(game._tile_at(click_at)), b.grid.block_of(body_tile),
+		"자가 점검 — 다시 겨눈 점도 그 몸이 선 칸이다")
 	var held := fs.cam_px
 	game._unhandled_input(_press(click_at))
 	game._unhandled_input(_release(click_at))
@@ -2048,6 +2070,24 @@ func _flat_sprites(fv: FieldView) -> Array:
 
 ## The sprite standing at a world-px point, matched on the ground plane (x, z) — a body's height is
 ## its own business (it depends on the picture's aspect), the tile it stands on is the sim's.
+## **Where 검사 `sid` has its drawn FOOT on the glass**, a hair inside the picture — or `Vector2.INF`
+## when the view drew no sprite for that body this frame. Read off the pooled sprite through the view's
+## own body → sprite map (what the press itself reads since 03-16) and the engine's
+## `unproject_position`, never off the view's own forward projection, so a press aimed here does not
+## share a defect with the pick that answers it.
+## ⚠ **It took a `soldier_pos` and searched within 0.6 조각 of its 조각 centre until 03-17**; a body at
+## rest is drawn on its seat now, up to 0.94 조각 from that centre, so the search found the wrong body
+## or none.
+func _drawn_foot_px(fv: FieldView, sid: int) -> Vector2:
+	var found: Sprite3D = null
+	if fv._sprite_of_soldier.has(sid):
+		found = fv._sprites[int(fv._sprite_of_soldier[sid])]
+	if found == null or found.texture == null or not found.visible:
+		return Vector2.INF
+	var half_tall := float(found.texture.get_height()) * found.scale.y * found.pixel_size * 0.5
+	return fv._cam.unproject_position(found.position - Vector3(0.0, half_tall - 0.02, 0.0))
+
+
 func _sprite_at_xz(list: Array, world_px: Vector2) -> Sprite3D:
 	for s: Sprite3D in list:
 		if absf(s.position.x - world_px.x / Look.TILE_PX) < 0.001 \
