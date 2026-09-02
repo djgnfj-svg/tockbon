@@ -40,6 +40,29 @@ var alive := PackedByteArray()
 ## type must not draw from one pool — and `Battle.slot_reserve_ids` reads exactly this column.
 var slot_id := PackedInt32Array()
 
+## The name each body arrived with, written once by `recruit` and never again — **a name stays on its body
+## through death and revival** (ticket 03-02), which the never-compacted rows above give for free. Drawn
+## from `Names.LIST`, unused first; `Names.next` owns that rule and this column only feeds it what is taken.
+## ⚠ **Filled in `recruit` and nowhere else** — `add_starting_force` reaches this through `recruit`, so the
+## two writers of `type_id` are one writer of this, and `net_names` pins the two lengths equal after both.
+var names := PackedStringArray()
+
+## The five 적성 of each body, **flat, five per row**: body `i`'s `k`-th aptitude is `i * APTITUDES.size() + k`,
+## and `aptitude_of` is the one reader of that stride. Rolled at `recruit` from `_rng` in
+## `0 .. Rules.APTITUDE_BORN_MAX`, and **never written again here** — climbing a scale is nobody's yet.
+## ⚠ The stride is `Rules.APTITUDES.size()` and not a literal 5: a sixth word added to that list would
+## otherwise make body 1's first aptitude read body 0's last, with every length check still green.
+var aptitudes := PackedInt32Array()
+
+## Each body's 허기, `Rules.HUNGER_MAX` at `recruit`. **Never decremented in this file** — the drain belongs to
+## ticket 05-07, and a second writer here would be the two-clocks shape. `hunger_of` reads it.
+var hunger := PackedFloat32Array()
+
+## The roll every aptitude comes from. **Owned by the army and seeded by `Run`**, so 「same seed, same four
+## bodies」 holds through `add_starting_force` — a `randi_range` on the global RNG would make the opening
+## four different on every launch with the seed sitting unread in `Run`.
+var _rng := RandomNumberGenerator.new()
+
 ## **Which species each summon slot fields — slot index to unit row.** ⚠⚠ **This was a CONSTANT table
 ## in `rules.gd` and it is run state now** (티켓 15): 「칸 s 는 영원히 종 t 에 묶여 있다」 stopped being
 ## true when a card started filling slots, and a constant holding a per-run fact is a shape this repo
@@ -72,7 +95,34 @@ func recruit(slot: int) -> int:
 	type_id.append(t)
 	slot_id.append(slot)
 	alive.append(1)
+	# The column so far is exactly "what is taken" — dead rows included, since a dead body keeps its name.
+	names.append(Names.next(names))
+	# One roll per aptitude, in `Rules.APTITUDES` order, so the k-th roll is the k-th word for every body.
+	for _k in Rules.APTITUDES.size():
+		aptitudes.append(_rng.randi_range(0, Rules.APTITUDE_BORN_MAX))
+	hunger.append(Rules.HUNGER_MAX)
 	return id
+
+
+## Seeds the roll `recruit` draws from. `Run._reset` calls this **before `add_starting_force`**; called after
+## it, the four starting bodies would already have rolled off an unseeded generator.
+func seed(s: int) -> void:
+	_rng.seed = s
+
+
+## Body `i`'s `k`-th aptitude, `k` indexing `Rules.APTITUDES`. The panel (ticket 03-02) is the reader.
+func aptitude_of(i: int, k: int) -> int:
+	return int(aptitudes[i * Rules.APTITUDES.size() + k])
+
+
+## Body `i`'s 허기. The panel (ticket 03-02) is the reader; ticket 05-07 will be the writer.
+func hunger_of(i: int) -> float:
+	return float(hunger[i])
+
+
+## The name body `i` arrived with. The panel (ticket 03-02) is the reader.
+func name_of(i: int) -> String:
+	return String(names[i])
 
 
 ## ⚠⚠ **`max_hp_of` · `damage_of` · `period_of` · `reach_of` ARE BACK** (2026-08-30, 티켓 41) after

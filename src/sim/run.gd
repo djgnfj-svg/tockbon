@@ -49,6 +49,15 @@ extends RefCounted
 ## The roster that survives the run. Never rebuilt outside `_reset`.
 var army: Army = null
 
+## **The run's one seed.** Drawn in `_reset` when the caller hands none, or taken from the caller — and
+## **the only random number a run is allowed to draw for itself**: 08-01 decided 「one number, drawn when a
+## run opens; same seed, same island」, and the island generator reads THIS rather than drawing a second one
+## (ticket 08-01 carries that line). Today its one reader is `Army.seed`, which makes the opening four
+## bodies' 적성 reproducible; the island joins it when 08-01 is built.
+## ⚠ `-1` is the 「draw one」 mark on the parameter, never a stored value — `randi()` is non-negative, so a
+## `seed` that reads -1 means `_reset` stored the mark instead of drawing, and `net_names` reddens on it.
+var seed: int = -1
+
 
 ## ⚠⚠ **`cards`, `card_kind`, `cards_taken` AND THE RNG STOOD HERE AND ALL FOUR ARE DELETED**
 ## (2026-08-28). They held the three cards a win paid out; the screen that showed them and the board
@@ -63,12 +72,19 @@ func _init() -> void:
 ## Back to the identical starting state. A run carries no meta and no unlock, so this is the whole of
 ## it — and it shares `_reset` with `_init` on purpose: a field added to one path and forgotten in the
 ## other would make the second run start somewhere the first did not, with nothing to bark about it.
-func restart() -> void:
-	_reset()
+## `seed_in`: a seed to replay, or `-1` to draw one — the same choice `_reset` offers, passed through.
+func restart(seed_in: int = -1) -> void:
+	_reset(seed_in)
 
 
-func _reset() -> void:
+func _reset(seed_in: int = -1) -> void:
+	seed = seed_in if seed_in >= 0 else randi()
 	army = Army.new()
+	# ⚠⚠ **BEFORE `add_starting_force`, and this order is the whole of 「same seed, same four bodies」.** The
+	# four starting bodies are recruited inside that call and roll their 적성 as they are recruited; a seed
+	# set one line lower leaves the only four bodies the game has non-deterministic while an `Army`-only
+	# check, which seeds by hand, stays green. `net_names` drives this through `Run` for exactly that reason.
+	army.seed(seed)
 	army.add_starting_force()
 	# ⚠⚠ **A RUN OPENS ON THE ISLAND** (티켓 12, 2026-08-27, the user: ***"Starting means the game
 	# starts, right then."***). It used to open on a card screen; the opening three were dealt here

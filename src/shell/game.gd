@@ -316,6 +316,9 @@ func _process(delta: float) -> void:
 	# ⚠ **The shell reads `lost`; the view never does.** `hud_view` holds a bool it was handed, so
 	# there is one reader of the loss condition and no pair to keep in step.
 	hud_view.set_over(battle.lost)
+	# **And what the hand holds, every frame** (03-02) — the panel's 체력 line follows the fight
+	# through this call, which is why it is here beside `set_over` and not on the press.
+	hud_view.set_picked(hand.ids)
 
 
 ## ⚠ **`_release_hold` stood here and it is deleted** with the hold. It closed the island that had

@@ -355,6 +355,33 @@ static func player_type_count() -> int:
 	return n
 
 
+## What one blow loses against this row. **No body has any defense yet, so every row answers 0.0** — the
+## panel (ticket 03-02) prints this stored truth rather than a sample. Not a column of `UNITS`, on purpose:
+## a column every row holds at 0 is a number nobody chose, and the day one is chosen it becomes a column.
+static func defense_of(_type_id: int) -> float:
+	return 0.0
+
+
+# --- 적성 · 허기 — what a body carries besides its species ----------------------------------------------
+## **The five aptitudes, in the panel's order, and the only place the five words live** (ticket 03-02,
+## 2026-09-02, the user: 「적성 특성 능력치라 그렇게 해서 나눠서 보이게 해줄래」). `look.gd` reads this at draw
+## time, never into a `const` of its own — a second list of the same five words is the shape `TYPE_LABELS`
+## took before it rotted. Index `k` here is the `k` of `Army.aptitude_of(i, k)`.
+## ⚠ **Nothing in the sim reads an aptitude yet.** The value is stored and shown; what it changes is the
+## 2-편 line the map carries. A Korean word here is the same exception the `UNITS` label column carries.
+const APTITUDES := ["요리", "제작", "낚시", "채광", "벌목"]
+## The top of the scale a body can reach. **Printed on screen as 「요리 2/10」** — the user said
+## 「영에서 십이고」, so the scale is what the player reads, not only a bound.
+const APTITUDE_MAX := 10
+## The top of the roll a body is born with: `Army.recruit` draws each aptitude in `0 .. this`. The session
+## put 「태어날 때 0~3 무작위」 to the user and the answer was 「네」. ⚠ Below `APTITUDE_MAX` or a newborn
+## could open at the top of a scale it is meant to climb.
+const APTITUDE_BORN_MAX := 3
+## What a body's 허기 is filled to at birth. **The drain is ticket 05-07's and is not written anywhere yet**;
+## today every body holds this number for the whole run, and the panel prints it.
+const HUNGER_MAX := 100.0
+
+
 # --- The telegraph -------------------------------------------------------------------------------
 ## ⚠ **`LION_WINDUP_SEC` stood here and it is deleted** (2026-08-29). It was 0.6 — how long the heavy
 ## attack DECLARED itself before landing. **The telegraph is the reason a heavy attack is fair**, and

@@ -389,6 +389,15 @@ func _table() -> Dictionary:
 			"_draw": 0,
 			"_paint_over": 1,
 			"_paint_back": 1,
+			# ⚠⚠ **THE PICKED BODY'S PANEL, 2026-09-02** (03-02, the user: 「눌렀을떄 뜨는 UI도 없고」).
+			# `_paint_panel` is one `draw_texture` of a plate pulled in a tool — a 2 would be a rect
+			# typed behind it. `_paint_line` is one `draw_string`, and **the 1 is what `net_panel`'s
+			# spy cannot see**: it captures the hook's arguments and never the call inside, so an
+			# emptied body would leave that net green. `panel_font` and `set_picked` hold nothing.
+			"panel_font": 0,
+			"set_picked": 0,
+			"_paint_panel": 1,
+			"_paint_line": 1,
 		},
 		# ⚠ **`panel_view.gd` had its own block here and the FILE is deleted** (2026-08-29) with the
 		# verdict it drew.
