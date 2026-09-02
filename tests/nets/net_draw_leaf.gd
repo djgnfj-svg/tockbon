@@ -278,6 +278,19 @@ func _table() -> Dictionary:
 			"_ground_y_px": 0,
 			"_g_tri": 0,
 			"_g_disc": 0,
+			# **The selection box on the ground** (ticket 03-12, rebuilt 2026-09-02 on the user's
+			# verdict: 「이게 일단 4번이 적용된게 맞음? 이게 아니였는데」). `set_box` takes the shell's
+			# screen rect; `_rebuild_box` projects it onto the terrain and commits two `ImmediateMesh`
+			# surfaces through `_box_commit`; the rest is the geometry. ⚠ **All 0 like every other
+			# ground mark** — a `draw_*` in any of them would mean the box had gone back on the glass.
+			"set_box": 0,
+			"_box_cam_key": 0,
+			"_box_hit": 0,
+			"_rebuild_box": 0,
+			"_box_commit": 0,
+			"_box_tri": 0,
+			"_box_ribbon": 0,
+			"_box_cap": 0,
 			# ⚠⚠ **FIFTEEN NAMES WERE MISSING FROM THIS TABLE AND SEVENTEEN WERE STALE** (2026-08-28).
 			# The stale ones are the 2D terrain pass — `_tile_colour`, `_quad`, `_skirt`, the noise and
 			# height helpers, `_terrain_material`, `_rebuild_ring` — deleted when the field went 3D and
@@ -395,13 +408,10 @@ func _table() -> Dictionary:
 			"_draw": 0,
 			"_paint_over": 1,
 			"_paint_back": 1,
-			# **The selection box** (ticket 03-12, 2026-09-02). `set_box` stores a rect and asks for a
-			# redraw; `_paint_box_piece` is the one leaf the eight pieces go through — exactly one
-			# `draw_texture_rect_region`, so a piece is a region of the pulled picture and never a
-			# typed stroke. ⚠ `_draw` stays 0: the box is drawn ABOVE the loss's early return, through
-			# its own leaf, or it would be a state with no picture.
-			"set_box": 0,
-			"_paint_box_piece": 1,
+			# ⚠ **`set_box` and `_paint_box_piece` stood here for part of 2026-09-02 and are gone** with
+			# the picture they drew (ticket 03-12): the user's verdict put the box on the terrain, and it
+			# is the field's `set_box` below now. A picture leaf reappearing here would be the 01
+			# candidate coming back.
 		},
 		# ⚠ **`panel_view.gd` had its own block here and the FILE is deleted** (2026-08-29) with the
 		# verdict it drew.

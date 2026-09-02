@@ -304,6 +304,9 @@ func _build_world() -> void:
 	# The two effect layers. Built here and never rebuilt, because what changes every frame is the
 	# geometry inside them and not the nodes.
 	_decal = _fx_layer()
+	# The selection box's own mesh — see `set_box`. Built once like the decal; what changes is the
+	# geometry inside it, and only when the rect or the camera does.
+	_box_mesh = _fx_layer(Look.SELECTION_BOX_RENDER_PRIORITY)
 
 	# ⚠⚠ **THE MARK IS A MAT, NOT A QUAD.** It used to be one plane the size of one tile, moved
 	# about; the user asked for the 2x2 piece to be the unit that lights up, and a square of that size
@@ -484,6 +487,10 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	_rebuild_terrain()
 	_rebuild_wash()
 	_place_camera()
+	# A fresh island opens with no box — the shell clears it on every release and dropped gesture too,
+	# and both writers are accepted for the reason `game._drop_the_gestures` gives.
+	_box = Rect2()
+	_rebuild_box()
 
 
 ## **Which 판 each tile belongs to** -- its own index, or -1 where nothing walks.
@@ -535,6 +542,11 @@ func _process(delta: float) -> void:
 	# placed from that field — a frame that placed first would draw every sweep one frame behind.
 	_sweep_the_yaw(delta)
 	_place_camera()
+	# ⚠ **After the sweep and the placement**: the box is laid on the ground under a screen rect, so a
+	# turn while the button is held (Q/E stay live during a press) moves the ground under it, and the
+	# rebuild has to read the yaw this frame draws with — see `set_box`.
+	if _box.size != Vector2.ZERO and _box_cam != _box_cam_key():
+		_rebuild_box()
 	# ⚠ **The buffer is opened BEFORE the bodies and flushed after them.** A body's shadow is painted
 	# from inside `_paint_bodies` — it is a per-body fact, and that is the one loop with a body's
 	# centre and radius in hand at the same time.
@@ -4059,8 +4071,9 @@ var _g_v := PackedVector3Array()
 var _g_c := PackedColorArray()
 
 
-## One unshaded, vertex-coloured, alpha-blended surface.
-func _fx_layer() -> MeshInstance3D:
+## One unshaded, vertex-coloured, alpha-blended surface. `priority` is its `render_priority` — the
+## ground layer's 1, or `Look.SELECTION_BOX_RENDER_PRIORITY` for the box that has to sort over it.
+func _fx_layer(priority: int = 1) -> MeshInstance3D:
 	var m := MeshInstance3D.new()
 	m.mesh = ImmediateMesh.new()
 	var mat := StandardMaterial3D.new()
@@ -4075,7 +4088,7 @@ func _fx_layer() -> MeshInstance3D:
 	# ordering arbitrary. **The 판 was winning**: the moment a pick lit the board, the bodies' own
 	# shadows and the 이동선 both disappeared under it. ⚠ **Raising the marks does nothing** — measured
 	# at half a 조각 of lift, still invisible; a priority is the only thing that decides this.
-	mat.render_priority = 1
+	mat.render_priority = priority
 	m.material_override = mat
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_world.add_child(m)
@@ -4242,3 +4255,163 @@ func _g_ribbon(a: Vector2, b: Vector2, half: float, col: Color) -> void:
 		var p1 := a + span * (float(k + 1) / float(steps))
 		_g_tri(p0 - side, p0 + side, p1 + side, col)
 		_g_tri(p0 - side, p1 + side, p1 - side, col)
+
+
+# --- the selection box: a shape on the ground under the dragged rect ---------------------------------
+## ⚠⚠ **THE BOX IS LAID ON THE TERRAIN, NOT DRAWN ON THE GLASS** (2026-09-02, ticket 03-12 rebuilt on
+## the user's verdict — the picture-on-the-HUD build was not the candidate they chose: 「이게 일단 4번이
+## 적용된게 맞음? 이게 아니였는데」 — *"was number 4 applied? this was not it."*, then 「선말고 선택된 부분을
+## 약간 드래그 영역 안쪽 색상이 보여야함」 — *"not the line — the inside of the drag region should show a
+## colour."*). The shell hands over the screen rect it is dragging; every `Look.SELECTION_BOX_STEP_PX`
+## across it a screen point is thrown through `screen_to_terrain_px` — the same near-to-far walk a press
+## goes through — and the hits become a tinted grid on the ground with a thin ribbon around its border.
+## **Where the rect crosses the foot of the 2층 the hits jump to its top and the tint climbs the face
+## with them; when the board turns the shape turns with the ground it was laid on.** That is the whole
+## of what the candidate was for.
+##
+## ⚠ **Its own mesh, not the per-frame decal buffer.** `_g_tri` writes into `_g_v`, which `_fx_begin`
+## clears every frame — a box there would cost its projections sixty times a second whether or not
+## anything moved. This mesh is rebuilt on exactly two events: the rect changed (`set_box`) or the
+## camera did (`_process`, through `_box_cam_key`). `Look.SELECTION_BOX_STEP_PX` says what one rebuild
+## costs.
+##
+## ⚠ **Two surfaces in one `ImmediateMesh`, fill first**: surface 0 is the tint, surface 1 the ribbon,
+## so the edge is drawn over the area. Both are read by `net_fx_view` — buffers prove geometry was built,
+## the surface count proves it was committed, and the two together are the seam `GLOSSARY.md` names.
+
+## **The box in screen px, as the shell last handed it over.** Up when its size is not zero; the shell
+## only ever hands a rect past the drag threshold or `Rect2()`.
+var _box := Rect2()
+var _box_mesh: MeshInstance3D = null
+## **The border hits in world 조각, clockwise from the rect's top-left, closed** — what the ribbon was
+## laid along. Kept so a net can unproject them through the same camera and find them inside the rect.
+var _box_hits := PackedVector3Array()
+## The four camera fields the mesh was last built against — see `_box_cam_key`. Empty until built.
+var _box_cam := []
+var _b_v := PackedVector3Array()
+var _b_c := PackedColorArray()
+
+
+## **The shell says where the box is, or that there is none.** Returns on no change because the motion
+## branch hands a rect on every mouse event, and a rebuild per unchanged rect would be the projections
+## above for nothing.
+func set_box(rect: Rect2) -> void:
+	if rect == _box:
+		return
+	_box = rect
+	_rebuild_box()
+
+
+## The four fields every screen-to-ground conversion reads. ⚠ **These and not `_cam.transform`**:
+## `screen_to_terrain_px` is pure over them, and `_place_camera` only ever writes the engine's camera
+## FROM them, so a change to any of the four is exactly 「the ground under the glass moved」.
+func _box_cam_key() -> Array:
+	return [cam_px, zoom, cam_yaw_deg, cam_pitch_deg]
+
+
+## Where one screen px meets the landscape, in world 조각, lifted off the ground like every other mark.
+func _box_hit(at: Vector2) -> Vector3:
+	var w := screen_to_terrain_px(at)
+	return Vector3(w.x / Look.TILE_PX, _ground_y_px(w), w.y / Look.TILE_PX)
+
+
+## Rebuilds both surfaces from the current rect and camera. An empty rect leaves the mesh with no
+## surfaces — ⚠ an `ImmediateMesh` surface with zero vertices is an error, so nothing is begun for it.
+func _rebuild_box() -> void:
+	_box_hits = PackedVector3Array()
+	_box_cam = _box_cam_key()
+	if _box_mesh == null:
+		return
+	var im: ImmediateMesh = _box_mesh.mesh
+	im.clear_surfaces()
+	if _box.size == Vector2.ZERO:
+		return
+	# The grid of hits: `nx` x `ny` cells, `(nx + 1) x (ny + 1)` corners, row-major from the top-left.
+	# ⚠ At least one cell on each axis, so the 6 px first box (0 px on one axis) still builds — its
+	# cells are zero-area and its ribbon is a stroke, which is what a 6 x 0 drag looks like.
+	var nx := maxi(1, int(ceil(_box.size.x / Look.SELECTION_BOX_STEP_PX)))
+	var ny := maxi(1, int(ceil(_box.size.y / Look.SELECTION_BOX_STEP_PX)))
+	var hits := PackedVector3Array()
+	hits.resize((nx + 1) * (ny + 1))
+	for j in ny + 1:
+		for i in nx + 1:
+			var at := _box.position + Vector2(_box.size.x * float(i) / float(nx),
+				_box.size.y * float(j) / float(ny))
+			hits[j * (nx + 1) + i] = _box_hit(at)
+
+	# Surface 0 — the tint: two triangles per cell, every corner at the height under it.
+	var fill := Look.COL_SELECTION_BOX
+	fill.a = Look.SELECTION_BOX_FILL_ALPHA
+	_b_v.clear()
+	_b_c.clear()
+	for j in ny:
+		for i in nx:
+			var a: Vector3 = hits[j * (nx + 1) + i]
+			var b: Vector3 = hits[j * (nx + 1) + i + 1]
+			var c: Vector3 = hits[(j + 1) * (nx + 1) + i + 1]
+			var d: Vector3 = hits[(j + 1) * (nx + 1) + i]
+			_box_tri(a, b, c, fill)
+			_box_tri(a, c, d, fill)
+	_box_commit(im)
+
+	# Surface 1 — the ribbon along the grid's own border, clockwise from the top-left and closed.
+	for i in nx:
+		_box_hits.append(hits[i])
+	for j in ny:
+		_box_hits.append(hits[j * (nx + 1) + nx])
+	for i in nx:
+		_box_hits.append(hits[ny * (nx + 1) + nx - i])
+	for j in ny:
+		_box_hits.append(hits[(ny - j) * (nx + 1)])
+	var line := Look.COL_SELECTION_BOX
+	var n := _box_hits.size()
+	for k in n:
+		_box_ribbon(_box_hits[k], _box_hits[(k + 1) % n], line)
+	# Square caps on the four corners hide the notch a 90° bend leaves on its outside.
+	for corner in [hits[0], hits[nx], hits[ny * (nx + 1) + nx], hits[ny * (nx + 1)]]:
+		_box_cap(corner, line)
+	_box_commit(im)
+
+
+## One surface from the buffer, then the buffer is spent. Nothing is begun for an empty buffer.
+func _box_commit(im: ImmediateMesh) -> void:
+	if _b_v.is_empty():
+		return
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for k in _b_v.size():
+		im.surface_set_color(_b_c[k])
+		im.surface_add_vertex(_b_v[k])
+	im.surface_end()
+	_b_v.clear()
+	_b_c.clear()
+
+
+func _box_tri(a: Vector3, b: Vector3, c: Vector3, col: Color) -> void:
+	for p in [a, b, c]:
+		_b_v.append(p)
+		_b_c.append(col)
+
+
+## One thin quad from `a` to `b`, its width perpendicular to the run in the ground plane — so a piece
+## that climbs a face still shows its face to the camera above. A purely vertical piece (straight up a
+## face) has no run to be perpendicular to and is widened across screen-right on the ground instead.
+func _box_ribbon(a: Vector3, b: Vector3, col: Color) -> void:
+	var flat := Vector2(b.x - a.x, b.z - a.z)
+	var len_w := flat.length()
+	var side: Vector3
+	if len_w <= Rules.EPS:
+		var r := _ground_right() * Look.SELECTION_BOX_HALF_W_TILES
+		side = Vector3(r.x, 0.0, r.y)
+	else:
+		var s := Vector2(-flat.y, flat.x) / len_w * Look.SELECTION_BOX_HALF_W_TILES
+		side = Vector3(s.x, 0.0, s.y)
+	_box_tri(a - side, a + side, b + side, col)
+	_box_tri(a - side, b + side, b - side, col)
+
+
+## A square lying on the ground at `p`, a half-width to each side.
+func _box_cap(p: Vector3, col: Color) -> void:
+	var x := Vector3(Look.SELECTION_BOX_HALF_W_TILES, 0.0, 0.0)
+	var z := Vector3(0.0, 0.0, Look.SELECTION_BOX_HALF_W_TILES)
+	_box_tri(p - x - z, p + x - z, p + x + z, col)
+	_box_tri(p - x - z, p + x + z, p - x + z, col)

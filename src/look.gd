@@ -2351,57 +2351,54 @@ static func back_to_title_rect_px(over_size: Vector2, button_size: Vector2) -> R
 ## **The selection box — the rectangle a left drag pulls over the island** (ticket 03-12, 2026-09-02, the
 ## user: *"Drag to select and move them. There is no other method as good as that one."*).
 ##
-## ⚠⚠ **A LOADED PICTURE, NOT A `draw_rect`.** The pulled `frame_01` candidate — a thin mint outline —
-## keyed from its white paper to alpha and cropped to its ink by `tools/pixel/keywhite.py`, once. It is
-## the orchestrator's default out of the five prototypes built that day; **the user has not picked it**,
-## and swapping it is one PNG through the same script (a bracket family would also change
-## `selection_box_pieces` to four rotations).
-## ⚠ **Its own size is the answer to 「how big is the picture」** — `HudView` reads `get_size()` off the
-## loaded texture, so a re-pulled picture of another size tiles itself with nothing told here.
-## ⚠ **No alpha normalisation.** The 64 px downsample peaks at alpha 0.72 and the user saw the
-## candidate at that strength; the file is that picture.
-const SELECTION_BOX_TEX := "res://assets/ui/selection_box.png"
-
-## **The side of the corner square cut from the picture, in picture px, drawn 1:1 on screen.** The
-## candidate's own `CORNER_PX`. A corner is never stretched; the edges between two corners are stretched
-## along their own side only, so the stroke's thickness stays the picture's whatever the rect's size.
-const SELECTION_BOX_CORNER_PX := 4.0
-
-## **The eight pieces the box is drawn from — `[src, dst]` pairs of `Rect2`, picture px to screen px** —
-## in this order: **TL, TR, BL, BR, top, bottom, left, right.** Pure and static, so a net drives it with
-## no tree and the HUD's hook is compared against exactly this.
+## ⚠⚠ **IT IS A SHAPE ON THE GROUND, NOT A PICTURE ON THE GLASS** (2026-09-02, the user's verdict on the
+## first build). The ticket installed candidate 01 — a pulled `frame_01` outline cut into eight pieces on
+## the HUD — and the user had expected candidate 04: 「이게 일단 4번이 적용된게 맞음? 이게 아니였는데」 —
+## *"was number 4 applied? this was not it."* Then, on the same build: 「드래그가 너무 안보여」 — *"the drag
+## is far too hard to see"* — and 「선말고 선택된 부분을 약간 드래그 영역 안쪽 색상이 보여야함」 — *"not the
+## line — the selected area, the inside of the drag region, should show a colour."* **So the FILL is the
+## subject and the outline is its edge**, and both are laid on the terrain by `FieldView.set_box`: every
+## `SELECTION_BOX_STEP_PX` across the rect a screen point is projected onto the landscape, the tint is
+## the grid of those hits and the outline is a thin ribbon around its border. It climbs the 2층 and
+## turns with the board, because it names ground and not glass. ⚠ **The picture, its keyer's output
+## `assets/ui/selection_box.png`, `HudView.set_box` and the eight-piece cutter are DELETED** — the
+## 04 mechanism is geometry, so the frame_01 ink has nowhere to go; `tools/pixel/keywhite.py` stays as
+## a tool.
 ##
-## ⚠ **The picture's ink box IS the whole picture** (`keywhite.py` cropped it), so the four picture
-## anchors are its corners and `pic - corner` is where the far pieces start.
-## ⚠ **A span never goes negative.** The first box the shell hands over is 6 px on one axis and can be
-## 0 on the other, and a negative-sized `Rect2` drawn by `draw_texture_rect_region` flips the region —
-## the spans are floored at 0 and the corners simply overlap.
-static func selection_box_pieces(rect: Rect2, pic: Vector2, corner: float) -> Array:
-	var c := corner
-	# Picture px: the near corner squares start at the picture's origin, the far ones end at its end.
-	var px0 := 0.0
-	var py0 := 0.0
-	var px1 := pic.x - c
-	var py1 := pic.y - c
-	var mid_w := pic.x - 2.0 * c
-	var mid_h := pic.y - 2.0 * c
-	# Screen px: the same four anchors on the drag rect.
-	var sx0 := rect.position.x
-	var sy0 := rect.position.y
-	var sx1 := rect.end.x - c
-	var sy1 := rect.end.y - c
-	var span_w := maxf(rect.size.x - 2.0 * c, 0.0)
-	var span_h := maxf(rect.size.y - 2.0 * c, 0.0)
-	return [
-		[Rect2(px0, py0, c, c), Rect2(sx0, sy0, c, c)],
-		[Rect2(px1, py0, c, c), Rect2(sx1, sy0, c, c)],
-		[Rect2(px0, py1, c, c), Rect2(sx0, sy1, c, c)],
-		[Rect2(px1, py1, c, c), Rect2(sx1, sy1, c, c)],
-		[Rect2(px0 + c, py0, mid_w, c), Rect2(sx0 + c, sy0, span_w, c)],
-		[Rect2(px0 + c, py1, mid_w, c), Rect2(sx0 + c, sy1, span_w, c)],
-		[Rect2(px0, py0 + c, c, mid_h), Rect2(sx0, sy0 + c, c, span_h)],
-		[Rect2(px1, py0 + c, c, mid_h), Rect2(sx1, sy0 + c, c, span_h)],
-	]
+## ⚠ **The four numbers below are tuned by eye and every one is a FIRST value** — nothing here has been
+## seen on the glass since the 04 swap. Their derivations are written beside them so a re-tune moves a
+## number and not a guess.
+
+## **The tint's colour, the mint the five candidates shared** ((158, 245, 212) over 255), **fully opaque
+## here** — the outline wears it as it is, and the fill takes `SELECTION_BOX_FILL_ALPHA` off it. Opaque
+## because the 01 picture's ink peaked at alpha 0.72 and its top edge vanished over yellow ground.
+## ⚠ Tuned by eye, first value.
+const COL_SELECTION_BOX := Color(158.0 / 255.0, 245.0 / 255.0, 212.0 / 255.0, 1.0)
+
+## **The outline ribbon's half-width in 조각.** At the opening survey zoom of the real island (0.762,
+## `survey_zoom_of(30, 26)`) a 조각 is `0.762 × TILE_PX` = 30.5 px across the screen and `× sin 40°` =
+## 19.6 px down it, so a ribbon 2 × 0.035 wide reads **2.1 px on the rect's sides and 1.4 px on its top
+## and bottom** — the thin edge of the tint, not the subject. The prototype's 0.045 was 2.7 / 1.8 px.
+## ⚠ Tuned by eye, first value.
+const SELECTION_BOX_HALF_W_TILES := 0.035
+
+## **The fill's alpha over `COL_SELECTION_BOX`.** 0.10 in the prototype read as nothing over yellow
+## ground; the user asked for the area itself to show, so it starts near the top of the 0.25–0.30 band
+## named for it. ⚠ Tuned by eye, first value.
+const SELECTION_BOX_FILL_ALPHA := 0.28
+
+## **Screen px between two terrain samples of the box**, across the fill's grid and along its border
+## alike — one constant, because the outline runs on the grid's own border hits. 8 px is about a quarter
+## of a 조각 at the opening zoom, so no piece of the tint can span more than one step of the terrain
+## and the tint climbs the 2층 face instead of diving under it. ⚠ **The cost is a projection per sample
+## per rebuild**: a 220 x 100 rect is 28 x 13 = 364 ray walks, and a rect across the whole glass is
+## 161 x 91 = 14,651 — that ceiling has not been measured on the real island. ⚠ Tuned by eye, first value.
+const SELECTION_BOX_STEP_PX := 8.0
+
+## **Draws above the ground layer's 1** — the fill must sit over the bodies' shadows and the 이동선 as
+## well as over the 판, and between transparent layers that is sort order and not depth (see
+## `FieldView._fx_layer`).
+const SELECTION_BOX_RENDER_PRIORITY := 2
 
 
 # ---------------------------------------------------------------------------------------------

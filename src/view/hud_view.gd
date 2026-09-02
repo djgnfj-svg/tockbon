@@ -7,10 +7,12 @@ extends Node2D
 ## Red letters, it just appears, and that is the end."*). **The island keeps drawing behind it and the
 ## board stops answering**, which is the same day's answer and lives in `game.gd`.
 ##
-## ⚠⚠ **「ONE THING」 IS TWO SINCE 2026-09-02** (ticket 03-12): **the selection box** the left drag pulls
-## over the island lives here too — a pulled picture cut into four corners and four stretched edges,
-## in SCREEN space, so it stays square to the glass when the board turns. **Not on the field's fx layer**,
-## which is a world-space ground decal and would skew the rectangle with the yaw and the pitch.
+## ⚠⚠ **「ONE THING」 WAS TWO FOR PART OF 2026-09-02 AND IS ONE AGAIN** (ticket 03-12): **the selection
+## box** the left drag pulls over the island lived here for a few hours — a pulled picture cut into four
+## corners and four stretched edges, in SCREEN space — and the user's verdict on it was that it was not
+## the candidate they chose: 「이게 일단 4번이 적용된게 맞음? 이게 아니였는데」 — *"was number 4 applied? this
+## was not it."* **The box is a shape on the terrain now, `FieldView.set_box`**, and nothing of it is
+## left on this layer: no rect, no picture, no leaf.
 ##
 ## ⚠⚠ **IT DREW NOTHING AT ALL FROM 2026-08-28 UNTIL THEN, AND THE BAR THAT ENDED THAT IS THE POINT.**
 ## Three things went in one day, all on the user's word:
@@ -73,15 +75,6 @@ var _tex_over: Texture2D = load(Look.GAME_OVER_TEX) as Texture2D
 ## reason: it is a picture made in pixellab, not a plate typed as `draw_rect` under a `draw_string`.
 var _tex_back: Texture2D = load(Look.BACK_TO_TITLE_TEX) as Texture2D
 
-## **The selection box, in screen px, as the shell last handed it over** (ticket 03-12). **The box is up
-## when its size is not zero**; the shell only ever hands a rect past the drag threshold or `Rect2()`.
-## ⚠ **Two writers clear it and that is accepted**: `bind` (a fresh island opens with no box) and the
-## shell's `set_box(Rect2())` on every release and on a dropped gesture. `_back_to_title` calls both.
-var _box := Rect2()
-## **The box's picture**, the keyed `frame_01` outline — loaded like the two above and for the same
-## reason. Its own size is read back at draw time; see `Look.SELECTION_BOX_TEX`.
-var _tex_box: Texture2D = load(Look.SELECTION_BOX_TEX) as Texture2D
-
 ## Resolved once and kept, and STATIC because panel_view needs the same face — the explanation for
 ## picking it lives here only, in one file, rather than in both view files.
 ## `ThemeDB` is available untreed and headless: "there is no font outside the tree" was measured
@@ -115,20 +108,6 @@ static func type_label(type_id: int) -> String:
 func bind(b: Battle) -> void:
 	battle = b
 	_over = false
-	# A box held through a lost run cannot outlive it — see `_box`.
-	_box = Rect2()
-	queue_redraw()
-
-
-## **The shell says where the box is, or that there is none.** Returns on no change for the reason
-## `set_over` gives: the motion branch hands a rect on every mouse event, and a redraw per unchanged rect
-## would be work nobody can see.
-## ⚠ **The size is what says 「up」** — a `Rect2()` brings it down, and the shell sends exactly that on
-## every release, so a box never survives the gesture that drew it.
-func set_box(rect: Rect2) -> void:
-	if rect == _box:
-		return
-	_box = rect
 	queue_redraw()
 
 
@@ -154,19 +133,14 @@ func set_over(over: bool) -> void:
 ## whatever the designed HUD needs, and not one frame earlier.
 
 
-## **The box while it is up, and the words once the island is lost.** Everything else on this layer
-## is still deleted — see the header, and the ticket's own "out of scope" (no win screen, no stats, no
-## way back). While the island stands and nothing is being dragged this is the empty canvas it has
-## been since 2026-08-28.
+## **The words once the island is lost, and nothing else.** Everything else on this layer is still
+## deleted — see the header, and the ticket's own "out of scope" (no win screen, no stats, no way
+## back). While the island stands this is the empty canvas it has been since 2026-08-28. ⚠ The
+## selection box was drawn above this early return for part of 2026-09-02 and is the field's now.
 ## ⚠ **`battle` is still bound** by `game._open_island`, so the wiring a real HUD needs is live and
 ## `net_shell` still measures that the bind happened. ⚠ **`_over` and not `battle.lost`** — see
 ## `set_over`; the shell owns which screen is up.
-## ⚠⚠ **THE BOX IS DRAWN ABOVE THE LOSS'S EARLY RETURN.** Below it, a box would be a state with no
-## picture — 「screen changes but the sim doesn't」 wearing its inverse — on every frame the island stands.
 func _draw() -> void:
-	if _box.size != Vector2.ZERO and _tex_box != null:
-		for piece in Look.selection_box_pieces(_box, _tex_box.get_size(), Look.SELECTION_BOX_CORNER_PX):
-			_paint_box_piece(_tex_box, (piece as Array)[0], (piece as Array)[1])
 	if not _over or _tex_over == null:
 		return
 	_paint_over(_tex_over, Look.game_over_origin_px(_tex_over.get_size()))
@@ -206,12 +180,3 @@ func _paint_over(tex: Texture2D, at: Vector2) -> void:
 func _paint_back(tex: Texture2D, at: Vector2) -> void:
 	draw_texture(tex, at)
 
-
-## **One piece of the selection box: the region `src` of the picture, drawn into `dst` on the glass.**
-##
-## ⚠⚠ **EXACTLY ONE `draw_texture_rect_region` AND NOTHING ELSE.** A corner arrives with `dst` the size
-## of `src` and is drawn 1:1; an edge arrives stretched along its own side only, so the stroke's
-## thickness is never scaled. Nearest sampling comes from `project.godot`'s canvas texture filter, the
-## same way the GAME OVER lettering gets it — a filter set here would be a second place for it.
-func _paint_box_piece(tex: Texture2D, src: Rect2, dst: Rect2) -> void:
-	draw_texture_rect_region(tex, dst, src)

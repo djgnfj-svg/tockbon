@@ -549,12 +549,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_boxing = true
 		# ⚠⚠ **`field_view.pan_by(motion.relative)` STOOD HERE AND IT IS DELETED** (2026-09-02, ticket
 		# 03-12). A press that travels pulls a BOX now — from the press point to this motion, `.abs()`ed
-		# so the hand may go any way — and hands it to the HUD on every motion, which is what puts the
-		# picture under the cursor while it is being pulled. **No drag pans**: the camera is the keys'
-		# and the band's, and `pan_by` keeps its one caller in `_pan_the_board`.
+		# so the hand may go any way — and hands it to the field on every motion, which lays the tint on
+		# the ground under the cursor while it is being pulled. ⚠ **The field and not the HUD** since the
+		# same evening: the HUD's picture was not the candidate the user chose (see `FieldView.set_box`).
+		# **No drag pans**: the camera is the keys' and the band's, and `pan_by` keeps its one caller in
+		# `_pan_the_board`.
 		if _boxing:
 			_box = Rect2(_press_at, motion.position - _press_at).abs()
-			hud_view.set_box(_box)
+			field_view.set_box(_box)
 
 
 ## The title screen's whole input table. Motion lights the slot under the cursor; a left press either
@@ -753,7 +755,7 @@ func _end_press() -> void:
 	_box = Rect2()
 	# **The box comes down on every release, box or click.** A box left standing after the hand let go
 	# of the button would be a picture of a gesture that has ended.
-	hud_view.set_box(Rect2())
+	field_view.set_box(Rect2())
 
 
 ## ⚠⚠ **`_begin_order` AND `_end_order` STOOD HERE AND BOTH ARE DELETED** (2026-09-02 evening, ticket
@@ -813,7 +815,7 @@ func _drop_the_gestures() -> void:
 	_press_open = false
 	_boxing = false
 	_box = Rect2()
-	hud_view.set_box(Rect2())
+	field_view.set_box(Rect2())
 
 
 # --- the camera keys ------------------------------------------------------------------------------

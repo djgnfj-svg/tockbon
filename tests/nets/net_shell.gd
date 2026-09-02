@@ -75,18 +75,15 @@ class HudSpy extends HudView:
 	## it: the two are separate leaves, and one drawn without the other is the failure worth naming —
 	## words with no way back, or a button floating on a live board.
 	var backs := []
-	## **The selection box's eight pieces** (ticket 03-12, 2026-09-02) — `tex`, `src` and `dst` of every
-	## `_paint_box_piece` call, in the order the leaf was handed them. Compared whole against the pure
-	## `Look.selection_box_pieces`, which is the shape `how-nets-lie` prescribes: capture the argument
-	## at the hook and assert it equals what the pure function returns.
-	var boxes := []
+	## ⚠ **`boxes` and a `_paint_box_piece` override stood here for part of 2026-09-02 and are gone**
+	## (ticket 03-12): the selection box left the HUD for the terrain on the user's verdict, and its
+	## state is read off the real `FieldView` below — `_box`, and the committed surfaces of `_box_mesh`.
 
 	func _draw() -> void:
 		buttons.clear()
 		enemies.clear()
 		overs.clear()
 		backs.clear()
-		boxes.clear()
 		seq = 0
 		super()
 		draws += 1
@@ -96,9 +93,6 @@ class HudSpy extends HudView:
 
 	func _paint_back(tex: Texture2D, at: Vector2) -> void:
 		backs.append({"seq": _bump(), "tex": tex, "at": at})
-
-	func _paint_box_piece(tex: Texture2D, src: Rect2, dst: Rect2) -> void:
-		boxes.append({"seq": _bump(), "tex": tex, "src": src, "dst": dst})
 
 	func _bump() -> int:
 		seq += 1
@@ -159,8 +153,9 @@ func run(t) -> void:
 	# read as covered and were not. **Wired at the very top on purpose**: the second builds a `Game` of
 	# its own and puts it in the tree, so it runs and lets go before the fixture below stands one up.
 	_speed_steps_survives_read_by_nobody(t)
-	# The selection box's pure half (03-12): eight rectangles from `Look` alone, no tree, no game.
-	_the_box_pieces_tile_the_rect(t)
+	# ⚠ The selection box's pure half (`Look.selection_box_pieces`) ran here for part of 2026-09-02 and
+	# is deleted with it (03-12): the box is terrain geometry now, measured in `net_fx_view`; what this
+	# file keeps is the WIRING — the shell's rect reaching `FieldView.set_box`, in the drag rows.
 	await _one_press_reaches_the_first_island(t)
 	# ⚠⚠ **AT THE TOP, AND FOR THE REASON THE TERRAIN BLOCK BELOW SPELLS OUT**: a red row halfway down
 	# `run()` has twice abandoned everything after it, and 티켓 15's red is still standing. This builds
@@ -327,9 +322,6 @@ func run(t) -> void:
 	# From here the sim is frozen, so a captured frame and a value read after it are the same instant.
 	game.set_process(false)
 	await t.pump_frames(2)
-
-	# The selection box's view half (03-12): the spy sees the eight pieces the pure function names.
-	await _the_box_reaches_the_hud_as_eight_pieces(t, hs)
 
 	# ⚠⚠ **THE PAN ROWS ARE CALLED HERE AND NOT DOWN BESIDE THE DRAG ROWS, AND THE REASON IS A HOLE
 	# IN THIS FILE.** Measured 2026-08-30: the terrain row below throws on a null `_terrain.mesh`, and
@@ -601,7 +593,8 @@ func run(t) -> void:
 	game._unhandled_input(_release(Vector2(680.0, 400.0)))
 	t.eq(fs.cam_px, Vector2(300.0, 300.0),
 		"끌기는 카메라를 안 민다 — 이 파일에서 처음으로 그렇게 말하는 줄이다")
-	t.eq(hs._box, Rect2(), "뗀 뒤에는 HUD 의 상자가 내려가 있다")
+	t.eq(fs._box, Rect2(), "뗀 뒤에는 판의 상자가 내려가 있다")
+	t.eq(fs._box_mesh.mesh.get_surface_count(), 0, "그리고 땅 위에 상자의 면이 하나도 안 남는다")
 	t.ok(not game._boxing, "그리고 셸도 상자를 끌고 있지 않다")
 	game._let_go()
 
@@ -965,19 +958,20 @@ func _a_drag_boxes_and_a_click_picks_or_orders(t, game, fs: FieldView, hs: HudSp
 	# this row the threshold could be zero and every check below would still pass.
 	game._unhandled_input(_motion(on_land + Vector2(2.0, 0.0), Vector2(2.0, 0.0)))
 	t.eq(fs.cam_px, before, "문턱 아래로 움직인 것은 카메라를 안 민다")
-	t.ok(not game._boxing and hs._box == Rect2(), "문턱 아래는 아직 상자가 아니다")
+	t.ok(not game._boxing and fs._box == Rect2(), "문턱 아래는 아직 상자가 아니다")
 	game._unhandled_input(_motion(on_land + Vector2(60.0, 40.0), Vector2(58.0, 40.0)))
 	t.eq(fs.cam_px, before, "끌기는 더 이상 카메라를 안 민다 — 판은 키와 띠가 민다")
 	t.ok(game._boxing, "문턱을 넘겨 끌면 상자다")
 	t.eq(game._box, Rect2(on_land, Vector2(60.0, 40.0)), "상자는 누른 점에서 지금 점까지다")
-	t.eq(hs._box, game._box, "상자가 HUD 에 닿았다")
-	# ⚠ **The spy sees the picture, not only the state.** One frame is pumped while the box is up;
-	# `Game._process` is off, so only the views turn.
-	await t.pump_frames(1)
-	t.eq(hs.boxes.size(), 8, "끄는 동안 상자가 그려진다 — 여덟 조각")
+	t.eq(fs._box, game._box, "상자가 판에 닿았다")
+	# ⚠ **The mesh, not only the state.** `set_box` commits at once — no frame is pumped — and the two
+	# surfaces are the tint and its edge; what they hold is `net_fx_view`'s to measure.
+	t.eq(fs._box_mesh.mesh.get_surface_count(), 2,
+		"끄는 동안 상자가 땅 위에 그려진다 — 채움 한 면, 테두리 한 면")
 	game._unhandled_input(_release(on_land + Vector2(60.0, 40.0)))
 	t.eq(_ordered(b), 0, "그리고 끌기는 아무도 명령하지 않는다 — 고르려고 움직인 것이지 보내려던 게 아니다")
-	t.eq(hs._box, Rect2(), "떼면 상자가 내려간다")
+	t.eq(fs._box, Rect2(), "떼면 상자가 내려간다")
+	t.eq(fs._box_mesh.mesh.get_surface_count(), 0, "그리고 땅 위의 면도 지워진다")
 	t.ok(not game._boxing, "그리고 셸도 상자를 놓았다")
 
 	# -- the release PICKS: a box around two drawn feet catches both --------------------------------
@@ -2413,7 +2407,7 @@ func _a_lost_board_stops_travelling(t) -> void:
 	game._process(0.2)
 	t.eq(fs.cam_px, still, "삼켜진 손 떼기 뒤에도 그대로다")
 	t.ok(game._pan_held.is_empty(), "쥐고 있던 키가 통째로 놓였다")
-	t.ok(not game._press_open and not game._boxing and game.hud_view._box == Rect2(),
+	t.ok(not game._press_open and not game._boxing and game.field_view._box == Rect2(),
 		"열려 있던 누름도, 상자도 같이 놓였다 — 걸린 채로 남으면 다음 섬의 띠가 통째로 죽는다")
 
 	# ⚠⚠ **AND THE LAST ROW IS THE BAND WITH ITS OWN GATE ALREADY GONE.** The press flag was cleared
@@ -2623,11 +2617,11 @@ func _the_keep_falls_and_the_screen_says_so(t) -> void:
 	game._press_open = true
 	game._boxing = true
 	game._box = Rect2(10.0, 10.0, 50.0, 50.0)
-	hs.set_box(game._box)
+	fs.set_box(game._box)
 	game._unhandled_input(_click(back_rect.get_center()))
 	t.ok(game.run == null, "단추를 누르면 회차가 버려진다 — 이게 셸을 타이틀로 되돌리는 그 한 줄이다")
 	t.ok(game.battle == null, "그리고 섬도 놓는다")
-	t.ok(not game._press_open and not game._boxing and game._box == Rect2() and hs._box == Rect2(),
+	t.ok(not game._press_open and not game._boxing and game._box == Rect2() and fs._box == Rect2(),
 		"돌아가는 길이 상자까지 내린다 — 단추를 쥔 채 진 회차가 다음 회차에 깃발도 상자도 넘기지 않는다")
 	t.ok(game.title_view.visible, "타이틀이 올라온다")
 	t.ok(not hs._over, "게임 오버 글씨는 내려간다")
@@ -2646,79 +2640,6 @@ func _the_keep_falls_and_the_screen_says_so(t) -> void:
 
 	t.root.remove_child(game)
 	game.queue_free()
-
-
-## **The eight pieces of the selection box, from `Look` alone** (ticket 03-12): four corners drawn 1:1
-## and four edges stretched along their own side, in the order TL, TR, BL, BR, top, bottom, left, right.
-##
-## ⚠⚠ **TYPED BY HAND, NEVER READ BACK OFF THE FUNCTION.** A 220 x 100 rect at (440, 345) over the
-## 54 x 54 picture with 4 px corners: the far picture anchor is 50, the edge strips are 46 long, the
-## far screen anchors are 656 and 441, and the spans are 212 and 92. Reading `SELECTION_BOX_CORNER_PX`
-## here would leave the row green for any corner size, which is the shape this file has measured.
-## ⚠ **And the degenerate first box.** The shell's first rect past the threshold is 6 px on one axis
-## and may be 0 on the other; a negative span would flip the region the leaf draws.
-func _the_box_pieces_tile_the_rect(t) -> void:
-	var pieces: Array = Look.selection_box_pieces(Rect2(440.0, 345.0, 220.0, 100.0), Vector2(54.0, 54.0), 4.0)
-	t.eq(pieces.size(), 8, "상자는 여덟 조각이다")
-	var want := [
-		[Rect2(0, 0, 4, 4), Rect2(440, 345, 4, 4)],
-		[Rect2(50, 0, 4, 4), Rect2(656, 345, 4, 4)],
-		[Rect2(0, 50, 4, 4), Rect2(440, 441, 4, 4)],
-		[Rect2(50, 50, 4, 4), Rect2(656, 441, 4, 4)],
-		[Rect2(4, 0, 46, 4), Rect2(444, 345, 212, 4)],
-		[Rect2(4, 50, 46, 4), Rect2(444, 441, 212, 4)],
-		[Rect2(0, 4, 4, 46), Rect2(440, 349, 4, 92)],
-		[Rect2(50, 4, 4, 46), Rect2(656, 349, 4, 92)],
-	]
-	var names := ["왼쪽 위 모서리", "오른쪽 위 모서리", "왼쪽 아래 모서리", "오른쪽 아래 모서리",
-		"위 변", "아래 변", "왼쪽 변", "오른쪽 변"]
-	for i in mini(pieces.size(), want.size()):
-		var got: Array = pieces[i]
-		t.eq(got[0], (want[i] as Array)[0], "%s — 그림에서 오려내는 자리" % names[i])
-		t.eq(got[1], (want[i] as Array)[1], "%s — 유리에 놓는 자리" % names[i])
-	var thin: Array = Look.selection_box_pieces(Rect2(100.0, 100.0, 6.0, 0.0), Vector2(54.0, 54.0), 4.0)
-	var negative := 0
-	for raw in thin:
-		var dst: Rect2 = (raw as Array)[1]
-		if dst.size.x < 0.0 or dst.size.y < 0.0:
-			negative += 1
-	t.eq(negative, 0, "6 px 첫 상자도 음수 크기가 없다")
-	t.eq(((thin[4] as Array)[1] as Rect2).size.x, 0.0, "그 상자의 위 변은 길이 0 이다")
-	t.eq(((thin[6] as Array)[1] as Rect2).size.y, 0.0, "그 상자의 왼쪽 변도 길이 0 이다")
-
-
-## **A box handed to the HUD reaches the leaf as exactly the eight pieces the pure function names**
-## (ticket 03-12). Captured on the hook and compared whole — the shape `how-nets-lie` prescribes,
-## because a `_draw` free to hand the leaf a bare `Rect2()` stayed green under 320 checks once.
-##
-## ⚠ **Every `dst` is held to the viewport with area**, so a box collapsed to nothing or laid off the
-## glass reddens here and not in somebody's eye. ⚠ **The picture is the loaded 54 x 54 file** — the
-## keyed and cropped `frame_01` — and a `tex` of any other size means the leaf was handed something
-## else.
-func _the_box_reaches_the_hud_as_eight_pieces(t, hs: HudSpy) -> void:
-	var rect := Rect2(440.0, 345.0, 220.0, 100.0)
-	hs.set_box(rect)
-	await t.pump_frames(2)
-	t.eq(hs.boxes.size(), 8, "상자 하나가 여덟 조각으로 후크에 닿는다")
-	var want: Array = Look.selection_box_pieces(rect, Vector2(54.0, 54.0), Look.SELECTION_BOX_CORNER_PX)
-	var wrong := 0
-	var dsts: Array[Rect2] = []
-	var sized := 0
-	for i in mini(hs.boxes.size(), want.size()):
-		var piece: Dictionary = hs.boxes[i]
-		if piece["src"] != (want[i] as Array)[0] or piece["dst"] != (want[i] as Array)[1]:
-			wrong += 1
-		dsts.append(piece["dst"] as Rect2)
-		var tex: Texture2D = piece["tex"]
-		if tex != null and tex.get_size() == Vector2(54.0, 54.0):
-			sized += 1
-	t.eq(wrong, 0, "조각 하나하나가 순수 함수의 답 그대로다 — 오려내는 자리도 놓는 자리도")
-	t.eq(sized, hs.boxes.size(), "상자 그림은 54x54 다 — 여덟 조각이 다 그 그림을 든다")
-	if not dsts.is_empty():
-		_rects_land_on_screen(t, "상자 조각", dsts)
-	hs.set_box(Rect2())
-	await t.pump_frames(2)
-	t.eq(hs.boxes.size(), 0, "빈 상자는 한 조각도 안 그린다")
 
 
 ## -- surface-2 readers: the pooled nodes the engine draws --------------------------------------------

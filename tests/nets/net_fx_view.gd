@@ -45,6 +45,9 @@ func run(t) -> void:
 	# ⚠⚠ **THE BAR FAMILY RUNS FIRST FOR THE REASON THE BOATS DO** (2026-09-01). This file is
 	# **incomplete today** — a row below it dies and abandons everything under it — so a row appended at
 	# the bottom would be green by never running at all. **The order carries no meaning otherwise.**
+	# The selection box on the ground (ticket 03-12, rebuilt 2026-09-02) — at the top for the same reason.
+	_the_box_is_laid_on_the_ground(t)
+	_the_box_climbs_the_tier(t)
 	_a_bar_appears_only_once_something_is_hurt(t)
 	_the_fill_drains_from_the_right_and_never_moves_its_left(t)
 	_the_keep_wears_its_bar_over_its_own_roof(t)
@@ -83,6 +86,131 @@ func run(t) -> void:
 
 
 
+
+
+## **The selection box is a committed shape on the terrain, and it comes down** (ticket 03-12, rebuilt
+## 2026-09-02 on the user's verdict: 「이게 일단 4번이 적용된게 맞음? 이게 아니였는데」 — *"was number 4
+## applied? this was not it."*). Surface 3 of the seam: the box mesh's surface count proves the commit,
+## its vertex arrays prove what was built, and the border hits unprojected through the SAME camera
+## prove it lies under the rect and not somewhere the projection invented.
+##
+## ⚠ **The vertex counts are typed by hand for `SELECTION_BOX_STEP_PX` 8**: an 80 x 40 rect is 10 x 5
+## cells, 2 triangles each = 300 fill vertices; its border is 2 × 10 + 2 × 5 = 30 hits, a 6-vertex
+## ribbon piece per hit and a 6-vertex cap per corner = 204. Reading the step here would keep the row
+## green for any step, which is the shape `how-nets-lie` names.
+## ⚠ **The yaw row is what says 「on the ground, not on the glass」**: a box built from screen
+## coordinates has the same world points at every yaw, and one laid on the terrain does not.
+func _the_box_is_laid_on_the_ground(t) -> void:
+	var pack := _quiet_view()
+	var fv: FieldView = pack["fv"]
+	var im: ImmediateMesh = fv._box_mesh.mesh
+	t.eq(im.get_surface_count(), 0, "상자를 주기 전에는 면이 하나도 없다 (자가 점검)")
+	var rect := Rect2(600.0, 340.0, 80.0, 40.0)
+	fv.set_box(rect)
+	t.eq(fv._box, rect, "판이 준 상자를 그대로 들고 있다")
+	t.eq(im.get_surface_count(), 2, "상자 하나가 두 면으로 커밋된다 — 채움과 테두리")
+	if im.get_surface_count() < 2:
+		return
+	var fill_v: PackedVector3Array = im.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var fill_c: PackedColorArray = im.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	var line_v: PackedVector3Array = im.surface_get_arrays(1)[Mesh.ARRAY_VERTEX]
+	var line_c: PackedColorArray = im.surface_get_arrays(1)[Mesh.ARRAY_COLOR]
+	t.eq(fill_v.size(), 300, "채움은 10 x 5 칸에 삼각형 둘씩 — 꼭짓점 300")
+	t.eq(fv._box_hits.size(), 30, "테두리 점은 서른이다 — 위아래 열씩, 양옆 다섯씩")
+	t.eq(line_v.size(), 204, "테두리는 띠 서른 조각과 모서리 마개 넷 — 꼭짓점 204")
+	var want_fill := Look.COL_SELECTION_BOX
+	want_fill.a = Look.SELECTION_BOX_FILL_ALPHA
+	t.ok(_cols_all_close(fill_c, want_fill),
+		"채움은 민트에 알파 %.2f 다 — 안쪽이 보여야 한다는 게 사용자의 말이다" % Look.SELECTION_BOX_FILL_ALPHA)
+	t.ok(_cols_all_close(line_c, Look.COL_SELECTION_BOX), "테두리는 불투명한 민트다")
+
+	# **Every vertex lies on the flat arena's ground, lifted** — one height and no other.
+	var ground := Islands.ground_h(0) + Look.FX_GROUND_LIFT_TILES
+	var off_ground := 0
+	for v in fill_v:
+		if absf(v.y - ground) > 0.001:
+			off_ground += 1
+	for v in line_v:
+		if absf(v.y - ground) > 0.001:
+			off_ground += 1
+	t.eq(off_ground, 0, "평평한 판에서는 꼭짓점 전부가 땅 높이 + 들림에 놓인다")
+
+	# **The border hits unproject back inside the rect** through the same camera that projected them.
+	var grown := rect.grow(1.0)
+	var outside := 0
+	for k in fv._box_hits.size():
+		var p: Vector3 = fv._box_hits[k]
+		var back := fv.world_to_screen_px(Vector2(p.x, p.z) * Look.TILE_PX, p.y - Look.FX_GROUND_LIFT_TILES)
+		if not grown.has_point(back):
+			outside += 1
+	t.eq(outside, 0, "테두리 점 서른을 같은 카메라로 되돌리면 전부 상자 안에 떨어진다")
+	var first: Vector3 = fv._box_hits[0]
+	var first_back := fv.world_to_screen_px(Vector2(first.x, first.z) * Look.TILE_PX,
+		first.y - Look.FX_GROUND_LIFT_TILES)
+	t.ok(first_back.distance_to(rect.position) < 1.0,
+		"첫 점은 상자의 왼쪽 위 모서리다 (되돌린 거리 %.3f px)" % first_back.distance_to(rect.position))
+
+	# **Turning the board moves the ground under the same screen rect**, and the box moves with it.
+	var fill_at0 := PackedVector3Array(fill_v)
+	var hits_at0 := PackedVector3Array(fv._box_hits)
+	fv.cam_yaw_deg = 90.0
+	fv._process(0.0)
+	t.eq(im.get_surface_count(), 2, "돌린 뒤에도 두 면이다 — 카메라가 바뀌면 다시 짓는다")
+	var fill_at90: PackedVector3Array = im.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var moved := 0
+	for k in mini(fill_at0.size(), fill_at90.size()):
+		if fill_at0[k].distance_to(fill_at90[k]) > 0.01:
+			moved += 1
+	t.ok(moved > 0, "판을 90 도 돌리면 같은 화면 상자의 채움이 다른 땅 위에 놓인다 — 유리가 아니라 땅이다 (%d/%d)"
+		% [moved, fill_at0.size()])
+	var hits_moved := 0
+	for k in mini(hits_at0.size(), fv._box_hits.size()):
+		if hits_at0[k].distance_to(fv._box_hits[k]) > 0.01:
+			hits_moved += 1
+	t.ok(hits_moved > 0, "테두리 점도 같이 옮겨 간다 (%d/%d)" % [hits_moved, hits_at0.size()])
+
+	# **An empty rect brings it down**: no surface, no hit.
+	fv.set_box(Rect2())
+	t.eq(im.get_surface_count(), 0, "빈 상자는 면이 하나도 없다")
+	t.eq(fv._box_hits.size(), 0, "테두리 점도 하나도 없다")
+
+
+## **The tint follows the ground up the 2층** (2026-09-02, the user: 「선말고 선택된 부분을 약간 드래그 영역
+## 안쪽 색상이 보여야함」 — *"not the line — the inside of the drag region should show a colour"*). A fill
+## laid as ONE quad across the four corner hits is flat at the corners' height and dives under any
+## ground that rises inside the rect; this row raises a 2 x 2 block under the rect's middle and reads
+## the fill's vertex heights — **two heights and no third**, the low ground's and the block's top.
+func _the_box_climbs_the_tier(t) -> void:
+	var pack := _quiet_view()
+	var fv: FieldView = pack["fv"]
+	var b: Battle = pack["b"]
+	var rect := Rect2(600.0, 340.0, 80.0, 40.0)
+	var tv := fv.world_to_tile(fv.screen_to_terrain_px(rect.get_center()))
+	t.ok(tv.x > 0 and tv.y > 0 and tv.x + 1 < b.grid.w - 1 and tv.y + 1 < b.grid.h - 1,
+		"상자 가운데 아래 조각 (%d, %d) 이 판 안쪽이다 (자가 점검)" % [tv.x, tv.y])
+	for dy in 2:
+		for dx in 2:
+			b.grid.level[(tv.y + dy) * b.grid.w + tv.x + dx] = 2
+	fv.set_box(rect)
+	if fv._box_mesh.mesh.get_surface_count() < 2:
+		t.ok(false, "상자가 두 면으로 커밋됐다 (자가 점검)")
+		return
+	var fill_v: PackedVector3Array = fv._box_mesh.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var low := Islands.ground_h(0) + Look.FX_GROUND_LIFT_TILES
+	var high := Islands.ground_h(2) + Look.FX_GROUND_LIFT_TILES
+	var on_low := 0
+	var on_high := 0
+	var elsewhere := 0
+	for v in fill_v:
+		if absf(v.y - low) < 0.001:
+			on_low += 1
+		elif absf(v.y - high) < 0.001:
+			on_high += 1
+		else:
+			elsewhere += 1
+	t.ok(on_high > 0, "채움의 꼭짓점 %d 개가 2층 위에 놓인다 — 네 모서리로 편 한 장이면 0 이다" % on_high)
+	t.ok(on_low > 0, "그리고 %d 개는 아래 땅에 남는다 — 상자가 층을 걸쳐 있다" % on_low)
+	t.eq(elsewhere, 0, "그 둘 말고 다른 높이의 꼭짓점은 없다 — 조각마다 제 땅을 읽었다")
 
 
 ## ⚠⚠ **`HILL_AMP_TILES` IS 2.60 AND A TIER IS 2.00, AND THAT SOUNDS FATAL. IT IS NOT, AND THE
