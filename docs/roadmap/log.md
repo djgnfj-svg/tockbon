@@ -4600,3 +4600,118 @@ that run's total to 1476. **Run alone it is 91 통과.** Not diagnosed.
 **티켓 열둘** — 태스크 03 이 넷에서 열둘이 됐고, **그중 지어진 것은 03-08 하나다.**
 **태스크 07 (몸이 서로를 알아채고 쫓는다) 이 새로 섰다.** ⚠⚠ **이 태스크는 모델이 자른 것이고 자르는 것은
 사용자의 몫이다** — 태스크 02 가 닫혀 있어서 두 티켓이 갈 데가 없었다.
+## ✅ **The picked body got a face, the word split in three, and a run got its first seed — 2026-09-02, evening**
+
+**The session opened with `compass`** — twenty-six open tickets, three held elsewhere (03-15 · 03-16 · 03-17,
+the last two on another session's worktree), nineteen takeable. The user: *"Let us start from 3-2."*
+(「3-2 부터하자」).
+
+### What was built — ticket 03-02, twice
+
+**Round 1** (plan interviewed, attacked, built by two builders in parallel): the Galmuri 14 font
+(OFL, 11,172 syllables, 15 px, imported with antialiasing · hinting · subpixel · oversampling all off),
+`Names.LIST` — forty old Korean names — and `Army.names`, and a 160x92 plate with four lines: 이름 · 특성 ·
+체력 · 허기. **The plate was pulled on pixellab** (three: crimson · wood · slate, 40 generations each) because
+the local ComfyUI could not start — Windows' application-control policy blocks torch's `shm.dll` from this
+session, with the sandbox on or off. **Fifteen shots** stood the three plates in the game at four corners.
+`net_names` 27 · `net_panel` 144 → 188 after `verify` found two identities (colour compared to itself,
+font compared to itself); `verify-look` counted 652 glyph pixels in one flat colour and watched 체력 go
+18 → 2 under a wolf.
+
+**Then the user looked, and the panel changed shape in one conversation:**
+
+> *"It should be wider, I think."* (「좀더 넓어야할꺼겉은데」)
+> *"Traits too — we have to settle values now, there is nothing there."* (「특성도 지금 값을 정해야하아
+> 없청맠ㅎ은데?」)
+> *"Cooking, crafting, fishing, mining, logging — those would be by level, but that has poor
+> extensibility."* (「요리 제잣 낚시 채광 벌목 이것들이 lv별로 있읉네데 저건쥼 호ㅓㄱ장이 떨어짐」)
+> *"Should a trait be something like 'small eater'? That kind would be fine too."* (「특성이 막 절식
+> 이런거여야하나? 그런 것도 괜찮긴할듯」)
+> *"The colour should be a little transparent too — understood?"* (「색도약간 투명한게 맞을듯 이해되나?」)
+
+The session recommended words (traits, not levels); the user overruled:
+
+> *"It has to be levels. But I will keep those words too — just not now."* (「레벨이여야함 근데 저 낱말도
+> 살리긴할껀데 지금은아님」)
+> *"Yes — there are traits, and combat traits, so the words have to be split a bit. Zero to ten, random
+> at birth — no, not at birth, they just have them. I would like it spread out, because as I said there
+> is attack, defence, attack speed separately, so the words have to be defined first."* (「네 이게 특성도
+> 있고, 전투 특성도 있어서 좀 단어를 좀 나눠야 될 거 같긴 해. 영 에서 십 이고, 태어날 때 무작위거든? 태어날
+> 때가 아니라 이제 가지고 있는 거지. 좀 퍼져서 보였으면 좋겠는데? ... 공격력, 방어력, 공격수 이런 것도 따로
+> 있어가지고 단어를 일단 정의해야 돼」)
+> *"There is 적성 and there is 특성, and there is attack — 능력치. How do we split these? ... combat
+> ability, life ability, and personality. Three or so."* (「적성이 있고 특성이 있거든 그리고 공격력 능력치도
+> 있고 ... 전투에 사용되는 능력 생활에 사용되는 능력 그리고 성격 ... 세 개 정도」)
+> *"Then split and show them as 적성 · 특성 · 능력치. And there will be a state, separately — the
+> character's current state has to show."* (「그럼 적성 특성 능력치라 그렇게 해서 나눠서 보이게 해줄래? 그리고
+> 상태가 따로 있겠지 상태?」)
+> *"State is the HP and such. HP, hunger. More to be added gradually. One big panel, from the left:
+> state, stats, aptitudes. Traits probably go under state. Bigger — it is too small now."* (「상태는 그 HP랑
+> 그런 거 있잖아. HP 허기 ... 크게 한 판으로 한 다음에 왼쪽 왼쪽부터 상태, 능력치, 적성. 그리고 상태 쪽에 아마
+> 이제 특성이 들어갈 거 같은데? 크게 좀 조금 크게 해서 지금 너무 작고」)
+
+**The glossary was corrected the same evening**: the morning's 「특성 = 적성」 row became three rows —
+**적성** (five leveled jobs, 0~10, a body carries 0~3 from birth), **특성** (personality words, none yet),
+**능력치** (공격력 · 방어력 · 공격간격) — and a **상태** row (체력 · 허기). The reversal is on the glossary's
+table with the user's words.
+
+**RimWorld was scouted twice** (`docs/reference/2026-09-02-rimworld-pawn-info-panel.md` · `-trait-degrees.md`):
+its glance strip is 432x165 with bars and one line of action, everything countable behind a tab; it has no
+positive/negative label — one def, signed degree. Bad North shows nothing at all. The user:
+
+> *"Then make one like RimWorld's? It is not such a complex game. Simpler — one big single panel."*
+> (「한번 그럼 리머릿드 천 원 만들어 줄래? 너무 너무 복잡한 게임 또 아닌데. 좀 더 심플하게 한 한 칸으로」)
+> *"Hmm, can we not make it look much better? Too much text does not fit these days, I think."* (「음 어떻게
+> 훨씬보기 좋게 못만들까? 글이너무 많은건 요즘에 안맞다고생각해서」)
+
+**Six layouts were stood up in the game and photographed** — four text (세 칸 · 림월드식 · 두 줄 · 이름 크게)
+and, after the user took the icon recommendation (「그렇게해야할듯 지금 좀 많아 정비가 필요해」), two icon
+layouts with ten pixellab icons and the body's own bar. Then:
+
+> *"Hmm — a better way than icons, and further, whether this is right for the gameplay: I am always
+> shaken."* (「음 아이콘보다는 더 좋은 방법 그리고 나아가 이게 게임성이 옳은지 항상 흔들림」)
+
+The session put the map's own line in front of the user — **「1 편은 디펜스 로그라이크, 2 편이 림월드 쪽」** —
+and that no sim rule reads a level today, and recommended cutting back to 이름 · 체력 · 허기. The user:
+
+> *"Hmm. Let us build it first and revise later."* (「음 일단 만들고 이후에 수정하자」)
+> *"No — do not do icons."* (「아니야 아이콘하지마」)
+
+**Round 2** built text layout A — 480x180, alpha 0.8, three columns, fifteen Galmuri lines. `adversary`
+stopped four things before the build: **there was no seed anywhere in `src/sim/`** (the last one died
+2026-08-28) while 08-01 had already decided 「one number drawn when a run opens」 — so `Run.seed` was stood
+up here, planted before the starting four, and 08-01 was told to read it; the 검사 row of `UNITS` is being
+rewritten on another session's branch, so `defense` became a function beside the table instead of a
+column; **「공격속도 2.4」 would read backwards** (the number is seconds between blows), so the label is
+공격간격; and the glossary still said 특성 = 적성. `verify` re-measured the plate and found the pad-12
+reason written on the wrong file (the bevel sits at 5..6, not 6..9) — the literal in `net_panel` is what
+holds 12. `net_names` 58 · `net_panel` 662 · **suite 3161 pass / 4 fail on the tree merged with `main` at
+147d9793** (the same four reds as the session's start, 1691 / 4). `verify-look` twice more.
+
+### What is NOT done
+
+- **03-02 is `claimed`, not resolved** — three of four `Done when` lines are met; **「the user looks and
+  says it passes」 has no word.** The user asked for 마무리 (「마무리 한건가? 이번에 뭐한거더라?」) without
+  saying it.
+- **The user's doubt stands** and is now ticket **03-18** (`Type: grilling`): does the panel keep 적성 and
+  능력치, or was that the second game.
+- **The panel is not the user's pick.** Six layouts were shown; the user cut icons and said build; layout
+  A is the session's choice (its columns are the user's own sentence). Reversible.
+- The plate's right 100 px and bottom 78 px are empty at these column widths · a dead picked body stays in
+  the hand under GAME OVER (03-14) · 특성 has no content (11-01, which now carries the evening's
+  half-answers) · 허기 never drains (05-07).
+- **PR 18 is a draft on `worktree-ticket-03-02-panel`; nothing went to `main`.** The map rule says
+  straight to `main`; this session ran as a background job in a worktree, and merging is the user's.
+
+### What this round measured that lasts
+
+- **pixellab's `create_font` makes A-Z, digits and punctuation only — no Hangul.** Checked against its live
+  schema. Galmuri · Neo둥근모 · 물마루 · 도스고딕 all carry 11,172 syllables free
+  (`docs/reference/2026-09-02-korean-pixel-fonts-for-hud.md`).
+- **pixellab UI panels come back at ~2.2 screen px per art pixel on a 640x368 request**, not an integer;
+  the plate was recovered to its 291x167 native grid by reconstruction error and nine-sliced to size.
+- **Local ComfyUI cannot start from this session** — `WinError 4551`, application control blocks
+  `torch/lib/shm.dll`. The user's own runs are unaffected; a session that needs the local pull should say
+  so at the start.
+- **`--headless --import` keys on mtime**: a copied png keeps its source's mtime and is not re-imported.
+  Two plates were photographed wearing the wrong picture before this was found.
