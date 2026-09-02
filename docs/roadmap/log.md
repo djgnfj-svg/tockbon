@@ -19,6 +19,92 @@
 [roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅✅ **The two defects the user found on screen were built and closed — 2026-09-02, third round**
+
+⚠⚠ **This is the THIRD round of 2026-09-02, and the first of the day that wrote code.** The two rounds
+below it decided; this one built tickets **03-16** and **03-17**, verified each twice, and the user looked
+at the running game and closed both: ***"Yes, it is done — wrap up."*** (「그려 됬다 마무리」).
+
+**The nets**: `1679 pass · 4 fail` at the start, **`2429 pass · 4 fail` at the end** — the same four reds
+(`net_boats` 1 · `net_fx_view` 2 · `net_shell` 1), `net_camera` still stamped incomplete, no new kind of
+stderr. Two net files are new: `net_pick` (600) and `net_seat` (89).
+
+### 1. 03-16 — the turned board was never the defect; the body press was
+
+**Nothing was measured when the round opened**, and the ticket's suspect list named the 판 pick. Five
+probes, anchored on the engine's own `unproject_position` because `how-nets-lie` records that a round
+trip cancels a defect present in both halves, found: **every visible 조각 and 칸 round-trips exactly at all
+four yaws; the transforms match the engine to 0.0007 px; the sweep hypothesis is dead.** The miss was in
+**`Game._point_at`**, which handed `Hand.body_at` a ground point in the `+0.5` convention while
+`soldier_pos` uses the integer-is-centre convention — **half a 조각 of bias that cancelled at 0° and 270°
+and added at 90° and 180°**, where a press on a body's chest or head picked **0/8**. And `adversary` found
+the part no yaw fix reaches: **at 20° pitch the chest ray lands 2.75× further past the feet**, so the
+ground-space pick fails at every yaw once the board tilts down.
+
+**That made it the user's fork, and they took the glass**:
+
+> *"Let us pick the body on the glass."* (「몸은 화면에서 잡자」)
+
+⇒ **`FieldView.body_at_px`** picks by the drawn sprite's rectangle — the ink's width, the canvas's height,
+nearest foot on overlap — and **`_point_at`, `Hand.body_at`, `Look.PICK_BODY_TILES` are deleted**. The
+first build used the 72-texel canvas as the width and `verify-look` caught a press 8 px beside a body
+picking it (2.2× the drawn 33 px); the bounce made it the ink. **A second, yaw-blind defect was measured
+alongside and fixed in the same ticket**: the stepped terrain ray's height quantum (5.02 / 48 = 0.1046)
+left every 2층 pick **0.071 조각 up the screen** and stepped clean over far cliff edges onto the hidden 1층
+behind. The ray now walks every 조각 between two rungs and answers at the exact surface height it meets.
+
+### 2. 03-17 — the seat moved into the occupancy table, and the lattice faces the order
+
+**The cause was read, not measured**: `Hand._seats` drained the north-west 조각 to three before touching
+the next. **The shape was already chosen** — 06-ranks-wide, the 칸's 3x3 lattice, 2026-08-31 — and the
+ticket had misread its facing as the camera's; `log.md` says **「부대의 보는 쪽」**, the squad's. The plan
+was attacked twice by `adversary` and rewritten twice: **v1 seated at order time on the soldier and lost
+every body that never passes through `Hand.order`** — the nine mustered at the 성채, every 짐승, the spilled
+ninth; **v2 moved the seat into `Grid`, assigned in `hold` and freed at any slot clear**, so every body
+takes the one door. Then the user answered the facing:
+
+> *"The lattice faces the order's direction, and the body is picked on the glass."*
+> (「격자는 명령 방향으로, 몸은 화면에서 잡자」)
+
+⇒ `Battle.block_face` per 칸, written by `Hand.order` as 칸 middle minus the centroid of the ordered
+bodies; the view draws a resting body at 칸 middle + `Look.seat_point_tiles(seat, face)` and **glides** it
+there at 3 조각/s; the 이동선 leaves from under the drawn body. **On screen**: nine on a 칸 centred to
+0.000, spacing 0.667, identical at all four yaws; a squad ordered from the south-west stood as a lattice
+turned 25.6°; three wolves off one boat drawn apart. ⚠ **At 40° pitch nine read as three columns of three
+and at 60° as a 3x3** — shown to the user with the launch, no objection, so it stands as accepted.
+
+### 3. What the round measured that nobody had
+
+| What | Number |
+|---|---|
+| **Body press, before** | chest/head **0/8 at yaw 90 and 180** at 40°; at 20° only the foot picked at any yaw |
+| **Terrain ray, before** | 2층 bias **−0.0710 조각**, 8 rounds alike; hidden-ground misses 8·12·8·12 of 284 are what the screen shows and are NOT a defect |
+| **Nine on a 칸, before** | NW 3 · NE 3 · SW 3 · SE 0, the pile 0.5 조각 north-west of the middle |
+| **The fight gap** | a resting body is drawn up to **1.65 조각** from its sim position (the plan said 0.94; the ring capped it at 0.30). Named, not fixed |
+| **Glide cost** | 0.038 ms per frame for 21 bodies |
+| **Mutations that redden the nets** | 03-16: 5 · 03-17: 10, each run and restored by `verify` |
+
+### 4. What did NOT close, by name
+
+- **Nine ordered onto one empty 칸 arrive as five** — the refused body's order is dropped. **03-14's**, and
+  measured identical before this round
+- **The fight measures `soldier_pos` while the screen draws the seat** — up to 1.65 조각 apart
+- **`_clamp_cam` uses unturned extents · the hover lags the sweep one step · `cam_yaw_deg` reads 360 after
+  four turns · `net_camera` aborts on a grid-less `Battle`** — all recorded in the tickets, no ticket of
+  their own
+- ⚠ **Another session moved `GLOSSARY.md` and the map the same day** (08-01's grilling, hunger, 바리케이트,
+  prisoners). **This round's branch is not on `main`** — it has to be merged onto that, and the map's 03
+  rows are where the two will meet
+
+### 5. Two things the process measured about itself
+
+- **`adversary` earned its rule twice**: the v1 plan for 03-17 would have shipped a game where the nine at
+  the 성채 stood on one point; the 03-16 plan would have fixed the yaw and left the pitch. **Neither
+  「looked small」 to the one who wrote it**
+- **`verify-look` found what `verify` could not** — the 2.2× width — because every headless press sat on
+  the sprite's centre line. ⇒ **A pick net presses the edges, not the middle** — the 2026-08-25 lesson
+  again, one axis over
+
 ## ✅✅ **The release got a shape, a fold rule, and a win condition — 2026-09-02, second round**
 
 ⚠⚠ **This is the SECOND round of 2026-09-02.** The section below it is the first one, which turned
