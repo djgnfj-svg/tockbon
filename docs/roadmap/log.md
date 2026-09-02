@@ -95,15 +95,56 @@ the work to be left as work.
 edit directly** (*"Shorten it. And split it if you can"*), so it was done and is recorded here rather
 than passed over in silence. **The rule stands for every round that does not carry that instruction.**
 
+## ✅ **Seven branches went into `main` in one morning — 2026-09-03, a merge session, nothing built**
+
+**The user opened it with 「merge the code-cleanup one, this seems to be the merging session」** (「코드정리하는거
+머지해줘 여기는 머지하는 세션일듯」) and closed it with 「merge the PRs and let us wrap up」 (「자 pr들 합치고
+마무리하자」). **Nothing was designed and nothing was decided.** The session's whole product is `main` holding
+PR 15 · 16 · 17 · 18 · 19 · 20 · 21, each as a `--no-ff` merge commit that names the PR.
+
+**Nets: `main` started at 1691 pass · 4 fail and ended at 3568 · 4.** The four reds are the same four
+(`boats` 1 · `fx_view` 2 · `shell` 1) and `net_camera` still does not finish. Every merge that touched code was
+measured after it landed; one measurement was false first — see 3.
+
+### 1. Where the branches collided, and how the documents were merged
+
+Three sessions wrote into the same opening section of the map and the top of this log on the same day, each
+calling itself the day's 「third」 or 「sixth」 round. **Every section was kept and none was rewritten** — the
+later-finished session sits above the earlier one, and the duplicated round labels were reworded to 「a
+session run alongside」. Every 「pushed, not merged」 line was changed to the PR number that merged it.
+
+### 2. ⚠⚠ One thing the documents now say twice, differently
+
+**Defect 1 of ticket 03-14 — a squad split across two lands.** PR 20's sixth grilling round (19:31) has the
+user's rule as 「send only the bodies that can go, and reduce the count」. PR 21's ticket 03-12 (built 22:41)
+closed the same defect with 「the destination is the intersection, so a split squad goes nowhere」 — and that
+is what runs. **Both are written into 03-14 and the choice is the user's.** Neither session saw the other.
+
+### 3. ⚠⚠ Two things `git` merged cleanly that were wrong
+
+- **`battle.gd`** — PR 19 moved the reach re-check from the start of a blow to its landing 0.4 s later; PR 21
+  changed the check at the start into `_can_hit`, the 눈금 guard from 07-01. Textually both applied; in
+  practice the landing still measured bare distance, so a body that climbed a stair during the swing could be
+  hit across a gap the rule forbids. **Both landings now go through `_can_hit`.** The rule the branch wrote
+  (「both body blows go through `_can_hit`」) is the reason — the merge made it true again rather than
+  choosing a side
+- **`net_fight`** — PR 21's 「a 늑대 at the wall keeps the wall」 row expected the 성채 hit after one sub-step,
+  written against the instant blow PR 19 had already removed. **The row now waits `SWING_LAND_SEC`** and its
+  five-second arithmetic lands at 0.4 · 2.4 · 4.4 s. ⚠ This is the one net edited to pass, and it was edited
+  because its premise had been overturned by a merged ticket, not because it disagreed with the code
+
+### 4. What the merge measured about the harness
+
+- **The runner skips `--import` when every `.gd` has a `.uid`**, and a branch carries its `.uid` files — so a
+  branch that adds a `class_name` (PR 18's `Names`) lands in a checkout whose class cache does not know it,
+  and ten nets die at parse. **`--import` once, then the count the branch wrote.** The cache is not in git
+- **`--import` rewrites every `.import` file's line endings and creates them for every screenshot** — 39
+  untracked files after one run. They were removed; nothing of the merge lives in them
+
 ## ✅✅ **The hand got one button and the bodies started noticing each other — 2026-09-02, an evening session alongside the sixth round, branch `worktree-tickets-03-11-07-01`, not yet on `main`**
 
-⚠⚠ **This round is on a branch off PR 17, and `main` has moved past it (PR 18, the 03-02 panel).** The map,
-this log, the glossary and `03.task.md` will meet at the merge. **Four tickets closed** — 03-11, 03-12,
-03-13, 07-01 — **one was decided and not built** — 07-02 — and **two decisions of the same afternoon were
-reversed the same evening**, both by the user after playing. **The nets: 2668 · 4 at the branch's start,
-2822 · 4 at its end**, 18 nets, the same four reds by name (`net_boats` 1 · `net_fx_view` 2 · `net_shell` 1),
-`net_camera` still incomplete, `net_wake`'s 480 stderr lines pre-existing. The wrap-up ran past midnight
-into 09-03.
+✅ **Merged into `main` as PR 21 on 2026-09-03**, behind PR 18 · 19 · 20; the map, this log, the glossary and
+`03.task.md` were merged by hand, and the 03-02 lines are `main`'s.
 
 ### 1. ⚠⚠ The right-button order lasted one afternoon — reversed to ONE button
 
