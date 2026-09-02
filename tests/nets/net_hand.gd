@@ -125,9 +125,11 @@ const CLIFF_HOME_TY := 0
 ## at (3,2), and flat ground everywhere else.
 ##
 ## ⚠⚠ **THE FIRST ASSERTION OF THE ROW BELOW IS THAT THIS SHAPE IS WHAT IT SAYS**: exactly ONE 조각
-## outside the pressed 칸 is `Grid.can_step` from it, and it is the stair. **That is what makes seating
-## twelve bodies proof that the walk went through the stair**, rather than proof that it found some
-## other way out.
+## outside the pressed 칸 is `Grid.can_step` from it, and it is the stair. **Until 2026-09-02 that is
+## what made seating twelve bodies proof that the walk went through the stair.** The rule flipped that
+## day (03-14 defect 2 — *a spill never changes storey*), so the same one-door shape now makes seating
+## exactly NINE proof that the walk did NOT go through it: there is nowhere else the surplus could
+## have gone, so 「nine」 can only mean 「the door was shut」.
 const PLATEAU := [
 	"........",
 	"........",
@@ -148,6 +150,43 @@ const PLATEAU_PRESSED_TX := 4
 const PLATEAU_PRESSED_TY := 2
 const PLATEAU_STAIR_TX := 3
 const PLATEAU_STAIR_TY := 2
+
+## **The board 03-14 defect 2 was MEASURED on: two storeys, one stair, and a top that can be sealed.**
+## Columns 0-5 stand at level 0, columns 6-11 at level 2, and the one 조각 at (6,2) is the stair
+## between them. The upper storey is **nine 칸** — three block columns by three block rows — so
+## `SEALED_CROWD` bodies fill it to `Rules.BLOCK_CAPACITY` exactly and not one seat is left up there.
+##
+## ⚠⚠ **THE SEAL IS WHAT MAKES THE ROW A MEASUREMENT.** With the top full, the only place a spill can
+## put a body is DOWNSTAIRS, two levels under the 칸 the player pointed at — and `Grid.can_strike`
+## refuses a gap of 2, so a 부대 seated there cannot hit the thing it was aimed at. **That is what the
+## old `_seats` did: nine seats, all at level 0.**
+const SEALED := [
+	"............",
+	"............",
+	"............",
+	"............",
+	"............",
+	"............",
+]
+const SEALED_TIERS := [
+	"......222222",
+	"......222222",
+	"......122222",
+	"......222222",
+	"......222222",
+	"......222222",
+]
+## Nine upper 칸 x the 칸 ceiling — the number that fills the top storey with no seat to spare.
+const SEALED_CROWD := 9 * Rules.BLOCK_CAPACITY
+## A 조각 of the upper 칸 the sealed row presses, and the low corner its 부대 stands in.
+const SEALED_PRESSED_TX := 8
+const SEALED_PRESSED_TY := 0
+const SEALED_HOME_TX := 0
+const SEALED_HOME_TY := 0
+## The stair 조각 of `SEALED_TIERS`, named so the row can prove the two storeys really are joined.
+const SEALED_STAIR_TX := 6
+const SEALED_STAIR_TY := 2
+
 
 ## **Two islands with open water between them — the 03-14 board, and the one the intersection is
 ## measured on** (ticket 03-12, 2026-09-02, the user: 「이동이 하나로 떠야지 하나처럼」 — *"the move must
@@ -185,7 +224,8 @@ func run(t) -> void:
 	_the_hover_line_ends_where_the_press_puts_the_body(t)
 	_the_line_is_redrawn_from_where_the_body_now_stands(t)
 	_the_surplus_does_not_spill_over_a_cliff(t)
-	_the_surplus_walks_down_the_stair_when_that_is_the_only_door(t)
+	_the_surplus_does_not_walk_down_the_stair(t)
+	_a_full_upper_storey_seats_nobody_downstairs(t)
 	_three_bodies_ordered_onto_a_block_land_in_three_pieces(t)
 	_an_order_writes_the_block_facing(t)
 	_a_split_squad_lights_only_what_everybody_can_reach(t)
@@ -696,18 +736,25 @@ func _the_surplus_does_not_spill_over_a_cliff(t) -> void:
 		"넘친 몸도 누른 칸에서 한 걸음 안이다 — 맞닿은 게 아니라 걸어갈 수 있는 곳이다 %s" % [dests])
 
 
-## **When the only way off a 칸 is a stair, the surplus walks down it.**
+## **When the only way off a 칸 is a stair, the surplus does NOT walk down it — it stays where it is.**
 ##
-## ⚠⚠ **THIS IS THE OTHER HALF OF THE ROW ABOVE AND WITHOUT IT THE GATE COULD BE A WALL.** A `_seats`
-## that simply refused every step off the pressed 칸's own storey would pass every assertion up there —
-## the surplus would go nowhere at all, which is a different failure that counts the same. **When a
-## check says a thing cannot happen there must be a neighbouring check that it DOES happen where it
-## should**, which is the rule `net_tiers` wrote down after missing it once.
+## ⚠⚠ **THIS ROW WAS THE EXACT OPPOSITE UNTIL 2026-09-02 AND IT WAS NOT WRONG THEN.** It asserted
+## `sent == 12`, nine upstairs and three down the stair, and it existed as the CONTROL for the row
+## above it: a `_seats` that refused every step off the pressed 칸's own storey would pass the cliff
+## row by seating nobody, which is a different failure that counts the same. **The user then chose
+## exactly that refusal** (03-14 defect 2 — *「a spill never changes storey」*, answered 「as
+## recommended」), so the old expectation is now the defect and this row measures its absence.
 ##
-## ⚠⚠ **THE DOOR ASSERTION IS WHAT MAKES THE SEAT COUNT PROOF.** Exactly one 조각 outside the pressed
-## 칸 is `Grid.can_step` from it and it is the stair, so twelve seats on a 칸 that holds nine can only
-## mean the walk went through the stair — there is no other way out to find.
-func _the_surplus_walks_down_the_stair_when_that_is_the_only_door(t) -> void:
+## ⚠⚠ **THE CONTROL DID NOT GO AWAY, IT MOVED INSIDE THIS ROW.** 「Nobody went downstairs」 is green for
+## a `_seats` that seats nobody at all, so the row asserts **nine bodies DID get seats and every one of
+## them is on the plateau**. The gate is not a wall: the 부대 still walks UP the stair, and what is
+## refused is only putting the surplus on a storey nobody pressed.
+##
+## ⚠⚠ **THE DOOR ASSERTION IS STILL WHAT MAKES THE SEAT COUNT PROOF.** Exactly one 조각 outside the
+## pressed 칸 is `Grid.can_step` from it and it is the stair, so **nine seats on a 칸 that holds nine
+## can only mean the walk did not go through the door** — there is no other way out to find, and no
+## roomier neighbour to explain the number away.
+func _the_surplus_does_not_walk_down_the_stair(t) -> void:
 	var squad := Rules.BLOCK_CAPACITY + Rules.TILE_CAPACITY
 	var b := _battle(PLATEAU, squad, PLATEAU_TIERS)
 	var g := b.grid
@@ -730,19 +777,100 @@ func _the_surplus_walks_down_the_stair_when_that_is_the_only_door(t) -> void:
 	t.eq(doors.size(), 1, "자가 점검 — 그 칸에서 걸어 나갈 수 있는 바깥 조각은 딱 하나다 %s" % [doors])
 	t.eq(int(doors[0]) if doors.size() > 0 else -1, stair, "자가 점검 — 그리고 그 하나가 계단이다")
 
-	t.eq(hand.order(b, pressed), squad, "그래도 열둘이 다 명령을 받는다 — 계단으로 내려가서 앉는다")
+	t.eq(hand.order(b, pressed), Rules.BLOCK_CAPACITY,
+		"천장만큼만 명령을 받는다 — 넘친 셋은 계단을 안 내려간다")
 	var dests := _orders_of(b, ids)
 	var upstairs := 0
 	var on_stair := 0
+	var downstairs := 0
+	var unmoved := 0
+	# ⚠ **The seats only.** Three bodies have no order at all and `-1` is not an index — `_far_seats`
+	# reads `d[seat]` straight, so an unmoved body must never reach it.
+	var seated := PackedInt32Array()
 	for k in dests.size():
-		if g.block_of(int(dests[k])) == pressed:
+		var d := int(dests[k])
+		if d < 0:
+			unmoved += 1
+			continue
+		seated.append(d)
+		if g.block_of(d) == pressed:
 			upstairs += 1
-		if int(dests[k]) == stair:
+		if d == stair:
 			on_stair += 1
-	t.eq(upstairs, Rules.BLOCK_CAPACITY, "고원 칸에는 천장만큼만 앉는다")
+		if g.level_of(d) == 0:
+			downstairs += 1
+	# **The control, and it is the half that a wall would fail.** Nine really were seated, and all nine
+	# are on the 칸 that was pressed — the walk up the stair is untouched.
+	t.eq(upstairs, Rules.BLOCK_CAPACITY, "고원 칸에는 천장만큼이 앉는다 — 올라가는 건 그대로다 %s" % [dests])
 	t.eq(on_stair, 0, "계단 위에는 아무도 안 앉는다 — 지나는 자리지 머무는 자리가 아니다")
-	t.eq(_far_seats(g, pressed, dests, 2), 0,
-		"내려간 셋도 계단 바로 아래다 — 누른 칸에서 두 걸음 안이다 %s" % [dests])
+	t.eq(downstairs, 0, "아래층에 앉은 몸은 하나도 없다 — 넘침은 층을 안 넘는다 %s" % [dests])
+	t.eq(unmoved, squad - Rules.BLOCK_CAPACITY,
+		"자리를 못 받은 셋은 명령이 없다 — 있던 자리에 그대로 선다 %s" % [dests])
+	t.eq(_far_seats(g, pressed, seated, 0), 0,
+		"앉은 아홉은 전부 누른 칸 안이다 — 한 걸음도 밖으로 안 나간다 %s" % [seated])
+
+
+## **A 부대 pressing a FULL upper 칸 gets nothing, and nobody is put downstairs** — the measurement
+## ticket 03-14's defect 2 named, on the board it named.
+##
+## ⚠⚠ **WHAT WAS MEASURED BEFORE THE RULE, DRIVING `Grid`/`Battle`/`Hand` HEADLESS**: this 12x6 board
+## with `SEALED_CROWD` bodies sealing the nine upper 칸, a 부대 of nine downstairs, a press on a full
+## upper 칸 — **nine seats came back and every one was at level 0.** `Rules.MAX_CLIMB_LEVELS` is 1 and
+## the gap from those seats to the aimed 칸 is 2, so `Grid.can_strike` refuses it: **not one of the
+## nine could hit anything standing on the 칸 the player pointed at**, and nothing went red.
+##
+## ⚠⚠ **THE SELF-CHECKS ARE THE TRAP, NOT DECORATION.** 「sent is 0」 is green for a board whose upper
+## 칸 was never lit, green for a 부대 that could not walk anywhere, and green for a press that was
+## refused for some other reason. **So the row first proves the press was a real one**: the two storeys
+## are joined by the stair, the pressed 칸 IS lit for this 부대, the top is full to the ceiling, and
+## **downstairs has room** — the 0 is the rule and not an empty board.
+func _a_full_upper_storey_seats_nobody_downstairs(t) -> void:
+	var squad := Rules.BLOCK_CAPACITY
+	var b := _battle(SEALED, SEALED_CROWD + squad, SEALED_TIERS)
+	var g := b.grid
+	var pressed_tile := g.tile_index(SEALED_PRESSED_TX, SEALED_PRESSED_TY)
+	var pressed := g.block_of(pressed_tile)
+	var home := g.tile_index(SEALED_HOME_TX, SEALED_HOME_TY)
+	var stair := g.tile_index(SEALED_STAIR_TX, SEALED_STAIR_TY)
+
+	# **The board is the two-storey one it says it is, and the stair is the door between them.**
+	t.eq(g.level_of(pressed_tile), 2, "자가 점검 — 누를 칸은 위층이다")
+	t.eq(g.level_of(home), 0, "자가 점검 — 부대가 설 구석은 아래층이다")
+	t.ok(Grid.is_stair_level(g.level_of(stair)), "자가 점검 — 두 층 사이에 계단이 있다")
+
+	# **Seal the top first.** The crowd is not in the hand — it is what fills the nine upper 칸.
+	var crowd := _stand_all(b, SEALED_CROWD, pressed_tile)
+	t.eq(crowd.size(), SEALED_CROWD, "자가 점검 — 위층에 %d 이 다 섰다" % [SEALED_CROWD])
+	t.eq(g.block_hold_count(pressed), Rules.BLOCK_CAPACITY,
+		"자가 점검 — 누를 칸은 천장까지 찼다")
+
+	var ids := PackedInt32Array()
+	for k in squad:
+		if b.place_ashore(SEALED_CROWD + k, home) >= 0:
+			ids.append(SEALED_CROWD + k)
+	t.eq(ids.size(), squad, "자가 점검 — 아래층에 아홉이 섰다")
+
+	var hand := Hand.new()
+	t.ok(hand.pick_many(b, ids), "자가 점검 — 손이 그 아홉을 쥐었다")
+	t.ok(hand.can_reach_block(pressed), "자가 점검 — 계단으로 올라갈 수 있어서 그 칸은 밝다")
+	# **Downstairs has room**, so a 0 cannot be explained by a board with nowhere left to stand — which
+	# is exactly where the old `_seats` put the nine.
+	t.ok(g.has_room(g.tile_index(SEALED_HOME_TX + 3, SEALED_HOME_TY + 3)),
+		"자가 점검 — 아래층에는 자리가 남아 있다")
+
+	t.eq(hand.order(b, pressed), 0, "찬 위층 칸을 누르면 아무도 안 간다")
+	var dests := _orders_of(b, ids)
+	var moved := 0
+	var downstairs := 0
+	for k in dests.size():
+		var d := int(dests[k])
+		if d < 0:
+			continue
+		moved += 1
+		if g.level_of(d) == 0:
+			downstairs += 1
+	t.eq(moved, 0, "명령을 받은 몸이 하나도 없다 %s" % [dests])
+	t.eq(downstairs, 0, "아래층에 앉힌 몸은 하나도 없다 — 옛 자리 아홉이 여기였다 %s" % [dests])
 
 
 ## **Every 조각 outside `block` that a body standing in `block` may step onto**, ascending in discovery
