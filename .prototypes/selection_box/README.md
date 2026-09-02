@@ -19,10 +19,27 @@ with it).
 python .prototypes/selection_box/sheet.py                                                          # all on one sheet
 ```
 
-**Watching**: `LEFT`/`RIGHT` cycle the candidates, `ESC` quits. A bare number on the command line
-opens on that candidate. **The game's own keys still work** — `Q`/`E` turn a quarter through the
-game's own sweep, `W`/`A`/`S`/`D` pan, `R`/`F` tilt, the wheel zooms. ⚠ The game has no zoom on W/S;
-those pan. The candidate's `NAME` is drawn top-left.
+**Watching — the box does the whole gesture** (2026-09-02, the user at the lab, translated: *"Drag
+→ the ones inside get selected → the move 판 lights → move."*): **the left drag draws the box**,
+and on release every 검사 whose drawn body overlaps it goes into the hand through the game's own
+`pick_many`, the reach lights, and the box stays up while the hand is full. Nobody inside: let go,
+box down. A press under 6 px is a click: a body under it is picked, empty ground lets go — the
+game's own `_press_the_island`. **The right button is the game's**: press a lit 칸 and 03-11's
+order sends everyone picked, the hand empties and the box comes down. The lab opens as if the fixed
+drag had just been released — four in the hand, reach lit. `LEFT`/`RIGHT` cycle the candidates,
+re-mounting with the drag you last made while the hand is full. `ESC` quits. A bare number on the command line opens on that candidate. **The game's own keys still work**
+— `Q`/`E` turn a quarter through the game's own sweep, `W`/`A`/`S`/`D` pan, `R`/`F` tilt, the wheel
+zooms, the right button orders. ⚠ The game has no zoom on W/S; those pan. The candidate's `NAME` is
+drawn top-left.
+
+⚠⚠ **In the lab the left button belongs to the box.** The lab consumes left presses and releases
+before they reach the game, so the game's own pick / let-go on a left press does not fire here. Motion
+is not consumed — the hover plate keeps working.
+
+`-- drive` (watch mode) feeds the gesture through `Input.parse_input_event`: a click on the sea (let
+go), a drag over the four at the door (picked 4), a right press on a lit 칸 two 칸 east (all four
+`soldier_order` in that 칸, hand empty, box down), three RIGHT taps, a second drag, quit — printing
+each step. The harness's own proof of the live gesture.
 
 **Shooting**: for every candidate — mount, photograph `out/<NN-name>_yaw0.png`, send the game its own
 `Q`, wait for `cam_yaw_deg` to stop changing with nothing owed to the sweep, three more ticks, photograph

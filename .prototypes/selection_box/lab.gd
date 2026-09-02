@@ -36,8 +36,43 @@ const OUT := "res://.prototypes/selection_box/out/%s_%s.png"
 const DRAG_A := Vector2(440.0, 345.0)
 const DRAG_B := Vector2(660.0, 445.0)
 
+## A press that moves less than this before release is a click, and the box is not touched.
+const DRAG_MIN_PX := 6.0
+
 ## How many ashore bodies the boot waits for before anything is mounted. The island opens with four.
 const ASHORE_WANTED := 4
+
+
+## **Catches the left button before it reaches the game** (2026-09-02, the user at the lab:
+## 「마우스로 드래그하는 거 아냐?」 — *"isn't it supposed to be dragged with the mouse?"*). `_input`
+## runs before `_unhandled_input`, and marking the event handled is what keeps `Game._press_the_island`
+## from picking or letting go on the same press. ⚠ **In the lab the left button belongs to the box.**
+## Motion is recorded and NOT consumed — the game's hover plate and pointer keep reading it.
+class DragCatcher extends Node:
+	var armed := false
+	var down := false
+	var released := false
+	var pressed_at := Vector2.ZERO
+	var pos := Vector2.ZERO
+
+	func _input(event: InputEvent) -> void:
+		if event is InputEventMouseMotion:
+			pos = (event as InputEventMouseMotion).position
+			return
+		if not (event is InputEventMouseButton):
+			return
+		var click := event as InputEventMouseButton
+		if click.button_index != MOUSE_BUTTON_LEFT:
+			return
+		pos = click.position
+		if click.pressed:
+			down = true
+			pressed_at = click.position
+		else:
+			down = false
+			released = true
+		if armed:
+			get_viewport().set_input_as_handled()
 ## Frames the boot will wait for them before giving up and saying so.
 const BOOT_FRAMES_MAX := 900
 
@@ -61,13 +96,28 @@ var _drag := {}
 ## Yaw read on the previous gated step, for the settle wait after a Q or E.
 var _yaw_last := INF
 var _settled := 0
+## The live drag (watch mode only). `_dragging` is true from the press to the release; `_moved` says
+## whether this press has passed `DRAG_MIN_PX` yet; once it has, `_drag` IS the live one and ←/→
+## re-mount with it. `-- shoot` never touches any of this, so the sheet stays reproducible.
+var _catch: DragCatcher = null
+var _dragging := false
+var _moved := false
+var _drag_a := Vector2.ZERO
+## `-- drive`: a scripted drag fed through `Input.parse_input_event`, the engine's own input path, so
+## the live drag can be proven without a hand on the mouse. Prints every remount, then quits.
+var _drive := false
+var _drive_frame := 0
 
 
 func _initialize() -> void:
 	root.size = Vector2i(int(Look.VIEWPORT_W_PX), int(Look.VIEWPORT_H_PX))
 	game = Game.new()
 	root.add_child(game)
-	_shooting = OS.get_cmdline_args().has("shoot") or OS.get_cmdline_user_args().has("shoot")
+	var args := OS.get_cmdline_args() + OS.get_cmdline_user_args()
+	_shooting = args.has("shoot")
+	_drive = args.has("drive") and not _shooting
+	_catch = DragCatcher.new()
+	root.add_child(_catch)
 
 
 func _process(_delta: float) -> bool:
@@ -133,6 +183,11 @@ func _boot_step() -> bool:
 					if a.is_valid_int() and int(a) >= 1 and int(a) <= _names.size():
 						start = int(a) - 1
 				_show(start)
+				# The lab opens as if the fixed drag had just been released: the box up, the bodies
+				# inside it in the hand, the reach lit. Otherwise the poll below takes the box down
+				# on the first frame, because nothing is picked yet.
+				_release_box()
+				_catch.armed = true
 	_boot += 1
 	return false
 
@@ -257,9 +312,20 @@ func _apply(k: int) -> void:
 	_cand.mount(game, field, _drag)
 
 
+func _unmount() -> void:
+	if _cand != null:
+		_cand.unmount()
+		_cand = null
+
+
 func _show(k: int) -> void:
 	_i = posmod(k, _names.size())
-	_apply(_i)
+	# ⚠ In watch mode the box stands only while the hand is full or a drag is in flight — a candidate
+	# switched to with nothing picked is named on the label and drawn on the next drag.
+	if _shooting or _dragging or not game.hand.is_empty():
+		_apply(_i)
+	else:
+		_unmount()
 	_set_label()
 
 
@@ -270,7 +336,7 @@ func _set_label() -> void:
 	if _shooting:
 		_label.text = name
 	else:
-		_label.text = "%d/%d  %s\nLEFT/RIGHT cycle · Q/E turn · WASD pan · R/F tilt · wheel zoom · ESC quit" % [
+		_label.text = "%d/%d  %s\nleft drag = the box · LEFT/RIGHT cycle · Q/E turn · WASD pan · R/F tilt · wheel zoom · ESC quit" % [
 			_i + 1, _names.size(), name]
 
 
@@ -369,8 +435,216 @@ func _tap(code: Key) -> bool:
 func _watch() -> bool:
 	if Input.is_key_pressed(KEY_ESCAPE):
 		return true
+	if _drive and _drive_step():
+		return true
 	if _tap(KEY_RIGHT):
 		_show(_i + 1)
 	if _tap(KEY_LEFT):
 		_show(_i - 1)
+	_live_drag()
+	# **The box lives exactly as long as the hand is full.** The right button's order goes to the
+	# game untouched, `_order_the_island` lets go, and this line takes the box down on that frame.
+	if _cand != null and not _dragging and game.hand.is_empty():
+		_unmount()
 	return false
+
+
+## **The whole gesture, and not a picture beside it** (2026-09-02, the user at the lab, translated:
+## *"when I drag, several should get selected... nothing gets selected, so how do I move them after
+## dragging? Drag → the ones inside get selected → the move 판 lights → move."*).
+##
+## Press: A is the press point. Held: B is the pointer, every frame, and once the drag has passed
+## `DRAG_MIN_PX` the drag dictionary is rebuilt exactly as the fixed one is (`_make_drag`) and the
+## candidate is unmounted and mounted again with it — for the screen-space and the ground-laid
+## candidates alike (04 re-projects its edge points every frame; that is its declared cost and it is
+## let show). Release over 6 px: every 검사 whose DRAWN body overlaps the rect goes into the hand
+## through the game's own `pick_many` and the reach lights through `_tell_the_view`; nobody inside
+## lets go. Release under 6 px: a click, handed to the game's own `_press_the_island` — a body under
+## it is picked, empty ground lets go.
+func _live_drag() -> void:
+	if _catch.down and not _dragging:
+		_dragging = true
+		_moved = false
+		_drag_a = _catch.pressed_at
+	if not _dragging:
+		return
+	var b: Vector2 = _catch.pos
+	if not _moved and b.distance_to(_drag_a) >= DRAG_MIN_PX:
+		_moved = true
+	if _moved:
+		_drag = _make_drag(_drag_a, b)
+		_apply(_i)
+		if _drive:
+			print("[lab] remount %s rect=%s" % [str(_cand.NAME), str(_drag["rect"])])
+	if _catch.released:
+		_catch.released = false
+		_dragging = false
+		if _moved:
+			print("[lab] drag A=%s B=%s rect=%s" % [str(_drag["a"]), str(_drag["b"]), str(_drag["rect"])])
+			_release_box()
+		else:
+			# The game's own left press: `body_at_px` first, then the let-go on nothing.
+			game._press_the_island(b)
+			print("[lab] click at %s → hand holds %d" % [str(b), game.hand.ids.size()])
+
+
+## **The release of the box**: pick everyone drawn inside the rect, or let go. Also what the boot
+## does with the fixed drag, so the lab opens mid-gesture rather than before it.
+func _release_box() -> void:
+	var picked := _bodies_in_rect(_drag["rect"])
+	if picked.is_empty():
+		game._let_go()
+		_unmount()
+		print("[lab] picked 0: nobody drawn inside the rect — let go")
+		return
+	game.hand.pick_many(game.battle, picked)
+	game._tell_the_view()
+	print("[lab] picked %d: %s  reach=%d 조각 / %d 칸" % [game.hand.ids.size(), str(game.hand.ids),
+		game.hand.reach.size(), game.hand.reach_blocks.size()])
+
+
+## **Every ashore 검사 whose drawn picture overlaps `rect`**, measured the way `FieldView.body_at_px`
+## measures a press — the sprite's foot and top through `world_to_screen_px`, its ink columns through
+## `_ink_cols` — so a body whose head or shoulder is in the box counts, and one standing just under
+## its edge does not. ⚠ The arithmetic is copied from `body_at_px` because that function answers one
+## body for one point and has no rect twin; a lab may copy, `src/` may not.
+func _bodies_in_rect(rect: Rect2) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var px_per_tile: float = Look.VIEWPORT_W_PX / field._visible_ground_px().x * Look.TILE_PX
+	for raw_id in field._sprite_of_soldier:
+		var k := int(field._sprite_of_soldier[raw_id])
+		if k < 0 or k >= field._sprites.size():
+			continue
+		var s: Sprite3D = field._sprites[k]
+		if not s.visible or s.texture == null:
+			continue
+		var xz := Vector2(s.position.x, s.position.z) * Look.TILE_PX
+		var half_tall := float(s.texture.get_height()) * s.scale.y * s.pixel_size * 0.5
+		var foot: Vector2 = field.world_to_screen_px(xz, s.position.y - half_tall)
+		var top: Vector2 = field.world_to_screen_px(xz, s.position.y + half_tall)
+		var texel_px := s.scale.x * s.pixel_size * px_per_tile
+		var half_w := float(s.texture.get_width()) * 0.5
+		var span: Vector2i = field._ink_cols.get(s.texture, Vector2i(0, s.texture.get_width() - 1))
+		var left := foot.x + (float(span.x) - half_w) * texel_px
+		var right := foot.x + (float(span.y) + 1.0 - half_w) * texel_px
+		var drawn := Rect2(left, top.y, right - left, foot.y - top.y)
+		if drawn.intersects(rect):
+			out.append(int(raw_id))
+	out.sort()
+	return out
+
+
+# --- the scripted drive, for proving the live drag through the engine's own input ------------------
+
+func _feed_mouse(at: Vector2, button: int, pressed: bool) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = button as MouseButton
+	ev.pressed = pressed
+	ev.position = at
+	ev.global_position = at
+	Input.parse_input_event(ev)
+
+
+func _feed_motion(at: Vector2) -> void:
+	var ev := InputEventMouseMotion.new()
+	ev.position = at
+	ev.global_position = at
+	Input.parse_input_event(ev)
+
+
+func _feed_key(code: Key, pressed: bool) -> void:
+	var ev := InputEventKey.new()
+	ev.keycode = code
+	ev.physical_keycode = code
+	ev.pressed = pressed
+	Input.parse_input_event(ev)
+
+
+## The 칸 the drive orders onto, and who was picked, remembered across the frames the gesture takes.
+var _drive_block := -1
+var _drive_ids := PackedInt32Array()
+
+
+## Frame-numbered: a click on empty sea (lets go, box down), a drag over the four at the door (picked
+## 4, reach lit), a RIGHT press on a lit 칸 two 칸 east (03-11's order: everyone walks, the hand
+## empties, the box comes down), three RIGHT taps to 04, a second drag there, then quit.
+func _drive_step() -> bool:
+	var f := _drive_frame
+	_drive_frame += 1
+	var sea := Vector2(1100.0, 600.0)
+	var a1 := Vector2(440.0, 345.0)
+	var b1 := Vector2(660.0, 445.0)
+	var a2 := Vector2(300.0, 200.0)
+	var b2 := Vector2(540.0, 330.0)
+	if f == 5:
+		_feed_mouse(sea, MOUSE_BUTTON_LEFT, true)
+	elif f == 7:
+		_feed_mouse(sea, MOUSE_BUTTON_LEFT, false)
+	elif f == 9:
+		print("[lab] after the sea click: hand holds %d, box %s" % [
+			game.hand.ids.size(), "up" if _cand != null else "down"])
+	elif f == 10:
+		_feed_mouse(a1, MOUSE_BUTTON_LEFT, true)
+	elif f > 10 and f <= 40:
+		_feed_motion(a1.lerp(b1, float(f - 10) / 30.0))
+	elif f == 41:
+		_feed_mouse(b1, MOUSE_BUTTON_LEFT, false)
+	elif f == 50:
+		_drive_ids = game.hand.ids.duplicate()
+		_drive_block = _block_two_east()
+		var at := _block_screen_px(_drive_block)
+		print("[lab] reach lit: %d 조각, order 칸 %d at screen %s, can_reach=%s" % [
+			game.hand.reach.size(), _drive_block, str(at), str(game.hand.can_reach_block(_drive_block))])
+		_feed_mouse(at, MOUSE_BUTTON_RIGHT, true)
+	elif f == 52:
+		_feed_mouse(_block_screen_px(_drive_block), MOUSE_BUTTON_RIGHT, false)
+	elif f == 56:
+		var tiles: PackedInt32Array = grid.tiles_of_block(_drive_block)
+		var all_in := true
+		var orders := []
+		for id in _drive_ids:
+			var o := int(game.battle.soldier_order[id])
+			orders.append(o)
+			all_in = all_in and tiles.has(o)
+		print("[lab] after the order: soldier_order=%s all in 칸 %d: %s, hand holds %d, box %s" % [
+			str(orders), _drive_block, str(all_in), game.hand.ids.size(), "up" if _cand != null else "down"])
+	elif f in [60, 70, 80]:
+		_feed_key(KEY_RIGHT, true)
+	elif f in [62, 72, 82]:
+		_feed_key(KEY_RIGHT, false)
+	elif f == 90:
+		_feed_mouse(a2, MOUSE_BUTTON_LEFT, true)
+	elif f > 90 and f <= 120:
+		_feed_motion(a2.lerp(b2, float(f - 90) / 30.0))
+	elif f == 121:
+		_feed_mouse(b2, MOUSE_BUTTON_LEFT, false)
+	elif f == 140:
+		print("[lab] drive done on %s, hand holds %d, box %s" % [
+			str(_names[_i]), game.hand.ids.size(), "up" if _cand != null else "down"])
+		return true
+	return false
+
+
+## A lit 칸 two 칸 east of the picked bodies' own 칸, or the first lit 칸 that is not their own.
+func _block_two_east() -> int:
+	if game.hand.ids.is_empty():
+		return -1
+	var p: Vector2 = game.battle.soldier_pos[int(game.hand.ids[0])]
+	var here := grid.block_of(grid.tile_index(int(p.x), int(p.y)))
+	var east := grid.block_of(grid.tile_index(int(p.x) + 2 * Rules.BLOCK_TILES, int(p.y)))
+	if game.hand.can_reach_block(east):
+		return east
+	for b in game.hand.reach_blocks:
+		if int(b) != here:
+			return int(b)
+	return -1
+
+
+## The middle of a 칸 on the glass, through the same conversion the bodies are drawn with.
+func _block_screen_px(block: int) -> Vector2:
+	var tiles: PackedInt32Array = grid.tiles_of_block(block)
+	var mid := Vector2.ZERO
+	for t in tiles:
+		mid += Vector2(int(t) % grid.w, int(t) / grid.w)
+	mid /= float(maxi(tiles.size(), 1))
+	return field.world_to_screen_px(Look.tile_point_px(mid), field._ground_h(int(mid.x), int(mid.y)))
