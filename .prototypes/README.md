@@ -23,13 +23,14 @@ it is the difference between a round that takes an hour and a round that takes a
 | **something moving over time** | `wake/lab.gd` | a boat sailing a path, four frames per candidate seconds apart, the shipped sea as the control |
 | **whether a body can physically get somewhere** | `stairs/walk_probe.gd` | a probe that prints numbers instead of taking a picture |
 | **where a crowd STANDS, and how it gets there** | `nine/lab.gd` | the real game opened, nine 검사 in one 블록, the sim frozen for stills and stepped by hand for a walk, plus two probes |
+| **a HAND gesture — a drag, a box, a press that picks or orders** | `selection_box/lab.gd` | a copy of `pads` that drives the real game: the left drag does the WHOLE gesture through the game's own `pick_many`, reach and order, so the user tries it by hand; candidates mount on screen or in the field's world; `-- drive` feeds the gesture through `parse_input_event` as the harness's own proof |
 
 ## The three families, and which one you are in
 
 - **Builds its own little world** — `shoreline`, `swash/lab.gd`, `sea/island_lab.gd`, `sea/open_lab.gd`, `wave`, `wake`.
   One block, one sea plane, the game's camera and sun. **Seconds to run, and nothing else in frame.**
   ⚠ Use it when the thing being judged is the SURFACE, not the place.
-- **Drives the REAL game** — `pads`, `props`, `merge`, `swash/island_lab.gd`, `palette/shoot_one.gd`.
+- **Drives the REAL game** — `pads`, `props`, `merge`, `selection_box`, `swash/island_lab.gd`, `palette/shoot_one.gd`.
   Opens `Game`, presses 시작하기, hangs candidates in the field's own world. **Slower, and the only
   honest answer when the candidate has to sit on ground the game actually ships.**
 - **A probe, not a picture** — `stairs/walk_probe.gd`. Prints measurements. No swapchain needed.
@@ -104,6 +105,12 @@ to the table above and copy the other one.
 **`bush/`** (three candidates: a baked mesh, quads, a Bad North card) and **`props/`** carry no
 `README.md` and `bush/` has no runner at all — its candidates are opened one at a time. Anyone who
 touches either should leave one behind.
+
+✅ **`selection_box/04-ground-decal` WON on 2026-09-02** (the user, playing the game: 「선말고 선택된 부분을
+약간 드래그 영역 안쪼 생상이 보여야함」 — *"not the line, the colour inside the drag area"*). It grew into
+**`FieldView.set_box`** — a mint fill on the terrain at alpha 0.28 with a thin outline. **The four losers
+were deleted** the same night, per the skill; the sheet is `docs/reference/2026-09-02-selection-box-prototypes/`.
+⚠ The lab's README still describes five candidates and a right-button order — read it as the round's record.
 
 ✅ **`bush/03-badnorth` WON on 2026-08-31** (the user: 「2d로해서 적용만해줘」). Its `card.gdshader`
 grew into **`src/view/prop_card.gdshader`**, with the shared `wind.gdshaderinc` folded in because the

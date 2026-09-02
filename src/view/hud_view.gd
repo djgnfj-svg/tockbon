@@ -7,6 +7,13 @@ extends Node2D
 ## Red letters, it just appears, and that is the end."*). **The island keeps drawing behind it and the
 ## board stops answering**, which is the same day's answer and lives in `game.gd`.
 ##
+## ⚠⚠ **「ONE THING」 WAS TWO FOR PART OF 2026-09-02 AND IS ONE AGAIN** (ticket 03-12): **the selection
+## box** the left drag pulls over the island lived here for a few hours — a pulled picture cut into four
+## corners and four stretched edges, in SCREEN space — and the user's verdict on it was that it was not
+## the candidate they chose: 「이게 일단 4번이 적용된게 맞음? 이게 아니였는데」 — *"was number 4 applied? this
+## was not it."* **The box is a shape on the terrain now, `FieldView.set_box`**, and nothing of it is
+## left on this layer: no rect, no picture, no leaf.
+##
 ## ⚠⚠ **IT DREW NOTHING AT ALL FROM 2026-08-28 UNTIL THEN, AND THE BAR THAT ENDED THAT IS THE POINT.**
 ## Three things went in one day, all on the user's word:
 ##
@@ -164,9 +171,10 @@ func set_over(over: bool) -> void:
 ## whatever the designed HUD needs, and not one frame earlier.
 
 
-## **One thing and one thing only: the words, once the island is lost.** Everything else on this layer
-## is still deleted — see the header, and the ticket's own "out of scope" (no win screen, no stats, no
-## way back). While the island stands this is the empty canvas it has been since 2026-08-28.
+## **The words once the island is lost, and nothing else.** Everything else on this layer is still
+## deleted — see the header, and the ticket's own "out of scope" (no win screen, no stats, no way
+## back). While the island stands this is the empty canvas it has been since 2026-08-28. ⚠ The
+## selection box was drawn above this early return for part of 2026-09-02 and is the field's now.
 ## ⚠ **`battle` is still bound** by `game._open_island`, so the wiring a real HUD needs is live and
 ## `net_shell` still measures that the bind happened. ⚠ **`_over` and not `battle.lost`** — see
 ## `set_over`; the shell owns which screen is up.

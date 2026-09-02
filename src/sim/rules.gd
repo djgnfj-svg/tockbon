@@ -93,8 +93,11 @@ const EPS := 1e-4
 
 ## The detect column's answer for a body that has no detection radius at all.
 ## ⚠⚠ **-1.0 AND NEVER 0.0.** A caller that reads a missing radius as zero freezes every body that has
-## one. **It outlived `detect_of`** (deleted 2026-08-29 with the fight) because `UNITS` still carries
+## one. **It outlived `detect_of`'s deletion** (2026-08-29 to 2026-09-02) because `UNITS` still carried
 ## the column, and a table row cannot hold a name that is not declared.
+## ⚠ **No row carries it since 2026-09-02** — the 검사's cell went to 3.0 in ticket 07-01. It stays
+## declared as the answer for a body that has none; `detect_of` returns it raw, and a scan that reads
+## `d > -1.0` refuses everything, which is the whole of what 「no radius」 has to mean.
 const NO_DETECT := -1.0
 
 
@@ -251,8 +254,13 @@ const UNITS := [
 	# **A sword has no reach**, so the range column is 0 where the spear had 1 — and the period and the
 	# speed take the faster of the two, because a swordsman that is slower than a spearman AND has less
 	# reach is a row that loses for a reason nobody chose.
-	# ⚠ **`NO_DETECT` because the player's bodies are commanded, not triggered** — the detect column is
-	# what makes a defender stand still until something walks near it.
+	# ⚠⚠ **DETECT 3.0 SINCE 2026-09-02, AND IT WAS `NO_DETECT` 「because the player's bodies are
+	# commanded, not triggered」** — reversed by the user off the screen, watching a 검사 and a 늑대 pass
+	# within two 조각 of each other and walk on (「너무 그냥 지나감 얼추 비슷하면 싸워야하는데」 — *"they
+	# just walk straight past; if they are roughly close they should fight"*). **3.0 is a 칸's diagonal,
+	# 2.828, rounded up**: a 검사 notices anything standing on a 칸 that touches his own and nothing
+	# further, and it is half the 늑대's 6.0 so the hunter always notices first. Ticket 07-01.
+	# ⚠ **Noticing is aiming, not walking** — the 검사 still does not move on his own (07-02).
 	# ⚠⚠ **THE PERIOD WENT 1.2 → 2.4 AND THE DAMAGE 2.5 → 5.0 IN THE SAME EDIT** (2026-08-31, the user:
 	# 「애니메이션을 좀더 늘려줘 좀더 공격 텀이 있는 느낌?」 — *"stretch the animation out, more of a
 	# sense of an interval between attacks"*). **The swing became eight frames, 0.96 s**, and at a 1.2 s
@@ -264,7 +272,7 @@ const UNITS := [
 	# looking at instead of a stream. ⇒ **A fight that gets shorter or longer after this is a bug**,
 	# not a balance change.
 	# ⚠ **2.4 divides cleanly by 2, 3 and 6**, which `SPEED_STEPS` requires of every period here.
-	["SWORDSMAN", 18.0, 5.0, 2.4, 0.0, 0.0, 3.2, NO_DETECT, Side.PLAYER, "검사"],
+	["SWORDSMAN", 18.0, 5.0, 2.4, 0.0, 0.0, 3.2, 3.0, Side.PLAYER, "검사"],
 	# ⚠⚠ **The beasts crossed sides and their numbers did NOT move.** The wolf is the one row a whole
 	# run has been played on; re-tuning it in the same edit that flips its side would make a later
 	# difference unattributable. **They gained a detect radius** — an enemy has to notice something.
@@ -293,9 +301,10 @@ const _COL_LABEL := 9
 ## ⚠⚠ **`hp_of` · `damage_of` · `period_of` · `range_of` ARE BACK** (2026-08-30, 티켓 41's 목~일
 ## slice) after being deleted with the fight on 2026-08-29. **Their columns never left `UNITS`**, which
 ## is why restoring them cost four lines: they are the only numbers in this repo that came from PLAYING,
-## and the deletion note said so at the time. `name_of`, `area_of` and `detect_of` stay deleted — the
-## splash radius and the detection radius have no reader, and a beast walks at the 성채 rather than
-## noticing anything.
+## and the deletion note said so at the time. `name_of` and `area_of` stay deleted — the splash radius
+## has no reader. ⚠ **`detect_of` is back since 2026-09-02** (ticket 07-01): `Battle._phase_targeting`
+## is its reader, and a beast notices a 검사 before it reaches the 성채 — until then the note here said
+## the detection radius had no reader and a beast walked at the 성채 rather than noticing anything.
 
 
 static func speed_of(type_id: int) -> float:
@@ -346,6 +355,15 @@ static func range_of(type_id: int) -> float:
 ## is 0, so a swordsman's whole reach is the bonus — see `REACH_BONUS` for what that number cost.
 static func reach_of(type_id: int) -> float:
 	return range_of(type_id) + REACH_BONUS
+
+
+## **How far this row NOTICES a body of the other side, in 조각 — the detect column raw.** Inside it a
+## body is aimed at, walked at and faced; only inside `reach_of` is it hit.
+## ⚠⚠ **NEVER PLUS `REACH_BONUS`.** `reach_of` is the ONE place that sum is written; mirroring it here
+## would make the 늑대's detection 7.75 with nothing on screen or in the table saying so, and
+## `net_fight` pins 6.0 against exactly that. `NO_DETECT` comes back raw for a row that has none.
+static func detect_of(type_id: int) -> float:
+	return float(UNITS[type_id][_COL_DETECT])
 
 
 static func side_of(type_id: int) -> int:

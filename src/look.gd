@@ -522,9 +522,20 @@ const SEAT_PITCH_TILES := Rules.BLOCK_TILES / 3.0
 
 ## **How fast a resting body's drawn point slides onto its seat, in 조각 per second.** ~3, so the 0.7
 ## 조각 from a 조각 centre to the 칸's middle takes a quarter of a second — a slide, not a pop, and not
-## a drift either. ⚠ **Only at rest**: a walking body is drawn exactly where the sim says, so this never
-## lags a walk. `FieldView._seat_glide` is the one piece of state it moves.
+## a drift either. ⚠ **Only at rest**: a walking body is drawn at the sim's point plus the seat offset
+## it left with (`SEAT_OFFSET_MAX_TILES`), so this never lags a walk. `FieldView._seat_glide` is the
+## one piece of state it moves.
 const SEAT_GLIDE_TILES_PER_S := 3.0
+
+## **How far from the sim's own point a WALKING body may be drawn, in 조각** — half a 칸. A body at rest
+## is drawn on its seat, up to 0.94 조각 from the 조각 centre the sim has it on, and when it is ordered
+## it keeps that offset for the whole walk so it leaves from where it stood and stays apart from the
+## bodies it shared a 조각 with (2026-09-02, the user: 「on a move order they depart as if newly spawned」
+## and 「the characters overlap when moving」). Half a 칸 is the most any seat is from its 조각 centre
+## with room to spare; anything past it is not a seat the body was standing on but a place the view
+## was told to draw it, and carrying that across the island would be the screen doing a thing the sim
+## did not. `FieldView._seat_offset` is the table it bounds.
+const SEAT_OFFSET_MAX_TILES := Rules.BLOCK_TILES * 0.5
 
 
 ## **The hills** (2026-08-24, the user: 「뭔가 대각선으로 올라가는 건 있나 혹시? 뭔가 지금 너무 딱딱해서
@@ -600,6 +611,13 @@ const CAM_ROAM_TILES := 20.0
 ## ⚠ **It takes nothing away.** A press that releases without travelling is still a walk order; only a
 ## press that MOVES becomes a look-around. ⚠ **Small on purpose**: a threshold big enough to be
 ## comfortable is a threshold that swallows short drags, and a hand that moves 6 px was never clicking.
+##
+## ⚠⚠ **THE NAME SAYS PAN AND IT GATES A BOX SINCE 2026-09-02** (ticket 03-12, the user: 「동작이 단순해야함
+## 왼쪽으로 드래그 왼쪽으로 칸누르기로 해야할듯」 — *"the actions must be simple — left drag, and left
+## press on a 칸"*). A left press that travels past this is a SELECTION BOX now; the pan is the keys' and
+## the edge band's, and no drag pans. Everything above about what a travelling press must not swallow
+## still holds — a click is still a click under it. **The rename is `naming`'s round, not 03-12's**, so
+## this is the glossary's own 「이름만 보면 / 실제로는」 trap, written down where it lives.
 const DRAG_PAN_THRESHOLD_PX := 6.0
 
 ## ⚠⚠ **FOUR CAMERA-TRAVEL CONSTANTS STOOD HERE, ALL FOUR WERE DELETED, AND ALL FOUR ARE BACK**
@@ -2435,6 +2453,70 @@ static func back_to_title_rect_px(over_size: Vector2, button_size: Vector2) -> R
 	return Rect2(Vector2(x, y), button_size)
 
 
+## **The selection box — the rectangle a left drag pulls over the island** (ticket 03-12, 2026-09-02, the
+## user: *"Drag to select and move them. There is no other method as good as that one."*).
+##
+## ⚠⚠ **IT IS A SHAPE ON THE GROUND, NOT A PICTURE ON THE GLASS** (2026-09-02, the user's verdict on the
+## first build). The ticket installed candidate 01 — a pulled `frame_01` outline cut into eight pieces on
+## the HUD — and the user had expected candidate 04: 「이게 일단 4번이 적용된게 맞음? 이게 아니였는데」 —
+## *"was number 4 applied? this was not it."* Then, on the same build: 「드래그가 너무 안보여」 — *"the drag
+## is far too hard to see"* — and 「선말고 선택된 부분을 약간 드래그 영역 안쪽 색상이 보여야함」 — *"not the
+## line — the selected area, the inside of the drag region, should show a colour."* **So the FILL is the
+## subject and the outline is its edge**, and both are laid on the terrain by `FieldView.set_box`: every
+## `SELECTION_BOX_STEP_PX` across the rect a screen point is projected onto the landscape, the tint is
+## the grid of those hits and the outline is a thin ribbon around its border. It climbs the 2층 and
+## turns with the board, because it names ground and not glass. ⚠ **The picture, its keyer's output
+## `assets/ui/selection_box.png`, `HudView.set_box` and the eight-piece cutter are DELETED** — the
+## 04 mechanism is geometry, so the frame_01 ink has nowhere to go; `tools/pixel/keywhite.py` stays as
+## a tool.
+##
+## ⚠ **The four numbers below are tuned by eye and every one is a FIRST value** — nothing here has been
+## seen on the glass since the 04 swap. Their derivations are written beside them so a re-tune moves a
+## number and not a guess.
+
+## **The tint's colour, the mint the five candidates shared** ((158, 245, 212) over 255), **fully opaque
+## here** — the outline wears it as it is, and the fill takes `SELECTION_BOX_FILL_ALPHA` off it. Opaque
+## because the 01 picture's ink peaked at alpha 0.72 and its top edge vanished over yellow ground.
+## ⚠ Tuned by eye, first value.
+const COL_SELECTION_BOX := Color(158.0 / 255.0, 245.0 / 255.0, 212.0 / 255.0, 1.0)
+
+## **The outline ribbon's half-width in 조각.** At the opening survey zoom of the real island (0.762,
+## `survey_zoom_of(30, 26)`) a 조각 is `0.762 × TILE_PX` = 30.5 px across the screen and `× sin 40°` =
+## 19.6 px down it, so a ribbon 2 × 0.035 wide reads **2.1 px on the rect's sides and 1.4 px on its top
+## and bottom** — the thin edge of the tint, not the subject. The prototype's 0.045 was 2.7 / 1.8 px.
+## ⚠ Tuned by eye, first value.
+const SELECTION_BOX_HALF_W_TILES := 0.035
+
+## **The fill's alpha over `COL_SELECTION_BOX`.** 0.10 in the prototype read as nothing over yellow
+## ground; the user asked for the area itself to show, so it starts near the top of the 0.25–0.30 band
+## named for it. ⚠ Tuned by eye, first value.
+const SELECTION_BOX_FILL_ALPHA := 0.28
+
+## **The finest screen px between two terrain samples of the box**, across the fill's grid and along its
+## border alike — one constant, because the outline runs on the grid's own border hits. 8 px is about a
+## quarter of a 조각 at the opening zoom, so no piece of the tint can span more than one step of the
+## terrain and the tint climbs the 2층 face instead of diving under it. ⚠ **The step GROWS past this for
+## a big rect** — see `SELECTION_BOX_MAX_CELLS`, which is what keeps a rect across the whole glass from
+## costing 14,651 projections. ⚠ Tuned by eye, first value.
+const SELECTION_BOX_STEP_PX := 8.0
+
+## **The most cells the box's grid has along its longer side.** The sample step is
+## `max(SELECTION_BOX_STEP_PX, ceil(longer side / this))`, so a small rect keeps the 8 px step and a
+## rect across the whole glass is at most 24 x 24 cells — 24 x 14 on a 1280 x 720 rect, a 54 px step.
+## ⚠⚠ **This exists because the user felt it** (2026-09-02: 「렉이 겁나걸리네 드래그좀 한다고?」 — *"it
+## lags like crazy — just from dragging?"*): at the 8 px step a full-glass rect was 14,651 projections
+## per rebuild, measured at 1.73 s on the real island, and the shell asked for a rebuild on every mouse
+## motion. **What the bound costs**: at the opening zoom a 54 px cell is 1.8 조각 across, so the tint's
+## climb up a 2층 face is a slant over one cell rather than a wall — `FieldView._rebuild_box` says what
+## one rebuild costs now. ⚠ First value, not seen on the glass.
+const SELECTION_BOX_MAX_CELLS := 24
+
+## **Draws above the ground layer's 1** — the fill must sit over the bodies' shadows and the 이동선 as
+## well as over the 판, and between transparent layers that is sort order and not depth (see
+## `FieldView._fx_layer`).
+const SELECTION_BOX_RENDER_PRIORITY := 2
+
+
 # ---------------------------------------------------------------------------------------------
 # Combat juice — the twelve effects. Forty-four values, and not one of them is a truth
 # ---------------------------------------------------------------------------------------------
@@ -2599,6 +2681,10 @@ const FX_GROUND_STEP_PX := 20.0
 ##
 ## ⚠ **Half-width, so the ribbon is twice this across.** Kept under half a 조각 — a line as wide as the
 ## 판 it crosses reads as another 판 rather than as a route over them.
+## ⚠⚠ **ONE LINE FOR THE 부대, SINCE 2026-09-02** (ticket 03-12, the user: 「이동이 하나로 떠야지 하나처럼」
+## — *"the move must show as ONE, as if they are one"*). `Hand.routes` still answers a route per body;
+## the shell hands the view only the `Hand.lead`'s — the walking body nearest the aimed 칸 — so nine
+## picked bodies draw one ribbon from one pair of feet, and the 부대 follows it.
 const MOVE_LINE_HALF_PX := 3.0
 
 ## ⚠⚠ **`PICK_BODY_TILES` STOOD HERE AND IT IS DELETED** (2026-09-02, the user: 「몸은 화면에서 잡자」

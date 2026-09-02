@@ -19,6 +19,181 @@
 [roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅✅ **The hand got one button and the bodies started noticing each other — 2026-09-02, an evening session alongside the sixth round, branch `worktree-tickets-03-11-07-01`, not yet on `main`**
+
+⚠⚠ **This round is on a branch off PR 17, and `main` has moved past it (PR 18, the 03-02 panel).** The map,
+this log, the glossary and `03.task.md` will meet at the merge. **Four tickets closed** — 03-11, 03-12,
+03-13, 07-01 — **one was decided and not built** — 07-02 — and **two decisions of the same afternoon were
+reversed the same evening**, both by the user after playing. **The nets: 2668 · 4 at the branch's start,
+2822 · 4 at its end**, 18 nets, the same four reds by name (`net_boats` 1 · `net_fx_view` 2 · `net_shell` 1),
+`net_camera` still incomplete, `net_wake`'s 480 stderr lines pre-existing. The wrap-up ran past midnight
+into 09-03.
+
+### 1. ⚠⚠ The right-button order lasted one afternoon — reversed to ONE button
+
+**03-11 was built as read from StarCraft**: the right press orders on its DOWN edge, the left button only
+picks and lets go. `net_shell` went 248 → 326, five mutations reddened it, and it closed. **Then the user
+tried the gesture in the selection-box lab and reversed it in one sentence**:
+
+> 「애매한데 그니까 동작이 단순해야함 왼쪽으로 드래그 왼쪽으로 칸누르기로 해야할듯」
+> *"It is ambiguous — so the actions must be simple. Left drag, and left press on a 칸 — that is how it
+> should be."*
+
+⇒ **03-12 built the one-button hand the same evening**: a left drag past 6 px boxes every 검사 whose drawn
+sprite it overlaps; a short left press with a full hand on a lit 칸 orders; the right button does nothing.
+**03-11's code was written onto with tombstones, not deleted; its Status stays resolved and the reversing
+sentence is its acceptance.**
+
+**What it overturned**: 03-04's 「왼쪽 끌기가 상자, 오른쪽이 이동」 (2026-09-02 morning) — the right half.
+The glossary carries it.
+
+### 2. ⚠⚠ The second same-day reversal — a press on nothing KEEPS the hand again
+
+**03-11 had also built 「빈 땅을 왼쪽으로 누르면 놓는다」** — the 2026-09-02 morning reversal of the
+2026-08-31 rule. With the order back on the left button, one button carried two jobs again, which is the
+exact reason the fork doc `a-left-press-on-nothing-keeps-the-hand.md` gave for the old rule. Put to the
+user as the adversary's finding, they took it:
+
+> 「추천대로 ㅇㅇ」 — *"As recommended, yes."*
+
+⇒ **A full hand's short press on dark ground, water or off the board keeps the hand; letting go is ESC or
+a box that catches nobody.** The fork doc's `Status:` line reads LIVE AGAIN. **The same two words answered
+a second question in the same breath: a full hand pressing a body that stands on a LIT 칸 orders rather than
+picks — move-first.**
+
+### 3. The 부대 moves as one — the reach is an intersection
+
+> 「이동이 하나로 떠야지 하나처럼」 — *"the move must show as ONE, as if they are one."*
+
+⇒ **The lit reach is the intersection of every picked body's flood, and one 이동선 leaves from the lead** —
+the walking body nearest the aimed 칸. **03-14's defect 1 (a 부대 split across two walking components
+seats a body on ground it can never reach) closed on this sentence**: a split 부대 lights nothing and the
+press is refused for everybody. The user did not choose between 「send whoever can」 and 「refuse」 by name;
+「as one」 chose it.
+
+### 4. ⚠⚠ The selection box — five prototypes, and the user chose the one nobody ships
+
+**The user asked for the prototype round by name and widened it**:
+
+> 「이건 프로토 타입 가자」 — *"Let us go prototype on this one."*
+> 「아 땅에 깔리는 거랑 그냥 사각형이랑 둘다 해야할듯? 그렇게 프로토타입으로 보는거지 해보면서」
+> *"Ah — the one laid on the ground and the plain rectangle both have to be tried, I think? That is what a
+> prototype is for — you see it by trying."*
+
+**Five candidates stood on the real island** — three on the glass (a pulled picture, four corners, a 1 px
+line as the StarCraft control) and two on the ground (a decal following the terrain's height, a flat
+quad) — photographed at yaw 0 and 90 on one sheet. **The scout note found every shipped RTS draws the
+marquee on the screen and none on the ground** (`docs/reference/2026-09-02-drag-selection-box-screen-or-ground.md`).
+
+**The lab had to be given the real gesture before it could be judged.** The user opened it and it did
+nothing they could use:
+
+> 「드래그를 하면 여러명이 선택이 되어야지... 선택이 안되는데 끌헜을때 어떻게 이동하는데? 드래그하면
+> 거기있는애들이 드래그되고 이동하는 판 뜨고 이동하고 이렇게 되야하는데 전혀안됨」
+> *"If I drag, several should get selected... nothing gets selected, so when I have dragged, how do they
+> move? Drag → the ones there get dragged → the move 판 lights → move. That is how it should go, and none
+> of it works at all."*
+
+⇒ The lab was rewired to drive the game's own `pick_many`, reach and order under the drag. **That is where
+the one-button reversal (§1) was said.**
+
+**03-12 shipped with the `01` picture as the orchestrator's default, and 03-13 closed on that record.
+Then the user played the game**:
+
+> 「이게 ㅣㅇㄹ단 4번이 적요ㅕㅇ된게 맞음? 이게 아니였는디」
+> *"Is this number 4 applied, for now? This was not it."*
+> 「선말고 선택된 부분을 약간 드래그 영역 안쪼 생상이 보여야함」
+> *"Not the line — the selected part; the colour should show a little inside the drag area."*
+
+⇒ **The winner is `04-ground-decal`, and the FILL is the subject.** `FieldView.set_box` lays a mint fill
+(alpha 0.28 — the prototype's 0.10 read as nothing over yellow ground) with a thin outline on the terrain,
+projected every 8 px, 24 cells across at most; it turns with the board and climbs the 2층 tongue.
+**`assets/ui/selection_box.png` and `HudView.set_box` are deleted** — the winner is geometry, so there is no
+seed name to write and 03-13's 「the user names one file」 is met by the sentence above. **The four losers
+are deleted; the sheet is `docs/reference/2026-09-02-selection-box-prototypes/`.**
+
+**What it overturned**: 03-13's own premise that the box is a pulled picture (2026-09-02 morning), and
+the 2026-08-28 rule's reading that a box must be a PNG — the rule forbids typed chrome, and a projected
+mesh the user chose by seeing is not typed chrome.
+
+### 5. The user played it and found two more — the walk and the lag
+
+> 「움직일떄 정렬이 바뀌네? … 새로 생성되는 느낌으로 출발함 그냥 그자리에서 병사가 이동하는게 아니라」
+> *"The arrangement changes when they move? … They set off as if newly spawned, rather than the soldier
+> moving from where he stands."*
+> 「캐릭터가 움직일때 켭친다」 — *"The characters overlap when they move."*
+
+⇒ **A walking body keeps its seat offset** (`FieldView._seat_offset`, bounded by half a 칸): it leaves from
+under where it was drawn and three on one 조각 stay apart on the way. ⚠ Wolves carry the same table
+unmeasured.
+
+> 「좋아 이정도면 됬는데 렉이 겁나걸리네 드래그좀 한다고?」
+> *"Good, this much is fine — but the lag is terrible, just from doing a bit of a drag?"*
+
+⇒ **One box rebuild per frame**: a 220x100 rect 58 ms → 2.7 ms, the whole glass 1731 ms → 3.2 ms. Then:
+
+> 「좋다 마무리」 — *"Good. Wrap up."*
+
+**Both sentences are 03-12's acceptance, verbatim in the ticket.**
+
+### 6. 07-01 — both sides notice; the user's eye question stayed unanswered
+
+**Built and closed**: `Rules.detect_of` reads the table raw — 검사 **3.0**, 늑대 **6.0**; two-tier targeting;
+body blows go through `Grid.can_strike` in both directions; a walking 늑대 diverts onto a 검사 it named.
+**The two HELD questions were answered with the same two words**, 「추천댜로 ㅇㅇ」 — *"as recommended,
+yes"*: **a 늑대 already in reach of the 성채 keeps it** (a defender three 조각 away does not pull it off),
+and **a blow crosses no more 눈금 than a body climbs, both ways.** `net_fight` 419 → 446; a 34-probe on the
+shipped island; two frames beside the ticket.
+
+⚠⚠ **The eye question is still open.** The ticket asked 「검사가 세 조각에서 고개를 돌린 것 — 이게 알아챈
+그림 맞아?」 (*"the 검사 turned his head at three 조각 — is that the noticing picture?"*), and the frame
+shows his BACK — the 늑대 stood north-west, and four-direction art turns north-west into 「up」. **The user
+played it and said nothing about that.** Silence is a row in the ticket, not a pass. What they said was
+the next ticket:
+
+> 「근데 알아채고 와서 싸워야하는데 이게 그냥 보고 기나가네 이게 붙어서 싸워야하는거 아님?」
+> *"But it should notice, come over and fight — this one just looks and walks past. Shouldn't it close in
+> and fight?"*
+
+### 7. 07-02 — decided, not built, and one thing still open
+
+> 「07=02 하자 이게 이동했을때 도망도 되야하고 싸움도 되야하는데 이해하나?」
+> *"Let us do 07-02. When they move, running away has to work and fighting has to work — do you understand?"*
+
+**Decided** (「추천대로 ㅇㅇ」): **the 늑대 gets a one-칸 leash too** — 2.0 조각 measured from where it
+noticed, and past it the 늑대 lets go and returns to the 성채. **That overturned the ticket's own open
+section** 「does the 늑대 get a leash too?」, which had three shapes and no answer — the second shape won.
+A wave can still reach the house: a defender near the path pulls a 늑대 one 칸 off it, not three.
+
+**Measured, and not a stair bug**: a 늑대 and a 검사 pass on the 계단 without a blow because the pass takes
+0.3–1.1 s and the cooldowns are 2.0 / 2.4 s, each body holds one target, and the ordered 검사 does not
+stop. All three are 07-02's.
+
+⚠⚠ **Open — how the game tells 「go and fight」 from 「walk past / flee」**:
+
+> 「알아 채서 싸우고 근데 음 이게 무시하고 지나가는 문제가 있네 그니까 붙여서 싸우는거랑 이동해서
+> 도망가는거랑이 둘다 되야하는데」
+> *"Notice and fight — but hm, there is this problem of ignoring and walking past. So closing in to fight
+> AND moving away to flee both have to work."*
+
+**Proposed and unanswered**: press a 늑대's 칸 = go and fight it; press bare ground = walk there without
+stopping. **07-02 cannot be planned until this is answered** — it is the first line the next session asks.
+
+### 8. What is still the user's, by name
+
+- **07-01's eye** — does the back-turned frame read as noticing
+- **07-02's split** — fight versus flee, above
+- **03-15** — `net_hand` dying at startup, half the instrument built
+- **03-14's remaining two** — the full upper 칸 spill, the one-frame preview gap
+- **Task 07's week** — not on the week table
+
+### 9. Holes named, not filed
+
+- The box comes down one frame late on release — named by the verifier, not measured on screen
+- Wolves walking with a seat offset — the same table as the 검사, unmeasured
+- 03-11's reach-guard hole on the right button — **moot**, the right button is gone
+- `net_wake`'s 480 stderr lines — pre-existing, identical on `main`
+
 ## ⏳ **The blow lands where the sword is — 2026-09-02, night, a background session on `worktree-anim-match`; merged as PR 19**
 
 **The round opened with the user asking for the game to be launched from `main`** (「음 메인에서 게임

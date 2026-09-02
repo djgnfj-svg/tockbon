@@ -232,8 +232,8 @@ var _sprite_of_soldier := {}
 ## glide from — so bodies placed by hand in a net read their seat immediately, and the slide only plays
 ## on a walk → rest transition the view has watched. **A key is dropped the frame its body leaves the
 ## pool**, so a body that dies and stands again does not slide in from where it fell.
-## ⚠ **Walking bodies track the sim exactly** and only overwrite their entry; a falling body is drawn
-## at its entry and never moves it.
+## ⚠ **Walking bodies track the sim plus their seat offset** (`_seat_offset`) and only overwrite
+## their entry; a falling body is drawn at its entry and never moves it.
 ## ⚠⚠ **`_advance_seat_glide` IS THE ONLY WRITER AND IT RUNS BEFORE ANYTHING IS PAINTED** (the 03-17
 ## bounce). It stood inside `_put_walker` for one round, and the 이동선 — painted BEFORE the bodies so it
 ## lies under their shadows — read the frame's target instead: on the first resting frame the line's
@@ -241,6 +241,26 @@ var _sprite_of_soldier := {}
 ## table is rebuilt whole every frame from the sim's lists, so every reader in the frame — the line, the
 ## body, the shadow, the bar — reads one point, and a body that left the pool is simply not in it.
 var _seat_glide := {}
+## **Where each living body is drawn RELATIVE to the sim's own point** — body key → `Vector2`, in
+## `soldier_pos` units, the second half of the glide and rebuilt in the same pass. At rest it is simply
+## `_seat_glide[key] − at`: the seat's offset from the 조각 centre once the glide has settled, and the
+## in-flight gap before. **Walking, it is FROZEN at the value it had on the last resting frame**, and the
+## body is drawn at `at + offset` for the whole walk.
+##
+## ⚠⚠ **WITHOUT THIS THE FIRST WALKING FRAME SNAPPED THE BODY ONTO THE 조각 CENTRE** (2026-09-02, the
+## user: 「그냥 딱 이동하게 하면 새로 생성되는 느낌으로 출발함 그냥 그자리에서 병사가 이동하는게 아니라」
+## — *"on a move order they depart as if newly spawned, not the soldier walking from where he stood"*).
+## A body at rest is drawn on its seat, 0.53–0.71 조각 from the 조각 centre the sim has it on; the walk's
+## first sub-step moved the sim a tenth of a 조각 and the drawn point the whole seat gap, in a direction
+## that had nothing to do with the walk. **And every body sharing a 조각 was drawn on the one sim point
+## while it walked** (「캐릭터가 움직일때 겹친다」 — *"the characters overlap when moving"*): three bodies
+## on one 조각 spread onto three seats at rest and collapsed onto one point the moment they moved.
+## Carrying the offset keeps them apart by exactly what kept them apart at rest.
+## ⚠ **Bounded by `Look.SEAT_OFFSET_MAX_TILES`**, and **a body that never rested has none** — it is
+## drawn on the sim's point, which is where a wolf walking off its boat has always been drawn.
+## ⚠ **The sim never reads this.** Reservation, capacity and arrival are all on the sim's own point;
+## this is the picture's memory of where the body was standing, and nothing else.
+var _seat_offset := {}
 ## **기법 17's black copies, one per body, in their own pool.** ⚠⚠ **A parallel pool and not a child
 ## node**, because the body sprites are recycled by index across frames: a child would be carried to
 ## whichever body reused that slot, and the outline would be right by accident. **Index `i` of this
@@ -304,6 +324,9 @@ func _build_world() -> void:
 	# The two effect layers. Built here and never rebuilt, because what changes every frame is the
 	# geometry inside them and not the nodes.
 	_decal = _fx_layer()
+	# The selection box's own mesh — see `set_box`. Built once like the decal; what changes is the
+	# geometry inside it, and only when the rect or the camera does.
+	_box_mesh = _fx_layer(Look.SELECTION_BOX_RENDER_PRIORITY)
 
 	# ⚠⚠ **THE MARK IS A MAT, NOT A QUAD.** It used to be one plane the size of one tile, moved
 	# about; the user asked for the 2x2 piece to be the unit that lights up, and a square of that size
@@ -452,6 +475,7 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	# ⚠ **The glide forgets every body too.** It holds drawn POINTS on the last island's board, and a
 	# 검사 carried across would otherwise slide in from a place on a different island.
 	_seat_glide = {}
+	_seat_offset = {}
 	# ⚠ **And the water forgets every hull.** The blocks are indexed by boat number, so island 2's
 	# first boat would otherwise open wearing island 1's first boat's trail.
 	_wake = _wake_empty()
@@ -484,6 +508,10 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	_rebuild_terrain()
 	_rebuild_wash()
 	_place_camera()
+	# A fresh island opens with no box — the shell clears it on every release and dropped gesture too,
+	# and both writers are accepted for the reason `game._drop_the_gestures` gives.
+	_box = Rect2()
+	_rebuild_box()
 
 
 ## **Which 판 each tile belongs to** -- its own index, or -1 where nothing walks.
@@ -535,6 +563,13 @@ func _process(delta: float) -> void:
 	# placed from that field — a frame that placed first would draw every sweep one frame behind.
 	_sweep_the_yaw(delta)
 	_place_camera()
+	# ⚠ **After the sweep and the placement**: the box is laid on the ground under a screen rect, so a
+	# turn while the button is held (Q/E stay live during a press) moves the ground under it, and the
+	# rebuild has to read the yaw this frame draws with — see `set_box`.
+	# ⚠⚠ **THIS IS THE ONLY PLACE THE BOX IS REBUILT WHILE THE GAME RUNS** — once a frame at most,
+	# whether the shell handed over one rect or twelve since the last one. See `set_box`.
+	if _box_dirty or (_box.size != Vector2.ZERO and _box_cam != _box_cam_key()):
+		_rebuild_box()
 	# ⚠ **The buffer is opened BEFORE the bodies and flushed after them.** A body's shadow is painted
 	# from inside `_paint_bodies` — it is a per-body fact, and that is the one loop with a body's
 	# centre and radius in hand at the same time.
@@ -663,12 +698,17 @@ func screen_to_world_px(at: Vector2, ground_h: float = 0.0) -> Vector2:
 ##
 ## ⚠ **Off the board there is no surface**, so an off-grid 조각 is stepped over rather than read as a
 ## top at height 0 — that is the same answer the rung walk gave, whose rungs never reached 0.
-func screen_to_terrain_px(at: Vector2) -> Vector2:
+##
+## `steps` is how many rungs the descent is cut into — `TERRAIN_PICK_STEPS` for a press, and **1 for
+## the selection box's hits** (`_box_hit`), which is the same walk over the same 조각 in one segment
+## instead of 48 and costs a sixteenth of it. ⚠ Not a second, cheaper answer: the rung count bounds
+## how the work is cut and does not move the answer, and `_box_hit` carries the measurement.
+func screen_to_terrain_px(at: Vector2, steps: int = TERRAIN_PICK_STEPS) -> Vector2:
 	var ceiling := Look.terrain_height_ceiling()
-	var step := ceiling / float(TERRAIN_PICK_STEPS)
+	var step := ceiling / float(steps)
 	var h_hi := ceiling
 	var w_hi := screen_to_world_px(at, h_hi)
-	for _i in TERRAIN_PICK_STEPS:
+	for _i in steps:
 		var h_lo := h_hi - step
 		var w_lo := screen_to_world_px(at, h_lo)
 		var met := _ground_met(w_hi, h_hi, w_lo, h_lo)
@@ -789,6 +829,8 @@ func tile_to_screen_px(tx: int, ty: int) -> Vector2:
 ## extent is the same foreshortening the camera applies to the upright card; the width is the card's
 ## world width, which an orthographic camera does not foreshorten.
 ## ⚠ Only living, ashore 검사 are in `_sprite_of_soldier`; 짐승 are not pickable, as before.
+## ⚠ **The rectangle itself is `_drawn_rect_of` since 03-12**, so the box (`bodies_in_rect_px`) and the
+## press read one arithmetic and cannot disagree about where a body is drawn.
 func body_at_px(at: Vector2) -> int:
 	var who := -1
 	var best := INF
@@ -798,27 +840,84 @@ func body_at_px(at: Vector2) -> int:
 		if k < 0 or k >= _sprites.size():
 			continue
 		var s := _sprites[k]
-		if not s.visible or s.texture == null:
+		var drawn := _drawn_rect_of(s, px_per_tile)
+		if drawn.size == Vector2.ZERO or not drawn.has_point(at):
 			continue
-		var xz := Vector2(s.position.x, s.position.z) * Look.TILE_PX
-		var half_tall := float(s.texture.get_height()) * s.scale.y * s.pixel_size * 0.5
-		var foot := world_to_screen_px(xz, s.position.y - half_tall)
-		var top := world_to_screen_px(xz, s.position.y + half_tall)
-		# One texel of this sprite on the glass, and where its ink starts and ends measured from the
-		# canvas centre the sprite is placed by. A picture never scanned spans its whole canvas.
-		var texel_px := s.scale.x * s.pixel_size * px_per_tile
-		var half_w := float(s.texture.get_width()) * 0.5
-		var span: Vector2i = _ink_cols.get(s.texture, Vector2i(0, s.texture.get_width() - 1))
-		var left := foot.x + (float(span.x) - half_w) * texel_px
-		var right := foot.x + (float(span.y) + 1.0 - half_w) * texel_px
-		var drawn := Rect2(left, top.y, right - left, foot.y - top.y)
-		if not drawn.has_point(at):
-			continue
-		var d := at.distance_to(foot)
+		var d := at.distance_to(_sprite_edge_px(s, -1.0))
 		if d < best:
 			best = d
 			who = int(raw_id)
 	return who
+
+
+## **The rectangle 검사 `sid` is drawn in on the glass, or an empty `Rect2` when no pooled sprite is his
+## this frame** (ticket 03-12). Public so a net can aim a box at a body's own picture.
+func drawn_rect_px(sid: int) -> Rect2:
+	if not _sprite_of_soldier.has(sid):
+		return Rect2()
+	var k := int(_sprite_of_soldier[sid])
+	if k < 0 or k >= _sprites.size():
+		return Rect2()
+	var px_per_tile := Look.VIEWPORT_W_PX / _visible_ground_px().x * Look.TILE_PX
+	return _drawn_rect_of(_sprites[k], px_per_tile)
+
+
+## **Every 검사 whose drawn picture overlaps `rect`, ascending by id** (ticket 03-12, 2026-09-02, the
+## user: *"Drag to select and move them. There is no other method as good as that one."*). The
+## selection box's whole hit test.
+##
+## ⚠ **`Rect2.intersects` and not containment**: a box that clips a body's edge catches him, which is
+## what the user tested in the lab. A purely horizontal 6 px drag is a rect of zero height, and
+## `intersects` still answers true when that row cuts a picture — the lab's `_bodies_in_rect` used the
+## same call.
+## ⚠ **Player-only by construction**: only ashore 검사 are in `_sprite_of_soldier`, so a box drawn
+## around a 늑대 and a 검사 answers the 검사 alone with no filter written here.
+func bodies_in_rect_px(rect: Rect2) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var px_per_tile := Look.VIEWPORT_W_PX / _visible_ground_px().x * Look.TILE_PX
+	for raw_id in _sprite_of_soldier:
+		var k := int(_sprite_of_soldier[raw_id])
+		if k < 0 or k >= _sprites.size():
+			continue
+		var drawn := _drawn_rect_of(_sprites[k], px_per_tile)
+		if drawn.size == Vector2.ZERO:
+			continue
+		if drawn.intersects(rect):
+			out.append(int(raw_id))
+	out.sort()
+	return out
+
+
+## **The screen rectangle one pooled body sprite is drawn in** — foot to top, the ink's own width — or
+## an empty `Rect2` for a sprite that is hidden or wears nothing. The body of `body_at_px`'s loop until
+## 03-12 cut it out so the box could read the same arithmetic; **the paragraphs on `body_at_px` are its
+## explanation**, and nothing about the numbers moved.
+##
+## ⚠ `px_per_tile` is passed in rather than read here, because every caller loops the pool and
+## `_visible_ground_px` is one answer per frame, not one per body.
+func _drawn_rect_of(s: Sprite3D, px_per_tile: float) -> Rect2:
+	if not s.visible or s.texture == null:
+		return Rect2()
+	var foot := _sprite_edge_px(s, -1.0)
+	var top := _sprite_edge_px(s, 1.0)
+	# One texel of this sprite on the glass, and where its ink starts and ends measured from the
+	# canvas centre the sprite is placed by. A picture never scanned spans its whole canvas.
+	var texel_px := s.scale.x * s.pixel_size * px_per_tile
+	var half_w := float(s.texture.get_width()) * 0.5
+	var span: Vector2i = _ink_cols.get(s.texture, Vector2i(0, s.texture.get_width() - 1))
+	var left := foot.x + (float(span.x) - half_w) * texel_px
+	var right := foot.x + (float(span.y) + 1.0 - half_w) * texel_px
+	return Rect2(left, top.y, right - left, foot.y - top.y)
+
+
+## **Where a pooled sprite's canvas centre column meets its bottom edge (`side` -1, the drawn foot) or
+## its top edge (`side` +1) on the glass.** The one owner of 「the foot」: `_drawn_rect_of` builds its
+## rectangle from both edges, and `body_at_px` breaks a tie between two overlapping pictures on the
+## nearer foot — written twice, the tie-break and the rectangle would drift apart by a texel.
+func _sprite_edge_px(s: Sprite3D, side: float) -> Vector2:
+	var xz := Vector2(s.position.x, s.position.z) * Look.TILE_PX
+	var half_tall := float(s.texture.get_height()) * s.scale.y * s.pixel_size * 0.5
+	return world_to_screen_px(xz, s.position.y + side * half_tall)
 
 
 ## Moves the camera by a SCREEN-space delta (mouse motion) and re-clamps. The ground under the cursor
@@ -2477,8 +2576,8 @@ func _clock_of(b: Dictionary, anim: int) -> float:
 ## be an empty trough riding a corpse down — the one thing 「깎인 것만 뜬다」 was chosen to avoid.
 ##
 ## ⚠⚠ **`drawn` IS WHERE THE BODY IS DRAWN THIS FRAME, ALREADY GLIDED** (2026-09-02, ticket 03-17) —
-## `_drawn_of`'s answer: the seat on the 칸's lattice for a body at rest, the sim's own point for one
-## walking, and the point in between while it slides. **This function moves nothing**; the glide stepped
+## `_drawn_of`'s answer: the seat on the 칸's lattice for a body at rest, the sim's own point plus the
+## seat offset it left with for one walking, and the point in between while it slides. **This function moves nothing**; the glide stepped
 ## in `_advance_seat_glide` before the 이동선 was laid, so the line under the feet and the feet agree.
 ## ⚠ **The `slot` parameter stood here and it is deleted** with the per-조각 ring it indexed.
 func _put_walker(key: String, type_id: int, drawn: Vector2, is_enemy: bool,
@@ -2519,7 +2618,10 @@ func _flash_of(key: String) -> float:
 ## an entry, a body still falling keeps the one it had, and anything else is gone.
 ##
 ## ⚠ **A body with no entry is drawn AT its stand point** — that is the first frame in the pool, and
-## why bodies stood by hand in a net read their seat at once. ⚠ **Walking, the entry IS the sim's point.**
+## why bodies stood by hand in a net read their seat at once. ⚠ **Walking, the entry is the sim's point
+## plus the body's `_seat_offset`**, frozen at what it was on the last resting frame; the offset is
+## rewritten only at rest, from the entry this pass just produced, so the two tables cannot disagree
+## about a body.
 ## ⚠ **At rest the step is `Look.SEAT_GLIDE_TILES_PER_S` a second, and only across a 칸's width or
 ## less.** The glide is the hand-off from the last walking point to the seat — under a 조각 to the far
 ## seat, under two between two seats of one 칸 re-faced — and a target further off than a whole 칸 was
@@ -2527,26 +2629,48 @@ func _flash_of(key: String) -> float:
 ## that slid ten 조각 across the island for that would be the screen doing a thing the sim did not.
 func _advance_seat_glide(delta: float) -> void:
 	var next := {}
+	var offsets := {}
 	if battle != null and army != null and battle.grid != null:
 		for raw_id in battle.living_enemy_ids():
 			var e := int(raw_id)
 			var key := "e%d" % e
-			next[key] = _glided(key, battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e,
-				_resting_enemy(e), delta)
+			var resting := _resting_enemy(e)
+			next[key] = _glided(key, battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e, resting, delta)
+			offsets[key] = _offset_after(key, battle.enemy_pos[e], next[key], resting)
 		for raw_id in battle.ashore_ids():
 			var i := int(raw_id)
 			var key := "s%d" % i
-			next[key] = _glided(key, battle.soldier_pos[i], i, _resting_soldier(i), delta)
+			var resting := _resting_soldier(i)
+			next[key] = _glided(key, battle.soldier_pos[i], i, resting, delta)
+			offsets[key] = _offset_after(key, battle.soldier_pos[i], next[key], resting)
 		for key: String in _body:
 			if float((_body[key] as Dictionary)["dying"]) > 0.0 and not next.has(key):
 				next[key] = _seat_glide.get(key, (_body[key] as Dictionary)["last"])
 	_seat_glide = next
+	_seat_offset = offsets
+
+
+## **The seat offset a body carries out of this frame**: at rest, where it was just drawn relative to
+## the sim's point, bounded to `Look.SEAT_OFFSET_MAX_TILES`; walking, whatever it carried in — a body
+## that never rested carries zero. ⚠ **The clamp is applied where the offset is WRITTEN, at rest, and
+## not where it is read**, so a resting body drawn further off than the bound (the glide's own
+## 「further than a 칸 → stand」 rule keeps that under 2 조각, but a body's first walking frame is what
+## the player sees) leaves at the bound and never further.
+func _offset_after(key: String, at: Vector2, drawn: Vector2, resting: bool) -> Vector2:
+	if resting:
+		return (drawn - at).limit_length(Look.SEAT_OFFSET_MAX_TILES)
+	return _seat_offset.get(key, Vector2.ZERO)
 
 
 ## One body's drawn point for this frame, from last frame's entry and where it is to stand now.
+## ⚠⚠ **A WALKING BODY IS `at` PLUS ITS `_seat_offset`, NEVER `at` ALONE** — `at` alone is the snap
+## the user saw on every move order (see `_seat_offset`). A body with no offset entry walks on the sim's
+## point, which is the same thing.
 func _glided(key: String, at: Vector2, unit_id: int, resting: bool, delta: float) -> Vector2:
+	if not resting:
+		return at + _seat_offset.get(key, Vector2.ZERO)
 	var stand := _stand_point(at, unit_id, resting)
-	if not resting or not _seat_glide.has(key):
+	if not _seat_glide.has(key):
 		return stand
 	var from: Vector2 = _seat_glide[key]
 	if from.distance_to(stand) > float(Rules.BLOCK_TILES):
@@ -2581,8 +2705,9 @@ func _drawn_of(key: String, at: Vector2, unit_id: int, resting: bool) -> Vector2
 ## ⚠ **A resting body with NO seat is drawn on its 조각 centre**, which is `at` itself. That is a body
 ## stood by writing `soldier_pos` without `Grid.hold` — `net_pick` does it — and drawing it at the
 ## middle would put a body somewhere the reservation table says nobody is.
-## ⚠ **Walking it is `at`, exactly**, so the glide never lags a walk; `_resting_soldier` and
-## `_resting_enemy` are the two rest tests and the caller passes the answer in.
+## ⚠ **Walking it is `at`, exactly** — `_glided` adds the body's `_seat_offset` on top, so the drawn
+## point never lags a walk and never snaps at its start; `_resting_soldier` and `_resting_enemy` are
+## the two rest tests and the caller passes the answer in.
 func _stand_point(at: Vector2, unit_id: int, resting: bool) -> Vector2:
 	if not resting or battle == null or battle.grid == null or battle.grid.w <= 0:
 		return at
@@ -4034,8 +4159,9 @@ var _g_v := PackedVector3Array()
 var _g_c := PackedColorArray()
 
 
-## One unshaded, vertex-coloured, alpha-blended surface.
-func _fx_layer() -> MeshInstance3D:
+## One unshaded, vertex-coloured, alpha-blended surface. `priority` is its `render_priority` — the
+## ground layer's 1, or `Look.SELECTION_BOX_RENDER_PRIORITY` for the box that has to sort over it.
+func _fx_layer(priority: int = 1) -> MeshInstance3D:
 	var m := MeshInstance3D.new()
 	m.mesh = ImmediateMesh.new()
 	var mat := StandardMaterial3D.new()
@@ -4050,7 +4176,7 @@ func _fx_layer() -> MeshInstance3D:
 	# ordering arbitrary. **The 판 was winning**: the moment a pick lit the board, the bodies' own
 	# shadows and the 이동선 both disappeared under it. ⚠ **Raising the marks does nothing** — measured
 	# at half a 조각 of lift, still invisible; a priority is the only thing that decides this.
-	mat.render_priority = 1
+	mat.render_priority = priority
 	m.material_override = mat
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_world.add_child(m)
@@ -4217,3 +4343,209 @@ func _g_ribbon(a: Vector2, b: Vector2, half: float, col: Color) -> void:
 		var p1 := a + span * (float(k + 1) / float(steps))
 		_g_tri(p0 - side, p0 + side, p1 + side, col)
 		_g_tri(p0 - side, p1 + side, p1 - side, col)
+
+
+# --- the selection box: a shape on the ground under the dragged rect ---------------------------------
+## ⚠⚠ **THE BOX IS LAID ON THE TERRAIN, NOT DRAWN ON THE GLASS** (2026-09-02, ticket 03-12 rebuilt on
+## the user's verdict — the picture-on-the-HUD build was not the candidate they chose: 「이게 일단 4번이
+## 적용된게 맞음? 이게 아니였는데」 — *"was number 4 applied? this was not it."*, then 「선말고 선택된 부분을
+## 약간 드래그 영역 안쪽 색상이 보여야함」 — *"not the line — the inside of the drag region should show a
+## colour."*). The shell hands over the screen rect it is dragging; every `Look.SELECTION_BOX_STEP_PX`
+## across it a screen point is thrown through `screen_to_terrain_px` — the same near-to-far walk a press
+## goes through — and the hits become a tinted grid on the ground with a thin ribbon around its border.
+## **Where the rect crosses the foot of the 2층 the hits jump to its top and the tint climbs the face
+## with them; when the board turns the shape turns with the ground it was laid on.** That is the whole
+## of what the candidate was for.
+##
+## ⚠ **Its own mesh, not the per-frame decal buffer.** `_g_tri` writes into `_g_v`, which `_fx_begin`
+## clears every frame — a box there would cost its projections sixty times a second whether or not
+## anything moved. This mesh is rebuilt **at most once a frame, in `_process`**, and only when the rect
+## changed since the last build (`set_box` marks it) or the camera did (`_box_cam_key`).
+##
+## ⚠⚠ **IT WAS REBUILT ON EVERY MOUSE MOTION AND THE USER FELT IT** (2026-09-02: 「렉이 겁나걸리네
+## 드래그좀 한다고?」 — *"it lags like crazy — just from dragging?"*). Three things were wrong at once,
+## measured headless on the real island at the opening camera: **`set_box` rebuilt at once**, so a
+## frame with several motion events paid several rebuilds; **every sample went through the 48-rung
+## press walk** at 112 µs a point; and **the 8 px step was unbounded**, so a rect across the glass was
+## 14,651 samples. A 220 x 100 rect cost **58.3 ms** a rebuild and a full-glass rect **1,731 ms**.
+## ⇒ The rebuild is coalesced into `_process`; a sample is the same walk cut into ONE segment
+## (`_box_hit`); and the step grows past 8 px so the grid is never more than
+## `Look.SELECTION_BOX_MAX_CELLS` across. **After**: the numbers `_rebuild_box` carries.
+##
+## ⚠ **Two surfaces in one `ImmediateMesh`, fill first**: surface 0 is the tint, surface 1 the ribbon,
+## so the edge is drawn over the area. Both are read by `net_fx_view` — buffers prove geometry was built,
+## the surface count proves it was committed, and the two together are the seam `GLOSSARY.md` names.
+
+## **The box in screen px, as the shell last handed it over.** Up when its size is not zero; the shell
+## only ever hands a rect past the drag threshold or `Rect2()`.
+var _box := Rect2()
+var _box_mesh: MeshInstance3D = null
+## **The border hits in world 조각, clockwise from the rect's top-left, closed** — what the ribbon was
+## laid along. Kept so a net can unproject them through the same camera and find them inside the rect.
+var _box_hits := PackedVector3Array()
+## The four camera fields the mesh was last built against — see `_box_cam_key`. Empty until built.
+var _box_cam := []
+## **The rect changed since the mesh was last built.** Set by `set_box`, spent by `_rebuild_box`; the
+## frame's `_process` is the one reader.
+var _box_dirty := false
+## **How many times the mesh has been rebuilt since the view was made.** Read by nothing in the game —
+## it is the counter `net_fx_view` reads to prove three rects in one frame are one rebuild, because a
+## surface count cannot tell one rebuild from three.
+var _box_rebuilds := 0
+var _b_v := PackedVector3Array()
+var _b_c := PackedColorArray()
+
+
+## **The shell says where the box is, or that there is none.** Stores the rect and marks it — the
+## rebuild is `_process`'s, once a frame, so the motion branch may hand over a rect on every mouse
+## event and the frame pays for the last one only. Returns on no change so a repeated rect does not
+## even mark.
+func set_box(rect: Rect2) -> void:
+	if rect == _box:
+		return
+	_box = rect
+	_box_dirty = true
+
+
+## The four fields every screen-to-ground conversion reads. ⚠ **These and not `_cam.transform`**:
+## `screen_to_terrain_px` is pure over them, and `_place_camera` only ever writes the engine's camera
+## FROM them, so a change to any of the four is exactly 「the ground under the glass moved」.
+func _box_cam_key() -> Array:
+	return [cam_px, zoom, cam_yaw_deg, cam_pitch_deg]
+
+
+## Where one screen px meets the landscape, in world 조각, lifted off the ground like every other mark.
+##
+## **The press's own walk, cut into one segment instead of 48.** The near-to-far rule is the whole of
+## why a press is a walk (see `screen_to_terrain_px`), and the box needs the same rule — a sample
+## answered by 「take the sea-level point, read its height, ask again」 settles on the hidden land behind
+## a 2층 cliff, which is the defect that header measured at 60 of 180 조각. **So the box does not take
+## the cheap way; it takes the exact way with the rungs removed.** Measured 2026-09-02 on 625 screen
+## points over the real island at the opening camera: one segment and 48 rungs answer **within 0.00012
+## world px** of each other, at **~7 µs** a point against **~112 µs**. ⚠ There is no cliff-edge error
+## to state, because there is no approximation.
+func _box_hit(at: Vector2) -> Vector3:
+	var w := screen_to_terrain_px(at, 1)
+	return Vector3(w.x / Look.TILE_PX, _ground_y_px(w), w.y / Look.TILE_PX)
+
+
+## Rebuilds both surfaces from the current rect and camera. An empty rect leaves the mesh with no
+## surfaces — ⚠ an `ImmediateMesh` surface with zero vertices is an error, so nothing is begun for it.
+##
+## **What one rebuild costs** (measured headless 2026-09-02 on the real island at the opening camera,
+## after the three fixes the section header names): **220 x 100 → 2.7 ms · 1280 x 720 → 3.2 ms**, from
+## 58.3 and 1,731. `net_fx_view`'s timing row prints the same two rebuilds on its arena every round.
+## ⚠ **The 0.3 ms and 2 ms the two were asked to come under are NOT met, and the floor is measured**: a
+## sample is ~6 µs (two `screen_to_world_px` at 1.2 µs and a one-segment walk over some six 조각 at
+## 0.65 µs each) and a vertex ~0.17 µs, in GDScript. A 220 x 100 rect is 253 samples at the 10 px step
+## the bound gives it, so 1.5 ms before a vertex is laid. **Fewer samples is the only lever left**, and
+## that is `Look.SELECTION_BOX_STEP_PX` and `Look.SELECTION_BOX_MAX_CELLS` — a tuning, not a rebuild.
+func _rebuild_box() -> void:
+	_box_dirty = false
+	_box_rebuilds += 1
+	_box_hits = PackedVector3Array()
+	_box_cam = _box_cam_key()
+	if _box_mesh == null:
+		return
+	var im: ImmediateMesh = _box_mesh.mesh
+	im.clear_surfaces()
+	if _box.size == Vector2.ZERO:
+		return
+	# The grid of hits: `nx` x `ny` cells, `(nx + 1) x (ny + 1)` corners, row-major from the top-left.
+	# **The step is the finest one until the rect's longer side would take more than
+	# `SELECTION_BOX_MAX_CELLS` of it**, and grows with the rect from there — see that constant.
+	# ⚠ At least one cell on each axis, so the 6 px first box (0 px on one axis) still builds — its
+	# cells are zero-area and its ribbon is a stroke, which is what a 6 x 0 drag looks like.
+	var step := maxf(Look.SELECTION_BOX_STEP_PX,
+		ceil(maxf(_box.size.x, _box.size.y) / float(Look.SELECTION_BOX_MAX_CELLS)))
+	var nx := maxi(1, int(ceil(_box.size.x / step)))
+	var ny := maxi(1, int(ceil(_box.size.y / step)))
+	var hits := PackedVector3Array()
+	hits.resize((nx + 1) * (ny + 1))
+	for j in ny + 1:
+		for i in nx + 1:
+			var at := _box.position + Vector2(_box.size.x * float(i) / float(nx),
+				_box.size.y * float(j) / float(ny))
+			hits[j * (nx + 1) + i] = _box_hit(at)
+
+	# Surface 0 — the tint: two triangles per cell, every corner at the height under it.
+	var fill := Look.COL_SELECTION_BOX
+	fill.a = Look.SELECTION_BOX_FILL_ALPHA
+	_b_v.clear()
+	_b_c.clear()
+	for j in ny:
+		for i in nx:
+			var a: Vector3 = hits[j * (nx + 1) + i]
+			var b: Vector3 = hits[j * (nx + 1) + i + 1]
+			var c: Vector3 = hits[(j + 1) * (nx + 1) + i + 1]
+			var d: Vector3 = hits[(j + 1) * (nx + 1) + i]
+			_box_tri(a, b, c, fill)
+			_box_tri(a, c, d, fill)
+	_box_commit(im)
+
+	# Surface 1 — the ribbon along the grid's own border, clockwise from the top-left and closed.
+	for i in nx:
+		_box_hits.append(hits[i])
+	for j in ny:
+		_box_hits.append(hits[j * (nx + 1) + nx])
+	for i in nx:
+		_box_hits.append(hits[ny * (nx + 1) + nx - i])
+	for j in ny:
+		_box_hits.append(hits[(ny - j) * (nx + 1)])
+	var line := Look.COL_SELECTION_BOX
+	var n := _box_hits.size()
+	for k in n:
+		_box_ribbon(_box_hits[k], _box_hits[(k + 1) % n], line)
+	# Square caps on the four corners hide the notch a 90° bend leaves on its outside.
+	for corner in [hits[0], hits[nx], hits[ny * (nx + 1) + nx], hits[ny * (nx + 1)]]:
+		_box_cap(corner, line)
+	_box_commit(im)
+
+
+## One surface from the buffer, then the buffer is spent. Nothing is begun for an empty buffer.
+func _box_commit(im: ImmediateMesh) -> void:
+	if _b_v.is_empty():
+		return
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for k in _b_v.size():
+		im.surface_set_color(_b_c[k])
+		im.surface_add_vertex(_b_v[k])
+	im.surface_end()
+	_b_v.clear()
+	_b_c.clear()
+
+
+## Three appends written out rather than a `for p in [a, b, c]`: the array that loop builds is an
+## allocation per triangle, and a full-glass box is 800 of them a rebuild.
+func _box_tri(a: Vector3, b: Vector3, c: Vector3, col: Color) -> void:
+	_b_v.append(a)
+	_b_v.append(b)
+	_b_v.append(c)
+	_b_c.append(col)
+	_b_c.append(col)
+	_b_c.append(col)
+
+
+## One thin quad from `a` to `b`, its width perpendicular to the run in the ground plane — so a piece
+## that climbs a face still shows its face to the camera above. A purely vertical piece (straight up a
+## face) has no run to be perpendicular to and is widened across screen-right on the ground instead.
+func _box_ribbon(a: Vector3, b: Vector3, col: Color) -> void:
+	var flat := Vector2(b.x - a.x, b.z - a.z)
+	var len_w := flat.length()
+	var side: Vector3
+	if len_w <= Rules.EPS:
+		var r := _ground_right() * Look.SELECTION_BOX_HALF_W_TILES
+		side = Vector3(r.x, 0.0, r.y)
+	else:
+		var s := Vector2(-flat.y, flat.x) / len_w * Look.SELECTION_BOX_HALF_W_TILES
+		side = Vector3(s.x, 0.0, s.y)
+	_box_tri(a - side, a + side, b + side, col)
+	_box_tri(a - side, b + side, b - side, col)
+
+
+## A square lying on the ground at `p`, a half-width to each side.
+func _box_cap(p: Vector3, col: Color) -> void:
+	var x := Vector3(Look.SELECTION_BOX_HALF_W_TILES, 0.0, 0.0)
+	var z := Vector3(0.0, 0.0, Look.SELECTION_BOX_HALF_W_TILES)
+	_box_tri(p - x - z, p + x - z, p + x + z, col)
+	_box_tri(p - x - z, p + x + z, p - x + z, col)

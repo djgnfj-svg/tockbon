@@ -30,12 +30,13 @@
 전제로 쓰였고 **그 둘이 2026-08-22 저녁에 빠졌다.** 되살리면 틀린 것을 읽게 된다.
 ⇒ **무엇을 만드는가는 지금 `docs/roadmap/`에서 읽는다.**
 
-## 남은 갈래 여섯
+## 남은 갈래 일곱
 
-**섬과 전투에 대한 결정들이고, 여섯 다 지금 이 게임에 아직 닿아 있다.**
+**섬과 전투에 대한 결정들이고, 일곱 다 지금 이 게임에 아직 닿아 있다.**
 
 | 문서 | 무엇을 접었나 |
 |---|---|
+| [A left press on nothing keeps the hand](a-left-press-on-nothing-keeps-the-hand.md) | A left press on empty ground keeping the 부대, with ESC the only way to let go. ⚠⚠ **Reversed by the user on 2026-09-02** — a left press on nothing lets go (StarCraft, which the user named) and ESC stays as the second way; the walk moved to the right button (ticket 03-11). The reason it existed — one button did both jobs — is spent, and the doc says why |
 | [해안선을 열고 고정 선착장을 버린다](open-coastline-over-fixed-docks.md) | 정해진 상륙 지점. ⚠ **규칙은 살아 있고 주인만 뒤집혔다** — 이제 적이 내린다 |
 | [배 수를 안 막는다](unlimited-boats-not-a-five-boat-cap.md) | 배 다섯 척 상한. ⚠⚠ **배는 이제 적의 것이다** — 플레이어는 배를 안 놓는다. 논증은 웨이브 표를 짤 때 다시 쓴다 |
 | [하늘에서 떨어뜨린다, 배로 대지 않는다](dropped-from-the-sky-not-landed-by-boat.md) | 배로 상륙시키는 것. ⚠ **결론은 그대로, 배를 타고 오는 쪽이 짐승이 됐다** |

@@ -157,6 +157,14 @@ func run(t) -> void:
 	_a_lost_run_stops_the_clock(t)
 	_the_fight_is_the_same_at_any_frame_rate(t)
 	_nearest_ties_break_on_the_lower_id(t)
+	_two_bodies_that_come_near_each_other_stop_walking_past(t)
+	_a_defender_pulls_a_landed_wolf_off_its_line(t)
+	_a_wolf_at_the_wall_keeps_the_wall(t)
+	_a_blow_between_bodies_crosses_no_more_notches_than_a_body_climbs(t)
+	_the_reach_tier_takes_the_further_body_it_can_strike_over_the_nearer_it_cannot(t)
+	_a_wolf_that_cannot_strike_its_target_walks_up_and_stands(t)
+	_a_chase_builds_one_field_per_piece_the_target_crosses(t)
+	_the_shipped_island_s_first_wave_meets_the_watch_at_the_door(t)
 	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies
 	# half way still reports every check it managed first, in a shape a healthy net cannot be told from.
 	t.done()
@@ -236,6 +244,17 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 		"그리고 휘두르는 시간이 주기보다도 동작 길이보다도 짧다")
 	t.ok(absf(Rules.SWING_LAND_SEC / Rules.SIM_SUBSTEP_SEC - round(Rules.SWING_LAND_SEC / Rules.SIM_SUBSTEP_SEC)) < 1e-6,
 		"휘두르는 시간이 서브스텝의 정수배다 — 닿는 서브스텝이 반올림에 안 걸린다")
+
+	# ⚠⚠ **THE DETECT RADII, TICKET 07-01** (2026-09-02). **3.0 is a new number** — a 칸's diagonal 2.828
+	# rounded up, so a 검사 notices anything on a 칸 touching his own and nothing further; **6.0 is the
+	# only detect number any design in this repo ever wrote** and it stands unchanged, so a difference on
+	# screen is attributable to its first reader and not to a retune.
+	t.eq(Rules.detect_of(Rules.SWORDSMAN), 3.0, "검사는 세 조각 안의 늑대를 알아챈다")
+	t.eq(Rules.detect_of(Rules.WOLF), 6.0, "늑대는 여섯 조각 안의 검사를 알아챈다 — 표에 있던 수 그대로다")
+	# ⚠ **6.0 and not 7.75.** `reach_of` is the ONE place `REACH_BONUS` is added; a `detect_of` that
+	# mirrored it would make the 늑대's detection 7.75 with nothing on screen or in the table saying so.
+	t.ok(absf(Rules.detect_of(Rules.WOLF) - (6.0 + Rules.REACH_BONUS)) > NEAR,
+		"탐지는 표의 칸 그대로다 — 사거리 보너스가 두 번 더해지지 않는다")
 
 	# ⚠ **The 성채 has to outlast one boat and fall to two**, which is what `KEEP_MAX_HP`'s own comment
 	# says it was chosen off. Derived here so a retune of either side moves this row rather than the
@@ -780,6 +799,13 @@ func _a_blow_takes_the_table_s_damage_on_the_table_s_period(t) -> void:
 	t.eq(apart.soldier_hp[0], apart.army.max_hp_of(0), "사거리 밖이면 검사가 안 깎인다")
 	t.eq(apart.enemy_hp[0], Rules.hp_of(Rules.WOLF), "늑대도 안 깎인다")
 	t.eq(int(apart.soldier_target[0]), -1, "그리고 아무도 겨누고 있지 않다")
+	# ⚠ **Re-derived from the detect number since 07-01.** 3.0 and 6.0 both sit under this pair's 8.06,
+	# and the three reads above fall together the day either passes it — so the gap is measured against
+	# the wider radius here rather than left standing as a coincidence.
+	var widest := maxf(Rules.detect_of(Rules.SWORDSMAN), Rules.detect_of(Rules.WOLF))
+	t.ok(gap > widest + NEAR,
+		"그리고 둘 다의 탐지 반경 %.1f 밖이다 — 이 대조군은 탐지가 %.2f 를 넘는 날 여기서 붉어진다 (자가 점검)"
+			% [widest, gap])
 
 
 ## **Damage lands in one phase and death latches in a later one.**
@@ -1115,6 +1141,533 @@ func _nearest_ties_break_on_the_lower_id(t) -> void:
 	t.eq(int(c.enemy_target[0]), 1, "동점이 아니면 가까운 쪽을 문다 — 번호가 이기는 게 아니다")
 
 
+# == noticing =========================================================================================
+## Ticket 07-01: **two bodies that come near each other stop walking past.** A 검사 names the nearest
+## 늑대 inside `Rules.detect_of(SWORDSMAN)`; a 늑대 still walking names the nearest 검사 inside
+## `Rules.detect_of(WOLF)` and walks at him. ⚠ **Nothing new gets hit** — both blow gates stay at
+## `reach_of`, so every row here that reads HP is reading a body that WALKED into reach.
+
+## **The complaint, measured.** The user watched a 검사 and a 늑대 pass within two 조각 of each other
+## and walk on (2026-09-02). **2.236 and not 2.5**: bodies snap to integer centres, so a gap is
+## `sqrt(dx² + dy²)` over integers and 6.25 is not a sum of two squares — (1, 2) is the attainable gap
+## nearest 「두 조각」 that sits above reach 1.75 and below both detect radii.
+## ⚠ **No 성채 on the board**, so the 늑대 has nothing else to walk at — before this ticket it froze
+## here, which is exactly the half a careless edit of the movement gate drops (`anchor < 0` alone is
+## not 「stand」).
+func _two_bodies_that_come_near_each_other_stop_walking_past(t) -> void:
+	var b := _battle_on(_grid(ISLE), PackedInt32Array(), -1)
+	t.eq(b.place_ashore(0, b.grid.tile_index(2, 2)), b.grid.tile_index(2, 2), "검사가 (2,2) 에 섰다 (자가 점검)")
+	var who := b.land_beast(Rules.WOLF, b.grid.tile_index(3, 4))
+	t.eq(b._tile_of(b.enemy_pos[who]), b.grid.tile_index(3, 4), "늑대가 (3,4) 에 섰다 (자가 점검)")
+	var gap := b._dist(b.soldier_pos[0], b.enemy_pos[who])
+	t.ok(absf(gap - sqrt(5.0)) <= NEAR, "둘 사이가 2.236 조각이다 (자가 점검 — %.3f)" % gap)
+	# The gap sits in the one band this ticket is about: above both reaches, below both detects.
+	# ⚠ Derived from `Rules`, so a detect that shrinks under 2.236 reddens this line and not the fight.
+	t.ok(gap > Rules.reach_of(Rules.SWORDSMAN) + Rules.EPS and gap > Rules.reach_of(Rules.WOLF) + Rules.EPS,
+		"그 거리는 둘 다의 사거리 밖이다 (자가 점검)")
+	t.ok(gap < Rules.detect_of(Rules.SWORDSMAN) and gap < Rules.detect_of(Rules.WOLF),
+		"그리고 둘 다의 탐지 반경 안이다 (자가 점검 — 검사 %.1f · 늑대 %.1f)"
+			% [Rules.detect_of(Rules.SWORDSMAN), Rules.detect_of(Rules.WOLF)])
+	t.ok(Rules.detect_of(Rules.SWORDSMAN) < Rules.detect_of(Rules.WOLF),
+		"사냥꾼이 먼저 알아챈다 — 늑대의 탐지가 검사의 것보다 넓다")
+
+	# **Aiming is not hitting.** One sub-step: both target columns name each other and nobody has bled.
+	# The 늑대 covers at most `speed / 60` in that sub-step and the 검사 does not move, so the pair is
+	# still outside 1.75 — a blow here would be a hit from further than the rule allows.
+	b.step(Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(b.soldier_target[0]), who, "한 서브스텝에 검사가 늑대를 겨눈다")
+	t.eq(int(b.enemy_target[who]), 0, "그리고 늑대도 검사를 겨눈다")
+	var gap1 := b._dist(b.soldier_pos[0], b.enemy_pos[who])
+	t.ok(gap1 > Rules.reach_of(Rules.WOLF) + Rules.EPS,
+		"그런데 아직 사거리 밖이다 (자가 점검 — %.3f)" % gap1)
+	t.eq(b.soldier_hp[0], b.army.max_hp_of(0), "그래서 검사는 안 깎였다 — 겨눈 것이지 때린 것이 아니다")
+	t.eq(b.enemy_hp[who], Rules.hp_of(Rules.WOLF), "늑대도 안 깎였다")
+
+	# **And then they fight.** ⚠ Read HP and never `enemy_alive`: the 검사's third blow lands at about
+	# 4.9 s, a margin of one tenth of a second on a 5 s read. Before this ticket both stood at full HP.
+	b.step(5.0 - Rules.SIM_SUBSTEP_SEC)
+	t.ok(float(b.soldier_hp[0]) < b.army.max_hp_of(0),
+		"5초 뒤 검사가 꽉 찬 체력이 아니다 — 늑대가 걸어와서 물었다 (%.1f)" % float(b.soldier_hp[0]))
+	t.ok(float(b.enemy_hp[who]) < Rules.hp_of(Rules.WOLF),
+		"늑대도 꽉 찬 체력이 아니다 — 검사가 받아쳤다 (%.1f)" % float(b.enemy_hp[who]))
+
+
+## **A defender pulls a landed 늑대 off its line to the 성채.** The control beside
+## `_the_beasts_walk_at_the_keep_and_stop_in_reach`, which survives this ticket only because no 검사 is
+## ever ashore on it — without this row 「beasts walk at the 성채」 and 「beasts notice a defender」 are
+## one untested pair.
+##
+## ⚠⚠ **MEASURED OVER THREE SECONDS AND NOT ONE STEP.** The first draft read 「its position moves on the
+## next step」, and that is green for the freeze: a 늑대 whose target is set but whose walk is gated
+## off still glides out the 조각 it reserved, up to 1.414. **A gap that closes by more than three and a
+## 검사 who was hit are what a glide-out cannot produce.**
+## ⚠ **`keep_hp` still full is the discriminating read against the code before this ticket**, which
+## had the 늑대 at the wall by 0.5 s and the 성채 at 112 by 3 s.
+func _a_defender_pulls_a_landed_wolf_off_its_line(t) -> void:
+	var b := _battle_on(_grid(LAND), _keep(), ISLE_MUSTER)
+	var who := b.land_beast(Rules.WOLF, b.grid.tile_index(2, 2))
+	t.eq(b._tile_of(b.enemy_pos[who]), b.grid.tile_index(2, 2), "늑대가 (2,2) 에 내렸다 (자가 점검)")
+	var wall := _keep_gap(b, b.enemy_pos[who])
+	t.ok(wall > Rules.reach_of(Rules.WOLF) + Rules.EPS,
+		"성채까지 %.2f 조각 — 사거리 밖이라 검사가 없으면 집으로 걷는다 (자가 점검)" % wall)
+	t.eq(b.place_ashore(0, b.grid.tile_index(2, 7)), b.grid.tile_index(2, 7), "검사가 (2,7) 에 섰다 (자가 점검)")
+	var gap0 := b._dist(b.enemy_pos[who], b.soldier_pos[0])
+	t.ok(absf(gap0 - 5.0) <= NEAR, "둘 사이가 5.0 조각이다 (자가 점검 — %.3f)" % gap0)
+	t.ok(gap0 < Rules.detect_of(Rules.WOLF) and gap0 > Rules.detect_of(Rules.SWORDSMAN),
+		"늑대의 탐지 안, 검사의 탐지 밖이다 (자가 점검)")
+
+	b.step(Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(b.enemy_target[who]), 0, "한 서브스텝에 늑대가 검사를 겨눈다")
+	t.eq(b.keep_hp, Rules.KEEP_MAX_HP, "그리고 성채는 멀쩡하다")
+
+	b.step(3.0 - Rules.SIM_SUBSTEP_SEC)
+	var gap1 := b._dist(b.enemy_pos[who], b.soldier_pos[0])
+	t.ok(gap1 <= Rules.reach_of(Rules.WOLF) + Rules.speed_of(Rules.WOLF) * Rules.SIM_SUBSTEP_SEC + NEAR,
+		"3초 뒤 늑대가 검사의 사거리 안까지 와 있다 (%.2f -> %.2f)" % [gap0, gap1])
+	t.ok(gap0 - gap1 > 3.0, "사이가 세 조각 넘게 좁혀졌다 — 예약한 조각을 마저 밟는 것으로는 안 나오는 값이다")
+	t.ok(float(b.soldier_hp[0]) < b.army.max_hp_of(0),
+		"그리고 검사가 물렸다 (%.1f) — 늑대가 실제로 걸어왔다" % float(b.soldier_hp[0]))
+	t.eq(b.keep_hp, Rules.KEEP_MAX_HP, "성채는 그동안 한 대도 안 맞았다 — 늑대가 집이 아니라 사람에게 갔다")
+
+
+## **[A] A 늑대 at the wall keeps the wall.** The user's answer 1 on 07-01 (2026-09-02): a 늑대 that can
+## already hit the 성채 is NOT pulled off by a 검사 three 조각 away — the detect tier sits BELOW the
+## wall. ⚠⚠ **This is the tripwire the HELD block said did not exist**: written 검사-first, the loss
+## condition leaves the board and this row goes red on its first read, while the two burn rows stay
+## green because nothing on them ever stands a 검사.
+##
+## Three reads, and each is the inversion of a rule the other two would let through:
+##  · the wall holds its 늑대 — red for 「검사 first」
+##  · the wall takes a 늑대 walking past it — red for 「성채 only when no 검사 is seen」
+##  · a 검사 at arm's length still outranks the wall — red for 「the wall beats everything」
+func _a_wolf_at_the_wall_keeps_the_wall(t) -> void:
+	var b := _at_the_keep()
+	var wall := _keep_gap(b, b.enemy_pos[0])
+	t.ok(wall <= Rules.reach_of(Rules.WOLF), "늑대가 성채 사거리 안에 서 있다 (자가 점검 — %.2f)" % wall)
+	t.eq(b.place_ashore(0, ISLE_MUSTER), ISLE_MUSTER, "검사가 문간 (7,4) 에 섰다 (자가 점검)")
+	var gap := b._dist(b.enemy_pos[0], b.soldier_pos[0])
+	t.ok(absf(gap - 3.0) <= NEAR, "늑대와 검사가 평지에서 3.0 조각이다 (자가 점검 — %.3f)" % gap)
+	t.ok(gap <= Rules.detect_of(Rules.SWORDSMAN) + Rules.EPS and gap <= Rules.detect_of(Rules.WOLF),
+		"둘 다의 탐지 안이다 (자가 점검)")
+	var parked: Vector2 = b.enemy_pos[0]
+
+	b.step(Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(b.enemy_target[0]), Battle.TARGET_KEEP,
+		"한 서브스텝에 늑대가 겨누는 것은 성채다 — 세 조각 밖의 검사가 아니다")
+	t.eq(int(b.soldier_target[0]), 0, "검사 쪽은 그 늑대를 겨눈다 — 3.0 은 제 탐지 안이다")
+	# The swing was thrown on that sub-step; the blow lands `Rules.SWING_LAND_SEC` later (03-19,
+	# merged 2026-09-03 after this row was written against the instant blow).
+	b.step(Rules.SWING_LAND_SEC)
+	t.ok(absf(b.keep_hp - (Rules.KEEP_MAX_HP - Rules.damage_of(Rules.WOLF))) <= HP_NEAR,
+		"그리고 성채가 한 대 맞았다 (%.1f)" % b.keep_hp)
+
+	# Swings at 0, 2 and 4 s land at 0.4, 2.4 and 4.4 — the burn row's own arithmetic over five seconds.
+	b.step(5.0 - Rules.SIM_SUBSTEP_SEC - Rules.SWING_LAND_SEC)
+	var blows := int(floor(5.0 / Rules.period_of(Rules.WOLF))) + 1
+	t.eq(int(b.enemy_target[0]), Battle.TARGET_KEEP, "5초 뒤에도 성채다")
+	t.ok(absf(b.keep_hp - (Rules.KEEP_MAX_HP - float(blows) * Rules.damage_of(Rules.WOLF))) <= HP_NEAR,
+		"성채가 %d 대 맞았다 (%.1f)" % [blows, b.keep_hp])
+	t.eq(b.soldier_hp[0], b.army.max_hp_of(0), "검사는 꽉 찬 체력이다 — 늑대가 그에게 안 갔다")
+	t.ok((b.enemy_pos[0] as Vector2).distance_to(parked) <= NEAR,
+		"그리고 늑대가 그 자리에서 안 움직였다 (%.5f)" % (b.enemy_pos[0] as Vector2).distance_to(parked))
+
+	# **The wall takes a 늑대 walking past it.** Landed at (2,4): 3.0 from the house (outside reach),
+	# 5.0 from the doorstep (inside 6.0). It notices the man and sets off; the house sits between them
+	# and the wall-in-reach clause catches it on the way. ⚠ An order written 「성채 only when no 검사 is
+	# seen」 is green on the read above and red here.
+	var c := _battle_on(_grid(LAND), _keep(), ISLE_MUSTER)
+	var walker := c.land_beast(Rules.WOLF, c.grid.tile_index(2, 4))
+	t.eq(c._tile_of(c.enemy_pos[walker]), c.grid.tile_index(2, 4), "늑대가 (2,4) 에 내렸다 (자가 점검)")
+	t.ok(_keep_gap(c, c.enemy_pos[walker]) > Rules.reach_of(Rules.WOLF) + Rules.EPS,
+		"거기서는 성채가 사거리 밖이다 (자가 점검 — %.2f)" % _keep_gap(c, c.enemy_pos[walker]))
+	c.place_ashore(0, ISLE_MUSTER)
+	var far := c._dist(c.enemy_pos[walker], c.soldier_pos[0])
+	t.ok(far > Rules.reach_of(Rules.WOLF) and far < Rules.detect_of(Rules.WOLF),
+		"검사는 %.1f 조각 — 사거리 밖, 탐지 안이다 (자가 점검)" % far)
+	c.step(Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(c.enemy_target[walker]), 0, "한 서브스텝에 늑대가 검사를 겨눈다 — 걷는 중이라 알아챈다")
+	c.step(3.0 - Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(c.enemy_target[walker]), Battle.TARGET_KEEP,
+		"3초 뒤에는 성채를 겨눈다 — 가는 길에 벽이 사거리 안에 들어왔다")
+	t.ok(c.keep_hp < Rules.KEEP_MAX_HP, "그리고 성채가 깎이고 있다 (%.1f)" % c.keep_hp)
+	t.eq(c.soldier_hp[0], c.army.max_hp_of(0), "검사는 꽉 찬 체력이다 — 늑대가 그에게 닿지 않았다")
+
+	# **A 검사 at arm's length still outranks the wall, exactly as before this ticket.** Without this
+	# read answer 1 could be built as 「the wall beats everything」 and nothing would say so. ⚠ Read at
+	# 3 s and not 5: the 검사's third blow kills the 늑대 at 4.8 s.
+	var d := _at_the_keep()
+	t.eq(d.place_ashore(0, d.grid.tile_index(4, 3)), d.grid.tile_index(4, 3), "검사가 (4,3) 에 섰다 (자가 점검)")
+	var near := d._dist(d.enemy_pos[0], d.soldier_pos[0])
+	t.ok(near <= Rules.reach_of(Rules.WOLF), "늑대에서 %.2f 조각 — 사거리 안이다 (자가 점검)" % near)
+	t.ok(_keep_gap(d, d.soldier_pos[0]) <= 2.0, "그리고 성채 바로 옆이다 (자가 점검)")
+	d.step(3.0)
+	t.eq(int(d.enemy_target[0]), 0, "사거리 안의 검사는 벽보다 먼저다 — 이 티켓 전과 같다")
+	t.ok(float(d.soldier_hp[0]) < d.army.max_hp_of(0), "그래서 검사가 물렸다 (%.1f)" % float(d.soldier_hp[0]))
+	t.eq(d.keep_hp, Rules.KEEP_MAX_HP, "그리고 성채는 안 맞았다")
+
+	# **A 늑대 holding the wall stands where the wall is, and does not walk at the anchor.** The
+	# movement gate's 「stand」 for `TARGET_KEEP` is its own clause, and every board above has the 늑대
+	# within reach of `keep_tiles[0]` too — so a gate that lets `TARGET_KEEP` fall through to the anchor
+	# walk is green on all of them. Here the 늑대 stands at (7,5) on `LAND`: 1.0 from the house's
+	# (6,5), 2.236 from its first 조각 (5,4), so that mutant walks it round the house while it is
+	# hitting it. ⚠ **Not on the shipped island** — there every 눈금 2 조각 beside the house is (10,11)
+	# or (11,11), both inside 1.75 of the anchor, and the flat ring cannot strike 눈금 2 at all.
+	var e := _battle_on(_grid(LAND), _keep(), ISLE_MUSTER)
+	var east := e.land_beast(Rules.WOLF, e.grid.tile_index(7, 5))
+	var post: Vector2 = e.enemy_pos[east]
+	t.eq(e._tile_of(post), e.grid.tile_index(7, 5), "늑대가 (7,5) 에 섰다 (자가 점검)")
+	t.ok(_keep_gap(e, post) <= Rules.reach_of(Rules.WOLF),
+		"거기서 성채가 사거리 안이다 (자가 점검 — %.2f)" % _keep_gap(e, post))
+	var to_anchor := e._dist(post, e._point_of_tile(int(e.keep_tiles[0])))
+	t.ok(to_anchor > Rules.reach_of(Rules.WOLF) + Rules.EPS,
+		"그런데 성채의 첫 조각은 사거리 밖이다 (자가 점검 — %.3f)" % to_anchor)
+	e.step(Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(e.enemy_target[east]), Battle.TARGET_KEEP, "한 서브스텝에 성채를 겨눈다")
+	e.step(3.0 - Rules.SIM_SUBSTEP_SEC)
+	var wall_blows := int(floor(3.0 / Rules.period_of(Rules.WOLF))) + 1
+	t.ok(absf(e.keep_hp - (Rules.KEEP_MAX_HP - float(wall_blows) * Rules.damage_of(Rules.WOLF))) <= HP_NEAR,
+		"3초에 성채가 %d 대 맞았다 (%.1f)" % [wall_blows, e.keep_hp])
+	t.ok((e.enemy_pos[east] as Vector2).distance_to(post) <= NEAR,
+		"그리고 늑대는 그 자리다 (%.5f) — 첫 조각을 향해 집을 돌지 않는다" % (e.enemy_pos[east] as Vector2).distance_to(post))
+
+
+## **[B] A blow between bodies crosses no more 눈금 than a body climbs, in both directions.** The user's
+## answer 2 on 07-01 (2026-09-02): the body-against-body blow gets the same `Grid.can_strike` guard the
+## 성채 blow got in 02-01. ⚠⚠ **The gap was real and unreachable in play**, because a beast only ever
+## walked at the 성채 — the chase is what walks it under a plateau, so the guard lands in the same edit.
+##
+## ⚠ **「0 is ready」 is what makes 5 s a real read**: without the guard the first blow lands on the
+## first sub-step, so full HP at 5 s means the guard refused every one of about 150 chances.
+## ⚠⚠ **The floor is the 계단 pair at the end** — a guard written 「same 눈금 only」 is green on every
+## read above it and red there, and that is the reach-from-a-계단 rule 02-01 refused to give up.
+func _a_blow_between_bodies_crosses_no_more_notches_than_a_body_climbs(t) -> void:
+	var b := _plateau_no_keep()
+	t.eq(b.place_ashore(0, b.grid.tile_index(3, 2)), b.grid.tile_index(3, 2), "검사가 고원 (3,2) 에 섰다 (자가 점검)")
+	t.eq(b.grid.level_of(b._tile_of(b.soldier_pos[0])), 2, "그 조각이 눈금 2 다 (자가 점검)")
+	var who := b.land_beast(Rules.WOLF, b.grid.tile_index(3, 1))
+	t.eq(b._tile_of(b.enemy_pos[who]), b.grid.tile_index(3, 1), "늑대가 바로 북쪽 (3,1) 에 섰다 (자가 점검)")
+	t.eq(b.grid.level_of(b._tile_of(b.enemy_pos[who])), 0, "그 조각은 눈금 0 이다 (자가 점검)")
+	var gap := b._dist(b.enemy_pos[who], b.soldier_pos[0])
+	t.ok(absf(gap - sqrt(2.0)) <= NEAR, "3D 거리가 1.414 다 (자가 점검 — %.3f)" % gap)
+	t.ok(gap <= Rules.reach_of(Rules.WOLF) and gap <= Rules.reach_of(Rules.SWORDSMAN),
+		"둘 다의 사거리 안이다 — 눈금이 안 막으면 첫 서브스텝에 맞는 거리다 (자가 점검)")
+	var s_at: Vector2 = b.soldier_pos[0]
+	var e_at: Vector2 = b.enemy_pos[who]
+
+	b.step(Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(b.soldier_target[0]), who, "한 서브스텝에 검사가 아래의 늑대를 겨눈다 — 알아채는 데는 높이가 안 막는다")
+	t.eq(int(b.enemy_target[who]), 0, "늑대도 위의 검사를 겨눈다")
+	t.eq(b.soldier_hp[0], b.army.max_hp_of(0), "그런데 검사는 안 깎였다")
+	t.eq(b.enemy_hp[who], Rules.hp_of(Rules.WOLF), "늑대도 안 깎였다")
+
+	b.step(5.0 - Rules.SIM_SUBSTEP_SEC)
+	t.eq(b.soldier_hp[0], b.army.max_hp_of(0), "5초 뒤에도 검사가 꽉 찬 체력이다 — 1층에서 고원 위를 못 때린다")
+	t.eq(b.enemy_hp[who], Rules.hp_of(Rules.WOLF), "늑대도 꽉 찬 체력이다 — 위에서 아래로도 못 때린다, 규칙이 대칭이다")
+	t.eq(int(b.soldier_target[0]), who, "둘은 여전히 서로를 겨눈다")
+	t.eq(int(b.enemy_target[who]), 0, "늑대 쪽도")
+	t.ok((b.soldier_pos[0] as Vector2).distance_to(s_at) <= NEAR, "검사는 안 움직였다")
+	t.ok((b.enemy_pos[who] as Vector2).distance_to(e_at) <= NEAR, "늑대도 안 움직였다 — 사거리 안이라 걷지 않는다")
+
+	# **The floor.** Same pair, the 늑대 on the 계단 tread — 눈금 1, planar 1.0, 3D 1.118 — both bleed.
+	var c := _plateau_no_keep()
+	t.eq(c.place_ashore(0, c.grid.tile_index(3, 3)), c.grid.tile_index(3, 3), "검사가 고원 (3,3) 에 섰다 (자가 점검)")
+	var climber := c.land_beast(Rules.WOLF, c.grid.tile_index(2, 3))
+	t.eq(c._tile_of(c.enemy_pos[climber]), c.grid.tile_index(2, 3), "늑대가 계단 (2,3) 에 섰다 (자가 점검)")
+	t.eq(c.grid.level_of(c._tile_of(c.enemy_pos[climber])), 1, "그 조각은 눈금 1 이다 (자가 점검)")
+	var tread := c._dist(c.enemy_pos[climber], c.soldier_pos[0])
+	t.ok(absf(tread - sqrt(1.25)) <= NEAR, "3D 거리가 1.118 다 (자가 점검 — %.3f)" % tread)
+	c.step(5.0)
+	t.ok(float(c.soldier_hp[0]) < c.army.max_hp_of(0),
+		"계단에서는 검사가 물린다 (%.1f) — 눈금 하나는 넘는다" % float(c.soldier_hp[0]))
+	t.ok(float(c.enemy_hp[climber]) < Rules.hp_of(Rules.WOLF), "그리고 늑대도 맞는다 (%.1f)" % float(c.enemy_hp[climber]))
+
+
+## **The reach tier takes the further body it can strike over the nearer one it cannot.** This is the
+## `must_strike` flag on the reach tier of BOTH scans, and it is the case the plan gave as the reason
+## the flag exists: 「a 검사 on the plateau with a 늑대 below at 1.414 and one on the 계단 at 1.5 would
+## stand aiming down forever」. ⚠⚠ **Every other row in this file is green with the flag off** — the
+## verifier flipped `true` to `false` on both calls and 419 checks stayed green — because no other
+## board has two bodies inside one reach where the NEARER is the unstrikable one. Here it is, twice.
+##
+## Both halves stand on `PLATEAU` with no 성채: the plateau is (3,2)·(4,2)·(3,3)·(4,3) on 눈금 2 and
+## the 계단 tread is (2,3) on 눈금 1. The unstrikable body is landed FIRST, so with the flag off it wins
+## on distance AND on the tie-break — the mutant has no way to pick the tread.
+## ⚠ **Read at 3 s and not 5**: the 검사's third blow (period 2.4) kills a 늑대 at 4.8 s, and a row that
+## reads a dead body's HP is reading the death phase, not the choice.
+func _the_reach_tier_takes_the_further_body_it_can_strike_over_the_nearer_it_cannot(t) -> void:
+	# **The 검사's scan.** He stands on (3,2); 늑대 A is straight below at (3,1) on 눈금 0 — 3D 1.414,
+	# two 눈금 down, unstrikable; 늑대 B is on the tread (2,3) — 3D 1.5, one 눈금 down, strikable.
+	var b := _plateau_no_keep()
+	t.eq(b.place_ashore(0, b.grid.tile_index(3, 2)), b.grid.tile_index(3, 2), "검사가 고원 (3,2) 에 섰다 (자가 점검)")
+	var below := b.land_beast(Rules.WOLF, b.grid.tile_index(3, 1))
+	var tread := b.land_beast(Rules.WOLF, b.grid.tile_index(2, 3))
+	t.eq(b._tile_of(b.enemy_pos[below]), b.grid.tile_index(3, 1), "늑대 A 가 바로 아래 (3,1) 에 섰다 (자가 점검)")
+	t.eq(b._tile_of(b.enemy_pos[tread]), b.grid.tile_index(2, 3), "늑대 B 가 계단 (2,3) 에 섰다 (자가 점검)")
+	var d_below := b._dist(b.soldier_pos[0], b.enemy_pos[below])
+	var d_tread := b._dist(b.soldier_pos[0], b.enemy_pos[tread])
+	t.ok(absf(d_below - sqrt(2.0)) <= NEAR and absf(d_tread - 1.5) <= NEAR,
+		"A 는 1.414, B 는 1.5 — A 가 가깝다 (자가 점검 — %.3f · %.3f)" % [d_below, d_tread])
+	t.ok(d_tread <= Rules.reach_of(Rules.SWORDSMAN), "둘 다 검사의 사거리 안이다 (자가 점검)")
+	t.ok(not b.grid.can_strike(b._tile_of(b.soldier_pos[0]), b._tile_of(b.enemy_pos[below])),
+		"A 는 눈금 둘 아래라 못 때린다 (자가 점검)")
+	t.ok(b.grid.can_strike(b._tile_of(b.soldier_pos[0]), b._tile_of(b.enemy_pos[tread])),
+		"B 는 눈금 하나 아래라 때릴 수 있다 (자가 점검)")
+
+	b.step(Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(b.soldier_target[0]), tread,
+		"한 서브스텝에 검사가 겨누는 것은 계단의 B 다 — 더 가깝지만 못 때리는 A 가 아니다")
+	b.step(3.0 - Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(b.soldier_target[0]), tread, "3초 뒤에도 B 다")
+	t.ok(float(b.enemy_hp[tread]) < Rules.hp_of(Rules.WOLF),
+		"그리고 B 가 깎였다 (%.1f) — 가까운 것을 겨눴으면 아무도 안 맞고 검사만 물린다" % float(b.enemy_hp[tread]))
+	t.eq(b.enemy_hp[below], Rules.hp_of(Rules.WOLF), "A 는 꽉 찬 체력이다 — 아무도 A 를 못 때린다")
+
+	# **The 늑대's scan, the same shape upside down.** It stands on the flat at (3,4); 검사 A is straight
+	# above at (3,3) on 눈금 2 — 3D 1.414, unstrikable; 검사 B is on the tread (2,3) — 3D 1.5, strikable.
+	var c := _plateau_no_keep()
+	t.eq(c.place_ashore(0, c.grid.tile_index(3, 3)), c.grid.tile_index(3, 3), "검사 A 가 고원 (3,3) 에 섰다 (자가 점검)")
+	t.eq(c.place_ashore(1, c.grid.tile_index(2, 3)), c.grid.tile_index(2, 3), "검사 B 가 계단 (2,3) 에 섰다 (자가 점검)")
+	var who := c.land_beast(Rules.WOLF, c.grid.tile_index(3, 4))
+	t.eq(c._tile_of(c.enemy_pos[who]), c.grid.tile_index(3, 4), "늑대가 평지 (3,4) 에 섰다 (자가 점검)")
+	var w_above := c._dist(c.enemy_pos[who], c.soldier_pos[0])
+	var w_tread := c._dist(c.enemy_pos[who], c.soldier_pos[1])
+	t.ok(absf(w_above - sqrt(2.0)) <= NEAR and absf(w_tread - 1.5) <= NEAR,
+		"A 는 1.414, B 는 1.5 — A 가 가깝다 (자가 점검 — %.3f · %.3f)" % [w_above, w_tread])
+	t.ok(w_tread <= Rules.reach_of(Rules.WOLF), "둘 다 늑대의 사거리 안이다 (자가 점검)")
+	t.ok(not c.grid.can_strike(c._tile_of(c.enemy_pos[who]), c._tile_of(c.soldier_pos[0])),
+		"A 는 눈금 둘 위라 못 때린다 (자가 점검)")
+
+	c.step(Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(c.enemy_target[who]), 1, "한 서브스텝에 늑대가 겨누는 것은 계단의 B 다 — 더 가깝지만 못 때리는 A 가 아니다")
+	c.step(3.0 - Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(c.enemy_target[who]), 1, "3초 뒤에도 B 다")
+	t.ok(float(c.soldier_hp[1]) < c.army.max_hp_of(1),
+		"그리고 B 가 물렸다 (%.1f) — 가까운 것을 겨눴으면 늑대는 아무도 못 문다" % float(c.soldier_hp[1]))
+	t.eq(c.soldier_hp[0], c.army.max_hp_of(0), "A 는 꽉 찬 체력이다 — 아무도 A 를 못 문다")
+
+
+## **[stands] A 늑대 whose target it cannot strike walks to the stop distance and stands.** Also the
+## measurement of the Risk line 「a path to something unreachable」: a field to a 눈금 2 조각 is asked
+## for by a body on 눈금 0, and the body neither spins nor stalls.
+##
+## Derived on the field, not guessed: the field from (3,2) reaches the flat only through the 계단 at
+## (2,3), so from (3,0) the cheapest neighbour is (2,1), which is 1.732 from the 검사 — inside 1.75. The
+## 늑대 walks one diagonal and the stop test ends the walk on the flat; the 계단 is two field steps
+## further and it never gets there.
+## ⚠⚠ **The level read is the discriminating one**: a 늑대 that reached the 계단 would be at 눈금 1,
+## 1.5 from him, and would land a blow — which is the 07-02 chase arriving early, not this ticket.
+func _a_wolf_that_cannot_strike_its_target_walks_up_and_stands(t) -> void:
+	var b := _plateau_no_keep()
+	t.eq(b.place_ashore(0, b.grid.tile_index(3, 2)), b.grid.tile_index(3, 2), "검사가 고원 (3,2) 에 섰다 (자가 점검)")
+	var who := b.land_beast(Rules.WOLF, b.grid.tile_index(3, 0))
+	var began: Vector2 = b.enemy_pos[who]
+	t.eq(b._tile_of(began), b.grid.tile_index(3, 0), "늑대가 (3,0) 에 섰다 (자가 점검)")
+	var gap0 := b._dist(began, b.soldier_pos[0])
+	t.ok(absf(gap0 - sqrt(5.0)) <= NEAR, "3D 거리가 2.236 다 (자가 점검 — %.3f)" % gap0)
+	t.ok(gap0 > Rules.reach_of(Rules.WOLF) and gap0 < Rules.detect_of(Rules.WOLF),
+		"사거리 밖, 탐지 안이다 (자가 점검)")
+
+	b.step(Rules.SIM_SUBSTEP_SEC)
+	t.eq(int(b.enemy_target[who]), 0, "한 서브스텝에 늑대가 검사를 겨눈다 — 못 때리는 것도 알아채기는 한다")
+
+	b.step(1.0 - Rules.SIM_SUBSTEP_SEC)
+	var at1: Vector2 = b.enemy_pos[who]
+	t.ok(at1.distance_to(began) > 1.0,
+		"1초 뒤 (3,0) 에서 한 조각 넘게 떨어져 있다 — 걸었다 (%.3f)" % at1.distance_to(began))
+	var gap1 := b._dist(at1, b.soldier_pos[0])
+	t.ok(gap1 <= Rules.reach_of(Rules.WOLF) + NEAR, "그리고 검사까지 사거리 거리 안에 서 있다 (%.3f)" % gap1)
+	t.eq(b.grid.level_of(b._tile_of(at1)), 0, "눈금 0 이다 — 계단도 고원도 아니다, 평지에서 올려다본다")
+
+	b.step(4.0)
+	t.ok((b.enemy_pos[who] as Vector2).distance_to(at1) <= NEAR,
+		"5초 뒤에도 그 자리다 (%.5f) — 돌지도 떨지도 않는다" % (b.enemy_pos[who] as Vector2).distance_to(at1))
+	t.eq(int(b.enemy_target[who]), 0, "여전히 검사를 겨눈다")
+	t.eq(int(b.soldier_target[0]), who, "검사도 아래의 늑대를 겨눈다 — 1.732 는 제 탐지 안이다")
+	t.eq(b.soldier_hp[0], b.army.max_hp_of(0), "그런데 아무도 못 때린다 — 검사가 꽉 찬 체력이다")
+	t.eq(b.enemy_hp[who], Rules.hp_of(Rules.WOLF), "늑대도 꽉 찬 체력이다")
+	# **It stood the way a stopped body stands: on a 조각 centre, holding that one 조각.** The stop test
+	# ends the walk at 1.75 from the 검사, which is 0.18 조각 SHORT of the (2,1) centre — so a gate that
+	# keeps calling `_walk` on a body already in reach leaves it there mid-조각 forever, never settled,
+	# still holding (3,0) behind it. ⚠ The reads above are green for that mutant: it walked more than
+	# 1.0, it is on 눈금 0, and it does not move again. **These two are what the mutant cannot produce.**
+	var stood: Vector2 = b.enemy_pos[who]
+	var centre := b._point_of_tile(b._tile_of(stood))
+	t.ok(stood.distance_to(centre) <= NEAR,
+		"그리고 조각 한가운데 서 있다 (%.3f) — 예약한 조각을 다 건너고 섰다, 중간에서 얼어붙은 게 아니다" % stood.distance_to(centre))
+	t.eq(b.grid.hold_count(b.grid.tile_index(3, 0)), 0,
+		"내렸던 (3,0) 은 놓았다 — 선 몸이 뒤의 조각까지 잡고 있으면 목이 절반이 된다")
+	t.ok(b.grid.holds(b._tile_of(stood), Battle.ENEMY_UID_BASE + who), "선 조각 하나만 잡고 있다")
+
+
+## **A chase builds one field per 조각 the target crosses, and not one per sub-step.** The flow field,
+## not the scan, is what a chase costs — `Battle.field_to` records one field at about 3.7 ms on the
+## shipped island and `Battle.FIELD_TTL` retires it after 0.5 s, so the number that matters is how
+## many distinct keys a chase asks for and how often they rebuild.
+##
+## ⚠ **Counted off `_field_age` and not off key presence.** A key that expires and is rebuilt inside
+## one sub-step — which is every rebuild a beast asks for, since `_age_fields` and `_walk` run in the
+## same phase — is present at both samples, so 「a key that was not there the sub-step before」 misses
+## it. An age that went DOWN between two samples is a rebuild, and a key that was absent is a build.
+## ⚠ **The distinct-key count is the discriminating read** (2 before this ticket against about 8
+## after); the build count is the bound that catches a key written off the 검사's position instead of
+## his 조각, which would build sixty times a second. **Timing is printed, never asserted** — a timing
+## assert is flaky across machines and the counts are the deterministic half.
+func _a_chase_builds_one_field_per_piece_the_target_crosses(t) -> void:
+	var g := _real()
+	var b := _battle_on(g, Islands.keep_tiles(), Islands.beside_home_tile(g.w))
+	var start := g.tile_index(4, 14)
+	var dest := g.tile_index(4, 8)
+	t.eq(b.place_ashore(0, start), start, "검사가 (4,14) 에 섰다 (자가 점검)")
+	var who := b.land_beast(Rules.WOLF, g.tile_index(9, 14))
+	t.eq(b._tile_of(b.enemy_pos[who]), g.tile_index(9, 14), "늑대가 (9,14) 에 섰다 (자가 점검)")
+	var gap := b._dist(b.enemy_pos[who], b.soldier_pos[0])
+	t.ok(absf(gap - 5.0) <= NEAR, "둘 사이가 5.0 조각이다 (자가 점검 — %.3f)" % gap)
+	t.ok(is_inf(b.keep_gap(b.enemy_pos[who])), "거기서는 성채를 못 때린다 — 눈금 2 아래다 (자가 점검)")
+	# Six 조각 straight north, all on 눈금 0 with no 계단 in the column — read off the island file.
+	for y in range(8, 15):
+		t.eq(g.level_of(g.tile_index(4, y)), 0, "(4,%d) 는 눈금 0 이다 (자가 점검)" % y)
+	t.ok(b.order_walk(0, dest), "검사를 (4,8) 로 보낸다 (자가 점검)")
+
+	var ages := {}
+	var seen := {}
+	var builds := _count_builds(b, ages, seen)
+	for _i in int(round(3.0 / Rules.SIM_SUBSTEP_SEC)):
+		b.step(Rules.SIM_SUBSTEP_SEC)
+		builds += _count_builds(b, ages, seen)
+	# One field timed on the same grid, carried in a label — never asserted: a timing assert is flaky
+	# across machines. ⚠ It rides on a real check rather than on `us >= 0`, which no duration fails.
+	var t0 := Time.get_ticks_usec()
+	g.flow_field(dest)
+	var us := Time.get_ticks_usec() - t0
+	t.ok(seen.size() >= 5,
+		"3초 동안 서로 다른 흐름장 열쇠가 %d 개다 — 검사가 건넌 조각마다 하나 (이 티켓 전에는 2)" % seen.size())
+	t.ok(builds <= 30,
+		"그동안 흐름장을 %d 번 지었다 — 초당 예순 번이 아니다 (이 판에서 하나가 %d us — 보고만 한다)" % [builds, us])
+	t.ok(builds >= seen.size(), "지은 횟수가 열쇠 수 이상이다 (자가 점검)")
+
+
+## **[watch] The shipped island's first wave meets the watch at the door.** The only row in this file on
+## the board the player actually plays: four 검사 stood by `stand_at_keep` exactly as `Run.begin_island`
+## and `_stand_the_watch` stand them, the first boat landed, thirty seconds read.
+##
+## ⚠⚠ **Measured 2026-09-02 on the code before this ticket**: the four 늑대 climbed the 계단, crossed the
+## plateau, came down the spine to 1.0 from the wall on 눈금 2, and the run was LOST at 38.98 s with the
+## watch never targeting anything. **After**: each 늑대 comes inside 6.0 of a 검사 at the plateau's edge,
+## the field to the door leads back down the 계단, and it paces between (8,8) and (9,9) — the wave that
+## burned past the watch now goes after the watch and never arrives.
+## ⚠⚠ **It is not a claim that the picture is right.** Four 늑대 pacing while the 성채 stands untouched
+## is the 07-02 leash question arriving on the opening frame, and it is the user's off the screenshot.
+## **The row is rewritten the day the rule that produces the pacing changes.**
+## ⚠ **Positions and 눈금 are printed, never asserted** — a row that pinned the exact 조각 would go red
+## on a reservation jam between four bodies on two 조각 while measuring nothing the reads missed.
+func _the_shipped_island_s_first_wave_meets_the_watch_at_the_door(t) -> void:
+	var g := _real()
+	var b := _battle_on(g, Islands.keep_tiles(), Islands.beside_home_tile(g.w))
+	for i in b.army.type_id.size():
+		b.stand_at_keep(i)
+	# The board, self-checked against the island file.
+	var door := g.tile_index(10, 14)
+	t.eq(b.muster_tile, door, "문간이 (10,14) 다 (자가 점검)")
+	t.eq(g.level_of(door), 0, "문간이 눈금 0 이다 (자가 점검)")
+	t.eq(b.ashore_ids().size(), Rules.SWORDSMAN_START_COUNT, "검사 넷이 판 위에 서 있다 (자가 점검)")
+	t.eq(g.hold_count(door), Rules.TILE_CAPACITY, "문간 조각에 셋이 선다 (자가 점검)")
+	var elsewhere := []
+	for raw in b.ashore_ids():
+		var tile := b._tile_of(b.soldier_pos[int(raw)])
+		if tile != door:
+			elsewhere.append("(%d,%d) L%d" % [tile % g.w, tile / g.w, g.level_of(tile)])
+	t.eq(elsewhere.size(), 1, "넷째는 옆 조각에 선다 (자가 점검) %s" % str(elsewhere))
+	var high := 0
+	for k in b.keep_tiles.size():
+		if g.level_of(int(b.keep_tiles[k])) == 2:
+			high += 1
+	t.eq(high, b.keep_tiles.size(), "성채의 조각 넷이 전부 눈금 2 다 (자가 점검)")
+	var stairs := []
+	for tile in g.w * g.h:
+		if g.level_of(tile) == 1:
+			stairs.append(Vector2i(tile % g.w, tile / g.w))
+	t.eq(stairs.size(), 4, "계단이 조각 넷뿐이다 (자가 점검) %s" % str(stairs))
+
+	# The landing, one sub-step at a time and not a second past it. Unchanged by this ticket: the
+	# nearest 검사 is outside 6.0 of the beach.
+	var guard := int(round((Rules.BOAT_FIRST_SEC + _crossing_sec() + 10.0) / Rules.SIM_SUBSTEP_SEC))
+	var landed_at := -1.0
+	for _i in guard:
+		b.step(Rules.SIM_SUBSTEP_SEC)
+		if not b.boat_riders.is_empty() and int(b.boat_riders[0]) == 0:
+			landed_at = b.elapsed
+			break
+	t.ok(landed_at > 0.0, "첫 배가 %.2f초에 다 내렸다 (자가 점검)" % landed_at)
+	t.eq(b.enemy_type.size(), Rules.BOAT_CAPACITY, "늑대 넷이 내렸다 (자가 점검)")
+	var nearest := INF
+	for e in b.enemy_type.size():
+		for raw in b.ashore_ids():
+			nearest = minf(nearest, b._dist(b.enemy_pos[e], b.soldier_pos[int(raw)]))
+	t.ok(nearest > Rules.detect_of(Rules.WOLF),
+		"내린 자리에서 가장 가까운 검사가 %.2f — 탐지 밖이다 (자가 점검)" % nearest)
+	t.eq(b.keep_hp, Rules.KEEP_MAX_HP, "내린 순간 성채는 멀쩡하다 (자가 점검)")
+
+	# Thirty seconds, with a flag set the first sub-step each 늑대 of the FIRST wave names a 검사.
+	# ⚠ **The second boat can land inside this window on the shipped coast** — it launches at 35 s and
+	# the crossing is under 18 s — so the per-늑대 reads below name the first `BOAT_CAPACITY` rows and
+	# the board-wide reads (the 성채, the verdict) take whatever is ashore. Measured: this row indexed
+	# past a four-long flag array on its first run.
+	var first := Rules.BOAT_CAPACITY
+	var noticed := PackedByteArray()
+	noticed.resize(first)
+	for _i in int(round(30.0 / Rules.SIM_SUBSTEP_SEC)):
+		b.step(Rules.SIM_SUBSTEP_SEC)
+		for e in first:
+			if int(b.enemy_target[e]) >= 0:
+				noticed[e] = 1
+		if b.lost:
+			break
+	var blind := []
+	var wolves_hurt := []
+	var at_wall := []
+	var where := []
+	for e in first:
+		if noticed[e] == 0:
+			blind.append(e)
+		if absf(float(b.enemy_hp[e]) - Rules.hp_of(Rules.WOLF)) > HP_NEAR:
+			wolves_hurt.append(e)
+		if b.keep_gap(b.enemy_pos[e]) <= Rules.reach_of(Rules.WOLF) + Rules.EPS:
+			at_wall.append(e)
+		var p: Vector2 = b.enemy_pos[e]
+		where.append("e%d (%.1f,%.1f) L%d" % [e, p.x, p.y, g.level_of(b._tile_of(p))])
+	var men_hurt := []
+	for i in b.soldier_state.size():
+		if int(b.soldier_state[i]) != Battle.SoldierState.ASHORE \
+				or absf(float(b.soldier_hp[i]) - b.army.max_hp_of(i)) > HP_NEAR:
+			men_hurt.append(i)
+	# ⚠ The two reported-only facts — where the first wave stands, and how many 늑대 are on the board
+	# at the read — ride on the labels of real checks. A check written `where.size() == first` or
+	# `enemy_type.size() >= first` is true by construction and counts a pass for nothing.
+	t.eq(blind.size(), 0, "늑대 넷이 전부 한 번은 검사를 겨눴다 — 파수를 알아챘다 %s" % str(blind))
+	t.eq(b.keep_hp, Rules.KEEP_MAX_HP,
+		"상륙 30초 뒤 성채가 그대로다 — 파수를 지나쳐 태우던 물결이 파수에게 가서 집에 안 닿는다 (%.1f · 읽는 순간 판 위의 늑대 %d 마리, 둘째 배가 이 창 안에 닿을 수 있다)" % [b.keep_hp, b.enemy_type.size()])
+	t.ok(not b.lost, "그리고 안 졌다 — 이 티켓 전에는 여기서 이미 진 뒤다")
+	t.eq(wolves_hurt.size(), 0, "늑대 넷이 다 꽉 찬 체력이다 — 아무도 안 싸웠다 %s" % str(wolves_hurt))
+	t.eq(men_hurt.size(), 0, "검사 넷도 다 서 있고 꽉 찬 체력이다 %s" % str(men_hurt))
+	t.eq(at_wall.size(), 0, "벽의 사거리 안에 선 늑대가 없다 %s — 첫 물결이 선 자리 (보고만 한다): %s" % [str(at_wall), str(where)])
+
+
+## How many fields `b` built since the last call: a key that was absent, or whose age went down.
+## `ages` is the previous sample and is rewritten here; `seen` collects every key ever present.
+func _count_builds(b: Battle, ages: Dictionary, seen: Dictionary) -> int:
+	var n := 0
+	for key in b._field_age:
+		var age := float(b._field_age[key])
+		if not ages.has(key) or age < float(ages[key]) - NEAR:
+			n += 1
+		seen[key] = true
+	# Keys that expired drop out of `ages`, so their next build reads as absent.
+	ages.clear()
+	for key in b._field_age:
+		ages[key] = float(b._field_age[key])
+	return n
+
+
 # == fixtures =========================================================================================
 
 func _grid(rows: Array) -> Grid:
@@ -1181,6 +1734,14 @@ func _on_the_plateau() -> Battle:
 	for raw in PLATEAU_KEEP:
 		keep.append(int(raw))
 	return _battle_on(g, keep, -1)
+
+
+## **The plateau board with NO 성채**, so its four 눈금 2 조각 are free ground a 검사 can stand on.
+## Landlocked like `PLATEAU` is, and `-1` for the doorstep — the [B] and [stands] rows of 07-01.
+func _plateau_no_keep() -> Battle:
+	var g := Grid.new()
+	g.load_rows(PLATEAU, PLATEAU_TIERS)
+	return _battle_on(g, PackedInt32Array(), -1)
 
 
 ## **Steps one sub-step at a time until the first boat has put everybody ashore.** Bounded, because a

@@ -122,6 +122,12 @@ func _table() -> Dictionary:
 			# The body pick on the glass (ticket 03-16, 2026-09-02): it READS the pooled sprites and
 			# projects them through `world_to_screen_px`; it places nothing and draws nothing.
 			"body_at_px": 0,
+			# The selection box's hit test and the arithmetic it shares with the press (ticket 03-12,
+			# 2026-09-02): all four READ the pooled sprites and project them; none draws.
+			"drawn_rect_px": 0,
+			"bodies_in_rect_px": 0,
+			"_drawn_rect_of": 0,
+			"_sprite_edge_px": 0,
 			"world_to_tile": 0,
 			"pan_by": 0,
 			"zoom_at": 0,
@@ -223,6 +229,7 @@ func _table() -> Dictionary:
 			# strokes.
 			"_advance_seat_glide": 0,
 			"_glided": 0,
+			"_offset_after": 0,
 			"_drawn_of": 0,
 			"_hide_unused": 0,
 			# The effect SIMULATION — carried across the move unchanged, still 0 draws each.
@@ -272,6 +279,19 @@ func _table() -> Dictionary:
 			"_ground_y_px": 0,
 			"_g_tri": 0,
 			"_g_disc": 0,
+			# **The selection box on the ground** (ticket 03-12, rebuilt 2026-09-02 on the user's
+			# verdict: 「이게 일단 4번이 적용된게 맞음? 이게 아니였는데」). `set_box` takes the shell's
+			# screen rect; `_rebuild_box` projects it onto the terrain and commits two `ImmediateMesh`
+			# surfaces through `_box_commit`; the rest is the geometry. ⚠ **All 0 like every other
+			# ground mark** — a `draw_*` in any of them would mean the box had gone back on the glass.
+			"set_box": 0,
+			"_box_cam_key": 0,
+			"_box_hit": 0,
+			"_rebuild_box": 0,
+			"_box_commit": 0,
+			"_box_tri": 0,
+			"_box_ribbon": 0,
+			"_box_cap": 0,
 			# ⚠⚠ **FIFTEEN NAMES WERE MISSING FROM THIS TABLE AND SEVENTEEN WERE STALE** (2026-08-28).
 			# The stale ones are the 2D terrain pass — `_tile_colour`, `_quad`, `_skirt`, the noise and
 			# height helpers, `_terrain_material`, `_rebuild_ring` — deleted when the field went 3D and
@@ -398,6 +418,10 @@ func _table() -> Dictionary:
 			"set_picked": 0,
 			"_paint_panel": 1,
 			"_paint_line": 1,
+			# ⚠ **`set_box` and `_paint_box_piece` stood here for part of 2026-09-02 and are gone** with
+			# the picture they drew (ticket 03-12): the user's verdict put the box on the terrain, and it
+			# is the field's `set_box` below now. A picture leaf reappearing here would be the 01
+			# candidate coming back.
 		},
 		# ⚠ **`panel_view.gd` had its own block here and the FILE is deleted** (2026-08-29) with the
 		# verdict it drew.

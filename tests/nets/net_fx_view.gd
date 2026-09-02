@@ -45,6 +45,10 @@ func run(t) -> void:
 	# ⚠⚠ **THE BAR FAMILY RUNS FIRST FOR THE REASON THE BOATS DO** (2026-09-01). This file is
 	# **incomplete today** — a row below it dies and abandons everything under it — so a row appended at
 	# the bottom would be green by never running at all. **The order carries no meaning otherwise.**
+	# The selection box on the ground (ticket 03-12, rebuilt 2026-09-02) — at the top for the same reason.
+	_the_box_is_laid_on_the_ground(t)
+	_the_box_climbs_the_tier(t)
+	_the_box_is_built_once_a_frame_and_bounded(t)
 	_a_bar_appears_only_once_something_is_hurt(t)
 	_the_fill_drains_from_the_right_and_never_moves_its_left(t)
 	_the_keep_wears_its_bar_over_its_own_roof(t)
@@ -66,6 +70,9 @@ func run(t) -> void:
 	_three_wolves_off_one_boat_are_drawn_apart(t)
 	_the_lattice_does_not_swing_with_the_camera(t)
 	_a_body_coming_to_rest_glides_to_its_seat(t)
+	_an_ordered_body_leaves_from_its_seat_and_carries_it(t)
+	_three_bodies_sharing_a_piece_walk_apart(t)
+	_a_body_that_never_rested_walks_on_the_sim_point_and_an_offset_is_bounded(t)
 	_the_lattice_turns_with_the_order_facing(t)
 	_the_move_line_leaves_from_under_the_drawn_body_mid_glide(t)
 	_the_readers_themselves(t)
@@ -83,6 +90,203 @@ func run(t) -> void:
 
 
 
+
+
+## **The selection box is a committed shape on the terrain, and it comes down** (ticket 03-12, rebuilt
+## 2026-09-02 on the user's verdict: 「이게 일단 4번이 적용된게 맞음? 이게 아니였는데」 — *"was number 4
+## applied? this was not it."*). Surface 3 of the seam: the box mesh's surface count proves the commit,
+## its vertex arrays prove what was built, and the border hits unprojected through the SAME camera
+## prove it lies under the rect and not somewhere the projection invented.
+##
+## ⚠ **The vertex counts are typed by hand for the step rule `max(SELECTION_BOX_STEP_PX 8,
+## ceil(longer side / SELECTION_BOX_MAX_CELLS 24))`** (the bound came 2026-09-02 with the lag fix): an
+## 80 x 40 rect's longer side would take 10 cells of 8 px, under the bound, so its step stays 8 — 10 x 5
+## cells, 2 triangles each = 300 fill vertices; its border is 2 × 10 + 2 × 5 = 30 hits, a 6-vertex
+## ribbon piece per hit and a 6-vertex cap per corner = 204. Reading the step here would keep the row
+## green for any step, which is the shape `how-nets-lie` names. The rect that crosses the bound is
+## `_the_box_is_built_once_a_frame_and_bounded`'s.
+## ⚠ **`set_box` builds nothing on its own since the lag fix** — it marks, and the frame's `_process`
+## builds — so every `set_box` here is followed by a `_process(0.0)`, the same frame the game pays.
+## ⚠ **The yaw row is what says 「on the ground, not on the glass」**: a box built from screen
+## coordinates has the same world points at every yaw, and one laid on the terrain does not.
+func _the_box_is_laid_on_the_ground(t) -> void:
+	var pack := _quiet_view()
+	var fv: FieldView = pack["fv"]
+	var im: ImmediateMesh = fv._box_mesh.mesh
+	t.eq(im.get_surface_count(), 0, "상자를 주기 전에는 면이 하나도 없다 (자가 점검)")
+	var rect := Rect2(600.0, 340.0, 80.0, 40.0)
+	fv.set_box(rect)
+	fv._process(0.0)
+	t.eq(fv._box, rect, "판이 준 상자를 그대로 들고 있다")
+	t.eq(im.get_surface_count(), 2, "상자 하나가 프레임에 두 면으로 커밋된다 — 채움과 테두리")
+	if im.get_surface_count() < 2:
+		return
+	var fill_v: PackedVector3Array = im.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var fill_c: PackedColorArray = im.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	var line_v: PackedVector3Array = im.surface_get_arrays(1)[Mesh.ARRAY_VERTEX]
+	var line_c: PackedColorArray = im.surface_get_arrays(1)[Mesh.ARRAY_COLOR]
+	t.eq(fill_v.size(), 300, "채움은 10 x 5 칸에 삼각형 둘씩 — 꼭짓점 300")
+	t.eq(fv._box_hits.size(), 30, "테두리 점은 서른이다 — 위아래 열씩, 양옆 다섯씩")
+	t.eq(line_v.size(), 204, "테두리는 띠 서른 조각과 모서리 마개 넷 — 꼭짓점 204")
+	var want_fill := Look.COL_SELECTION_BOX
+	want_fill.a = Look.SELECTION_BOX_FILL_ALPHA
+	t.ok(_cols_all_close(fill_c, want_fill),
+		"채움은 민트에 알파 %.2f 다 — 안쪽이 보여야 한다는 게 사용자의 말이다" % Look.SELECTION_BOX_FILL_ALPHA)
+	t.ok(_cols_all_close(line_c, Look.COL_SELECTION_BOX), "테두리는 불투명한 민트다")
+
+	# **Every vertex lies on the flat arena's ground, lifted** — one height and no other.
+	var ground := Islands.ground_h(0) + Look.FX_GROUND_LIFT_TILES
+	var off_ground := 0
+	for v in fill_v:
+		if absf(v.y - ground) > 0.001:
+			off_ground += 1
+	for v in line_v:
+		if absf(v.y - ground) > 0.001:
+			off_ground += 1
+	t.eq(off_ground, 0, "평평한 판에서는 꼭짓점 전부가 땅 높이 + 들림에 놓인다")
+
+	# **The border hits unproject back inside the rect** through the same camera that projected them.
+	var grown := rect.grow(1.0)
+	var outside := 0
+	for k in fv._box_hits.size():
+		var p: Vector3 = fv._box_hits[k]
+		var back := fv.world_to_screen_px(Vector2(p.x, p.z) * Look.TILE_PX, p.y - Look.FX_GROUND_LIFT_TILES)
+		if not grown.has_point(back):
+			outside += 1
+	t.eq(outside, 0, "테두리 점 서른을 같은 카메라로 되돌리면 전부 상자 안에 떨어진다")
+	var first: Vector3 = fv._box_hits[0]
+	var first_back := fv.world_to_screen_px(Vector2(first.x, first.z) * Look.TILE_PX,
+		first.y - Look.FX_GROUND_LIFT_TILES)
+	t.ok(first_back.distance_to(rect.position) < 1.0,
+		"첫 점은 상자의 왼쪽 위 모서리다 (되돌린 거리 %.3f px)" % first_back.distance_to(rect.position))
+
+	# **Turning the board moves the ground under the same screen rect**, and the box moves with it.
+	var fill_at0 := PackedVector3Array(fill_v)
+	var hits_at0 := PackedVector3Array(fv._box_hits)
+	fv.cam_yaw_deg = 90.0
+	fv._process(0.0)
+	t.eq(im.get_surface_count(), 2, "돌린 뒤에도 두 면이다 — 카메라가 바뀌면 다시 짓는다")
+	var fill_at90: PackedVector3Array = im.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var moved := 0
+	for k in mini(fill_at0.size(), fill_at90.size()):
+		if fill_at0[k].distance_to(fill_at90[k]) > 0.01:
+			moved += 1
+	t.ok(moved > 0, "판을 90 도 돌리면 같은 화면 상자의 채움이 다른 땅 위에 놓인다 — 유리가 아니라 땅이다 (%d/%d)"
+		% [moved, fill_at0.size()])
+	var hits_moved := 0
+	for k in mini(hits_at0.size(), fv._box_hits.size()):
+		if hits_at0[k].distance_to(fv._box_hits[k]) > 0.01:
+			hits_moved += 1
+	t.ok(hits_moved > 0, "테두리 점도 같이 옮겨 간다 (%d/%d)" % [hits_moved, hits_at0.size()])
+
+	# **An empty rect brings it down**: no surface, no hit.
+	fv.set_box(Rect2())
+	fv._process(0.0)
+	t.eq(im.get_surface_count(), 0, "빈 상자는 면이 하나도 없다")
+	t.eq(fv._box_hits.size(), 0, "테두리 점도 하나도 없다")
+
+
+## **The tint follows the ground up the 2층** (2026-09-02, the user: 「선말고 선택된 부분을 약간 드래그 영역
+## 안쪽 색상이 보여야함」 — *"not the line — the inside of the drag region should show a colour"*). A fill
+## laid as ONE quad across the four corner hits is flat at the corners' height and dives under any
+## ground that rises inside the rect; this row raises a 2 x 2 block under the rect's middle and reads
+## the fill's vertex heights — **two heights and no third**, the low ground's and the block's top.
+func _the_box_climbs_the_tier(t) -> void:
+	var pack := _quiet_view()
+	var fv: FieldView = pack["fv"]
+	var b: Battle = pack["b"]
+	var rect := Rect2(600.0, 340.0, 80.0, 40.0)
+	var tv := fv.world_to_tile(fv.screen_to_terrain_px(rect.get_center()))
+	t.ok(tv.x > 0 and tv.y > 0 and tv.x + 1 < b.grid.w - 1 and tv.y + 1 < b.grid.h - 1,
+		"상자 가운데 아래 조각 (%d, %d) 이 판 안쪽이다 (자가 점검)" % [tv.x, tv.y])
+	for dy in 2:
+		for dx in 2:
+			b.grid.level[(tv.y + dy) * b.grid.w + tv.x + dx] = 2
+	fv.set_box(rect)
+	fv._process(0.0)
+	if fv._box_mesh.mesh.get_surface_count() < 2:
+		t.ok(false, "상자가 두 면으로 커밋됐다 (자가 점검)")
+		return
+	var fill_v: PackedVector3Array = fv._box_mesh.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var low := Islands.ground_h(0) + Look.FX_GROUND_LIFT_TILES
+	var high := Islands.ground_h(2) + Look.FX_GROUND_LIFT_TILES
+	var on_low := 0
+	var on_high := 0
+	var elsewhere := 0
+	for v in fill_v:
+		if absf(v.y - low) < 0.001:
+			on_low += 1
+		elif absf(v.y - high) < 0.001:
+			on_high += 1
+		else:
+			elsewhere += 1
+	t.ok(on_high > 0, "채움의 꼭짓점 %d 개가 2층 위에 놓인다 — 네 모서리로 편 한 장이면 0 이다" % on_high)
+	t.ok(on_low > 0, "그리고 %d 개는 아래 땅에 남는다 — 상자가 층을 걸쳐 있다" % on_low)
+	t.eq(elsewhere, 0, "그 둘 말고 다른 높이의 꼭짓점은 없다 — 조각마다 제 땅을 읽었다")
+
+
+## **Three rects in one frame are one rebuild, and a rect across the whole glass is a bounded grid**
+## (2026-09-02, the user: 「렉이 겁나걸리네 드래그좀 한다고?」 — *"it lags like crazy — just from
+## dragging?"*). The shell hands a rect on every mouse motion; `set_box` only marks, and the frame's
+## `_process` builds once. **The counter `_box_rebuilds` is the instrument**, because a surface count
+## reads 2 after one rebuild and after three alike — and its own literal `1` is what catches the
+## counter going dead.
+##
+## ⚠ **The literals are typed by hand for `SELECTION_BOX_STEP_PX` 8 and `SELECTION_BOX_MAX_CELLS` 24**:
+## a 1280 x 720 rect takes step max(8, ceil(1280 / 24)) = 54 px, so 24 x 14 cells — 2016 fill vertices,
+## 76 border hits, 76 ribbon pieces and 4 caps = 480 vertices; at step 8 it would be 86,400. A 220 x 100
+## rect takes step 10, so 22 x 10 cells = 1320. Reading the constants here would keep the row green
+## with the bound deleted.
+## ⚠ **The last line prints two wall-clocks and asserts nothing about them** — wall-clock is not
+## asserted in this repo; the numbers are for the eye reading the round, taken on this arena and not
+## on the real island (`FieldView._rebuild_box` carries the island's).
+func _the_box_is_built_once_a_frame_and_bounded(t) -> void:
+	var pack := _quiet_view()
+	var fv: FieldView = pack["fv"]
+	var im: ImmediateMesh = fv._box_mesh.mesh
+	var built: int = fv._box_rebuilds
+	fv.set_box(Rect2(600.0, 340.0, 80.0, 40.0))
+	fv.set_box(Rect2(600.0, 340.0, 120.0, 60.0))
+	fv.set_box(Rect2(600.0, 340.0, 160.0, 80.0))
+	t.eq(fv._box_rebuilds - built, 0, "상자 셋을 한 프레임 안에 주면 아직 하나도 안 짓는다")
+	t.eq(im.get_surface_count(), 0, "그래서 면도 아직 없다")
+	fv._process(0.0)
+	t.eq(fv._box_rebuilds - built, 1, "프레임이 돌면 한 번 짓는다 — 셋이 아니라")
+	t.eq(im.get_surface_count(), 2, "그리고 두 면이 선다")
+	if im.get_surface_count() < 2:
+		return
+	var fill_v: PackedVector3Array = im.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	t.eq(fill_v.size(), 1200, "지어진 것은 마지막 상자다 — 160 x 80 은 걸음 8 로 20 x 10 칸, 꼭짓점 1200")
+	fv._process(0.0)
+	t.eq(fv._box_rebuilds - built, 1, "상자도 카메라도 안 바뀐 프레임은 다시 안 짓는다")
+
+	# **The bound**: a rect across the whole glass.
+	fv.set_box(Rect2(0.0, 0.0, 1280.0, 720.0))
+	fv._process(0.0)
+	t.eq(fv._box_rebuilds - built, 2, "유리 전체 상자도 한 프레임에 한 번이다")
+	if im.get_surface_count() < 2:
+		t.ok(false, "유리 전체 상자가 두 면으로 섰다 (자가 점검)")
+		return
+	fill_v = im.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var line_v: PackedVector3Array = im.surface_get_arrays(1)[Mesh.ARRAY_VERTEX]
+	t.eq(fill_v.size(), 2016, "유리 전체 상자는 걸음 54 px 로 24 x 14 칸이다 — 꼭짓점 2016 (걸음 8 이면 86,400)")
+	t.eq(fv._box_hits.size(), 76, "테두리 점은 일흔여섯이다 — 위아래 스물넷씩, 양옆 열넷씩")
+	t.eq(line_v.size(), 480, "테두리는 띠 일흔여섯 조각과 모서리 마개 넷 — 꼭짓점 480")
+
+	# **The wall-clock, printed and not asserted.** `_rebuild_box` is timed on its own so the number is
+	# the box's and not the frame's.
+	var t0 := Time.get_ticks_usec()
+	fv._rebuild_box()
+	var full_us := Time.get_ticks_usec() - t0
+	fv.set_box(Rect2(530.0, 310.0, 220.0, 100.0))
+	fv._process(0.0)
+	fill_v = im.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	t.eq(fill_v.size(), 1320, "220 x 100 상자는 걸음 10 px 로 22 x 10 칸 — 꼭짓점 1320")
+	t0 = Time.get_ticks_usec()
+	fv._rebuild_box()
+	var mid_us := Time.get_ticks_usec() - t0
+	print("  ~ 상자 한 번 짓기 (이 판 %d x %d, 재지 않고 적기만 한다): 1280 x 720 %.2f ms · 220 x 100 %.2f ms"
+		% [ARENA_W, ARENA_H, full_us / 1000.0, mid_us / 1000.0])
 
 
 ## ⚠⚠ **`HILL_AMP_TILES` IS 2.60 AND A TIER IS 2.00, AND THAT SOUNDS FATAL. IT IS NOT, AND THE
@@ -698,14 +902,18 @@ func _the_lattice_does_not_swing_with_the_camera(t) -> void:
 			"요 %d 도에서도 아홉이 같은 땅 위 아홉 점이다 (최대 %.5f 조각)" % [int(yaw), worst])
 
 
-## **From walking to resting the body glides to its seat; while walking it tracks the sim exactly; a
-## body that left the pool and came back does not glide in from where it used to be.**
+## **From walking to resting the body glides to its seat; while walking it tracks the sim plus the seat
+## offset it left with; a body that left the pool and came back does not glide in from where it used
+## to be.**
 ##
-## ⚠⚠ **THE GLIDE IS THE ONLY VIEW-SIDE STATE THIS TICKET ADDS** and it is keyed on the body's string
-## key, not the pool slot (amendment 2). Three things are read: the first resting frame moves the drawn
-## point by exactly `SEAT_GLIDE_TILES_PER_S` times the frame, it reaches the seat within the frames the
-## distance needs and not in one, and after the body has been out of the pool the first frame back is
-## AT its stand point.
+## ⚠⚠ **THE GLIDE AND ITS OFFSET ARE THE ONLY VIEW-SIDE STATE THIS TICKET ADDS** and both are keyed on
+## the body's string key, not the pool slot (amendment 2). Three things are read: the first resting
+## frame moves the drawn point by exactly `SEAT_GLIDE_TILES_PER_S` times the frame, it reaches the seat
+## within the frames the distance needs and not in one, and after the body has been out of the pool the
+## first frame back is AT its stand point.
+## ⚠⚠ **THE WALKING ROW BELOW ASSERTED 「sim 의 자리에 정확히」 UNTIL 2026-09-02**, and that rule was the
+## snap the user saw on every move order (『새로 생성되는 느낌으로 출발함』). It now asserts the sim's point
+## PLUS the offset the body was standing with, and that the sim's point alone is NOT where it is drawn.
 func _a_body_coming_to_rest_glides_to_its_seat(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
 	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN]), [])
@@ -715,16 +923,26 @@ func _a_body_coming_to_rest_glides_to_its_seat(t) -> void:
 	fv._process(0.0)
 	var seat0 := _block_middle_world(b, g.tile_index(NINE_TX, NINE_TY))
 	t.ok(_spot_of(fv, 0).distance_to(seat0) < 0.01, "선 채로 열리면 첫 프레임에 자리 위다 (자가 점검)")
+	# The seat is the 칸's middle, (+0.5, +0.5) from this 조각's centre: that is the offset the body
+	# carries out when it walks.
+	var seat_offset := _spot_of(fv, 0) - _world(b.soldier_pos[0])
+	t.ok(seat_offset.length() > 0.5,
+		"자가 점검 — 자리는 조각 가운데에서 %.3f 조각 떨어져 있다" % seat_offset.length())
 
-	# Walking: an order is out and the position is off any 조각 centre — drawn at the sim's own point.
-	# The body is a third of a 조각 short of the 조각 it will stop on, the way a walk's last sub-step is.
+	# Walking: an order is out and the position is off any 조각 centre — drawn at the sim's own point
+	# plus the seat offset. The body is a third of a 조각 short of the 조각 it will stop on, the way a
+	# walk's last sub-step is.
 	var far := g.tile_index(NINE_TX + 4, NINE_TY)
 	b.soldier_order[0] = far
 	b.soldier_pos[0] = Vector2(NINE_TX + 1.7, NINE_TY)
 	fv._process(1.0 / 60.0)
-	var walk_want := Look.tile_point_px(b.soldier_pos[0]) / Look.TILE_PX
+	var walk_want := _world(b.soldier_pos[0]) + seat_offset
 	t.ok(_spot_of(fv, 0).distance_to(walk_want) < 1e-4,
-		"걷는 몸은 sim 의 자리에 정확히 그려진다 (%.3f, %.3f)" % [_spot_of(fv, 0).x, _spot_of(fv, 0).y])
+		"걷는 몸은 sim 의 자리에 서 있던 자리 오프셋을 더한 곳에 그려진다 (%.3f, %.3f)"
+			% [_spot_of(fv, 0).x, _spot_of(fv, 0).y])
+	t.ok(_spot_of(fv, 0).distance_to(_world(b.soldier_pos[0])) > 0.5,
+		"그리고 sim 의 자리 그대로가 아니다 — 오프셋을 버리는 그림은 여기서 물린다 (%.3f 조각)"
+			% _spot_of(fv, 0).distance_to(_world(b.soldier_pos[0])))
 
 	# Arrival one 칸 east: the sim puts it on a 조각 centre with no order, the view glides to the seat.
 	var dest := g.tile_index(NINE_TX + 2, NINE_TY)
@@ -784,6 +1002,161 @@ func _a_body_coming_to_rest_glides_to_its_seat(t) -> void:
 	t.ok(_spot_of(fv, 0).distance_to(back) < 1e-4,
 		"다시 선 몸은 첫 프레임에 새 자리 위다 — 옛 자리에서 미끄러져 오지 않는다 (%.3f 조각)"
 			% _spot_of(fv, 0).distance_to(back))
+
+
+## **An ordered body leaves from where it was DRAWN standing, walks the whole way carrying that seat
+## offset, and eases onto its new seat with no jump at either end** — the two defects the user saw on
+## 2026-09-02, driven through the real sim (`order_walk` + `step`) and not by writing `soldier_pos`.
+##
+## The body stands on the north-west 조각 of a 칸 whose centre seat is taken, so it holds the north edge
+## middle: 0.527 조각 from the 조각 centre the sim has it on (`Grid.seat_fits_piece` gives it that seat).
+## Before this rule the first walking frame drew it on the sim's point — a 0.5 조각 jump north-to-south
+## while the walk went east.
+## ⚠ **0.11 and not 0.06**: a frame of walking is `speed × dt` = 0.053 조각 and a frame of glide is 0.05;
+## the bound has to admit either and refuse the 0.5 snap, and nothing in between exists to confuse it.
+## ⚠ Mutation: make `_glided` answer `at` for a walking body and the first-frame row, the whole-walk row
+## and the arrival row all redden.
+func _an_ordered_body_leaves_from_its_seat_and_carries_it(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN, Rules.SWORDSMAN]), [])
+	var g := b.grid
+	var tiles := g.tiles_of_block(g.block_of(g.tile_index(NINE_TX, NINE_TY)))
+	var nw := int(tiles[0])
+	var se := int(tiles[3])
+	_ashore(b, 0, Vector2(float(se % g.w), float(se / g.w)))
+	_ashore(b, 1, Vector2(float(nw % g.w), float(nw / g.w)))
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	var rest := _spot_of(fv, 1)
+	var offset := rest - _world(b.soldier_pos[1])
+	t.ok(absf(offset.length() - 0.527) < 0.01,
+		"자가 점검 — 가장자리 자리는 제 조각 가운데에서 0.527 조각 떨어져 있다 (%.3f)" % offset.length())
+	var dest := g.tile_index(NINE_TX + 6, NINE_TY)
+	t.ok(b.order_walk(1, dest), "자가 점검 — 명령이 받아들여졌다")
+	var dt := 1.0 / 60.0
+	var sim_before: Vector2 = b.soldier_pos[1]
+	b.step(dt)
+	fv._process(dt)
+	t.ok(b.soldier_pos[1].distance_to(sim_before) > 0.01,
+		"자가 점검 — sim 은 첫 프레임에 움직였다 (%.3f 조각)" % b.soldier_pos[1].distance_to(sim_before))
+	var first := _spot_of(fv, 1).distance_to(rest)
+	t.ok(first <= 0.11,
+		"명령 첫 프레임에 그려진 몸은 서 있던 자리에서 0.11 조각 이내로만 움직인다 — 조각 가운데로 튀지 않는다 (%.3f)" % first)
+
+	# The whole walk: every walking frame is the sim's point plus that one offset, and no frame — walking,
+	# arriving or settling — moves the drawn point more than a frame's worth.
+	var worst_gap := 0.0
+	var worst_step := first
+	var walking_frames := 0
+	var frames := 1
+	var prev := _spot_of(fv, 1)
+	var settled := 0
+	while frames < 900 and settled < 3:
+		b.step(dt)
+		fv._process(dt)
+		frames += 1
+		var spot := _spot_of(fv, 1)
+		if int(b.soldier_order[1]) >= 0:
+			walking_frames += 1
+			worst_gap = maxf(worst_gap, spot.distance_to(_world(b.soldier_pos[1]) + offset))
+		worst_step = maxf(worst_step, spot.distance_to(prev))
+		settled = settled + 1 if int(b.soldier_order[1]) < 0 and spot.distance_to(prev) < 1e-6 else 0
+		prev = spot
+	t.ok(walking_frames > 30, "자가 점검 — 걷는 프레임이 %d 이었다 (30 보다 많다)" % walking_frames)
+	t.ok(worst_gap < 0.01,
+		"걷는 내내 그려진 점은 sim 의 자리 더하기 떠날 때의 오프셋이다 (최대 어긋남 %.4f 조각)" % worst_gap)
+	t.ok(int(b.soldier_order[1]) < 0 and frames < 900, "자가 점검 — %d 프레임 안에 도착해 멈췄다" % frames)
+	t.ok(worst_step <= 0.11,
+		"떠나서 도착해 자리에 앉기까지 한 프레임에 0.11 조각 넘게 움직인 적이 없다 (최대 %.4f)" % worst_step)
+	var seat := _world(fv._stand_point(b.soldier_pos[1], 1, true))
+	t.ok(_spot_of(fv, 1).distance_to(seat) < 1e-3,
+		"그리고 새 자리에 정확히 선다 (%.4f 조각)" % _spot_of(fv, 1).distance_to(seat))
+	t.ok(seat.distance_to(_world(b.soldier_pos[1])) > 0.5,
+		"자가 점검 — 새 자리도 조각 가운데가 아니다 (%.3f 조각)" % seat.distance_to(_world(b.soldier_pos[1])))
+
+
+## **Three bodies sharing one 조각 are drawn apart while they walk**, not only once they stand — the
+## user's 「캐릭터가 움직일때 겹친다」. The three take three seats at rest (the north, west and east edge
+## middles); ordered to one 조각 they walk the same route at the same speed, so the sim has them on ONE
+## point every sub-step, and the offsets are the only thing keeping three bodies on screen.
+## ⚠ Mutation: make `_glided` answer `at` for a walking body — the three collapse onto one point.
+func _three_bodies_sharing_a_piece_walk_apart(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN, Rules.SWORDSMAN, Rules.SWORDSMAN]), [])
+	var g := b.grid
+	var nw := int(g.tiles_of_block(g.block_of(g.tile_index(NINE_TX, NINE_TY)))[0])
+	for i in 3:
+		_ashore(b, i, Vector2(float(nw % g.w), float(nw / g.w)))
+	t.eq(g.hold_count(nw), 3, "자가 점검 — 셋이 한 조각을 잡고 있다")
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	t.eq(_distinct(_body_spots(fv)), 3, "자가 점검 — 서 있는 셋은 세 자리에 따로 그려진다")
+	var dest := g.tile_index(NINE_TX + 6, NINE_TY)
+	for i in 3:
+		t.ok(b.order_walk(i, dest), "자가 점검 — %d 번의 명령이 받아들여졌다" % i)
+	var dt := 1.0 / 60.0
+	for _f in 6:
+		b.step(dt)
+		fv._process(dt)
+	var sim_spread := 0.0
+	var moved := 1e9
+	for i in 3:
+		moved = minf(moved, b.soldier_pos[i].distance_to(Vector2(float(nw % g.w), float(nw / g.w))))
+		for j in 3:
+			sim_spread = maxf(sim_spread, b.soldier_pos[i].distance_to(b.soldier_pos[j]))
+	t.ok(moved > 0.1 and sim_spread < 0.01,
+		"자가 점검 — 셋 다 걷는 중이고 sim 은 셋을 한 점에 두고 있다 (움직임 %.3f, 퍼짐 %.4f)" % [moved, sim_spread])
+	var spots := _body_spots(fv)
+	t.eq(spots.size(), 3, "자가 점검 — 걷는 셋이 그려졌다")
+	var nearest := 1e9
+	for i in spots.size():
+		for j in spots.size():
+			if i != j:
+				nearest = minf(nearest, (spots[i] as Vector2).distance_to(spots[j] as Vector2))
+	t.eq(_distinct(spots), 3, "걷는 셋은 세 점에 따로 그려진다 — 한 점에 겹치지 않는다")
+	t.ok(nearest > 0.3,
+		"그리고 서로 %.3f 조각 넘게 떨어져 있다 — 서 있을 때만큼" % nearest)
+
+
+## **A body that never rested walks on the sim's own point, and the offset a body carries out is bounded
+## to half a 칸** — the two edges of the rule. The first is a wolf off its boat: no seat was ever drawn,
+## so there is nothing to carry. The second is the 「further than a seat」 guard: the glide entry is written
+## a 조각 and a half off the sim's point by hand (the `_seat_glide` table is the agreed seam), and the
+## body leaves carrying half a 칸 of it and no more.
+## ⚠ Mutation: drop the `limit_length` in `_offset_after` and the bound row reddens at 1.45; default the
+## missing offset to the stand point's own offset and the never-rested row does.
+func _a_body_that_never_rested_walks_on_the_sim_point_and_an_offset_is_bounded(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var g_pos := Vector2(NINE_TX, NINE_TY)
+	var dt := 1.0 / 60.0
+	# Never rested: ordered and stepped before the view has drawn a single frame.
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN]), [])
+	_ashore(b, 0, g_pos)
+	var fv := _view_of(b, rows)
+	t.ok(b.order_walk(0, b.grid.tile_index(NINE_TX + 6, NINE_TY)), "자가 점검 — 명령이 받아들여졌다")
+	b.step(dt)
+	fv._process(dt)
+	t.ok(int(b.soldier_order[0]) >= 0 and b.soldier_pos[0].distance_to(g_pos) > 0.01,
+		"자가 점검 — 첫 프레임부터 걷고 있다")
+	t.ok(_spot_of(fv, 0).distance_to(_world(b.soldier_pos[0])) < 1e-4,
+		"한 번도 선 적 없는 몸은 sim 의 자리 그대로 걷는다 — 들고 나갈 오프셋이 없다 (%.4f 조각)"
+			% _spot_of(fv, 0).distance_to(_world(b.soldier_pos[0])))
+
+	# Bounded: the resting entry is pushed 1.5 조각 off by hand, the body leaves carrying 1.0.
+	var b2 := _battle_of(rows, _army_of([Rules.SWORDSMAN]), [])
+	_ashore(b2, 0, g_pos)
+	var fv2 := _view_of(b2, rows)
+	fv2._process(0.0)
+	fv2._seat_glide["s0"] = g_pos + Vector2(1.5, 0.0)
+	fv2._process(dt)
+	var off_rest := _spot_of(fv2, 0).distance_to(_world(b2.soldier_pos[0]))
+	t.ok(off_rest > 1.2, "자가 점검 — 쉬는 몸이 조각 가운데에서 %.3f 조각 벗어나 그려져 있다" % off_rest)
+	t.ok(b2.order_walk(0, b2.grid.tile_index(NINE_TX + 6, NINE_TY)), "자가 점검 — 명령이 받아들여졌다")
+	b2.step(dt)
+	fv2._process(dt)
+	var carried := _spot_of(fv2, 0).distance_to(_world(b2.soldier_pos[0]))
+	t.ok(absf(carried - Look.SEAT_OFFSET_MAX_TILES) < 1e-3,
+		"반 칸 넘게 벗어난 자리는 반 칸 (%.1f 조각) 까지만 들고 떠난다 (%.3f)" % [Look.SEAT_OFFSET_MAX_TILES, carried])
 
 
 ## **The lattice TURNS with the 칸's facing, and a re-face glides the resting bodies to the turned
@@ -951,6 +1324,12 @@ func _block_middle_world(b: Battle, tile: int) -> Vector2:
 		var tt := int(tiles[k])
 		sum += Vector2(float(tt % g.w), float(tt / g.w))
 	return Look.tile_point_px(sum / float(tiles.size())) / Look.TILE_PX
+
+
+## A sim point (`soldier_pos` units) in the ground-plane units `_spot_of` reads — the same arithmetic
+## `_block_middle_world` does, so an offset measured between a spot and a sim point is in these units.
+func _world(p: Vector2) -> Vector2:
+	return Look.tile_point_px(p) / Look.TILE_PX
 
 
 ## Where soldier `i` is drawn this frame, on the ground plane — through the view's own soldier → sprite
