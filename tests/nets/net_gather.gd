@@ -24,14 +24,18 @@ extends RefCounted
 ## **All land but a pool in the middle and one resource 칸 in the south-east.** The 조각 around the pool
 ## are the water's edge; the corner is as far from water as this board goes; the `#` 칸 is impassable
 ## and dry, which is exactly what `Grid.set_resources` looks for.
+## ⚠⚠ **THE `#` PATCH IS ALIGNED TO THE 칸 GRID AND THE FIRST VERSION OF IT WAS NOT.** Written at rows
+## 5-6 it covered (6,5) (7,5) (6,6) (7,6) — four 조각 straddling TWO 칸, because a 칸 starts on an even
+## row. **`Grid.block_of` then answered a 칸 that was half resource and half open ground**, and every
+## row below would have measured that instead. Rows 4-5, columns 6-7, is one whole 칸.
 const POND := [
 	".........",
 	".........",
 	"...~~~...",
 	"...~~~...",
-	"...~~~...",
+	"...~~~##.",
 	"......##.",
-	"......##.",
+	".........",
 ]
 ## On the pool's edge, and as far from it as the board allows.
 const SHORE_TX := 2
@@ -41,11 +45,11 @@ const INLAND_TY := 0
 ## Where the 창고 goes — on land, off the shore, so it is never the 조각 being worked from.
 const STORE_TX := 8
 const STORE_TY := 3
-## The resource 칸's north-west 조각; it covers (6,5) (7,5) (6,6) (7,6).
+## The resource 칸's north-west 조각; it covers (6,4) (7,4) (6,5) (7,5) — one whole 칸.
 const WOOD_TX := 6
-const WOOD_TY := 5
+const WOOD_TY := 4
 ## Beside the 칸 and NOT on the water's edge, so what a body gathers there can only be the 칸.
-const BESIDE_TX := 5
+const BESIDE_TX := 7
 const BESIDE_TY := 6
 ## Beside the 칸 AND on the water's edge — the 조각 that makes the two rules compete.
 const BOTH_TX := 5
@@ -68,6 +72,9 @@ func run(t) -> void:
 	_a_body_beside_a_resource_block_gathers_it(t)
 	_the_block_never_runs_out(t)
 	_the_resource_block_beats_the_coast(t)
+	_pressing_a_resource_block_sends_the_squad_beside_it(t)
+	_the_squad_that_walks_there_gathers(t)
+	_a_block_with_no_resource_takes_no_gather_order(t)
 	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies half way still reports
 	# every check it managed first, in a shape a healthy net cannot be told from.
 	t.done()
@@ -266,16 +273,105 @@ func _the_resource_block_beats_the_coast(t) -> void:
 	t.eq(b.store.count("fish"), 0, "물고기는 안 들어온다")
 
 
+# == pressing one =====================================================================================
+
+## **A press on a resource 칸 sends the 부대 to the 조각 AROUND it** (2026-09-03, the user: 「딱 눌렀을 때
+## 채집하러 갔을 때 잘 갈 거 아니야 ... 거기 가면 채집이다」).
+##
+## ⚠⚠ **THE 칸 IS NOT LIT AND THAT IS THE WHOLE DIFFICULTY.** It blocks, so no 조각 of it is standable,
+## so `can_reach_block` is false and until now the press was swallowed with nothing on screen to say
+## why. **The row asserts the 칸 is dark FIRST**, or it would be measuring an ordinary move order.
+func _pressing_a_resource_block_sends_the_squad_beside_it(t) -> void:
+	var b := _wooded(3)
+	var g := b.grid
+	var block := g.block_of(g.tile_index(WOOD_TX, WOOD_TY))
+	var ids := PackedInt32Array()
+	for i in 3:
+		if b.place_ashore(i, g.tile_index(INLAND_TX, INLAND_TY)) >= 0:
+			ids.append(i)
+	t.eq(ids.size(), 3, "자가 점검 — 몸 셋이 구석에 섰다")
+	t.ok(b.place_store(g.tile_index(STORE_TX, STORE_TY)), "자가 점검 — 창고가 섰다")
+
+	var hand := Hand.new()
+	t.ok(hand.pick_many(b, ids), "자가 점검 — 손이 셋을 쥐었다")
+	t.ok(not hand.can_reach_block(block), "자가 점검 — 자원 칸은 불이 안 켜진다 — 막혀 있으니까")
+	t.ok(hand.can_gather_block(b, block), "그래도 캐러 갈 수는 있는 칸이다")
+
+	var ring := hand.gather_ring(b, block)
+	t.ok(ring.size() >= 3, "자가 점검 — 그 칸 옆에 설 자리가 %d 개 있다" % [ring.size()])
+	for k in ring.size():
+		t.ok(g.block_of(int(ring[k])) != block, "옆자리는 그 칸 밖이다")
+
+	t.eq(hand.order(b, block), 3, "셋 다 명령을 받는다")
+	var seats := PackedInt32Array()
+	for k in ids.size():
+		seats.append(int(b.soldier_order[int(ids[k])]))
+	var on_ring := 0
+	for k in seats.size():
+		for m in ring.size():
+			if int(seats[k]) == int(ring[m]):
+				on_ring += 1
+				break
+	t.eq(on_ring, 3, "셋 다 그 칸 옆자리로 간다 %s" % [seats])
+	# **The preview says the same thing**, which is the invariant `routes` exists for.
+	var lines := hand.routes(b, block)
+	t.eq(lines.size(), 3, "이동선도 셋이 나온다")
+
+
+## **They walk there and the wood starts coming in.**
+##
+## ⚠ **The whole chain in one row**: the press, the walk, the order clearing on arrival, and the
+## gathering that standing there IS. **Each half is measured on its own elsewhere**; this says they
+## meet.
+func _the_squad_that_walks_there_gathers(t) -> void:
+	var b := _wooded()
+	var g := b.grid
+	var block := g.block_of(g.tile_index(WOOD_TX, WOOD_TY))
+	b.place_ashore(0, g.tile_index(INLAND_TX, INLAND_TY))
+	t.ok(b.place_store(g.tile_index(STORE_TX, STORE_TY)), "자가 점검 — 창고가 섰다")
+	var hand := Hand.new()
+	t.ok(hand.pick_many(b, PackedInt32Array([0])), "자가 점검 — 손이 하나를 쥐었다")
+	t.eq(hand.order(b, block), 1, "자가 점검 — 캐러 가라는 명령이 나갔다")
+	t.eq(b.store.count("wood"), 0, "자가 점검 — 아직 나무는 0 이다")
+
+	_run_for(b, Rules.GATHER_SEC * 2.0)
+	t.ok(b.store.count("wood") >= 1, "걸어가서 서 있으면 나무가 들어온다 (실측 %d)" % [b.store.count("wood")])
+	t.ok(b.gatherable_at(b._tile_of(b.soldier_pos[0])) == "wood",
+		"몸은 그 칸 옆에 서 있다 — 캐는 것은 나무다")
+
+
+## **A 칸 with nothing on it is not a gather order**, whatever else it is.
+##
+## ⚠⚠ **THE CONTROL, AND WITHOUT IT 「the press goes through」 IS TRUE OF EVERY 칸 ON THE BOARD.** The
+## middle of the pool is water: unlit, unwalkable and holding no resource — exactly the shape a
+## resource 칸 has from `can_reach_block`'s side, and the one that must still answer no.
+func _a_block_with_no_resource_takes_no_gather_order(t) -> void:
+	var b := _wooded()
+	var g := b.grid
+	var wet := g.block_of(g.tile_index(4, 3))
+	t.eq(g.passable[g.tile_index(4, 3)], 0, "자가 점검 — 물 위는 못 지나간다")
+	b.place_ashore(0, g.tile_index(INLAND_TX, INLAND_TY))
+	t.ok(b.place_store(g.tile_index(STORE_TX, STORE_TY)), "자가 점검 — 창고가 섰다")
+	var hand := Hand.new()
+	t.ok(hand.pick_many(b, PackedInt32Array([0])), "자가 점검 — 손이 하나를 쥐었다")
+	t.ok(not hand.can_reach_block(wet), "자가 점검 — 물 칸은 불이 안 켜진다")
+	t.ok(not hand.can_gather_block(b, wet), "물 칸은 캐러 갈 수 있는 칸이 아니다")
+	t.eq(hand.gather_ring(b, wet).size(), 0, "옆자리도 안 나온다")
+	t.eq(hand.order(b, wet), 0, "그래서 아무도 안 간다")
+	t.eq(int(b.soldier_order[0]), -1, "명령도 안 걸린다")
+
+
 # == fixtures =========================================================================================
 
 ## **The pond board, one 검사 on the roster, no 성채 and no doorstep.** ⚠ **No 성채 on purpose** — this
 ## board has no beach, so nothing can attack one, and a house would only take a 조각 out of the count.
-func _battle() -> Battle:
+func _battle(n: int = 1) -> Battle:
 	var g := Grid.new()
 	g.load_rows(POND)
 	var army := Army.new()
 	var slot := army.register_species(Rules.SWORDSMAN)
-	army.recruit(slot)
+	for _i in n:
+		army.recruit(slot)
 	var b := Battle.new()
 	b.setup(g, army, [], PackedInt32Array(), -1)
 	return b
@@ -284,8 +380,8 @@ func _battle() -> Battle:
 ## **The same board with the resource 칸 filled in.** ⚠ **The props are handed to `Grid.set_resources`
 ## by hand here** — the drawn island's props arrive through `Islands.load_into`, and a fixture that
 ## went through the file would be measuring the drawn island instead of this board.
-func _wooded() -> Battle:
-	var b := _battle()
+func _wooded(n: int = 1) -> Battle:
+	var b := _battle(n)
 	var props: Array = []
 	for dy in Rules.BLOCK_TILES:
 		for dx in Rules.BLOCK_TILES:

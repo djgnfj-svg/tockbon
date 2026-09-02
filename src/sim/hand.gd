@@ -180,6 +180,70 @@ func can_reach_block(block: int) -> bool:
 	return _in_reach_block.has(block)
 
 
+## **Whether the picked bodies may be sent to GATHER at this 칸** — it holds a resource, and at least
+## one 조각 they can walk to touches it. Tickets 05-05 and 08-02.
+##
+## ⚠⚠ **A RESOURCE 칸 IS NEVER LIT AND THAT IS WHY THIS EXISTS** (2026-09-03, the user: 「딱 눌렀을 때
+## 채집하러 갔을 때 잘 갈 거 아니야 ... 거기 가면 채집이다」). The 칸 blocks — 「막힌다」 — so no 조각 of
+## it is standable, so `can_reach_block` is false and the press was simply swallowed. **A body gathers
+## from the 조각 BESIDE it**, so what has to be reachable is the ring and not the 칸.
+##
+## ⚠ **A separate question and not a widened `can_reach_block`.** The two mean different things on
+## screen — one is 「stand here」 and one is 「work on that」 — and the shell has to be able to draw them
+## differently. **Folding them into one would make a resource 칸 look like ground.**
+func can_gather_block(battle: Battle, block: int) -> bool:
+	return not gather_ring(battle, block).is_empty()
+
+
+## **Every lit 조각 a body could stand on to work this 칸**, ascending. Empty for a 칸 with no resource
+## on it, and for one whose whole ring is water, wall or somewhere this 부대 cannot walk.
+##
+## ⚠ **Asked of `Grid.resource_at` and not of the props**, so a 칸 whose resource was never registered
+## answers empty rather than sending a 부대 to stand around a hole.
+func gather_ring(battle: Battle, block: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	if battle == null or battle.grid == null or block < 0:
+		return out
+	var grid := battle.grid
+	var seen := {}
+	var any_resource := false
+	for raw in grid.tiles_of_block(block):
+		var t := int(raw)
+		if grid.resource_at(t) == "":
+			continue
+		any_resource = true
+		var tx := t % grid.w
+		var ty := t / grid.w
+		for k in Grid.NEIGHBOURS.size():
+			var nx: int = tx + int(Grid.NEIGHBOURS[k][0])
+			var ny: int = ty + int(Grid.NEIGHBOURS[k][1])
+			if nx < 0 or ny < 0 or nx >= grid.w or ny >= grid.h:
+				continue
+			var nt := ny * grid.w + nx
+			if seen.has(nt) or not can_reach(nt):
+				continue
+			# ⚠⚠ **LIT IS NOT THE SAME AS 「SOMEBODY COULD STAND THERE」, AND A BUILDING IS THE GAP.**
+			# The 성채 and the 창고 hold their whole 조각 through the reservation table while the 조각
+			# stays PASSABLE — so it is lit, `_room_in_tile` reads it as having room (the house is one
+			# body, not three), and a 부대 seated there walks up to the wall and stops. **`can_hold` is
+			# the walker's own admission test and it answers no**, so it is what filters the ring.
+			# ⚠ **Asked of a picked body and not of nobody**, so a 조각 the 부대 already stands on stays
+			# in — that is the one case `can_hold` answers true for a full 조각.
+			var holds := false
+			for m in ids.size():
+				if grid.can_hold(nt, int(ids[m])):
+					holds = true
+					break
+			if not holds:
+				continue
+			seen[nt] = true
+			out.append(nt)
+	if not any_resource:
+		return PackedInt32Array()
+	out.sort()
+	return out
+
+
 ## **Where the picked bodies stand right now**, one 조각 each and in `ids` order. ⚠ **A body whose
 ## position is off the board answers -1 rather than being dropped**, so this list and `ids` are always
 ## the same length and index the same body.
@@ -234,9 +298,9 @@ func from_tiles(battle: Battle) -> PackedInt32Array:
 func order(battle: Battle, block: int) -> int:
 	if battle == null or battle.grid == null or ids.is_empty():
 		return 0
-	if not can_reach_block(block):
+	if not can_reach_block(block) and not can_gather_block(battle, block):
 		return 0
-	var seats := _seats(battle, block, ids.size())
+	var seats := _seats_for(battle, block, ids.size())
 	var centroid := Vector2.ZERO
 	for k in ids.size():
 		centroid += battle.soldier_pos[int(ids[k])] as Vector2
@@ -300,12 +364,12 @@ func _block_middle(grid: Grid, block: int) -> Vector2:
 func routes(battle: Battle, block: int) -> Array:
 	if battle == null or battle.grid == null or ids.is_empty():
 		return []
-	if not can_reach_block(block):
+	if not can_reach_block(block) and not can_gather_block(battle, block):
 		_forget_routes()
 		return []
 	# ⚠⚠ **LIVE, BOTH OF THEM, BEFORE ANY CACHE IS CONSULTED.** These two ARE the key — computing them
 	# is what makes the key true, and skipping straight to a remembered answer is the whole bug.
-	var seats := _seats(battle, block, ids.size())
+	var seats := _seats_for(battle, block, ids.size())
 	var starts := from_tiles(battle)
 	if seats == _route_seats and starts == _route_starts:
 		return _routes
@@ -531,6 +595,58 @@ func _standable(battle: Battle, tile: int) -> bool:
 	if Grid.is_stair_level(grid.level_of(tile)):
 		return false
 	return true
+
+
+## **The seats for a press, whichever kind of press it was.**
+##
+## ⚠⚠ **THE TWO KINDS ARE 「STAND ON IT」 AND 「WORK ON IT」, AND ONE FUNCTION HAS TO PICK.** `order` and
+## `routes` both go through here so the 이동선 the player looks at and the walk the press buys cannot
+## come from different rules — the invariant `routes` exists for.
+func _seats_for(battle: Battle, block: int, want: int) -> PackedInt32Array:
+	if can_reach_block(block):
+		return _seats(battle, block, want)
+	return _gather_seats(battle, block, want)
+
+
+## **One seat per body on the ring AROUND a resource 칸**, `ids`-aligned, handed out round-robin.
+##
+## ⚠⚠ **ROUND-ROBIN OVER THE RING AND NOT DRAINED ONE 조각 AT A TIME**, which is the same answer 03-17
+## gave for the pressed 칸: filling one 조각 to its ceiling before moving on piles the whole 부대 into
+## the first corner of the ring the loop happens to reach. **Here one seat goes to each 조각 in turn.**
+##
+## ⚠ **The ring is already `can_reach`**, so every 조각 in it is somewhere every picked body can walk —
+## `gather_ring` filters on the intersection reach, the same as everything else the hand hands out.
+## ⚠ **Fewer seats than bodies is not an error.** A 칸 with two open 조각 beside it takes six bodies and
+## no more; the caller stops at `seats.size()` and reports the smaller number, exactly as `_seats` does.
+func _gather_seats(battle: Battle, block: int, want: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	if want <= 0 or battle == null or battle.grid == null:
+		return out
+	var grid := battle.grid
+	var ring := gather_ring(battle, block)
+	if ring.is_empty():
+		return out
+	var tile_room := {}
+	var block_room := {}
+	var served := true
+	while out.size() < want and served:
+		served = false
+		for k in ring.size():
+			if out.size() >= want:
+				break
+			var t := int(ring[k])
+			var bk := grid.block_of(t)
+			if not tile_room.has(t):
+				tile_room[t] = _room_in_tile(grid, t)
+			if not block_room.has(bk):
+				block_room[bk] = _room_in_block(grid, bk)
+			if int(tile_room[t]) <= 0 or int(block_room[bk]) <= 0:
+				continue
+			out.append(t)
+			tile_room[t] = int(tile_room[t]) - 1
+			block_room[bk] = int(block_room[bk]) - 1
+			served = true
+	return out
 
 
 ## **One seat per picked body, `ids`-aligned: inside the pressed 칸 first, spilling into a
