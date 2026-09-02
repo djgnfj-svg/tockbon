@@ -260,7 +260,23 @@ func _the_plate_and_the_font_are_what_look_says(t) -> void:
 	if font != null:
 		var w := font.get_string_size("돌쇠", HORIZONTAL_ALIGNMENT_LEFT, -1, Look.PANEL_FONT_PX).x
 		t.ok(w > 0.0, "그 글꼴에 한글이 들어 있다 — 「돌쇠」 의 폭이 0 이 아니다 (%s)" % str(w))
-		t.ok(font.get_ascent(Look.PANEL_FONT_PX) > 0.0, "15 px 에서 어센트가 0 이 아니다")
+		_the_font_is_galmuri(t, font, "글꼴")
+		# **The widest line the panel can ever be asked to hold**: the widest name in the list with the
+		# full-list count behind it, and it still fits between the paddings. ⚠ **Measured with the
+		# font, not by syllable count** — the widest name by glyphs is whatever the font says it is.
+		var widest := ""
+		var widest_px := 0.0
+		for raw in Names.LIST:
+			var name_px := font.get_string_size(str(raw), HORIZONTAL_ALIGNMENT_LEFT, -1,
+				Look.PANEL_FONT_PX).x
+			if name_px > widest_px:
+				widest_px = name_px
+				widest = str(raw)
+		var longest := "이름 %s x %d" % [widest, Names.LIST.size()]
+		var longest_px := font.get_string_size(longest, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			Look.PANEL_FONT_PX).x
+		t.ok(longest_px > 0.0 and longest_px <= Look.PANEL_SIZE_PX.x - 2.0 * Look.PANEL_PAD_PX,
+			"가장 넓은 이름 줄 「%s」 (%s px) 이 여백 안쪽 폭에 든다" % [longest, str(longest_px)])
 
 	# The two pure functions, on their own — the hook-vs-function compare below is what proves
 	# `_draw` calls them; this is what proves they answer a corner and a line pitch.
@@ -297,12 +313,30 @@ func _the_layout_is_looks_answer(t, spy: PanelSpy, label: String) -> void:
 	t.ok(_inside(plate, vp), "%s — 판이 통째로 화면 안에 든다" % label)
 	var font: Font = spy.lines[0]["font"]
 	t.ok(font == HudView.panel_font(), "%s — 글줄이 판의 글꼴로 그려진다" % label)
+	# ⚠ Identity alone is green when `panel_font()` is quietly swapped to the theme face — the ascent
+	# and the path pin WHICH font that is.
+	_the_font_is_galmuri(t, font, label)
+	var plate_lum := _plate_centre_luminance(tex)
 	var ascent := font.get_ascent(Look.PANEL_FONT_PX)
 	var descent := font.get_descent(Look.PANEL_FONT_PX)
+	var inner_w := Look.PANEL_SIZE_PX.x - 2.0 * Look.PANEL_PAD_PX
 	var last_y := -1.0
 	for i in spy.lines.size():
 		var line: Dictionary = spy.lines[i]
 		var p: Vector2 = line["at"]
+		var col: Color = line["col"]
+		var text := str(line["text"])
+		# ⚠ `col == COL_PANEL_TEXT` alone is green at alpha 0 and green in the plate's own colour —
+		# the letters have to be opaque and have to stand off the plate.
+		t.ok(is_equal_approx(col.a, 1.0), "%s — %d째 줄의 글자색이 불투명하다 (a=%s)" % [label, i, str(col.a)])
+		t.ok(absf(col.get_luminance() - plate_lum) > 0.3,
+			"%s — %d째 줄의 글자색이 판 한가운데 색과 밝기로 갈린다 (%s 대 %s)"
+				% [label, i, str(col.get_luminance()), str(plate_lum)])
+		var text_px := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			int(line["size_px"])).x
+		t.ok(text_px > 0.0 and text_px <= inner_w,
+			"%s — %d째 줄 「%s」 의 폭 %s px 가 여백 안쪽 %s px 에 든다"
+				% [label, i, text, str(text_px), str(inner_w)])
 		t.ok(p.is_equal_approx(Look.panel_line_baseline_px(at, i, ascent)),
 			"%s — %d째 줄의 기준선이 panel_line_baseline_px 의 답이다 (%s)" % [label, i, str(p)])
 		t.ok(vp.has_point(p), "%s — %d째 줄의 기준선이 화면 안이다" % [label, i])
@@ -318,6 +352,26 @@ func _the_layout_is_looks_answer(t, spy: PanelSpy, label: String) -> void:
 	var bottom: float = spy.lines[3]["at"].y + descent
 	t.ok(top >= plate.position.y and bottom <= plate.end.y,
 		"%s — 첫 줄의 머리와 넷째 줄의 꼬리가 다 판 안이다 (%s..%s)" % [label, str(top), str(bottom)])
+
+
+## **Which font this is**, by two things a swapped face cannot fake: Galmuri14's ascent at 15 px is
+## 15.0 (measured 2026-09-02; the theme's Hangul face answers 18.0), and the resource was loaded from
+## `Look.PANEL_FONT` and nowhere else.
+func _the_font_is_galmuri(t, font: Font, label: String) -> void:
+	t.eq(font.get_ascent(Look.PANEL_FONT_PX), 15.0,
+		"%s — 15 px 에서 어센트가 15.0 이다 (갈무리14 의 값 — 테마 글꼴은 18.0)" % label)
+	t.eq(font.resource_path, Look.PANEL_FONT, "%s — 글꼴이 PANEL_FONT 에서 불러진 그 파일이다" % label)
+
+
+## The luminance of the plate's own centre pixel — what the letters have to stand off.
+func _plate_centre_luminance(tex: Texture2D) -> float:
+	if tex == null:
+		return -1.0
+	var img := tex.get_image()
+	if img == null:
+		return -1.0
+	var c := img.get_pixel(int(img.get_width() / 2), int(img.get_height() / 2))
+	return c.get_luminance()
 
 
 # == the shell ========================================================================================
