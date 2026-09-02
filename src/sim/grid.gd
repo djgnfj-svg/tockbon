@@ -154,14 +154,43 @@ var coast: Array = []
 ## ⚠ **Nothing outside this file may index it.** `slot_of`, `holds`, `hold_count`, `has_room` and
 ## `can_hold` are the readers, and a raw `reserved[tile]` now names slot 0 of a 조각 three times lower
 ## down the board — a plausible number for the wrong 조각, which is this repo's own named false green.
-## ⚠ **The slot is a PLACE and not an identity**: the view reads it to spread a crowd inside its 조각,
-## and it changes whenever the body ahead of it in that 조각 leaves.
+## ⚠ **The slot is a PLACE and not an identity**, and it changes whenever the body ahead of it in that
+## 조각 leaves. ⚠ **The view stopped reading it on 2026-09-02** (ticket 03-17): where a body is drawn
+## inside its 칸 is `block_seats`' answer now, and the slot is the reservation alone.
 var reserved := PackedInt32Array()     # tile * Rules.TILE_CAPACITY + slot -> unit id, or -1
 
 ## unit id -> Array of tiles it currently holds. At most two: the tile it stands on and the tile it is
 ## walking into. This is only the fast path for releasing — `reserved` is the authority, which is why
 ## `release_all` rescans it in full instead of trusting this.
 var _held := {}
+
+## **Which body sits in which of a 칸's nine seats** — 칸 index -> `PackedInt32Array` of nine unit ids
+## or -1, row-major over a 3x3, **4 the centre**. Ticket 03-17 (2026-09-02, the user at the screen:
+## 「the characters ought to fill in starting from the centre and that is not really working」).
+##
+## ⚠⚠ **THE SEAT IS A FACT ABOUT THE 칸 AND NOT ABOUT THE 조각, AND THAT WAS MEASURED BEFORE IT WAS
+## BUILT.** `log.md` 2026-08-31: a per-조각 seat table assumed the split 3·2·2·2, the walk delivered
+## 3·3·2·1, and a body fell through to no seat while a seat elsewhere stood empty. Nine seats laid over
+## a 2x2 do not line up with the four 조각 one-to-one, so the table hangs off the 칸.
+##
+## ⚠⚠ **`hold` HANDS THE SEAT OUT AND THE LOWEST WRITE OF `reserved` TAKES IT BACK.** `hold` is the one
+## door every body walks through — the muster, a landing beast, every step of a walk, `_settle` — so a
+## seat given there is given to every body there is, and a seat invented at order time (the first plan)
+## missed the nine mustered at the 성채 and every 짐승. The free hooks into `_release_except` as well as
+## `release_all`, because **the walk never calls `release_all`**: `_commit_step` is `hold(dest)` then
+## `_release_except(cur, dest)`, and a body keeps its seat exactly as long as it holds a 조각 of that
+## 칸. A body mid-step across a 칸 line holds a seat in both for the length of one call.
+## ⚠ **The sim never reads the seat.** It is `Grid`'s so that two bodies cannot be handed one place the
+## moment a third dies — a seat invented in the view would drift from the occupancy it draws — but the
+## only readers are the view's `_stand_point` and the nets. `fill` takes no seat: a house is not a body.
+## ⚠ **Reset with `reserved`** in `load_rows`, so a `Grid` reused across islands starts every 칸 empty.
+var block_seats := {}
+
+## **The order seats are handed out**: the centre, then the four edge middles, then the four corners.
+## Within one tier the seats that lie over the body's OWN 조각 go first — `seat_fits_piece` — so a body
+## is drawn near where it stands and a 3·3·3·0 split still seats nine, the ninth simply standing off its
+## quadrant. ⚠ A plain `const` Array on purpose: a `const` packed array does not parse on 4.7.1.
+const SEAT_ORDER := [4, 1, 3, 5, 7, 0, 2, 6, 8]
 
 
 ## Loads one island's rows. Safe to call twice: every array is rebuilt, so a `Grid` reused across
@@ -192,6 +221,7 @@ func load_rows(rows: Array, tiers: Array = []) -> void:
 	reserved = PackedInt32Array()
 	reserved.resize(n * Rules.TILE_CAPACITY)
 	reserved.fill(-1)
+	block_seats = {}
 
 	# Built once per load rather than per tile: the string is assembled from a table, and 1536 tiles
 	# rebuilding it would be a walk of `SPAWN_ROWS` per tile for an answer that cannot change.
@@ -1472,10 +1502,17 @@ func string_pull(path: PackedInt32Array) -> PackedInt32Array:
 ## entry that names it is the same set either way — but the index is not a tile number and nothing here
 ## may treat it as one.
 func release_all(unit_id: int) -> void:
+	var cap := Rules.TILE_CAPACITY
+	var left := {}
 	for k in reserved.size():
 		if reserved[k] == unit_id:
 			reserved[k] = -1
+			# ⚠ The slot index over the capacity is the 조각 — see the loop note above.
+			left[block_of(k / cap)] = true
 	_held.erase(unit_id)
+	# ⚠ **The seat goes back with the slot, here as in `_release_except`** — see `block_seats`.
+	for raw in left.keys():
+		_unseat_if_gone(unit_id, int(raw))
 
 
 ## Claims a slot in `tile` unless the 조각 is full. A 조각 this unit is already standing in is adopted
@@ -1502,7 +1539,114 @@ func hold(unit_id: int, tile: int) -> bool:
 	if not held.has(tile):
 		held.append(tile)
 	_held[unit_id] = held
+	# ⚠ **After the slot and only on success**, so a refused body never takes a seat — see `block_seats`.
+	_seat(unit_id, tile)
 	return true
+
+
+## **Which of the nine seats of `block` this unit sits in, or -1.** Row-major over the 3x3, 4 the
+## centre; the geometry of a seat is `Look.seat_point_tiles`' and this file never reads it.
+func seat_of(block: int, unit_id: int) -> int:
+	if not block_seats.has(block):
+		return -1
+	var seats: PackedInt32Array = block_seats[block]
+	for k in seats.size():
+		if int(seats[k]) == unit_id:
+			return k
+	return -1
+
+
+## **Whether seat `seat` lies over `tile`'s quarter of its 칸** — a corner over its own 조각, an edge
+## middle over either 조각 it borders, the centre over all four.
+##
+## ⚠⚠ **THE COLUMN RUNS THE OTHER WAY FROM x, AND THAT IS `Look.seat_point_tiles`' DOING.** The lattice
+## is drawn as `right * (column - 1) + forward * (row - 1)` with `forward` the unturned facing `(0, 1)`
+## and `right` a body's own right hand facing that way — which is **-x**. So column 0 is drawn EAST of
+## the middle and column 2 WEST, while row 0 is north and row 2 south. **This function says the same
+## thing in the 칸's own quarters**, and `net_fx_view`'s own-side row is what holds the two files to one
+## answer — flip either alone and it reddens.
+static func seat_fits_piece(seat: int, dx: int, dy: int) -> bool:
+	var column := seat % 3
+	var row := seat / 3
+	var east := column == 0
+	var west := column == 2
+	var north := row == 0
+	var south := row == 2
+	if (east and dx == 0) or (west and dx == 1):
+		return false
+	if (north and dy == 1) or (south and dy == 0):
+		return false
+	return true
+
+
+## **Gives `unit_id` a seat in the 칸 of `tile` if it has none there** — the first free seat in
+## `SEAT_ORDER`, its own quarter first within each tier.
+##
+## ⚠ **No free seat cannot happen while the ceilings hold**: `block_has_room` admits at most
+## `Rules.BLOCK_CAPACITY` distinct holders and the table has as many seats, and a house that `fill`ed a
+## 조각 took none. It is barked rather than swallowed, because a body with no seat is drawn on its 조각
+## centre and reads as standing in the wrong place with nothing else saying so.
+func _seat(unit_id: int, tile: int) -> void:
+	var block := block_of(tile)
+	if block < 0:
+		return
+	if seat_of(block, unit_id) >= 0:
+		return
+	var seats: PackedInt32Array
+	if block_seats.has(block):
+		seats = block_seats[block]
+	else:
+		seats = PackedInt32Array()
+		seats.resize(SEAT_ORDER.size())
+		seats.fill(-1)
+	var b := Rules.BLOCK_TILES
+	var dx := (tile % w) % b
+	var dy := (tile / w) % b
+	var pick := -1
+	# The tiers are contiguous runs of `SEAT_ORDER`: the centre, then four edges, then four corners.
+	var tiers := [[0, 1], [1, 5], [5, 9]]
+	for raw_tier in tiers:
+		var lo := int(raw_tier[0])
+		var hi := int(raw_tier[1])
+		for own in [true, false]:
+			for k in range(lo, hi):
+				var s := int(SEAT_ORDER[k])
+				if int(seats[s]) != -1:
+					continue
+				if own and not seat_fits_piece(s, dx, dy):
+					continue
+				pick = s
+				break
+			if pick >= 0:
+				break
+		if pick >= 0:
+			break
+	if pick < 0:
+		push_error("grid.seat: 칸 %d 에 빈 자리가 없다 — 천장이 아홉인데 열째가 섰다" % block)
+		return
+	seats[pick] = unit_id
+	block_seats[block] = seats
+
+
+## **Frees `unit_id`'s seat in `block` once it holds no 조각 there** — called after every slot clear,
+## and a no-op while a step still holds a 조각 of the 칸. See `block_seats`.
+func _unseat_if_gone(unit_id: int, block: int) -> void:
+	if block < 0 or not block_seats.has(block):
+		return
+	if _block_holds(block, unit_id):
+		return
+	var seats: PackedInt32Array = block_seats[block]
+	var any := false
+	for k in seats.size():
+		if int(seats[k]) == unit_id:
+			seats[k] = -1
+		elif int(seats[k]) != -1:
+			any = true
+	if any:
+		block_seats[block] = seats
+	else:
+		# An empty table entry is the same fact as no entry, and one fewer key to walk.
+		block_seats.erase(block)
 
 
 ## **Takes the WHOLE 조각 for one unit — what a building does, and nothing that walks.** Answers
@@ -1532,7 +1676,8 @@ func fill(unit_id: int, tile: int) -> bool:
 
 
 ## **Which slot of `tile` this unit stands in, or -1.** ⚠ **It is a place inside the 조각 and not a
-## name**: the view spreads a crowd by it, and it changes when the body ahead of it leaves.
+## name**, and it changes when the body ahead of it leaves. The view drew a crowd off it until
+## 2026-09-02; it draws off `seat_of` now.
 func slot_of(tile: int, unit_id: int) -> int:
 	var cap := Rules.TILE_CAPACITY
 	if tile < 0 or tile >= w * h:
@@ -1674,7 +1819,8 @@ func can_hold(tile: int, unit_id: int) -> bool:
 ##
 ## ⚠⚠ **LOWEST AND NOT ANY, AND THAT IS THE WHOLE OF DETERMINISM HERE.** A body's place inside a 조각
 ## has to be a function of who was already standing there — pick any free slot and the same seed stops
-## giving the same fight, and the crowd the view draws off these indices reshuffles every frame.
+## giving the same fight. (The view drew a crowd off these indices until 2026-09-02; it draws off
+## `block_seats` now, whose hand-out is deterministic for the same reason.)
 func _free_slot(tile: int) -> int:
 	var cap := Rules.TILE_CAPACITY
 	if tile < 0 or tile >= w * h:
@@ -1699,4 +1845,8 @@ func _release_except(unit_id: int, keep_a: int, keep_b: int) -> void:
 		var k := slot_of(tile, unit_id)
 		if k >= 0:
 			reserved[tile * Rules.TILE_CAPACITY + k] = -1
+			# ⚠ **The seat goes back with the slot — here, because the walk never calls `release_all`.**
+			# A body stepping inside its 칸 still holds the 조각 it stepped into, so this is a no-op for
+			# it; a body that crossed a 칸 line hands the old 칸's seat back in this call. See `block_seats`.
+			_unseat_if_gone(unit_id, block_of(tile))
 	_held[unit_id] = kept

@@ -148,10 +148,11 @@ const MAX_CLIMB_LEVELS := 1
 ## ceiling that is actually nine has to be stated one unit up. **Both hold at once** — a 조각 takes
 ## three and the 블록 takes nine, so the tenth body is refused even when the 조각 it wants has room.
 ##
-## ⚠⚠ **THE SLOT INDEX INSIDE A 조각 IS NOT PRIVATE TO THE RESERVATION.** `Grid.slot_of` answers it and
-## the view reads it to spread a crowd apart on screen, because three bodies handed the same 조각 centre
-## draw as one body. **The sim owns the slot and the drawing owns the offset** — see
-## `Look.crowd_offset_px`.
+## ⚠⚠ **THE PLACE A BODY IS DRAWN INSIDE ITS 칸 IS THE SIM'S TO HAND OUT AND THE VIEW'S TO READ.**
+## Three bodies handed the same 조각 centre draw as one body, so `Grid` hands each body a SEAT of its
+## 칸 (`Grid.block_seats`, ticket 03-17) and the view lays it on `Look.seat_point_tiles`' lattice.
+## Until 2026-09-02 the same job was done by the slot index and a ring inside one 조각, and the user
+## rejected that picture by eye. **The sim owns the seat and the drawing owns the geometry.**
 ##
 ## ⚠ **Raising this does not widen a doorway by itself.** A neck is measured in 조각, and the queue at
 ## one is now three deep per 조각 instead of one.
@@ -173,7 +174,8 @@ const TILE_CAPACITY := 3
 ##
 ## ⚠ **Nine over four 조각 is 2.25, so the split is never even.** Which 조각 of a 블록 holds three
 ## and which holds two falls out of arrival order, and **that is a fact about the picture, not only
-## about the table** — where the nine actually stand is `Look.crowd_offset_px`'s business.
+## about the table** — where the nine actually stand is `Grid.block_seats`' and `Look.seat_point_tiles`'
+## business (ticket 03-17), and the split no longer shows: the nine seats are the 칸's, not a 조각's.
 const BLOCK_TILES := 2
 const BLOCK_CAPACITY := 9
 

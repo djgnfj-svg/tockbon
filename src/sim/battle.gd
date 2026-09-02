@@ -251,6 +251,22 @@ var _boats_launched := 0
 var _fields := {}                         # target tile -> PackedInt32Array
 var _field_age := {}                      # target tile -> seconds since it was built
 
+## **Which way the seat lattice on each 칸 faces** — 칸 index -> unit `Vector2`, in `soldier_pos` axes.
+## Ticket 03-17 (2026-09-02, the user: 「격자는 명령 방향으로」 — *"the lattice faces the order's
+## direction"*).
+##
+## ⚠⚠ **`Hand.order` IS THE ONLY WRITER AND THE VIEW IS THE ONLY READER.** The facing is the 칸's middle
+## minus the centroid of the ordered bodies' positions at the moment of the order, normalised; an order
+## whose centroid IS the middle (under `Rules.EPS`) leaves the entry as it was. **A 칸 with no entry
+## faces `(0, 1)`** — the nine mustered at the 성채 and every 짐승 stand on an unturned lattice.
+## ⚠ **Nothing in the sim reads this.** Where a body stands, walks and fights is `soldier_pos`; this is
+## where the view DRAWS a body at rest inside its 칸, and it lives here rather than in the view because
+## it is written by a sim call and has to survive the view being rebuilt.
+## ⚠ **A later order onto a 칸 with bodies already standing turns the lattice under them** — they glide
+## to the new points. That is the accepted cost of the user's answer, not a defect.
+## ⚠ **Reset in `setup`**, like every other per-island table here.
+var block_face := {}
+
 
 ## Builds one island's fight. **`grid.load_rows` must already have run** — this writes tile
 ## reservations for every enemy, and `load_rows` clears the reservation table, so calling it
@@ -271,6 +287,9 @@ func setup(grid: Grid, army: Army, spawns: Array,
 	lost = false
 	_fields = {}
 	_field_age = {}
+	# Every time: a reused `Battle` carrying the previous island's facings would turn the first 부대 of
+	# the next island to an order nobody gave there.
+	block_face = {}
 	# Every time. A `Battle` is reused across islands, and a leftover `_substep_acc` is a fraction of
 	# the previous island's clock. `setup` exists to make a reused Battle indistinguishable from a
 	# fresh one.

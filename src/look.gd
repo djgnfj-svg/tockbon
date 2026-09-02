@@ -495,18 +495,36 @@ const BODY_SPRITE_SCALE := 0.80
 ## thing on open ground — **a size that was right beside an empty island is not right beside a wood.**
 const BUILD_SCALE := 0.34
 
-## **How far off its 조각's centre a body stands when it is not alone there, as a fraction of a 조각.**
+## ⚠⚠ **`CROWD_SPREAD_RATIO` STOOD HERE AND IT IS DELETED** (2026-09-02, ticket 03-17). It was the
+## radius of a ring inside ONE 조각 — slot 0 at the 조각 centre, the other two `0.30` of a 조각 around
+## it — and it is what the user saw and rejected: nine bodies filled the north-west 조각 to three, then
+## the north-east, then the south-west, and the pile stood off the middle of the 칸 at every count above
+## one, because nothing anywhere asked where the middle of the 칸 was. **What replaces it is the seat
+## lattice below**, laid over the whole 칸 and not over one 조각.
+## ⚠ **What it kept true still holds**: bodies sharing a 조각 are drawn apart, and `net_fx_view` reads
+## that off the lattice's pitch now.
+
+## **The seat lattice — where inside its 칸 a resting body is drawn** (2026-08-31, chosen by the user
+## from six photographed arrangements: 「Let's go with 6」, the 3x3 lattice across the 칸 turned to the
+## 부대's facing; 2026-09-02, installed as ticket 03-17).
 ##
-## ⚠⚠ **A 조각 ADMITS `Rules.TILE_CAPACITY` BODIES SINCE 2026-08-30 AND THEY WOULD OTHERWISE DRAW AS
-## ONE.** The sim walks every one of them to the same 조각 centre, so without this the second and third
-## body in a 조각 are hidden exactly behind the first — the count changes and the screen does not, which
-## is this repo's own named fake.
+## ⚠⚠ **THE PITCH IS THE SAME ON BOTH AXES AND THAT IS THE CHOICE, NOT AN ACCIDENT.** `06-ranks-wide`
+## exists because the two arrangements the user was torn between differed by this one number; a square
+## lattice is what makes 「2번's look」, and a square turned a quarter is the same nine points, so **at
+## this game's four camera notches the lattice is never seen to turn** — it turns with the ORDER's
+## direction (`Battle.block_face`), which is any angle. `.prototypes/nine/06-ranks-wide/NOTES.md` has the
+## measurement.
 ##
-## ⚠ **It is DRAWING and the sim knows nothing about it.** Reach, the flow field and every distance
-## are still measured from the 조각 centre; what moves is the picture and the disc under it.
-## ⚠ **Under 0.5 or a body is drawn outside its own 조각** and reads as standing on its neighbour.
-## 0.30 leaves a clear gap at `Rules.TILE_CAPACITY` = 3 and still keeps every body inside its square.
-const CROWD_SPREAD_RATIO := 0.30
+## ⚠ **A third of the 칸, so the corner seats sit two thirds of a 조각 from the middle and a whole 조각
+## from the 칸's edge is never crossed.** Read from `Rules.BLOCK_TILES` rather than typed, so a 칸 that
+## stopped being 2x2 moves the lattice with it.
+const SEAT_PITCH_TILES := Rules.BLOCK_TILES / 3.0
+
+## **How fast a resting body's drawn point slides onto its seat, in 조각 per second.** ~3, so the 0.7
+## 조각 from a 조각 centre to the 칸's middle takes a quarter of a second — a slide, not a pop, and not
+## a drift either. ⚠ **Only at rest**: a walking body is drawn exactly where the sim says, so this never
+## lags a walk. `FieldView._seat_glide` is the one piece of state it moves.
+const SEAT_GLIDE_TILES_PER_S := 3.0
 
 
 ## **The hills** (2026-08-24, the user: 「뭔가 대각선으로 올라가는 건 있나 혹시? 뭔가 지금 너무 딱딱해서
@@ -2583,14 +2601,14 @@ const FX_GROUND_STEP_PX := 20.0
 ## 판 it crosses reads as another 판 rather than as a route over them.
 const MOVE_LINE_HALF_PX := 3.0
 
-## **How near a press has to land to count as pressing a BODY** rather than the ground under it, in
-## 조각. ⚠ **A distance and not a 조각 test**: bodies stand up to three to a 조각 and off its centre,
-## so 「the body whose 조각 you pressed」 refuses presses that visibly hit somebody and accepts presses
-## that visibly missed.
-## ⚠ **A body is drawn standing UP from its feet**, so a press aimed at the chest lands past the feet
-## on the ground behind them. This is generous on purpose for that reason, and it is the first number
-## to move if picking feels sticky or slippery.
-const PICK_BODY_TILES := 0.8
+## ⚠⚠ **`PICK_BODY_TILES` STOOD HERE AND IT IS DELETED** (2026-09-02, the user: 「몸은 화면에서 잡자」
+## — *"let us pick the body on the glass"*, ticket 03-16). It was 0.8 조각 — how near a ground point had
+## to land to a body's `soldier_pos` to count as pressing the body — and its own paragraph said why it
+## was generous: 「a press aimed at the chest lands past the feet on the ground behind them」. **That
+## sentence was the defect.** Behind the feet is screen-up, screen-up turns with the yaw, and at pitch
+## 20° the chest lands 2.75 times the body's height behind — no number here reaches it. The body is
+## picked by its DRAWN rectangle now (`FieldView.body_at_px`), whose size is the sprite's own, so there
+## is no pick radius to tune and this constant has no reader. **Not retuned — deleted.**
 
 ## **The white rim around the body the hand is holding** (2026-08-31, the user: 「캐릭터 눌렀을때 살짝
 ## 내가 누른 캐릭에 흰색 테두리 ... 내가 누른 캐릭이 티가 나야할듯함」).
@@ -2647,23 +2665,29 @@ const MOVE_LINE_ZOOM_MAX := 2.4
 # Accessors
 # ---------------------------------------------------------------------------------------------
 
-## **Where inside its own 조각 the body in reservation slot `slot` stands, in canvas px.**
+## **Where seat `seat` of the lattice lies, as an offset from the 칸's middle in 조각 units, with the
+## lattice turned to `face`.** Row-major over the 3x3, 4 the centre — the same index `Grid.seat_of`
+## answers. -1 (no seat) is the middle itself.
 ##
-## ⚠⚠ **SLOT 0 IS THE 조각 CENTRE AND EVERY OTHER SLOT RINGS IT.** A body standing alone is always in
-## slot 0 — `Grid._free_slot` hands out the lowest free one — so **a lone body is drawn exactly where it
-## was before the crowd existed**, and nothing about the single-body picture had to be re-judged.
+## ⚠⚠ **`crowd_offset_px` STOOD HERE AND IT IS DELETED** (2026-09-02, ticket 03-17) — the per-조각 ring,
+## see `CROWD_SPREAD_RATIO`'s tombstone above. **This is the geometry of `06-ranks-wide/scene.gd`,
+## unchanged**: `right * (column - 1) * pitch + forward * (row - 1) * pitch`, with `forward` the facing
+## and `right` a body's own right hand facing that way — `(-forward.y, forward.x)`, which at the unturned
+## facing `(0, 1)` is **-x**. `Grid.seat_fits_piece` says the same mapping in the 칸's quarters and
+## `net_fx_view`'s own-side row holds the two to one answer.
 ##
-## ⚠ **`cap` is passed in rather than read from `Rules`.** This file is presentation and holds no rule;
-## the caller already has the capacity in hand, and a copy of it here would be the second place the
-## number lives.
-## ⚠ **The ring is in WORLD axes, not screen axes.** These px are the same px `tile_point_px` answers
-## in, so the spread is fixed to the ground and does not swing when the board is turned.
-static func crowd_offset_px(slot: int, cap: int) -> Vector2:
-	if slot <= 0 or cap <= 1:
+## ⚠ **The facing is an argument, never read from the camera.** These offsets are in WORLD axes — the
+## same axes `tile_point_px` answers in — so the lattice is fixed to the ground and does not swing when
+## the board is turned; what turns it is the ORDER's direction, written by `Hand.order`. An empty or
+## near-zero `face` reads as the unturned lattice rather than as a divide by zero.
+static func seat_point_tiles(seat: int, face: Vector2 = Vector2(0.0, 1.0)) -> Vector2:
+	if seat < 0 or seat > 8:
 		return Vector2.ZERO
-	var around := maxi(cap - 1, 1)
-	var a := TAU * float(slot - 1) / float(around)
-	return Vector2(cos(a), sin(a)) * CROWD_SPREAD_RATIO * TILE_PX
+	var fwd := face.normalized() if face.length() > 0.001 else Vector2(0.0, 1.0)
+	var right := Vector2(-fwd.y, fwd.x)
+	var column := seat % 3
+	var row := seat / 3
+	return right * float(column - 1) * SEAT_PITCH_TILES + fwd * float(row - 1) * SEAT_PITCH_TILES
 
 
 ## A `const` Array is read-only but its elements are untyped, so every read casts.

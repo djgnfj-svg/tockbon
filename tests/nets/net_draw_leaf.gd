@@ -114,8 +114,14 @@ func _table() -> Dictionary:
 			# actually goes through; the other two are its forward, written here so the six copies
 			# under `tools/` could stop each carrying a private one.
 			"screen_to_terrain_px": 0,
+			# The 조각 walk between two of its rungs (ticket 03-16, 2026-09-02) — arithmetic on the
+			# ground heights, no stroke.
+			"_ground_met": 0,
 			"world_to_screen_px": 0,
 			"tile_to_screen_px": 0,
+			# The body pick on the glass (ticket 03-16, 2026-09-02): it READS the pooled sprites and
+			# projects them through `world_to_screen_px`; it places nothing and draws nothing.
+			"body_at_px": 0,
 			"world_to_tile": 0,
 			"pan_by": 0,
 			"zoom_at": 0,
@@ -169,6 +175,10 @@ func _table() -> Dictionary:
 			# canvas stops shrinking the body. An alpha scan and a divisor — neither strokes anything.
 			"_measure_body_ink": 0,
 			"_ink_of": 0,
+			# The one alpha-column scan both the drawn width and the pick rectangle read (ticket 03-16,
+			# 2026-09-02) — the same shape as the foot pair above, and it strokes nothing either.
+			"_measure_ink_cols": 0,
+			"_ink_one": 0,
 			# The wolf's frame strips. `_body_tex` picks the picture and the other three feed it; not
 			# one of them strokes a canvas, same as the standing lookup they sit beside.
 			"_load_beast_anim": 0,
@@ -203,8 +213,17 @@ func _table() -> Dictionary:
 			"_swing_squash": 0,
 			"_flash_of": 0,
 			"_put_walker": 0,
-			# Which slot of its 조각 a body holds — a read of `Grid`, and it strokes nothing.
-			"_crowd_slot_of": 0,
+			# Where a body is drawn inside its 칸 (03-17) — reads of `Grid` and `Battle`, and the two
+			# rest tests; none of them strokes anything. `_crowd_slot_of` stood here until 2026-09-02.
+			"_stand_point": 0,
+			"_resting_soldier": 0,
+			"_resting_enemy": 0,
+			"_on_a_piece_centre": 0,
+			# The glide — one frame's step of every body's drawn point, and its two readers. State, not
+			# strokes.
+			"_advance_seat_glide": 0,
+			"_glided": 0,
+			"_drawn_of": 0,
 			"_hide_unused": 0,
 			# The effect SIMULATION — carried across the move unchanged, still 0 draws each.
 			"_map_tiles": 0,

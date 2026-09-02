@@ -46,11 +46,24 @@ extends Node2D
 ## Kept because `_rounded_square` is gone but the baked picture wants the same corner it drew.
 const CORNER_SEGMENTS := 6
 
-## How many rungs `screen_to_terrain_px` walks down the view ray. **The height step is this divided
-## into `Look.terrain_height_ceiling()`**, so at pitch 40 one rung slides the ground point about 3.6
-## world px — under a tenth of a tile, which is the resolution a press is answered to. Raising it buys
-## precision nobody can press to; lowering it lets a thin ridge fall between two rungs.
+## How many rungs `screen_to_terrain_px` cuts the view ray's descent into. **The height step is this
+## divided into `Look.terrain_height_ceiling()`**, so at pitch 40 one rung slides the ground point about
+## 5 world px along the ground.
+##
+## ⚠⚠ **SINCE 2026-09-02 THE RUNG IS NOT THE RESOLUTION A PRESS IS ANSWERED TO** (ticket 03-16). It
+## was: the walk answered AT a rung, so every surface that sat between two rungs was answered 0.07 조각
+## up the screen, and a 2층 조각's far edge was skipped clean. **Now every 조각 the ray crosses between
+## two rungs is tested against the ray's own height where it enters and leaves it**, so the answer is
+## exact at any count and no ridge can fall between rungs. **48 stays by the ticket's decision** — the
+## count bounds how the work is cut, and it does not move the answer.
 const TERRAIN_PICK_STEPS := 48
+## How far into a 조각 the ground point is set when the ray meets that 조각's FACE rather than its top,
+## as a fraction of the way from the entry point to the 조각's centre. The entry point sits exactly on
+## the edge shared with the 조각 in front, and `world_to_tile` floors — so a face hit answered on the edge
+## itself would name whichever of the two 조각 the last bit of the float fell into. **The face belongs to
+## the taller 조각**, which is what the player is looking at, and this nudge is what makes the floor say
+## so. Below the 0.02 조각 a net can tell from an edge.
+const FACE_HIT_INSET := 0.001
 
 const WATER_SHADER := "res://src/view/water.gdshader"
 ## ⚠ **The 판's own shader.** It is a second material on a second object inside `island.glb`, not a
@@ -133,10 +146,20 @@ var _tex_anim: Array = _load_beast_anim()
 ## of that frame's height, keyed by the picture. See `_measure_body_feet`. ⚠ **Declared here and not
 ## beside the boats**, because the island needs it for exactly the reason the deck always did.
 var _foot_body: Dictionary = _measure_body_feet(_tex_facing, _tex_anim)
-## **How much of its own canvas each row's ANIMAL actually fills across**, measured off the standing
-## pictures once at load. **This is what divides the canvas back out of a body's drawn size**, so a
+## **The first and last texel column of each body picture that holds any opaque pixel**, `(lo, hi)`
+## inclusive, keyed by the picture — the INK's own extent across its canvas, standing pictures and
+## every strip frame alike. See `_measure_ink_cols`.
+##
+## ⚠⚠ **ONE SCAN, TWO READERS** (2026-09-02, ticket 03-16). `_ink_frac` below divides the canvas back
+## out of a body's drawn width, and `body_at_px` answers a press by the ink's drawn edges — **a press
+## rectangle on the CANVAS was 2.2 times the man**: a 72-texel frame carries 33 texels of 검사, and a
+## press 8 px beside him on empty ground picked him (`verify-look`). Both facts are the same columns,
+## so both read this one dictionary rather than each scanning alpha on its own.
+var _ink_cols: Dictionary = _measure_ink_cols(_tex_facing, _tex_anim)
+## **How much of its own canvas each row's ANIMAL actually fills across**, read off the standing
+## pictures' columns above. **This is what divides the canvas back out of a body's drawn size**, so a
 ## strip that needs a wider frame stops changing how big the body reads. See `Look.beast_draw_scale`.
-var _ink_frac: Array = _measure_body_ink(_tex_facing)
+var _ink_frac: Array = _measure_body_ink(_tex_facing, _ink_cols)
 
 ## **The two drawn things the marks wear, and the font the number is set in.** Loaded once, beside
 ## the body pictures, for the same reason: a `load()` in a drawer is a disk read in a frame.
@@ -186,6 +209,38 @@ var _hover_cell := -1
 var _wash_cell := PackedInt32Array()
 var _sprites: Array[Sprite3D] = []
 var _sprites_used := 0
+## **Which pooled sprite each living, ashore 검사 is wearing this frame** — soldier id to index into
+## `_sprites`. Rebuilt by `_paint_bodies` every frame and read by `body_at_px`, which is how a press
+## finds a body by where it is DRAWN (2026-09-02, the user: 「몸은 화면에서 잡자」 — *"let us pick the
+## body on the glass"*).
+##
+## ⚠⚠ **THE INDEX IS `_sprites_used - 1` RIGHT AFTER `_put_walker`, WHICH IS THE SAME CONVENTION
+## `_put_outline` STANDS ON.** A walker takes exactly one sprite from the pool, and the bar it wears
+## comes from `_bars`, not from here — so the last sprite handed out IS the body's. **Recorded in the
+## one loop that draws the 검사** rather than derived here from `soldier_pos`, because a body mid-sway or
+## mid-lunge is picked where it is drawn, and only the paint knows where that is.
+## ⚠ **짐승, riders and a body still falling are not in here** — none of them is pickable, as before.
+var _sprite_of_soldier := {}
+## **Where each body was DRAWN last frame, in `soldier_pos` units** — body key (`s%d` · `e%d`) to
+## `Vector2`. Ticket 03-17's one piece of view state: a body coming to rest slides from where the sim
+## left it onto its seat at `Look.SEAT_GLIDE_TILES_PER_S`, and this is the point it slides from.
+##
+## ⚠⚠ **KEYED ON THE BODY'S STRING KEY AND NOT ON THE POOL SLOT** (the plan's amendment 2). `_sprite()`
+## hands out pool slots by draw order and every index shifts after a death, so a glide kept in the
+## sprite's own position would make a body inherit a stranger's in-flight point.
+## ⚠⚠ **A BODY'S FIRST FRAME IN THE POOL DRAWS AT ITS STAND POINT, NO GLIDE** — there is no entry to
+## glide from — so bodies placed by hand in a net read their seat immediately, and the slide only plays
+## on a walk → rest transition the view has watched. **A key is dropped the frame its body leaves the
+## pool**, so a body that dies and stands again does not slide in from where it fell.
+## ⚠ **Walking bodies track the sim exactly** and only overwrite their entry; a falling body is drawn
+## at its entry and never moves it.
+## ⚠⚠ **`_advance_seat_glide` IS THE ONLY WRITER AND IT RUNS BEFORE ANYTHING IS PAINTED** (the 03-17
+## bounce). It stood inside `_put_walker` for one round, and the 이동선 — painted BEFORE the bodies so it
+## lies under their shadows — read the frame's target instead: on the first resting frame the line's
+## start led the drawn body by the whole glide gap, up to 1.65 조각, closing over half a second. The
+## table is rebuilt whole every frame from the sim's lists, so every reader in the frame — the line, the
+## body, the shadow, the bar — reads one point, and a body that left the pool is simply not in it.
+var _seat_glide := {}
 ## **기법 17's black copies, one per body, in their own pool.** ⚠⚠ **A parallel pool and not a child
 ## node**, because the body sprites are recycled by index across frames: a child would be carried to
 ## whichever body reused that slot, and the outline would be right by accident. **Index `i` of this
@@ -394,6 +449,9 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	# a place nothing happened. **The body rows survive because a 검사 carries across islands.**
 	_live = []
 	_body = {}
+	# ⚠ **The glide forgets every body too.** It holds drawn POINTS on the last island's board, and a
+	# 검사 carried across would otherwise slide in from a place on a different island.
+	_seat_glide = {}
 	# ⚠ **And the water forgets every hull.** The blocks are indexed by boat number, so island 2's
 	# first boat would otherwise open wearing island 1's first boat's trail.
 	_wake = _wake_empty()
@@ -481,6 +539,9 @@ func _process(delta: float) -> void:
 	# from inside `_paint_bodies` — it is a per-body fact, and that is the one loop with a body's
 	# centre and radius in hand at the same time.
 	_fx_begin()
+	# ⚠ **The glide steps BEFORE the line and the bodies**, so both read the same drawn point this
+	# frame — see `_seat_glide`.
+	_advance_seat_glide(delta)
 	# ⚠ **Before the bodies and that is the stacking order.** The buffer is one surface drawn in the
 	# order it was filled, so a route laid down first passes UNDER the shadows of the bodies walking
 	# it — which is the way round that reads as a line on the ground rather than over the feet.
@@ -577,20 +638,98 @@ func screen_to_world_px(at: Vector2, ground_h: float = 0.0) -> Vector2:
 ## `TERRAIN_PICK_STEPS` is a COUNT and the height step is derived from it, so a shallow pitch (where
 ## one step of height slides the ground point a long way) costs the same work as a steep one instead of
 ## costing an unbounded amount.
+##
+## ⚠⚠ **IT ANSWERED AT A RUNG UNTIL 2026-09-02, AND EVERY 2층 PRESS WAS 0.071 조각 UP THE SCREEN**
+## (ticket 03-16, measured against the engine's own ray). The rung is `5.02 / 48 = 0.1046` of height;
+## the 1층 top at 0.21 sits 0.001 above a rung and the 2층 top at 1.21 sits 0.0596 above one, so the
+## first rung at or below the 2층 top was already 2.84 world px past it along the ground. **Two things
+## came of that**: in the far 0.071 조각 of every 2층 조각 the neighbour answered, and **at a 2층 덩어리's
+## far cliff edge the ray stepped clean over the top and fell to the 1층 land 1.19 조각 behind it** —
+## the 「ledge skip」 the ticket named as a suspect, and it was real.
+## ⇒ **Between two consecutive rungs, every 조각 the ground segment crosses is walked in order, and
+## for each the ray's height where it ENTERS and where it LEAVES that 조각 is compared with the 조각's
+## own top.** Top between the two: the ray met that top, and the answer is the ray at exactly that
+## height — over that 조각 by construction. Top above the entry height: the ray met that 조각's FACE, and
+## the answer is the entry point set a hair inside it (`FACE_HIT_INSET`). Otherwise the ray cleared it
+## and the walk goes on. **The rung count no longer moves the answer** — see `TERRAIN_PICK_STEPS`.
+##
+## ⚠⚠ **TWO WORDINGS THAT WERE TRIED ON PAPER AND ARE WRONG** (`adversary`, 2026-09-02), so nobody
+## re-tries them: 「snap the rung's point to the found 조각's top」 moves the point 0.071 조각 further
+## along the ground, so a press inside the last 0.071 of a 2층 조각 snaps past its far edge onto the
+## hidden 1층 behind and answers height 1.21 over a 0.21 surface; 「test only the 조각 newly entered
+## between the two rungs」 reads the low land at a far cliff edge and the skip survives. **The 조각 that
+## owns the top is the one the ray was over at the HIGHER rung, and during the 0.22 s sweep the segment
+## can cross a corner** — so every crossed 조각 is walked, not one.
+##
+## ⚠ **Off the board there is no surface**, so an off-grid 조각 is stepped over rather than read as a
+## top at height 0 — that is the same answer the rung walk gave, whose rungs never reached 0.
 func screen_to_terrain_px(at: Vector2) -> Vector2:
 	var ceiling := Look.terrain_height_ceiling()
 	var step := ceiling / float(TERRAIN_PICK_STEPS)
-	var h := ceiling
+	var h_hi := ceiling
+	var w_hi := screen_to_world_px(at, h_hi)
 	for _i in TERRAIN_PICK_STEPS:
-		var world := screen_to_world_px(at, h)
-		var tile := world_to_tile(world)
-		if _ground_h(tile.x, tile.y) >= h:
-			return world
-		h -= step
+		var h_lo := h_hi - step
+		var w_lo := screen_to_world_px(at, h_lo)
+		var met := _ground_met(w_hi, h_hi, w_lo, h_lo)
+		if met.is_finite():
+			return met
+		h_hi = h_lo
+		w_hi = w_lo
 	# Under every hill on the board: the ray reached sea level without meeting anything, so the sea is
 	# what it hit. **Not `0.0`** — the water is a surface at `TERRAIN_H_WATER` like any other, and
 	# answering on the plane below it would put a press on open sea a fifth of a tile off.
 	return screen_to_world_px(at, Look.TERRAIN_H_WATER)
+
+
+## **Where the ray's ground segment from `w_hi` (at height `h_hi`) to `w_lo` (at `h_lo`) first meets
+## the landscape, in world px — or `Vector2.INF` when it clears every 조각 it crosses.** The half of
+## `screen_to_terrain_px` that walks 조각; see its header for what it replaced and why.
+##
+## The 조각 are walked in the order the ray crosses them, and the ray's height is linear along the
+## segment — `screen_to_world_px` is linear in its height — so the height at any point of it is a lerp
+## between the two ends. ⚠ **A 조각 the segment only grazes at a corner (a zero-length crossing) is
+## skipped**: there is no length of ray over it for a top to lie under.
+func _ground_met(w_hi: Vector2, h_hi: float, w_lo: Vector2, h_lo: float) -> Vector2:
+	if battle == null or battle.grid == null:
+		return Vector2.INF
+	var p0 := w_hi / Look.TILE_PX
+	var d := (w_lo - w_hi) / Look.TILE_PX
+	var tx := int(floor(p0.x))
+	var ty := int(floor(p0.y))
+	var step_x := 1 if d.x > 0.0 else -1
+	var step_y := 1 if d.y > 0.0 else -1
+	# How far along the segment (0..1) the next x line and the next y line are crossed, and how much
+	# further each whole 조각 costs. An axis the segment does not move along is never crossed.
+	var t_dx := INF if d.x == 0.0 else absf(1.0 / d.x)
+	var t_dy := INF if d.y == 0.0 else absf(1.0 / d.y)
+	var t_x := INF if d.x == 0.0 else ((float(tx) + (1.0 if d.x > 0.0 else 0.0)) - p0.x) / d.x
+	var t_y := INF if d.y == 0.0 else ((float(ty) + (1.0 if d.y > 0.0 else 0.0)) - p0.y) / d.y
+	var t_in := 0.0
+	while t_in < 1.0:
+		var t_out := minf(minf(t_x, t_y), 1.0)
+		var on_board := tx >= 0 and ty >= 0 and tx < battle.grid.w and ty < battle.grid.h
+		if on_board and t_out > t_in:
+			var top := _ground_h(tx, ty)
+			var h_in := lerpf(h_hi, h_lo, t_in)
+			if top >= h_in:
+				# The ray is already under this 조각's top as it arrives: it met the FACE, and the face is
+				# this 조각's — see `FACE_HIT_INSET` for why the point is pushed off the shared edge.
+				var p_in := p0 + d * t_in
+				var centre := Vector2(float(tx) + 0.5, float(ty) + 0.5)
+				return (p_in + (centre - p_in) * FACE_HIT_INSET) * Look.TILE_PX
+			if top >= lerpf(h_hi, h_lo, t_out):
+				# The top lies between the entry and exit heights: the ray met it. The ray at exactly the
+				# top's height is over this 조각 by construction.
+				return (p0 + d * ((h_hi - top) / (h_hi - h_lo))) * Look.TILE_PX
+		if t_x < t_y:
+			tx += step_x
+			t_x += t_dx
+		else:
+			ty += step_y
+			t_y += t_dy
+		t_in = t_out
+	return Vector2.INF
 
 
 func world_to_tile(world: Vector2) -> Vector2i:
@@ -613,6 +752,73 @@ func world_to_screen_px(world: Vector2, ground_h: float = 0.0) -> Vector2:
 ## The forward of `screen_to_terrain_px`: where a tile's own surface lands on the glass.
 func tile_to_screen_px(tx: int, ty: int) -> Vector2:
 	return world_to_screen_px(Look.tile_point_px(Vector2(tx, ty)), _ground_h(tx, ty))
+
+
+## **Which 검사 is drawn under the screen point `at`, or -1** (2026-09-02, the user: 「몸은 화면에서
+## 잡자」 — *"let us pick the body on the glass"*). The answer is the soldier id whose drawn picture —
+## foot to top, the sprite's own width — contains the press; **when two pictures contain it, the one
+## whose drawn foot is nearest the press**, which is the front-most body and the one the eye picks.
+##
+## ⚠⚠ **THE PRESS USED TO BE ANSWERED ON THE GROUND AND IT MISSED AT TWO OF THE FOUR YAWS** (ticket
+## 03-16, measured 2026-09-02). The shell turned the press into a ground point and `Hand.body_at`
+## measured its distance to `soldier_pos` — but a body is drawn standing UP from its feet, so a press on
+## the chest lands on the ground `h / tan(pitch)` 조각 BEHIND the feet, and screen-up is a world direction
+## that turns with the yaw: at 0° and 270° it cancelled a half-조각 origin error in that conversion, at
+## 90° and 180° it added to it, and chest and head presses picked nobody. At pitch 20° the factor is
+## 2.75 and no radius on the ground reaches a head at any yaw. **Both `Hand.body_at` and the constant
+## it read are deleted**; the question 「which body is under the finger」 lives here now.
+##
+## ⚠⚠ **IT READS THE POOLED SPRITES THE VIEW ITSELF PLACED** — position, scale, texture, visible, the
+## agreed measuring surface in `GLOSSARY.md` — and projects them through `world_to_screen_px`, so the
+## rectangle IS the picture: the pitch, the yaw, the zoom, the seat on the 칸's lattice, the idle sway
+## and the `_pitch_stretch` are all already inside the sprite's own fields. **No new constant** — the
+## picture's size is the pick area, and 03-17 moving a body onto its lattice seat moved the pick with
+## the drawing by construction.
+##
+## ⚠⚠ **THE WIDTH IS THE INK'S AND NOT THE CANVAS'S** (2026-09-02, the bounce). For one round the
+## rectangle was the whole `Sprite3D` quad — texture width times scale — and that quad is 2.2 times the
+## man: a 72-texel frame with 33 texels of 검사 in it, the rest transparent margin. `verify-look` pressed
+## empty ground 8 px beside a body and picked him. **The drawn edges are the first and last opaque
+## column of the texture the sprite wears** (`_ink_cols`, the same scan that sizes the body), placed off
+## the canvas centre in texels — a billboard's own x is the camera's right, so a texel to the right of
+## centre is a texel to the right on the glass. The height stays the canvas's: the frames fill it, and
+## the rows under the feet are already folded into the sprite's position by `_put_body`.
+## ⚠ **Sprite px per 조각 across is read off `_visible_ground_px`**, the one place the zoom becomes a
+## ground span, rather than written as `zoom * TILE_PX` a second time here.
+## ⚠ **The foot and the top go through `world_to_screen_px` at their own heights**, so the vertical
+## extent is the same foreshortening the camera applies to the upright card; the width is the card's
+## world width, which an orthographic camera does not foreshorten.
+## ⚠ Only living, ashore 검사 are in `_sprite_of_soldier`; 짐승 are not pickable, as before.
+func body_at_px(at: Vector2) -> int:
+	var who := -1
+	var best := INF
+	var px_per_tile := Look.VIEWPORT_W_PX / _visible_ground_px().x * Look.TILE_PX
+	for raw_id in _sprite_of_soldier:
+		var k := int(_sprite_of_soldier[raw_id])
+		if k < 0 or k >= _sprites.size():
+			continue
+		var s := _sprites[k]
+		if not s.visible or s.texture == null:
+			continue
+		var xz := Vector2(s.position.x, s.position.z) * Look.TILE_PX
+		var half_tall := float(s.texture.get_height()) * s.scale.y * s.pixel_size * 0.5
+		var foot := world_to_screen_px(xz, s.position.y - half_tall)
+		var top := world_to_screen_px(xz, s.position.y + half_tall)
+		# One texel of this sprite on the glass, and where its ink starts and ends measured from the
+		# canvas centre the sprite is placed by. A picture never scanned spans its whole canvas.
+		var texel_px := s.scale.x * s.pixel_size * px_per_tile
+		var half_w := float(s.texture.get_width()) * 0.5
+		var span: Vector2i = _ink_cols.get(s.texture, Vector2i(0, s.texture.get_width() - 1))
+		var left := foot.x + (float(span.x) - half_w) * texel_px
+		var right := foot.x + (float(span.y) + 1.0 - half_w) * texel_px
+		var drawn := Rect2(left, top.y, right - left, foot.y - top.y)
+		if not drawn.has_point(at):
+			continue
+		var d := at.distance_to(foot)
+		if d < best:
+			best = d
+			who = int(raw_id)
+	return who
 
 
 ## Moves the camera by a SCREEN-space delta (mouse motion) and re-clamps. The ground under the cursor
@@ -916,7 +1122,7 @@ var _keep_roof_known := false
 var _move_lines: Array = []
 
 ## Whose line each entry of `_move_lines` is, in the same order. **Empty is allowed** and means no
-## crowd offset — a line leaving the middle of a 조각 rather than a body's feet.
+## seat — a line leaving the middle of a 조각 rather than a body's feet.
 var _move_ids := PackedInt32Array()
 var _builds: Node3D = null
 var _props: Node3D = null
@@ -1103,8 +1309,8 @@ func set_reach(tiles: PackedInt32Array) -> void:
 ## buffer that has already been committed, and it never reaches the screen.
 func set_move_lines(lines: Array, ids: PackedInt32Array = PackedInt32Array()) -> void:
 	_move_lines = lines
-	# ⚠ **The ids are what let the line leave the FEET.** A body is drawn off its 조각's middle by the
-	# crowd offset, and a line that ignored that started from the middle of the 조각 with nobody on it
+	# ⚠ **The ids are what let the line leave the FEET.** A body at rest is drawn off its 조각's middle
+	# on its seat, and a line that ignored that started from the middle of the 조각 with nobody on it
 	# — 2026-08-31, the user: 「지금은 블록 가운데서 오는듯한데?」.
 	_move_ids = ids
 
@@ -1871,16 +2077,22 @@ func _pitch_stretch() -> float:
 ## height of the tile NEXT to it**, which on the plateau's edge is the floor a storey down: the body
 ## sank into the ground. ⚠ The y axis was worse still — `TILE_H_PX` need not equal `TILE_PX`, so the
 ## two axes were off by different amounts.
-## ⇒ **The sim's own tile-unit position goes in, untouched.** The picture is offset afterwards.
-## ⚠⚠ **`crowd_px` IS THE THIRD POINT AND IT IS NOT A FOURTH IDEA OF WHERE THE BODY IS.** A 조각
+## ⇒ **A tile-unit position goes in, untouched.** The picture is offset afterwards.
+## ⚠⚠ **THERE WAS A THIRD POINT HERE, `crowd_px`, AND IT IS GONE** (2026-09-02, ticket 03-17). A 조각
 ## admits `Rules.TILE_CAPACITY` bodies since 2026-08-30 and the sim walks every one of them to the same
-## 조각 centre; this is how far off that centre THIS body is drawn. **The shadow takes it and the idle
-## sway does not** — a crowd offset is where the body is standing, so the disc goes with it, while the
-## sway is the body moving over a disc that stays put.
+## 조각 centre; the ring that spread them is replaced by the seat, and the seat is already folded into
+## `at_tiles` by the caller. **The rule the third point carried still holds**: where the body STANDS
+## takes the shadow with it and the idle sway does not — the sway is the body moving over a disc that
+## stays put.
 ## ⚠⚠ **IT TOOK A `radius` AND IT TAKES THE `type_id` IT WAS DERIVED FROM** (2026-08-30). The radius is
 ## one read of the row; the row also says how big this species is drawn, and passing the derived number
 ## while the caller kept the row is how the two would have been read in two places.
-func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id: int, colour: Color,
+## ⚠ **`at_tiles` IS THE DRAWN STAND POINT SINCE 2026-09-02** (ticket 03-17) — the seat on the 칸's
+## lattice for a body at rest, the sim's point for one walking — and not the sim's position outright:
+## the seat is a still point a body stands on, so the ground and the shadow belong under it, where the
+## sway (which moves every frame) still does not. **The `crowd_px` parameter stood between these two and
+## is deleted** with the per-조각 ring; the shadow needs no second offset now.
+func _put_body(centre_px: Vector2, at_tiles: Vector2, type_id: int, colour: Color,
 		squash: Vector2, tex: Texture2D, outlined: bool = false) -> float:
 	var radius := Look.body_radius_of(type_id)
 	# ⚠⚠ **THE ROW'S INK FRACTION, AND DIVIDING BY IT IS THE WHOLE POINT** (2026-08-31).
@@ -1907,7 +2119,7 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 	# 33x40 where a wolf's is 74x40, so at one drawn WIDTH he stands far taller and buries the disc.
 	# ⚠⚠ **`wide * frac` AND NOT `wide`** (2026-08-31) — the disc is a fraction of the ANIMAL,
 	# so a canvas widened by a death pose no longer widens the shadow. See `Look.BODY_SHADOW_OF_INK`.
-	_put_ground_shadow(Look.tile_point_px(at_tiles) + crowd_px,
+	_put_ground_shadow(Look.tile_point_px(at_tiles),
 		wide * frac * 0.5 * Look.BODY_SHADOW_OF_INK)
 	var s := _sprite()
 	var pic: Texture2D = tex if tex != null else _tex_body
@@ -1946,7 +2158,7 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 	# there is one place a body's colour is decided and `net_shell` reads the same answer this does.
 	_put_outline(s)
 	# ⚠⚠ **THE RIM IS PLACED FROM THE BODY'S FINISHED POSITION AND SCALE, NOT RE-DERIVED.** Every
-	# correction above it — the foot height, the frame's empty rows, the gait squash, the crowd offset
+	# correction above it — the foot height, the frame's empty rows, the gait squash, the seat
 	# — would otherwise have to be repeated, and a rim that repeated four of five would sit a little
 	# off its own body in exactly the cases that were hardest to get right.
 	if outlined:
@@ -1972,6 +2184,9 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 
 ## Every body, every frame. **This is what pass 6, 7 and 8 of the old `_draw` were**, minus the marks
 ## that are not ported yet.
+## ⚠ **It reads the glide and never moves it** — `_advance_seat_glide` ran before the 이동선 was laid,
+## and a body with no entry (the nets that call this straight, before any frame) is drawn at its stand
+## point, which is what the first frame would have written.
 func _paint_bodies() -> void:
 	_sprites_used = 0
 	# ⚠ **Opened with the body pool and closed by the same `_hide_unused`.** A rim pool opened
@@ -1993,30 +2208,38 @@ func _paint_bodies() -> void:
 	for raw_id in battle.living_enemy_ids():
 		var e := int(raw_id)
 		var ety := int(battle.enemy_type[e])
-		_put_walker("e%d" % e, ety, battle.enemy_pos[e], true,
-			_crowd_slot_of(battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e), false,
-			_hp_frac(float(battle.enemy_hp[e]), Rules.hp_of(ety)))
+		_put_walker("e%d" % e, ety,
+			_drawn_of("e%d" % e, battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e, _resting_enemy(e)),
+			true, false, _hp_frac(float(battle.enemy_hp[e]), Rules.hp_of(ety)))
 
+	# ⚠ **Emptied here and not on the empty path above**, so a frame with no island leaves the last
+	# frame's map standing — and the last frame's sprites are hidden, which `body_at_px` reads.
+	_sprite_of_soldier = {}
 	for raw_id in battle.ashore_ids():
 		var i := int(raw_id)
 		# ⚠ **`army.max_hp_of` and not `Rules.hp_of` off the row.** There is no `hp` column in the
 		# army since the revival, and `max_hp_of` is the one answer to 「what is this body healed to」.
-		_put_walker("s%d" % i, int(army.type_id[i]), battle.soldier_pos[i], false,
-			_crowd_slot_of(battle.soldier_pos[i], i), _picked.has(i),
-			_hp_frac(float(battle.soldier_hp[i]), army.max_hp_of(i)))
+		_put_walker("s%d" % i, int(army.type_id[i]),
+			_drawn_of("s%d" % i, battle.soldier_pos[i], i, _resting_soldier(i)),
+			false, _picked.has(i), _hp_frac(float(battle.soldier_hp[i]), army.max_hp_of(i)))
+		# The sprite `_put_walker` just took is this body's — see `_sprite_of_soldier` for why the
+		# index is read here and nowhere else.
+		_sprite_of_soldier[i] = _sprites_used - 1
 
 	# ⚠⚠ **THE ONE PLACE A BODY THE SIM HAS ALREADY DROPPED IS STILL DRAWN** (2026-08-31). Both lists
 	# above hold the living only — `living_enemy_ids`'s own header says a corpse must not be left on
 	# screen — and that is still true: **what is drawn here is not a corpse, it is a body in the
 	# middle of falling**, and it stops the frame its death strip runs out.
 	# ⚠ **It reads `last` and never the sim's position**, which is OFFMAP for a dead beast.
-	# ⚠ **No crowd slot.** The 조각 was released the moment the body died, so asking for a slot would
-	# hand a falling body the seat a living one has already taken and stand the two in one place.
+	# ⚠ **It falls where it was DRAWN, not where the sim had it.** The 조각 and the seat were released
+	# the moment the body died, so `_stand_point` has nothing to say; the glide entry still holds the
+	# seat it was standing on, and a fall that popped back onto the 조각 centre first would read as the
+	# body stepping before it drops. `last` is the fallback for a body that died on its first frame.
 	for key: String in _body:
 		var b: Dictionary = _body[key]
 		if float(b["dying"]) <= 0.0:
 			continue
-		_put_walker(key, int(b["type"]), b["last"], key.begins_with("e"), 0)
+		_put_walker(key, int(b["type"]), _seat_glide.get(key, b["last"]), key.begins_with("e"))
 
 	# ⚠ **Inside this function and not beside it.** The riders come out of the same `Sprite3D` pool the
 	# bodies do, and that pool is opened by the `_sprites_used = 0` above and closed by the
@@ -2243,12 +2466,15 @@ func _clock_of(b: Dictionary, anim: int) -> float:
 ## ⚠⚠ **`hp_frac` DEFAULTS TO 1.0, WHICH IS 「no bar」, AND THE FALLING BODIES RELY ON IT** (2026-09-01).
 ## A body in the middle of its death strip is already at 0 hp, and a bar drawn from that number would
 ## be an empty trough riding a corpse down — the one thing 「깎인 것만 뜬다」 was chosen to avoid.
-func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: int,
+##
+## ⚠⚠ **`drawn` IS WHERE THE BODY IS DRAWN THIS FRAME, ALREADY GLIDED** (2026-09-02, ticket 03-17) —
+## `_drawn_of`'s answer: the seat on the 칸's lattice for a body at rest, the sim's own point for one
+## walking, and the point in between while it slides. **This function moves nothing**; the glide stepped
+## in `_advance_seat_glide` before the 이동선 was laid, so the line under the feet and the feet agree.
+## ⚠ **The `slot` parameter stood here and it is deleted** with the per-조각 ring it indexed.
+func _put_walker(key: String, type_id: int, drawn: Vector2, is_enemy: bool,
 		outlined: bool = false, hp_frac: float = 1.0) -> void:
-	# ⚠ **The crowd offset is kept apart from the sway** and handed down separately — see `_put_body`,
-	# where the shadow takes one and not the other.
-	var crowd := Look.crowd_offset_px(slot, Rules.TILE_CAPACITY)
-	var centre := Look.tile_point_px(at) + crowd + _body_offset_of(key)
+	var centre := Look.tile_point_px(drawn) + _body_offset_of(key)
 	# A body faces the way it last walked. `_facing_of` returns RIGHT when it has never moved, so a
 	# body standing still faces right rather than flipping on a zero vector.
 	var tex := _body_tex(key, type_id, _facing_of(key))
@@ -2261,13 +2487,13 @@ func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: i
 	var swing := _swing_squash(key)
 	# ⚠ **`outlined` rides along untouched** — whether this body is the one in hand is the shell's
 	# answer, not a thing the view re-derives.
-	var top := _put_body(centre, at, crowd, type_id, lit,
+	var top := _put_body(centre, drawn, type_id, lit,
 		Vector2(gait.x * swing.x, gait.y * swing.y), tex, outlined)
 	# ⚠ **Here and not in `_paint_bodies`**, because this is the one line where the body's drawn top is
 	# in hand. `_put_body`'s own note carries what re-deriving it off the radius cost.
 	# ⚠ **`centre` and not the sim's 조각**: the bar hangs over the picture, so it takes the sway, the
-	# lunge and the crowd offset the picture took — a bar left on the 조각 centre would drift off the
-	# head of a body that is leaning into a blow.
+	# lunge and the seat the picture took — a bar left on the 조각 centre would drift off the head of a
+	# body that is leaning into a blow.
 	_put_bar(Vector3(centre.x / Look.TILE_PX, top + Look.HP_BAR_LIFT_PX / Look.TILE_PX,
 		centre.y / Look.TILE_PX), hp_frac)
 
@@ -2279,23 +2505,112 @@ func _flash_of(key: String) -> float:
 	return float((_body[key] as Dictionary)["flash"]) / Look.HIT_FLASH_SEC
 
 
-## **Which slot of its own 조각 this body holds, or 0 when the sim does not say.**
+## **Steps every body's drawn point one frame toward where it is to be drawn** — the one writer of
+## `_seat_glide`, run once per frame before anything is painted. Rebuilt whole: every living body gets
+## an entry, a body still falling keeps the one it had, and anything else is gone.
 ##
-## ⚠⚠ **THE SIM OWNS THE SLOT AND THIS ONLY READS IT.** `Grid` hands the lowest free slot to whoever
-## claims a 조각, so the number is already deterministic and already the same for everyone looking; a
-## slot invented here — off the body's index, say — would put two bodies in one place the moment one of
-## them died.
+## ⚠ **A body with no entry is drawn AT its stand point** — that is the first frame in the pool, and
+## why bodies stood by hand in a net read their seat at once. ⚠ **Walking, the entry IS the sim's point.**
+## ⚠ **At rest the step is `Look.SEAT_GLIDE_TILES_PER_S` a second, and only across a 칸's width or
+## less.** The glide is the hand-off from the last walking point to the seat — under a 조각 to the far
+## seat, under two between two seats of one 칸 re-faced — and a target further off than a whole 칸 was
+## not walked to: the sim placed the body there, as `net_pick` does by writing `soldier_pos`, and a body
+## that slid ten 조각 across the island for that would be the screen doing a thing the sim did not.
+func _advance_seat_glide(delta: float) -> void:
+	var next := {}
+	if battle != null and army != null and battle.grid != null:
+		for raw_id in battle.living_enemy_ids():
+			var e := int(raw_id)
+			var key := "e%d" % e
+			next[key] = _glided(key, battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e,
+				_resting_enemy(e), delta)
+		for raw_id in battle.ashore_ids():
+			var i := int(raw_id)
+			var key := "s%d" % i
+			next[key] = _glided(key, battle.soldier_pos[i], i, _resting_soldier(i), delta)
+		for key: String in _body:
+			if float((_body[key] as Dictionary)["dying"]) > 0.0 and not next.has(key):
+				next[key] = _seat_glide.get(key, (_body[key] as Dictionary)["last"])
+	_seat_glide = next
+
+
+## One body's drawn point for this frame, from last frame's entry and where it is to stand now.
+func _glided(key: String, at: Vector2, unit_id: int, resting: bool, delta: float) -> Vector2:
+	var stand := _stand_point(at, unit_id, resting)
+	if not resting or not _seat_glide.has(key):
+		return stand
+	var from: Vector2 = _seat_glide[key]
+	if from.distance_to(stand) > float(Rules.BLOCK_TILES):
+		return stand
+	return from.move_toward(stand, Look.SEAT_GLIDE_TILES_PER_S * delta)
+
+
+## **Where a body is drawn this frame** — its glide entry, or its stand point when it has none (a
+## `_paint_bodies` called straight by a net before any frame has stepped the glide).
+func _drawn_of(key: String, at: Vector2, unit_id: int, resting: bool) -> Vector2:
+	if _seat_glide.has(key):
+		return _seat_glide[key]
+	return _stand_point(at, unit_id, resting)
+
+
+## **Where a body is to be drawn, in `soldier_pos` units** — its seat on the 칸's lattice when it is at
+## rest, the sim's own point otherwise. Ticket 03-17; the glide (`_advance_seat_glide`) is its only
+## reader, and the body, the shadow under it, a falling body and the 이동선's first point all read the
+## glide.
 ##
-## ⚠ **0 on a refusal, and 0 is the 조각 centre**, which is where a body was drawn before crowds
-## existed. A body mid-step holds the 조각 it is walking into as well as the one it stands on; the
-## rounded position is which of the two it is nearer, and that is the one it is drawn in.
-func _crowd_slot_of(at: Vector2, unit_id: int) -> int:
-	if battle == null or battle.grid == null or battle.grid.w <= 0:
-		return 0
+## ⚠⚠ **`_crowd_slot_of` STOOD HERE AND IT IS DELETED** (2026-09-02). It read `Grid.slot_of` — a body's
+## place inside ONE 조각 — and `Look.crowd_offset_px` rang the three of them around that 조각's centre;
+## the user rejected the picture by eye (「the characters ought to fill in starting from the centre」).
+## **The sentence it stood on still holds**: the sim owns the place and this only reads it. `Grid.seat_of`
+## hands the seat to whoever holds a 조각 of the 칸, so two bodies cannot be handed one point the moment
+## a third dies — a seat invented here would.
+##
+## ⚠⚠ **AT REST IT IS THE 칸's MIDDLE PLUS THE SEAT, AND BOTH HALVES ARE SIM FACTS.** The middle is
+## `_block_middle_tiles` — asked of the grid, never `+ 0.5` — and the seat is `Look.seat_point_tiles`
+## over `Grid.seat_of` and `Battle.block_face` (the order's direction; a 칸 with none faces `(0, 1)`).
+## `Look` holds the lattice's geometry because nothing in `src/sim/` reads it.
+## ⚠ **A resting body with NO seat is drawn on its 조각 centre**, which is `at` itself. That is a body
+## stood by writing `soldier_pos` without `Grid.hold` — `net_pick` does it — and drawing it at the
+## middle would put a body somewhere the reservation table says nobody is.
+## ⚠ **Walking it is `at`, exactly**, so the glide never lags a walk; `_resting_soldier` and
+## `_resting_enemy` are the two rest tests and the caller passes the answer in.
+func _stand_point(at: Vector2, unit_id: int, resting: bool) -> Vector2:
+	if not resting or battle == null or battle.grid == null or battle.grid.w <= 0:
+		return at
 	var g := battle.grid
 	var tx := clampi(int(round(at.x)), 0, g.w - 1)
 	var ty := clampi(int(round(at.y)), 0, g.h - 1)
-	return maxi(g.slot_of(ty * g.w + tx, unit_id), 0)
+	var block := g.block_of(ty * g.w + tx)
+	var seat := g.seat_of(block, unit_id)
+	if seat < 0:
+		return at
+	var face: Vector2 = battle.block_face.get(block, Vector2(0.0, 1.0))
+	return _block_middle_tiles(Vector2(float(tx), float(ty))) + Look.seat_point_tiles(seat, face)
+
+
+## **Whether 검사 `i` is at rest**: no order out, and standing exactly on a 조각 centre. A body one
+## sub-step into a walk is off the centre and is drawn where it is.
+## ⚠ **Exactly, under `Rules.EPS`** — the same test `_phase_orders` uses for 「arrived」, so the view and
+## the sim agree about the frame a walk ends.
+func _resting_soldier(i: int) -> bool:
+	if battle == null or int(battle.soldier_order[i]) >= 0:
+		return false
+	return _on_a_piece_centre(battle.soldier_pos[i])
+
+
+## **Whether 짐승 `e` is at rest**: standing exactly on a 조각 centre. **A wolf has no order column, so
+## its position is the whole test** (the plan's amendment 3) — a wolf blocked in a queue at a neck reads
+## as at rest, glides to its seat, and glides back onto its path when the queue moves. That shuffle is
+## accepted and named: a queue of wolves spreading across the 칸 is the intended look, and a wolf that
+## stopped to bite is at rest by the same test.
+func _resting_enemy(e: int) -> bool:
+	if battle == null:
+		return false
+	return _on_a_piece_centre(battle.enemy_pos[e])
+
+
+func _on_a_piece_centre(p: Vector2) -> bool:
+	return p.distance_to(p.round()) <= Rules.EPS
 
 
 ## ⚠ **Hidden, never freed.** A pool that shrinks is a pool that reallocates on the next busy frame,
@@ -2554,28 +2869,58 @@ static func _measure_body_feet(pool: Array, strips: Array) -> Dictionary:
 ## ⚠ **The standing pictures only.** A strip is exactly the thing that reaches wider than the animal,
 ## so measuring the frames would let a raised arm shrink the whole body for as long as it was raised.
 ## ⚠ **1.0 for a row with no picture**, which draws the plain rounded shape and needs no division.
-static func _measure_body_ink(pool: Array) -> Array:
+## ⚠ **It reads `cols` and scans nothing itself since 2026-09-02** — the columns are `_measure_ink_cols`'s,
+## the same ones `body_at_px` picks by, so the width a body is drawn at and the width it is pressed at
+## cannot come from two scans that disagree.
+static func _measure_body_ink(pool: Array, cols: Dictionary) -> Array:
 	var out := []
 	for raw_pics in pool:
 		var widest := 0.0
 		for pic: Texture2D in (raw_pics as Array):
-			if pic == null:
+			if pic == null or not cols.has(pic):
 				continue
-			var img := pic.get_image()
-			if img == null:
-				continue
-			var lo := img.get_width()
-			var hi := -1
-			for x in img.get_width():
-				for y in img.get_height():
-					if img.get_pixel(x, y).a > 0.0:
-						lo = mini(lo, x)
-						hi = maxi(hi, x)
-						break
-			if hi >= lo:
-				widest = maxf(widest, float(hi - lo + 1) / float(img.get_width()))
+			var span: Vector2i = cols[pic]
+			if span.y >= span.x:
+				widest = maxf(widest, float(span.y - span.x + 1) / float(pic.get_width()))
 		out.append(widest if widest > 0.0 else 1.0)
 	return out
+
+
+## **Every body picture's opaque columns, `(lo, hi)` inclusive, keyed by the picture** — the standing
+## pictures and every strip frame, for the reason `_measure_body_feet` walks the strips: a frame that was
+## never measured would be picked by its whole canvas while the standing picture beside it is picked by
+## the man, and the pick area would jump the moment he started walking.
+static func _measure_ink_cols(pool: Array, strips: Array) -> Dictionary:
+	var out := {}
+	for raw_pics in pool:
+		for pic: Texture2D in (raw_pics as Array):
+			_ink_one(out, pic)
+	for raw_type in strips:
+		for raw_facing in (raw_type as Array):
+			for raw_anim in (raw_facing as Array):
+				for pic: Texture2D in (raw_anim as Array):
+					_ink_one(out, pic)
+	return out
+
+
+## One picture's opaque columns, written into `out` and skipped when it is already there. **A picture
+## with no opaque pixel at all spans its whole canvas** — there is nothing narrower to point at.
+static func _ink_one(out: Dictionary, pic: Texture2D) -> void:
+	if pic == null or out.has(pic):
+		return
+	var img := pic.get_image()
+	if img == null:
+		return
+	var w := img.get_width()
+	var lo := w
+	var hi := -1
+	for x in w:
+		for y in img.get_height():
+			if img.get_pixel(x, y).a > 0.0:
+				lo = mini(lo, x)
+				hi = maxi(hi, x)
+				break
+	out[pic] = Vector2i(lo, hi) if hi >= lo else Vector2i(0, w - 1)
 
 
 ## Row `type_id`'s ink fraction, **and never 0** — it is a divisor.
@@ -3765,12 +4110,18 @@ func _paint_move_lines() -> void:
 		var stop := _block_middle_tiles(pts[pts.size() - 1])
 		if not stops.has(stop):
 			stops.append(stop)
-		# ⚠ **Only the FIRST point wears the crowd offset.** The rest are 조각 middles and should be —
-		# the route is a list of 조각 and the body walks through their centres.
+		# ⚠ **Only the FIRST point is moved onto the body's DRAWN point.** The rest are 조각 middles and
+		# should be — the route is a list of 조각 and the body walks through their centres. A body at
+		# rest is drawn on its seat, up to 0.94 조각 from the 조각 centre `Hand.route_points` hands back,
+		# and a line leaving the centre would leave from beside nobody's feet.
+		# ⚠⚠ **THE GLIDE ENTRY AND NOT THE STAND POINT** (the 03-17 bounce): the stand point is where
+		# the body is GOING, and for the half second after it arrives the two differ by the whole seat
+		# gap — verify measured the line leading the sprite by up to 1.65 조각. `_advance_seat_glide`
+		# has already stepped this frame, so this is the very point the body is about to be drawn at.
 		var from := Look.tile_point_px(pts[0])
 		if i < _move_ids.size():
-			from += Look.crowd_offset_px(_crowd_slot_of(pts[0], int(_move_ids[i])),
-				Rules.TILE_CAPACITY)
+			var who := int(_move_ids[i])
+			from = Look.tile_point_px(_drawn_of("s%d" % who, pts[0], who, _resting_soldier(who)))
 		for k in range(pts.size() - 1):
 			# ⚠ **The last leg runs to the 칸's middle**, which is 0.71 조각 from the seat it replaces
 			# and always inside that same 칸. **Moving the dot alone was tried on paper and dropped**:

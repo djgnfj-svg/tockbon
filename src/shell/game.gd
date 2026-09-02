@@ -942,7 +942,14 @@ func _press_the_island(at: Vector2) -> bool:
 		# again to try the same order twice.
 		return false
 	# **An empty hand picks whoever was pressed**, and that is the only thing an empty hand does.
-	var who := hand.body_at(battle, _point_at(at), Look.PICK_BODY_TILES)
+	# ⚠⚠ **THE BODY IS FOUND ON THE GLASS AND NOT ON THE GROUND** (2026-09-02, the user: 「몸은 화면에서
+	# 잡자」 — *"let us pick the body on the glass"*, ticket 03-16). This line read
+	# `hand.body_at(battle, _point_at(at), Look.PICK_BODY_TILES)` — the press turned into a ground point
+	# and measured against `soldier_pos` — and it missed every chest and head press at yaw 90 and 180,
+	# because a body stands UP from its feet and screen-up turns with the board. **The view knows where it
+	# drew each body and nothing else does**, so it answers; the pick itself is still `Hand.pick`, a sim
+	# fact a net drives with `.new()`.
+	var who := field_view.body_at_px(at)
 	if who >= 0:
 		var picked := hand.pick(battle, who)
 		_tell_the_view()
@@ -987,11 +994,14 @@ func _show_route(at: Vector2) -> void:
 	field_view.set_move_lines(hand.route_points(battle, block), hand.ids)
 
 
-## **A screen press in 조각 units, fractions and all.** ⚠ **Not `_tile_at` rounded** — `Hand.body_at`
-## measures a real distance to a body standing off the middle of its 조각, and a rounded point would
-## throw away exactly the part that decides whether the press hit him.
-func _point_at(at: Vector2) -> Vector2:
-	return field_view.screen_to_terrain_px(at) / Look.TILE_PX
+## ⚠⚠ **`_point_at` STOOD HERE AND IT IS DELETED** (2026-09-02, ticket 03-16). It answered a screen
+## press in 조각 units with the fractions kept — `screen_to_terrain_px(at) / Look.TILE_PX` — for
+## `Hand.body_at` to measure against `soldier_pos`. **Its one caller is gone**: the body is picked on
+## the glass by `FieldView.body_at_px`. **What it cost is worth keeping**: in its unit a 조각's centre
+## is `(tx + 0.5, ty + 0.5)` while `soldier_pos` puts the centre ON the integer (`Look.tile_point_px`'s
+## header is the convention), so every press it answered was already 0.71 조각 from a body standing
+## dead under it. Anything that ever converts a ground point to `soldier_pos` units again reads that
+## header first.
 
 
 ## A screen press converted to the tile it landed on, or -1 off the grid — the one function every

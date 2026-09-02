@@ -29,7 +29,13 @@ static func seats(c: Vector2, _face: Vector2) -> PackedVector2Array:
 	return out
 
 
-## The game's own crowd offset, in 조각 rather than in px. ⚠ **Read off `Look` and not copied** — a
-## control that drew its own ring would be a picture of this file instead of of the game.
+## The ring the game drew on 2026-08-31, in 조각. ⚠⚠ **IT READ `Look.crowd_offset_px` AND THAT FUNCTION
+## IS DELETED** (2026-09-02, ticket 03-17 — the user chose 06 off this very sheet and the ring went with
+## it). This is now the ONLY place the ring lives, kept so the sheet's control stays the picture it was
+## photographed as: slot 0 the 조각 centre, slots 1 and 2 on a ring of 0.30 조각 around it.
 static func _ring(slot: int) -> Vector2:
-	return Look.crowd_offset_px(slot, Rules.TILE_CAPACITY) / Look.TILE_PX
+	if slot <= 0:
+		return Vector2.ZERO
+	var around := maxi(Rules.TILE_CAPACITY - 1, 1)
+	var a := TAU * float(slot - 1) / float(around)
+	return Vector2(cos(a), sin(a)) * 0.30

@@ -1,0 +1,147 @@
+extends SceneTree
+## Ticket 03-16, the body pick half. Four soldiers are stood on open level-0 ground far from the
+## second storey (probe-side write of `soldier_pos`, nothing in src/ is touched). At each yaw every
+## drawn body is pressed at its drawn FEET, drawn CENTRE and drawn HEAD (engine unproject of the
+## pooled Sprite3D). Reported: what `Hand.body_at` answers through the shell's `_point_at`, the
+## distance `_point_at` hands it, and — probe-side only — what it would answer with the half-tile
+## taken back out (`_point_at(at) - (0.5, 0.5)`).
+
+
+func _initialize() -> void:
+	await _run()
+	quit(0)
+
+
+func _run() -> void:
+	var game := Game.new()
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	ev.position = Look.title_slot_hit_rect_px(0).get_center()
+	game._unhandled_input(ev)
+	await process_frame
+	var fv: FieldView = game.field_view
+	var g: Grid = game.battle.grid
+	var b: Battle = game.battle
+	game.set_process(false)
+	fv.set_process(true)
+
+	# open ground: level-0 passable tiles at least 3 tiles from any level-2 tile, one body per tile
+	var spots := []
+	for ty in g.h:
+		for tx in g.w:
+			var t := g.tile_index(tx, ty)
+			if g.passable[t] != 1 or g.level_of(t) != 0:
+				continue
+			var near_tall := false
+			for dy in range(-3, 4):
+				for dx in range(-3, 4):
+					var nx := tx + dx
+					var ny := ty + dy
+					if nx < 0 or ny < 0 or nx >= g.w or ny >= g.h:
+						continue
+					if g.level_of(g.tile_index(nx, ny)) >= 1:
+						near_tall = true
+			if not near_tall:
+				spots.append(Vector2(tx, ty))
+	var ids: Array = b.ashore_ids()
+	print("open level-0 spots %d, soldiers ashore %d" % [spots.size(), ids.size()])
+	var k := 0
+	for raw in ids:
+		var i := int(raw)
+		# spread them: every 7th spot
+		b.soldier_pos[i] = spots[(k * 7) % spots.size()]
+		k += 1
+	await process_frame
+	await process_frame
+	print("bodies now at: %s" % [ids.map(func(i): return b.soldier_pos[int(i)])])
+	print("pick radius %.2f tile; soldier_pos is tile-centre units (integer = centre); _point_at is world px / TILE_PX (centre = n + 0.5)" % Look.PICK_BODY_TILES)
+
+	for yaw_target in [0.0, 90.0, 180.0, 270.0]:
+		await _turn_to(game, fv, yaw_target)
+		_measure(game, fv, b, int(round(fv.cam_yaw_deg)))
+
+	root.remove_child(game)
+	game.free()
+
+
+func _turn_to(game: Game, fv: FieldView, yaw_target: float) -> void:
+	var guard := 0
+	while absf(fmod(fv.cam_yaw_deg - yaw_target + 720.0, 360.0)) > 0.001 and guard < 8:
+		var key := InputEventKey.new()
+		key.pressed = true
+		key.keycode = KEY_E
+		game._unhandled_input(key)
+		var n := 0
+		while (fv._yaw_remaining != 0.0 or n == 0) and n < 120:
+			await process_frame
+			n += 1
+		guard += 1
+	await process_frame
+	await process_frame
+
+
+func _measure(game: Game, fv: FieldView, b: Battle, yaw: int) -> void:
+	var rows := []
+	var tally := {"feet": [0, 0, 0], "centre": [0, 0, 0], "head": [0, 0, 0]}   # [picked right, picked other, nobody]
+	var tally_fixed := {"feet": [0, 0, 0], "centre": [0, 0, 0], "head": [0, 0, 0]}
+	for k in fv._sprites_used:
+		var s: Sprite3D = fv._sprites[k]
+		if not s.visible or s.texture == null:
+			continue
+		var foot_xz := Vector2(s.position.x, s.position.z)
+		var who := -1
+		var best := 0.6
+		for raw in b.ashore_ids():
+			var i := int(raw)
+			var p: Vector2 = (b.soldier_pos[i] as Vector2) + Vector2(0.5, 0.5)
+			var d := p.distance_to(foot_xz)
+			if d < best:
+				best = d
+				who = i
+		if who < 0:
+			continue
+		var tall := float(s.texture.get_height()) * s.scale.y / Look.TILE_PX
+		var points := {
+			"feet": s.position - Vector3(0.0, tall * 0.5 - 0.02, 0.0),
+			"centre": s.position,
+			"head": s.position + Vector3(0.0, tall * 0.5 - 0.05, 0.0),
+		}
+		for name in ["feet", "centre", "head"]:
+			var scr: Vector2 = fv._cam.unproject_position(points[name])
+			var pt: Vector2 = game._point_at(scr)
+			var d_shell: float = (b.soldier_pos[who] as Vector2).distance_to(pt)
+			var d_fixed: float = (b.soldier_pos[who] as Vector2).distance_to(pt - Vector2(0.5, 0.5))
+			game.hand.clear()
+			game._tell_the_view()
+			_press_release(game, scr)
+			var got := int(game.hand.ids[0]) if not game.hand.is_empty() else -1
+			var got_fixed: int = game.hand.body_at(b, pt - Vector2(0.5, 0.5), Look.PICK_BODY_TILES)
+			var slot := 0 if got == who else (1 if got >= 0 else 2)
+			var slot_f := 0 if got_fixed == who else (1 if got_fixed >= 0 else 2)
+			tally[name][slot] += 1
+			tally_fixed[name][slot_f] += 1
+			rows.append("   yaw %3d body %d at %s press %-6s: _point_at=%s  |Δ| to body %.2f → %s   (half-tile removed: |Δ| %.2f → %s)" % [
+				yaw, who, b.soldier_pos[who], name, pt, d_shell,
+				("body %d" % got) if got >= 0 else "NOBODY", d_fixed,
+				("body %d" % got_fixed) if got_fixed >= 0 else "NOBODY"])
+	for r in rows:
+		print(r)
+	print("C5 yaw %3d SUMMARY [picked that body / picked another / NOBODY]: feet %s centre %s head %s   || with the half tile removed: feet %s centre %s head %s" % [
+		yaw, tally["feet"], tally["centre"], tally["head"], tally_fixed["feet"], tally_fixed["centre"], tally_fixed["head"]])
+
+
+func _press_release(game: Game, at: Vector2) -> void:
+	var down := InputEventMouseButton.new()
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.pressed = true
+	down.position = at
+	game._unhandled_input(down)
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.pressed = false
+	up.position = at
+	game._unhandled_input(up)

@@ -1,0 +1,438 @@
+extends SceneTree
+## Probe for ticket 03-16: does the press round trip miss after the board is turned?
+## Nothing here edits src/. Output only.
+
+const YAWS := [0.0, 90.0, 180.0, 270.0]
+const FRACS := [0.1, 0.3, 0.5, 0.7, 0.9]
+
+
+func _initialize() -> void:
+	await _run()
+	quit(0)
+
+
+func _run() -> void:
+	print("=== PART A: pure seam, FieldView.new(), real island (Islands.load_into) ===")
+	var fv := FieldView.new()
+	var g := Grid.new()
+	Islands.load_into(g)
+	var army := Army.new()
+	var b := Battle.new()
+	b.setup(g, army, [])
+	fv.setup(b, army, Islands.rows())
+	print("grid %dx%d  survey zoom %.4f  pitch %.1f  ceiling %.3f  step %.4f (world px/step along down = %.2f)" % [
+		g.w, g.h, fv.zoom, fv.cam_pitch_deg, Look.terrain_height_ceiling(),
+		Look.terrain_height_ceiling() / FieldView.TERRAIN_PICK_STEPS,
+		Look.terrain_height_ceiling() / FieldView.TERRAIN_PICK_STEPS * Look.TILE_PX / tan(deg_to_rad(fv.cam_pitch_deg))])
+	var levels := {}
+	for t in g.w * g.h:
+		if g.water[t] == 0:
+			levels[g.level_of(t)] = levels.get(g.level_of(t), 0) + 1
+	var hs := ""
+	for lv in levels.keys():
+		hs += "L%d=%.3f " % [lv, Islands.ground_h(lv)]
+	print("land tiles by level: %s   heights: %s" % [levels, hs])
+
+	# A0 — is screen_to_world_px the exact algebraic inverse of world_to_screen_px at fixed h?
+	for yaw: float in YAWS:
+		fv.cam_yaw_deg = yaw
+		fv._clamp_cam()
+		var worst := 0.0
+		for i in 400:
+			var at := Vector2(randf() * Look.VIEWPORT_W_PX, randf() * Look.VIEWPORT_H_PX)
+			var h := randf() * 2.0
+			var back := fv.world_to_screen_px(fv.screen_to_world_px(at, h), h)
+			worst = maxf(worst, back.distance_to(at))
+		print("A0 yaw %3d: fixed-h forward∘inverse worst error %.6f screen px" % [int(yaw), worst])
+
+	for zoom_name in ["survey", "1.0", "ZOOM_MAX"]:
+		var zoom := fv.zoom
+		if zoom_name == "1.0":
+			zoom = 1.0
+		elif zoom_name == "ZOOM_MAX":
+			zoom = Look.ZOOM_MAX
+		for yaw: float in YAWS:
+			fv.zoom = zoom
+			fv.cam_yaw_deg = yaw
+			# centre on the island like setup does
+			var map_px := Vector2(float(g.w), float(g.h)) * Look.TILE_PX
+			fv.cam_px = map_px * 0.5 - fv._visible_ground_px() * 0.5
+			fv._clamp_cam()
+			_sweep_pure(fv, g, "zoom=%s yaw=%d" % [zoom_name, int(yaw)])
+
+	# A2 — which side of the tile do sub-tile misses cluster on? (zoom 1.0, per yaw)
+	print("\n--- A2: sub-tile miss geometry at zoom 1.0 ---")
+	for yaw: float in YAWS:
+		fv.zoom = 1.0
+		fv.cam_yaw_deg = yaw
+		var map_px := Vector2(float(g.w), float(g.h)) * Look.TILE_PX
+		fv.cam_px = map_px * 0.5 - fv._visible_ground_px() * 0.5
+		fv._clamp_cam()
+		_sub_tile_geometry(fv, g, yaw)
+
+	fv.free()
+
+	print("\n=== PART D: _clamp_cam extents per yaw (zoom 1.0) — the pan's reach ===")
+	_clamp_extents(g)
+
+	print("\n=== PART C: shell seam — real Game in the tree, engine unproject as the oracle ===")
+	await _shell_part()
+
+
+## Every land tile: centre round trip + 25 sub-points at the tile's own height.
+func _sweep_pure(fv: FieldView, g: Grid, label: String) -> void:
+	var total := 0
+	var on_glass := 0
+	var miss := 0
+	var block_miss := 0
+	var sub_total := 0
+	var sub_miss := 0
+	var sub_block_miss := 0
+	var sub_miss_higher := 0
+	var offs := {}
+	var worst_dist := 0.0
+	var b_total := 0
+	var b_miss := 0
+	for ty in g.h:
+		for tx in g.w:
+			var t := g.tile_index(tx, ty)
+			if g.water[t] != 0:
+				continue
+			total += 1
+			var s := fv.tile_to_screen_px(tx, ty)
+			if s.x < 0.0 or s.y < 0.0 or s.x >= Look.VIEWPORT_W_PX or s.y >= Look.VIEWPORT_H_PX:
+				continue
+			on_glass += 1
+			var w := fv.screen_to_terrain_px(s)
+			var tv := fv.world_to_tile(w)
+			if tv != Vector2i(tx, ty):
+				miss += 1
+				var k := "%d,%d" % [tv.x - tx, tv.y - ty]
+				offs[k] = offs.get(k, 0) + 1
+				if g.block_of(g.tile_index(tv.x, tv.y)) != g.block_of(t):
+					block_miss += 1
+			worst_dist = maxf(worst_dist, w.distance_to(Look.tile_point_px(Vector2(tx, ty))))
+			# sub-points
+			var h: float = fv._ground_h(tx, ty)
+			for fy: float in FRACS:
+				for fx: float in FRACS:
+					var wp := Vector2((tx + fx) * Look.TILE_PX, (ty + fy) * Look.TILE_PX)
+					var sp := fv.world_to_screen_px(wp, h)
+					if sp.x < 0.0 or sp.y < 0.0 or sp.x >= Look.VIEWPORT_W_PX or sp.y >= Look.VIEWPORT_H_PX:
+						continue
+					sub_total += 1
+					var w2 := fv.screen_to_terrain_px(sp)
+					var tv2 := fv.world_to_tile(w2)
+					if tv2 != Vector2i(tx, ty):
+						sub_miss += 1
+						if fv._ground_h(tv2.x, tv2.y) > h + 0.001:
+							sub_miss_higher += 1
+						if tv2.x >= 0 and tv2.y >= 0 and tv2.x < g.w and tv2.y < g.h \
+								and g.block_of(g.tile_index(tv2.x, tv2.y)) != g.block_of(t):
+							sub_block_miss += 1
+	# block-level: project each land block's centre point at the block's tallest tile height
+	var per_row := (g.w + 1) / 2
+	for by in (g.h + 1) / 2:
+		for bx in per_row:
+			var tiles := g.tiles_of_block(by * per_row + bx)
+			var land := false
+			var hmax := -99.0
+			for t2 in tiles:
+				if g.water[t2] == 0:
+					land = true
+					hmax = maxf(hmax, fv._ground_h(t2 % g.w, t2 / g.w))
+			if not land:
+				continue
+			b_total += 1
+			var cw := Vector2((bx * 2 + 1.0) * Look.TILE_PX, (by * 2 + 1.0) * Look.TILE_PX)
+			var sp := fv.world_to_screen_px(cw, hmax)
+			var w3 := fv.screen_to_terrain_px(sp)
+			var tv3 := fv.world_to_tile(w3)
+			if tv3.x < 0 or tv3.y < 0 or tv3.x >= g.w or tv3.y >= g.h \
+					or g.block_of(g.tile_index(tv3.x, tv3.y)) != by * per_row + bx:
+				b_miss += 1
+	print("A1 %-22s centres: %d/%d on glass, miss %d (block differs %d) offsets %s  worst |Δworld| %.2f px | sub-points: miss %d/%d (higher neighbour %d, block differs %d) | block centres miss %d/%d" % [
+		label, on_glass, total, miss, block_miss, offs, worst_dist, sub_miss, sub_total,
+		sub_miss_higher, sub_block_miss, b_miss, b_total])
+
+
+func _sub_tile_geometry(fv: FieldView, g: Grid, yaw: float) -> void:
+	# For every miss, classify the sub-point by where it sits inside its tile relative to the SCREEN
+	# axes (toward the top of the screen = away from the camera = -_ground_down).
+	var down := fv._ground_down()
+	var right := fv._ground_right()
+	var hist := {"up-screen edge": 0, "down-screen edge": 0, "right edge": 0, "left edge": 0, "interior": 0}
+	var shift_along_down := 0.0
+	var n := 0
+	var same_h := 0
+	var lower := 0
+	var higher := 0
+	var stair := 0
+	for ty in g.h:
+		for tx in g.w:
+			var t := g.tile_index(tx, ty)
+			if g.water[t] != 0:
+				continue
+			var h: float = fv._ground_h(tx, ty)
+			for fy: float in FRACS:
+				for fx: float in FRACS:
+					var wp := Vector2((tx + fx) * Look.TILE_PX, (ty + fy) * Look.TILE_PX)
+					var sp := fv.world_to_screen_px(wp, h)
+					var w2 := fv.screen_to_terrain_px(sp)
+					var tv2 := fv.world_to_tile(w2)
+					if tv2 == Vector2i(tx, ty):
+						continue
+					n += 1
+					var d := w2 - wp
+					shift_along_down += d.dot(down) / Look.TILE_PX
+					var loc := Vector2(fx - 0.5, fy - 0.5)
+					var u := loc.dot(right)
+					var v := loc.dot(down)
+					if absf(v) >= absf(u) and v < -0.3:
+						hist["up-screen edge"] += 1
+					elif absf(v) >= absf(u) and v > 0.3:
+						hist["down-screen edge"] += 1
+					elif u > 0.3:
+						hist["right edge"] += 1
+					elif u < -0.3:
+						hist["left edge"] += 1
+					else:
+						hist["interior"] += 1
+					var h2: float = fv._ground_h(tv2.x, tv2.y)
+					if absf(h2 - h) < 0.001:
+						same_h += 1
+					elif h2 > h:
+						higher += 1
+					else:
+						lower += 1
+					if Grid.is_stair_level(g.level_of(t)):
+						stair += 1
+	print("A2 yaw %3d: %d sub-point misses; where in the tile: %s; returned tile height same %d / higher %d / lower %d; on a stair tile %d; mean shift along screen-down %.3f tile" % [
+		int(yaw), n, hist, same_h, higher, lower, stair, shift_along_down / maxf(1.0, float(n))])
+
+
+func _clamp_extents(g: Grid) -> void:
+	var fv := FieldView.new()
+	var army := Army.new()
+	var b := Battle.new()
+	b.setup(g, army, [])
+	fv.setup(b, army, Islands.rows())
+	fv.zoom = 1.0
+	var vis := fv._visible_ground_px()
+	print("visible ground at zoom 1.0: %.1f x %.1f world px (screen-right span x screen-down span); map %d x %d px; roam %.0f px" % [
+		vis.x, vis.y, int(g.w * Look.TILE_PX), int(g.h * Look.TILE_PX), Look.CAM_ROAM_TILES * Look.TILE_PX])
+	for yaw: float in YAWS:
+		fv.cam_yaw_deg = yaw
+		# push the centre far out on each axis and read where the clamp stops it
+		var stops := []
+		for axis in 2:
+			for sign in [-1.0, 1.0]:
+				fv.cam_px = Vector2(2000.0, 2000.0) * sign
+				fv._clamp_cam()
+				stops.append(fv._ground_centre_px()[axis])
+		# the true half-extent of the visible ground along world x and y at this yaw
+		var r := fv._ground_right().abs() * vis.x * 0.5 + fv._ground_down().abs() * vis.y * 0.5
+		print("D yaw %3d: centre.x may reach [%.0f, %.0f], centre.y [%.0f, %.0f]; clamp used half-extents (%.0f, %.0f) but the turned view's true half-extents along world x,y are (%.0f, %.0f)" % [
+			int(yaw), stops[0], stops[1], stops[2], stops[3], vis.x * 0.5, vis.y * 0.5, r.x, r.y])
+	fv.free()
+
+
+func _shell_part() -> void:
+	var game := Game.new()
+	root.add_child(game)
+	await process_frame
+	await process_frame
+	if game.field_view == null:
+		print("C: field_view is null after two frames — cannot drive the shell")
+		return
+	# press 시작하기 on the title
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	ev.position = Look.title_slot_hit_rect_px(0).get_center()
+	game._unhandled_input(ev)
+	await process_frame
+	if game.battle == null:
+		print("C: no battle after pressing start")
+		return
+	var fv: FieldView = game.field_view
+	var g: Grid = game.battle.grid
+	print("C: run started, yaw %.1f zoom %.4f  cam %s" % [fv.cam_yaw_deg, fv.zoom, fv.cam_px])
+
+	# settled at yaw 0 first
+	await process_frame
+	_shell_sweep(game, fv, g, "settled yaw %.1f (opening)" % fv.cam_yaw_deg)
+
+	for press in 4:
+		var key := InputEventKey.new()
+		key.pressed = true
+		key.keycode = KEY_E
+		game._unhandled_input(key)
+		# mid-sweep: a few frames in
+		await process_frame
+		await process_frame
+		await process_frame
+		print("C: after E + 3 frames yaw = %.2f (remaining %.2f)" % [fv.cam_yaw_deg, fv._yaw_remaining])
+		_shell_sweep(game, fv, g, "MID-SWEEP yaw %.2f" % fv.cam_yaw_deg)
+		_shell_sweep_stale(game, fv, g, "MID-SWEEP stale-frame yaw %.2f" % fv.cam_yaw_deg)
+		var n := 0
+		while fv._yaw_remaining != 0.0 and n < 120:
+			await process_frame
+			n += 1
+		await process_frame
+		print("C: settled after %d more frames at yaw %.6f  cam %s" % [n, fv.cam_yaw_deg, fv.cam_px])
+		_shell_sweep(game, fv, g, "settled yaw %.1f" % fv.cam_yaw_deg)
+
+	# a real order at yaw 90 through press/release: pick a body, click a reachable block's centre
+	await _real_order(game, fv, g)
+
+	root.remove_child(game)
+	game.free()
+
+
+## Oracle = the ENGINE's unproject of the tile's own surface point (what is drawn), asked at the
+## instant of the check; pick = game._tile_at (screen_to_terrain_px → world_to_tile), the same call
+## the hover and the press make.
+func _shell_sweep(game: Game, fv: FieldView, g: Grid, label: String) -> void:
+	var total := 0
+	var miss := 0
+	var block_miss := 0
+	var offs := {}
+	var sub_total := 0
+	var sub_miss := 0
+	var sub_block_miss := 0
+	for ty in g.h:
+		for tx in g.w:
+			var t := g.tile_index(tx, ty)
+			if g.water[t] != 0:
+				continue
+			var world := Look.tile_point_px(Vector2(tx, ty))
+			var h: float = fv._ground_h(tx, ty)
+			var s: Vector2 = fv._cam.unproject_position(Vector3(world.x / Look.TILE_PX, h, world.y / Look.TILE_PX))
+			if s.x < 0.0 or s.y < 0.0 or s.x >= Look.VIEWPORT_W_PX or s.y >= Look.VIEWPORT_H_PX:
+				continue
+			total += 1
+			var got: int = game._tile_at(s)
+			if got != t:
+				miss += 1
+				if got >= 0:
+					var k := "%d,%d" % [got % g.w - tx, got / g.w - ty]
+					offs[k] = offs.get(k, 0) + 1
+					if g.block_of(got) != g.block_of(t):
+						block_miss += 1
+			for fy: float in FRACS:
+				for fx: float in FRACS:
+					var wp := Vector2((tx + fx) * Look.TILE_PX, (ty + fy) * Look.TILE_PX)
+					var sp: Vector2 = fv._cam.unproject_position(Vector3(wp.x / Look.TILE_PX, h, wp.y / Look.TILE_PX))
+					if sp.x < 0.0 or sp.y < 0.0 or sp.x >= Look.VIEWPORT_W_PX or sp.y >= Look.VIEWPORT_H_PX:
+						continue
+					sub_total += 1
+					var got2: int = game._tile_at(sp)
+					if got2 != t:
+						sub_miss += 1
+						if got2 >= 0 and g.block_of(got2) != g.block_of(t):
+							sub_block_miss += 1
+	print("C1 %-34s centres miss %d/%d (block differs %d) offsets %s | sub-points miss %d/%d (block differs %d)" % [
+		label, miss, total, block_miss, offs, sub_miss, sub_total, sub_block_miss])
+
+
+## Same, but the oracle is the camera as placed LAST frame (the picture actually on the glass when a
+## click arrives mid-sweep) — i.e. does a press mid-sweep read a yaw the picture has not reached?
+## We approximate "last frame" by re-projecting with the transform the camera holds now, before this
+## frame's _process moves it: in Godot input is flushed before _process, so game._tile_at at input
+## time reads cam_yaw_deg as of the end of the previous frame, and _cam was placed from that same
+## value in the previous frame. Both agree by construction; this row measures that they do.
+func _shell_sweep_stale(game: Game, fv: FieldView, g: Grid, label: String) -> void:
+	var worst := 0.0
+	var n := 0
+	for ty in range(0, g.h, 2):
+		for tx in range(0, g.w, 2):
+			var t := g.tile_index(tx, ty)
+			if g.water[t] != 0:
+				continue
+			var world := Look.tile_point_px(Vector2(tx, ty))
+			var h: float = fv._ground_h(tx, ty)
+			var s: Vector2 = fv._cam.unproject_position(Vector3(world.x / Look.TILE_PX, h, world.y / Look.TILE_PX))
+			worst = maxf(worst, s.distance_to(fv.tile_to_screen_px(tx, ty)))
+			n += 1
+	print("C2 %-34s engine camera vs pure forward: worst %.4f screen px over %d tiles" % [label, worst, n])
+
+
+func _real_order(game: Game, fv: FieldView, g: Grid) -> void:
+	var b: Battle = game.battle
+	# find a live soldier
+	var sid := -1
+	for i in b.soldier_pos.size():
+		if b.soldier_state.size() > i and b.soldier_hp.size() > i and b.soldier_hp[i] > 0.0:
+			sid = i
+			break
+	if sid < 0:
+		print("C3: no soldier to pick")
+		return
+	for yaw_target in [0.0, 90.0, 180.0, 270.0]:
+		# rotate to the target by pressing E until there
+		var guard := 0
+		while absf(fmod(fv.cam_yaw_deg - yaw_target + 360.0, 360.0)) > 0.001 and guard < 8:
+			var key := InputEventKey.new()
+			key.pressed = true
+			key.keycode = KEY_E
+			game._unhandled_input(key)
+			var n := 0
+			while (fv._yaw_remaining != 0.0 or n == 0) and n < 120:
+				await process_frame
+				n += 1
+			guard += 1
+		await process_frame
+		game.hand.clear()
+		game._tell_the_view()
+		var p: Vector2 = b.soldier_pos[sid]
+		var hb: float = fv._stand_h(p)
+		var s_body: Vector2 = fv._cam.unproject_position(Vector3(p.x + 0.5, hb, p.y + 0.5))
+		_press_release(game, s_body)
+		if game.hand.is_empty():
+			print("C3 yaw %3d: press on body at %s did not pick (soldier %d at tile %s)" % [int(fv.cam_yaw_deg), s_body, sid, p])
+			continue
+		# every reachable block: click its centre as drawn, check the order landed in it
+		var tried := 0
+		var wrong := 0
+		var wrong_list := []
+		var reach_blocks: PackedInt32Array = game.hand.reach_blocks.duplicate()
+		for blk in reach_blocks:
+			var tiles := g.tiles_of_block(blk)
+			var hmax := -99.0
+			for t2 in tiles:
+				hmax = maxf(hmax, fv._ground_h(t2 % g.w, t2 / g.w))
+			var per_row := (g.w + 1) / 2
+			var cx := (blk % per_row) * 2 + 1.0
+			var cy := (blk / per_row) * 2 + 1.0
+			var sp: Vector2 = fv._cam.unproject_position(Vector3(cx, hmax, cy))
+			if sp.x < 0.0 or sp.y < 0.0 or sp.x >= Look.VIEWPORT_W_PX or sp.y >= Look.VIEWPORT_H_PX:
+				continue
+			# re-pick before each order since the order lets go
+			if game.hand.is_empty():
+				_press_release(game, s_body)
+				if game.hand.is_empty():
+					break
+			tried += 1
+			_press_release(game, sp)
+			var dest: int = b.soldier_order[sid]
+			var got_blk := g.block_of(dest) if dest >= 0 else -1
+			if got_blk != blk:
+				wrong += 1
+				if wrong_list.size() < 6:
+					wrong_list.append("blk %d→%d (tile %d)" % [blk, got_blk, dest])
+		print("C3 yaw %3d: real press/release orders — %d blocks tried, %d landed in a different block %s" % [
+			int(fv.cam_yaw_deg), tried, wrong, wrong_list])
+
+
+func _press_release(game: Game, at: Vector2) -> void:
+	var down := InputEventMouseButton.new()
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.pressed = true
+	down.position = at
+	game._unhandled_input(down)
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.pressed = false
+	up.position = at
+	game._unhandled_input(up)
