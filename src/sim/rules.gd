@@ -382,15 +382,9 @@ const SWORDSMAN_START_COUNT := 4
 ## costs, and `Army.alive` stays 1 through it.
 const REVIVE_SEC := 20.0
 
-## **How long the 성채 takes to turn out one more 검사.**
-##
-## 2026-09-01, the user: 「일단 병사 뽑는 데 이십 초」. ⚠ **Time is the whole price** — 나무·돌·철·식량
-## appear nowhere in the sim, so there is nothing else to spend, and a resource cost is task 05.
-##
-## ⚠⚠ **IT IS TWENTY AND SO IS `REVIVE_SEC`, AND THEY ARE TWO RULES THAT HAPPEN TO AGREE TODAY.** One is
-## what dying costs, the other is what growing costs. **Neither may be written as the other**: pointed
-## at one another, the day either is retuned both would move and nothing would say so.
-const MUSTER_PERIOD_SEC := 20.0
+## ⚠⚠ **THE TWENTY-SECOND CLOCK (`MUSTER_PERIOD_SEC`) IS DELETED** (2026-09-02, the user: 「자동 병사 생성
+## 지워줘」). The 성채 no longer turns out a 검사 on its own; `Battle.recruit` stands one only when it is
+## called, and today nothing in `src/` calls it. **What it costs is still task 05's question.**
 
 ## **How many 검사 a run may hold at once — the ceiling on the doorstep.**
 ##
