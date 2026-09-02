@@ -19,6 +19,104 @@
 [roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅ **Seven grilling tickets were walked and four closed — 2026-09-02, sixth round, decisions only**
+
+**Opened by the user with one line: *"Go through what needs grilling from the roadmap."*** (「로드맵에서
+그랄링 필요한거 진행」). **No code was written.** Seven tickets carried `Type: grilling` with `Status: open`
+— 03-13 · 03-14 · 04-04 · 06-02 · 10-02 · 10-03 · 11-01 — and 06-01, a task ticket whose only open line was
+a number, was pulled in because 06-02 hung on it. **Thirteen questions were put, each with a recommendation
+and a reason, and the user took every recommendation.** Four tickets closed (04-04 · 06-02 · 10-02, and 06-01
+superseded); 03-14 has its rules and waits for the build; 10-03 stays open on three; 11-01 was handed to
+another session; 03-13 could not be asked.
+
+**The nets did not run — this machine has no Godot.** The last measurement stands: `2429 pass · 4 fail`
+after PR 17. Nothing under `src/` was touched.
+
+### 1. The shape of the round changed twice, in the user's words
+
+The first three rounds were one question each, as the `grilling` skill has said since 2026-09-01. On the
+fourth the user answered ***"as recommended — several questions at once"*** (「추천대러 질문 한번에 여러개」),
+and the next round put eight. Then, on the eight: ***"Probably the word 적성 did it. Doing all of these as
+recommended should be fine, right?"*** (「아마 적성이란 단어가 했네. 이거 다 추천대로 해주면 됐듯?」).
+⚠ **The skill file was not changed** — whether 「several at once」 is this session's or every session's was
+not said, and the skill is the user's to change.
+
+⚠ **One misreading was made and corrected inside the round.** The first question (03-14 defect 1) was put
+as though its answer would settle defect 2 too. It does not: defect 2's seats are reachable, and its fault
+is the storey, not the reach. The correction was said out loud and defect 2 was asked on its own.
+
+### 2. 03-14 — the two rules for what a press means
+
+- **Defect 1, a split 부대 seated on ground it cannot reach** → **send only the bodies that can get there,
+  and report the smaller count.** Today `order` answers `sent = 4` with one body standing still.
+- **Defect 2, a full upper 칸 seating the 부대 downstairs** → **a spill never changes storey.** It spills
+  only inside the aimed 칸's storey; when that storey is full nobody goes and `sent` is 0. Today nine bodies
+  pressed onto a full 2층 칸 all seat at 1층, two levels down, where `can_strike` refuses them.
+- **Defect 3, the one-frame jump (6 of 507 pairs)** — not decided; it needs the user to watch it.
+
+Both rules live in `Hand._seats`. **The ticket stays `open`** because its bar includes the three
+measurements after the build.
+
+### 3. 04-04 — the empty hand got its word
+
+Asked what to call a body holding neither weapon nor farm tool; the recommendation was **맨손** — the 124
+drawings on disk are already bare-handed, and 일꾼 · 캐릭터 are dead words. ***"As recommended."*** The other
+two were not re-asked, only written down from the user's own words: **병사** is a body holding a weapon
+(2026-09-01, 「무기를 끼면 병사가 되는 거고」) and **장비** is the thing held (2026-09-02, 「장비칸 있어야함」 ·
+「몸이 기본으로 갖고 장비가 더해져」). ⇒ **검사 is a 병사 holding a sword**, and the glossary's 「the only
+병종」 went to the reversed-words table. The code symbol `SWORDSMAN` is untouched.
+
+### 4. 06 — the island's number, and the task folded into 08
+
+- **How much wider** — the ticket's own fork was 「double or half again」 and the user's word had been
+  「조금 더」; the recommendation was **half again, about 107 칸** on today's 71. ***"As recommended."***
+- **Who widens it** — 08-01 generates the island from the first run, so the hand-drawn one is never shown
+  again and widening it in Blender would be thrown away. **06-01 is superseded by 08-01 and keeps only the
+  number.**
+- **「Too flat」** — the recommendation was **a third of the land as plateau**, up from a sixth, because
+  「너무 평면」 was said looking at the sixth. ***"As recommended."*** The third storey stays closed; stairs
+  1~3 and plateaus 1~2 were already 08-01's.
+- ⇒ **Task 06 is folded (⏸) into 08.** Its screen arrives when 08-01 builds.
+
+### 5. 10-02 — the prisoner, settled
+
+The user had said 「현재 모르겠어」 on tied-versus-walking in the fifth round. Put with a reason this time —
+the user's own loop 「kill the wolves, go to the boat, rescue」 only works if the prisoner is still at the
+boat, and the existing `man` frames draw it for 0 new pictures — it took: **the prisoner stays on the boat
+and does nothing until every wolf off that boat is dead.** Also as recommended: **the wolf boat is broken
+for wood, never ridden** (week 4 builds the player's boat, week 9 sails it; a rideable wolf boat leaves that
+build no reason), and **every boat carries one prisoner for now** (with the clock gone it is the only door a
+body comes through). 「An unbroken boat stays」 was written as the reading the user had leaned to.
+**Ticket 02-04 got the two answers written onto its reversal note.**
+
+### 6. 10-03 — one answer, then the round ended on three
+
+**People only — a 늑대 is never captured**, as recommended (a captured wolf has nothing to do, and a down
+pose for wolves is a second drawing set). Then three were put — what knocks a person down (every enemy
+person at 0 체력), what fetching is (send the 부대 to its 칸, the 10-02 shape), how long it lies (until
+fetched, no clock — `research` found RimWorld, Endless Sky and Veloren hold a downed body with no timer and
+X-COM, the one with a timer, is the one where the body gets up and fights). **The user closed the session
+on them:**
+
+> ***"Hmm, let us wrap up for now — something is unclear."*** (「음 일단 마무리하자 뭔가 애매하다」)
+
+⚠ **That is the measurement: the three did not convince.** They are written into 10-03 as put-and-not-
+answered, and the research note is `docs/reference/2026-09-02-how-long-a-downed-body-stays-down.md`.
+
+### 7. 11-01 — not this session's
+
+Three trait questions were put (how many per body, bad ones, changes mid-run) and withdrawn when the user
+said ***"Traits are being handled in another session."*** (「특성관련해서는 다른 세션에서 진행중」). **This
+session wrote nothing into 11-01**, and the earlier 「a trait is one job done faster」 that the user had
+accepted is left to that session too — two sessions writing one ticket is the collision `CLAUDE.md` warns
+about.
+
+### 8. What is still the user's
+
+**10-03's three** (asked differently next time, or something upstream of them) · **03-14 defect 3** (watch
+it) · **03-13** (four candidates must stand in the game and be photographed first) · **what 「breaking a
+boat for wood」 is on the board** (an order, a duration, a wood count — week-4 values, no ticket).
+
 ## ✅✅ **The two defects the user found on screen were built and closed — 2026-09-02, a session run alongside the third to fifth rounds, merged last (PR 17)**
 
 ⚠⚠ **This is the THIRD round of 2026-09-02, and the first of the day that wrote code.** The two rounds
