@@ -2155,6 +2155,68 @@ const COL_BODY_SHADOW := Color(0.05, 0.06, 0.10, 0.30)  # alpha <= 0.45, over wh
 ## `HudView._draw` has been `pass` since the island screen lost its chrome, so the start button, the
 ## slot row, the reserve bars, the enemy counter and the ghost fan were laid out in pixels nobody
 ## drew. **A designed HUD is built in a tool and measured then** — see `CLAUDE.md`.
+
+# ---------------------------------------------------------------------------------------------
+# The panel — what is picked, in one corner (03-02)
+# ---------------------------------------------------------------------------------------------
+
+## **The plate the picked body's four lines sit on**, pulled in a tool and loaded — never a `draw_rect`.
+## ⚠⚠ **Pulled AT `PANEL_SIZE_PX` and asserted to be that size** (`net_panel`): the layout below is
+## not re-fitted to whatever picture arrives, so a plate pulled at another size goes red rather than
+## quietly shifting every baseline.
+const PANEL_TEX := "res://assets/ui/panel.png"
+
+## **The Hangul pixel font the panel is typed in** — Galmuri14, OFL 1.1, whose native size is 15 px.
+## ⚠ `draw_string`'s default size is 16, not 15; a leaf that omits the size silently leaves the
+## font's pixel grid, which is why the size travels through the hook's arguments.
+const PANEL_FONT := "res://assets/font/Galmuri14.ttf"
+const PANEL_FONT_PX := 15
+
+## Inside the plate: the padding on every side and the pitch from one baseline to the next.
+## ⚠ `PANEL_SIZE_PX.y` is `2 * PANEL_PAD_PX + PANEL_LABELS.size() * PANEL_LINE_PX` — 92 — and the
+## plate is pulled at exactly that. Change one and the other must follow.
+const PANEL_PAD_PX := 8
+const PANEL_LINE_PX := 19
+const PANEL_SIZE_PX := Vector2(160, 92)
+
+## The four labels, in the order the lines are drawn (2026-09-02, the user: 「이름 특성 체력으로 일단
+## 떠야함」, then 허기 the same day). ⚠ Not `PackedStringArray` — a `const` packed array does not parse
+## on 4.7.1; every read casts to `String`.
+const PANEL_LABELS := ["이름", "특성", "체력", "허기"]
+
+## Which corner the plate sits in. **Bottom-left is where the build starts** — the 시안 round
+## photographs the winner in all four and the user's answer lands here.
+enum PanelCorner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+const PANEL_CORNER := PanelCorner.BOTTOM_LEFT
+
+## The text colour. The HUD's own until the chosen plate asks for another.
+const COL_PANEL_TEXT := COL_HUD_TEXT
+
+
+## **The plate's top-left for `PANEL_CORNER`, flush with the viewport edge, no margin.**
+##
+## ⚠ Derived from the canvas the same way `game_over_origin_px` is: `window/stretch/mode` is
+## `canvas_items`, so the answer survives a resize and a typed `Vector2(0, 628)` would not.
+static func panel_origin_px(size: Vector2) -> Vector2:
+	var far := viewport_size_px() - size
+	match PANEL_CORNER:
+		PanelCorner.TOP_LEFT:
+			return Vector2.ZERO
+		PanelCorner.TOP_RIGHT:
+			return Vector2(far.x, 0.0)
+		PanelCorner.BOTTOM_LEFT:
+			return Vector2(0.0, far.y)
+		_:
+			return far
+
+
+## **The BASELINE of line `line`**, which is the point `draw_string` takes — nothing is added inside
+## the leaf. `ascent_px` is `font.get_ascent(PANEL_FONT_PX)`, computed once in `_draw` and computed
+## the same way by the net, so the first baseline sits one ascent under the top padding.
+static func panel_line_baseline_px(origin: Vector2, line: int, ascent_px: float) -> Vector2:
+	return origin + Vector2(float(PANEL_PAD_PX),
+		float(PANEL_PAD_PX) + ascent_px + float(line * PANEL_LINE_PX))
+
 # ---------------------------------------------------------------------------------------------
 # Panel — reward pick, win, lose, restart
 # ---------------------------------------------------------------------------------------------

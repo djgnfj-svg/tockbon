@@ -40,6 +40,13 @@ var alive := PackedByteArray()
 ## type must not draw from one pool — and `Battle.slot_reserve_ids` reads exactly this column.
 var slot_id := PackedInt32Array()
 
+## The name each body arrived with, written once by `recruit` and never again — **a name stays on its body
+## through death and revival** (ticket 03-02), which the never-compacted rows above give for free. Drawn
+## from `Names.LIST`, unused first; `Names.next` owns that rule and this column only feeds it what is taken.
+## ⚠ **Filled in `recruit` and nowhere else** — `add_starting_force` reaches this through `recruit`, so the
+## two writers of `type_id` are one writer of this, and `net_names` pins the two lengths equal after both.
+var names := PackedStringArray()
+
 ## **Which species each summon slot fields — slot index to unit row.** ⚠⚠ **This was a CONSTANT table
 ## in `rules.gd` and it is run state now** (티켓 15): 「칸 s 는 영원히 종 t 에 묶여 있다」 stopped being
 ## true when a card started filling slots, and a constant holding a per-run fact is a shape this repo
@@ -72,7 +79,14 @@ func recruit(slot: int) -> int:
 	type_id.append(t)
 	slot_id.append(slot)
 	alive.append(1)
+	# The column so far is exactly "what is taken" — dead rows included, since a dead body keeps its name.
+	names.append(Names.next(names))
 	return id
+
+
+## The name body `i` arrived with. The panel (ticket 03-02) is the reader.
+func name_of(i: int) -> String:
+	return String(names[i])
 
 
 ## ⚠⚠ **`max_hp_of` · `damage_of` · `period_of` · `reach_of` ARE BACK** (2026-08-30, 티켓 41) after

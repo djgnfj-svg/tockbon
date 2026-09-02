@@ -68,11 +68,24 @@ var _tex_over: Texture2D = load(Look.GAME_OVER_TEX) as Texture2D
 ## reason: it is a picture made in pixellab, not a plate typed as `draw_rect` under a `draw_string`.
 var _tex_back: Texture2D = load(Look.BACK_TO_TITLE_TEX) as Texture2D
 
+## **The bodies the hand is holding**, as soldier ids, handed in by the shell every frame (03-02, the
+## user: 「캐릭터 누르면 선택되고 정보ㄴ뜨고 이동되는게 필요할듯」). Empty is 「nothing picked」 and the
+## panel is not drawn at all. ⚠ A COPY of `hand.ids`, never the same array — a view holding the
+## sim's own container is one aliasing bug away from writing it.
+var _picked := PackedInt32Array()
+
+## **The plate under the four lines.** Pulled in a tool and loaded, for the reason `_tex_over` gives.
+var _tex_panel: Texture2D = load(Look.PANEL_TEX) as Texture2D
+
 ## Resolved once and kept, and STATIC because panel_view needs the same face — the explanation for
 ## picking it lives here only, in one file, rather than in both view files.
 ## `ThemeDB` is available untreed and headless: "there is no font outside the tree" was measured
 ## wrong twice, and the real cause was a script that quit before turning a single frame.
 static var _face: Font = null
+
+## **The panel's own face** — the Hangul pixel font `Look.PANEL_FONT` names — loaded once and kept,
+## beside `_face` and for the same reason.
+static var _panel_face: Font = null
 
 
 ## The project's own default font carries Hangul; the engine's fallback need not, and a missing
@@ -88,6 +101,14 @@ static func default_font() -> Font:
 	return _face
 
 
+## **The font the panel is typed in**, not the default face: the panel draws at the pixel font's own
+## size, and the theme's Hangul face at 15 px is smooth lettering on a pixel plate.
+static func panel_font() -> Font:
+	if _panel_face == null:
+		_panel_face = load(Look.PANEL_FONT) as Font
+	return _panel_face
+
+
 ## The word a player reads for a beast row. **One line reading the unit table**, so the name on the
 ## refit strip and the name in the reward list cannot say two different things.
 static func type_label(type_id: int) -> String:
@@ -101,7 +122,24 @@ static func type_label(type_id: int) -> String:
 func bind(b: Battle) -> void:
 	battle = b
 	_over = false
+	# ⚠ Cleared for the same reason `_over` is: the ids survive an island and the last island's pick
+	# would open the next one with a panel about a body standing nowhere yet.
+	_picked = PackedInt32Array()
 	queue_redraw()
+
+
+## The shell says what the hand is holding, and the panel follows.
+##
+## ⚠⚠ **NO GUARD ON A NON-EMPTY LIST, ON PURPOSE — it is the opposite of `set_over`.** The shell
+## calls this once per frame off `hand.ids`, and the 체력 line has to follow the fight, so every
+## non-empty call asks for a redraw. **The call that empties the list asks once more** — that is the
+## frame the plate comes down — and an empty list after an empty list asks for nothing, which is what
+## keeps an unpicked island from redrawing an empty canvas sixty times a second.
+func set_picked(ids: PackedInt32Array) -> void:
+	var was_empty := _picked.is_empty()
+	_picked = ids.duplicate()
+	if not _picked.is_empty() or not was_empty:
+		queue_redraw()
 
 
 ## The shell says the island is lost, and the words go up.
@@ -132,7 +170,34 @@ func set_over(over: bool) -> void:
 ## ⚠ **`battle` is still bound** by `game._open_island`, so the wiring a real HUD needs is live and
 ## `net_shell` still measures that the bind happened. ⚠ **`_over` and not `battle.lost`** — see
 ## `set_over`; the shell owns which screen is up.
+##
+## **And the panel, while the hand holds somebody** (03-02). The plate goes down first, then the four
+## lines `Look.PANEL_LABELS` names, each as 「label value」 with one space between — the value is the
+## first held body's name (with 「x N」 when the hand holds more), blank, live 체력 as 「current/max」,
+## and blank again; 특성 and 허기 fill in when 11-01 and 05-07 land. ⚠ **The first id the hand holds is
+## shown, alive or not** — `Hand` never prunes a dead body, so 「체력 0/max」 is the panel's honest
+## resting state after a picked body dies, until 03-14 prunes the hand.
+## ⚠ **The origin is laid out from `Look.PANEL_SIZE_PX` and not from the picture's size** — the plate
+## is pulled AT that size and the net asserts it is; a layout that re-fitted itself to the file would
+## hide a wrongly-sized plate under green checks.
 func _draw() -> void:
+	if battle != null and not _picked.is_empty() and _tex_panel != null:
+		var font := panel_font()
+		var ascent := font.get_ascent(Look.PANEL_FONT_PX)
+		var origin := Look.panel_origin_px(Look.PANEL_SIZE_PX)
+		var id := int(_picked[0])
+		# ⚠ `who`, not `name` — a Node already has a `name`, and a shadowed member is a warning on
+		# stderr, which the runner counts as red.
+		var who: String = battle.army.name_of(id)
+		if _picked.size() > 1:
+			who += " x %d" % _picked.size()
+		var hp := "%d/%d" % [int(battle.soldier_hp[id]), int(battle.army.max_hp_of(id))]
+		var values := [who, "", hp, ""]
+		_paint_panel(_tex_panel, origin)
+		for i in values.size():
+			_paint_line("%s %s" % [str(Look.PANEL_LABELS[i]), str(values[i])],
+				Look.panel_line_baseline_px(origin, i, ascent), font, Look.PANEL_FONT_PX,
+				Look.COL_PANEL_TEXT)
 	if not _over or _tex_over == null:
 		return
 	_paint_over(_tex_over, Look.game_over_origin_px(_tex_over.get_size()))
@@ -171,3 +236,22 @@ func _paint_over(tex: Texture2D, at: Vector2) -> void:
 ## reacts by wearing a SECOND picture, and this leaf still draws one thing.
 func _paint_back(tex: Texture2D, at: Vector2) -> void:
 	draw_texture(tex, at)
+
+
+## The plate under the picked body's lines, drawn 1:1 at its own size.
+##
+## ⚠⚠ **ONE `draw_texture` AND NO RECT**, like the two leaves above it: the plate is a picture pulled
+## in a tool, and `draw_texture` takes the file's own width so no second copy of it lives here.
+func _paint_panel(tex: Texture2D, at: Vector2) -> void:
+	draw_texture(tex, at)
+
+
+## One line of the panel, typed in the panel's font at the panel's size — the house shape is
+## `title_view.gd`'s `draw_string`.
+##
+## ⚠⚠ **THE SIZE AND THE COLOUR ARRIVE AS ARGUMENTS SO THE SPY SEES THEM.** `draw_string` defaults to
+## 16 px, and a leaf that read `Look.PANEL_FONT_PX` for itself could be edited to omit the size with
+## every hook capture still green; through the argument, `net_panel` reads 15 off the call.
+## `at` IS the baseline — `Look.panel_line_baseline_px` already added the ascent.
+func _paint_line(text: String, at: Vector2, font: Font, size_px: int, col: Color) -> void:
+	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, col)
