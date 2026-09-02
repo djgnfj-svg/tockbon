@@ -14,11 +14,10 @@ class_name Rules
 # every constant here is asserted to name its own row, and the pair list's LENGTH is pinned against
 # the table so a row added without a constant reddens too.
 #
-# ⚠⚠ **`CELL_MELEE` and `CELL_RANGED` are GONE, renamed to `WOLF` and `CROW`.** `GLOSSARY.md` marked
-# them as the last place the dead cell game was still spelled out and said they change 「고도가 도는
-# 데서」; the five-beast roster is that place. **The numbers moved unchanged** — the wolf is the one
-# row a whole run has been played on, and re-tuning it while renaming it would make a later
-# difference unattributable.
+# ⚠⚠ **`CELL_MELEE` is GONE, renamed to `WOLF`.** `GLOSSARY.md` marked it as the last place the dead
+# cell game was still spelled out. **The numbers moved unchanged** — the wolf is the one row a whole
+# run has been played on, and re-tuning it while renaming it would make a later difference
+# unattributable.
 ## ⚠⚠ **THE SIDES SWAPPED 2026-08-26.** The player was five beasts and the enemy was three humans and
 ## a lion; **the player is now ONE human — a swordsman — and the beasts are what he fights.** The user
 ## decided both halves: 「상대를 오히려 지금까지 만들었던 몬스터들로 하면 되잖아」 and 「병사가 아직
@@ -29,16 +28,9 @@ class_name Rules
 ## row coming back is a row, not a drawing.
 const SWORDSMAN := 0
 const WOLF := 1
-## ⚠⚠ **`BEAR := 2` · `CROW := 3` · `LION := 4` STOOD HERE AND ALL THREE ARE DELETED** (2026-08-31,
-## the user: 「곰까마귀사자 관련코드제거 아직 늑대만있음」 — *"take out the bear, crow and lion code —
-## there is only the wolf"*). **Nothing spawned them.** The shipped island's own letters are `H`, `~`
-## and `.` only, the boats carry 늑대, and every one of the three had no attack art, no walk art and
-## no death art. **They were four numbers in a table and two pictures each.**
-## ⚠ **The survivors keep their indices**, because the three that left were the last three: SWORDSMAN
-## is still 0 and WOLF is still 1. **Nothing indexed by a saved type id moved.**
-## ⚠⚠ **7 주 is 「짐승 종류를 늘린다」 and this does not make that week bigger.** A species is a row in
-## `UNITS` plus a row in `Look.BEAST_TEX`; **what a new beast actually costs is the DRAWING**, and none
-## of the three had one. **Adding a row back is the cheap half either way.**
+## ⚠⚠ **7 주 is 「짐승 종류를 늘린다」.** A species is a row in `UNITS` plus a row in
+## `Look.BEAST_TEX`; **what a new beast actually costs is the DRAWING** — 124 pictures, which is what
+## the wolf carries.
 
 ## ⚠ **`TYPE_COUNT` is DELETED, not renamed.** It meant two different things at once — the table's
 ## height and the number of equipment boards — and those stopped being the same number the day the
@@ -75,12 +67,8 @@ enum Side { PLAYER, ENEMY }
 ##
 ## ⚠⚠ **IT IS NOT A MELEE-ONLY CHANGE AND NO VALUE COULD MAKE IT ONE.** This bonus is added to EVERY
 ## species' range, so raising it moves every species' reach. Swept over every 조각-aligned pair at every
-## level difference: at 1.75 exactly **two** species gained a flat-ground distance —
-## **다람쥐 3.50 -> 3.75 gains 3.606** and **까마귀 5.50 -> 5.75 gains 5.657** — and nothing else moved.
-## **There is no way to avoid those two**: 다람쥐's next distance enters at a bonus of 1.606, which is
-## BELOW the 1.732 melee needs, so any value that fixes the stair also gives it that 조각. ⚠ **1.85 was
-## the other candidate** — more comfortable margins, but it also handed 창병 the 2-조각 diagonal (2.828)
-## and 까마귀 a second 조각. **1.75 is the smallest drift that closes the defect.**
+## level difference: **1.75 is the smallest drift that closes the defect.** ⚠ **1.85 was the other
+## candidate** — more comfortable margins, but it hands a ranged row an extra 조각.
 ##
 ## ⚠ **Do not retune it to make a plateau safe.** The user's line is 「2층은 안전한 땅이고 그 안전을
 ## 값으로 산다」, and the reach is shared by every body and every weapon — **a storey-aware refusal
@@ -223,9 +211,8 @@ const STAIR_TREADS := 6
 ## detect(tiles), side, 한국어 이름.
 ##
 ## ⚠⚠ **THE KOREAN NAME IS A COLUMN HERE AND NOT A SECOND TABLE IN `hud_view`.** `TYPE_LABELS` was
-## that second table, and the split showed: 까마귀 stood in it TWICE, because the player's ranged row
-## borrowed the crow's picture while the enemy crow was its own row. One column ends the duplicate at
-## its cause. The Korean is the same exception `ITEMS`' names carry — the user reads this word.
+## that second table and one name could stand in it twice. One column ends the duplicate at its cause.
+## The Korean is the same exception `ITEMS`' names carry — the user reads this word.
 ##
 ## `const X := PackedInt32Array([...])` is a PARSE ERROR in GDScript 4.7 — "Assigned value for
 ## constant isn't a constant expression" — so every table in this repo is a plain const Array.
@@ -235,18 +222,10 @@ const STAIR_TREADS := 6
 ## Body radius is deliberately absent: it changes nothing about what happens, so it lives in
 ## look.gd. It was in this table in the first draft and that broke the one-file rule.
 ##
-## The lion's row is a starting point, not a measured value. Its range stays 0 on purpose: raising
-## it to 5 is the one change that gives the boss a losable band, and that is an open design decision
-## for the user, not a tuning knob. Until it is decided the probe's fourth policy fails on purpose
-## rather than being quietly retired — see the first slice plan, "the boss still has no band".
 ## ⚠⚠ **WHICH ROWS ARE MEASURED AND WHICH ARE FIRST DRAFTS decides what a later measurement means.**
-## `WOLF` carries `CELL_MELEE`'s numbers and `CROW` carries the old enemy crow's, unchanged through two
-## side swaps, because the wolf is the only row a whole run has ever been played on. **`SWORDSMAN` is
-## interpolated between the two humans a run was played against** (see its own comment in the table);
-## **`BEAR` and `LION` are first values and nothing has measured them.**
-##
-## ⚠ **The lion's range stays 0 on purpose**: raising it to 5 is the one change that gives the boss a
-## losable band, and that is an open design decision for the user, not a tuning knob.
+## `WOLF` carries `CELL_MELEE`'s numbers unchanged through two side swaps, because it is the only row a
+## whole run has ever been played on. **`SWORDSMAN` is interpolated between the two humans a run was
+## played against** (see its own comment in the table).
 const UNITS := [
 	# ⚠⚠ **The swordsman's numbers sit BETWEEN the spearman's and the shieldbearer's, deliberately.**
 	# Those two were the humans a whole run was played against, so their row is the only measured
@@ -278,11 +257,8 @@ const UNITS := [
 	# difference unattributable. **They gained a detect radius** — an enemy has to notice something.
 	# ⚠⚠ **1.0 → 2.0 AND 2.0 → 4.0, the same trade the 검사 above took** and for the same reason. DPS
 	# is 2.0 either way.
-	# ⚠⚠ **THREE ROWS STOOD UNDER THIS ONE AND THEY ARE DELETED** (2026-08-31) — see the tombstone
-	# where `BEAR` was. **Their numbers, in case one comes back**: 곰 30/3.5/1.8/0/1.5/2.8/6 ·
-	# 까마귀 8/1.5/1.0/**4 사거리**/1.0/4.0/12 · 사자 140/4.0/1.5/0/1.5/2.5/**2 탐지**.
-	# ⚠ **The 까마귀's 4-tile range and the 사자's 2-tile detect were the only two of their kind on the
-	# table**, so the day a ranged beast or a boss is built, those two columns have no other example.
+	# ⚠ **No row on this table has ever used the range or the area column**, so the day a ranged beast
+	# or a boss is built, those two columns have no example to copy.
 	["WOLF", 14.0, 4.0, 2.0, 0.0, 0.0, 4.0, 6.0, Side.ENEMY, "늑대"],
 ]
 
