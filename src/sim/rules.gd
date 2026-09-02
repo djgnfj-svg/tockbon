@@ -448,6 +448,16 @@ const BARRICADE_WOOD := 5
 const BARRICADE_HP := 30.0
 
 
+# --- 낚시 ------------------------------------------------------------------------------------------
+## **How long one catch takes, in seconds** (ticket 05-09; the number is 05-05's, which the user settled
+## with 「왜 몇 초까지는 너무 커 일단 대략적으로 네가 추천대로 정해 줘」 — *do not go down to seconds, set
+## it roughly as you recommend* ⇒ ten seconds a unit). **The same ten seconds gathering will use.**
+const FISH_SEC := 10.0
+## How many fish one catch puts in the 창고. ⚠ **What a GOOD spot is worth is not decided** — 05-09 lists
+## it as open, and the good spot needs a boat that does not exist yet.
+const FISH_PER_CATCH := 1
+
+
 # --- The telegraph -------------------------------------------------------------------------------
 ## ⚠ **`LION_WINDUP_SEC` stood here and it is deleted** (2026-08-29). It was 0.6 — how long the heavy
 ## attack DECLARED itself before landing. **The telegraph is the reason a heavy attack is fair**, and

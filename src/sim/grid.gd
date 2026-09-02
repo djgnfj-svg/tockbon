@@ -611,6 +611,20 @@ func _build_ring(reach: float) -> void:
 ## Whether any of the eight neighbours of `t` is water. ⚠ **Its own function and not folded into the
 ## bearing**: water on two exactly opposite sides sums to nothing, and a 조각 on a one-조각 isthmus is
 ## still coast.
+## **Whether a body standing here is on the water's edge** — passable, no wall on it, and touching
+## water 8-way. Ticket 05-09: 「해안가 어디서나 할 수 있는데」 — *you can fish anywhere along the coast*.
+##
+## ⚠ **Any water, not only the open sea.** An inland pool is water a line goes into; `beach_ring` is the
+## one that cares which side of the island the sea is on, and it cares because a BOAT has to get there.
+## ⚠ **A 바리케이트 makes a 조각 not a place to stand**, so it is not a place to fish from either.
+func is_coast(t: int) -> bool:
+	if t < 0 or t >= passable.size():
+		return false
+	if passable[t] == 0 or built[t] == 1:
+		return false
+	return _touches_water(t)
+
+
 func _touches_water(t: int) -> bool:
 	var tx := t % w
 	var ty := t / w

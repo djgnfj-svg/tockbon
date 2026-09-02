@@ -212,6 +212,13 @@ var soldier_revive := PackedFloat32Array()
 ## ⚠ **It is not 「hungry」.** A body at zero 허기 with full health is starving; one at 40 walking to the
 ## 창고 is not. The column says only 「this drop was hunger」.
 var soldier_starving := PackedByteArray()
+## **Seconds this body has spent fishing where it stands** (ticket 05-09).
+##
+## ⚠ **Reset to 0 the moment it stops**, so a body that walks off half way through a catch does not
+## bank the half. Nobody asked for progress to be kept and a catch that survives being interrupted is a
+## different rule from the one the user gave (「해안가 어디서나 할 수 있는데」 — it is about WHERE, and
+## says nothing about coming back to it).
+var soldier_fish := PackedFloat32Array()
 
 # --- the 창고, and everything gathered ---------------------------------------------------------------
 ## **Everything stacked, by kind** (ticket 05-08). ⚠ **Never null after `setup`** — an empty 창고 and no
@@ -435,6 +442,8 @@ func setup(grid: Grid, army: Army, spawns: Array,
 	soldier_revive.resize(roster)
 	soldier_starving = PackedByteArray()
 	soldier_starving.resize(roster)
+	soldier_fish = PackedFloat32Array()
+	soldier_fish.resize(roster)
 	# ⚠ **A fresh 창고 per island, and no building yet.** The counts do not cross islands today; when
 	# raiding lands and something has to be carried home, this is the line that says so.
 	store = Store.new()
@@ -587,6 +596,8 @@ func step(dt: float) -> void:
 		#  · ⚠⚠ **HUNGER FIRST, AND IT IS FIRST FOR TWO REASONS.** It can send a body to the 창고,
 		#    and an order written after `_phase_orders` would sit unwalked for a whole sub-step; and
 		#    it can take a body's last health, which `_phase_deaths` further down is what answers.
+		#  · **Fishing after hunger and before the orders**, so a body that gave itself an order to go
+		#    and eat is already carrying it here and does not spend this sub-step fishing instead.
 		#  · **Orders before movement, and movement skips whoever orders moved** — falling through
 		#    walks one body twice in a sub-step, at double speed and toward two different places.
 		#  · **Boats before landings**, so a hull that reaches the shore on this sub-step unloads on
@@ -603,6 +614,7 @@ func step(dt: float) -> void:
 		#  · **The muster last**, so a body that died this sub-step starts its own clock this sub-step
 		#    and not on the next one.
 		_phase_hunger(Rules.SIM_SUBSTEP_SEC)
+		_phase_fishing(Rules.SIM_SUBSTEP_SEC)
 		_phase_orders(Rules.SIM_SUBSTEP_SEC)
 		_phase_boats(Rules.SIM_SUBSTEP_SEC)
 		_phase_landings()
@@ -899,6 +911,49 @@ func keep_gap(p: Vector2) -> float:
 ##    search `place_ashore` still uses — a keep standing on the aimed tile still lands somebody beside it.
 ##  · **The append order was the press order**, and two boats aimed at one tile arrived on the same
 ##    sub-step: whoever unloaded first took the target tile.
+
+
+## **A body standing on the water's edge with nothing else to do fishes, and the fish goes into the
+## 창고.** Ticket 05-09 — (2026-09-02, the user: 「해안가 어디서나 할 수 있는데 특정 위치에 좋은 포인트가
+## 눈에 보여야 될 거 같아」 — *you can fish anywhere along the coast, but there should be good spots at
+## particular places that are visible*.)
+##
+## ⚠⚠ **THE GOOD SPOT IS NOT HERE.** It floats about two 칸 off the island and a body has to take the
+## 나무 배 out to it — and there is no player boat in this game at all (the only hull is the beasts').
+## **This is the 「anywhere along the coast」 half**, which is the half that can stand today.
+##
+## ⚠⚠ **A CATCH NEEDS A 창고 TO GO INTO.** With none built there is nowhere to put a fish, and a body
+## that fished into nothing would be spending ten seconds a catch on a number that does not exist.
+##
+## ⚠ **「Sent to fish」 and 「happens to be standing there」 are the same thing today, and that is not a
+## decision — it is what the board can express.** An order is CLEARED on arrival, so a body that was
+## sent to a coast 조각 is indistinguishable from one that walked there for its own reasons a sub-step
+## later. The day 「go and fish」 is its own order, this is where it plugs in.
+func _phase_fishing(dt: float) -> void:
+	if army == null or store == null:
+		return
+	for i in soldier_state.size():
+		if i >= soldier_fish.size():
+			break
+		if int(soldier_state[i]) != SoldierState.ASHORE:
+			soldier_fish[i] = 0.0
+			continue
+		# **Nothing else to do**: not walking anywhere, not fighting anything, and standing on the edge.
+		if int(soldier_order[i]) >= 0 or int(soldier_target[i]) != TARGET_NONE or store_tile < 0:
+			soldier_fish[i] = 0.0
+			continue
+		if not grid.is_coast(_tile_of(soldier_pos[i])):
+			soldier_fish[i] = 0.0
+			continue
+		var spent := float(soldier_fish[i]) + dt
+		if spent < Rules.FISH_SEC:
+			soldier_fish[i] = spent
+			continue
+		# ⚠ **The remainder is carried, not thrown away.** A catch that lands mid-sub-step would
+		# otherwise make every catch after the first take a whole extra sub-step, and ten seconds would
+		# quietly not be ten seconds.
+		soldier_fish[i] = spent - Rules.FISH_SEC
+		store.add("fish", Rules.FISH_PER_CATCH)
 
 
 ## **Builds the 창고 on one 조각, or answers false.** Ticket 05-08.
