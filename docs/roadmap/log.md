@@ -19,6 +19,76 @@
 [roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅✅ **The generated island got its rules — 2026-09-02, fourth round**
+
+⚠⚠ **This is the FOURTH round of 2026-09-02**, after the deletion below it. **Nothing was built and no
+net was run — the round was fifteen questions and fifteen answers**, and the answers are in ticket 08-01
+word for word. **This section keeps the quotations and what they overturned.**
+
+> The user opened with: ***"Look at the ticket, ask what has to be asked, and let us make the ticket
+> concrete."*** (「티켓보고 물어봐야하는것들 물어봐서 티켓 구체화하자」)
+
+### 1. The grilling shape changed mid-round: two questions per round, not one
+
+> ***"Hm, the size stays the same | and ask two questions at a time."***
+> (「음 크기는 같은걸로하자 | 그리고 질문 2개씩 해줘」)
+
+**The `grilling` skill said 「one question is the round」 since 2026-09-01.** The user asked for two after
+three single-question rounds. ⚠ **The skill file was not edited this round** — the reading is kept in
+memory and the skill is corrected when the user says so.
+
+### 2. What was decided, in order
+
+| Asked | Answered |
+|---|---|
+| What varies — outline only, or trees, rocks and 성채 too | ***"All three."*** (「셋다」) |
+| Does the drawn island stay as run one | ***"Generated from the first run."*** (「첫 판부터 생성」) |
+| Does the size vary | ***"Hm, let us keep the size the same."*** (「음 크기는 같은걸로하자」) — and later ***"that island needs widening a bit"*** (「그 섬을 조금더 넓혀야할듯」) |
+| A seed, or fresh every time | ***"Let us have a seed."*** (「시드로 두자」) |
+| Is the 성채 always on the plateau | ***"On the second storey."*** (「2층으로」) |
+| One harbour side, or several | ***"Harbour? There is no such thing — they just come from anywhere. You see them coming and respond."*** (「항구? 그런건 없는데 그냥 어디서드지 오는거임 미리보고 대응해야지」) |
+| Is the ore on a detached block like now | ***"One ore is mandatory, and the rest — rock, tree — must have at least one each."*** (「철광석 1개는 무조건 있어야하고 나머지 돌 나무는 1개 무조건 있는걸로해서 만들어야할듯」) |
+| — the user's own question — | ***"Is this a random seed? Or is it that some rules are set and it builds itself automatically?"*** (「이게 랜덤 시드인가? 어느정도 규약을 정하고 자동으로 만들어지는건가?」) — **answered: both. Rules fixed, seed picks one island inside them** |
+| One stair or more | ***"Between 1 and 3."*** (「1~3 사이」) |
+| Trees in one forest or scattered | ***"It should go like this — a 칸 thick with trees, a rock 칸, an ore 칸."*** (「이게 나무가 무성한 칸 돌 칸 철광석 칸 이렇게 행햐할듯」) |
+| Is the ore 칸 joined to the island | ***"It has to be attached to the island."*** (「섬에 부텅야함」) |
+| How many tree and rock 칸 | ***"Trees 1~3, rocks 1~3, ore 1~2 — set for now."*** (「나무 1~3 돌 1~3 철 1~2 로 일단 지정」) |
+| Can bodies walk on a resource 칸 | ***"Blocked."*** (「막힌다」) |
+| Is the barricade the 성벽 or a sixth building | ***"It'd be one of the buildings you can build."*** (「지을 수 있는 건물중에 하나일듯」) |
+| One plateau or two | ***"Second storeys 1~2, but every second storey must include a stair."*** (「이층은 1~2개 하지만 모든 2층은 계단을 포함해야함」) |
+| How far the 성채 stands from the coast | ***"3 칸 or more from every side."*** (「모든변에서 3칸이상」) |
+
+### 3. ⚠⚠ Two things said in passing opened a task of their own
+
+> ***"Hm, and the buildings I build should be per 조각, yeah. We should widen the island and build
+> barricades to block what comes."***
+> (「음 그리고 내가 건물을 짓는건 조각단위로 해야할듯 ㅇㅇ 섬을 더 넓히고 바리게이트를 지어서 오는걸 막아야할듯」)
+
+**Task 09 stood on that sentence** — buildings per 조각, and a barricade as the first thing the player
+places. ⚠ **Per 조각 disagrees with the command unit (칸, 03-08) and the resource unit (칸, 08-02).** The
+user said it and the reason was not asked; **09-01 is `Type: grilling`** and asks five things — is it the
+성벽, does it block bodies, does it break, what does it cost, what does it look like.
+
+### 4. ⚠⚠ What was overturned, and one thing that was NOT
+
+- **The ore's detached block** (the user's own placement of 2026-08-31) → **on the island, 1~2.** Ticket
+  05-06 「how is the ore reached」 dissolved: there is nothing to reach
+- **The glossary's 「ore: one per island」** → 1~2
+- **「trees and rocks are scenery」** → **resource 칸**, one kind per 칸, blocking, gathered from beside
+- ⚠ **「no harbour」 is NOT a code reversal — measured after the round.** The beasts' boats already depart
+  from open sea and aim at `Grid.beach_ring`, every beach around the island. The `H` in `island.json` is
+  the file's outer rim, 108 조각, and nothing in `src/` routes from it. **The word died; the code was
+  already there.** ⚠ The model told the user mid-round that the boat code would need changing — **that
+  was wrong, and the ticket says so.**
+
+### 5. The user closed it
+
+> ***"Good, let us add the tickets like this, if that is everything."*** (「좋이 ㅣ렇게 해서 티켓 추가하자 ㅇㅇ 다 됬으면」)
+
+**Written**: 08-01 rewritten from `grilling` to `task` with the fifteen rows · 08-02 new · task 09 and
+09-01 new · 05-06 resolved · 06-02 half-answered · the map's opening, task table and subtask tables ·
+the glossary's three new rows, three reversal rows and one dead word.
+
 ## ✅ **The 성채 stopped turning out soldiers on a clock — 2026-09-02, third round**
 
 ⚠⚠ **This is the THIRD round of 2026-09-02**, after the one below it. **One thing was built, and it is a
