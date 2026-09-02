@@ -16,8 +16,84 @@
 출처로 삼지 마라.** 뒤집힌 과정은 아래 「왜 뒤집혔나」 절에 사용자의 말 그대로 남아 있다.
 
 ⚠⚠ **2026-08-27 에 이 파일에서 「무엇을 할 것인가」가 떨어져 나갔다.** 주간 목표는 이제
-[roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
+이 폴더의 `README.md` 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
+
+## ⚠⚠ **The harness was measured and then cut — 2026-09-03, branch `claude/project-harness-review-v82cvx`, not on `main`**
+
+**No `src/` line and no ticket moved.** The round began as a question about the harness and became a
+cut: **`CLAUDE.md` 171 → 115 lines, the skills 1476 → 1235, the agents 675 → 577.** ⚠⚠ **Not one rule
+was deleted** — what went was the same sentence said twice, the provenance of which skill split from
+which, and two ASCII diagrams a sentence above them already said.
+
+### 1. What could not be measured, and why that is the finding
+
+**The nets cannot run in a remote session at all.** The runner is PowerShell-only and the Godot binary is
+gitignored, so a session that is not the user's own Windows machine has **no instrument**. ⇒ **The last
+real number stands from 2026-09-02 night: 통과 3187 · 실패 4 · 20 nets.**
+
+⚠ **Skill usage cannot be measured from inside the repo either.** The counts this repo has quoted before
+(「149 sessions, ZERO calls」) were read out of session transcripts on the user's machine, and a remote
+container holds only its own. **What the repo can show is which path a ticket took**: 25 closed with a
+plan written, 9 closed by an answer with the plan section still empty, 15 open and waiting for one.
+
+⚠⚠ **Counting how often a skill's NAME appears in the docs measures the wrong thing.** `plan-into-ticket`
+looked like the most-used skill at 31 mentions — **every one of them the same boilerplate line in 30
+tickets, and its meaning is "no plan has been written here yet".** The opposite of use.
+**Two skills appear nowhere in the repo at all**: `listup` and `resolving-merge-conflicts`.
+
+### 2. Why the reply rule was not being kept
+
+**The rule was written in the shape it forbids.** Measured: **128 bold spans and 58 ⚠ marks over 171
+lines** — with everything emphasised, 「the answer goes in the first line」 carried no more weight than
+anything else. **And it was four sections, not one**, so obeying all four (one bullet per line, a heading
+per subject, blank lines between) made replies LONGER, which is what the first rule forbids.
+
+⇒ **Four sections became one of twelve bullets. Bold 128 → 59, ⚠ 58 → 28.**
+
+### 3. What moved out, and the rule it followed
+
+**The skills' own README already said it**: *what only some runs reach goes in a sibling file behind a
+one-line pointer.* Two things qualified and neither was in one.
+
+- **The art and mesh rules** left `CLAUDE.md` for `docs/manual/making-what-the-player-sees.md` — three
+  lines and a pointer stayed. **A `docs/manual/README.md` was stood up** so this folder obeys the repo's
+  own 「open a folder's README」 rule
+- **verify-look's MCP-bridge section**, 36 lines that open with *"read this only when the server is
+  re-enabled"*, became `docs/manual/godot-mcp-bridge.md`
+- ⚠ **It was first written as a sibling INSIDE `.claude/agents/`, and that was wrong** — a subdirectory
+  there is scanned for agent definitions
+
+### 4. Two things the cut caught
+
+- ⚠⚠ **`CLAUDE.md` still said December was a DEMO.** This map changed it to an early-access release on
+  2026-09-02 and the rules file never followed. **Its own line says whichever the user said last wins**
+- ⚠ **「A block's corners are not cut at 45°, they are slightly tilted」 lived in `CLAUDE.md` and nowhere
+  else.** Cutting the section would have deleted a live mesh rule; it went to the Blender manual
+
+### 5. The user opened the design folder, and it is the GDD
+
+**Measured: 17 documents, and 14 of them are cited nowhere outside the folder.** The three that are cited
+are `a-left-press-on-nothing-keeps-the-hand` (five places), `commit-before-the-fight-not-during` (two)
+and `07-how-the-sea-moves` (one). **「재미」 appears in five of the seventeen.** The ten numbered files
+point at tickets that were all deleted.
+
+> *"Shall we write the design again? It has to be written in Korean, and the reason WHY it was designed
+> that way has to be clear, and the fun point has to be certain — and if it does not read well, remake
+> it. Delete the unused files there and stand a ticket to update it."*
+> (2026-09-03, the user)
+
+⚠⚠ **This is the GDD the folder's own README already calls its defect**, and `CLAUDE.md` already fixes
+its shape: Korean, one page, no twin. ⇒ **It went on `TODO.md`, not into a ticket** — the user asked for
+the work to be left as work.
+⚠ **One word of the user's could not be made out** (「매일/패션 루프 디자인」) and was read as *core loop*.
+**It is written down as unconfirmed rather than guessed into the entry.**
+
+### 6. `CLAUDE.md` was edited, and the rule says it must not be
+
+**This skill's own step 8 says do not touch it — only the user adds to it.** ⚠ **The user instructed the
+edit directly** (*"Shorten it. And split it if you can"*), so it was done and is recorded here rather
+than passed over in silence. **The rule stands for every round that does not carry that instruction.**
 
 ## ✅✅ **The hand got one button and the bodies started noticing each other — 2026-09-02, an evening session alongside the sixth round, branch `worktree-tickets-03-11-07-01`, not yet on `main`**
 
@@ -1883,7 +1959,7 @@ own.**
 
 ## ⚠⚠ **블렌더를 열기 전에 읽는 문서가 있다**
 
-**[티켓 01 — 한 칸이 무엇인가](tickets/01-what-one-piece-is.md).** 칸을 여섯 번 뽑아 여섯 번 다
+**티켓 01 — 한 칸이 무엇인가** (⚠ 그 파일은 2026-08-30 에 지워졌다). 칸을 여섯 번 뽑아 여섯 번 다
 불합격이었고, **그 이유가 전부 그 문서에 적혀 있었는데 아무도 안 읽었다.** 사용자의 판정 일곱 줄과
 Bad North 강연이 말한 아홉 줄, 그리고 만들 때 지킬 일곱 가지가 한 장에 있다.
 

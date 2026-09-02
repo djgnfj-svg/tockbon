@@ -134,6 +134,8 @@ the game where a body's feet go. **If they disagree, bodies walk through the sta
   levels, stairs the ODD, and a body crosses one notch and no more.
 - **A stair run spans exactly one storey however many 조각 long it is.** One 조각 of run is 45°, two is
   26.6°, and a real staircase is 30 to 37.
+- ⚠⚠ **A block's corners are NOT cut at 45° — they are slightly tilted.** This is a live rule and it
+  has been trampled once by a round that opened Blender without reading it first.
 - **The island is one mesh, ~1100 vertices, one draw call.** Nothing here is a performance problem, and
   optimisation is never a reason to change the approach.
 - **The boat's length and beam are a RULE, not a picture** — `Rules.BOAT_HULL_HALF_TILES` (2.1) and
