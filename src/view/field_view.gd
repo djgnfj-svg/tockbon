@@ -146,10 +146,20 @@ var _tex_anim: Array = _load_beast_anim()
 ## of that frame's height, keyed by the picture. See `_measure_body_feet`. ⚠ **Declared here and not
 ## beside the boats**, because the island needs it for exactly the reason the deck always did.
 var _foot_body: Dictionary = _measure_body_feet(_tex_facing, _tex_anim)
-## **How much of its own canvas each row's ANIMAL actually fills across**, measured off the standing
-## pictures once at load. **This is what divides the canvas back out of a body's drawn size**, so a
+## **The first and last texel column of each body picture that holds any opaque pixel**, `(lo, hi)`
+## inclusive, keyed by the picture — the INK's own extent across its canvas, standing pictures and
+## every strip frame alike. See `_measure_ink_cols`.
+##
+## ⚠⚠ **ONE SCAN, TWO READERS** (2026-09-02, ticket 03-16). `_ink_frac` below divides the canvas back
+## out of a body's drawn width, and `body_at_px` answers a press by the ink's drawn edges — **a press
+## rectangle on the CANVAS was 2.2 times the man**: a 72-texel frame carries 33 texels of 검사, and a
+## press 8 px beside him on empty ground picked him (`verify-look`). Both facts are the same columns,
+## so both read this one dictionary rather than each scanning alpha on its own.
+var _ink_cols: Dictionary = _measure_ink_cols(_tex_facing, _tex_anim)
+## **How much of its own canvas each row's ANIMAL actually fills across**, read off the standing
+## pictures' columns above. **This is what divides the canvas back out of a body's drawn size**, so a
 ## strip that needs a wider frame stops changing how big the body reads. See `Look.beast_draw_scale`.
-var _ink_frac: Array = _measure_body_ink(_tex_facing)
+var _ink_frac: Array = _measure_body_ink(_tex_facing, _ink_cols)
 
 ## **The two drawn things the marks wear, and the font the number is set in.** Loaded once, beside
 ## the body pictures, for the same reason: a `load()` in a drawer is a disk read in a frame.
@@ -735,9 +745,18 @@ func tile_to_screen_px(tx: int, ty: int) -> Vector2:
 ## ⚠⚠ **IT READS THE POOLED SPRITES THE VIEW ITSELF PLACED** — position, scale, texture, visible, the
 ## agreed measuring surface in `GLOSSARY.md` — and projects them through `world_to_screen_px`, so the
 ## rectangle IS the picture: the pitch, the yaw, the zoom, the crowd offset, the idle sway and the
-## `_pitch_stretch` are all already inside the sprite's own fields. **No new constant** — the sprite's
+## `_pitch_stretch` are all already inside the sprite's own fields. **No new constant** — the picture's
 ## size is the pick area, and when 03-17 moves a body onto its lattice seat the pick follows the drawing
 ## by construction.
+##
+## ⚠⚠ **THE WIDTH IS THE INK'S AND NOT THE CANVAS'S** (2026-09-02, the bounce). For one round the
+## rectangle was the whole `Sprite3D` quad — texture width times scale — and that quad is 2.2 times the
+## man: a 72-texel frame with 33 texels of 검사 in it, the rest transparent margin. `verify-look` pressed
+## empty ground 8 px beside a body and picked him. **The drawn edges are the first and last opaque
+## column of the texture the sprite wears** (`_ink_cols`, the same scan that sizes the body), placed off
+## the canvas centre in texels — a billboard's own x is the camera's right, so a texel to the right of
+## centre is a texel to the right on the glass. The height stays the canvas's: the frames fill it, and
+## the rows under the feet are already folded into the sprite's position by `_put_body`.
 ## ⚠ **Sprite px per 조각 across is read off `_visible_ground_px`**, the one place the zoom becomes a
 ## ground span, rather than written as `zoom * TILE_PX` a second time here.
 ## ⚠ **The foot and the top go through `world_to_screen_px` at their own heights**, so the vertical
@@ -757,10 +776,16 @@ func body_at_px(at: Vector2) -> int:
 			continue
 		var xz := Vector2(s.position.x, s.position.z) * Look.TILE_PX
 		var half_tall := float(s.texture.get_height()) * s.scale.y * s.pixel_size * 0.5
-		var half_wide_px := float(s.texture.get_width()) * s.scale.x * s.pixel_size * 0.5 * px_per_tile
 		var foot := world_to_screen_px(xz, s.position.y - half_tall)
 		var top := world_to_screen_px(xz, s.position.y + half_tall)
-		var drawn := Rect2(foot.x - half_wide_px, top.y, half_wide_px * 2.0, foot.y - top.y)
+		# One texel of this sprite on the glass, and where its ink starts and ends measured from the
+		# canvas centre the sprite is placed by. A picture never scanned spans its whole canvas.
+		var texel_px := s.scale.x * s.pixel_size * px_per_tile
+		var half_w := float(s.texture.get_width()) * 0.5
+		var span: Vector2i = _ink_cols.get(s.texture, Vector2i(0, s.texture.get_width() - 1))
+		var left := foot.x + (float(span.x) - half_w) * texel_px
+		var right := foot.x + (float(span.y) + 1.0 - half_w) * texel_px
+		var drawn := Rect2(left, top.y, right - left, foot.y - top.y)
 		if not drawn.has_point(at):
 			continue
 		var d := at.distance_to(foot)
@@ -2715,28 +2740,58 @@ static func _measure_body_feet(pool: Array, strips: Array) -> Dictionary:
 ## ⚠ **The standing pictures only.** A strip is exactly the thing that reaches wider than the animal,
 ## so measuring the frames would let a raised arm shrink the whole body for as long as it was raised.
 ## ⚠ **1.0 for a row with no picture**, which draws the plain rounded shape and needs no division.
-static func _measure_body_ink(pool: Array) -> Array:
+## ⚠ **It reads `cols` and scans nothing itself since 2026-09-02** — the columns are `_measure_ink_cols`'s,
+## the same ones `body_at_px` picks by, so the width a body is drawn at and the width it is pressed at
+## cannot come from two scans that disagree.
+static func _measure_body_ink(pool: Array, cols: Dictionary) -> Array:
 	var out := []
 	for raw_pics in pool:
 		var widest := 0.0
 		for pic: Texture2D in (raw_pics as Array):
-			if pic == null:
+			if pic == null or not cols.has(pic):
 				continue
-			var img := pic.get_image()
-			if img == null:
-				continue
-			var lo := img.get_width()
-			var hi := -1
-			for x in img.get_width():
-				for y in img.get_height():
-					if img.get_pixel(x, y).a > 0.0:
-						lo = mini(lo, x)
-						hi = maxi(hi, x)
-						break
-			if hi >= lo:
-				widest = maxf(widest, float(hi - lo + 1) / float(img.get_width()))
+			var span: Vector2i = cols[pic]
+			if span.y >= span.x:
+				widest = maxf(widest, float(span.y - span.x + 1) / float(pic.get_width()))
 		out.append(widest if widest > 0.0 else 1.0)
 	return out
+
+
+## **Every body picture's opaque columns, `(lo, hi)` inclusive, keyed by the picture** — the standing
+## pictures and every strip frame, for the reason `_measure_body_feet` walks the strips: a frame that was
+## never measured would be picked by its whole canvas while the standing picture beside it is picked by
+## the man, and the pick area would jump the moment he started walking.
+static func _measure_ink_cols(pool: Array, strips: Array) -> Dictionary:
+	var out := {}
+	for raw_pics in pool:
+		for pic: Texture2D in (raw_pics as Array):
+			_ink_one(out, pic)
+	for raw_type in strips:
+		for raw_facing in (raw_type as Array):
+			for raw_anim in (raw_facing as Array):
+				for pic: Texture2D in (raw_anim as Array):
+					_ink_one(out, pic)
+	return out
+
+
+## One picture's opaque columns, written into `out` and skipped when it is already there. **A picture
+## with no opaque pixel at all spans its whole canvas** — there is nothing narrower to point at.
+static func _ink_one(out: Dictionary, pic: Texture2D) -> void:
+	if pic == null or out.has(pic):
+		return
+	var img := pic.get_image()
+	if img == null:
+		return
+	var w := img.get_width()
+	var lo := w
+	var hi := -1
+	for x in w:
+		for y in img.get_height():
+			if img.get_pixel(x, y).a > 0.0:
+				lo = mini(lo, x)
+				hi = maxi(hi, x)
+				break
+	out[pic] = Vector2i(lo, hi) if hi >= lo else Vector2i(0, w - 1)
 
 
 ## Row `type_id`'s ink fraction, **and never 0** — it is a divisor.

@@ -175,6 +175,10 @@ func _table() -> Dictionary:
 			# canvas stops shrinking the body. An alpha scan and a divisor — neither strokes anything.
 			"_measure_body_ink": 0,
 			"_ink_of": 0,
+			# The one alpha-column scan both the drawn width and the pick rectangle read (ticket 03-16,
+			# 2026-09-02) — the same shape as the foot pair above, and it strokes nothing either.
+			"_measure_ink_cols": 0,
+			"_ink_one": 0,
 			# The wolf's frame strips. `_body_tex` picks the picture and the other three feed it; not
 			# one of them strokes a canvas, same as the standing lookup they sit beside.
 			"_load_beast_anim": 0,

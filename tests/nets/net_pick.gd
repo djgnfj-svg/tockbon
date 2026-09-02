@@ -18,9 +18,11 @@ extends RefCounted
 ##
 ## **Row 1** was red before the code went in: chest and head presses picked nobody at yaw 90 and 180
 ## at pitch 40, and everything but the foot missed at pitch 20 — the half-조각 origin error the ticket
-## measured, and the pitch the fix on the ground could never reach.
+## measured, and the pitch the fix on the ground could never reach. **Its edge presses were red a
+## second time** (2026-09-02, the bounce): the rectangle was the sprite's CANVAS, 2.2 times the ink.
 ## **Row 2** was red at a 2층 bias of 0.071 조각 up the screen — the stepped ray answering at a rung
-## instead of at the surface.
+## instead of at the surface. **Its cliff-face row** is what measures the face branch and the sign of
+## `FACE_HIT_INSET`, which the lattice forgives as an edge.
 
 const YAWS := [0.0, 90.0, 180.0, 270.0]
 const PITCHES := [20.0, 40.0, 80.0]
@@ -184,6 +186,43 @@ func _press_every_drawn_body(t, game: Game, fv: FieldView, b: Battle, label: Str
 			t.ok(got == who and game.hand.ids.size() == 1,
 				"%s — 몸 %d 의 %s 을 누르면 그 몸이 잡힌다 (잡힌 것 %s)" % [label, who, where,
 				("몸 %d" % got) if got >= 0 else "없음"])
+		# ⚠⚠ **THE WIDTH, WHICH THE THREE PRESSES ABOVE NEVER MEASURE** — they all sit on the picture's
+		# vertical centre line, and `verify` multiplied the rectangle's width by 12 with every one of
+		# them still green. **The drawn edges are the INK's**, the opaque columns of the texture the
+		# sprite wears, read off the PNG here and never asked of the view: a body's canvas is 72
+		# texels with 33 of ink, and a rectangle on the canvas picked a press 8 px beside the man
+		# (`verify-look`, 2026-09-02). The edge world points are the sprite's centre pushed along the
+		# CAMERA's right axis — a billboard's own x — and unprojected by the engine.
+		var cols := _ink_cols_of(s.texture)
+		var texel := s.scale.x * s.pixel_size
+		var half_w := float(s.texture.get_width()) * 0.5
+		var cam_x: Vector3 = fv._cam.global_transform.basis.x
+		var left: Vector2 = fv._cam.unproject_position(s.position + cam_x * ((float(cols.x) - half_w) * texel))
+		var right: Vector2 = fv._cam.unproject_position(s.position + cam_x * ((float(cols.y) + 1.0 - half_w) * texel))
+		var edges := {
+			"왼 가장자리 1px 안": [left + Vector2(1.0, 0.0), who],
+			"오른 가장자리 1px 안": [right - Vector2(1.0, 0.0), who],
+			"왼 가장자리 3px 밖": [left - Vector2(3.0, 0.0), -1],
+			"오른 가장자리 3px 밖": [right + Vector2(3.0, 0.0), -1],
+		}
+		for name: String in edges:
+			var scr: Vector2 = edges[name][0]
+			var want := int(edges[name][1])
+			if not _on_glass(scr):
+				t.ok(false, "%s — 몸 %d 의 %s 이 화면 안이다 %s" % [label, who, name, scr.round()])
+				continue
+			game._let_go()
+			_press_release(game, scr)
+			var got := int(game.hand.ids[0]) if game.hand.ids.size() == 1 else -1
+			if want >= 0:
+				t.ok(got == want and game.hand.ids.size() == 1,
+					"%s — 몸 %d 의 %s 을 누르면 그 몸이 잡힌다 (잡힌 것 %s)" % [label, who, name,
+					("몸 %d" % got) if got >= 0 else "없음"])
+			else:
+				# ⚠ Nobody — and not the neighbour two 조각 over either, which the same empty hand says.
+				t.ok(game.hand.is_empty(),
+					"%s — 몸 %d 의 %s 을 누르면 아무도 안 잡힌다 — 옆 몸도 아니다 (잡힌 것 %s)" % [label, who, name,
+					("몸 %d" % got) if got >= 0 else "없음"])
 	t.eq(pressed, b.ashore_ids().size(), "%s — 자가 점검: 검사 넷이 다 그려져 있고 넷 다 눌렀다" % label)
 
 	# The inversion: open ground two 조각 in FRONT of a body (toward the camera) is below every drawn
@@ -197,6 +236,25 @@ func _press_every_drawn_body(t, game: Game, fv: FieldView, b: Battle, label: Str
 			_press_release(game, scr)
 			t.ok(game.hand.is_empty(), "%s — 몸 앞 두 조각의 맨땅을 누르면 아무도 안 잡힌다" % label)
 	game._let_go()
+
+
+## The first and last texel column of `pic` holding any opaque pixel, `(lo, hi)` inclusive — the ink's
+## own extent, scanned off the PNG here so the assertion above is against the picture and not against
+## whatever the view remembers about it. The whole canvas when the picture has no ink at all.
+func _ink_cols_of(pic: Texture2D) -> Vector2i:
+	var img := pic.get_image()
+	var w := img.get_width()
+	var lo := w
+	var hi := -1
+	for x in w:
+		for y in img.get_height():
+			if img.get_pixel(x, y).a > 0.0:
+				lo = mini(lo, x)
+				hi = maxi(hi, x)
+				break
+	if hi < lo:
+		return Vector2i(0, w - 1)
+	return Vector2i(lo, hi)
 
 
 # --- row 2: the ground ----------------------------------------------------------------------------
@@ -229,6 +287,7 @@ func _the_terrain_pick_answers_the_engine_ray_at_every_yaw(t, game: Game) -> voi
 			rng.seed = LATTICE_SEED
 			_lattice_against_the_engine(t, game, fv, g, heights, h_top, rng, label)
 			_centre_bias_by_level(t, fv, g, label)
+			_the_face_of_a_cliff_names_the_tall_tile(t, fv, g, heights, h_top, label)
 
 
 func _lattice_against_the_engine(t, game: Game, fv: FieldView, g: Grid, heights: PackedFloat32Array,
@@ -291,6 +350,65 @@ func _engine_terrain_tile(fv: FieldView, g: Grid, heights: PackedFloat32Array, h
 		guard += 1
 	var s := o + d * ((Look.TERRAIN_H_WATER - o.y) / d.y)
 	return Vector2i(int(floor(s.x)), int(floor(s.z)))
+
+
+## **The visible FACE of every 2층 cliff, sampled directly.** For each 2층 조각 whose camera-side
+## neighbour is 1층 land, screen points down the shared edge between the tall 조각's top and the low
+## neighbour's ground — three places along the edge, seven heights — through the pick and through the
+## engine march, compared 조각 for 조각 **with no edge tolerance at all**.
+##
+## ⚠⚠ **THE LATTICE ROW CANNOT SEE THIS** (`verify`, 2026-09-02): a face hit is answered ON the shared
+## edge pushed `FACE_HIT_INSET` inside, and a nudge of 0.0005 조각 the wrong way — into the 조각 in
+## FRONT of the cliff — is a disagreement 0.0005 조각 from an edge, which `EDGE_TOL` forgives. The sign
+## of that nudge, and the face branch existing at all, are measured here and nowhere else: with the
+## sign flipped or the branch gone the pick names the low 조각 in front, and the engine does not.
+func _the_face_of_a_cliff_names_the_tall_tile(t, fv: FieldView, g: Grid, heights: PackedFloat32Array,
+		h_top: float, label: String) -> void:
+	var down := fv._ground_down()
+	var toward_cam := Vector2i(int(round(down.x)), int(round(down.y)))
+	var samples := 0
+	var engine_tall := 0
+	var wrong := 0
+	var example := ""
+	for ty in g.h:
+		for tx in g.w:
+			var tall := g.tile_index(tx, ty)
+			if g.water[tall] != 0 or g.level_of(tall) != 2:
+				continue
+			var nx := tx + toward_cam.x
+			var ny := ty + toward_cam.y
+			if nx < 0 or ny < 0 or nx >= g.w or ny >= g.h:
+				continue
+			var low := g.tile_index(nx, ny)
+			if g.water[low] != 0 or g.level_of(low) != 0:
+				continue
+			var top: float = heights[tall]
+			var ground: float = heights[low]
+			# The shared edge, in 조각 units: the tall 조각's centre pushed half a 조각 toward the camera,
+			# then along the edge itself.
+			var edge_mid := Vector2(float(tx) + 0.5, float(ty) + 0.5) + Vector2(toward_cam) * 0.5
+			var along := Vector2(float(-toward_cam.y), float(toward_cam.x))
+			for u: float in [-0.3, 0.0, 0.3]:
+				var e := edge_mid + along * u
+				for k in 7:
+					var h := lerpf(ground + 0.05, top - 0.05, float(k) / 6.0)
+					var scr: Vector2 = fv._cam.unproject_position(Vector3(e.x, h, e.y))
+					if not _on_glass(scr):
+						continue
+					samples += 1
+					var eng := _engine_terrain_tile(fv, g, heights, h_top, scr)
+					var eng_t := g.tile_index(eng.x, eng.y) if eng.x >= 0 and eng.y >= 0 and eng.x < g.w and eng.y < g.h else -1
+					if eng_t == tall:
+						engine_tall += 1
+					var got := fv.world_to_tile(fv.screen_to_terrain_px(scr))
+					var got_t := g.tile_index(got.x, got.y) if got.x >= 0 and got.y >= 0 and got.x < g.w and got.y < g.h else -1
+					if got_t != eng_t:
+						wrong += 1
+						if example == "":
+							example = " 예: 절벽 (%d,%d) 높이 %.2f 화면 %s 엔진 %s 픽 %s" % [tx, ty, h, scr.round(), eng, got]
+	t.ok(samples >= 20 and engine_tall * 2 >= samples,
+		"%s — 자가 점검: 절벽 면 위의 점 %d 개 중 엔진이 %d 개를 그 2층 조각으로 댄다" % [label, samples, engine_tall])
+	t.eq(wrong, 0, "%s — 절벽 면을 누르면 픽과 엔진이 같은 조각을 댄다 — 가장자리 봐주기 없이%s" % [label, example])
 
 
 ## Every land 조각's own centre, unprojected by the engine at its own height, put through the pick:
