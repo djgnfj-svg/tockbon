@@ -16,6 +16,139 @@
 [roadmap.md](../roadmap.md) 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅✅ **December stopped being a demo, the soldier stopped being summoned, and the game got a part 2 — 2026-09-02**
+
+**Nothing was built. No net was run — there is no Godot and no PowerShell in the box this round ran in,
+and `tests/run_nets.ps1` is the only runner. The last measured figure stands at 1567 pass · 4 fail.**
+**Nineteen things were decided and one of them moves the destination of the whole map.**
+
+### 1. December is an EARLY ACCESS RELEASE, not a demo
+
+> *"Keeping the December demo is the right call — at this rate I will be developing forever. So I am
+> aiming for an Early Access release in December."* (「십이 월에 얼리엑세스 출시를 좀 목표로 가는 게」)
+
+⚠⚠ **This reverses 2026-08-26, where the user made December a DEMO and not a release.** What the demo
+was not carrying comes back: **saves, an options screen, sound, a store page and its builds, and
+language.**
+
+### 2. The 검사 stops being summoned — the body arrives by an EVENT
+
+> *"The very idea that I summon soldiers — each soldier is going to have stats, and that makes them all
+> uniform, which is a bit rubbish, isn't it? So I want the soldier to be something I GET, through some
+> particular trigger. Like RimWorld. Then a rare one can turn up, or one that is flawed but usable."*
+> (「병사를 내가 소환한다는 개념 자체가 ... 획일화되는 거잖아 ... 특정 계기로 내가 얻었으면 좋겠어.
+> 라이크 림월드처럼」)
+
+**Measured against what is actually running**: the 성채 turns out one 검사 every twenty seconds for free,
+capped at nine, and **`Army` carries only `type_id`, `alive` and `slot_id`** — every one of 체력 · 공격 ·
+주기 · 속도 · 사거리 is read from the `UNITS` row by species, so **four 검사 are literally the same body.**
+
+> *"That twenty-second one obviously goes."* (「이 십 초 나오는 건 당연히 없애는 거고」)
+
+**And no mass production**: *"Can soldiers be mass-produced? No, they cannot."* (「양산할 순 없을 거지」)
+
+### 3. Bodies come on the SAME boat as the 늑대 — as prisoners, and as captures
+
+> *"Prisoners, yes — and I would like capture as well."* (「포로도 있고 근데 포획도 있었으면 좋겠다」)
+
+⚠ **Capture has nothing to take today**: 죽음 runs six frames and the body disappears, and the glossary
+already settles that **there is no corpse**. The agreed shape is **knock down, then send a 부대 to fetch**.
+
+### 4. The enemy does not have to be a 늑대 — a person works the same
+
+> *"If we go body by body, then 'lots of monsters arriving' fades out a bit too. And really the enemy
+> does not have to be a wolf. A wolf is fine, but a person works exactly the same. A person is fine."*
+> (「적이 늑대일 필요도 없고 ... 실제로 사람이어도 똑같아」)
+
+**Settled**: the 늑대 stays and PEOPLE are added; **many kinds and swarms are both LATER**, not now.
+⚠⚠ **A human enemy costs zero new pictures** — `assets/human/man` already holds 124, and 124 is
+**four directions × thirty-one frames** (idle 8 · attack 8 · death 6 · walk 4 · hurt 4 · standing 1).
+
+### 5. 병종 is deleted — the EQUIPPED WEAPON decides the animation
+
+> *"There is no separate unit class. The animation changes according to the weapon that is fitted."*
+> (「병종이 따로 없고 낀 무기에 따라서 애니메이션이 바뀔 거 같은데?」)
+
+⚠⚠ **`GLOSSARY.md` calls the 검사 「the player's body, and the only 병종」. That line dies.**
+
+**Three slots, on the body and not the 부대**: 머리 · 몸 · 손.
+⚠ **This reverses two lines from 2026-09-01** — 「the three equipment slots are cut, only a hand
+remains」 and 「equipment is worn by the whole 부대 at once, not body by body」.
+
+> *"When a weapon is equipped it has to be worn ON the picture. Changing the colour is meaningless.
+> Colour is just each user's soldier colour."* (「무기를 착용하면 현재 그림에 무기가 착용돼야 된다고」)
+
+**So a palette swap was refused for equipment and kept for telling the multiplayer players apart.**
+**The costs put in front of the user**: an overlay set is **84 pictures per item** (skipping 죽음 and
+피격); a [socket](https://dev.epicgames.com/documentation/en-us/unreal-engine/paper-2d-sprite-sockets-in-unreal-engine)
+makes it **four**, at the price of stamping a position and an angle onto 84 frames once.
+⚠ **A socket cannot change a POSE** — the bow therefore carries its own animation set, and that is what
+「the weapon decides the animation」 means.
+
+### 6. Numbers split in two — the body is born with its own, equipment adds
+
+> *"The body holds the base and equipment adds to it."* (「몸이 기본으로 갖고 장비가 더해져」)
+> *"The body's base numbers should be something it is BORN with. Above that, a particular event raises
+> them."* (「몸 기본 숫자는 타고 나야 될 거 같은데?」)
+
+⇒ **등급 does not raise the numbers.** The roll happens at birth; events raise it afterwards.
+⚠⚠ **「등급」 and 「종족」 are both dead words being revived** — 등급 was cut twice by the user themselves,
+and 종족 died on 2026-08-26 because 「the body is only the 검사, so there is no crowd to fill」.
+**종족 starts at ONE and the colour is not rolled**: *"one race for now, and I will not roll the colour
+either. Each time I add one I will do it properly."* (「종족은 일단 하나고」)
+
+### 7. Multiplayer: ONE island, ONE 성채, and only the 부대 is each player's
+
+**The user proposed three separate islands and killed it themselves three messages later.**
+> *"There has to be a taste of doing it together. So — rejected."* (「같이 시키게 맛이 있어야 되거든?
+> 그래서 기각」)
+> *"One island, together, one castle is right."* (「한 섬에 같이 한 성이 맞겠다」)
+> *"This one is the 부대 only."* (「이건 부대뿐」)
+
+⚠ **This kills 「each player does their own build」 from the same conversation** — one 성채 is one store.
+⚠ **The reason to pull the boat forward died with it** — the boat was needed so the three could meet.
+
+### 8. ⚠⚠ **Ship THIN — part 1 is a defence roguelike, part 2 is the RimWorld-ish one**
+
+> *"Should I release the game? Is that first? ... Or release one, then release two? Because the two
+> directions I am heading in are so different — one is adventure, a bit RimWorld-ish, and one is just a
+> roguelike defence game."*
+
+**The opinion given, and the facts under it**: the two are not different games — one island, 부대 and an
+arriving enemy are the same in both, and only how deeply a body is handled differs. **Cutting part 2 off
+does not shrink part 1's work**: a win, eight screens and sound are needed either way.
+**RimWorld was measured for this**: Kickstarter 2013-10 for $268,132, **an alpha sold from 2013-11**,
+beta 2017-11, **1.0 on 2018-10 — five and a half years, two to three people.** ⚠ **In Alpha 1 objects
+did not sit on the floor at all** — resources vanished into 「a magical storage number in the sky」 and
+stockpile zones were what that release added. **Don't Starve sold a Chrome beta from late 2012 and
+released 2013-04.** ⇒ **Neither shipped because it was full. They sold, then filled it.**
+
+> *"Alright, then let us ship thin too."* (「오케이 그러면 우리도 얇게 내자」)
+
+**The five that go in**, put to the user and not yet confirmed line by line: **a run that can be WON**
+(there is only `lost` in `battle.gd` today and no `won`) · **the run getting harder** · **three screens,
+title, pause and result** (zero screens are built) · **sound** (there is none) · **the store page and
+its builds**.
+**What is cut**: 장비창 · 포획 · 등급 and 특성 and 종족 · 채집 and 테크트리 · sailing out · more islands.
+⚠⚠ **Multiplayer is cut from the thin release too, and that collides head-on with**
+「멀티가 와야 맞아. 돈 벌어야지」 **from 2026-09-01.**
+
+### 9. The `grilling` skill was rewritten twice, mid-round, by the user
+
+> *"Do not do anything but those questions and recommendations this session. It gets too long ... the
+> body above them is too hard to look at."* (「질문 추천 외에는 최소한으로만 해야 될 듯」)
+> *"I said minimise this — minimise the questions too. The questions too."* (「질문도 최소화해줘 질문도」)
+
+⇒ **Three lines above the rule at most, no headings above the questions, nothing after the last one —
+and ONE question is the round.** Committed as `9819fd5`.
+
+### ⚠ What is still the user's to answer
+
+**The five of the thin release, line by line** · **what the run's win condition actually is** ·
+**whether multiplayer is really out of December** · and the three from this session's first round that
+were never answered — **whether the 일반병 fights**, **whether the first boat still comes at 5 seconds**,
+and **which of the three 「less flat」 means** (widen the plateau · more stairs · open a third storey).
+
 ## ✅✅ **The week's two tasks both closed — four tickets, and the lead reddened the nets twice — 2026-09-01 (late)**
 
 **Nets 1464 pass · 21 fail → 1476 pass · 4 fail, and two unfinished nets became one.**

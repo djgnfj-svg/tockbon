@@ -34,7 +34,40 @@ break the very thing they name.
 - ⚠ **Do not bury the recommendation in prose above and leave a bare question at the bottom.** The user:
   *"The questions are so long that I cannot tell what is actually being asked."*
 - ⚠ **A frontier of one is a round of one.** Never pad a round to look like grilling
+- ⚠⚠ **A frontier of many is STILL a round of one.** See the section below — the frontier decides what
+  may be asked, never how much is asked
 - ⚠⚠ **No emoji.** The template above used them; **this repo's no-emoji rule wins**
+
+## ⚠⚠ **Everything that is not a question is kept to a MINIMUM** (2026-09-01, the user)
+
+***"Do not do anything but those questions and recommendations this session. It gets too long. And from
+now on too, when brainstorming, everything but the question and the recommendation is too long. It makes
+the body above them too hard to look at. So everything but the questions and recommendations should be
+the bare minimum."***
+
+**The round IS the questions.** Everything above them is overhead the user reads before reaching what
+they are actually being asked.
+
+- **Three lines above the rule, at most** — what the last round settled, and nothing else
+- ⚠⚠ **No section headings above the questions.** A heading is the sign the body grew into a document
+- ⚠ **A measurement goes in the `왜` line, never in a table above it.** If it does not fit on that line,
+  it is not what the user needs in order to answer
+- **Nothing after the last question** — no summary, no next step, no offer
+
+## ⚠⚠ **And the QUESTIONS are minimised too** (2026-09-01, the user)
+
+***"I said minimise this — minimise what is outside the questions. Minimise the questions too. The
+questions too."*** ⚠ **Said one round after the body was cut**, because cutting the body alone left four
+questions still filling the screen.
+
+**One question is the round.** A second is attached only when it is answerable no matter how the first
+goes AND it is blocking work today. **There is no third.**
+
+- **Ask the most upstream one and let the rest wait** — the user's answer usually dissolves two of them
+- ⚠ **An unasked frontier question is not lost** — it is named in one line above the rule and re-asked
+  in a later round
+- ⚠⚠ **A question the user has already half-answered is not re-asked to be sure.** Write down the
+  reading, and let them correct it
 
 Each round the user answers reshapes the tree: settled decisions push the frontier outward and unblock questions that depended on them. Recompute the frontier and ask the next round. A question whose answer depends on another question still open in this round belongs to a _later_ round, not this one.
 
