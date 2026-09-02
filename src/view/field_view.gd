@@ -2405,12 +2405,21 @@ func _body_tex(key: String, type_id: int, head: Vector2) -> Texture2D:
 	# that is dying is not interrupted by anything — it has already left the sim. A body being hit
 	# drops the swing it was in the middle of, because **a blow that lands has to be the thing on
 	# screen**; the other way round, a body under fire keeps calmly punching and nothing reads.
+	# ⚠⚠ **EXCEPT A SWING WHOSE BLOW HAS NOT LANDED YET** (2026-09-02). The sim lands the blow
+	# `Rules.SWING_LAND_SEC` into the swing whether or not the striker was hit meanwhile, and a swing
+	# hidden under a flinch is damage dealt by a sword nobody saw — the very thing the flinch-first
+	# rule exists to prevent, the other way round. So: the swing until it lands, the flinch after.
 	var order := []
 	if float(b["dying"]) > 0.0:
 		order.append(Look.Anim.DEATH)
+	var swinging := float(b["attack"]) > 0.0
+	var landed := swinging and _anim_sec(type_id, Look.Anim.ATTACK) - float(b["attack"]) \
+			>= Rules.SWING_LAND_SEC - Rules.EPS
+	if swinging and not landed:
+		order.append(Look.Anim.ATTACK)
 	if float(b["hurt"]) > 0.0:
 		order.append(Look.Anim.HURT)
-	if float(b["attack"]) > 0.0:
+	if landed:
 		order.append(Look.Anim.ATTACK)
 	if float(b["still"]) <= Look.BODY_STILL_SEC:
 		order.append_array([Look.Anim.WALK, Look.Anim.IDLE])
@@ -3681,17 +3690,22 @@ func _fx_step(delta: float) -> void:
 		if i >= army.type_id.size():
 			break
 		var state := int(battle.soldier_state[i])
+		# ⚠ **The victim is the one the SWING was thrown at** (`soldier_swing_at`), not this frame's
+		# target — the sim locks it at the start of the swing and the blow lands on it 0.4 s later,
+		# by which time `soldier_target` may already be the next beast over.
 		rows.append(["s%d" % i, state != Battle.SoldierState.DEAD,
 			state == Battle.SoldierState.ASHORE, battle.soldier_pos[i],
 			float(battle.soldier_hp[i]), float(battle.soldier_cool[i]), int(army.type_id[i]),
 			_aim_of(int(battle.soldier_target[i]), battle.enemy_pos, battle.soldier_pos[i]),
-			"e%d" % int(battle.soldier_target[i]) if int(battle.soldier_target[i]) >= 0 else ""])
+			"e%d" % int(battle.soldier_swing_at[i]) if int(battle.soldier_swing_at[i]) >= 0 else "",
+			int(battle.soldier_blows[i])])
 	for e in battle.enemy_alive.size():
 		var living := battle.enemy_alive[e] != 0
 		rows.append(["e%d" % e, living, living, battle.enemy_pos[e],
 			float(battle.enemy_hp[e]), float(battle.enemy_cool[e]), int(battle.enemy_type[e]),
 			_aim_of(int(battle.enemy_target[e]), battle.soldier_pos, battle.enemy_pos[e]),
-			"s%d" % int(battle.enemy_target[e]) if int(battle.enemy_target[e]) >= 0 else ""])
+			"s%d" % int(battle.enemy_swing_at[e]) if int(battle.enemy_swing_at[e]) >= 0 else "",
+			int(battle.enemy_blows[e])])
 
 	for raw_row in rows:
 		var row: Array = raw_row
@@ -3704,6 +3718,13 @@ func _fx_step(delta: float) -> void:
 		var type_id: int = row[6]
 		var aim: Vector2 = row[7]
 		var victim: String = row[8]
+		var blows: int = row[9]
+		# ⚠⚠ **THE DRAWN POINT, NOT THE SIM'S, IS WHAT THE LEGS AND THE FACING READ** (2026-09-02). A body
+		# that has arrived glides to its seat over half a second (`_seat_glide`) while the sim's point
+		# stands still — measured off `here` it read as standing, and BREATHED while it slid. Walking,
+		# the glide entry IS the sim's point, so nothing changes there. Last frame's entry (the glide
+		# steps after this) — one frame late, and the same frame late every frame.
+		var drawn: Vector2 = _seat_glide.get(key, here)
 		if not _body.has(key):
 			if not ashore:
 				continue
@@ -3729,7 +3750,7 @@ func _fx_step(delta: float) -> void:
 				"walk": float(absi(key.hash()) % 1000) / 1000.0,
 				"gait": 0.0,
 				"head": Vector2.RIGHT,
-				"last": here,
+				"last": drawn,
 				# How wide this body is DRAWN, so the knock and the sway are sized off the picture and
 				# not off the sim radius. Looked up once — a body's species never changes.
 				"half": float(Look.sprite_half_px(type_id)),
@@ -3743,6 +3764,9 @@ func _fx_step(delta: float) -> void:
 				# never reads as three events at once.
 				"hp": hp,
 				"cool": cool,
+				# Blows this body has LANDED, per the sim. **A rise is the blow landing** — the one
+				# moment the flash, the shards and the number belong to. Seeded like the three above.
+				"blows": blows,
 				"alive": alive,
 				"type": type_id,
 			}
@@ -3751,23 +3775,32 @@ func _fx_step(delta: float) -> void:
 			b["type"] = type_id
 			b["half"] = float(Look.sprite_half_px(type_id))
 
-		# ⚠ **The cooldown is RESET to the whole period the instant a blow lands** (`battle`'s attack
+		# ⚠ **The cooldown is RESET to the whole period the instant a swing STARTS** (`battle`'s attack
 		# phase), and it only ever counts down otherwise — so a rise is a swing and there is no other
 		# way for it to rise. **Not `> 0`**: a body whose target dies mid-cooldown keeps a positive
 		# cooldown for a second without swinging again.
+		# ⚠⚠ **THE STRIP STARTS HERE AND THE BLOW LANDS `Rules.SWING_LAND_SEC` LATER** (2026-09-02).
+		# Until then the sim dealt the damage on this same sub-step, and everything below — the
+		# flash, the shards, the number, the victim's flinch — fired on the FIRST frame of an
+		# eight-frame swing, the sword reaching out a third of a second after the bar had dropped.
 		if cool > float(b["cool"]) + Rules.EPS:
 			b["attack"] = _anim_sec(type_id, Look.Anim.ATTACK)
-			# ⚠⚠ **THE WHOLE OF 타격감 HANGS OFF THIS ONE LINE**, and it is here rather than on the
-			# victim's health drop because **this is the only place both ends of a blow are in hand**.
-			# The victim's own row knows it lost health; it does not know who took it.
+		# ⚠⚠ **THE WHOLE OF 타격감 HANGS OFF THIS ONE LINE**, and it is on the STRIKER's blow count
+		# rather than on the victim's health drop because **this is the only place both ends of a
+		# blow are in hand**. The victim's own row knows it lost health; it does not know who took it.
+		# `blows` rises only when the sim dealt the damage — a swing that whiffed shows nothing here.
+		if blows > int(b.get("blows", blows)):
 			_land_blow(key, victim, here, aim, type_id)
 		# ⚠ **Health only falls in this game** — there is no heal — so a drop is a blow taken. A
 		# revived body comes back at full and that is a RISE, which is why this is one-sided.
+		# ⚠⚠ **THE FLINCH NO LONGER CANCELS THE SWING** (2026-09-02). It did — and with the blow
+		# landing a third of a second into the swing, a body hit in its wind-up dropped the picture
+		# of a blow the sim still landed: damage dealt, no sword seen. `_body_tex` decides which of
+		# the two is on top — the swing until its blow has landed, the flinch after.
 		if hp < float(b["hp"]) - Rules.EPS:
 			b["hurt"] = _anim_sec(type_id, Look.Anim.HURT)
-			b["attack"] = 0.0
-			# ⚠ **The flinch is triggered by health falling and everything else by the swing landing**,
-			# one frame apart at worst. **Health is the honest signal for「I was hurt」** — it is true
+			# ⚠ **The flinch is triggered by health falling and everything else by the blow landing**,
+			# the same sub-step. **Health is the honest signal for「I was hurt」** — it is true
 			# even for damage nothing swung for, and the day something like that exists this line is
 			# already right.
 		# ⚠⚠ **The fall starts where the body was standing, not where the sim says it is.** A beast's
@@ -3783,12 +3816,13 @@ func _fx_step(delta: float) -> void:
 			b["dying"] = 0.0
 		b["hp"] = hp
 		b["cool"] = cool
+		b["blows"] = blows
 		b["alive"] = alive
 
 		if not ashore:
 			continue
 		var last: Vector2 = b["last"]
-		var moved := here.distance_to(last)
+		var moved := drawn.distance_to(last)
 		b["still"] = 0.0 if moved > Rules.EPS else float(b["still"]) + delta
 		if moved > Rules.EPS:
 			# Positions are in TILES and so is the period, so the two divide directly. Phase on
@@ -3796,7 +3830,7 @@ func _fx_step(delta: float) -> void:
 			# animate, and no amount of time passing changes that.
 			b["gait"] = fposmod(
 				float(b["gait"]) + TAU * moved / Look.GAIT_PERIOD_TILES, TAU)
-			b["head"] = (here - last).normalized()
+			b["head"] = (drawn - last).normalized()
 		elif aim != OFFMAP_AIM:
 			# ⚠⚠ **A BODY THAT HAS STOPPED FACES WHAT IT IS HITTING** (2026-08-31). Until this
 			# line a body faced the way it last WALKED, and the lunge went that way too — photographed
@@ -3805,10 +3839,10 @@ func _fx_step(delta: float) -> void:
 			# ⚠ **Only while STILL.** A walking body already heads where it is going, and a body
 			# that walks one way while facing another is the sliding animal `_facing_of`'s own header
 			# was written against.
-			var to_aim := aim - here
+			var to_aim := aim - drawn
 			if to_aim.length_squared() > Rules.EPS:
 				b["head"] = to_aim.normalized()
-		b["last"] = here
+		b["last"] = drawn
 
 ## ⚠ **`_drain_events` stood here and it is deleted** (2026-08-29) — see the effects block below.
 

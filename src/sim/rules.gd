@@ -317,6 +317,25 @@ static func period_of(type_id: int) -> float:
 	return float(UNITS[type_id][_COL_PERIOD])
 
 
+## **Seconds from the start of a swing to the blow landing.** A swing begins the moment a body is
+## ready and its target in reach; the damage arrives this long after, and the period counts from the
+## START of the swing, not from the landing.
+##
+## ⚠⚠ **UNTIL 2026-09-02 THERE WAS NO SWING AT ALL** — the blow landed the instant the cooldown ran out,
+## and the picture then played its eight-frame swing AFTER the health had already dropped: the victim
+## flinched and its bar fell on the striker's FIRST frame, the sword reaching out 0.36 s later. The user
+## saw exactly that (「게임 애니메이션하고 코드적 액션이 안맞음」). **This is the sim's half of the fix**:
+## the blow lands where the picture's sword is furthest out.
+##
+## ⚠ **0.4 is 24 sub-steps exactly**, so the landing sub-step does not depend on rounding, and it sits
+## on the fourth of the eight attack frames (0.36 s ~ 0.48 s), where `look.gd`'s lunge is at full reach.
+## `look.gd` does not read this — a net holds the two together instead, because the sim must not know
+## how long a strip is and the picture must not decide when damage happens.
+## ⚠ **A body hit during its own swing still lands it.** Cancelling on a hit would stun-lock: the faster
+## period would interrupt the slower one every time, and the 검사 would never land a blow on a 늑대.
+const SWING_LAND_SEC := 0.4
+
+
 ## The row's own range column, **without the bonus.** Nothing outside `reach_of` should read this: a
 ## caller that adds `REACH_BONUS` itself is the second copy of the reach rule, and the two drift.
 static func range_of(type_id: int) -> float:

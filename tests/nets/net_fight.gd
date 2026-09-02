@@ -130,6 +130,11 @@ const BOXED_KEEP := 2 + 2 * BOXED_W
 const NEAR := 1e-3
 ## Tolerance on an accumulated HP. Damage is subtracted whole, so this is float noise and nothing else.
 const HP_NEAR := 1e-3
+## **Seconds from two bodies meeting to the first blow LANDING.** The swing starts on the first
+## sub-step (0 is ready) and the blow lands `Rules.SWING_LAND_SEC` later (2026-09-02 — until then the
+## first sub-step dealt the damage itself). Half a sub-step of slack so the landing sub-step is inside
+## the step whatever the float sum does.
+const FIRST_BLOW_SEC := Rules.SWING_LAND_SEC + Rules.SIM_SUBSTEP_SEC * 1.5
 
 
 func run(t) -> void:
@@ -218,6 +223,19 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 	t.ok(bite < Rules.period_of(Rules.WOLF) * 0.6,
 		"늑대도 그렇다 (%.2f초)" % bite)
 	t.eq(Rules.range_of(Rules.SWORDSMAN), 0.0, "검이라 사거리 칸은 0 이다 — 검사의 사거리는 보너스가 전부다")
+	# ⚠⚠ **The blow lands while the picture's sword is furthest out** (2026-09-02). The sim does not
+	# read the strip and the strip does not read the sim, so this row is the only thing holding
+	# `Rules.SWING_LAND_SEC` inside the lunge's hold window — `Look.SWING_WINDUP + SWING_SNAP` to
+	# `+ SWING_HOLD`, as fractions of the attack strip. Move either and this reddens.
+	var reach_at := (Look.SWING_WINDUP + Look.SWING_SNAP) * swing
+	var reach_until := reach_at + Look.SWING_HOLD * swing
+	t.ok(Rules.SWING_LAND_SEC >= reach_at - 1e-6 and Rules.SWING_LAND_SEC <= reach_until + 1e-6,
+		"피해는 칼이 끝까지 나간 사이에 들어간다 — %.2f 초는 %.2f~%.2f 안이다"
+			% [Rules.SWING_LAND_SEC, reach_at, reach_until])
+	t.ok(Rules.SWING_LAND_SEC < Rules.period_of(Rules.WOLF) and Rules.SWING_LAND_SEC < swing,
+		"그리고 휘두르는 시간이 주기보다도 동작 길이보다도 짧다")
+	t.ok(absf(Rules.SWING_LAND_SEC / Rules.SIM_SUBSTEP_SEC - round(Rules.SWING_LAND_SEC / Rules.SIM_SUBSTEP_SEC)) < 1e-6,
+		"휘두르는 시간이 서브스텝의 정수배다 — 닿는 서브스텝이 반올림에 안 걸린다")
 
 	# ⚠ **The 성채 has to outlast one boat and fall to two**, which is what `KEEP_MAX_HP`'s own comment
 	# says it was chosen off. Derived here so a retune of either side moves this row rather than the
@@ -393,7 +411,7 @@ func _the_keep_cannot_be_burned_from_low_ground(t) -> void:
 	var gap := s.keep_gap(s.enemy_pos[climber])
 	t.ok(gap <= Rules.reach_of(Rules.WOLF) + Rules.EPS,
 		"계단에서는 성채까지 %.3f 조각이고 사거리 %.2f 안이다" % [gap, Rules.reach_of(Rules.WOLF)])
-	s.step(Rules.SIM_SUBSTEP_SEC)
+	s.step(FIRST_BLOW_SEC)
 	t.eq(int(s.enemy_target[climber]), Battle.TARGET_KEEP, "그리고 성채를 겨눈다")
 	t.ok(s.keep_hp < Rules.KEEP_MAX_HP, "한 대가 실제로 들어간다 (%.2f)" % s.keep_hp)
 
@@ -700,10 +718,24 @@ func _a_blow_takes_the_table_s_damage_on_the_table_s_period(t) -> void:
 	t.eq(b.soldier_hp[0], full_s, "검사가 꽉 찬 체력이다 (자가 점검)")
 	t.eq(b.enemy_hp[0], full_e, "늑대도 그렇다 (자가 점검)")
 
-	# One sub-step: **each lands exactly one blow, and the first one is not a period away.**
+	# ⚠⚠ **THE FIRST SUB-STEP STARTS THE SWING AND DEALS NOTHING** (2026-09-02). Both bars are whole
+	# after it — a sim that dealt the damage at the start of the swing is the one the user watched
+	# and called 「애니메이션하고 코드적 액션이 안맞음」.
 	b.step(Rules.SIM_SUBSTEP_SEC)
+	t.eq(b.soldier_hp[0], full_s, "첫 서브스텝에는 검사가 아직 안 깎인다 — 휘두르기가 시작만 됐다")
+	t.eq(b.enemy_hp[0], full_e, "늑대도 아직 안 깎인다")
+	t.ok(float(b.soldier_cool[0]) > 0.0 and float(b.enemy_cool[0]) > 0.0,
+		"그런데 둘 다 재사용 대기는 감겼다 — 휘두르기가 시작됐다는 표시")
+	t.ok(float(b.soldier_swing[0]) > 0.0 and float(b.enemy_swing[0]) > 0.0,
+		"그리고 둘 다 휘두르는 중이다")
+	t.eq(int(b.soldier_swing_at[0]), 0, "검사의 휘두르기는 늑대 0 을 향한다")
+	t.eq(int(b.enemy_swing_at[0]), 0, "늑대의 것은 검사 0 을 향한다")
+	# `Rules.SWING_LAND_SEC` later: **each lands exactly one blow, and the first one is not a period away.**
+	b.step(FIRST_BLOW_SEC - Rules.SIM_SUBSTEP_SEC)
 	t.ok(absf(float(b.soldier_hp[0]) - (full_s - Rules.damage_of(Rules.WOLF))) <= HP_NEAR,
-		"첫 서브스텝에 검사가 늑대 한 대만큼 깎인다 (%.3f)" % float(b.soldier_hp[0]))
+		"휘두르기 시간이 지나면 검사가 늑대 한 대만큼 깎인다 (%.3f)" % float(b.soldier_hp[0]))
+	t.eq(int(b.soldier_blows[0]), 1, "검사가 한 대 맞혔다고 센다")
+	t.eq(int(b.enemy_blows[0]), 1, "늑대도 한 대")
 	t.ok(absf(float(b.enemy_hp[0]) - (full_e - Rules.damage_of(Rules.SWORDSMAN))) <= HP_NEAR,
 		"그리고 늑대도 검사 한 대만큼 깎인다 (%.3f)" % float(b.enemy_hp[0]))
 
@@ -731,9 +763,10 @@ func _a_blow_takes_the_table_s_damage_on_the_table_s_period(t) -> void:
 	t.eq(fresh.enemy_alive[0], 0, "검사가 늑대를 죽인다")
 	# The last blow is the one that kills, so the loop above misses it — hence `blows + 1`.
 	t.eq(blows + 1, want_blows, "그러는 데 %d 대 걸린다 — 표의 나눗셈 그대로다" % want_blows)
-	t.ok(fresh.elapsed <= float(want_blows - 1) * Rules.period_of(Rules.SWORDSMAN) 			+ Rules.SIM_SUBSTEP_SEC * 2.0,
-		"그리고 %.1f초 안에 끝난다 — 첫 대가 한 주기를 안 기다린다 (%.2f)"
-			% [float(want_blows - 1) * Rules.period_of(Rules.SWORDSMAN), fresh.elapsed])
+	t.ok(fresh.elapsed <= float(want_blows - 1) * Rules.period_of(Rules.SWORDSMAN) 			+ Rules.SWING_LAND_SEC + Rules.SIM_SUBSTEP_SEC * 2.0,
+		"그리고 %.1f초 안에 끝난다 — 첫 대가 한 주기를 안 기다린다, 휘두르는 시간만 기다린다 (%.2f)"
+			% [float(want_blows - 1) * Rules.period_of(Rules.SWORDSMAN) + Rules.SWING_LAND_SEC,
+				fresh.elapsed])
 
 	# ⚠ **Out of reach, nothing happens.** Without this the rows above are green for a fight that
 	# resolves at any distance, which would delete `REACH_BONUS` from the game entirely.
@@ -763,8 +796,8 @@ func _the_blow_and_the_death_are_different_phases(t) -> void:
 	t.ok(float(b.soldier_hp[0]) > 0.0 and float(b.enemy_hp[0]) > 0.0,
 		"둘 다 아직 살아 있다 (자가 점검)")
 
-	b.step(Rules.SIM_SUBSTEP_SEC)
-	t.eq(int(b.soldier_state[0]), Battle.SoldierState.DEAD, "한 서브스텝에 검사가 죽는다")
+	b.step(FIRST_BLOW_SEC)
+	t.eq(int(b.soldier_state[0]), Battle.SoldierState.DEAD, "첫 대가 닿는 서브스텝에 검사가 죽는다")
 	t.eq(b.enemy_alive[0], 0, "그리고 늑대도 같은 서브스텝에 죽는다 — 먼저 도는 쪽이 공짜 킬을 안 먹는다")
 	t.eq(b.living_enemy_ids().size(), 0, "판에 산 짐승이 없다")
 	t.eq(b.ashore_ids().size(), 0, "그리고 선 검사도 없다")
@@ -775,7 +808,7 @@ func _the_blow_and_the_death_are_different_phases(t) -> void:
 	var c := _pair()
 	c.soldier_hp[0] = Rules.damage_of(Rules.WOLF) + 1.0
 	c.enemy_hp[0] = Rules.damage_of(Rules.SWORDSMAN) + 1.0
-	c.step(Rules.SIM_SUBSTEP_SEC)
+	c.step(FIRST_BLOW_SEC)
 	t.eq(int(c.soldier_state[0]), Battle.SoldierState.ASHORE, "한 점 더 있으면 검사는 그 서브스텝을 넘긴다")
 	t.eq(c.enemy_alive[0], 1, "늑대도 넘긴다 — 위의 「둘 다 죽었다」가 순서를 재는 것이 맞다")
 
@@ -787,7 +820,7 @@ func _a_dead_beast_lets_go_of_its_piece(t) -> void:
 	var tile := b._tile_of(b.enemy_pos[0])
 	t.ok(b.grid.holds(tile, Battle.ENEMY_UID_BASE + 0), "늑대가 제 조각을 잡고 있다 (자가 점검)")
 	b.enemy_hp[0] = Rules.damage_of(Rules.SWORDSMAN)
-	b.step(Rules.SIM_SUBSTEP_SEC)
+	b.step(FIRST_BLOW_SEC)
 	t.eq(b.enemy_alive[0], 0, "늑대가 죽었다 (자가 점검)")
 	t.eq(b.grid.hold_count(tile), 0, "그리고 잡고 있던 조각을 놓는다 — 자리 하나도 안 남는다")
 
@@ -804,7 +837,7 @@ func _a_dead_beast_lets_go_of_its_piece(t) -> void:
 func _a_dead_swordsman_stands_again_at_the_keep(t) -> void:
 	var b := _pair()
 	b.soldier_hp[0] = Rules.damage_of(Rules.WOLF)
-	b.step(Rules.SIM_SUBSTEP_SEC)
+	b.step(FIRST_BLOW_SEC)
 	t.eq(int(b.soldier_state[0]), Battle.SoldierState.DEAD, "검사가 죽었다 (자가 점검)")
 	t.eq(b.army.alive[0], 1, "그런데 명부에서는 여전히 살아 있다 — 영구 죽음이 아니다")
 	t.eq(b.ashore_ids().size(), 0, "판 위에는 없다")
@@ -956,6 +989,9 @@ func _columns_are_level(t, b: Battle, when: String) -> void:
 		"soldier_hp": b.soldier_hp.size(),
 		"soldier_target": b.soldier_target.size(),
 		"soldier_cool": b.soldier_cool.size(),
+		"soldier_swing": b.soldier_swing.size(),
+		"soldier_swing_at": b.soldier_swing_at.size(),
+		"soldier_blows": b.soldier_blows.size(),
 		"soldier_revive": b.soldier_revive.size(),
 		"soldier_pos": b.soldier_pos.size(),
 		"_soldier_stale": b._soldier_stale.size(),
@@ -976,7 +1012,7 @@ func _the_keep_burns_and_the_run_is_lost(t) -> void:
 	t.ok(not b.lost, "그리고 아직 안 졌다")
 	t.eq(b.boat_pos.size(), 0, "이 판에는 바다가 없어서 배가 안 온다 (자가 점검 — 한 마리만 잰다)")
 
-	b.step(Rules.SIM_SUBSTEP_SEC)
+	b.step(FIRST_BLOW_SEC)
 	t.eq(int(b.enemy_target[0]), Battle.TARGET_KEEP, "늑대가 성채를 겨눈다")
 	t.ok(absf(b.keep_hp - (Rules.KEEP_MAX_HP - Rules.damage_of(Rules.WOLF))) <= HP_NEAR,
 		"한 대에 늑대의 피해만큼 깎인다 (%.2f)" % b.keep_hp)
@@ -1064,7 +1100,7 @@ func _nearest_ties_break_on_the_lower_id(t) -> void:
 	var d1 := b._dist(b.enemy_pos[who], b.soldier_pos[1])
 	t.ok(absf(d0 - d1) <= NEAR, "둘까지의 거리가 정확히 같다 (자가 점검 — %.4f · %.4f)" % [d0, d1])
 
-	b.step(Rules.SIM_SUBSTEP_SEC)
+	b.step(FIRST_BLOW_SEC)
 	t.eq(int(b.enemy_target[who]), 0, "동점이면 낮은 번호를 문다")
 	t.ok(float(b.soldier_hp[0]) < float(b.soldier_hp[1]),
 		"그래서 0 번만 깎였다 (%.2f · %.2f)" % [float(b.soldier_hp[0]), float(b.soldier_hp[1])])

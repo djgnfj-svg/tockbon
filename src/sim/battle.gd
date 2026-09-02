@@ -135,6 +135,18 @@ var enemy_target := PackedInt32Array()
 ## the first blow does not wait a period. ⚠ 티켓 41's 「6 타 7.2 초」 column is the arithmetic for a body
 ## that waits one first, and the ticket marks that column as arithmetic rather than play.
 var enemy_cool := PackedFloat32Array()
+## Seconds until the swing this body is in the middle of LANDS. **0 means no swing is pending.** Set to
+## `Rules.SWING_LAND_SEC` on the sub-step a swing begins (the same sub-step `enemy_cool` is wound), and
+## the blow is dealt on the sub-step it reaches 0 — see `_phase_attacks`.
+var enemy_swing := PackedFloat32Array()
+## Whom the pending swing was thrown at: a 검사's id or `TARGET_KEEP`. **Locked at the start of the
+## swing** — retargeting runs every sub-step and a swing that followed it would land on a body it was
+## never thrown at. ⚠ **Not cleared when the swing lands**, so a reader one frame late still sees it.
+var enemy_swing_at := PackedInt32Array()
+## How many blows this body has LANDED, ever. **Only goes up**, and only on the sub-step the damage is
+## dealt — a swing that finds its target dead or out of reach adds nothing. The view reads a rise here
+## the way it reads a rise in `enemy_cool`: it is the one honest 「the blow landed」 the sim has.
+var enemy_blows := PackedInt32Array()
 var _enemy_goal: Array = []
 var _enemy_stale := PackedByteArray()
 
@@ -174,6 +186,11 @@ var soldier_hp := PackedFloat32Array()
 var soldier_target := PackedInt32Array()
 ## Seconds until this body may swing again. See `enemy_cool` for why 0 means ready.
 var soldier_cool := PackedFloat32Array()
+## The 검사 side of `enemy_swing` · `enemy_swing_at` · `enemy_blows`. `soldier_swing_at` is a beast
+## index or `TARGET_NONE`, never `TARGET_KEEP`.
+var soldier_swing := PackedFloat32Array()
+var soldier_swing_at := PackedInt32Array()
+var soldier_blows := PackedInt32Array()
 ## Seconds until a DEAD body stands again at the 성채. **Only read while `soldier_state` is DEAD.**
 var soldier_revive := PackedFloat32Array()
 
@@ -315,6 +332,9 @@ func setup(grid: Grid, army: Army, spawns: Array,
 	enemy_pos = []
 	enemy_target = PackedInt32Array()
 	enemy_cool = PackedFloat32Array()
+	enemy_swing = PackedFloat32Array()
+	enemy_swing_at = PackedInt32Array()
+	enemy_blows = PackedInt32Array()
 	_enemy_goal = []
 	_enemy_stale = PackedByteArray()
 
@@ -364,6 +384,12 @@ func setup(grid: Grid, army: Army, spawns: Array,
 	soldier_target.resize(roster)
 	soldier_cool = PackedFloat32Array()
 	soldier_cool.resize(roster)
+	soldier_swing = PackedFloat32Array()
+	soldier_swing.resize(roster)
+	soldier_swing_at = PackedInt32Array()
+	soldier_swing_at.resize(roster)
+	soldier_blows = PackedInt32Array()
+	soldier_blows.resize(roster)
 	soldier_revive = PackedFloat32Array()
 	soldier_revive.resize(roster)
 	# resize on a fresh array zero-fills, so nobody has charged yet. **Per island for free**: a
@@ -384,6 +410,9 @@ func setup(grid: Grid, army: Army, spawns: Array,
 		soldier_hp[i] = 0.0
 		soldier_target[i] = TARGET_NONE
 		soldier_cool[i] = 0.0
+		soldier_swing[i] = 0.0
+		soldier_swing_at[i] = TARGET_NONE
+		soldier_blows[i] = 0
 		soldier_revive[i] = 0.0
 		soldier_pos.append(OFFMAP)
 		_soldier_goal.append(OFFMAP)
@@ -575,6 +604,10 @@ func place_ashore(soldier_id: int, near_tile: int) -> int:
 	soldier_hp[soldier_id] = army.max_hp_of(soldier_id)
 	soldier_target[soldier_id] = TARGET_NONE
 	soldier_cool[soldier_id] = 0.0
+	# ⚠ **A swing a body died in the middle of does not land on its next life.** `soldier_blows` is
+	# left alone: it only ever rises, and a reader diffing it wants no false rise here.
+	soldier_swing[soldier_id] = 0.0
+	soldier_swing_at[soldier_id] = TARGET_NONE
 	soldier_revive[soldier_id] = 0.0
 	_clear_path(soldier_id)
 	grid.hold(soldier_id, tile)
@@ -647,6 +680,9 @@ func recruit(slot: int) -> int:
 	soldier_hp.append(0.0)
 	soldier_target.append(TARGET_NONE)
 	soldier_cool.append(0.0)
+	soldier_swing.append(0.0)
+	soldier_swing_at.append(TARGET_NONE)
+	soldier_blows.append(0)
 	soldier_revive.append(0.0)
 	soldier_pos.append(OFFMAP)
 	_soldier_goal.append(OFFMAP)
@@ -684,6 +720,9 @@ func land_beast(type_id: int, near_tile: int) -> int:
 	enemy_pos.append(here)
 	enemy_target.append(TARGET_NONE)
 	enemy_cool.append(0.0)
+	enemy_swing.append(0.0)
+	enemy_swing_at.append(TARGET_NONE)
+	enemy_blows.append(0)
 	_enemy_goal.append(here)
 	_enemy_stale.append(0)
 	grid.hold(ENEMY_UID_BASE + e, tile)
@@ -1100,11 +1139,29 @@ func _phase_movement(dt: float) -> void:
 ## ⚠ **The ready test carries `EPS` rather than being `<= 0.0`.** The clock is a sum of sub-steps against
 ## a period that divides it exactly, so the last bit decides whether a blow lands on the 60th sub-step or
 ## the 61st — and a bare comparison there is a coin flip that changes an outcome.
+##
+## ⚠⚠ **A BLOW IS TWO SUB-STEPS APART: THE SWING, THEN THE LANDING** (2026-09-02). A ready body with a
+## target in reach STARTS a swing — winds its cooldown to the whole period and its `*_swing` clock to
+## `Rules.SWING_LAND_SEC`, and locks the target in `*_swing_at`. **The damage is dealt on the sub-step
+## that clock runs out**, against the locked target, and only if it is still alive, still standing and
+## still in reach — a body that walked off, or died under someone else's sword, is not hit by a blow
+## thrown at where it was. **A swing that finds nothing costs the period all the same**: the body swung.
+## ⚠ **The reach re-check moved from the start of the swing to its landing** and is checked at BOTH — a
+## swing is not thrown at a body out of reach, and does not land on one that left.
+## ⚠ **A body in the middle of a swing does not start another**, whatever its cooldown says — the two
+## clocks are wound together and the period is longer than the swing, so this cannot happen today; the
+## test is here so that the day a period is shortened under 0.4 s it still cannot.
 func _phase_attacks(dt: float) -> void:
 	for i in soldier_state.size():
 		if int(soldier_state[i]) != SoldierState.ASHORE:
 			continue
 		soldier_cool[i] = maxf(float(soldier_cool[i]) - dt, 0.0)
+		if float(soldier_swing[i]) > 0.0:
+			soldier_swing[i] = maxf(float(soldier_swing[i]) - dt, 0.0)
+			if float(soldier_swing[i]) <= Rules.EPS:
+				soldier_swing[i] = 0.0
+				_land_soldier_blow(i)
+			continue
 		var tgt := int(soldier_target[i])
 		if tgt < 0 or float(soldier_cool[i]) > Rules.EPS:
 			continue
@@ -1112,13 +1169,20 @@ func _phase_attacks(dt: float) -> void:
 			continue
 		if _dist(soldier_pos[i], enemy_pos[tgt]) > army.reach_of(i) + Rules.EPS:
 			continue
-		enemy_hp[tgt] = float(enemy_hp[tgt]) - army.damage_of(i)
+		soldier_swing[i] = Rules.SWING_LAND_SEC
+		soldier_swing_at[i] = tgt
 		soldier_cool[i] = army.period_of(i)
 
 	for e in enemy_type.size():
 		if enemy_alive[e] == 0:
 			continue
 		enemy_cool[e] = maxf(float(enemy_cool[e]) - dt, 0.0)
+		if float(enemy_swing[e]) > 0.0:
+			enemy_swing[e] = maxf(float(enemy_swing[e]) - dt, 0.0)
+			if float(enemy_swing[e]) <= Rules.EPS:
+				enemy_swing[e] = 0.0
+				_land_enemy_blow(e)
+			continue
 		var etgt := int(enemy_target[e])
 		if etgt == TARGET_NONE or float(enemy_cool[e]) > Rules.EPS:
 			continue
@@ -1127,14 +1191,46 @@ func _phase_attacks(dt: float) -> void:
 		if etgt == TARGET_KEEP:
 			if keep_gap(enemy_pos[e]) > reach + Rules.EPS:
 				continue
-			keep_hp -= Rules.damage_of(ty)
 		else:
 			if int(soldier_state[etgt]) != SoldierState.ASHORE:
 				continue
 			if _dist(enemy_pos[e], soldier_pos[etgt]) > reach + Rules.EPS:
 				continue
-			soldier_hp[etgt] = float(soldier_hp[etgt]) - Rules.damage_of(ty)
+		enemy_swing[e] = Rules.SWING_LAND_SEC
+		enemy_swing_at[e] = etgt
 		enemy_cool[e] = Rules.period_of(ty)
+
+
+## **The landing of a 검사's swing** — the damage, if the beast it was thrown at is still there to take
+## it. `soldier_blows` rises only on the line the health falls.
+func _land_soldier_blow(i: int) -> void:
+	var tgt := int(soldier_swing_at[i])
+	if tgt < 0 or tgt >= enemy_alive.size() or enemy_alive[tgt] == 0:
+		return
+	if _dist(soldier_pos[i], enemy_pos[tgt]) > army.reach_of(i) + Rules.EPS:
+		return
+	enemy_hp[tgt] = float(enemy_hp[tgt]) - army.damage_of(i)
+	soldier_blows[i] = int(soldier_blows[i]) + 1
+
+
+## **The landing of a beast's swing**, on the 성채 or on the 검사 it was thrown at.
+func _land_enemy_blow(e: int) -> void:
+	var etgt := int(enemy_swing_at[e])
+	var ty := int(enemy_type[e])
+	var reach := Rules.reach_of(ty)
+	if etgt == TARGET_KEEP:
+		if keep_gap(enemy_pos[e]) > reach + Rules.EPS:
+			return
+		keep_hp -= Rules.damage_of(ty)
+	else:
+		if etgt < 0 or etgt >= soldier_state.size():
+			return
+		if int(soldier_state[etgt]) != SoldierState.ASHORE:
+			return
+		if _dist(enemy_pos[e], soldier_pos[etgt]) > reach + Rules.EPS:
+			return
+		soldier_hp[etgt] = float(soldier_hp[etgt]) - Rules.damage_of(ty)
+	enemy_blows[e] = int(enemy_blows[e]) + 1
 
 
 ## **Everything at or below 0 HP dies, in the sub-step the blow landed and in a phase of its own.**
