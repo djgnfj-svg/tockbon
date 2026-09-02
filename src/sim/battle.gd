@@ -975,6 +975,10 @@ func place_store(tile: int) -> bool:
 		return false
 	if grid.passable[tile] == 0 or grid.hold_count(tile) > 0:
 		return false
+	# ⚠ **Not on a 바리케이트.** The wall holds the 조각 through `Grid.built` and not through the
+	# reservation table, so `hold_count` above says nothing about it.
+	if grid.is_built(tile):
+		return false
 	if store_tile >= 0:
 		grid.release_all(STORE_UID)
 	store_tile = tile
@@ -996,7 +1000,10 @@ func store_doorstep() -> PackedInt32Array:
 		if nx < 0 or ny < 0 or nx >= grid.w or ny >= grid.h:
 			continue
 		var nt := ny * grid.w + nx
-		if grid.passable[nt] == 1:
+		# ⚠ **A walled neighbour is not a doorstep.** A body ordered onto one would be ordered onto a
+		# 조각 `Grid.can_step` refuses, walk nowhere, and have the order cleared by the stall clause —
+		# which on screen is a hungry body that simply does not go.
+		if grid.passable[nt] == 1 and not grid.is_built(nt):
 			out.append(nt)
 	out.sort()
 	return out
@@ -1167,7 +1174,11 @@ func _phase_hunger(dt: float) -> void:
 		army.hunger[i] = hunger
 		# **Eating comes before starving**, so a body that reaches the 창고 on the sub-step it would
 		# have started losing health does not lose any.
-		if hunger < Rules.HUNGER_MAX - Rules.EPS and store_tile >= 0 and store != null:
+		# ⚠⚠ **ONLY A BODY THAT IS ACTUALLY HUNGRY EATS, AND `HUNGER_SEEK` IS THAT LINE.** Written as
+		# 「any body not completely full」, a body standing beside the 창고 takes a whole fish the moment
+		# it drops a hair under the ceiling — **one fish every quarter of a second**, and the 창고 is
+		# empty before anybody who needs it arrives. The user's own word for this is 「배고프면」.
+		if hunger <= Rules.HUNGER_SEEK and store_tile >= 0 and store != null:
 			var reach: float = (soldier_pos[i] as Vector2).distance_to(_point_of_tile(store_tile))
 			if reach <= Rules.EAT_RANGE_TILES and store.take_meal() != "":
 				hunger = minf(Rules.HUNGER_MAX, hunger + Rules.HUNGER_MEAL)
