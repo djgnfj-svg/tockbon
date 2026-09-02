@@ -60,7 +60,12 @@ func run(t) -> void:
 	_the_hills_never_swallow_the_tier(t)
 	_the_first_island_opens_with_room_around_it(t)
 	_a_body_lays_one_shadow_disc(t)
-	_bodies_sharing_a_piece_are_drawn_apart(t)
+	_nine_resting_bodies_on_one_block_read_as_a_centred_lattice(t)
+	_a_body_alone_stands_in_the_middle_of_its_block(t)
+	_a_seat_is_drawn_on_its_own_pieces_side(t)
+	_three_wolves_off_one_boat_are_drawn_apart(t)
+	_the_lattice_does_not_swing_with_the_camera(t)
+	_a_body_coming_to_rest_glides_to_its_seat(t)
 	_the_readers_themselves(t)
 	_every_row_wears_its_own_picture(t)
 	_the_wolf_ashore_wears_the_picture_that_was_chosen(t)
@@ -284,8 +289,11 @@ func _a_bar_appears_only_once_something_is_hurt(t) -> void:
 	if one.is_empty():
 		return
 	var bar: Sprite3D = one[0]
-	# ⚠ **Tile CENTRES.** `Look.tile_point_px` puts 조각 (14,6) at (14.5, 6.5) in tile units.
-	t.ok(absf(bar.position.x - 14.5) < 0.01 and absf(bar.position.z - 6.5) < 0.01,
+	# ⚠ **Over the body's STAND POINT, which since 03-17 is its seat and not its 조각 centre.** A body
+	# alone in its 칸 takes the centre seat, so the bar stands over the 칸's middle — (15.0, 7.0) for a
+	# body on 조각 (14,6), where it stood over (14.5, 6.5) while the body was drawn on the 조각.
+	var over := _block_middle_world(b, b.grid.tile_index(14, 6))
+	t.ok(absf(bar.position.x - over.x) < 0.01 and absf(bar.position.z - over.y) < 0.01,
 		"그 바가 맞은 몸 위에 선다 (%.2f, %.2f)" % [bar.position.x, bar.position.z])
 
 	# **Above the body's own drawn top**, and by exactly the lift.
@@ -477,9 +485,12 @@ func _a_body_lays_one_shadow_disc(t) -> void:
 	for pt: Vector2 in one:
 		centre += pt
 	centre /= float(one.size())
-	# ⚠ **Tile CENTRES.** `Look.tile_point_px` puts 조각 (14,6) at (14.5, 6.5) in tile units, and a
-	# bare (14, 6) here would be its corner — the half-조각 error this repo has paid for once.
-	t.ok(centre.distance_to(Vector2(14.5, 6.5)) < 0.2,
+	# ⚠ **Under the body's STAND POINT** — since 03-17 a body alone in its 칸 stands on the centre seat,
+	# the 칸's middle (15.0, 7.0) for 조각 (14,6), and the disc goes with the feet. (Until then this
+	# read (14.5, 6.5), the 조각 centre; a bare (14, 6) would be its corner — the half-조각 error this
+	# repo has paid for once.)
+	var under := _block_middle_world(b, b.grid.tile_index(14, 6))
+	t.ok(centre.distance_to(under) < 0.2,
 		"그 원판의 한가운데가 그 몸 발밑이다 (%.2f, %.2f)" % [centre.x, centre.y])
 
 	# ⚠ **The floor: a SECOND body lays a SECOND disc.** Without this the row above is equally true of
@@ -494,63 +505,335 @@ func _a_body_lays_one_shadow_disc(t) -> void:
 		"몸이 둘이면 그림자도 둘이다 (%d -> %d 정점) — 프레임당 하나가 아니다" % [one.size(), two.size()])
 
 
-## **Two bodies on ONE 조각 are drawn in two places, and a body standing alone is not moved at all.**
+## **Nine bodies at rest on one 칸 are drawn as a 3x3 lattice centred on the 칸's middle, one seat pitch
+## apart** — 06-ranks-wide, the arrangement the user chose on 2026-08-31 and asked for again on
+## 2026-09-02 (「the characters ought to fill in starting from the centre」). Ticket 03-17.
 ##
-## ⚠⚠ **A 조각 ADMITS `Rules.TILE_CAPACITY` BODIES SINCE 2026-08-30** (the user at the screen: about
-## nine to a 칸). The sim walks every one of them to the same 조각 centre, so **without a spread the
-## count changes and the screen does not** — the second body is hidden exactly behind the first, which
-## is this repo's own named 「screen changes but the sim doesn't」 wearing its other face.
+## ⚠⚠ **`_bodies_sharing_a_piece_are_drawn_apart` STOOD HERE AND IT IS REWRITTEN INTO THIS.** It pinned
+## the per-조각 ring — slot 0 at the 조각 centre, the rest `CROWD_SPREAD_RATIO` around it — and the user
+## rejected that picture by eye: nine bodies filled north-west to three, north-east to three, south-west
+## to three, and the pile stood off-centre at every count above one. **What it guarded is kept**: bodies
+## sharing a 조각 are still drawn apart (the pitch row), and the wolves row below carries the same guard
+## for the 짐승.
 ##
-## ⚠ **The alone row is the floor.** A drawer that scattered every body unconditionally would pass the
-## apart row on its own, and it would have moved the single-body picture nobody asked to move.
-## ⚠ **Inside its own 조각 is the ceiling.** A spread past half a 조각 draws a body standing on its
-## neighbour, and the reservation it holds would then disagree with the ground it appears to be on.
+## ⚠⚠ **PUMPED UNTIL THE GLIDE SETTLES, AND THE SETTLING IS ASSERTED.** The drawn position at rest moves
+## toward its seat at `Look.SEAT_GLIDE_TILES_PER_S`, so a net that read the pool the frame a body arrived
+## would read mid-glide. A body's FIRST frame in the pool draws at its stand point with no glide, so the
+## first frame already reads the lattice — and the row proves that too by comparing frame 1 to frame 7.
+## ⚠ Seven and not thirty: every frame pumped on an untreed view barks once per body in `_put_outline`
+## (a pre-existing bark, not this row's), and a longer pump only adds to that noise.
 ##
-## ⚠ Mutation: make `Look.crowd_offset_px` answer `Vector2.ZERO` and the apart row reddens; make it
-## answer for slot 0 too and the alone row does.
-func _bodies_sharing_a_piece_are_drawn_apart(t) -> void:
+## ⚠ Mutation: make `Look.seat_point_tiles` answer `Vector2.ZERO` and the pitch row reddens (nine on one
+## point); drop the 칸 middle from `_stand_point` and the centroid row does.
+func _nine_resting_bodies_on_one_block_read_as_a_centred_lattice(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
-	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN, Rules.SWORDSMAN]), [])
-	_ashore(b, 0, Vector2(14.0, 6.0))
-	_ashore(b, 1, Vector2(14.0, 6.0))
-	var tile := b.grid.tile_index(14, 6)
-	t.eq(b.grid.hold_count(tile), 2, "몸 둘이 한 조각에 서 있다 (자가 점검)")
-	t.eq(b.grid.slot_of(tile, 0), 0, "첫 몸이 0번 자리다 (자가 점검)")
-	t.eq(b.grid.slot_of(tile, 1), 1, "둘째 몸이 1번 자리다 (자가 점검)")
-	t.ok((b.soldier_pos[0] as Vector2).is_equal_approx(b.soldier_pos[1] as Vector2),
-		"그리고 sim 의 자리는 완전히 같다 — 갈라놓는 것은 그림뿐이다 (자가 점검)")
-
+	var b := _nine_on_one_block(rows)
+	var g := b.grid
+	var block := g.block_of(g.tile_index(NINE_TX, NINE_TY))
+	t.eq(g.block_hold_count(block), Rules.BLOCK_CAPACITY, "아홉이 한 칸에 서 있다 (자가 점검)")
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
-	var at := _body_spots(fv)
-	t.eq(at.size(), 2, "화면에 몸이 둘 그려졌다 (자가 점검)")
-	if at.size() < 2:
+	var first := _body_spots(fv)
+	t.eq(first.size(), Rules.BLOCK_CAPACITY, "화면에 몸이 아홉 그려졌다 (자가 점검)")
+	if first.size() < Rules.BLOCK_CAPACITY:
 		return
-	var apart: float = (at[0] as Vector2).distance_to(at[1] as Vector2)
-	var want := Look.crowd_offset_px(1, Rules.TILE_CAPACITY).length() / Look.TILE_PX
-	t.ok(want > 0.01, "자리마다 밀어내는 거리가 실제로 있다 (%.3f 조각 — 자가 점검)" % want)
-	t.ok(absf(apart - want) < 0.01,
-		"한 조각에 선 둘이 %.3f 조각 떨어져 그려진다 (기대 %.3f)" % [apart, want])
+	for _i in 6:
+		fv._process(1.0 / 60.0)
+	var at := _body_spots(fv)
+	var moved := 0.0
+	for k in at.size():
+		moved = maxf(moved, (at[k] as Vector2).distance_to(first[k] as Vector2))
+	t.ok(moved < 1e-4, "첫 프레임에 이미 자리에 서 있다 — 손으로 세운 몸은 미끄러지지 않는다 (%.4f 조각)" % moved)
 
-	# **Inside its own 조각**, both of them — a spread past half a 조각 stands a body on its neighbour.
-	for raw_pt in at:
-		var pt: Vector2 = raw_pt
-		t.ok(pt.distance_to(Vector2(14.5, 6.5)) < 0.5,
-			"그러고도 제 조각 안이다 (%.2f, %.2f)" % [pt.x, pt.y])
+	var middle := _block_middle_world(b, g.tile_index(NINE_TX, NINE_TY))
+	var centroid := Vector2.ZERO
+	for raw in at:
+		centroid += raw as Vector2
+	centroid /= float(at.size())
+	t.ok(centroid.distance_to(middle) < 0.05,
+		"아홉의 무게중심이 칸 한가운데다 (%.3f 조각 어긋남)" % centroid.distance_to(middle))
+	var pitch := Look.SEAT_PITCH_TILES
+	t.ok(pitch > 0.3, "자리 간격이 실제로 있다 (%.3f 조각 — 자가 점검)" % pitch)
+	var worst := 0.0
+	for i in at.size():
+		var nearest := 1e9
+		for j in at.size():
+			if i != j:
+				nearest = minf(nearest, (at[i] as Vector2).distance_to(at[j] as Vector2))
+		worst = maxf(worst, absf(nearest - pitch))
+	t.ok(worst < 0.01,
+		"몸마다 가장 가까운 이웃이 자리 간격 %.3f 조각 떨어져 있다 (최대 어긋남 %.4f)" % [pitch, worst])
+	t.eq(_distinct(at), Rules.BLOCK_CAPACITY, "아홉이 아홉 자리에 따로 그려진다")
+	# **Inside the 칸**: the far corner of the lattice is a pitch from the middle on each axis, and a 칸
+	# is a whole 조각 each way — nothing is drawn standing on the neighbouring 칸.
+	var out := 0
+	for raw in at:
+		var p: Vector2 = raw
+		if absf(p.x - middle.x) > 1.0 or absf(p.y - middle.y) > 1.0:
+			out += 1
+	t.eq(out, 0, "아홉이 다 제 칸 안에 그려진다")
 
-	# ⚠ **The floor: a body ALONE is not moved.** Slot 0 is the 조각 centre, so the single-body picture
-	# is exactly what it was before crowds existed.
-	var solo := _battle_of(rows, _army_of([Rules.SWORDSMAN, Rules.SWORDSMAN]), [])
-	_ashore(solo, 0, Vector2(14.0, 6.0))
-	var fv2 := _view_of(solo, rows)
-	fv2._process(0.0)
-	var one := _body_spots(fv2)
+
+## **One body alone stands at the 칸's middle** — the seat is the centre one, and the centre is the
+## 칸's, not its 조각's. `Look.tile_point_px` puts 조각 (14,6) at (14.5, 6.5); the 칸 it lies in is
+## 14..15 x 6..7 and its middle is (15.0, 7.0).
+## ⚠ The floor under the lattice row: a drawer that left every body on its 조각 centre would still put
+## nine in nine places on this arena — three 조각 hold three — and only this row says where ONE stands.
+func _a_body_alone_stands_in_the_middle_of_its_block(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN]), [])
+	_ashore(b, 0, Vector2(NINE_TX, NINE_TY))
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	var one := _body_spots(fv)
 	t.eq(one.size(), 1, "혼자 선 몸 하나만 그려졌다 (자가 점검)")
 	if one.is_empty():
 		return
-	t.ok((one[0] as Vector2).distance_to(Vector2(14.5, 6.5)) < 0.01,
-		"혼자면 조각 한가운데 그대로다 — 무조건 흩뿌리는 게 아니다 (%.3f, %.3f)"
+	var middle := _block_middle_world(b, b.grid.tile_index(NINE_TX, NINE_TY))
+	t.ok(middle.distance_to(Vector2(14.5, 6.5)) > 0.5,
+		"자가 점검 — 칸 가운데는 조각 가운데와 다른 점이다 (%.2f, %.2f)" % [middle.x, middle.y])
+	t.ok((one[0] as Vector2).distance_to(middle) < 0.01,
+		"혼자면 칸 한가운데에 선다 — 조각 한가운데가 아니다 (%.3f, %.3f)"
 			% [(one[0] as Vector2).x, (one[0] as Vector2).y])
+
+
+## **A seat is drawn on the side of the 칸 its body's own 조각 is on** — the row that ties `Grid`'s
+## own-quadrant preference to `Look`'s lattice geometry, which are two files that could each be right
+## alone and wrong together.
+##
+## The first body stands in the south-east 조각 and takes the centre. Three more stand in the
+## north-west 조각: by `Grid.seat_fits_piece` they take the north edge middle and the west edge middle,
+## and the third — its own two edges taken and **every edge middle going before any corner** — the east
+## edge middle, off its quadrant. Then two more in the south-east: the south edge middle, and, the
+## edges spent, the south-east CORNER over their own 조각. This row reads where those five are DRAWN,
+## relative to the 칸's middle, at the unturned facing — all four edge signs and one corner.
+## ⚠ Mutation: flip the column sign in `Look.seat_point_tiles` and the west/east/corner rows redden;
+## flip the row test in `Grid.seat_fits_piece` and the north/south rows do.
+func _a_seat_is_drawn_on_its_own_pieces_side(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN, Rules.SWORDSMAN, Rules.SWORDSMAN,
+		Rules.SWORDSMAN, Rules.SWORDSMAN, Rules.SWORDSMAN]), [])
+	var g := b.grid
+	var block := g.block_of(g.tile_index(NINE_TX, NINE_TY))
+	var tiles := g.tiles_of_block(block)
+	var nw := int(tiles[0])
+	var se := int(tiles[3])
+	_ashore(b, 0, Vector2(float(se % g.w), float(se / g.w)))
+	for i in range(1, 4):
+		_ashore(b, i, Vector2(float(nw % g.w), float(nw / g.w)))
+	for i in range(4, 6):
+		_ashore(b, i, Vector2(float(se % g.w), float(se / g.w)))
+	t.eq(g.seat_of(block, 0), 4, "남동의 첫 몸이 한가운데다 (자가 점검)")
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	t.eq(fv._sprite_of_soldier.size(), 6, "여섯이 그려졌다 (자가 점검)")
+	if fv._sprite_of_soldier.size() < 6:
+		return
+	var middle := _block_middle_world(b, nw)
+	var pitch := Look.SEAT_PITCH_TILES
+	var p1 := _spot_of(fv, 1)
+	var p2 := _spot_of(fv, 2)
+	var p3 := _spot_of(fv, 3)
+	var p4 := _spot_of(fv, 4)
+	var p5 := _spot_of(fv, 5)
+	t.ok(absf(p1.x - middle.x) < 0.01 and absf(p1.y - (middle.y - pitch)) < 0.01,
+		"북서 조각의 첫 몸은 북쪽 변 가운데에 그려진다 (%.2f, %.2f)" % [p1.x, p1.y])
+	t.ok(absf(p2.x - (middle.x - pitch)) < 0.01 and absf(p2.y - middle.y) < 0.01,
+		"둘째는 서쪽 변 가운데다 (%.2f, %.2f)" % [p2.x, p2.y])
+	t.ok(absf(p3.x - (middle.x + pitch)) < 0.01 and absf(p3.y - middle.y) < 0.01,
+		"셋째는 남은 변 가운데 — 동쪽, 제 조각을 벗어나서라도 모서리보다 변이 먼저다 (%.2f, %.2f)" % [p3.x, p3.y])
+	t.ok(absf(p4.x - middle.x) < 0.01 and absf(p4.y - (middle.y + pitch)) < 0.01,
+		"남동 조각의 둘째 몸은 남쪽 변 가운데다 (%.2f, %.2f)" % [p4.x, p4.y])
+	t.ok(absf(p5.x - (middle.x + pitch)) < 0.01 and absf(p5.y - (middle.y + pitch)) < 0.01,
+		"남동 조각의 셋째 몸은 남동 모서리다 — 제 조각 위다 (%.2f, %.2f)" % [p5.x, p5.y])
+
+
+## **Three wolves off one boat are drawn apart** — what the deleted ring row guarded, for the 짐승.
+## `land_beast` puts all three on one 조각 (the nearest with room), the sim gives them one 조각 centre,
+## and only the seat separates them on screen.
+## ⚠ A wolf has no order column, so its rest test is its position alone (amendment 3 of the plan).
+func _three_wolves_off_one_boat_are_drawn_apart(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([]), [])
+	var tile := b.grid.tile_index(NINE_TX, NINE_TY)
+	for _k in 3:
+		t.ok(b.land_beast(Rules.WOLF, tile) >= 0, "늑대가 내린다 (자가 점검)")
+	t.eq(b.grid.hold_count(tile), 3, "셋이 한 조각에 서 있다 (자가 점검)")
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	var at := _body_spots(fv)
+	t.eq(at.size(), 3, "늑대 셋이 그려졌다 (자가 점검)")
+	if at.size() < 3:
+		return
+	var least := 1e9
+	for i in at.size():
+		for j in range(i + 1, at.size()):
+			least = minf(least, (at[i] as Vector2).distance_to(at[j] as Vector2))
+	t.ok(absf(least - Look.SEAT_PITCH_TILES) < 0.01,
+		"가장 가까운 두 늑대가 자리 간격만큼 떨어져 그려진다 (%.3f 조각)" % least)
+	t.eq(_distinct(at), 3, "셋이 세 자리에 따로 그려진다")
+
+
+## **The lattice does NOT swing with the camera.** The nine seats are world points turned by the
+## 부대's own facing (`Battle.block_face`), never by the yaw — the four camera notches draw the same
+## nine ground points. `log.md` 2026-09-02: the ticket first read the decision as 「turns with the
+## camera」 and the correction is this row.
+func _the_lattice_does_not_swing_with_the_camera(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _nine_on_one_block(rows)
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	var base := _sorted_spots(fv)
+	t.eq(base.size(), Rules.BLOCK_CAPACITY, "아홉이 그려졌다 (자가 점검)")
+	for yaw in [90.0, 180.0, 270.0]:
+		fv.cam_yaw_deg = float(yaw)
+		fv._process(0.0)
+		var turned := _sorted_spots(fv)
+		var worst := 0.0
+		for k in mini(base.size(), turned.size()):
+			worst = maxf(worst, (base[k] as Vector2).distance_to(turned[k] as Vector2))
+		t.ok(turned.size() == base.size() and worst < 1e-4,
+			"요 %d 도에서도 아홉이 같은 땅 위 아홉 점이다 (최대 %.5f 조각)" % [int(yaw), worst])
+
+
+## **From walking to resting the body glides to its seat; while walking it tracks the sim exactly; a
+## body that left the pool and came back does not glide in from where it used to be.**
+##
+## ⚠⚠ **THE GLIDE IS THE ONLY VIEW-SIDE STATE THIS TICKET ADDS** and it is keyed on the body's string
+## key, not the pool slot (amendment 2). Three things are read: the first resting frame moves the drawn
+## point by exactly `SEAT_GLIDE_TILES_PER_S` times the frame, it reaches the seat within the frames the
+## distance needs and not in one, and after the body has been out of the pool the first frame back is
+## AT its stand point.
+func _a_body_coming_to_rest_glides_to_its_seat(t) -> void:
+	var rows := _open(ARENA_W, ARENA_H)
+	var b := _battle_of(rows, _army_of([Rules.SWORDSMAN]), [])
+	var g := b.grid
+	_ashore(b, 0, Vector2(NINE_TX, NINE_TY))
+	var fv := _view_of(b, rows)
+	fv._process(0.0)
+	var seat0 := _block_middle_world(b, g.tile_index(NINE_TX, NINE_TY))
+	t.ok(_spot_of(fv, 0).distance_to(seat0) < 0.01, "선 채로 열리면 첫 프레임에 자리 위다 (자가 점검)")
+
+	# Walking: an order is out and the position is off any 조각 centre — drawn at the sim's own point.
+	# The body is a third of a 조각 short of the 조각 it will stop on, the way a walk's last sub-step is.
+	var far := g.tile_index(NINE_TX + 4, NINE_TY)
+	b.soldier_order[0] = far
+	b.soldier_pos[0] = Vector2(NINE_TX + 1.7, NINE_TY)
+	fv._process(1.0 / 60.0)
+	var walk_want := Look.tile_point_px(b.soldier_pos[0]) / Look.TILE_PX
+	t.ok(_spot_of(fv, 0).distance_to(walk_want) < 1e-4,
+		"걷는 몸은 sim 의 자리에 정확히 그려진다 (%.3f, %.3f)" % [_spot_of(fv, 0).x, _spot_of(fv, 0).y])
+
+	# Arrival one 칸 east: the sim puts it on a 조각 centre with no order, the view glides to the seat.
+	var dest := g.tile_index(NINE_TX + 2, NINE_TY)
+	b.soldier_pos[0] = Vector2(NINE_TX + 2, NINE_TY)
+	b._soldier_goal[0] = b.soldier_pos[0]
+	b.soldier_order[0] = -1
+	g.release_all(0)
+	g.hold(0, dest)
+	var target := _block_middle_world(b, dest)
+	var from := _spot_of(fv, 0)
+	var dt := 1.0 / 60.0
+	fv._process(dt)
+	var one := _spot_of(fv, 0)
+	var step := from.distance_to(one)
+	t.ok(absf(step - Look.SEAT_GLIDE_TILES_PER_S * dt) < 1e-4,
+		"쉬는 첫 프레임에 자리 쪽으로 딱 %.3f 조각 움직인다 (%.4f)" % [Look.SEAT_GLIDE_TILES_PER_S * dt, step])
+	t.ok(one.distance_to(target) > 0.1, "그리고 아직 자리에 닿지 않았다 — 튀지 않고 미끄러진다")
+	var frames := 1
+	var last_gap := one.distance_to(target)
+	var monotone := true
+	while frames < 200 and _spot_of(fv, 0).distance_to(target) > 1e-4:
+		fv._process(dt)
+		frames += 1
+		var gap := _spot_of(fv, 0).distance_to(target)
+		if gap > last_gap + 1e-6:
+			monotone = false
+		last_gap = gap
+	var need := int(ceil(from.distance_to(target) / (Look.SEAT_GLIDE_TILES_PER_S * dt)))
+	t.ok(frames > 1 and frames <= need + 1,
+		"자리에 닿는 데 %d 프레임 걸린다 (거리가 요구하는 %d 이내, 1 보다 많다)" % [frames, need])
+	t.ok(monotone, "가는 동안 자리에서 멀어지는 프레임이 없다")
+	t.ok(_spot_of(fv, 0).distance_to(target) < 1e-4, "그리고 정확히 자리에 선다")
+
+	# A jump further than a 칸 while at rest is not a walk's hand-off and does not glide: the body is
+	# drawn where the sim has it that frame. This is `net_pick`'s fixture — bodies placed by writing
+	# `soldier_pos` — and a view that slid them across the island would be the screen doing a thing
+	# the sim did not.
+	var jump := g.tile_index(NINE_TX + 6, NINE_TY)
+	b.soldier_pos[0] = Vector2(NINE_TX + 6, NINE_TY)
+	b._soldier_goal[0] = b.soldier_pos[0]
+	g.release_all(0)
+	g.hold(0, jump)
+	fv._process(dt)
+	var jumped := _block_middle_world(b, jump)
+	t.ok(jumped.distance_to(target) > float(Rules.BLOCK_TILES), "자가 점검 — 칸 하나보다 멀리 뛰었다")
+	t.ok(_spot_of(fv, 0).distance_to(jumped) < 1e-4,
+		"쉬는 채로 칸 하나보다 멀리 옮겨진 몸은 그 프레임에 새 자리 위다 — 섬을 가로질러 미끄러지지 않는다 (%.3f 조각)"
+			% _spot_of(fv, 0).distance_to(jumped))
+
+	# Out of the pool and back: no glide from the old place.
+	b.soldier_state[0] = Battle.SoldierState.RESERVE
+	fv._process(dt)
+	t.eq(_body_spots(fv).size(), 0, "예비로 돌아간 몸은 안 그려진다 (자가 점검)")
+	_ashore(b, 0, Vector2(2.0, 2.0))
+	fv._process(dt)
+	var back := _block_middle_world(b, g.tile_index(2, 2))
+	t.ok(_spot_of(fv, 0).distance_to(back) < 1e-4,
+		"다시 선 몸은 첫 프레임에 새 자리 위다 — 옛 자리에서 미끄러져 오지 않는다 (%.3f 조각)"
+			% _spot_of(fv, 0).distance_to(back))
+
+
+## The 조각 the nine-body fixtures stand on: (14, 6) is the north-west 조각 of the 칸 14..15 x 6..7.
+const NINE_TX := 14
+const NINE_TY := 6
+
+
+## Nine 검사 ashore over the four 조각 of one 칸, split 3·2·2·2 — the split the walk actually delivers
+## most often, and never the one a per-조각 table assumed.
+func _nine_on_one_block(rows: Array) -> Battle:
+	var kinds := []
+	for _k in Rules.BLOCK_CAPACITY:
+		kinds.append(Rules.SWORDSMAN)
+	var b := _battle_of(rows, _army_of(kinds), [])
+	var g := b.grid
+	var tiles := g.tiles_of_block(g.block_of(g.tile_index(NINE_TX, NINE_TY)))
+	var split := [3, 2, 2, 2]
+	var i := 0
+	for q in split.size():
+		var tile := int(tiles[q])
+		for _n in int(split[q]):
+			_ashore(b, i, Vector2(float(tile % g.w), float(tile / g.w)))
+			i += 1
+	return b
+
+
+## The middle of the 칸 holding `tile`, in the world tile units `_body_spots` reads — the mean of the
+## 칸's 조각 put through `Look.tile_point_px`. ⚠ Asked of the grid and never divided by two, for the
+## reason `FieldView._block_middle_tiles` gives.
+func _block_middle_world(b: Battle, tile: int) -> Vector2:
+	var g := b.grid
+	var tiles := g.tiles_of_block(g.block_of(tile))
+	var sum := Vector2.ZERO
+	for k in tiles.size():
+		var tt := int(tiles[k])
+		sum += Vector2(float(tt % g.w), float(tt / g.w))
+	return Look.tile_point_px(sum / float(tiles.size())) / Look.TILE_PX
+
+
+## Where soldier `i` is drawn this frame, on the ground plane — through the view's own soldier → sprite
+## map, which is what the press reads too.
+func _spot_of(fv: FieldView, i: int) -> Vector2:
+	var s: Sprite3D = fv._sprites[int(fv._sprite_of_soldier[i])]
+	return Vector2(s.position.x, s.position.z)
+
+
+## The body spots sorted by x then y, so two frames can be compared point for point.
+func _sorted_spots(fv: FieldView) -> Array:
+	var out := _body_spots(fv)
+	out.sort_custom(func(a: Vector2, c: Vector2) -> bool:
+		return a.x < c.x - 1e-6 or (absf(a.x - c.x) <= 1e-6 and a.y < c.y))
+	return out
 
 
 

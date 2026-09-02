@@ -212,12 +212,28 @@ func from_tiles(battle: Battle) -> PackedInt32Array:
 ## **`_seats` is the seam the 부대's own formation plugs into now** — the roadmap has the shape for
 ## nine standing bodies already chosen as shape 6, and when it is built it replaces the body of that
 ## one function and nothing else here.
+##
+## ⚠⚠ **AND THE ORDER WRITES WHICH WAY THAT SHAPE FACES** (2026-09-02, the user: 「격자는 명령
+## 방향으로」, ticket 03-17). `Battle.block_face[block]` becomes the unit vector from the centroid of the
+## ordered bodies' positions — where they stood when the press landed — to the 칸's middle. **Written
+## before the walks go out and from positions read at this instant**, so nine bodies streaming in over
+## two seconds all arrive onto one lattice. A centroid already AT the middle (a 부대 spread over the
+## 칸 and told to stay) leaves the facing as it was rather than writing a zero.
+## ⚠ **The 칸's middle is the mean of its 조각 asked of the grid**, never `block + 0.5`: a truncated
+## 칸 at the board's edge has two 조각, and its middle is the middle of those two.
 func order(battle: Battle, block: int) -> int:
 	if battle == null or battle.grid == null or ids.is_empty():
 		return 0
 	if not can_reach_block(block):
 		return 0
 	var seats := _seats(battle, block, ids.size())
+	var centroid := Vector2.ZERO
+	for k in ids.size():
+		centroid += battle.soldier_pos[int(ids[k])] as Vector2
+	centroid /= float(ids.size())
+	var toward := _block_middle(battle.grid, block) - centroid
+	if toward.length() > Rules.EPS:
+		battle.block_face[block] = toward.normalized()
 	var sent := 0
 	for k in ids.size():
 		if k >= seats.size():
@@ -226,6 +242,20 @@ func order(battle: Battle, block: int) -> int:
 			sent += 1
 	_forget_routes()
 	return sent
+
+
+## **The middle of a 칸 in `soldier_pos` units** — the mean of the 조각 the grid names for it. ⚠ Asked
+## of `Grid.tiles_of_block` rather than decoded here, for the reason that function's header gives: the
+## low-corner decode has been hand-copied three times outside `src/` and every copy could disagree.
+func _block_middle(grid: Grid, block: int) -> Vector2:
+	var tiles := grid.tiles_of_block(block)
+	if tiles.is_empty():
+		return Vector2.ZERO
+	var sum := Vector2.ZERO
+	for k in tiles.size():
+		var t := int(tiles[k])
+		sum += Vector2(float(t % grid.w), float(t / grid.w))
+	return sum / float(tiles.size())
 
 
 ## **The line each picked body would walk onto `block`** — one 조각 list per body, in `ids` order, and
@@ -492,6 +522,36 @@ func _seats(battle: Battle, block: int, want: int) -> PackedInt32Array:
 			continue
 		seen[t] = true
 		queue.append(t)
+	# ⚠⚠ **THE PRESSED 칸 IS SERVED ROUND-ROBIN OVER ITS 조각, AND IT WAS DRAINED ONE 조각 AT A TIME
+	# UNTIL 2026-09-02** (ticket 03-17; the user at the screen: 「the characters ought to fill in
+	# starting from the centre and that is not really working」). The loop below fills each 조각 to
+	# `Rules.TILE_CAPACITY` before moving on, and `Grid.tiles_of_block` hands the 조각 back north-west
+	# first — so three bodies all took the north-west 조각 and the pile stood in one corner of the 칸.
+	# **Here one seat goes to each 조각 in turn** while any has room and the 칸 has room, so three
+	# bodies land in three quarters and the seat lattice `Grid` hands them on arrival is the centre and
+	# two edges rather than one 조각's three. ⚠ **Only the pressed 칸.** A spill 칸 below is still
+	# drained in discovery order — which neighbouring 칸 takes the surplus was never chosen (see the
+	# header) and this does not choose it either.
+	var pressed_room := _room_in_block(grid, block)
+	block_room[block] = pressed_room
+	var served := true
+	while out.size() < want and int(block_room[block]) > 0 and served:
+		served = false
+		for k in queue.size():
+			var t := int(queue[k])
+			if out.size() >= want or int(block_room[block]) <= 0:
+				break
+			# A stair 조각 inside the 칸 rides the queue and takes nobody — the same split as below.
+			if not can_reach(t):
+				continue
+			if not tile_room.has(t):
+				tile_room[t] = _room_in_tile(grid, t)
+			if int(tile_room[t]) <= 0:
+				continue
+			out.append(t)
+			tile_room[t] = int(tile_room[t]) - 1
+			block_room[block] = int(block_room[block]) - 1
+			served = true
 	var head := 0
 	while head < queue.size() and out.size() < want:
 		var cur := int(queue[head])

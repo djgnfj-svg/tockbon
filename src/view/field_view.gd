@@ -221,6 +221,24 @@ var _sprites_used := 0
 ## mid-lunge is picked where it is drawn, and only the paint knows where that is.
 ## ⚠ **짐승, riders and a body still falling are not in here** — none of them is pickable, as before.
 var _sprite_of_soldier := {}
+## **Where each body was DRAWN last frame, in `soldier_pos` units** — body key (`s%d` · `e%d`) to
+## `Vector2`. Ticket 03-17's one piece of view state: a body coming to rest slides from where the sim
+## left it onto its seat at `Look.SEAT_GLIDE_TILES_PER_S`, and this is the point it slides from.
+##
+## ⚠⚠ **KEYED ON THE BODY'S STRING KEY AND NOT ON THE POOL SLOT** (the plan's amendment 2). `_sprite()`
+## hands out pool slots by draw order and every index shifts after a death, so a glide kept in the
+## sprite's own position would make a body inherit a stranger's in-flight point.
+## ⚠⚠ **A BODY'S FIRST FRAME IN THE POOL DRAWS AT ITS STAND POINT, NO GLIDE** — there is no entry to
+## glide from — so bodies placed by hand in a net read their seat immediately, and the slide only plays
+## on a walk → rest transition the view has watched. **A key is dropped the frame its body leaves the
+## pool**, so a body that dies and stands again does not slide in from where it fell.
+## ⚠ **Walking bodies track the sim exactly** and only overwrite their entry; a falling body is drawn
+## at its entry and never moves it. `_put_walker` is the only writer.
+var _seat_glide := {}
+## The keys `_put_walker` wrote THIS frame — emptied by `_paint_bodies` at the top and read at the
+## bottom to drop the rest. ⚠ Not derived from the sim's lists: a body in the middle of falling is in
+## the pool and in no list.
+var _glide_fresh := {}
 ## **기법 17's black copies, one per body, in their own pool.** ⚠⚠ **A parallel pool and not a child
 ## node**, because the body sprites are recycled by index across frames: a child would be carried to
 ## whichever body reused that slot, and the outline would be right by accident. **Index `i` of this
@@ -429,6 +447,9 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	# a place nothing happened. **The body rows survive because a 검사 carries across islands.**
 	_live = []
 	_body = {}
+	# ⚠ **The glide forgets every body too.** It holds drawn POINTS on the last island's board, and a
+	# 검사 carried across would otherwise slide in from a place on a different island.
+	_seat_glide = {}
 	# ⚠ **And the water forgets every hull.** The blocks are indexed by boat number, so island 2's
 	# first boat would otherwise open wearing island 1's first boat's trail.
 	_wake = _wake_empty()
@@ -520,7 +541,7 @@ func _process(delta: float) -> void:
 	# order it was filled, so a route laid down first passes UNDER the shadows of the bodies walking
 	# it — which is the way round that reads as a line on the ground rather than over the feet.
 	_paint_move_lines()
-	_paint_bodies()
+	_paint_bodies(delta)
 	_paint_marks()
 	_fx_flush()
 	# ⚠ **Outside the buffer.** A picture prop writes nothing into the fx buffers — it is a standing
@@ -744,10 +765,10 @@ func tile_to_screen_px(tx: int, ty: int) -> Vector2:
 ##
 ## ⚠⚠ **IT READS THE POOLED SPRITES THE VIEW ITSELF PLACED** — position, scale, texture, visible, the
 ## agreed measuring surface in `GLOSSARY.md` — and projects them through `world_to_screen_px`, so the
-## rectangle IS the picture: the pitch, the yaw, the zoom, the crowd offset, the idle sway and the
-## `_pitch_stretch` are all already inside the sprite's own fields. **No new constant** — the picture's
-## size is the pick area, and when 03-17 moves a body onto its lattice seat the pick follows the drawing
-## by construction.
+## rectangle IS the picture: the pitch, the yaw, the zoom, the seat on the 칸's lattice, the idle sway
+## and the `_pitch_stretch` are all already inside the sprite's own fields. **No new constant** — the
+## picture's size is the pick area, and 03-17 moving a body onto its lattice seat moved the pick with
+## the drawing by construction.
 ##
 ## ⚠⚠ **THE WIDTH IS THE INK'S AND NOT THE CANVAS'S** (2026-09-02, the bounce). For one round the
 ## rectangle was the whole `Sprite3D` quad — texture width times scale — and that quad is 2.2 times the
@@ -1096,7 +1117,7 @@ var _keep_roof_known := false
 var _move_lines: Array = []
 
 ## Whose line each entry of `_move_lines` is, in the same order. **Empty is allowed** and means no
-## crowd offset — a line leaving the middle of a 조각 rather than a body's feet.
+## seat — a line leaving the middle of a 조각 rather than a body's feet.
 var _move_ids := PackedInt32Array()
 var _builds: Node3D = null
 var _props: Node3D = null
@@ -1283,8 +1304,8 @@ func set_reach(tiles: PackedInt32Array) -> void:
 ## buffer that has already been committed, and it never reaches the screen.
 func set_move_lines(lines: Array, ids: PackedInt32Array = PackedInt32Array()) -> void:
 	_move_lines = lines
-	# ⚠ **The ids are what let the line leave the FEET.** A body is drawn off its 조각's middle by the
-	# crowd offset, and a line that ignored that started from the middle of the 조각 with nobody on it
+	# ⚠ **The ids are what let the line leave the FEET.** A body at rest is drawn off its 조각's middle
+	# on its seat, and a line that ignored that started from the middle of the 조각 with nobody on it
 	# — 2026-08-31, the user: 「지금은 블록 가운데서 오는듯한데?」.
 	_move_ids = ids
 
@@ -2051,16 +2072,22 @@ func _pitch_stretch() -> float:
 ## height of the tile NEXT to it**, which on the plateau's edge is the floor a storey down: the body
 ## sank into the ground. ⚠ The y axis was worse still — `TILE_H_PX` need not equal `TILE_PX`, so the
 ## two axes were off by different amounts.
-## ⇒ **The sim's own tile-unit position goes in, untouched.** The picture is offset afterwards.
-## ⚠⚠ **`crowd_px` IS THE THIRD POINT AND IT IS NOT A FOURTH IDEA OF WHERE THE BODY IS.** A 조각
+## ⇒ **A tile-unit position goes in, untouched.** The picture is offset afterwards.
+## ⚠⚠ **THERE WAS A THIRD POINT HERE, `crowd_px`, AND IT IS GONE** (2026-09-02, ticket 03-17). A 조각
 ## admits `Rules.TILE_CAPACITY` bodies since 2026-08-30 and the sim walks every one of them to the same
-## 조각 centre; this is how far off that centre THIS body is drawn. **The shadow takes it and the idle
-## sway does not** — a crowd offset is where the body is standing, so the disc goes with it, while the
-## sway is the body moving over a disc that stays put.
+## 조각 centre; the ring that spread them is replaced by the seat, and the seat is already folded into
+## `at_tiles` by the caller. **The rule the third point carried still holds**: where the body STANDS
+## takes the shadow with it and the idle sway does not — the sway is the body moving over a disc that
+## stays put.
 ## ⚠⚠ **IT TOOK A `radius` AND IT TAKES THE `type_id` IT WAS DERIVED FROM** (2026-08-30). The radius is
 ## one read of the row; the row also says how big this species is drawn, and passing the derived number
 ## while the caller kept the row is how the two would have been read in two places.
-func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id: int, colour: Color,
+## ⚠ **`at_tiles` IS THE DRAWN STAND POINT SINCE 2026-09-02** (ticket 03-17) — the seat on the 칸's
+## lattice for a body at rest, the sim's point for one walking — and not the sim's position outright:
+## the seat is a still point a body stands on, so the ground and the shadow belong under it, where the
+## sway (which moves every frame) still does not. **The `crowd_px` parameter stood between these two and
+## is deleted** with the per-조각 ring; the shadow needs no second offset now.
+func _put_body(centre_px: Vector2, at_tiles: Vector2, type_id: int, colour: Color,
 		squash: Vector2, tex: Texture2D, outlined: bool = false) -> float:
 	var radius := Look.body_radius_of(type_id)
 	# ⚠⚠ **THE ROW'S INK FRACTION, AND DIVIDING BY IT IS THE WHOLE POINT** (2026-08-31).
@@ -2087,7 +2114,7 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 	# 33x40 where a wolf's is 74x40, so at one drawn WIDTH he stands far taller and buries the disc.
 	# ⚠⚠ **`wide * frac` AND NOT `wide`** (2026-08-31) — the disc is a fraction of the ANIMAL,
 	# so a canvas widened by a death pose no longer widens the shadow. See `Look.BODY_SHADOW_OF_INK`.
-	_put_ground_shadow(Look.tile_point_px(at_tiles) + crowd_px,
+	_put_ground_shadow(Look.tile_point_px(at_tiles),
 		wide * frac * 0.5 * Look.BODY_SHADOW_OF_INK)
 	var s := _sprite()
 	var pic: Texture2D = tex if tex != null else _tex_body
@@ -2126,7 +2153,7 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 	# there is one place a body's colour is decided and `net_shell` reads the same answer this does.
 	_put_outline(s)
 	# ⚠⚠ **THE RIM IS PLACED FROM THE BODY'S FINISHED POSITION AND SCALE, NOT RE-DERIVED.** Every
-	# correction above it — the foot height, the frame's empty rows, the gait squash, the crowd offset
+	# correction above it — the foot height, the frame's empty rows, the gait squash, the seat
 	# — would otherwise have to be repeated, and a rim that repeated four of five would sit a little
 	# off its own body in exactly the cases that were hardest to get right.
 	if outlined:
@@ -2152,8 +2179,11 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, crowd_px: Vector2, type_id
 
 ## Every body, every frame. **This is what pass 6, 7 and 8 of the old `_draw` were**, minus the marks
 ## that are not ported yet.
-func _paint_bodies() -> void:
+## ⚠ **`delta` is the glide's** (`_seat_glide`) and nothing else here reads it; the nets that call this
+## straight leave it at 0, which draws every body where it was.
+func _paint_bodies(delta: float = 0.0) -> void:
 	_sprites_used = 0
+	_glide_fresh = {}
 	# ⚠ **Opened with the body pool and closed by the same `_hide_unused`.** A rim pool opened
 	# anywhere else is a rim left standing over a body that has died.
 	_rims_used = 0
@@ -2173,9 +2203,10 @@ func _paint_bodies() -> void:
 	for raw_id in battle.living_enemy_ids():
 		var e := int(raw_id)
 		var ety := int(battle.enemy_type[e])
+		var resting := _resting_enemy(e)
 		_put_walker("e%d" % e, ety, battle.enemy_pos[e], true,
-			_crowd_slot_of(battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e), false,
-			_hp_frac(float(battle.enemy_hp[e]), Rules.hp_of(ety)))
+			_stand_point(battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e, resting), resting, delta,
+			false, _hp_frac(float(battle.enemy_hp[e]), Rules.hp_of(ety)))
 
 	# ⚠ **Emptied here and not on the empty path above**, so a frame with no island leaves the last
 	# frame's map standing — and the last frame's sprites are hidden, which `body_at_px` reads.
@@ -2184,8 +2215,9 @@ func _paint_bodies() -> void:
 		var i := int(raw_id)
 		# ⚠ **`army.max_hp_of` and not `Rules.hp_of` off the row.** There is no `hp` column in the
 		# army since the revival, and `max_hp_of` is the one answer to 「what is this body healed to」.
+		var resting := _resting_soldier(i)
 		_put_walker("s%d" % i, int(army.type_id[i]), battle.soldier_pos[i], false,
-			_crowd_slot_of(battle.soldier_pos[i], i), _picked.has(i),
+			_stand_point(battle.soldier_pos[i], i, resting), resting, delta, _picked.has(i),
 			_hp_frac(float(battle.soldier_hp[i]), army.max_hp_of(i)))
 		# The sprite `_put_walker` just took is this body's — see `_sprite_of_soldier` for why the
 		# index is read here and nowhere else.
@@ -2196,13 +2228,16 @@ func _paint_bodies() -> void:
 	# screen — and that is still true: **what is drawn here is not a corpse, it is a body in the
 	# middle of falling**, and it stops the frame its death strip runs out.
 	# ⚠ **It reads `last` and never the sim's position**, which is OFFMAP for a dead beast.
-	# ⚠ **No crowd slot.** The 조각 was released the moment the body died, so asking for a slot would
-	# hand a falling body the seat a living one has already taken and stand the two in one place.
+	# ⚠ **It falls where it was DRAWN, not where the sim had it.** The 조각 and the seat were released
+	# the moment the body died, so `_stand_point` has nothing to say; the glide entry still holds the
+	# seat it was standing on, and a fall that popped back onto the 조각 centre first would read as the
+	# body stepping before it drops. `last` is the fallback for a body that died on its first frame.
 	for key: String in _body:
 		var b: Dictionary = _body[key]
 		if float(b["dying"]) <= 0.0:
 			continue
-		_put_walker(key, int(b["type"]), b["last"], key.begins_with("e"), 0)
+		var fell_at: Vector2 = _seat_glide.get(key, b["last"])
+		_put_walker(key, int(b["type"]), fell_at, key.begins_with("e"), fell_at, false, delta)
 
 	# ⚠ **Inside this function and not beside it.** The riders come out of the same `Sprite3D` pool the
 	# bodies do, and that pool is opened by the `_sprites_used = 0` above and closed by the
@@ -2215,6 +2250,11 @@ func _paint_bodies() -> void:
 	_paint_bars()
 
 	_hide_unused()
+	# ⚠ **A body that left the pool this frame loses its glide entry** — see `_seat_glide`. Walked
+	# rather than rebuilt: the entries that were written are the whole set that stays.
+	for key in _seat_glide.keys():
+		if not _glide_fresh.has(key):
+			_seat_glide.erase(key)
 
 
 ## **One flat disc on the ground under a body, and it is the whole of a body's shadow.**
@@ -2429,12 +2469,28 @@ func _clock_of(b: Dictionary, anim: int) -> float:
 ## ⚠⚠ **`hp_frac` DEFAULTS TO 1.0, WHICH IS 「no bar」, AND THE FALLING BODIES RELY ON IT** (2026-09-01).
 ## A body in the middle of its death strip is already at 0 hp, and a bar drawn from that number would
 ## be an empty trough riding a corpse down — the one thing 「깎인 것만 뜬다」 was chosen to avoid.
-func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: int,
-		outlined: bool = false, hp_frac: float = 1.0) -> void:
-	# ⚠ **The crowd offset is kept apart from the sway** and handed down separately — see `_put_body`,
-	# where the shadow takes one and not the other.
-	var crowd := Look.crowd_offset_px(slot, Rules.TILE_CAPACITY)
-	var centre := Look.tile_point_px(at) + crowd + _body_offset_of(key)
+##
+## ⚠⚠ **`at` IS WHERE THE SIM HAS THE BODY AND `stand` IS WHERE IT IS TO BE DRAWN** (2026-09-02, ticket
+## 03-17) — the seat on the 칸's lattice for a body at rest, the sim's own point for one walking, and the
+## caller (`_stand_point`) decides which. **Between the two sits the glide**: at rest (`resting`) the
+## drawn point moves from last frame's toward `stand` at `Look.SEAT_GLIDE_TILES_PER_S`; walking, it IS
+## `stand`; and a body with no entry yet is drawn AT `stand`. `_seat_glide` is the entry.
+## ⚠ **The `slot` parameter stood here and it is deleted** with the per-조각 ring it indexed.
+func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, stand: Vector2,
+		resting: bool, delta: float, outlined: bool = false, hp_frac: float = 1.0) -> void:
+	var drawn := stand
+	if resting and _seat_glide.has(key):
+		var from: Vector2 = _seat_glide[key]
+		# ⚠ **Only across a 칸's width or less.** The glide is the hand-off from the last walking point to
+		# the seat — under a 조각 to the far seat, under two between two seats of one 칸 — and a target
+		# further off than a whole 칸 was not walked to: the sim placed the body there, as `net_pick`
+		# does by writing `soldier_pos`, and a body that slid ten 조각 across the island for that would
+		# be the screen doing a thing the sim did not. It is drawn where the sim has it.
+		if from.distance_to(stand) <= float(Rules.BLOCK_TILES):
+			drawn = from.move_toward(stand, Look.SEAT_GLIDE_TILES_PER_S * delta)
+	_seat_glide[key] = drawn
+	_glide_fresh[key] = true
+	var centre := Look.tile_point_px(drawn) + _body_offset_of(key)
 	# A body faces the way it last walked. `_facing_of` returns RIGHT when it has never moved, so a
 	# body standing still faces right rather than flipping on a zero vector.
 	var tex := _body_tex(key, type_id, _facing_of(key))
@@ -2447,13 +2503,13 @@ func _put_walker(key: String, type_id: int, at: Vector2, is_enemy: bool, slot: i
 	var swing := _swing_squash(key)
 	# ⚠ **`outlined` rides along untouched** — whether this body is the one in hand is the shell's
 	# answer, not a thing the view re-derives.
-	var top := _put_body(centre, at, crowd, type_id, lit,
+	var top := _put_body(centre, drawn, type_id, lit,
 		Vector2(gait.x * swing.x, gait.y * swing.y), tex, outlined)
 	# ⚠ **Here and not in `_paint_bodies`**, because this is the one line where the body's drawn top is
 	# in hand. `_put_body`'s own note carries what re-deriving it off the radius cost.
 	# ⚠ **`centre` and not the sim's 조각**: the bar hangs over the picture, so it takes the sway, the
-	# lunge and the crowd offset the picture took — a bar left on the 조각 centre would drift off the
-	# head of a body that is leaning into a blow.
+	# lunge and the seat the picture took — a bar left on the 조각 centre would drift off the head of a
+	# body that is leaning into a blow.
 	_put_bar(Vector3(centre.x / Look.TILE_PX, top + Look.HP_BAR_LIFT_PX / Look.TILE_PX,
 		centre.y / Look.TILE_PX), hp_frac)
 
@@ -2465,23 +2521,63 @@ func _flash_of(key: String) -> float:
 	return float((_body[key] as Dictionary)["flash"]) / Look.HIT_FLASH_SEC
 
 
-## **Which slot of its own 조각 this body holds, or 0 when the sim does not say.**
+## **Where a body is to be drawn, in `soldier_pos` units** — its seat on the 칸's lattice when it is at
+## rest, the sim's own point otherwise. Ticket 03-17; the one function `_put_walker`, the shadow under
+## it, a falling body and the 이동선's first point all read.
 ##
-## ⚠⚠ **THE SIM OWNS THE SLOT AND THIS ONLY READS IT.** `Grid` hands the lowest free slot to whoever
-## claims a 조각, so the number is already deterministic and already the same for everyone looking; a
-## slot invented here — off the body's index, say — would put two bodies in one place the moment one of
-## them died.
+## ⚠⚠ **`_crowd_slot_of` STOOD HERE AND IT IS DELETED** (2026-09-02). It read `Grid.slot_of` — a body's
+## place inside ONE 조각 — and `Look.crowd_offset_px` rang the three of them around that 조각's centre;
+## the user rejected the picture by eye (「the characters ought to fill in starting from the centre」).
+## **The sentence it stood on still holds**: the sim owns the place and this only reads it. `Grid.seat_of`
+## hands the seat to whoever holds a 조각 of the 칸, so two bodies cannot be handed one point the moment
+## a third dies — a seat invented here would.
 ##
-## ⚠ **0 on a refusal, and 0 is the 조각 centre**, which is where a body was drawn before crowds
-## existed. A body mid-step holds the 조각 it is walking into as well as the one it stands on; the
-## rounded position is which of the two it is nearer, and that is the one it is drawn in.
-func _crowd_slot_of(at: Vector2, unit_id: int) -> int:
-	if battle == null or battle.grid == null or battle.grid.w <= 0:
-		return 0
+## ⚠⚠ **AT REST IT IS THE 칸's MIDDLE PLUS THE SEAT, AND BOTH HALVES ARE SIM FACTS.** The middle is
+## `_block_middle_tiles` — asked of the grid, never `+ 0.5` — and the seat is `Look.seat_point_tiles`
+## over `Grid.seat_of` and `Battle.block_face` (the order's direction; a 칸 with none faces `(0, 1)`).
+## `Look` holds the lattice's geometry because nothing in `src/sim/` reads it.
+## ⚠ **A resting body with NO seat is drawn on its 조각 centre**, which is `at` itself. That is a body
+## stood by writing `soldier_pos` without `Grid.hold` — `net_pick` does it — and drawing it at the
+## middle would put a body somewhere the reservation table says nobody is.
+## ⚠ **Walking it is `at`, exactly**, so the glide never lags a walk; `_resting_soldier` and
+## `_resting_enemy` are the two rest tests and the caller passes the answer in.
+func _stand_point(at: Vector2, unit_id: int, resting: bool) -> Vector2:
+	if not resting or battle == null or battle.grid == null or battle.grid.w <= 0:
+		return at
 	var g := battle.grid
 	var tx := clampi(int(round(at.x)), 0, g.w - 1)
 	var ty := clampi(int(round(at.y)), 0, g.h - 1)
-	return maxi(g.slot_of(ty * g.w + tx, unit_id), 0)
+	var block := g.block_of(ty * g.w + tx)
+	var seat := g.seat_of(block, unit_id)
+	if seat < 0:
+		return at
+	var face: Vector2 = battle.block_face.get(block, Vector2(0.0, 1.0))
+	return _block_middle_tiles(Vector2(float(tx), float(ty))) + Look.seat_point_tiles(seat, face)
+
+
+## **Whether 검사 `i` is at rest**: no order out, and standing exactly on a 조각 centre. A body one
+## sub-step into a walk is off the centre and is drawn where it is.
+## ⚠ **Exactly, under `Rules.EPS`** — the same test `_phase_orders` uses for 「arrived」, so the view and
+## the sim agree about the frame a walk ends.
+func _resting_soldier(i: int) -> bool:
+	if battle == null or int(battle.soldier_order[i]) >= 0:
+		return false
+	return _on_a_piece_centre(battle.soldier_pos[i])
+
+
+## **Whether 짐승 `e` is at rest**: standing exactly on a 조각 centre. **A wolf has no order column, so
+## its position is the whole test** (the plan's amendment 3) — a wolf blocked in a queue at a neck reads
+## as at rest, glides to its seat, and glides back onto its path when the queue moves. That shuffle is
+## accepted and named: a queue of wolves spreading across the 칸 is the intended look, and a wolf that
+## stopped to bite is at rest by the same test.
+func _resting_enemy(e: int) -> bool:
+	if battle == null:
+		return false
+	return _on_a_piece_centre(battle.enemy_pos[e])
+
+
+func _on_a_piece_centre(p: Vector2) -> bool:
+	return p.distance_to(p.round()) <= Rules.EPS
 
 
 ## ⚠ **Hidden, never freed.** A pool that shrinks is a pool that reallocates on the next busy frame,
@@ -3981,12 +4077,14 @@ func _paint_move_lines() -> void:
 		var stop := _block_middle_tiles(pts[pts.size() - 1])
 		if not stops.has(stop):
 			stops.append(stop)
-		# ⚠ **Only the FIRST point wears the crowd offset.** The rest are 조각 middles and should be —
-		# the route is a list of 조각 and the body walks through their centres.
+		# ⚠ **Only the FIRST point is moved onto the body's stand point.** The rest are 조각 middles and
+		# should be — the route is a list of 조각 and the body walks through their centres. A body at
+		# rest is drawn on its seat, up to 0.94 조각 from the 조각 centre `Hand.route_points` hands back,
+		# and a line leaving the centre would leave from beside nobody's feet.
 		var from := Look.tile_point_px(pts[0])
 		if i < _move_ids.size():
-			from += Look.crowd_offset_px(_crowd_slot_of(pts[0], int(_move_ids[i])),
-				Rules.TILE_CAPACITY)
+			var who := int(_move_ids[i])
+			from = Look.tile_point_px(_stand_point(pts[0], who, _resting_soldier(who)))
 		for k in range(pts.size() - 1):
 			# ⚠ **The last leg runs to the 칸's middle**, which is 0.71 조각 from the seat it replaces
 			# and always inside that same 칸. **Moving the dot alone was tried on paper and dropped**:

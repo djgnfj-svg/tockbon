@@ -213,8 +213,12 @@ func _table() -> Dictionary:
 			"_swing_squash": 0,
 			"_flash_of": 0,
 			"_put_walker": 0,
-			# Which slot of its 조각 a body holds — a read of `Grid`, and it strokes nothing.
-			"_crowd_slot_of": 0,
+			# Where a body is drawn inside its 칸 (03-17) — reads of `Grid` and `Battle`, and the two
+			# rest tests; none of them strokes anything. `_crowd_slot_of` stood here until 2026-09-02.
+			"_stand_point": 0,
+			"_resting_soldier": 0,
+			"_resting_enemy": 0,
+			"_on_a_piece_centre": 0,
 			"_hide_unused": 0,
 			# The effect SIMULATION — carried across the move unchanged, still 0 draws each.
 			"_map_tiles": 0,

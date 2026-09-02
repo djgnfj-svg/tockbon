@@ -159,6 +159,8 @@ func run(t) -> void:
 	_the_line_is_redrawn_from_where_the_body_now_stands(t)
 	_the_surplus_does_not_spill_over_a_cliff(t)
 	_the_surplus_walks_down_the_stair_when_that_is_the_only_door(t)
+	_three_bodies_ordered_onto_a_block_land_in_three_pieces(t)
+	_an_order_writes_the_block_facing(t)
 	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies half way still reports
 	# every check it managed first, in a shape a healthy net cannot be told from.
 	t.done()
@@ -783,6 +785,98 @@ func _far_seats(g: Grid, block: int, seats: PackedInt32Array, bound: int) -> int
 ## **Stands `n` bodies on one 조각 and answers the ids that landed.** ⚠ **The twin of `_stand_at_home`
 ## for a board that is not `FIELD`** — the corner is the caller's, because the cliff boards have their
 ## own low corner and `HOME_TX`/`HOME_TY` belong to the flat one.
+# == the 칸 fills from its middle (03-17) =============================================================
+
+## **Three bodies sent to an empty 칸 are seated on three DIFFERENT 조각 of it.**
+##
+## ⚠⚠ **THIS IS THE ROW THE USER'S OWN LOOK LEFT BEHIND** (2026-09-02: 「the characters ought to fill in
+## starting from the centre and that is not really working」). `_seats` drained each 조각 to
+## `Rules.TILE_CAPACITY` before moving to the next, so three bodies took the north-west 조각 three times
+## and the pile stood in one corner of the 칸. **The ceiling row above cannot see this** — it asserts
+## counts and never which 조각 — so the distinct count is read here.
+## ⚠ **Nine still cannot take nine distinct 조각** (a 칸 has four); the round robin is what puts three
+## in three, and `_a_block_seats_its_ceiling_and_no_more` still holds the repeat.
+func _three_bodies_ordered_onto_a_block_land_in_three_pieces(t) -> void:
+	var b := _battle(FIELD, 3)
+	var g := b.grid
+	var pressed := g.block_of(g.tile_index(PRESSED_TX, PRESSED_TY))
+	var ids := _stand_at_home(b, 3)
+	var hand := _squad(b, ids)
+	t.eq(hand.ids.size(), 3, "자가 점검 — 손이 셋을 쥐었다")
+	t.eq(g.block_hold_count(pressed), 0, "자가 점검 — 누를 칸은 비어 있다")
+	t.eq(hand.order(b, pressed), 3, "빈 칸에 셋을 보내면 셋이 다 간다")
+	var dests := {}
+	var inside := 0
+	for k in ids.size():
+		var dest := int(b.soldier_order[int(ids[k])])
+		if dest >= 0 and g.block_of(dest) == pressed:
+			inside += 1
+		dests[dest] = true
+	t.eq(inside, 3, "셋이 다 그 칸 안이다")
+	t.eq(dests.size(), 3, "그리고 셋이 서로 다른 조각에 앉는다 — 한 조각에 셋을 몰아넣지 않는다")
+
+
+## **An order writes the 칸's facing: from where the 부대 stood toward the 칸's middle** (2026-09-02, the
+## user: 「격자는 명령 방향으로」 — *"the lattice faces the order's direction"*).
+##
+## ⚠⚠ **THREE HALVES**: a 칸 nobody ordered onto has no entry (the view then draws the unturned
+## lattice); an ordered 칸 faces the unit vector from the bodies' centroid to its middle; and an order
+## whose centroid IS the middle leaves the facing as it was — a 부대 already spread over the 칸 and told
+## to stay there must not zero its own lattice. `setup` empties the table.
+func _an_order_writes_the_block_facing(t) -> void:
+	var b := _battle(FIELD, 4)
+	var g := b.grid
+	var pressed := g.block_of(g.tile_index(PRESSED_TX, PRESSED_TY))
+	var ids := _stand_at_home(b, 3)
+	var hand := _squad(b, ids)
+	t.ok(not b.block_face.has(pressed), "명령 전에는 그 칸에 방향이 없다")
+	var centroid := Vector2.ZERO
+	for k in ids.size():
+		centroid += b.soldier_pos[int(ids[k])] as Vector2
+	centroid /= float(ids.size())
+	var want := (_block_middle(g, pressed) - centroid).normalized()
+	t.ok(want.length() > 0.5, "자가 점검 — 집과 누른 칸이 떨어져 있어 방향이 있다")
+	t.eq(hand.order(b, pressed), 3, "자가 점검 — 셋이 간다")
+	t.ok(b.block_face.has(pressed), "명령이 그 칸의 방향을 쓴다")
+	if b.block_face.has(pressed):
+		var face: Vector2 = b.block_face[pressed]
+		t.ok(absf(face.length() - 1.0) < 1e-4, "방향은 단위 벡터다 (%.3f)" % face.length())
+		t.ok(face.dot(want) > 0.999,
+			"방향이 몸들의 무게중심에서 칸 가운데를 향한다 (%.2f, %.2f)" % [face.x, face.y])
+	var other := g.block_of(g.tile_index(HOME_TX, HOME_TY))
+	t.ok(not b.block_face.has(other), "명령받지 않은 칸에는 방향이 없다")
+
+	# The zero case: four bodies on the four 조각 of the pressed 칸, ordered onto it.
+	var b2 := _battle(FIELD, 4)
+	var g2 := b2.grid
+	var tiles := g2.tiles_of_block(pressed)
+	var four := PackedInt32Array()
+	for k in 4:
+		if b2.place_ashore(k, int(tiles[k])) == int(tiles[k]):
+			four.append(k)
+	t.eq(four.size(), 4, "자가 점검 — 넷이 칸의 네 조각에 하나씩 섰다")
+	b2.block_face[pressed] = Vector2(1.0, 0.0)
+	var hand2 := Hand.new()
+	hand2.pick_many(b2, four)
+	hand2.order(b2, pressed)
+	t.ok((b2.block_face[pressed] as Vector2).is_equal_approx(Vector2(1.0, 0.0)),
+		"무게중심이 칸 가운데면 방향은 있던 대로 둔다")
+
+	# And `setup` starts the next island with no facings at all.
+	b2.setup(g2, b2.army, [], PackedInt32Array(), -1)
+	t.ok(b2.block_face.is_empty(), "setup 이 방향표를 비운다")
+
+
+## The middle of a 칸 in `soldier_pos` units — the mean of its 조각, as the view's terminator does.
+func _block_middle(g: Grid, block: int) -> Vector2:
+	var sum := Vector2.ZERO
+	var tiles := g.tiles_of_block(block)
+	for k in tiles.size():
+		var tile := int(tiles[k])
+		sum += Vector2(float(tile % g.w), float(tile / g.w))
+	return sum / float(tiles.size())
+
+
 func _stand_all(b: Battle, n: int, home: int) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	for i in n:
