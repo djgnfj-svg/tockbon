@@ -86,7 +86,7 @@ static func land_chars() -> String:
 
 ## ⚠⚠ **WHICH SIDE OF A CORNER STAIR IS ITS MOUTH, WHEN MORE THAN ONE FACES THE FLOOR BELOW.**
 ## West, then east, then north, then south — and **the order itself is arbitrary; that it is the SAME
-## order in `tools/blender/island_build.py` is not.** The staircase's geometry is cut along the axis
+## order the staircase in `blend/island.blend` was CUT along is not.** Its geometry runs along the axis
 ## this picks, and the feet climb along the axis this picks; a disagreement puts the body walking
 ## across the treads instead of up them (2026-08-28, the user: 「계단 이동할때 뚫는거 같은데」).
 ## ⚠ **Blender cannot read this file.** The pairing is written down here and there, the same way
@@ -114,6 +114,30 @@ const NEIGHBOURS := [
 var w: int = 0
 var h: int = 0
 var passable := PackedByteArray()      # w*h, 1 = walkable (includes a ramp)
+## **w*h, 1 where the PLAYER has built a wall** — the 바리케이트 (ticket 09-02, the user: 「성벽이지」).
+##
+## ⚠⚠ **A SECOND LAYER AND NOT A HOLE PUNCHED IN `passable`.** The terrain letters are the island and
+## a wall is a thing standing ON it: written into `passable`, a wall would also move `beach_ring` (where
+## boats may land), the main landmass and the stair runs, and taking it down again would have to undo
+## all three from memory. **Here it is one byte that `can_step` and `can_hold` consult**, and every rule
+## downstream — the flow field, the straightened route, `Hand`'s reach, the seating — asks one of those
+## two and inherits it.
+## ⚠ **Cleared by `load_rows`**, like every other board-sized column: a new island has no walls on it.
+## ⚠⚠ **IT BLOCKS THE PLAYER TOO** (the user: 「네 편도 맞고」) — which is why it lives here, where both
+## sides ask, and not in a beast-only rule.
+var built := PackedByteArray()
+## **w*h, which resource stands on each 조각** — 0 none, and otherwise an index into
+## `Store.KINDS` + 1. Ticket 05-05: 「나무가 무성한 칸 돌 칸 철광석 칸」.
+##
+## ⚠⚠ **A RESOURCE 칸 IS AN IMPASSABLE, DRY 조각 CARRYING A PROP, AND THAT IS THE WHOLE TEST.** The
+## hand-drawn island has 31 pines, 3 rocks and an ore standing on ground a body can WALK on — they are
+## 풍경 and were placed as 풍경 (2026-08-31: 「게임이 도는 동안 이것에 대해 정하는 것이 없다」). **A
+## generated island cuts its resource 칸 out of the walkable board and stands the same props on the
+## hole.** So passability is what tells the two apart, and no new letter and no new prop kind is needed.
+## ⚠ **Dry as well as impassable**, or the sea would be a resource the moment a prop washed into it.
+## ⚠ **Cleared by `load_rows`**, and filled by `set_resources` afterwards — the props live in the
+## island file beside the board, not in the letters.
+var resource := PackedByteArray()
 var water := PackedByteArray()         # w*h, 1 = water (includes a harbour)
 ## w*h, the tier level of each tile. **Every height in this game is derived from this one integer** —
 ## see `Rules.TIER_STEP_TILES` and `TIER_CHARS` above.
@@ -218,6 +242,10 @@ func load_rows(rows: Array, tiers: Array = []) -> void:
 	water.resize(n)
 	level = PackedByteArray()
 	level.resize(n)
+	built = PackedByteArray()
+	built.resize(n)
+	resource = PackedByteArray()
+	resource.resize(n)
 	reserved = PackedInt32Array()
 	reserved.resize(n * Rules.TILE_CAPACITY)
 	reserved.fill(-1)
@@ -305,7 +333,7 @@ func height_at(p: Vector2) -> float:
 ## may, or the rounding that keeps the sim reproducible would be quietly undone.
 ##
 ## ⚠ **A stair run spans exactly one storey however long it is**, so tile `i` of `n` carries the slice
-## from `i/n` to `(i+1)/n` of the climb — the identical arithmetic `island_build.py` uses.
+## from `i/n` to `(i+1)/n` of the climb — the identical arithmetic the staircase part was cut with.
 ##
 ## ⚠⚠ **AND THE TREADS ARE MODELLED NOW** (2026-08-28, the user, watching a body climb: 「계단을 캐릭이
 ## 뚫고감 이건 근본적인문제인데 왜그럴까?」). This function returned a straight RAMP and the mesh is cut
@@ -365,7 +393,7 @@ func stair_run_of(t: int) -> Array:
 ## (2026-08-27, the user: 「계단이라는 블록이 있어야할듯」). Two tiles side by side at the same step
 ## carry the same index and therefore the same height, which is what makes a wide stair one
 ## staircase rather than two beside each other. **`surface_h` needed no change for it.**
-## ⚠⚠ **This mirrors `stair_runs()` in `tools/blender/island_build.py` and the two must agree** — one
+## ⚠⚠ **This mirrors how the staircase parts were CUT in `blend/island.blend`, and the two must agree** — one
 ## draws the surface and one says where the feet go. If you change the shape of a run in one, change it
 ## in the other in the same edit.
 func _build_runs() -> void:
@@ -398,12 +426,16 @@ func _build_runs() -> void:
 			# ⚠⚠ **A CORNER STAIR MEETS THE FLOOR ON TWO SIDES AND ONLY ONE OF THEM CAN BE THE MOUTH**
 			# (2026-08-28, the user: 「계단 이동할때 뚫는거 같은데」). This used to keep the LAST mouth
 			# the loops happened to find — the group is walked off a stack, so which tile came last was
-			# not even stable — and `island_build.py` picked its own by a different rule. **The result
+			# not even stable — and the bake picked its own by a different rule. **The result
 			# was a staircase drawn climbing west-to-east while the feet climbed south-to-north**: the
 			# body walked across the treads instead of up them, which is exactly「뚫는다」.
 			# ⇒ **The mouth is chosen deterministically and by the same rule in both files**: the
 			# lowest tile index wins, and among its own sides `STAIR_MOUTH_ORDER` decides.
-			# ⚠⚠ **`island_build.py`'s `lowside` mirrors this and the two must move together.** It is
+			# ⚠⚠ **THE OTHER HALF OF THIS PAIR IS GEOMETRY AND NOT CODE, AND THAT IS THE HARD PART.** It
+			# used to live in a Python bake called `lowside`; the bake was deleted on 2026-08-31 once the
+			# originals existed (`docs/manual/blender.md`), so **the mouth this picks now has to match
+			# the way the staircase parts are actually cut in `blend/island.blend`** — which nothing can
+			# check but an eye. It is
 			# the third pair in this pattern, after `TIER_STEP_TILES`/`level_h` and `STAIR_TREADS`.
 			var mouth := Vector2i(-99, -99)
 			var mouth_dir := Vector2i.ZERO
@@ -428,7 +460,7 @@ func _build_runs() -> void:
 			if mouth_dir == Vector2i.ZERO or not has_head:
 				continue
 			var ax := Vector2i(-mouth_dir.x, -mouth_dir.y)
-			## The cross axis, 90 degrees from the climb — the same one `island_build.py` picks.
+			## The cross axis, 90 degrees from the climb — the same one the staircase part is cut along.
 			var perp := Vector2i(-ax.y, ax.x)
 			## Each tile's place in the block: `x` along the climb, `y` across it.
 			var cells := {}
@@ -597,6 +629,71 @@ func _build_ring(reach: float) -> void:
 ## Whether any of the eight neighbours of `t` is water. ⚠ **Its own function and not folded into the
 ## bearing**: water on two exactly opposite sides sums to nothing, and a 조각 on a one-조각 isthmus is
 ## still coast.
+## **Reads the resource 칸 out of an island's props.** Called after `load_rows`, by whoever has the
+## props — `Islands.load_into` for the drawn island, and the generator's own loader when there is one.
+##
+## ⚠ **Every call starts from nothing**, so a board loaded twice does not keep a 칸 the second island
+## does not have.
+## ⚠ **A prop on walkable ground is scenery and is skipped in silence.** That is the drawn island's
+## whole prop list, and it is not an error — see `resource`.
+func set_resources(props: Array) -> void:
+	resource.fill(0)
+	for raw in props:
+		var prop: Dictionary = raw
+		var kind := String(prop.get("kind", ""))
+		var index := _resource_index(kind)
+		if index <= 0:
+			continue
+		var tx := int(prop.get("x", -1))
+		var ty := int(prop.get("y", -1))
+		if tx < 0 or ty < 0 or tx >= w or ty >= h:
+			continue
+		var t := ty * w + tx
+		if passable[t] != 0 or water[t] != 0:
+			continue
+		resource[t] = index
+
+
+## **Which kind stands on this 조각, as a `Store.KINDS` word, or an empty string.**
+func resource_at(t: int) -> String:
+	if t < 0 or t >= resource.size():
+		return ""
+	var index := int(resource[t])
+	if index <= 0 or index > Store.KINDS.size():
+		return ""
+	return String(Store.KINDS[index - 1])
+
+
+## **The prop kinds that are resources, mapped to their `Store.KINDS` slot plus one.**
+##
+## ⚠⚠ **THE PROP KIND AND THE STORE KIND ARE DIFFERENT WORDS AND THIS IS THE ONE PLACE THEY MEET.** A
+## pine is drawn as `tree_pine` and stored as `wood`; a rock and an ore happen to share their word.
+## Anything else — a bush, a stump — is scenery whatever it stands on.
+static func _resource_index(prop_kind: String) -> int:
+	match prop_kind:
+		"tree_pine":
+			return Store.index_of("wood") + 1
+		"rock":
+			return Store.index_of("rock") + 1
+		"ore":
+			return Store.index_of("ore") + 1
+	return 0
+
+
+## **Whether a body standing here is on the water's edge** — passable, no wall on it, and touching
+## water 8-way. Ticket 05-09: 「해안가 어디서나 할 수 있는데」 — *you can fish anywhere along the coast*.
+##
+## ⚠ **Any water, not only the open sea.** An inland pool is water a line goes into; `beach_ring` is the
+## one that cares which side of the island the sea is on, and it cares because a BOAT has to get there.
+## ⚠ **A 바리케이트 makes a 조각 not a place to stand**, so it is not a place to fish from either.
+func is_coast(t: int) -> bool:
+	if t < 0 or t >= passable.size():
+		return false
+	if passable[t] == 0 or built[t] == 1:
+		return false
+	return _touches_water(t)
+
+
 func _touches_water(t: int) -> bool:
 	var tx := t % w
 	var ty := t / w
@@ -1008,6 +1105,10 @@ func can_step(from_tile: int, to_tile: int) -> bool:
 		return false
 	if passable[to_tile] == 0:
 		return false
+	# ⚠ **The wall is asked here and not by the walkers.** `flow_field`, `path_from`, `string_pull` and
+	# `Hand`'s flood all come through this one function, so a 바리케이트 blocks every one of them at once.
+	if built[to_tile] == 1:
+		return false
 	var from_level := level_of(from_tile)
 	if absi(from_level - level_of(to_tile)) > Rules.MAX_CLIMB_LEVELS:
 		return false
@@ -1056,6 +1157,10 @@ func _stair_face_open(from_tile: int, to_tile: int, dx: int, dy: int) -> bool:
 ## same argument `_water_step_open`'s header makes, one rule over.
 func _shoulder_open(from_level: int, shoulder_tile: int) -> bool:
 	if passable[shoulder_tile] == 0:
+		return false
+	# ⚠ **A wall corner is walked through without this.** The shoulders get the same two questions the
+	# destination gets, and a 바리케이트 is one of them — see `built`.
+	if built[shoulder_tile] == 1:
 		return false
 	return absi(from_level - level_of(shoulder_tile)) <= Rules.MAX_CLIMB_LEVELS
 
@@ -1714,7 +1819,7 @@ func hold_count(tile: int) -> int:
 ## 블록 ceiling and not a 조각 one** — see `Rules.BLOCK_CAPACITY`.
 ##
 ## ⚠ **A shift and not a lookup, and that is only sound because the island is built in 2x2 pieces**
-## whose outline may turn on even tiles only (`island_build.py`: `S = 2.0`). **The day a piece stops
+## whose outline may turn on even tiles only (the parts in `blend/island.blend` are 2.0 wide). **The day a piece stops
 ## being 2x2, this function is wrong and nothing else is** — which is why the size is
 ## `Rules.BLOCK_TILES` rather than a bare 2 in here.
 
@@ -1801,7 +1906,26 @@ func _block_holds(block: int, unit_id: int) -> bool:
 ## Whether one more body would fit in `tile`. **Both ceilings, and the 블록 one is the new half**
 ## (2026-08-31): a 조각 with a free slot in a full 블록 answers false.
 func has_room(tile: int) -> bool:
+	if tile >= 0 and tile < built.size() and built[tile] == 1:
+		return false
 	return _free_slot(tile) >= 0 and block_has_room(block_of(tile), -1)
+
+
+## **Raises or takes down the wall on one 조각.** Answers false for a 조각 off the board.
+##
+## ⚠ **It does not ask whether anything is standing there** — `Battle.place_barricade` owns that, along
+## with what it costs and how much health it has. **This is the one byte and nothing else.**
+func set_built(tile: int, on: bool) -> bool:
+	if tile < 0 or tile >= built.size():
+		return false
+	built[tile] = 1 if on else 0
+	return true
+
+
+func is_built(tile: int) -> bool:
+	if tile < 0 or tile >= built.size():
+		return false
+	return built[tile] == 1
 
 
 ## Whether this unit may stand in `tile` — it already does, or there is room for it.
@@ -1812,6 +1936,11 @@ func has_room(tile: int) -> bool:
 func can_hold(tile: int, unit_id: int) -> bool:
 	if slot_of(tile, unit_id) >= 0:
 		return true
+	# ⚠ **After the 「it already stands here」 line, deliberately.** A wall raised on a body already
+	# standing there would otherwise make that body unable to hold its own 조각 and it would be evicted
+	# by arithmetic — `Battle.place_barricade` refuses an occupied 조각, and this is the second net.
+	if tile >= 0 and tile < built.size() and built[tile] == 1:
+		return false
 	return _free_slot(tile) >= 0 and block_has_room(block_of(tile), unit_id)
 
 

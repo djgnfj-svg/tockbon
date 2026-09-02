@@ -70,7 +70,7 @@ const WATER_SHADER := "res://src/view/water.gdshader"
 ## second copy of the water's — the two answer different questions and share no uniform.
 const PADS_SHADER := "res://src/view/pads.gdshader"
 ## The name Blender gives the 판 object inside `island.glb`. ⚠ **Both sides spell it once**: the
-## export names it in `tools/blender/island_build.py` and this is the only place the game reads it.
+## export out of `blend/island.blend` names it, and this is the only place the game reads it.
 const PADS_NODE := "pads"
 
 
@@ -83,7 +83,6 @@ var rows: Array = []
 
 # --- its own clock. Unchanged by the move: an effect ages in seconds whatever draws it -------------
 
-var _fx: Array = []
 var _body: Dictionary = {}
 
 
@@ -342,7 +341,7 @@ func _build_world() -> void:
 	# quad per tile used to lie over the ground here. The user's word on it was 「위에 노드만 살짝 얹은
 	# 느낌이어서 너무 별로」 and 「너무 흰색이 너무 잘 보여」 — and it could not be fixed in place: a flat
 	# quad cannot bend with a surface `COAST_WOB` and a `BEVEL` have already curved, and every quad was
-	# the same rectangle. **`tools/blender/island_build.py` paints each piece's own flat interior
+	# the same rectangle. **The bake paints each piece's own flat interior
 	# lighter instead**, so the mat IS the walking surface, wears that piece's own wobble, and needs no
 	# colour of its own. ⚠ **The mask below survives** — the HOVER still wears it.
 
@@ -464,9 +463,6 @@ func setup(battle: Battle, army: Army, rows: Array) -> void:
 	self.battle = battle
 	self.army = army
 	self.rows = rows
-	# **Both drawers are emptied here.** Without it island 2 opens with island 1's explosions still in
-	# flight over bodies that no longer exist, and every id in them means a different unit now.
-	_fx = []
 	# ⚠⚠ **THE AIR IS EMPTIED WHEN A BOARD LOADS, AND `_body` DELIBERATELY IS NOT.** A mark carries its
 	# own frozen position, so one left over from the last island would hang in the air over this one at
 	# a place nothing happened. **The body rows survive because a 검사 carries across islands.**
@@ -1125,8 +1121,9 @@ func _stand_h(p: Vector2) -> float:
 ##
 ## ⚠⚠ **Nothing here generates terrain any more, and that is the point.** 569 lines of noise, stepped
 ## heights, shore fades and skirts stood here and the user rejected the picture they made six times
-## (2026-08-26). The shape is now authored — `tools/blender/island_build.py` builds it and exports
-## `assets/terrain/island.glb`, and this function's whole job is to put that file on screen.
+## (2026-08-26). The shape is now authored — `blend/island.blend` holds it and an export out of that
+## file writes `assets/terrain/island.glb`, and this function's whole job is to put that file on
+## screen. See `docs/manual/blender.md`.
 ##
 ## ⚠ **The mesh carries its own colour in VERTEX COLOURS**, so there is no palette here either. What
 ## decides how the island looks lives in the Blender script, next to the shape it belongs to.
@@ -1281,8 +1278,8 @@ func _rebuild_terrain() -> void:
 ##
 ## ⚠⚠ **THE 판 IS A SECOND OBJECT IN THE SAME FILE** (2026-08-28). It spent one day welded into the
 ## island's own mesh, where the hover had nothing to raise and nothing to hide — which is exactly why
-## the mark went missing for a round. `tools/blender/island_build.py` exports it beside the island and
-## this is where the game picks it up.
+## the mark went missing for a round. The export out of `blend/island.blend` writes it beside the
+## island and this is where the game picks it up.
 ##
 ## ⚠ **A missing `pads` node is not an error.** The island file is baked by hand; a build from before
 ## the split simply has no such child, and every writer below checks for null rather than this
@@ -3482,7 +3479,14 @@ func _paint_wake() -> void:
 # --- the body clocks, carried across the move unchanged ----------------------------------------------
 ## ⚠⚠ **Everything below this line is the file as it was.** The effects were never drawing code: they
 ## are a little simulation of their own with its own clock, and moving the picture into 3D did not
-## touch one line of it. That is why `_fx` is still filling every frame while nothing paints it.
+## touch one line of it.
+## ⚠⚠ **THIS SAID `_fx` WAS 「still filling every frame while nothing paints it」 AND THAT WAS FALSE**
+## (found 2026-09-03 by reading the file rather than by anything going red). Nothing had appended to it
+## since the twelve effects were deleted on 2026-08-29 — it was declared, emptied once per board, and
+## read by nobody. **The array is gone and this sentence is what is left of it**, because a comment
+## that describes a thing the code stopped doing is the failure this repository keeps a whole document
+## about. ⚠ `_fx_layer` · `_fx_step` · `_fx_begin` · `_fx_flush` are NOT this — they are the live fx
+## buffers `GLOSSARY.md` names as a measuring surface, and they only share the first three letters.
 
 
 ## Called by `game.gd` whenever a slot is armed or disarmed, whenever the cursor moves with one armed,
@@ -3823,14 +3827,16 @@ func _fx_step(delta: float) -> void:
 			float(battle.soldier_hp[i]), float(battle.soldier_cool[i]), int(army.type_id[i]),
 			_aim_of(int(battle.soldier_target[i]), battle.enemy_pos, battle.soldier_pos[i]),
 			"e%d" % int(battle.soldier_swing_at[i]) if int(battle.soldier_swing_at[i]) >= 0 else "",
-			int(battle.soldier_blows[i])])
+			int(battle.soldier_blows[i]),
+			int(battle.soldier_starving[i])])
 	for e in battle.enemy_alive.size():
 		var living := battle.enemy_alive[e] != 0
 		rows.append(["e%d" % e, living, living, battle.enemy_pos[e],
 			float(battle.enemy_hp[e]), float(battle.enemy_cool[e]), int(battle.enemy_type[e]),
 			_aim_of(int(battle.enemy_target[e]), battle.soldier_pos, battle.enemy_pos[e]),
 			"s%d" % int(battle.enemy_swing_at[e]) if int(battle.enemy_swing_at[e]) >= 0 else "",
-			int(battle.enemy_blows[e])])
+			int(battle.enemy_blows[e]),
+			0])
 
 	for raw_row in rows:
 		var row: Array = raw_row
@@ -3844,6 +3850,9 @@ func _fx_step(delta: float) -> void:
 		var aim: Vector2 = row[7]
 		var victim: String = row[8]
 		var blows: int = row[9]
+		# **1 while the sim is taking this body's health for 허기 rather than for a blow** (05-07).
+		# ⚠ **Beasts always answer 0** — nothing starves them.
+		var starving: bool = int(row[10]) != 0
 		# ⚠⚠ **THE DRAWN POINT, NOT THE SIM'S, IS WHAT THE LEGS AND THE FACING READ** (2026-09-02). A body
 		# that has arrived glides to its seat over half a second (`_seat_glide`) while the sim's point
 		# stands still — measured off `here` it read as standing, and BREATHED while it slid. Walking,
@@ -3922,12 +3931,16 @@ func _fx_step(delta: float) -> void:
 		# landing a third of a second into the swing, a body hit in its wind-up dropped the picture
 		# of a blow the sim still landed: damage dealt, no sword seen. `_body_tex` decides which of
 		# the two is on top — the swing until its blow has landed, the flinch after.
-		if hp < float(b["hp"]) - Rules.EPS:
+		if hp < float(b["hp"]) - Rules.EPS and not starving:
 			b["hurt"] = _anim_sec(type_id, Look.Anim.HURT)
 			# ⚠ **The flinch is triggered by health falling and everything else by the blow landing**,
 			# the same sub-step. **Health is the honest signal for「I was hurt」** — it is true
-			# even for damage nothing swung for, and the day something like that exists this line is
-			# already right.
+			# even for damage nothing swung for.
+			# ⚠⚠ **AND THAT DAY CAME, AND IT NEEDED THE ONE EXCEPTION ABOVE** (2026-09-02, ticket
+			# 05-07). 허기 takes health every sub-step it is at zero, so a starving body would flinch
+			# on EVERY frame until it fell — a body being beaten by nothing, for half a minute.
+			# **`soldier_starving` is the sim saying which kind of drop this is**, and it is a column
+			# rather than a guess here because only the sim knows.
 		# ⚠⚠ **The fall starts where the body was standing, not where the sim says it is.** A beast's
 		# position is OFFMAP by the time this runs.
 		if bool(b["alive"]) and not alive:

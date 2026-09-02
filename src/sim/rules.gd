@@ -116,7 +116,7 @@ const NO_DETECT := -1.0
 ## How tall one tier stands, in tiles. Everything below is derived from it and the number is not
 ## repeated anywhere else.
 ## ⚠⚠ **LOWERED 2.0 -> 1.0 (2026-08-27), and it was a LIE being corrected, not a balance change.**
-## The mesh has always been the source of the board: `island_build.py` writes `level_h` into
+## The mesh has always been the source of the board: the bake writes `level_h` into
 ## `island.json` and it is **0.5 — half a tile per notch**, which the user restated as 「한 층이 한 칸,
 ## 계단은 반 칸」 — ⚠ **the user's own words, unchanged; the 2026-08-27 swap makes those 칸 today's 조각.** This constant said one notch was a whole tile, so **the sim measured every height at
 ## exactly twice what the ground the player looks at actually stands.** A body on the plateau computed
@@ -171,7 +171,7 @@ const TILE_CAPACITY := 3
 ## live again as a second name for the same thing; the glossary carries the pair.
 ##
 ## ⚠⚠ **THE GAME CODE HAD NO NAME FOR A 블록 UNTIL THIS LINE.** It was Blender's unit only —
-## `island_build.py`'s `PIECES`, where **`S = 2.0` and the outline may only turn on even tiles**. That
+## the island's own parts, where **the piece is 2.0 wide and the outline may only turn on even tiles**. That
 ## is exactly what makes `Grid.block_of` a shift rather than a lookup: a 블록 is the four 조각 whose
 ## coordinates share a top-left even pair, and nothing has to be exported to say so.
 ##
@@ -205,7 +205,7 @@ const STEP_COST_DIAG := 14
 ## ⚠⚠ **HOW MANY TREADS BLENDER CUTS INTO ONE STAIR 칸, AND THE FEET HAVE TO LAND ON THEM**
 ## (2026-08-28, the user, watching a body climb: 「계단을 캐릭이 뚫고감 이건 근본적인문제인데」).
 ##
-## **The stair was drawn as steps and walked as a ramp.** `tools/blender/island_build.py`'s `stair()`
+## **The stair was drawn as steps and walked as a ramp.** The staircase part in `blend/island.blend`
 ## cuts `TREADS = 6` steps with a nosing into the 칸's own mesh, and `Grid.surface_h` returned a
 ## straight line from the bottom of the run to the top — so a body walked the *average* of the steps,
 ## sinking into every tread and floating over every riser. **Both files carried a comment saying the
@@ -213,7 +213,7 @@ const STEP_COST_DIAG := 14
 ##
 ## ⚠ **The steps win and the ramp loses**, because the picture is what the user chose over several
 ## rounds (「큐브형투처럼 블록 블록이 있었으면 좋겠는데」) and because a ramp cannot be drawn as a stair.
-## ⚠ **6 IS DUPLICATED IN `island_build.py` AS `TREADS`** and Blender cannot read this file. That is the
+## ⚠ **6 IS DUPLICATED IN THE STAIRCASE PART OF `blend/island.blend`** and Blender cannot read this file. That is the
 ## same shape `TIER_STEP_TILES` / `level_h` already has, and it is written down rather than assumed.
 const STAIR_TREADS := 6
 
@@ -414,9 +414,52 @@ const APTITUDE_MAX := 10
 ## put 「태어날 때 0~3 무작위」 to the user and the answer was 「네」. ⚠ Below `APTITUDE_MAX` or a newborn
 ## could open at the top of a scale it is meant to climb.
 const APTITUDE_BORN_MAX := 3
-## What a body's 허기 is filled to at birth. **The drain is ticket 05-07's and is not written anywhere yet**;
-## today every body holds this number for the whole run, and the panel prints it.
+## What a body's 허기 is filled to at birth, and the ceiling a meal fills it back to.
 const HUNGER_MAX := 100.0
+## **How fast 허기 wears down, per second** (ticket 05-07, 2026-09-02, the user: 「허기라는 값이 있어가지고
+## 그게 이제 천천히 닳아서」). At this rate a full body empties in about four minutes.
+## ⚠⚠ **THE USER DID NOT GIVE THIS NUMBER AND SAID SO** — 「몇 초까지는 너무 커」, *a matter of seconds is
+## far too big*. **It is the builder's first value and it is meant to be changed on screen**, which is the
+## only place a pace like this can be judged.
+const HUNGER_DRAIN_PER_SEC := 0.4
+## **How fast 체력 drains once 허기 is at zero, per second** (「영이 되면 이제 체력이 깎이는 거지」). A 검사
+## holds `UNITS`' hp, so starving kills in under a minute once it starts. ⚠ **Also the builder's number.**
+const STARVE_HP_PER_SEC := 2.0
+## **The 허기 at which a body goes to the 창고 on its own** (「배고프면은 식량 창고를 만들어놔서 알아서 가서
+## 먹는 걸로 하자」 — *when hungry they go and eat by themselves*). ⚠ **Above zero on purpose**: a body that
+## only set off at zero would already be losing 체력 by the time it started walking.
+const HUNGER_SEEK := 40.0
+## **What one meal puts back.** ⚠ **Not the whole bar** — a body that ate once and was full for another
+## four minutes would make one fish worth a quarter of an hour of walking to fetch it.
+const HUNGER_MEAL := 45.0
+## **How close to the 창고 a body has to be to eat, in 조각.** The 창고 holds its own 조각 like the 성채
+## does, so a body stands BESIDE it — this is the reach across that one step, with the diagonal in it.
+const EAT_RANGE_TILES := 1.6
+
+
+# --- the 바리케이트 -------------------------------------------------------------------------------
+## **What a 바리케이트 is built of and how much of it** (ticket 09-02, the user: 「일단 나무로」).
+## ⚠⚠ **THE USER DID NOT GIVE THIS NUMBER AND SAID SO** — 「몇 초까지는 너무 커」 covers every cost in
+## this game so far. **It is the builder's first value.** ⚠ Nothing gathers wood yet (05-05), so today
+## the only way to pay for one is to put wood in the 창고 by hand, which is what the nets do.
+const BARRICADE_WOOD := 5
+## **A 바리케이트's health** (「체력과 갖고 있고 깎여서 영 이 되면 사라집니다」). ⚠ **Also the builder's
+## number.** A 늑대 deals `damage_of(WOLF)` a swing, so this is a handful of swings and not a siege.
+const BARRICADE_HP := 30.0
+
+
+# --- 채집과 낚시 ------------------------------------------------------------------------------------
+## **How long one unit takes to gather, in seconds — fish, wood, rock and ore alike** (ticket 05-05,
+## the user: 「왜 몇 초까지는 너무 커 일단 대략적으로 네가 추천대로 정해 줘」 — *do not go down to seconds,
+## set it roughly as you recommend* ⇒ ten seconds a unit).
+##
+## ⚠⚠ **ONE NUMBER FOR BOTH, AND THAT IS THE TICKETS' OWN WORD.** 05-09 says a catch takes 「a first
+## value like 05-05's ten seconds」, so fishing and gathering are the same ten seconds until somebody
+## says otherwise — **two constants holding one number is how they come to disagree.**
+const GATHER_SEC := 10.0
+## How many units one turn of the clock puts in the 창고. ⚠ **What a GOOD fishing spot is worth is not
+## decided** — 05-09 lists it as open, and the good spot needs a boat that does not exist yet.
+const GATHER_PER_TURN := 1
 
 
 # --- The telegraph -------------------------------------------------------------------------------

@@ -791,7 +791,11 @@ func _end_press() -> void:
 func _order_the_island(block: int) -> bool:
 	if battle == null:
 		return false
-	if not hand.can_reach_block(block):
+	# ⚠⚠ **A RESOURCE 칸 IS PRESSED THE SAME WAY AND IT IS NOT LIT** (2026-09-03, the user: 「딱 눌렀을
+	# 때 채집하러 갔을 때 잘 갈 거 아니야 ... 거기 가면 채집이다」). It blocks, so no 조각 of it is
+	# standable and `can_reach_block` is false — **the press used to be swallowed here.** `Hand` seats
+	# the 부대 on the ring around it instead, and standing there is what gathering is.
+	if not hand.can_reach_block(block) and not hand.can_gather_block(battle, block):
 		return false
 	var sent := hand.order(battle, block)
 	# ⚠⚠ **THE ORDER LETS GO, AND IT KEPT HOLD FOR ONE ROUND** (2026-08-31, the user: 「이동하면 그러면
@@ -1113,7 +1117,7 @@ func _press_the_island(at: Vector2) -> bool:
 	# that catches the swap presses a body standing on a lit 칸 with the hand full.
 	var tile := _tile_at(at)
 	var block := battle.grid.block_of(tile) if tile >= 0 else -1
-	if not hand.is_empty() and hand.can_reach_block(block):
+	if not hand.is_empty() and (hand.can_reach_block(block) or hand.can_gather_block(battle, block)):
 		return _order_the_island(block)
 	# ⚠⚠ **A FULL HAND MOVES; AN EMPTY HAND PICKS. THE BODY TEST CAME FIRST FOR ONE ROUND AND IT IS
 	# REVERSED** (2026-08-31, the user at the screen: 「이게 조각에 옮길 수가 있잖아? 같은 조각으로?

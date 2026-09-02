@@ -180,6 +180,70 @@ func can_reach_block(block: int) -> bool:
 	return _in_reach_block.has(block)
 
 
+## **Whether the picked bodies may be sent to GATHER at this 칸** — it holds a resource, and at least
+## one 조각 they can walk to touches it. Tickets 05-05 and 08-02.
+##
+## ⚠⚠ **A RESOURCE 칸 IS NEVER LIT AND THAT IS WHY THIS EXISTS** (2026-09-03, the user: 「딱 눌렀을 때
+## 채집하러 갔을 때 잘 갈 거 아니야 ... 거기 가면 채집이다」). The 칸 blocks — 「막힌다」 — so no 조각 of
+## it is standable, so `can_reach_block` is false and the press was simply swallowed. **A body gathers
+## from the 조각 BESIDE it**, so what has to be reachable is the ring and not the 칸.
+##
+## ⚠ **A separate question and not a widened `can_reach_block`.** The two mean different things on
+## screen — one is 「stand here」 and one is 「work on that」 — and the shell has to be able to draw them
+## differently. **Folding them into one would make a resource 칸 look like ground.**
+func can_gather_block(battle: Battle, block: int) -> bool:
+	return not gather_ring(battle, block).is_empty()
+
+
+## **Every lit 조각 a body could stand on to work this 칸**, ascending. Empty for a 칸 with no resource
+## on it, and for one whose whole ring is water, wall or somewhere this 부대 cannot walk.
+##
+## ⚠ **Asked of `Grid.resource_at` and not of the props**, so a 칸 whose resource was never registered
+## answers empty rather than sending a 부대 to stand around a hole.
+func gather_ring(battle: Battle, block: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	if battle == null or battle.grid == null or block < 0:
+		return out
+	var grid := battle.grid
+	var seen := {}
+	var any_resource := false
+	for raw in grid.tiles_of_block(block):
+		var t := int(raw)
+		if grid.resource_at(t) == "":
+			continue
+		any_resource = true
+		var tx := t % grid.w
+		var ty := t / grid.w
+		for k in Grid.NEIGHBOURS.size():
+			var nx: int = tx + int(Grid.NEIGHBOURS[k][0])
+			var ny: int = ty + int(Grid.NEIGHBOURS[k][1])
+			if nx < 0 or ny < 0 or nx >= grid.w or ny >= grid.h:
+				continue
+			var nt := ny * grid.w + nx
+			if seen.has(nt) or not can_reach(nt):
+				continue
+			# ⚠⚠ **LIT IS NOT THE SAME AS 「SOMEBODY COULD STAND THERE」, AND A BUILDING IS THE GAP.**
+			# The 성채 and the 창고 hold their whole 조각 through the reservation table while the 조각
+			# stays PASSABLE — so it is lit, `_room_in_tile` reads it as having room (the house is one
+			# body, not three), and a 부대 seated there walks up to the wall and stops. **`can_hold` is
+			# the walker's own admission test and it answers no**, so it is what filters the ring.
+			# ⚠ **Asked of a picked body and not of nobody**, so a 조각 the 부대 already stands on stays
+			# in — that is the one case `can_hold` answers true for a full 조각.
+			var holds := false
+			for m in ids.size():
+				if grid.can_hold(nt, int(ids[m])):
+					holds = true
+					break
+			if not holds:
+				continue
+			seen[nt] = true
+			out.append(nt)
+	if not any_resource:
+		return PackedInt32Array()
+	out.sort()
+	return out
+
+
 ## **Where the picked bodies stand right now**, one 조각 each and in `ids` order. ⚠ **A body whose
 ## position is off the board answers -1 rather than being dropped**, so this list and `ids` are always
 ## the same length and index the same body.
@@ -234,9 +298,9 @@ func from_tiles(battle: Battle) -> PackedInt32Array:
 func order(battle: Battle, block: int) -> int:
 	if battle == null or battle.grid == null or ids.is_empty():
 		return 0
-	if not can_reach_block(block):
+	if not can_reach_block(block) and not can_gather_block(battle, block):
 		return 0
-	var seats := _seats(battle, block, ids.size())
+	var seats := _seats_for(battle, block, ids.size())
 	var centroid := Vector2.ZERO
 	for k in ids.size():
 		centroid += battle.soldier_pos[int(ids[k])] as Vector2
@@ -300,12 +364,12 @@ func _block_middle(grid: Grid, block: int) -> Vector2:
 func routes(battle: Battle, block: int) -> Array:
 	if battle == null or battle.grid == null or ids.is_empty():
 		return []
-	if not can_reach_block(block):
+	if not can_reach_block(block) and not can_gather_block(battle, block):
 		_forget_routes()
 		return []
 	# ⚠⚠ **LIVE, BOTH OF THEM, BEFORE ANY CACHE IS CONSULTED.** These two ARE the key — computing them
 	# is what makes the key true, and skipping straight to a remembered answer is the whole bug.
-	var seats := _seats(battle, block, ids.size())
+	var seats := _seats_for(battle, block, ids.size())
 	var starts := from_tiles(battle)
 	if seats == _route_seats and starts == _route_starts:
 		return _routes
@@ -533,6 +597,58 @@ func _standable(battle: Battle, tile: int) -> bool:
 	return true
 
 
+## **The seats for a press, whichever kind of press it was.**
+##
+## ⚠⚠ **THE TWO KINDS ARE 「STAND ON IT」 AND 「WORK ON IT」, AND ONE FUNCTION HAS TO PICK.** `order` and
+## `routes` both go through here so the 이동선 the player looks at and the walk the press buys cannot
+## come from different rules — the invariant `routes` exists for.
+func _seats_for(battle: Battle, block: int, want: int) -> PackedInt32Array:
+	if can_reach_block(block):
+		return _seats(battle, block, want)
+	return _gather_seats(battle, block, want)
+
+
+## **One seat per body on the ring AROUND a resource 칸**, `ids`-aligned, handed out round-robin.
+##
+## ⚠⚠ **ROUND-ROBIN OVER THE RING AND NOT DRAINED ONE 조각 AT A TIME**, which is the same answer 03-17
+## gave for the pressed 칸: filling one 조각 to its ceiling before moving on piles the whole 부대 into
+## the first corner of the ring the loop happens to reach. **Here one seat goes to each 조각 in turn.**
+##
+## ⚠ **The ring is already `can_reach`**, so every 조각 in it is somewhere every picked body can walk —
+## `gather_ring` filters on the intersection reach, the same as everything else the hand hands out.
+## ⚠ **Fewer seats than bodies is not an error.** A 칸 with two open 조각 beside it takes six bodies and
+## no more; the caller stops at `seats.size()` and reports the smaller number, exactly as `_seats` does.
+func _gather_seats(battle: Battle, block: int, want: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	if want <= 0 or battle == null or battle.grid == null:
+		return out
+	var grid := battle.grid
+	var ring := gather_ring(battle, block)
+	if ring.is_empty():
+		return out
+	var tile_room := {}
+	var block_room := {}
+	var served := true
+	while out.size() < want and served:
+		served = false
+		for k in ring.size():
+			if out.size() >= want:
+				break
+			var t := int(ring[k])
+			var bk := grid.block_of(t)
+			if not tile_room.has(t):
+				tile_room[t] = _room_in_tile(grid, t)
+			if not block_room.has(bk):
+				block_room[bk] = _room_in_block(grid, bk)
+			if int(tile_room[t]) <= 0 or int(block_room[bk]) <= 0:
+				continue
+			out.append(t)
+			tile_room[t] = int(tile_room[t]) - 1
+			block_room[bk] = int(block_room[bk]) - 1
+			served = true
+	return out
+
+
 ## **One seat per picked body, `ids`-aligned: inside the pressed 칸 first, spilling into a
 ## neighbouring 칸 only once the ceilings are used up.**
 ##
@@ -566,10 +682,12 @@ func _standable(battle: Battle, tile: int) -> bool:
 ## cannot come to disagree with the route drawn for it — **a second reachability rule that drifts from
 ## the walker's is the named failure in `how-nets-lie`, not a hypothetical one.**
 ##
-## ⚠ **The flood and the seating are two tests here, exactly as they are in `_build_reach`.** A stair is
-## walked THROUGH and never stood on, so it rides the queue and hands the walk on without ever taking a
-## body — folding the two into one test would seal the spill inside its own storey, because a stair is
-## the only door there is.
+## ⚠⚠ **THE FLOOD AND THE SEATING WERE TWO TESTS HERE AND ARE ONE AGAIN SINCE 2026-09-02.** A stair
+## used to ride the queue — walked THROUGH, never stood on — so the spill could hand the walk down to
+## the storey below, and this header said folding the two into one test *"would seal the spill inside
+## its own storey"*. **That sealing is now the rule** (03-14 defect 2), so `_walk_holds` is one test:
+## lit, and on the aimed storey. ⚠ **`_build_reach` still keeps them apart** — the 부대 is still
+## ORDERED up stairs; only the surplus is pinned.
 ##
 ## ⚠ **WHICH neighbouring 칸 takes the overflow is BFS discovery order, and nobody has chosen it.** The
 ## walk is the 8-way 조각 one `_spread` used, whose `dy`/`dx` table is an arbitrary tie-break inherited
@@ -584,6 +702,25 @@ func _seats(battle: Battle, block: int, want: int) -> PackedInt32Array:
 	if want <= 0 or battle == null or battle.grid == null:
 		return out
 	var grid := battle.grid
+	# ⚠⚠ **THE STOREY THE PRESS AIMED AT, AND THE SPILL NEVER LEAVES IT** (2026-09-02, ticket 03-14
+	# defect 2 — the user, asked whether a spill may change storey at all: 「as recommended」 on *it may
+	# not*). **Measured before the rule, driving `Grid`/`Battle`/`Hand` headless with `.new()`:** a 12x6
+	# board, columns 0-5 at level 0 and 6-11 at level 2 with one stair 조각 at (6,2), and 81 짐승 —
+	# nine upper 칸 x `Rules.BLOCK_CAPACITY` — sealing the top. **A 부대 of nine pressing a full upper
+	# 칸 got nine seats, ALL at level 0**, a gap of 2 under the 칸 it was pointed at, where
+	# `Grid.can_strike` refuses a gap of 2 and not one of the nine could hit what it was aimed at. The
+	# order went out, nothing went red, and the 부대 walked to a storey nobody aimed at.
+	# ⚠ **One number read ONCE, not the level of each 조각 compared to its neighbour's.** A walk that
+	# stepped down a stair and back up would come home to the same storey and creep in under a
+	# neighbour-by-neighbour test; pinning it to the aimed storey closes that door too.
+	# ⚠ **The 2026-09-01 cliff gate below is NOT this rule and is not replaced by it.** That one keeps
+	# the spill off a 조각 no body may STEP to; this one keeps it off a 조각 the player did not AIM at.
+	var aim_level := _aim_level(grid, block)
+	# ⚠⚠ **NOTHING SEATABLE IN THE PRESSED 칸 MEANS NOBODY GOES AND `order` REPORTS 0**, which is the
+	# other half of the same answer: **when the aimed storey is full the 부대 stays where it is.** It is
+	# a smaller `sent`, never a seat somewhere else — the surplus body keeps the seat it has.
+	if aim_level < 0:
+		return out
 	# Room left AS SEATS ARE HANDED OUT, so two 조각 of one 칸 cannot each spend the whole 칸 ceiling.
 	var tile_room := {}
 	var block_room := {}
@@ -595,7 +732,7 @@ func _seats(battle: Battle, block: int, want: int) -> PackedInt32Array:
 	# aimed at, and `order` and `routes` both refused it already unless `can_reach_block` was true.
 	for raw in grid.tiles_of_block(block):
 		var t := int(raw)
-		if not _walk_holds(grid, t):
+		if not _walk_holds(grid, t, aim_level):
 			continue
 		seen[t] = true
 		queue.append(t)
@@ -618,7 +755,8 @@ func _seats(battle: Battle, block: int, want: int) -> PackedInt32Array:
 			var t := int(queue[k])
 			if out.size() >= want or int(block_room[block]) <= 0:
 				break
-			# A stair 조각 inside the 칸 rides the queue and takes nobody — the same split as below.
+			# ⚠ **Redundant since the storey rule and kept as the guard it always was.** Nothing off
+			# `reach` reaches the queue any more — `_walk_holds` refuses it — so this never fires today.
 			if not can_reach(t):
 				continue
 			if not tile_room.has(t):
@@ -633,8 +771,9 @@ func _seats(battle: Battle, block: int, want: int) -> PackedInt32Array:
 	while head < queue.size() and out.size() < want:
 		var cur := int(queue[head])
 		head += 1
-		# ⚠ **A stair rides the queue and takes nobody.** It is in here to hand the walk on, which is
-		# the same split `_build_reach` makes between its flood and its filter.
+		# ⚠ **A stair no longer rides the queue at all** (03-14 defect 2, 2026-09-02) — it used to be
+		# in here to hand the walk on to the storey below, and that walk is exactly what was refused.
+		# The test stays as the guard: everything in the queue is lit, so it is always true today.
 		if can_reach(cur):
 			var bk := grid.block_of(cur)
 			if not tile_room.has(cur):
@@ -662,7 +801,7 @@ func _seats(battle: Battle, block: int, want: int) -> PackedInt32Array:
 				# edge is a neighbour by arithmetic and the surplus lands where no body may go.
 				if not grid.can_step(cur, nt):
 					continue
-				if not _walk_holds(grid, nt):
+				if not _walk_holds(grid, nt, aim_level):
 					continue
 				seen[nt] = true
 				queue.append(nt)
@@ -670,15 +809,46 @@ func _seats(battle: Battle, block: int, want: int) -> PackedInt32Array:
 
 
 ## **Whether the spill's walk may hold this 조각 at all** — it is somewhere a picked body may be
-## pointed, or it is a stair the walk crosses to get somewhere that is.
+## pointed, AND it stands on the storey the press aimed at.
 ##
 ## ⚠ **`can_reach` carries the flood from the bodies with it**, so a 조각 in a component none of them
-## can enter is refused here and never seated. **A stair is the one thing outside `reach` that is let
-## through**, for the reason `_build_reach`'s own header gives: it is the only door between storeys.
-func _walk_holds(grid: Grid, tile: int) -> bool:
-	if can_reach(tile):
-		return true
-	return grid.passable[tile] == 1 and Grid.is_stair_level(grid.level_of(tile))
+## can enter is refused here and never seated.
+##
+## ⚠⚠ **THE STAIR WAS LET THROUGH HERE UNTIL 2026-09-02 AND IT IS NOT ANY MORE** (ticket 03-14 defect
+## 2). It rode the queue — passable, and an odd level — for the reason `_build_reach`'s own header
+## gives: **a stair is the only door between storeys, so without it the spill is sealed inside one.**
+## **Being sealed inside one storey is now the rule the user chose**, so the door is shut, and the
+## level test below refuses the stair along with everything else off the aimed storey. **There is no
+## stair clause left to keep in step with `Grid.is_stair_level`** — one test does both jobs.
+##
+## ⚠ **This is the SPILL only, and the 부대 may still be ordered up a stair.** `_build_reach`'s flood
+## still crosses stairs, `can_reach_block` still lights the plateau, and a press on an upper 칸 with
+## room still walks everybody up. What is refused is putting a body on a storey **nobody pressed**.
+func _walk_holds(grid: Grid, tile: int, aim_level: int) -> bool:
+	return can_reach(tile) and grid.level_of(tile) == aim_level
+
+
+## **The storey the pressed 칸 stands on, or -1 when nothing in it may be stood on.**
+##
+## ⚠ **Read off the 조각 that are LIT and not off all four.** `reach` never holds a stair — `_standable`
+## is what keeps them out — so every level this can see is already an even one, and the greatest of
+## them is the 칸's own height by the rule `GLOSSARY.md` states: **a 칸's height is the greatest EVEN
+## 눈금 among the four 조각 it covers.** Asking `Grid` for a second block-height rule is what this
+## avoids; there is no such function and inventing one here would be the second copy.
+##
+## ⚠ **-1 and never 0.** Level 0 is the ground and a real answer, so a 칸 with nothing standable in it
+## has to say something else — answering 0 there would pin the spill to the beach and seat a 부대 that
+## should not have moved at all.
+func _aim_level(grid: Grid, block: int) -> int:
+	var best := -1
+	for raw in grid.tiles_of_block(block):
+		var t := int(raw)
+		if not can_reach(t):
+			continue
+		var lv := grid.level_of(t)
+		if lv > best:
+			best = lv
+	return best
 
 
 ## **How many more bodies this 조각 would take, the hand's own not counted.** See `_seats` for why they

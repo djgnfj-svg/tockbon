@@ -7,7 +7,7 @@ class_name Islands
 ## drawing islands.** The shape lived in the game and the picture only decorated it, so a shape the
 ## user changed in Blender could never reach the board.
 ##
-## ⇒ **`tools/blender/island_build.py` is the source.** One run of it writes both
+## ⇒ **`blend/island.blend` is the source** (`docs/manual/blender.md`). One export out of it writes both
 ## `assets/terrain/island.glb` (what the game DRAWS) and `assets/terrain/island.json` (what the game
 ## WALKS ON). **They cannot disagree**, because nothing writes one without the other.
 ##
@@ -55,7 +55,7 @@ static func _load() -> Dictionary:
 	if not _board.is_empty():
 		return _board
 	var text := FileAccess.get_file_as_string(BOARD_PATH)
-	assert(text != "", "island.json is missing — run tools/blender/island_build.py")
+	assert(text != "", "island.json is missing — export it from blend/island.blend, see docs/manual/blender.md")
 	var parsed: Variant = JSON.parse_string(text)
 	assert(parsed is Dictionary, "island.json is not an object")
 	_board = parsed as Dictionary
@@ -184,6 +184,10 @@ static func load_into(grid: Grid) -> void:
 	# 조각**, so the rule needs both and this is the one place that has both. ⚠ Set AFTER `load_rows`,
 	# which does not clear it — see `Grid.coast`.
 	grid.coast = coast()
+	# ⚠ **The resource 칸 come in with the board too** (ticket 05-05). The drawn island has none — its
+	# 54 props all stand on ground a body can walk on, which is what `Grid.set_resources` skips — so
+	# this line changes nothing today and is what a generated island will arrive through.
+	grid.set_resources(props())
 
 
 ## ⚠⚠ **THE ISLAND'S TIME LIMIT WAS DELETED 2026-08-27.** The loss it fed died on 2026-08-24 and the
