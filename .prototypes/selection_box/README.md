@@ -1,5 +1,15 @@
 # selection_box — five ways of drawing the drag-selection box on the real island
 
+✅ **DECIDED 2026-09-02 — `04-ground-decal` won, and the FILL is the subject.** The user, playing the game
+with `01` on the glass: 「이게 ㅣㅇㄹ단 4번이 적요ㅕㅇ된게 맞음? 이게 아니였는디」 — *"Is this number 4 applied,
+for now? This was not it."* — and 「선말고 선택된 부분을 약간 드래그 영역 안쪼 생상이 보여야함」 — *"Not the
+line — the colour should show inside the drag area."* It ships as `FieldView.set_box`. **The four losers
+(01 · 02 · 03 · 05) and their shots are deleted**; the sheets are in
+`docs/reference/2026-09-02-selection-box-prototypes/`. Only 04 mounts now, so `LEFT`/`RIGHT` cycle one.
+⚠ **Everything below is the round's record and reads as of the morning it was written** — in particular
+「the right button is the game's」 was true for one afternoon (03-11) and is not: the order is a short LEFT
+press on a lit 칸 now (03-12), and the lab's own `-- drive` still feeds a right press that orders nobody.
+
 ## The question
 
 **2026-09-02, the user:** 「땅에 깔리는 거랑 그냥 사각형이랑 둘 다 해야할듯? 그렇게 프로토타입으로 보는거지
