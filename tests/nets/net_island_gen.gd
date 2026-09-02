@@ -43,6 +43,7 @@ func run(t) -> void:
 	_the_keep_stands_on_a_plateau_three_blocks_in(t, made)
 	_the_resource_blocks_are_counted_and_they_block(t, made)
 	_no_harbour_and_no_third_storey(t, made)
+	_the_resource_blocks_become_gatherable(t, made)
 	_the_same_seed_gives_the_same_island(t)
 	# **The sentinel.** See `run_nets.done` — without it a `run()` that dies half way still reports
 	# every check it managed first, in a shape a healthy net cannot be told from.
@@ -249,6 +250,63 @@ func _no_harbour_and_no_third_storey(t, made: Array) -> void:
 			flat += 1
 	t.eq(clean, SEEDS, "생성된 섬에 항구 글자가 하나도 없다")
 	t.eq(flat, SEEDS, "높이 글자는 0층 · 계단 · 2층 셋뿐이다 — 3층은 없다")
+
+
+## **A generated board's props, handed to `Grid.set_resources`, come back as the resource 칸 a body can
+## gather from.** Tickets 08-02 and 05-05.
+##
+## ⚠⚠ **THIS IS THE SEAM BETWEEN THE TWO HALVES AND NOTHING ELSE MEASURES IT.** The generator stands
+## its props on `#` 조각 and `Grid.set_resources` reads a resource 칸 as 「impassable, dry, carrying a
+## prop」 — **two files agreeing on a convention neither one states.** Change either side and the
+## generator keeps making islands, the gathering keeps working on a hand-made fixture, and a generated
+## island quietly has nothing to gather on it.
+##
+## ⚠ **The counts are re-derived from the letters here**, not read out of the generator's own answer:
+## a board that wrote its resource count into the dictionary would pass a row that read the dictionary.
+func _the_resource_blocks_become_gatherable(t, made: Array) -> void:
+	var matched := 0
+	var gatherable := 0
+	for row in made:
+		var board: Dictionary = row["board"]
+		var grid: Grid = row["grid"]
+		grid.set_resources(board["props"] as Array)
+		# **The 칸 the letters say are blocked**, counted off the board itself.
+		var blocked := {}
+		for tile in grid.w * grid.h:
+			if grid.passable[tile] == 0 and grid.water[tile] == 0:
+				blocked[grid.block_of(tile)] = true
+		var named := {}
+		for tile in grid.w * grid.h:
+			var kind := grid.resource_at(tile)
+			if kind == "":
+				continue
+			named[grid.block_of(tile)] = true
+			if kind != "wood" and kind != "rock" and kind != "ore":
+				named[-1] = true
+		if blocked.size() == named.size() and not named.has(-1) and blocked.size() >= 3:
+			matched += 1
+		# **And a body could actually stand somewhere and gather it** — every resource 칸 has at least
+		# one walkable 조각 touching it, or it is a pile nobody can reach.
+		var reachable := 0
+		for b in named:
+			var open := false
+			for raw in grid.tiles_of_block(int(b)):
+				var seat := int(raw)
+				var tx := seat % grid.w
+				var ty := seat / grid.w
+				for k in Grid.NEIGHBOURS.size():
+					var nx: int = tx + int(Grid.NEIGHBOURS[k][0])
+					var ny: int = ty + int(Grid.NEIGHBOURS[k][1])
+					if nx < 0 or ny < 0 or nx >= grid.w or ny >= grid.h:
+						continue
+					if grid.passable[ny * grid.w + nx] == 1:
+						open = true
+			if open:
+				reachable += 1
+		if reachable == named.size() and named.size() > 0:
+			gatherable += 1
+	t.eq(matched, SEEDS, "막힌 칸과 자원 칸이 하나도 안 어긋난다 — 셋 이상, 전부 나무·돌·철이다")
+	t.eq(gatherable, SEEDS, "자원 칸마다 옆에 설 자리가 있다 — 못 가는 자원 칸이 없다")
 
 
 # == the seed =========================================================================================
