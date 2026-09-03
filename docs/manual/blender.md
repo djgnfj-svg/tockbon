@@ -40,8 +40,20 @@ not the 26th solid.
 | `islet` | 1 | 1 |
 | **total** | **20** | **11** |
 
-**What every one of them shares**: it sits at the ORIGIN, spans **±1.0** (one 칸) with a coastal skirt
-out to **±1.25**, and carries a vertex-colour layer named `Col`. ⚠⚠ **None has a UV layer and none has
+**What every one of them shares**: it sits at the ORIGIN, spans **±1.0** (one 칸), and carries a
+vertex-colour layer named `Col`.
+
+⚠ **The coastal skirt out to ±1.25 is on SEVENTEEN of the thirty-one and not on all of them** —
+measured 2026-09-03. It is on every level-0 block that has a water-facing edge (`edge` · `corner` ·
+`strait` · `cape` · `islet`), and on nothing else: **the three level-0 `solid` and all eleven level-2
+blocks stop dead at ±1.0.** A plateau ends in a cliff and has no hem running down into the water, which
+is the deleted bake's own rule — the skirt hangs on coastal sides only.
+
+⚠⚠ **There is NO STAIR in the kit.** The six kinds are all flat floors, and a generated island needs
+one to three stairs because **a stair is the only way up between storeys**. The drawn island's stair
+is welded inside the `island` mesh — the deleted bake built it in place, tread by tread — so there is
+no block to stand. **Cutting one out of `island` is the cheapest way to get it, and it keeps the shape
+the user already passed.** ⚠⚠ **None has a UV layer and none has
 a material** — the colour is on the vertices and nothing else. `pads` is the opposite and carries two
 UV layers, `UVMap` and `UVMap.001`.
 
