@@ -169,6 +169,9 @@ func run(t) -> void:
 	# taken to GAME OVER with a key held down.
 	await _a_shell_that_never_saw_the_mouse_pans_nothing(t)
 	await _a_lost_board_stops_travelling(t)
+	# ⚠ **Its own `Game` for the same reason as the four above** — it puts a building on the board, and
+	# the fixture below is shared with every camera row. See the function's own header.
+	await _the_build_mode_stands_the_store(t)
 
 	var game := QuitGame.new()
 
@@ -2454,6 +2457,191 @@ func _a_lost_board_stops_travelling(t) -> void:
 
 	t.root.remove_child(game)
 	game.queue_free()
+
+## **짓기 모드 through the door the OS uses: B in, a left press that builds, ESC out.** Ticket 05-08.
+##
+## ⚠⚠ **THE ROW THIS FILE EXISTS FOR IS 「THE SAME PRESS, TWICE」.** One screen point is found that is
+## both a lit 칸 and a 조각 the 창고 would stand on, and it is pressed twice: **outside the mode it
+## orders the 부대 and builds nothing; inside it, it builds and orders nobody.** Either half alone is
+## satisfied by a shell that has stopped listening — a mode that ate every press would pass 「it did not
+## order」, and a mode that did nothing at all would pass 「it still orders」.
+##
+## ⚠⚠ **ITS OWN `Game`, BUILT AND LET GO OF HERE.** The camera rows below `run()`'s fixture read
+## `cam_px` axes that only line up at the opening yaw, and this row moves nothing — but it puts a
+## building on the board, and a fixture shared with the band rows is one more thing that has to stay
+## true for reasons neither row states.
+##
+## ⚠ **`_key_edge` and not `_key`**: the mode's key is read on the pressed edge with an echo guard, and
+## an event with no edge on it cannot say whether the release was ignored.
+func _the_build_mode_stands_the_store(t) -> void:
+	var game := QuitGame.new()
+	t.root.add_child(game)
+	await t.pump_frames(2)
+	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
+	game.set_process(false)
+	await t.pump_frames(2)
+	var fs: FieldView = game.field_view
+	var b: Battle = game.battle
+
+	# -- the island opens with no 창고 -------------------------------------------------------------
+	t.eq(b.store_tile, -1, "섬이 열릴 때 창고가 없다 — 지어야 한다")
+	t.ok(not game.hand.is_building(), "그리고 손은 짓기 모드가 아니다")
+	var builds_before := fs._builds.get_child_count() if fs._builds != null else 0
+	t.ok(builds_before > 0, "자가 점검 — 성채는 이미 서 있다 (건물 %d개)" % [builds_before])
+
+	# -- a 조각 that is BOTH a lit 칸 and somewhere the 창고 would stand ----------------------------
+	var ashore := b.ashore_ids()
+	t.ok(ashore.size() > 0, "자가 점검 — 판 위에 선 몸이 있다")
+	if ashore.is_empty():
+		t.root.remove_child(game)
+		game.queue_free()
+		return
+	var sid := int(ashore[0])
+	t.ok(game.hand.pick(b, sid), "자가 점검 — 손이 몸 하나를 쥐었다")
+	var spot := -1
+	var spot_at := Vector2.ZERO
+	for k in game.hand.reach.size():
+		var cand := int(game.hand.reach[k])
+		if not b.can_place_store(cand):
+			continue
+		var at := fs.tile_to_screen_px(cand % b.grid.w, cand / b.grid.w)
+		if game._tile_at(at) != cand:
+			continue
+		spot = cand
+		spot_at = at
+		break
+	t.ok(spot >= 0, "자가 점검 — 불도 켜져 있고 창고도 설 수 있는 조각을 화면에서 겨눴다 (%d)" % [spot])
+	if spot < 0:
+		t.root.remove_child(game)
+		game.queue_free()
+		return
+	t.ok(game.hand.can_reach_block(b.grid.block_of(spot)), "자가 점검 — 그 칸에는 불이 켜져 있다")
+
+	# -- the CONTROL: outside the mode that press is still a move order ------------------------------
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
+	game._unhandled_input(_press(spot_at))
+	game._unhandled_input(_release(spot_at))
+	t.ok(_ordered(b) > 0, "짓기 모드 밖에서는 그 누름이 여전히 부대를 보낸다 (%d 명)" % [_ordered(b)])
+	t.eq(b.store_tile, -1, "그리고 아무것도 안 짓는다")
+
+	# -- B opens the mode, and the 부대 stays in the hand -------------------------------------------
+	t.ok(game.hand.pick(b, sid), "자가 점검 — 다시 쥐었다 (명령이 손을 놓았다)")
+	var held := game.hand.ids.duplicate()
+	game._unhandled_input(_key_edge(KEY_B, true))
+	t.ok(game.hand.is_building(), "B 를 누르면 짓기 모드가 켜진다")
+	t.eq(game.hand.building, Builds.STORE, "손이 든 것은 창고다")
+	t.eq(game.hand.ids, held, "모드에 들어가도 쥔 부대는 그대로다")
+	# **The mark reaches the ground under the cursor**, and it says the 조각 would take the building.
+	game._unhandled_input(_motion(spot_at, Vector2.ZERO))
+	t.eq(fs._build_spot, spot, "커서 밑 조각이 지을 자리로 판에 닿는다")
+	t.ok(fs._build_spot_ok, "그리고 지을 수 있는 자리라고 켜진다")
+	# ⚠ **The refused colour is the half a player meets**, so it is driven too — the middle of the
+	# open sea is the one point on every board that no press can build on.
+	var wet_at := Vector2(2.0, Look.VIEWPORT_H_PX - 2.0)
+	game._unhandled_input(_motion(wet_at, Vector2.ZERO))
+	t.ok(not fs._build_spot_ok, "못 짓는 자리에서는 안 켜진다 — 아무 데나 초록이 아니다")
+	game._unhandled_input(_motion(spot_at, Vector2.ZERO))
+	# **The 이동선 comes down**: the press builds, so a line saying 「they walk here」 would be the
+	# screen naming a gesture the button does not carry.
+	t.eq(fs._move_lines.size(), 0, "모드 안에서는 이동선이 안 그려진다")
+
+	# -- a drag inside the mode is NOT a box --------------------------------------------------------
+	# ⚠ **Dragged FROM the sea and not from the buildable 조각.** The release resolves the press from
+	# the point the button went DOWN, so a drag started on buildable ground would build there and the
+	# rows below would be measuring a mode that had already closed.
+	game._unhandled_input(_press(wet_at))
+	game._unhandled_input(_motion(wet_at + Vector2(80.0, -60.0), Vector2(80.0, -60.0)))
+	t.ok(not game._boxing, "모드 안에서 끌어도 상자가 안 열린다")
+	t.eq(fs._box, Rect2(), "땅 위에 민트 상자도 안 깔린다")
+	game._unhandled_input(_release(wet_at + Vector2(80.0, -60.0)))
+	t.ok(game.hand.is_building(), "못 짓는 자리를 눌러도 모드는 안 닫힌다 — 헛손질이 비싸지 않다")
+	t.eq(b.store_tile, -1, "그리고 아무것도 안 선다")
+	game._unhandled_input(_motion(spot_at, Vector2.ZERO))
+
+	# -- the same press, inside the mode, BUILDS ----------------------------------------------------
+	for i in b.soldier_order.size():
+		b.soldier_order[i] = -1
+	t.ok(game.hand.is_building(), "자가 점검 — 아직 모드 안이다")
+	game._unhandled_input(_press(spot_at))
+	game._unhandled_input(_release(spot_at))
+	t.eq(b.store_tile, spot, "같은 누름이 모드 안에서는 창고를 세운다")
+	t.eq(_ordered(b), 0, "그리고 아무도 안 보낸다 — 한 버튼이 두 뜻을 같이 갖지 않는다")
+	t.ok(not game.hand.is_building(), "짓고 나면 모드가 닫힌다 — 다음 누름이 창고를 옮기지 않는다")
+	t.eq(game.hand.ids, held, "그러고도 쥔 부대는 그대로다")
+	t.eq(fs._build_spot, -1, "지을 자리 표시도 내려간다")
+
+	# -- and it reaches the ground ------------------------------------------------------------------
+	fs._process(0.0)
+	t.eq(fs._builds_store_tile, spot, "판이 그 창고를 그리려고 건물을 다시 세웠다")
+	t.eq(fs._builds.get_child_count(), builds_before + 1,
+		"땅 위의 건물이 하나 늘었다 — sim 만 바뀌고 화면은 그대로가 아니다")
+
+	# -- ESC leaves the mode and keeps the 부대; ESC outside it lets go ------------------------------
+	game._unhandled_input(_key_edge(KEY_B, true))
+	t.ok(game.hand.is_building(), "자가 점검 — 다시 모드를 켰다")
+	game._unhandled_input(_key_edge(KEY_ESCAPE, true))
+	t.ok(not game.hand.is_building(), "ESC 로 모드에서 나온다")
+	t.eq(game.hand.ids, held, "나와도 쥐고 있던 부대가 그대로 남는다")
+	t.ok(game.hand.reach.size() > 0, "불 켜진 자리도 그대로 남는다 (%d 조각)" % [game.hand.reach.size()])
+	game._unhandled_input(_key_edge(KEY_ESCAPE, true))
+	t.ok(game.hand.is_empty(), "모드 밖의 ESC 는 여전히 손을 놓는다 — 둘째 누름이 놓는다")
+
+	# -- B toggles ---------------------------------------------------------------------------------
+	game._unhandled_input(_key_edge(KEY_B, true))
+	t.ok(game.hand.is_building(), "B 로 다시 켜진다")
+	game._unhandled_input(_key_edge(KEY_B, true))
+	t.ok(not game.hand.is_building(), "B 를 또 누르면 꺼진다 — 같은 키로 들어가고 나온다")
+	# ⚠ **The release edge is not a second toggle.** Read on both edges, B would open the mode on the
+	# press and shut it again the instant the finger came up.
+	game._unhandled_input(_key_edge(KEY_B, true))
+	game._unhandled_input(_key_edge(KEY_B, false))
+	t.ok(game.hand.is_building(), "떼는 것은 토글이 아니다 — 손을 떼도 모드가 남는다")
+	# ⚠ **And an OS auto-repeat is not one either**, which is the guard TAB and ESC both carry.
+	game._unhandled_input(_key_edge(KEY_B, true, true))
+	t.ok(game.hand.is_building(), "키 반복도 토글이 아니다")
+	game._unhandled_input(_key_edge(KEY_ESCAPE, true))
+
+	# -- 지을 자리 is GEOMETRY on the ground, not only a field on the view ---------------------------
+	# ⚠⚠ **WITHOUT THIS `_paint_build_spot` COULD BE DELETED WHOLE AND EVERY ROW ABOVE WOULD STAY
+	# GREEN.** The two `_build_spot` rows measure what the shell handed over; **what the player sees is
+	# the fx buffer**, which is the measuring surface `GLOSSARY.md` names for this folder.
+	# ⚠ **Measured with an EMPTY hand**, because opening the mode also takes the 이동선 down — with a
+	# 부대 held, the mark's triangles and the line's would be added and subtracted in one number.
+	# ⚠ **A floor AND a return to the floor**, so no vertex count is copied into this file: the mark
+	# adds something, and closing the mode takes exactly that something away again.
+	t.ok(game.hand.is_empty(), "자가 점검 — 손이 비어 있다 — 이동선이 셈에 안 섞인다")
+	t.ok(not game.hand.is_building(), "자가 점검 — 모드도 꺼져 있다")
+	var other := -1
+	var other_at := Vector2.ZERO
+	for tile in b.grid.w * b.grid.h:
+		if not b.can_place_store(tile):
+			continue
+		var at := fs.tile_to_screen_px(tile % b.grid.w, tile / b.grid.w)
+		if game._tile_at(at) != tile:
+			continue
+		other = tile
+		other_at = at
+		break
+	t.ok(other >= 0, "자가 점검 — 창고가 선 뒤에도 지을 수 있는 조각이 화면에 남아 있다 (%d)" % [other])
+	if other >= 0:
+		game._unhandled_input(_motion(other_at, Vector2.ZERO))
+		fs._process(0.0)
+		var without := fs._g_v.size()
+		t.eq(fs._build_spot, -1, "자가 점검 — 모드 밖에서는 지을 자리가 안 깔린다")
+		game._unhandled_input(_key_edge(KEY_B, true))
+		game._unhandled_input(_motion(other_at, Vector2.ZERO))
+		fs._process(0.0)
+		t.ok(fs._g_v.size() > without,
+			"지을 자리가 땅 위에 진짜 삼각형으로 깔린다 (꼭짓점 %d개 늘었다)" % [fs._g_v.size() - without])
+		t.eq(fs._decal.mesh.get_surface_count(), 1, "그리고 그 면이 실제로 커밋됐다")
+		game._unhandled_input(_key_edge(KEY_ESCAPE, true))
+		fs._process(0.0)
+		t.eq(fs._g_v.size(), without, "모드에서 나오면 그 삼각형이 딱 그만큼 사라진다")
+
+	t.root.remove_child(game)
+	game.queue_free()
+
 
 ## The right button's two edges. ⚠ **The release carries no position because the shell reads nothing
 ## on it: the order went out on the press** (2026-09-02, 03-11 — `_end_order` clears one flag and

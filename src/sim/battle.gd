@@ -1014,10 +1014,32 @@ func gatherable_at(tile: int) -> String:
 ##
 ## ⚠ **One 창고 an island.** A second call moves it rather than making two — 「one building」 is the
 ## user's own word for it, and two piles of fish is a different game.
-## ⚠⚠ **NOBODY CALLS THIS YET.** 「Build here」 is an order the player gives and that order is task 09's
-## (「내가 건물을 짓는건 조각단위로 해야할듯」). This is the door it will come through, and the nets are
-## what open it today.
+## ⚠⚠ **THE PLAYER REACHES THIS THROUGH 짓기 모드 SINCE 2026-09-03.** The line that stood here said
+## 「nobody calls this yet」 and named task 09; what the user chose instead is a MODE — 「짓기모드가
+## 맞을듯」 — and a left press inside it lands here through `Hand.build`. **The refusal rule moved out
+## whole** into `can_place_store`, because the mark the mode paints on the ground has to answer the
+## same question this does.
 func place_store(tile: int) -> bool:
+	if not can_place_store(tile):
+		return false
+	if store_tile >= 0:
+		grid.release_all(STORE_UID)
+	store_tile = tile
+	grid.fill(STORE_UID, tile)
+	return true
+
+
+## **Whether a 창고 would stand on `tile`.** The whole of the refusal, and the one place it lives.
+##
+## ⚠⚠ **IT EXISTS SO THE MARK ON THE GROUND AND THE PRESS CANNOT DISAGREE.** 짓기 모드 paints the 조각
+## under the cursor one colour when the building would stand and another when it would not; a view
+## working that out for itself would be a second copy of this rule, which is the drift `how-nets-lie`
+## opens with. **`place_store` asks this and asks nothing else.**
+##
+## ⚠ **The 조각 the 창고 already stands on answers FALSE**, because the building holds its own 조각 and
+## `hold_count` counts that hold. **A press on the standing 창고 does nothing at all** — it is not a
+## move onto itself and it is not a rebuild.
+func can_place_store(tile: int) -> bool:
 	if grid == null:
 		return false
 	if tile < 0 or tile >= grid.passable.size():
@@ -1028,10 +1050,6 @@ func place_store(tile: int) -> bool:
 	# reservation table, so `hold_count` above says nothing about it.
 	if grid.is_built(tile):
 		return false
-	if store_tile >= 0:
-		grid.release_all(STORE_UID)
-	store_tile = tile
-	grid.fill(STORE_UID, tile)
 	return true
 
 

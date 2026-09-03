@@ -2493,6 +2493,32 @@ const SELECTION_BOX_RENDER_PRIORITY := 2
 
 
 # ---------------------------------------------------------------------------------------------
+# 지을 자리 — the 조각 짓기 모드 would put the building on
+# ---------------------------------------------------------------------------------------------
+## **The mark 짓기 모드 lays on the 조각 under the cursor** (ticket 05-08). ⚠⚠ **IT IS GROUND AND NOT
+## GLASS**, the same kind of thing the 선택 상자 is: it is cut into pieces, each piece sits at the
+## height under it, and it turns and climbs with the board because it names a 조각 rather than a
+## rectangle on the screen.
+##
+## ⚠⚠ **TWO COLOURS AND NOT ONE, AND THE SECOND IS THE HALF THAT MATTERS.** A mark that looked the
+## same everywhere would be a press that silently does nothing over water, over the 성채 and over a
+## body — the player would learn the rule by failing at it. **Which colour is shown is
+## `Battle.can_place_store`'s answer** and is never worked out where the mark is drawn.
+##
+## ⚠ **Warm against the 선택 상자's mint on purpose**: both can be on the ground in the same second —
+## the 부대 stays picked through the mode — and two mint marks would read as one gesture.
+## ⚠ **All three are tuned by eye and every one is a FIRST value.** Nothing here has been on the glass.
+const COL_BUILD_SPOT := Color(255.0 / 255.0, 206.0 / 255.0, 112.0 / 255.0, 1.0)
+## **Refused.** The red the flash and the damage digits already use would tie this to being hit, so it
+## is a duller brick that reads as 「not here」 rather than as 「something hurt you」.
+const COL_BUILD_SPOT_REFUSED := Color(214.0 / 255.0, 92.0 / 255.0, 82.0 / 255.0, 1.0)
+## **The fill's alpha over whichever of the two colours is showing.** Held a shade over the 선택
+## 상자's 0.28 because this covers one 조각 and that covers a dragged region — the same alpha over a
+## fortieth of the area reads as less.
+const BUILD_SPOT_FILL_ALPHA := 0.38
+
+
+# ---------------------------------------------------------------------------------------------
 # Combat juice — the twelve effects. Forty-four values, and not one of them is a truth
 # ---------------------------------------------------------------------------------------------
 
