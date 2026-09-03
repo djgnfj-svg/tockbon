@@ -22,10 +22,12 @@ _this_ bug you will find the cause. Without one, no amount of staring at code wi
 
 **This is a Godot game driven from PowerShell — no dev server, no browser, no HTTP.**
 
-1. **A net** at a seam the glossary already agrees on, run by `tests/run_nets.ps1`.
-   ⚠ **No net at a seam `GLOSSARY.md` does not name**; needing a new one is the user's call
-2. **A throwaway `--headless --script` runner** building `sim` objects with `.new`. `src/sim/` is
-   constructible without the tree, which is what makes this cheap
+1. **A throwaway `--headless --script` runner** building `sim` objects with `.new`. `src/sim/` is
+   constructible without the tree, which is what makes this cheap. ⚠⚠ **This is the first move** — it
+   costs one file that is thrown away, where a net costs a file that is kept
+2. **The existing nets**, run by `tests/run_nets.ps1` — read what is already there.
+   ⚠⚠ **Writing a NEW one is the user's call** (`CLAUDE.md`), and so is any seam `GLOSSARY.md` does
+   not name
 3. **A throwaway under `.prototypes/<subject>/`.** ⚠ **Ten runners already exist there** — copy the nearest
 4. **A photograph**, only when the pixels ARE the symptom. ⚠ **Never `--headless` for this**: no
    swapchain, every PNG comes back black, and no error is raised

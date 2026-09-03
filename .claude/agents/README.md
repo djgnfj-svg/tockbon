@@ -44,7 +44,7 @@ standing by for it.
 ```
 (main) interviews the user on the ticket, writes the plan into it, sets Status: claimed
 adversary ALWAYS, and before builder — attacks the plan. No small-ticket exception
-builder implements per that plan. One chunk → nets green → report → HALT
+builder implements per that plan. One chunk → RUN IT AND LOOK → suite still green → report → HALT
 verify always. Reads it to prove it wrong, then runs it headless. Both passes, never one
 verify-look the moment anything reaches the screen, and not before
 judgment all pass → Status: resolved + the answer under ## Answer + one line on the map

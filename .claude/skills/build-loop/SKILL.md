@@ -40,7 +40,8 @@ cheap. **Put its blockers in front of the user WITH the plan**, never instead of
 
 ## 3. Build — the `builder` agent
 
-- **`sim` work writes the net FIRST. Screen work writes it after** (the user)
+- ⚠⚠ **NO NEW NET** (the user) — **the plan says how to RUN the thing and what to look at.**
+  A check is written only when the user asks for a batch of them
 - **Measured, not preferred**: the 3D move put 1033 drawing-bound checks at risk and about 480 died. What
   lived measured **input → state**; what died asserted pixels
 - ⚠⚠ **No check at a seam that is not agreed** — the agreed three are in the glossary. A new seam is the
@@ -54,15 +55,12 @@ cheap. **Put its blockers in front of the user WITH the plan**, never instead of
 
 - ⚠ **Never split work touching the SAME file** — three agents in one view file voided the measurement
   three times and cost two rounds. Blender work and code work never collide
-- **Nets are separate files, so writing several splits well** — one agent per net, spawned at once, and
-  every result read in one pass
-- ⚠⚠ **Split the nets only after builder stops**, or across files builder is not in. A net aimed at a
-  source that is still moving measures nothing
 
-### Four questions before a net is written
+### Only if the user asks for a batch of nets
 
-**Measured: 15 nets, 11,845 lines, 790 each — and the whole suite runs in 14 seconds.**
-⇒ **Writing is what costs the round, never running.** `diagnosing-bugs` holds the long form.
+**Measured: 26 nets, 21,942 lines against 17,723 lines of game — and the whole suite runs in 23
+seconds.** ⇒ **Writing is what costs the round, never running, and that is why the per-ticket net
+went.** `diagnosing-bugs` holds the long form.
 
 | | |
 |---|---|
@@ -71,15 +69,16 @@ cheap. **Put its blockers in front of the user WITH the plan**, never instead of
 | **Seconds, not minutes?** | Past 120s it is killed and reported red |
 | **Runs with nobody watching?** | A check that needs the user to look is not a net |
 
-Spawn `builder`. It writes what the plan says, runs the nets, reports red/green, and **stops**. It does
-not declare anything done.
+Spawn `builder`. It writes what the plan says, **runs the game and looks at it**, runs the existing
+suite, reports what it saw and red/green, and **stops**. It does not declare anything done.
 
 ⚠ **Do not pass builder's impressions to the verifiers.** Pass what was written where, and where it said
 it was unsure — nothing else.
 
 ## 4. Verify — in parallel
 
-**`verify` always. `verify-look` the moment anything reached the screen.**
+**`verify-look` carries the round now that no net is written for it** — it is the only pass that SEES
+the change. **`verify` still always**: it reads the code and runs the existing suite.
 ⚠ **Never spawn the screen verifier on a stage that draws nothing** — a third of the round trips for nothing.
 
 ## 5. Judge
@@ -91,7 +90,7 @@ it was unsure — nothing else.
 
 ## What comes back to the user
 
-**The report, not the diff**: what was built · what the nets said · what the verifiers found · **what was
+**The report, not the diff**: what was built · **what was seen on screen** · what the existing suite said · what the verifiers found · **what was
 not done** · where anyone was unsure.
 ⚠ **Pasting source into the chat means the context saving has already gone.**
 

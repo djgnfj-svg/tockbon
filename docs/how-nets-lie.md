@@ -1,5 +1,9 @@
 # How nets lie — the shapes a false green comes in
 
+⚠⚠ **NO NET IS WRITTEN PER TICKET** (`CLAUDE.md`) — **so more of the verifying is done by RUNNING THE
+GAME AND LOOKING, and a green that guarantees nothing and a screenshot that shows nothing are the same
+failure.** This file is still live for both.
+
 **Read this before writing a check, and before believing a green round.** Every line below is a shape that
 was measured in this repo or in the two games before it. **No case histories, no dates** — the shape is the
 whole of what carries forward.

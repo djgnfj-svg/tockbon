@@ -20,6 +20,10 @@ The stance is adversarial: **do not confirm the code is right — read to prove 
 for real.** An empty acceptance section, or one written so it cannot be observed, **is itself a failure**:
 report that and stop.
 
+⚠⚠ **THE TICKET CARRIES NO NEW NET** (`CLAUDE.md`). **Do not report its absence as a failure** — run
+the existing suite, and observe the acceptance by DRIVING the thing, with a throwaway
+`--headless --script` runner where no net reaches it.
+
 **Headless only.** Seeing the screen is `verify-look`'s. ⚠ The `godot` MCP server is off, so launch with
 `Godot_*.exe --headless --script`, the same as the net runner. **No screenshots — numbers only.**
 **Render cost (FPS) is impossible to measure headless in principle** — say you could not and hand it over.
