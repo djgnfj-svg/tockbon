@@ -10,8 +10,8 @@ extends RefCounted
 ## `src/sim/` seam `GLOSSARY.md` names. No `Battle`, no frame: every number below is the state one `Grid`
 ## call left behind.
 ##
-## ⚠⚠ **WHY THE SEAT IS MEASURED HERE AND NOT WHERE IT IS DRAWN.** `log.md` 2026-08-31: a per-조각 seat
-## table assumed the split 3·2·2·2, the walk delivered 3·3·2·1, and a body fell through to no seat while a
+## ⚠⚠ **WHY THE SEAT IS MEASURED HERE AND NOT WHERE IT IS DRAWN.** A per-조각 seat table assumed the
+## split 3·2·2·2, the walk delivered 3·3·2·1, and a body fell through to no seat while a
 ## seat elsewhere stood empty. **The seat is a fact about the 칸**, and the row `_a_3_3_3_0_hold_still_seats_nine`
 ## is that measurement turned into a check. The lattice the seat is drawn on is `net_fx_view`'s.
 ##
@@ -188,8 +188,7 @@ func _a_body_keeps_its_seat_across_its_own_block_and_loses_it_leaving(t) -> void
 	t.eq(g.seat_of(home, UID + 3), seat, "비운 자리를 다음 몸이 그대로 받는다 (%d)" % seat)
 
 
-## **Three, three, three and none still seats nine.** `log.md` 2026-08-31: a per-조각 table lost a body
-## to exactly this split.
+## **Three, three, three and none still seats nine.** A per-조각 table lost a body to exactly this split.
 func _a_3_3_3_0_hold_still_seats_nine(t) -> void:
 	var g := _field()
 	var block := g.block_of(g.tile_index(BLOCK_TX, BLOCK_TY))

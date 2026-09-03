@@ -31,7 +31,7 @@ inherits no context.
 |---|---|
 | **Measured** | ⚠⚠ **A number and how it was taken.** 「it is known that」 is not a measurement |
 | **Durable** | True after this island, this ticket, this week. A fact about the current board belongs to the board |
-| **Unowned** | ⚠ **Check the README's routing table first** — `how-nets-lie`, the Blender manual, the glossary, the log and `docs/reference/` each own a kind of fact, and **the same fact in two files drifts** |
+| **Unowned** | ⚠ **Check the README's routing table first** — `how-nets-lie`, the Blender manual and the glossary each own a kind of fact, and **the same fact in two files drifts** |
 | **Actionable** | It changes what the next agent types. **A symptom with no instruction is a war story** |
 | **Run** | ⚠⚠ **The page's lab launched on screen this round and was looked at.** Reading the code is not this criterion — 02 and 03 were written, reviewed and shipped while a parse error kept them from loading |
 
@@ -40,9 +40,9 @@ inherits no context.
 2. **Write it in the page's shape**: what happens · how it was measured · **what to do instead**
 3. **Add the row to the README's page table** if a file was created
 
-⚠⚠ **A page found wrong is corrected in place, and the wrong claim stays with a line saying it was
-measured false** — the opposite of `docs/reference/`, which is frozen. **A doc saying a tool is broken is
-a doc to re-test, not to quote**: that cost four days when a Blender warning outlived its fault.
+⚠⚠ **A page found wrong is corrected in place and the wrong claim is DELETED**, not struck through.
+**A doc saying a tool is broken is a doc to re-test, not to quote**: that cost four days when a Blender
+warning outlived its fault.
 
 ## The lab
 
@@ -69,8 +69,8 @@ first.**
 | **An engine constant with named options** — billboard mode, alpha mode, filter | ⚠⚠ **← → walk every option**, named on screen. **Two of five is not the technique** |
 | **Present or absent** | Space toggles it |
 
-**Every dial's starting value carries its origin on that line**: **measured** this round · **sourced** from
-`docs/reference/` or a named outside source · ⚠ **`# 추정`**, a guess marked as one.
+**Every dial's starting value carries its origin on that line**: **measured** this round · **sourced**
+from a named outside source, linked · ⚠ **`# 추정`**, a guess marked as one.
 
 ⚠⚠ **A bare number with no origin is the failure** (2026-08-31, the user: ***"You pick those values far
 too casually. Nobody studies anything from a test like this."***) — six numbers shipped in `01` with no

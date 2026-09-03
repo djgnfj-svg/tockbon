@@ -43,11 +43,11 @@ and how Sea of Thieves builds its water.
 
 ## Where it lands
 
-⚠⚠ **Two places, and they hold different things.** **The conclusion** goes into the ticket that asked
-for it, under `## 남들은 어떻게 하나` (the tickets are Korean, so the heading is). **The material — every
-case, every link — stays in the note `research` left at `docs/reference/`**, and the ticket names its path.
-⚠ **Keeping the whole table in the ticket is what makes tickets unreadable**; keeping nothing is what makes
-the next round search it all again.
+⚠⚠ **One place: the ticket that asked for it**, under `## 남들은 어떻게 하나` (the tickets are Korean, so
+the heading is). **Three cases with their links, one opposite, and the conclusion** — that is the whole
+entry, and the rest of the reading is not kept.
+⚠ **This repo keeps no reference folder.** A note nobody reaches for is one more old file to be confused
+by, and the user asked for that to stop.
 
 **No ticket in play → the findings
 come back in conversation and nowhere else** — a research file nobody asked for is a file nobody reads.

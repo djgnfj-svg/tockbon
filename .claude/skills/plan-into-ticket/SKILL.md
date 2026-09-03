@@ -18,7 +18,7 @@ guessing** — which is where a round goes.
 
 - **Ask everything at once, in one batch, before writing the plan.** Not one question at a time
 - **Keep going until nothing is left to guess** — every number, name, edge, and "what happens when"
-- ⚠ **A question you can settle by reading `src/`, the ticket or the log is not a question.** Go read it
+- ⚠ **A question you can settle by reading `src/` or the ticket is not a question.** Go read it
 - ⚠ **No multiple-choice UI.** Options as short prose; the user answers in their own words
 - ⚠⚠ **This runs in the main session, where the user is.** The `spec` agent that held it was deleted for
   exactly this reason — it could not have the conversation the plan depends on
@@ -34,7 +34,7 @@ a team boundary, and here the person who decided it is the person reading it.
 | | Where |
 |---|---|
 | **What already stands** at this spot | `src/`, the tools, the docs. **Name it, so nobody builds it twice** |
-| **What already died** here — deleted or reversed | The log and `git log`. **Reviving a dead thing costs a round** |
+| **What already died** here — deleted or reversed | `git log`. **Reviving a dead thing costs a round** |
 | **Which net measures it**, and is it green right now | `tests/nets/` |
 | **Which green went false here** | `docs/how-nets-lie.md`, searched for this spot |
 

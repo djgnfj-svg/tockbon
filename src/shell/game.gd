@@ -1176,10 +1176,9 @@ func _notification(what: int) -> void:
 ##  - **full hand** -> a press on a lit 칸 is a walk, and a body standing there does not intercept it;
 ##  - **full hand, pressed anywhere else** -> nothing. **ESC is the only thing that lets go.**
 ##
-## The first line stands. **The second moved to the right button, on its press** (03-11). **The third is
-## REVERSED by the user on 2026-09-02** — a left press on nothing lets go, StarCraft's rule, and ESC
-## stays as the second way; ticket 03-04's Answer and `a-left-press-on-nothing-keeps-the-hand` in
-## `docs/design/` carry the reversal.
+## The first line stands. **The second moved to the right button, on its press** (03-11). **The third was
+## REVERSED by the user** — a left press on nothing lets go, StarCraft's rule, and ESC stays as the
+## second way.
 ##
 ## ⚠⚠ **THE THIRD ERA, THE SAME EVENING — ONE BUTTON AGAIN** (2026-09-02, ticket 03-12; the user reversed
 ## the split after trying the drag in the lab: 「동작이 단순해야함 왼쪽으로 드래그 왼쪽으로 칸누르기로

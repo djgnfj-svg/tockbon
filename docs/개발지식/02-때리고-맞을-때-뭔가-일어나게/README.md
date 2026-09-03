@@ -120,4 +120,3 @@
 - **The Art of Screenshake — Jan Willem Nijman (Vlambeer), 2013** — Nuclear Throne 을 만든 수법 서른 개를 빠르게 훑는 강연
 - [Hitstop in Capcom Beat 'Em Ups](https://shane-sicienski.com/blog/blog-post-title-one-55pmn) — 히트스톱을 프레임 단위로 뜯은 글
 - [How to Make Your Game Feel Good](https://egmatic.com/blog/how-to-make-your-game-feel-good) — 흔들기·되튐·히트스톱을 한 자리에 모은 정리
-- **밖에서 찾아 둔 것** : `docs/reference/2026-08-30-hit-feel-techniques.md`

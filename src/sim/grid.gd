@@ -193,7 +193,7 @@ var _held := {}
 ## 「the characters ought to fill in starting from the centre and that is not really working」).
 ##
 ## ⚠⚠ **THE SEAT IS A FACT ABOUT THE 칸 AND NOT ABOUT THE 조각, AND THAT WAS MEASURED BEFORE IT WAS
-## BUILT.** `log.md` 2026-08-31: a per-조각 seat table assumed the split 3·2·2·2, the walk delivered
+## BUILT.** A per-조각 seat table assumed the split 3·2·2·2, the walk delivered
 ## 3·3·2·1, and a body fell through to no seat while a seat elsewhere stood empty. Nine seats laid over
 ## a 2x2 do not line up with the four 조각 one-to-one, so the table hangs off the 칸.
 ##

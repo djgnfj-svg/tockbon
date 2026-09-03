@@ -1,6 +1,6 @@
 ---
 name: wrap-up
-description: Closes the session — verifies and closes this session's tickets and tasks, repairs the map and the log, clears the loose images, runs the nets, commits. Use whenever the user's message contains 마무리 — "마무리", "마무리하자", "마무리했어", "마무리 좀" — or says "wrap up".
+description: Closes the session — verifies and closes this session's tickets and tasks, deletes the closed ticket folders, repairs the map, clears the loose images, runs the nets, commits. Use whenever the user's message contains 마무리 — "마무리", "마무리하자", "마무리했어", "마무리 좀" — or says "wrap up".
 ---
 
 # 마무리 — the session ends and the state has to end with it
@@ -8,12 +8,15 @@ description: Closes the session — verifies and closes this session's tickets a
 **The work finishes and nothing else moves.** A ticket stays `claimed`; the map still says the week is
 open; the next session believes all of it and rebuilds what is already built.
 
-⚠⚠ **Run this skill, do not remember it.** Run from memory once (2026-08-31), the ticket and map half
-fell out of the round entirely — five commits landed and neither the map nor the log was opened.
+⚠⚠ **Run this skill, do not remember it.** Run from memory once, the ticket and map half fell out of the
+round entirely — five commits landed and the map was never opened.
 
-⚠⚠ **A ticket is closed because it was CHECKED, never because the work happened** (2026-08-31, the user).
+⚠⚠ **A ticket is closed because it was CHECKED, never because the work happened.**
 
-**Ten steps, in this order, one at a time. Say each result out loud before moving on.**
+⚠⚠ **This repo keeps NO log.** What a round decided goes into the ticket while it is open, and the map's
+✅ is all that survives it. **Do not write a decision log, a session summary, or a failure diary.**
+
+**Nine steps, in this order, one at a time. Say each result out loud before moving on.**
 
 ## 1. What actually finished
 
@@ -32,19 +35,23 @@ line saying what is missing.
 
 **Done when** every ticket has a verdict: **met**, or **not met and what is missing**.
 
-## 4. Close the ones that passed
+## 4. Close the ones that passed — **and delete them**
 
-- **`Status:` → `resolved`**, the answer written under `## Answer`
-- ⚠ **The file never moves between folders.** Status is a line inside it
-- **What the ticket produced stays in that ticket's folder** — the screenshot, the measurement, the note
+- ⚠⚠ **A closed ticket's FOLDER is deleted, screenshots and all.** What survives is its row on the map,
+  flipped to ✅ with at most one line saying what it built
+- ⚠ **Anything in that ticket that is still TRUE of the game moves first** — to `GLOSSARY.md` if it is a
+  word, to the task file if it is a settled rule, to a new ticket if it is unfinished. **Then delete**
+- ⚠ **Do not mark it `resolved` and leave the file.** That is what buried this repo once already
+- ⚠⚠ **Clear every `Blocked by:` line that names it.** The blocker is satisfied, and a `Blocked by:`
+  pointing at a deleted ticket is what `net_process` reds on
 
-**Done when** nothing that passed step 3 is still `open` or `claimed`.
+**Done when** nothing that passed step 3 is still on disk, and the map says what each one built.
 
 ## 5. Check the task above them
 
-**Open `NN.task.md`.** Every ticket in its table now `resolved`?
+**Open `NN.task.md`.** Every ticket in its table now closed and deleted?
 
-- **Yes** → set its `Status:` and flip its row on the map to ✅
+- **Yes** → flip its row on the map to ✅ and **delete the whole task folder**
 - **No** → name the ones still open. **A task with one open ticket is an open task**
 
 ## 6. The map
@@ -54,21 +61,16 @@ line saying what is missing.
 against a measured 63.
 
 - **This week's row** — does its status still match what happened
-- **The opening section** — rewrite it for the session that opens next
+- **The open-ticket table** — a row per open ticket, and no row for one that no longer exists
 - **What is still the user's to answer** — every open question, by name
 - **Any number that went stale** — net counts most of all
 
+⚠⚠ **The map says what IS, never what happened.** No session sections, no dates, no 「이 라운드가」.
+**If you are about to write a paragraph explaining an earlier round, delete it instead.**
+
 **Done when** all four are either changed or said to be already right.
 
-## 7. The log
-
-**What happened and why.** ⚠⚠ **The user's own words go here and nowhere else** — translated to English,
-with the citation kept.
-
-⚠ **A round that decided nothing still writes an entry.** 「nothing was decided, here is what is still
-open」 is exactly what the next session needs.
-
-## 8. New tickets, dead references, loose pictures
+## 7. New tickets, dead references, loose pictures
 
 - **New tickets** — anything the user decided that no ticket holds. ⚠ **You write down answers, you do
   not invent work.** A question the user must answer is `Type: grilling`, never `task`
@@ -83,7 +85,7 @@ open」 is exactly what the next session needs.
 
 **Done when** each of the seven has an answer, including 「doesn't apply」.
 
-## 9. Run the nets
+## 8. Run the nets
 
 ```
 powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1
@@ -98,7 +100,7 @@ powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1
 
 **Done when** the numbers are written down, before and after.
 
-## 10. Commit, then stop
+## 9. Commit, then stop
 
 - **`git status` first** — anything unintended mixed in
 - **Straight to `main`. Do not branch, do not ask** — settled by the user. **Asking is itself friction**

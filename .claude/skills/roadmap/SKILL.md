@@ -40,7 +40,7 @@ twice, 2026-08-30 and 2026-08-31.
 1. **The roadmap** — every row, every chunk, its bar, its tasks, its order
 2. **Every task and every ticket in it**, `Status:` line included. ⚠ **A task folder with no ticket yet is
    a measurement, not a fault** — say so
-3. **The decision log and the commits since its last dated row**
+3. **The commits since the map was last true** — ⚠ **there is no decision log**; the commits are the record
 4. **The nets, run once.** ⚠⚠ **The map's net counts go stale faster than anything else on it** —
    measured 2026-08-30, the map said 실패 79 against a real 통과 629 · 실패 59, and named three red nets
    when seven of eleven were red

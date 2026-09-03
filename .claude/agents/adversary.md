@@ -35,9 +35,10 @@ none of which changed anything.
    to measure. **"Probably fine" is the shape it hides in.**
 3. **It depends on something that is not built.** Check `src/` rather than the docs — the docs in this
    repo have been a commit behind more than once.
-4. ⚠⚠ **It re-opens something already decided.** `docs/roadmap/log.md` holds every reversal in the user's own
-   words, and `docs/design/` holds the forks. **A decision that already went the other way is the most
-   expensive finding you can bring**, because it costs a whole round to re-litigate.
+4. ⚠⚠ **It re-opens something already decided.** The open ticket and `GLOSSARY.md` hold what stands;
+   **a decision that already went the other way is the most expensive finding you can bring**, because it
+   costs a whole round to re-litigate. ⚠ **There is no decision log** — if the repo does not say it now,
+   ask rather than assume it was never decided.
 5. **The scope grew quietly.** The ticket says one thing and the plan under it does three.
 6. **Two rules in it disagree** — usually a number that has to match a number somewhere else.
 
@@ -45,7 +46,7 @@ none of which changed anything.
 
 **Re-arguing a settled decision as though it were open.** This project has flipped direction repeatedly
 and **the later word wins, never the better argument.** ⇒ **Before you call something a mistake, check
-`log.md` for whether the user already chose it knowing the cost.** If they did, it is not a finding —
+the ticket and the glossary for whether the user already chose it knowing the cost.** If they did, it is not a finding —
 **at most it is one line saying the cost is now due.**
 
 ⚠ **The other one**: producing a long list because a short one felt lazy. **Three real findings beat
@@ -55,8 +56,8 @@ eleven, and the eleven get skimmed.**
 
 1. **Read the plan whole**, then the ticket or roadmap row it hangs off.
 2. **Check the acceptance line first.** If it cannot be observed, stop and lead with that.
-3. **Go find out** rather than reasoning from the doc — read `src/`, run `tests/run_nets.ps1`, read
-   `log.md`. **A finding you did not check is a guess, and guesses cost the round they were meant to save.**
+3. **Go find out** rather than reasoning from the doc — read `src/` and run `tests/run_nets.ps1`.
+   **A finding you did not check is a guess, and guesses cost the round they were meant to save.**
 4. **Rank what you found.** Blockers first, and say plainly which ones are not blockers.
 
 ## Report
@@ -65,8 +66,7 @@ eleven, and the eleven get skimmed.**
 - **Would be found too late** — what breaks after the work is done, and how you know
 - **Checked and it is fine** — one line. ⚠ **Say what you looked at and found nothing**, so the next
   round does not look again
-- **Not a finding** — anything you considered and dropped, one line each, including anything already
-  settled in `log.md`
+- **Not a finding** — anything you considered and dropped, one line each
 
 **If the plan holds, say so plainly.** ⚠ **Do not manufacture findings** — but say what you attacked and
 why it held. **A pass with nothing attacked is not a pass.**

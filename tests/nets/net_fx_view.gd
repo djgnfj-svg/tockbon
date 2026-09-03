@@ -882,8 +882,8 @@ func _three_wolves_off_one_boat_are_drawn_apart(t) -> void:
 
 ## **The lattice does NOT swing with the camera.** The nine seats are world points turned by the
 ## 부대's own facing (`Battle.block_face`), never by the yaw — the four camera notches draw the same
-## nine ground points. `log.md` 2026-09-02: the ticket first read the decision as 「turns with the
-## camera」 and the correction is this row.
+## nine ground points. ⚠ The ticket first read the decision as 「turns with the camera」 and this row is
+## the correction.
 func _the_lattice_does_not_swing_with_the_camera(t) -> void:
 	var rows := _open(ARENA_W, ARENA_H)
 	var b := _nine_on_one_block(rows)

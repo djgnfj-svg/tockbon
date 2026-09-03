@@ -21,7 +21,7 @@ at, and both treat a remark on that sheet as a question rather than a work order
 ⚠⚠ **The user answers, and only `wrap-up` writes.** Nothing in this chain edits the map during a
 conversation — that rule was set on 2026-08-27 after it was broken twice in one session.
 
-**`docs/roadmap/` is what that chain reads and writes** — the map, the log, and the task folders.
+**`docs/roadmap/` is what that chain reads and writes** — the map and the task folders. ⚠⚠ **There is no log**, and a closed ticket's folder is deleted.
 
 ## ⚠⚠ How a skill here is written — **short by default, length is earned**
 
@@ -70,7 +70,7 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 | Skill | Why it stays |
 |---|---|
 | **`diagnosing-bugs`** | The hard bug: intermittent, or a regression between two known-good states |
-| ~~`domain-modeling`~~ | ⚠⚠ **Folded into `naming` on 2026-08-29.** Both wrote `GLOSSARY.md` and asked the same question; `naming` was this repo's own. **Its ADR half was dropped** — there is no `docs/adr/` here and decisions go to `docs/roadmap/log.md` |
+| ~~`domain-modeling`~~ | ⚠⚠ **Folded into `naming`.** Both wrote `GLOSSARY.md` and asked the same question. **Its ADR half was dropped** — there is no `docs/adr/` here and no decision log; a decision lives in the open ticket |
 | **`codebase-design`** | The deep-module vocabulary interfaces are designed with |
 | **`writing-for-agents`** | How to write a skill. **The ones written here were written with it** |
 | **`resolving-merge-conflicts`** | Two sessions have collided on `main` once already |

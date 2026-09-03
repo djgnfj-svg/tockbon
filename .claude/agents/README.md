@@ -48,6 +48,7 @@ builder     implements per that plan. One chunk → nets green → report → HA
 verify      always. Reads it to prove it wrong, then runs it headless. Both passes, never one
 verify-look the moment anything reaches the screen, and not before
 judgment    all pass → Status: resolved + the answer under ## Answer + one line on the map
+            (wrap-up then deletes the ticket folder — only the map's line survives)
             any fail → batch the findings into ONE message back to builder
 ```
 

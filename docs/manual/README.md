@@ -8,5 +8,5 @@
 | `blender.md` | touching any mesh — the originals, the loop, the four measured traps, the numbers |
 | `godot-mcp-bridge.md` | ⚠ only if the `godot` MCP server is switched back on — it is OFF today |
 
-⚠ **What came in from OUTSIDE the repo is not here** — that is `docs/reference/`. This folder is how
-this repo's own tools are worked.
+⚠ **This folder is how this repo's own tools are worked.** Material from outside the repo is not kept
+at all — a conclusion goes in the ticket that needed it.

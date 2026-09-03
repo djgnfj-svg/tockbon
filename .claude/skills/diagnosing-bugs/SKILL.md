@@ -7,9 +7,9 @@ description: Diagnosis loop for hard bugs and performance regressions. Use when 
 
 A discipline for hard bugs. **Skip a phase only when you say why.**
 
-Read `GLOSSARY.md` first for the modules and the agreed seams. ⚠ **There is no `docs/adr/` here** — what
-was decided lives in `docs/roadmap/log.md`, and **every green already measured false lives in
-`docs/how-nets-lie.md`.** Read that one before believing any loop you build.
+Read `GLOSSARY.md` first for the modules and the agreed seams. ⚠ **There is no decision log and no
+`docs/adr/` here** — what stands is in the glossary and the open ticket. **Every shape a false green comes
+in lives in `docs/how-nets-lie.md`** — read it before believing any loop you build.
 ⚠ **Redact every secret out of anything you paste** — write `<REDACTED>` in its place.
 
 ## Phase 1: Build a feedback loop

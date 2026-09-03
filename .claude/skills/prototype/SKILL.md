@@ -80,7 +80,9 @@ this skill is written against, because two mechanisms cannot show a spread.
 
 ## Where it lands
 
-**The winner becomes a ticket.** The sheet goes to `docs/reference/` as `YYYY-MM-DD-<subject>-prototypes`,
-and the ticket names it; **each version's three lines stay in its own `NOTES.md`** under
-`.prototypes/<subject>/`. ⚠ **The losers are deleted once one has won** — a throwaway left in the
+**The winner becomes a ticket**, and what the user chose is written into that ticket in one line.
+**Each version's three lines stay in its own `NOTES.md`** under `.prototypes/<subject>/`.
+⚠⚠ **The sheet is not filed anywhere** — this repo keeps no reference folder, and a contact sheet whose
+choice is already in the ticket is one more old file to be confused by.
+⚠ **The losers are deleted once one has won** — a throwaway left in the
 tree becomes code nobody dares remove, and this repo has paid that before.

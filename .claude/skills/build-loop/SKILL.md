@@ -84,7 +84,7 @@ it was unsure — nothing else.
 
 ## 5. Judge
 
-- **All pass** → the answer under `## Answer`, `Status: resolved`, and **one line on the map**
+- **All pass** → the answer under `## Answer`, `Status: resolved`, and **one line on the map**. ⚠ **`wrap-up` then deletes the ticket's folder** — anything in it still true of the game moves out first
 - **Any fail** → batch every finding into **ONE** message back to builder
 - ⚠⚠ **Bounced three times without passing → stop and take it to the user.** Past that builder bends the
   code to get past verification, the commonest path to code that pretends to work

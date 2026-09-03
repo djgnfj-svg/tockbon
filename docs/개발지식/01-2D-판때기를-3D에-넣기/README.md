@@ -130,8 +130,6 @@
 
 ⚠ **아래는 링크가 있는 것만이다.** ㅂ 절의 일곱과 표의 「지금 이 게임」 칸은 이 저장소를 직접 읽고 쓴 것이다.
 
-- **Bad North 의 방식 전부** : `docs/reference/2026-08-30-reading-a-20px-unit.md` — 인용과 시각까지 있다
-- **체크리스트와 이 게임 감사** : `docs/reference/2026-08-30-billboard-sprites-in-3d-checklist.md`
 - [Alan Zucconi, Billboard Impostors](https://www.alanzucconi.com/2018/08/25/shader-showcase-saturday-7/) — 임포스터가 무엇인가
 - [Godot Octahedral Impostors](https://github.com/SIsilicon/Godot-Octahedral-Impostors) — 고도용 공개 구현
 - [HD-2D (위키백과)](https://en.wikipedia.org/wiki/HD-2D) — 피사계 심도로 묶는 방식

@@ -125,4 +125,4 @@
 - [Formation Movement for Real-Time Strategy Games — Andrew Cannon 학위논문](https://andrewtc.dev/thesis/) — 「자리 배정」이 무엇이고 왜 필요한지
 - [RVO2 / ORCA](https://gamma.cs.unc.edu/RVO2/) — 서로 안 겹치게 하는 표준 방법
 - **Bad North 의 우선순위** : 스톨베리는 순서를 이렇게 말한다 — **좋은 움직임 > 좋은 애니메이션 >
-  잘생긴 캐릭터.** 인용은 `docs/reference/2026-08-30-reading-a-20px-unit.md` 에 있다
+  잘생긴 캐릭터**
