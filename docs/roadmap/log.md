@@ -111,6 +111,16 @@ gesture (09-03) and how many 특성 exist (11-01).
 ⚠ **A `research` agent on placement gestures was launched and then killed** after two rounds stuck
 loading its search tools; the user asked what it was still doing. **It returned nothing**, and once
 스타크래프트 was named it was no longer needed.
+⚠⚠ **AND IT GRILLED A QUESTION THAT HAD ALREADY BEEN ANSWERED THAT MORNING.** While this round
+was running, a parallel session merged 짓기 모드 into `main` — **B toggles it, ESC leaves it with
+the 부대 held, a left press inside it builds** — and the user chose that shape themselves:
+「짓기모드가 맞을듯」. **This round cut 09-03 saying there was no build gesture at all, and
+recommended a bottom-bar button.** The ticket was rewritten before the push: the gesture exists,
+and what is missing is **how the player says WHICH building** — `Builds.STORE` is the only kind
+the key can reach, so 바리케이트 still cannot be placed.
+⚠ **The lesson is the one the round was told at the start**: the user said to read the other
+worktree first, and the worktree read was already a commit behind by the time it was read.
+
 ⚠⚠ **The nets were not run at the start of this round** — the session wrote documents only, and the
 last measured numbers are still 2026-09-02 night's 통과 3187 · 실패 4.
 
