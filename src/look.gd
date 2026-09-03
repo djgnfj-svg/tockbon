@@ -537,6 +537,14 @@ const SEAT_GLIDE_TILES_PER_S := 3.0
 ## did not. `FieldView._seat_offset` is the table it bounds.
 const SEAT_OFFSET_MAX_TILES := Rules.BLOCK_TILES * 0.5
 
+## **How far short of a ledge a held-back drawn point is parked, in 조각** (티켓 03-21). The offset above
+## is a whole 조각 wide and `Grid.surface_h` ROUNDS its point to a 조각, so a walking body carrying its
+## seat across a 칸 line was drawn a storey up — 46 조각 on the hand island. `FieldView` caps the offset's
+## length by the distance to the nearest 조각 of another 눈금, and this is the hair it stops short by:
+## **the 조각 IS its whole square, and a point touching that square's edge rounds inside it**, so a cap of
+## exactly the distance would still land on the far 조각 and the whole rule would measure nothing.
+const LEDGE_INSET_TILES := 0.001
+
 
 ## **The hills** (2026-08-24, the user: 「뭔가 대각선으로 올라가는 건 있나 혹시? 뭔가 지금 너무 딱딱해서
 ## 재미가 없을까?」). The first port gave every tile a box, so land was one flat slab and a ramp was a
