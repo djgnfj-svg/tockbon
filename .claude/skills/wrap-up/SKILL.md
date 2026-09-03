@@ -1,6 +1,6 @@
 ---
 name: wrap-up
-description: Closes the session — verifies and closes this session's tickets and tasks, deletes the closed ticket folders, repairs the map, clears the loose images, runs the nets, commits. Use whenever the user's message contains 마무리 — "마무리", "마무리하자", "마무리했어", "마무리 좀" — or says "wrap up".
+description: Closes the session — verifies and closes this session's tickets and tasks, deletes the closed ticket folders, repairs the map, clears the loose images, runs the nets, commits — and in a worktree pushes and opens the PR. Use whenever the user's message contains 마무리 — "마무리", "마무리하자", "마무리했어", "마무리 좀" — or says "wrap up".
 ---
 
 # 마무리 — the session ends and the state has to end with it
@@ -103,11 +103,28 @@ powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1
 ## 9. Commit, then stop
 
 - **`git status` first** — anything unintended mixed in
-- **Straight to `main`. Do not branch, do not ask** — settled by the user. **Asking is itself friction**
 - **Korean message**, saying what was done and why
+- ⚠⚠ **Where it lands depends on ONE thing: is this session in a worktree.** Check it, do not assume —
+  the working directory is under `.claude/worktrees/` or it is not
+
+**On `main` — the ordinary case**
+
+- **Straight to `main`. Do not branch, do not ask** — settled by the user. **Asking is itself friction**
 - ⚠ **Do not push.** Only when the user says so
+
+**In a worktree**
+
+- **Commit to the worktree's own branch, push it, and OPEN THE PR.** ⚠⚠ **Do not ask** — the user
+  settled this: 「앞으로 마무리하면 그 PR을 띄우도록하자 그 워크트리상태면」
+- ⚠⚠ **Never merge it and never push to `main`** — merging is the user's
+- **The PR body is what the report says**, in Korean: what was built · what the nets measured, before
+  and after · what is still the user's to answer. ⚠ **Not a session diary** — the same rule the map obeys
+- ⚠ **If a PR already stands on that branch, the pushed commits join it** — say so instead of making one
+- **Hand back the PR's URL on the last line of the report.** A branch nobody was given a link to is a
+  branch nobody merges
 
 ## The report
 
-**What finished · what didn't and why · what is still the user's to answer · candidates for next.**
+**What finished · what didn't and why · what is still the user's to answer · candidates for next**, and
+**the PR link when there is one.**
 ⚠ **Never write unfinished as finished.** The moment a doc says "done", the next session believes it.
