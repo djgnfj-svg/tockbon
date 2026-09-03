@@ -66,6 +66,46 @@ swing stays small. **But the length rule is no longer a claim from a doc; it is 
 a clean arc. ⇒ **What this generator will give is a planted body with a moving tool**, and asking for
 the opposite has failed sixteen times.
 
+## ⚠⚠ PASS A KEYFRAME AS A URL, NEVER AS PASTED base64
+
+**`custom_start_frame_url` and `end_frame_url` take an https URL, and the rotations already have
+one** — `get_character` prints them, and the same path with a different state id resolves too, so a
+state with no animations is the cheap way to read the URL shape.
+
+**Pasting `custom_start_frame_base64` corrupts the image.** Measured 2026-09-03:
+
+- A 2828-character string arrived at full length and still would not decode — a character was altered
+  in transit, not truncated
+- A 1688-character string did the same
+- Shrinking to fit (fewer colours, or cropping) is not a fix, it is a second bug: **the 4-colour
+  north keyframe transmitted cleanly and then produced a body that turned side-on and knelt**, and
+  the cropped south-west and north keyframes drifted off heading entirely
+
+⇒ **Every facing pulled by URL held its heading. Every facing pulled by pasted base64 needed a
+re-roll.** The URL route also costs nothing extra.
+
+## ⚠⚠ THE FRONT AND BACK VIEWS LAY THE TOOL FLAT — say which way it slants
+
+**A pickaxe raised overhead in a symmetric front or back view comes back horizontal**, head to the
+left and right of the head, handle straight down. When that descends, **the handle goes into the
+ground and the point never lands** — which is exactly what the user rejected: 「공개이질을 누가
+이렇게 함? 빾족한부분으로 하는 곡갱이질을 만들라고」 (*"who swings a pickaxe like that? make it strike
+with the sharp part"*).
+
+**The diagonals get it right on their own; the front and back do not.** The fix is in the STATE's
+words, not the animation's:
+
+- **Raised**: `raising a pickaxe up and back over one shoulder with both hands, the handle slanted
+  diagonally, the sharp metal point aimed forward and downward at the ground ahead of the feet,
+  never held flat or level` — `0d0bfd7c-16d1-4515-9aab-373f063d443e`
+- **Struck**: naming the side is what broke the symmetry. `the sharp metal point stabbed into the
+  ground far to the left of the feet, the wooden handle slanting up and to the right across the body
+  to both hands at the right hip, broken rock scattered around the buried point, the handle never
+  upright and never centred` — `20fa9ea9-5ab9-4025-8c1d-b63a9cfaa6e0`
+
+⚠ **A struck state written without a named side came back vertical on south and north** and only
+worked on the diagonals — that was one wasted state.
+
 ## ⇒ A held tool is a CHARACTER STATE, never a word in the animation prompt
 
 **`create_character_state` puts the tool in the hand across all eight rotations, consistently, once.**
