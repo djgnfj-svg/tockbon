@@ -13,6 +13,10 @@ human body.** It is for props, UI and the 3D-render beasts.
 game wears as `down` · `right` · `left` · `up`. ⚠ **The generator's compass words are not the game's** —
 `.candidates/README.md` holds the mapping and the trap.
 
+⚠⚠ **AND ONLY TWO OF THE FOUR ARE EVER PULLED** — 정면우 and 후면우. Flipping each horizontally
+gives 정면좌 and 후면좌, so **one animation is two generations, not four.** `.candidates/README.md`
+carries the rule and the measurement behind it.
+
 ---
 
 ## ⚠⚠ THE THREE RULES, AND ALL THREE WERE BROKEN ON 2026-09-03

@@ -30,6 +30,9 @@ from now on."***). It holds **the three rules that page measured being broken** 
 name the held object, no environment — and **why a tool goes in a character STATE and never in the
 animation prompt.** ⚠ **Sixteen candidates were burned in one round writing against those rules.**
 
+⚠⚠ **ONE ANIMATION IS TWO PULLS, NOT FOUR** — 정면우 and 후면우, each flipped horizontally to give
+정면좌 and 후면좌. **Pulling four is doing the work twice.**
+
 ⚠⚠ **READ `.candidates/README.md` BEFORE WRITING A PROMPT.** It holds **the four views every body in
 this game is pulled in** — 정면우 · 정면좌 · 후면우 · 후면좌, four DIAGONALS and no side view — with the
 exact phrase for each and the trap that flips them (the animal's own left is the screen's right).

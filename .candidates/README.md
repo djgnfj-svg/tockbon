@@ -31,6 +31,28 @@ the camera, and the generator obeys the animal's own words, never the screen's. 
 gives four pictures that are two pairs of the same view**, which is what 「the folder has four files」
 cannot catch.
 
+## ⚠⚠ SO ONLY **TWO** IMAGES ARE EVER PULLED, AND THE OTHER TWO ARE MIRRORS
+
+> ***"So in the end we only need two images — do you understand?"*** (2026-09-03, the user)
+
+**정면우 mirrored horizontally IS 정면좌. 후면우 mirrored horizontally IS 후면좌.**
+⇒ **Pull 정면우 and 후면우. Flip each one. That is all four facings.**
+
+**One animation is two pulls, not four. A body is 62 images, not 124.**
+
+⚠ **This is the whole reason the set must be diagonals.** A straight front or a straight back is its
+own mirror — it has no partner — so the old compass set needs **three** uniques (정면, 정면우, 뒷면)
+where the diagonal set needs **two**.
+
+⚠ **What ships today does not do this, and it was measured.** `man/right` and `man/left` were pulled
+separately: **7% to 25% of their pixels differ** from a mirror of each other (2026-09-03, over the
+standing, idle, walk, attack and death frames). Nobody tried mirroring; it is not that mirroring
+failed.
+
+⚠ **Mirroring swaps which hand holds the tool.** On a flat grey body 40 px tall with no asymmetric
+marking, that is invisible. **Re-check this the day a body gains a scar, a patch, or a one-sided
+piece of kit.**
+
 ⚠ **Why diagonal and not the compass.** The board is isometric and it TURNS. A body walking along a grid
 row is already moving diagonally on screen, so a straight side view is a pose the camera never actually
 asks for — and a dead-on front view collapses the animal to its own width (the top-down lion lesson in
