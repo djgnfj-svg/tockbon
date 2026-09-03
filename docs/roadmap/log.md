@@ -19,6 +19,101 @@
 이 폴더의 `README.md` 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅✅ **The run got a clock — 2026-09-03, evening, a grilling round on `main`. No code**
+
+**Eight rounds of questions, twelve answers, three new tickets, and not one line of `src/`.** The round
+opened on 「로드맵 보고 브레인 스토밍」 and the user's first instruction was to read the other worktree
+first — which had turned the endless 늑대 boats off that morning.
+
+### The clock, all of it in the user's numbers
+
+> ***"For a start I think a run has to be about an hour. At most? At most an hour. Because the boss
+> comes round on a cycle. For a start I think we hold it at one hour."***
+> (「일단은 한판에 한 한 시간은 돼야 되듯? 기 최대? 최대 한 시간이고. 보스가 주기적으로 오기 때문에.
+> 처음에는 한 시간을 잡고 갈 듯」)
+
+> ***"Fifteen minutes each, ten minutes each — at the start, the first wave is eight minutes ... every
+> eight minutes, when it comes, every eight minutes."***
+> (「십오 분마다 십 분마다 처음에 처음 웨이브는 팔 분 첫 보스는 어 두 번째 보스는 신 팔 분마다 올때
+> 팔 분마다」)
+
+**One hour · first wave 8 분 then every 8 분 · first boss 24 분 then every 24 분 · two bosses · kill the
+second to win · warning 3 분 before · expedition boat 1 분 one way.** The boss numbers and the win were
+the recommendation taken whole (「1번 추천대로」); the warning replaced the recommendation's two numbers
+with one (「예고는 3분전」); the crossing was the user's own (「배는 편도 1분」).
+
+⚠⚠ **「보스가 주기적으로 오기 때문에」 REVERSES 2026-08-30's single boss at a fixed hour**, and the map's
+8 주 row and its 「이기는 것」 section both still carried the old answer. Both were corrected.
+⚠⚠ **No ticket anywhere holds the boss.** The four numbers went into 12-01 because there was nowhere
+else to put them; where the boss ticket is cut is the user's call, never this file's.
+
+### A second move order, and the user named the game it comes from
+
+> ***"It should stop and fight. It could also just go, and there will be times it stops and fights.
+> Something like: you drag, then press some key and go, and it fights what it meets on the way — like
+> A, like StarCraft. I want it like StarCraft."***
+> (「멈춰서 싸워야지. 그냥 가는 그냥 가게 할 수도 있고 멈춰서 싸울 때도 있을 거 같은데. 뭔가 드레그해서
+> 뭔가 어떤 키를 누르고 가면은 만나다가 싸우고 에이처럼 스타크래프트 처럼 ... 스타크래프트 처럼 하고
+> 싶은데」)
+
+**Then, asked which of the two the bare left press is: 「그냥 간다지」** — *"it just goes."*
+⇒ **plain press walks past · A then press fights on the way · a body under no order still chases on the
+2.0 조각 leash.** This is exactly 07-02's open 「싸우러 가기 / 지나가기」 question, and it is closed.
+**03-20 was cut for the attack-move**, because the hand lives in 태스크 03 and not in 07.
+⚠ **스타크래프트 is the user's own reference**, named in that sentence — nothing unnamed was recommended.
+
+### The resource 칸 runs out after all
+
+> ***"I think it regenerates once time passes."*** (「시간이 지나면 다시 생성될듯」)
+
+**This settles the collision 05-10 had recorded that morning**: 「계속 나온다」 (9/2) against 「특정 블록에
+있는 나무를 다 캔다」. **It runs out, comes back whole, 3 분** — the second and third were the
+recommendation, taken (「2번은 추천대로」).
+⚠⚠ **The code stands on the old answer and 05-11 is the whole of the reversal.**
+⚠ **How much one 칸 holds was never asked**, and the 3 분 clock starts from that number running out.
+
+### The expedition, and what a lost run looks like
+
+> ***"If you cannot get back the enemy comes and smashes the island."***
+> (「못돌아오면 적이 와서 섬을 부시는거지」)
+
+> ***"Generated fresh every time, but the island generated has a theme already set."***
+> (「매번 새로 생성되지만 테마를 정해놓은 섬이 생성되는거임」)
+
+**And on how many may go: 「배당 다름」** — *"it differs per boat"* — then 「미정 테크트리로 열 수 있음」.
+⇒ **boats have types with different capacities, and the tech tree is where a bigger one comes from.**
+⚠ **No boat type, no capacity and no tech-tree row exists**, and the one settled boat line still
+stands: the 늑대 boat is broken for wood, not boarded.
+
+### What the user refused, and what they deferred
+
+- **A formula for wave size was refused, not the number**: 「그건 웨이브마다 설계해야할듯」 — *"I think
+  that has to be designed per wave."* ⇒ **a hand-written table of seven rows**, and then
+  「웨이브표는 다음에」 — deferred
+- **테마는 아직 미정** — three themes were recommended out of the user's own 2026-09-02 list
+  (뼈 · 가죽 · 특수 광석) and were not taken
+- **포획 and 특성 came BACK INTO the December build**, both off the cut list: 「포획은 필요함 포로 ㅇㅇ」
+
+### The instruction that shapes the next session
+
+> ***"I think we have to grill until the design is complete and then attach the weeks."***
+> (「캐물어서 기획이 완료되고 주를 붙여야할듯」)
+
+**The user asked first whether the week-less tasks were designed at all** (「주가 없는건 근데 기획이
+다되어있는거야?」), **and the measured answer was no**: of 여섯 (07 · 08 · 09 · 10 · 11 · 12), **only 08 is
+complete**; 07 and 09 were one answer each; 10-03, 11 and 12 held twenty open questions between them.
+**The week map is not redrawn until those close.**
+
+### What this round did NOT do
+
+⚠⚠ **Two questions were asked and the round ended before they were answered** — the building placement
+gesture (09-03) and how many 특성 exist (11-01).
+⚠ **A `research` agent on placement gestures was launched and then killed** after two rounds stuck
+loading its search tools; the user asked what it was still doing. **It returned nothing**, and once
+스타크래프트 was named it was no longer needed.
+⚠⚠ **The nets were not run at the start of this round** — the session wrote documents only, and the
+last measured numbers are still 2026-09-02 night's 통과 3187 · 실패 4.
+
 ## ⚠⚠ **The harness was measured and then cut — 2026-09-03, branch `claude/project-harness-review-v82cvx`, not on `main`**
 
 **No `src/` line and no ticket moved.** The round began as a question about the harness and became a
