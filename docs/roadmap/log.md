@@ -19,6 +19,91 @@
 이 폴더의 `README.md` 한 장에 있고, **이 파일은 「왜 그렇게 됐나」를 담는 결정 로그다.**
 ⇒ **이번 주에 뭘 하는지 묻는다면 로드맵을 봐라.** 여기는 뒤집힌 과정과 그 근거가 사는 자리다.
 
+## ✅✅ **The wave was built — 2026-09-03, night, on a worktree. 12-01 closed**
+
+**The user opened with 「웨이브 기능 만들고 싶은데」** (*"I want to build the wave feature."*) and the
+ticket was already standing from the evening round. **The one thing blocking it was the wave table**,
+which the user had deliberately deferred that same evening: 「웨이브표는 다음에」. This was 다음.
+
+### The table, and what the user settled
+
+> ***"As recommended."*** (「나머지는 추천대로」)
+
+**1 · 2 · 3 · 3 · 4 · 5 · 6 boats**, 15 s between hulls for waves 1-3 and 10 s for 4-7, the seventh row
+repeating forever, and **「the wave comes at 8 분」 means the first hull LANDS at 8:00** — it launches one
+crossing earlier. All four were the recommendation, taken.
+
+**Two the user answered in their own words:**
+
+> ***"The alarm should come up differently, I think — top left."***
+> (「알람은 다르게 떠야할듯한데 왼쪽 위에」)
+
+> ***"The time only needs to show during the three minutes."*** (「시간은 3분때만 뜨면 될듯」)
+
+⚠ **The 「다르게」 rejected the recommendation**, which had been to reuse the body panel's plate. **A
+picture was pulled instead** — sixteen candidates in four directions (iron plate · wooden signboard ·
+stone slab · red banner), shown at ship size 384x96, and the user chose by looking: 「빨간색 3번」.
+
+### ⚠⚠ A decision landed that no ticket holds
+
+> ***"Kill the last boss, the ending shows, and it's over."*** (「마지막 보스잡으면 엔딩 뜨고 끝」)
+
+**There is no win in `src/` at all** — only `Battle.lost`. **The boss still has no ticket anywhere**,
+and this is now the second round in a row where its numbers had to be written into 12-01 because there
+was nowhere else. ⚠ **Where the boss ticket is cut is the user's, never a file's.**
+
+### The user asked what 「overlap」 meant, and the answer stands on the map
+
+> ***"What overlaps with the wave?"*** (「웨이브가 뭐가 겹친다는거지?」)
+
+**24 분 and 48 분 are both multiples of 8**, so the first boss lands on wave 3's minute and the second
+on wave 6's. ⚠ **And 「kill the second boss and it ends」 means wave 7 (56 분) normally never runs** — it
+is the row for a player who has not killed it. **Left alone by this ticket; the boss does not exist.**
+
+### ⚠⚠ Three defects were found AFTER the build, and all three were one species
+
+**A file saying something the screen did not do.** None threw an error; all three sat beside a green.
+
+- **「3:00」 appeared in no frame.** The warning opens at `179.999999999944`, because `elapsed` is 1/60
+  added 28800 times and cannot land on 300.0. ⚠⚠ **A net row pinned `[180.0, "3:00"]` — an input the
+  simulation cannot produce.** Green, with nothing on screen hanging off it
+- **A self-check said 「four values」 and asserted two.** Moving the 늑대's period 2.0 → 2.5 turned the
+  row above red and left the self-check green
+- **「0:00」 appeared on no wave from 1 to 4.** The residuals are deterministic — `1.08e-10` ·
+  `5.44e-10` · `9.81e-10` · `1.42e-09` — so ceiling made every one of them 「0:01」
+
+**Fixed, and each fix inverted to prove the net bites.** ⚠ Widening the settle epsilon to 1.0 printed
+**「0:-1」**, which showed the zero clamp was not what kept the number positive.
+
+⇒ **This belongs in `how-nets-lie`.** The species is: **a net row whose input the simulation cannot
+produce.** It is not the same as an assertion that is too loose — the row was exact, and unreachable.
+
+### ⚠⚠ An instrument burned a core for 13 minutes with no error
+
+`Battle.step` advances on whole sub-steps and **carries the remainder**, so a capture loop that shrinks
+its `dt` onto a target feeds it 1e-9 forever when it lands a hair short. **A verifier lost 13 minutes at
+100% of one core between 6:00 and 7:59 — no error line, no frame.** Fixed with a sub-step floor, a
+stalled-clock watchdog and a step cap. **Four capture instruments now exist**, two walking the real
+clock and two staging `elapsed`, each saying which in its own first lines.
+
+### ⚠⚠ What the user asked at the end, and what is still open
+
+They launched it and watched:
+
+> ***"Hm, what's this? Do the wolves actually come?"*** (「음 뭐지? 늑대무리가 실제로 오는거 맞음?」)
+
+**They do — four of them, off one boat, at 8:01.** ⚠ **And that is the whole of the problem: wave 1 is
+one boat, so 「늑대 무리」 is four wolves.** ⚠ **It bites on balance too** — an unopposed boat burns the
+성채 in 15 seconds, so **nobody defending means the run ends at 8:15.** ⇒ **Raise the first row to two
+boats, or change what the first row's words say. One line either way. NOT ANSWERED.**
+
+### ⚠ What the round did NOT touch, and said so
+
+- **`KEEP_MAX_HP` keeps 120 and loses its derivation.** It was fifteen seconds of one unopposed boat
+  against a 30-second interval, and that interval is dead. The user: 「추천대로 해줘」
+- **`rules.gd`'s 「two hulls are never on the water at once」 was false** — measured max 3. Comment fixed
+- **Performance was never measured.** Both screen checks ran while another session held the machine
+
 ## ✅✅ **The run got a clock — 2026-09-03, evening, a grilling round on `main`. No code**
 
 **Eight rounds of questions, twelve answers, three new tickets, and not one line of `src/`.** The round

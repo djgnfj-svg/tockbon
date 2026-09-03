@@ -1,6 +1,6 @@
 # tools/look — the game screenshots itself
 
-**This is verify-look without the bridge.** Five scripts live in this folder and **all five run**:
+**This is verify-look without the bridge.** Nine scripts live in this folder and **all nine run**:
 
 | Script | Reads pixels? | The one question it answers |
 |---|---|---|
@@ -9,6 +9,13 @@
 | `capture_boat.gd` | yes | **where is the arriving hull, and what does it look like up close?** Opens the title, presses 시작하기 through a real mouse event, then `find` (scan with the pan keys) or `close` (centre one and zoom in) |
 | `capture_float.gd` | yes | **what makes the boat read as floating?** One frozen moment, shot once with everything on and then once per part removed — the part that takes the floating with it is the answer |
 | `capture_float2.gd` | yes | **which white mark stands off the hull?** The water draws four things about a boat — halo, contact shadow, break line, trail — and this turns them off one at a time |
+| `capture_alarm.gd` | yes | **does the wave alarm come and go over a run?** ⚠ **REAL CLOCK** — the shell's own `_process` called by hand in 0.25 s chunks, so eight minutes pass in seconds and the state is the state a player's clock lands on. Eight human-readable times |
+| `capture_alarm2.gd` | yes | **does the alarm sit beside the body panel and the box?** ⚠ **STAGES `elapsed`** — writes the run clock by hand to get all three up in one frame |
+| `capture_alarm3.gd` | yes | **is the alarm down on a lost run?** ⚠ **STAGES `elapsed`** and `lost` |
+| `capture_alarm4.gd` | yes | **what is on screen in the ONE sub-step a warning opens and closes on?** ⚠ **REAL CLOCK**, single-stepped at the boundaries — 0.25 s chunks cannot land there, and that is exactly where 2026-09-03's two defects lived |
+
+⚠⚠ **THE FOUR ALARM SCRIPTS SPLIT INTO TWO KINDS AND MIXING THEM UP MEASURES NOTHING**: `capture_alarm.gd` and `capture_alarm4.gd` **walk the real clock**; `capture_alarm2.gd` and `capture_alarm3.gd` **write `elapsed` by hand**. The wave clock is a pure function of `elapsed`, so a staged frame shows the right picture and proves nothing about whether the run reaches it. **Each file's first lines say which it is.**
+⚠⚠ **`Battle.step` advances on whole sub-steps and CARRIES THE REMAINDER.** A loop that shrinks its `dt` to land exactly on a target therefore feeds it 1e-9 forever when it lands a hair short — **measured 2026-09-03: 13 minutes at 100% of one core, no error line, no frame.** Any new script that steps toward a time needs a sub-step floor and a stalled-clock bail-out.
 
 ⚠⚠ **The last three were written on 2026-08-30 for the boat and they are one-off sheets by shape**, not
 standing instruments: each stages one framing and answers one question. **Read one before writing a sixth**
