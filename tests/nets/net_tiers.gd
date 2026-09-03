@@ -339,7 +339,7 @@ func _the_feet_land_on_the_treads(t) -> void:
 ## ⚠⚠ **THE OTHER HALF IS NO LONGER CODE** (2026-09-03). The bake was a Python file until 2026-08-31,
 ## when it was deleted in favour of the `.blend` originals — so **what this row has to agree with is now
 ## the way the staircase is actually CUT in `blend/island.blend`, and nothing can diff that but an eye.**
-## `docs/manual/blender.md` carries the pair as a table.
+## The Blender manual carries the pair as a table.
 ##
 ## ⚠ Mutation: keep the LAST mouth instead of the first, or drop the lowest-tile tie-break, and the
 ## axis flips on this board.

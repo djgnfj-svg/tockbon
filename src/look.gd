@@ -566,7 +566,7 @@ const HILL_AMP_TILES := 2.60
 ## ⚠⚠ **The shape they made is now the BAKE's promise, not this file's.** A rung about two tiles wide,
 ## the coast reading as sand rather than as pale grass, a cliff that undulates less than a meadow: none
 ## of that is measured anywhere any more. **The bake either honours it or does not**, and the bake is
-## now `blend/island.blend` opened by hand — see `docs/manual/blender.md`.
+## now `blend/island.blend` opened by hand — see the Blender manual.
 
 ## ⚠⚠ **How wide the open sea is, in tiles, and it exists because the board turns.** The terrain mesh
 ## runs `WATER_MARGIN_TILES` past the grid, which was enough while the view was a screen-aligned
@@ -914,7 +914,7 @@ const COL_WATER := Color(0.430, 0.590, 0.660)
 ## rule is *borders, not textures*, and which edges differ is what carries the information: same-height
 ## neighbour barely there, a step strong because that is where a body can and cannot walk, the sea edge
 ## strongest of all. **That rule now has to be honoured by the bake**, and the bake is `blend/island.blend`
-## — where it is either obeyed or quietly dropped. See `docs/manual/blender.md`.
+## — where it is either obeyed or quietly dropped. See the Blender manual.
 
 
 # Bodies. Friend and foe are told apart by COLOUR; the unit type is told apart by SIZE and by how

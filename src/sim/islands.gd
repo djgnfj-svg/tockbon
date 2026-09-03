@@ -7,7 +7,7 @@ class_name Islands
 ## drawing islands.** The shape lived in the game and the picture only decorated it, so a shape the
 ## user changed in Blender could never reach the board.
 ##
-## ⇒ **`blend/island.blend` is the source** (`docs/manual/blender.md`). One export out of it writes both
+## ⇒ **`blend/island.blend` is the source** (see the Blender manual). One export out of it writes both
 ## `assets/terrain/island.glb` (what the game DRAWS) and `assets/terrain/island.json` (what the game
 ## WALKS ON). **They cannot disagree**, because nothing writes one without the other.
 ##
@@ -55,7 +55,7 @@ static func _load() -> Dictionary:
 	if not _board.is_empty():
 		return _board
 	var text := FileAccess.get_file_as_string(BOARD_PATH)
-	assert(text != "", "island.json is missing — export it from blend/island.blend, see docs/manual/blender.md")
+	assert(text != "", "island.json is missing — export it from blend/island.blend, see the Blender manual")
 	var parsed: Variant = JSON.parse_string(text)
 	assert(parsed is Dictionary, "island.json is not an object")
 	_board = parsed as Dictionary
@@ -178,16 +178,29 @@ static func tiers() -> Array:
 ## island became TWO calls and five callers were still making one**: a grid loaded without its tier
 ## board comes up flat, draws, plays, and says nothing.
 static func load_into(grid: Grid) -> void:
-	grid.load_rows(rows(), tiers())
+	load_board(grid, _load())
+
+
+## **Loads any board of the island-file shape into `grid`** — the drawn island's, or one the generator
+## made. ⚠⚠ **THIS IS THE DOOR, AND `load_into` IS NOW ONE CALL TO IT.** A generated island has no file
+## to be read out of, so the generator was loading its own board by hand and the two paths could stop
+## agreeing without a word — the same shape that made this function necessary in the first place, one
+## level up. **Everything a board carries beyond its 조각 letters is set here and only here.**
+##
+## ⚠ **Missing keys are absent, not an error.** The generator asks for a `Grid` mid-build, before the
+## props exist and with no outline at all (nothing draws a generated board yet), and a board with
+## neither is a board — not a half-loaded one.
+static func load_board(grid: Grid, board: Dictionary) -> void:
+	grid.load_rows(Array(board.get("rows", [])), Array(board.get("tiers", [])))
 	# ⚠⚠ **THE DRAWN SHORE GOES IN WITH THE BOARD.** `load_rows` builds the 조각 tables and knows nothing
 	# about where the mesh was actually cut; **the boats stop against the outline, not against the
 	# 조각**, so the rule needs both and this is the one place that has both. ⚠ Set AFTER `load_rows`,
 	# which does not clear it — see `Grid.coast`.
-	grid.coast = coast()
+	grid.coast = Array(board.get("coast", []))
 	# ⚠ **The resource 칸 come in with the board too** (ticket 05-05). The drawn island has none — its
 	# 54 props all stand on ground a body can walk on, which is what `Grid.set_resources` skips — so
-	# this line changes nothing today and is what a generated island will arrive through.
-	grid.set_resources(props())
+	# this line changes nothing for it, and it is what a generated island arrives through.
+	grid.set_resources(Array(board.get("props", [])))
 
 
 ## ⚠⚠ **THE ISLAND'S TIME LIMIT WAS DELETED 2026-08-27.** The loss it fed died on 2026-08-24 and the

@@ -506,11 +506,16 @@ static func _paint(land: Dictionary, plateaus: Array, stairs: PackedInt32Array,
 
 
 ## **A real `Grid` over a painted board** — the one place a generated island becomes something the
-## game can be asked about. ⚠ **`Grid.new()` and `load_rows` and nothing else**: the moment this
-## reached for its own walk rule, the generator could certify an island the game cannot walk.
+## game can be asked about. ⚠ **Through `Islands.load_board` and nothing else**: the moment this
+## reached for its own walk rule, the generator could certify an island the game cannot walk — and a
+## second copy of the loading rule is exactly that, one step removed. **The board this hands over is
+## the same shape a played board is, so it goes through the same door.**
+##
+## ⚠ It arrives with no props and no outline — they are decided after the board is certified — and the
+## door takes a board without them rather than half-loading one.
 static func _grid_of(painted: Dictionary) -> Grid:
 	var grid := Grid.new()
-	grid.load_rows(Array(painted["rows"] as PackedStringArray), Array(painted["tiers"] as PackedStringArray))
+	Islands.load_board(grid, painted)
 	return grid
 
 
