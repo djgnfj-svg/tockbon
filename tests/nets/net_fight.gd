@@ -290,8 +290,31 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 	t.ok(absf(burn_sec - 15.0) < 0.001,
 		"배 한 척이 아무도 안 막으면 성채를 15.0초에 태운다 (얻은 값 %.3f)"
 			% burn_sec)
-	t.ok(Rules.KEEP_MAX_HP == 120.0 and Rules.BOAT_CAPACITY == 4,
-		"그 15초를 만드는 네 값 중 하나라도 움직이면 위가 빨강이다 (자가 점검)")
+	# ⚠⚠ **FOUR VALUES, AND THIS ROW ONCE NAMED FOUR WHILE MEASURING TWO** (2026-09-03). It read
+	# `KEEP_MAX_HP == 120.0 and BOAT_CAPACITY == 4` under a label promising all four. **Measured by
+	# mutation: the 늑대's period 2.0 -> 2.5 reddened the row above and left this one green** — the
+	# label was true of the row above and false of this one, which is a label promising more than it
+	# measures, the failure `how-nets-lie` is written about.
+	#
+	# ⚠ **It also catches what the row above cannot: a PAIR that moved and left the 15 alone.** Doubling
+	# the damage and the period together holds `one_boat_dps` at 8.0 and `burn_sec` at 15.0, so the row
+	# above stays green while two of the four have moved.
+	#
+	# ⚠ **The 늑대's two numbers are pinned again here and that repeat is deliberate.** The rows far
+	# above own the SPECIES table; these four are the inputs of the 성채's burn, and a retune has to
+	# redden both — they name the same constants, so they cannot come to disagree.
+	var moved := []
+	if Rules.KEEP_MAX_HP != 120.0:
+		moved.append("성채 체력 %.1f" % Rules.KEEP_MAX_HP)
+	if Rules.BOAT_CAPACITY != 4:
+		moved.append("한 배에 %d" % Rules.BOAT_CAPACITY)
+	if absf(Rules.damage_of(Rules.WOLF) - 4.0) > NEAR:
+		moved.append("늑대 한 대 %.2f" % Rules.damage_of(Rules.WOLF))
+	if absf(Rules.period_of(Rules.WOLF) - 2.0) > NEAR:
+		moved.append("늑대 주기 %.2f" % Rules.period_of(Rules.WOLF))
+	t.eq(moved.size(), 0,
+		"그 15초를 만드는 네 값이 120 · 4 · 4.0 · 2.0 그대로다 — 하나라도 움직이면 여기가 빨강이다 %s"
+			% str(moved))
 
 
 ## **`reach = range + REACH_BONUS`, in one place, and the window that number was measured into.**
