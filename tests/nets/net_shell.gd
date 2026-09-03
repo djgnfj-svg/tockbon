@@ -452,6 +452,9 @@ func run(t) -> void:
 		"몸 스프라이트 수 = 섬에 선 몸 + 판 위의 짐승 + 갑판 위의 늑대 (%d + %d + %d) — 화면에 있는 것과 sim 이 아는 것이 같다"
 			% [ashore.size(), b.living_enemy_ids().size(), riders])
 	var body_bad := 0
+	var lost_bad := 0
+	var mod_bad := 0
+	var size_bad := 0
 	for raw_i in ashore:
 		var i: int = raw_i
 		var st := int(b.army.type_id[i])
@@ -464,6 +467,7 @@ func run(t) -> void:
 			s = fs._sprites[int(fs._sprite_of_soldier[i])]
 		if s == null or not bodies.has(s):
 			body_bad += 1
+			lost_bad += 1
 			continue
 		# A textured body wears `beast_tint(side colour)`; the bare rounded square wears the colour
 		# raw — the same fork `_put_body` takes, read back off the one modulate the engine applies.
@@ -472,19 +476,32 @@ func run(t) -> void:
 			else Look.body_colour_of(false)
 		if s.modulate != want_mod:
 			body_bad += 1
+			mod_bad += 1
 			continue
 		# The size really is the type's own radius through the sprite-width ratio.
 		# ⚠⚠ **BOTH DRAW FACTORS, AND THE SPECIES' ROW SAYS ONE OF THEM** (2026-08-30). This compared
 		# against the bare ratio while `_put_body` has multiplied `BODY_SPRITE_SCALE` in since
 		# 2026-08-28 and the row's own draw column since today — **a size row that does not carry every
 		# factor is a size row that goes green on a size nothing drew.**
-		var drawn := Look.BODY_SPRITE_SCALE * Look.beast_draw_scale(st)
+		# ⚠⚠ **THE INK FRACTION IS THE THIRD FACTOR AND THIS ROW WENT RED THE DAY IT LANDED**
+		# (2026-08-31). `beast_draw_scale` says how wide the ANIMAL is drawn, so the CANVAS around it
+		# has to be that much wider again — `_put_body` divides by the fraction and this row did not,
+		# so all four bodies read a size nothing drew. **It is the same failure the 2026-08-30 note two
+		# lines up describes, arriving a third time on a third factor**: a size row that does not carry
+		# every factor is a size row that goes green on a size nothing drew.
+		# ⚠ **The squash is deliberately NOT a factor here.** `_gait_squash` is `Vector2.ONE` at phase
+		# 0 by construction (`sin`, not `cos`), and every body this row reads is at rest — reading the
+		# view's own squash back would be the tautology `_ink_frac_of` exists to avoid.
+		var frac := _ink_frac_of(fs, st)
+		var drawn := Look.BODY_SPRITE_SCALE * Look.beast_draw_scale(st) / frac
 		var want_sx := Look.body_radius_of(st) * Look.BEAST_SPRITE_W_RATIO * drawn \
 				/ float(s.texture.get_width()) \
 			if textured else Look.body_radius_of(st) * 2.0 * drawn / float(s.texture.get_width())
 		if absf(s.scale.x - want_sx) > 0.001:
 			body_bad += 1
-	t.eq(body_bad, 0, "몸마다 자리·색·크기가 sim 의 그 몸에게서 나왔다")
+			size_bad += 1
+	t.eq(body_bad, 0, "몸마다 자리·색·크기가 sim 의 그 몸에게서 나왔다 (없음 %d · 색 %d · 크기 %d)"
+			% [lost_bad, mod_bad, size_bad])
 	# ⚠⚠ **THE HP BAR ROWS ARE DELETED** (2026-08-28, the user: 「체력바 없이」). They read the two flat
 	# sprites per body — rail and fill — and their two colours.
 	t.eq(_flat_sprites(fs).size(), 0, "몸 위에 막대가 한 장도 안 붙는다 — 체력바가 삭제됐다")
@@ -2718,6 +2735,41 @@ func _body_sprites(fv: FieldView) -> Array:
 		if s.texture != fv._tex_flat:
 			out.append(s)
 	return out
+
+
+## **How much of its own canvas row `type_id`'s ANIMAL fills across, widest facing wins** — the number
+## `_put_body` divides its drawn width by, so a strip needing a wider frame stops shrinking the body.
+##
+## ⚠⚠ **THE NET SCANS THE PNGs AND DOES NOT ASK THE VIEW.** `field_view._ink_frac` holds the same
+## quantity; reading it back would make the size row a tautology — the shape `net_fx_view` already
+## refused for the same scan (`_ink_pad_below` says so in its own words).
+## ⚠⚠ **THE STANDING PICTURES ONLY, AND THE WIDEST OF THE FOUR.** Per facing, a man seen edge-on would
+## be stretched to the width of a man seen face-on; per FRAME, a raised arm would shrink the whole body
+## for as long as it was raised. **Scanning the worn texture is therefore wrong even though it is the
+## one on screen** — a walking body wears a strip frame and the divisor is not that frame's.
+## ⚠ **1.0 for a row with no picture** — that row draws the plain rounded shape and is not divided.
+func _ink_frac_of(fv: FieldView, type_id: int) -> float:
+	if type_id < 0 or type_id >= fv._tex_facing.size():
+		return 1.0
+	var widest := 0.0
+	for pic: Texture2D in (fv._tex_facing[type_id] as Array):
+		if pic == null:
+			continue
+		var img := pic.get_image()
+		if img == null:
+			continue
+		var w := img.get_width()
+		var lo := w
+		var hi := -1
+		for x in w:
+			for y in img.get_height():
+				if img.get_pixel(x, y).a > 0.0:
+					lo = mini(lo, x)
+					hi = maxi(hi, x)
+					break
+		if hi >= lo:
+			widest = maxf(widest, float(hi - lo + 1) / float(w))
+	return widest if widest > 0.0 else 1.0
 
 
 ## The HP-bar sprites — the flat one-texel texture, scaled into rails and fills.
