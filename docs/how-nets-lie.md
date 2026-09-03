@@ -84,6 +84,13 @@ truncated result.
   half is dead. ⇒ Call `game._unhandled_input(ev)` directly
 - ⚠ **A `const` Array cannot be mutated at runtime**, so "zero this table entry and watch it redden" is not
   a mutation you can write. Drive the accessor instead
+- ⚠⚠ **A HAND-WRITTEN TABLE ROW CAN PIN AN INPUT THE SIMULATION CAN NEVER PRODUCE.** An
+  accumulated clock is a sum of fixed substeps, so it lands on no round tick: the frame a warning opens
+  reads `179.999999999944`, and a row pinning `180.0` stays green while the screen never shows that
+  string. **Ask whether the sim can produce a value before writing it down**, and pin what a replay
+  actually yields. ⚠ The residue is per-case, not global — four of eight waves reached exactly `0.0`
+  and four did not, so one probe proves nothing about its siblings. ⚠ **A `%.1f` label rounds the
+  value and plants the unreachable number a second time**, in the row's own name
 - ⚠⚠ **A GREEN CHECK CAN BE AN ARTEFACT OF THE DEFECT BESIDE IT.** When a defect is fixed, the checks that
   were green around it are suspects, not controls. A check that survives a fix unchanged has been
   re-verified; one that reddens was measuring the defect — and the two look identical until the fix lands

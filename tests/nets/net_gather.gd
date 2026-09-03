@@ -7,8 +7,10 @@ extends RefCounted
 ## of the 칸 beside it if there is one, and nothing at all inland, while walking, or with no 창고.**
 ##
 ## ⚠⚠ **THE POND IS NOT DECORATION — IT IS WHAT KEEPS THE BOATS OUT.** A board with open sea launches a
-## beast boat at `Rules.BOAT_FIRST_SEC`, and a catch takes ten seconds, so every row here would be
-## measuring a fight it did not ask for. **An inland pool is water with no crossing to it**:
+## beast boat on the wave clock, and a catch takes ten seconds, so every row here would be measuring a
+## fight it did not ask for. ⚠ **The first hull moved to 461.75 s on 2026-09-03 and this board is still
+## the reason**: a fixture that relies on being finished before the first wave is a fixture that goes
+## quiet the day somebody lengthens a row. **An inland pool is water with no crossing to it**:
 ## `Grid._build_ring` refuses an inner shore whose seaward line runs into the island, which is a
 ## measured rule with a number on it (22 조각 went back into the ring the day it was dropped). **The
 ## first row asserts no hull was born**, so if that ever stops being true this file says so rather than
@@ -94,7 +96,7 @@ func _the_pond_is_water_with_no_boats(t) -> void:
 	t.ok(not g.is_coast(g.tile_index(4, 3)), "물 위는 물가가 아니다 — 서지도 못한다")
 	t.eq(g.beach_ring(Rules.BOAT_START_DIST_TILES).size(), 0,
 		"자가 점검 — 배가 댈 해변이 하나도 없다")
-	_run_for(b, Rules.BOAT_FIRST_SEC + Rules.GATHER_SEC * 2.0)
+	_run_for(b, Rules.WAVE_FIRST_SEC - Rules.BOAT_CROSSING_SEC + 1.0)
 	t.eq(b.boat_pos.size(), 0, "자가 점검 — 그래서 배가 한 척도 안 뜬다")
 	t.eq(b.enemy_type.size(), 0, "짐승도 하나도 안 내린다")
 

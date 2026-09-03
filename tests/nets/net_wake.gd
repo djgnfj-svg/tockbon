@@ -704,7 +704,7 @@ func _every_hull_is_marked_the_same_way(t) -> void:
 	var fv: FieldView = pack["fv"]
 	var b: Battle = pack["b"]
 	# A second hull, elsewhere on the water. **Injected**, because the second boat of an island is a
-	# whole `Rules.BOAT_INTERVAL_SEC` of sim away and this row is not about when one is born.
+	# whole wave away — 「웨이브 하나는 배 한 척」 — and this row is not about when one is born.
 	b.boat_pos.append(Vector2(4.0, 8.0))
 	b.boat_beach.append(b.boat_beach[0])
 	b.boat_stop.append(b.boat_stop[0])
@@ -732,9 +732,10 @@ func _every_hull_is_marked_the_same_way(t) -> void:
 
 ## **Boats pile up and nothing ever removes one, so the thirteenth landing has no block.**
 ##
-## ⚠⚠ **THIS IS A CEILING AND NOT A BUG, AND THE ROW EXISTS SO THAT IT IS A MEASURED ONE.** One boat
-## lands every `Rules.BOAT_INTERVAL_SEC` and stays, so an island that runs past twelve landings draws
-## its thirteenth hull with dry water round it. **What must NOT happen is the loop running off the end
+## ⚠⚠ **THIS IS A CEILING AND NOT A BUG, AND THE ROW EXISTS SO THAT IT IS A MEASURED ONE.** A hull
+## stays where it landed, so an island that runs past twelve landings draws its thirteenth with dry
+## water round it. ⚠ **The wave table reaches twelve at 40 분** where the deleted drip reached it at
+## 5.6 분 — later, and still reached. **What must NOT happen is the loop running off the end
 ## of the array**, which is what a loop over the boats rather than over the slots would do.
 func _boats_past_the_ceiling_are_dropped_and_the_rest_are_not(t) -> void:
 	var pack := _boat_view()
@@ -937,7 +938,14 @@ func _view_of(b: Battle, rows: Array) -> FieldView:
 func _boat_view(secs: float = -1.0) -> Dictionary:
 	var rows := _open(ARENA_W, ARENA_H)
 	var b := _battle_of(rows, _army_of([]), [])
-	b.step(Rules.BOAT_FIRST_SEC if secs < 0.0 else secs)
+	b.step(_first_hull_sec() if secs < 0.0 else secs)
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
 	return {"fv": fv, "b": b}
+
+
+## **When the first hull of a run is born**, in seconds: one crossing before the first wave lands.
+## ⚠⚠ **IT WAS FIVE SECONDS UNTIL 2026-09-03 AND IT IS NOW 461.75** — the wave table replaced the drip.
+## `net_boats` holds the wave clock; this is a caller and not a second copy of it.
+func _first_hull_sec() -> float:
+	return Rules.WAVE_FIRST_SEC - Rules.BOAT_CROSSING_SEC

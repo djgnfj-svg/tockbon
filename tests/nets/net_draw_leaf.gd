@@ -1,7 +1,13 @@
 extends RefCounted
-## The drawing scan. It reads the text of `src/view/`, `src/shell/` and `src/`, and it measures
-## nothing at runtime — which is the point: a spy on a hook sees the HOOK, never the native call
-## inside it, so the last inch has to be pinned structurally. See `how-nets-lie`.
+## The drawing scan. It reads the text of `src/view/`, `src/shell/` and `src/`, and almost all of it
+## measures nothing at runtime — which is the point: a spy on a hook sees the HOOK, never the native
+## call inside it, so the last inch has to be pinned structurally. See `how-nets-lie`.
+##
+## ⚠⚠ **ONE SECTION IS RUNTIME AND IT ARRIVED ON 2026-09-03** (12-01, the wave alarm) — see
+## `_the_alarm_paints_only_while_its_warning_is_open`. **It is the same argument standing the other
+## way up**: the scan says what a leaf commits and cannot say when the leaf runs, and 「only during
+## the 3 분」 is entirely a claim about WHEN. **Neither half means anything alone**, which is why the
+## two live in one file instead of being split across two nets that could drift apart.
 ##
 ## Four things are pinned here, and each one exists because its absence shipped a bug under a green
 ## round in this repo before:
@@ -49,6 +55,77 @@ const VIEW_DIR := "res://src/view"
 const SHELL_DIR := "res://src/shell"
 const SRC_DIR := "res://src"
 const LOOK_PATH := "res://src/look.gd"
+
+## **The wave alarm's plate, and the two lines on it** (12-01). The size is the size it was pulled
+## at, typed here as a literal on purpose: read back off `Look` it would be green for any picture.
+const ALARM_PLATE_PX := Vector2(384, 96)
+const ALARM_LINES := 2
+## What the label says. ⚠ **Typed, not read off `Look`** — read back it would be green for any phrase.
+const ALARM_LABEL := "늑대 무리"
+
+## **What the countdown reads at six points, and the six are the ticket's own acceptance**: it opens
+## at the whole warning, falls, **reaches 0:00**, and **never shows a negative number**. ⚠ **Typed,
+## not computed** — `Look.alarm_clock_text` is the thing under test, and a net that called it would
+## agree with any formatting at all, 「179」 and 「-1:-1」 included.
+##
+## ⚠⚠ **THE FIRST ROW READ `180.0` UNTIL 2026-09-03 AND THAT WAS A PIN ON AN INPUT THE SIM CANNOT
+## PRODUCE.** `elapsed` is one sixtieth added 28800 times, so the sub-step the window opens on hands
+## the screen **179.999999999944** and never 180.0 — the row was green, nothing on the glass hung off
+## it, and 「3:00」 was on none of the eight waves. **The value here is now the one the simulation
+## actually produces**, which is the whole difference between a check and a decoration
+## (`how-nets-lie` keeps this species).
+## ⚠⚠ **FOUR ROWS ARE THE MEASURED RESIDUALS OF WAVES 1-4, AND `[0.0, "0:00"]` DOES NOT COVER THEM.**
+## The last open sub-step of a wave almost never lands on exactly 0.0 — `elapsed` is a sum of one
+## sixtieths — so it reports **1.08e-10 · 5.44e-10 · 9.81e-10 · 1.42e-09** and only waves 5-8 reach
+## the zero row. **Rounding up alone turned every one of those into 「0:01」 and 0:00 was on half the
+## waves and no more.** These four are the values the run actually produces, exactly as the 3:00 row
+## above is; the exact zero is kept beside them because it is what waves 5-8 do hand over.
+## ⚠⚠ **`[1.0, "0:01"]` IS THE EPSILON'S OWN LEASH.** A settle wide enough to swallow a real second
+## would turn a whole second left into 「0:00」 and every row above would still be green. **It is the
+## only row that goes red if the epsilon grows**, which is the half of the pair that measures the fix
+## rather than the defect.
+## ⚠ **0.4 reads 0:01 and not 0:00** — that is what ceiling costs, written down rather than hidden.
+## ⚠ The last row is a value `Battle` already clamps at zero. It is here because the SCREEN must not
+## depend on that holding somewhere else: two clamps, and the second is the one the player sees.
+const CLOCK_PROBES := [
+	[179.999999999944, "3:00"],
+	[179.0, "2:59"],
+	[60.0, "1:00"],
+	[1.0, "0:01"],
+	[0.4, "0:01"],
+	[1.08e-10, "0:00"],
+	[5.44e-10, "0:00"],
+	[9.81e-10, "0:00"],
+	[1.42e-09, "0:00"],
+	[0.0, "0:00"],
+	[-5.0, "0:00"],
+]
+## Every glyph the countdown can ask for. ⚠⚠ **A MISSING GLYPH DRAWS NOTHING AND RAISES NOTHING** —
+## the countdown would be a blank stretch of plate with every count on this page still green, which is
+## why the face is asked directly rather than trusted.
+const CLOCK_GLYPHS := "0123456789:"
+
+
+## Records that the alarm's two leaves were REACHED, and what they were handed. ⚠ **It cannot see the
+## `draw_*` inside either body** — a spy overrides the leaf and never runs it (`CLAUDE.md`), which is
+## exactly why the table above pins both bodies at 1. **Reached, times non-zero, is drawn**, and
+## neither half says it alone.
+class AlarmSpy extends HudView:
+	var plates := []
+	var lines := []
+	var draws := 0
+
+	func _draw() -> void:
+		plates.clear()
+		lines.clear()
+		super()
+		draws += 1
+
+	func _paint_alarm(tex: Texture2D, at: Vector2) -> void:
+		plates.append({"tex": tex, "at": at})
+
+	func _paint_alarm_line(text: String, at: Vector2, font: Font, size_px: int, col: Color) -> void:
+		lines.append({"text": text, "at": at, "font": font, "size_px": size_px, "col": col})
 
 ## The size-ish half. Swept over every `.gd` under `src/` except `look.gd`.
 ##
@@ -433,6 +510,20 @@ func _table() -> Dictionary:
 			"set_picked": 0,
 			"_paint_panel": 1,
 			"_paint_line": 1,
+			# ⚠⚠ **THE WAVE ALARM, 2026-09-03** (12-01, the user: 「알람은 다르게 떠야할듯한데 왼쪽
+			# 위에」 · 「시간은 3분때만 뜨면 될듯」). **The two 1s are what make the runtime rows below
+			# mean anything**: a spy overriding a leaf never runs its body, so `_the_alarm_paints_only
+			# _while_its_warning_is_open` can prove the hooks were REACHED and nothing more. These two
+			# counts are the other half — the plate is one `draw_texture` of a picture the user chose
+			# by looking, and each line is one `draw_string`. **Reached times non-zero is drawn.**
+			# ⚠ **`_paint_alarm_line` and not `_paint_line`, and the duplicate is deliberate** — the
+			# leaf's own comment says why (`net_panel` counts what comes through `_paint_line` as the
+			# panel's fifteen). A 0 in either row is an alarm that is in the plan and not on the glass.
+			# ⚠ `alarm_font` and `set_warning` hold nothing, like `panel_font` and `set_picked`.
+			"alarm_font": 0,
+			"set_warning": 0,
+			"_paint_alarm": 1,
+			"_paint_alarm_line": 1,
 			# ⚠ **`set_box` and `_paint_box_piece` stood here for part of 2026-09-02 and are gone** with
 			# the picture they drew (ticket 03-12): the user's verdict put the box on the terrain, and it
 			# is the field's `set_box` below now. A picture leaf reappearing here would be the 01
@@ -624,6 +715,7 @@ func run(t) -> void:
 
 	_world_width_table(t)
 	_invert_the_scanner(t)
+	await _the_alarm_paints_only_while_its_warning_is_open(t)
 
 
 # -- 5. the world-width table --------------------------------------------------------------------
@@ -871,6 +963,142 @@ func _invert_the_scanner(t) -> void:
 		"draw_rect(r, c)", "주석은 잘라낸다 (스캐너 자가 점검)")
 	t.eq(_strip_comment("var row := \"~~##..\"  # the wall"),
 		"var row := \"~~##..\"  ", "문자열 안의 # 는 주석이 아니다 (스캐너 자가 점검)")
+
+
+# == the wave alarm, driven at the view seam =======================================================
+
+## **The alarm goes up only inside its warning window, and comes down when the window closes**
+## (12-01, 2026-09-03, the user: 「알람은 다르게 떠야할듯한데 왼쪽 위에」 · 「시간은 3분때만 뜨면 될듯」).
+##
+## ⚠⚠ **THIS IS THE ONE RUNTIME SECTION IN THIS FILE, AND IT IS HERE BECAUSE THE SCAN CANNOT REACH
+## WHAT IT MEASURES.** Everything above reads text: it can say the alarm's plate leaf commits one
+## `draw_texture`, and it cannot say WHEN that leaf runs. **A leaf pinned at 1 that `_draw` never
+## calls is a picture in the plan and nothing on the glass; one that `_draw` calls every frame is an
+## alarm that never comes down.** The counts and these rows are one claim in two halves, and neither
+## half is worth anything alone — which is the whole of 「a hook running is not a thing drawn」 read
+## in both directions.
+##
+## ⚠ **The two arms invert each other, and `draws >= 1` is what makes the closed one bite**: without
+## it, a layer that had stopped drawing altogether would pass 「the closed alarm paints nothing」 —
+## the shape `how-nets-lie` records as a green measuring less than its label.
+##
+## ⚠ **No `Battle` is built here.** `_draw` reads the shell's bool and never the sim, so a battle
+## would add a fixture that proves nothing this row claims; **that the bool follows the wave clock is
+## `net_boats`'s, and that the shell hands it over is `net_shell`'s.**
+func _the_alarm_paints_only_while_its_warning_is_open(t) -> void:
+	var spy := AlarmSpy.new()
+	t.root.add_child(spy)
+
+	# **The floor of the whole section.** Nothing announced: not one alarm leaf runs. An alarm painted
+	# unconditionally passes every row below this one and fails here.
+	spy.set_warning(false, Rules.WAVE_FIRST_SEC)
+	await t.pump_frames(1)
+	t.ok(spy.draws >= 1, "자가 점검 — 틀에 붙은 알람 뷰가 한 프레임에 그리기를 돌았다")
+	t.eq(spy.plates.size(), 0, "예고 창이 닫혀 있으면 알람 판을 한 장도 안 그린다")
+	t.eq(spy.lines.size(), 0, "닫혀 있으면 글줄도 한 줄 안 그린다")
+
+	# **Open.** One plate and two lines — what is coming, and how long is left.
+	spy.set_warning(true, Rules.WAVE_WARNING_SEC)
+	await t.pump_frames(1)
+	t.eq(spy.plates.size(), 1, "예고 창이 열리면 알람 판을 한 장 그린다")
+	t.eq(spy.lines.size(), ALARM_LINES, "그리고 글줄 둘 — 무엇이 오는지와 얼마나 남았는지")
+	var plate: Dictionary = spy.plates[0]
+	var tex: Texture2D = plate["tex"]
+	t.ok(tex != null, "알람 판 그림이 실제로 실렸다")
+	t.eq(tex.get_size(), ALARM_PLATE_PX, "그 그림은 뽑은 크기 그대로다")
+	# **Top left, flush, no margin** — the user's own words, and the one number they fix.
+	t.eq(plate["at"], Vector2.ZERO, "판은 화면 왼쪽 위에 여백 없이 붙는다")
+
+	# The label names what is coming, and it is a phrase and not 「something」.
+	var label: Dictionary = spy.lines[0]
+	var clock: Dictionary = spy.lines[1]
+	t.eq(str(label["text"]), ALARM_LABEL, "첫 줄은 무엇이 오는지를 이름으로 말한다")
+	# ⚠ **The two faces must NOT be the same object.** The countdown's face carries no Hangul and the
+	# label's is the panel's Hangul face; one face for both means one of the two lines is being drawn
+	# in a face that has no glyphs for it — and a missing glyph is silent.
+	t.ok(label["font"] != null and clock["font"] != null, "두 줄 다 실린 서체를 받았다")
+	t.ok(label["font"] != clock["font"], "이름과 숫자는 서로 다른 서체로 찍힌다")
+	var missing: Array[String] = []
+	var clock_face: Font = clock["font"]
+	for g in CLOCK_GLYPHS.length():
+		if not clock_face.has_char(CLOCK_GLYPHS.unicode_at(g)):
+			missing.append(CLOCK_GLYPHS[g])
+	t.eq(missing.size(), 0, "숫자 서체가 0~9 와 : 를 전부 갖고 있다 %s" % str(missing))
+	t.ok(label["font"].has_char(ALARM_LABEL.unicode_at(0)), "이름 서체는 한글을 갖고 있다")
+	# ⚠⚠ **THE INSTRUMENT'S OWN INVERSION, AND IT IS NOT DECORATION.** Both faces here carry 0-9 and
+	# a colon, so the row above would read the same whichever one it was handed — and if `has_char`
+	# answered true for everything it would read the same with no face at all. **The digits face has
+	# no Hangul**, so this is the one glyph in reach that must come back false.
+	t.ok(not clock_face.has_char(ALARM_LABEL.unicode_at(0)),
+		"자가 점검 — 숫자 서체는 한글이 없다고 대답한다 (has_char 가 거짓도 낸다)")
+
+	# **Both baselines stand inside the plate**, so lettering laid off the banner reads red rather than
+	# drawing over the island.
+	var plate_rect := Rect2(plate["at"], ALARM_PLATE_PX)
+	t.ok(plate_rect.has_point(label["at"]), "이름 줄의 기준선이 판 안에 있다")
+	t.ok(plate_rect.has_point(clock["at"]), "남은 시간의 기준선이 판 안에 있다")
+	t.ok(float(clock["at"].x) > float(label["at"].x), "남은 시간은 이름 오른쪽에 선다")
+	# ⚠⚠ **A BASELINE INSIDE THE PLATE IS NOT LETTERING INSIDE THE PLATE.** Both lines start at their
+	# left edge, so a face or a size that came out wider than planned runs off the banner and over the
+	# island with the point check above still green. **The ends are measured, not the starts.**
+	var label_w := _line_width(label)
+	var clock_w := _line_width(clock)
+	t.ok(float(label["at"].x) + label_w <= plate_rect.end.x, "이름이 판 오른쪽 밖으로 안 나간다")
+	t.ok(float(clock["at"].x) + clock_w <= plate_rect.end.x, "남은 시간이 판 오른쪽 밖으로 안 나간다")
+	t.ok(float(label["at"].x) + label_w <= float(clock["at"].x), "이름과 남은 시간이 안 겹친다")
+	t.ok(int(clock["size_px"]) > int(label["size_px"]), "남은 시간이 이름보다 크게 찍힌다")
+
+	# **What the countdown reads, at the five points the ticket's acceptance names.**
+	# ⚠ The label prints the probe with `str` and not `%.1f` — rounded to one place, the opening
+	# 179.999999999944 reads as 「180.0초」 and the row would name a value nobody can produce.
+	for row: Array in CLOCK_PROBES:
+		spy.set_warning(true, float(row[0]))
+		await t.pump_frames(1)
+		t.eq(spy.lines.size(), ALARM_LINES, "%s초 남았을 때도 글줄은 둘이다" % str(row[0]))
+		t.eq(str(spy.lines[1]["text"]), str(row[1]),
+			"%s초 남으면 「%s」로 찍힌다" % [str(row[0]), str(row[1])])
+
+	# **Closed again**, and the plate comes down. The OFF edge is what a `note_wave()` with no false
+	# arm would have lost — the alarm would stand for the rest of the island.
+	spy.set_warning(false, Rules.WAVE_FIRST_SEC)
+	await t.pump_frames(1)
+	t.eq(spy.plates.size(), 0, "창이 닫히면 알람 판이 내려간다")
+	t.eq(spy.lines.size(), 0, "글줄도 같이 내려간다")
+
+	# ⚠⚠ **AND THE RUN ENDING TAKES IT DOWN — MEASURED ON THE GLASS, 2026-09-03.** A lost board was
+	# photographed under GAME OVER with the alarm still standing and **frozen at 「2:57」**: `_process`
+	# stops advancing the sim after a loss, so the window never closes and the countdown never moves.
+	# **The screen was promising 늑대 in three minutes on a run that was over.** This row is that
+	# photograph, and the OFF arm below is what proves the guard is `_over` and not the alarm having
+	# quietly died.
+	spy.set_warning(true, Rules.WAVE_WARNING_SEC)
+	await t.pump_frames(1)
+	t.eq(spy.plates.size(), 1, "자가 점검 — 다시 열면 판이 다시 뜬다")
+	spy.set_over(true)
+	await t.pump_frames(1)
+	t.eq(spy.plates.size(), 0, "판이 끝나면 예고 창이 열려 있어도 알람이 내려간다")
+	t.eq(spy.lines.size(), 0, "글줄도 같이 내려간다 — 끝난 판이 3 분 뒤를 약속하지 않는다")
+	spy.set_over(false)
+	await t.pump_frames(1)
+	t.eq(spy.plates.size(), 1, "자가 점검 — 게임 오버가 걷히면 알람이 다시 선다")
+
+	# **And a bind clears it**, for the reason `_over` is cleared: a fresh island's wave clock starts
+	# at a whole interval and the last island's countdown must not open it.
+	spy.bind(null)
+	await t.pump_frames(1)
+	t.eq(spy.plates.size(), 0, "섬을 새로 매면 알람이 지워진다")
+
+	t.root.remove_child(spy)
+	spy.queue_free()
+
+
+## How wide one captured alarm line comes out, in the face and at the size the hook was handed.
+## ⚠ **Off the capture and not off `Look`** — a width computed from the constants would agree with a
+## leaf that dropped the size argument and drew at `draw_string`'s default 16.
+func _line_width(line: Dictionary) -> float:
+	var face: Font = line["font"]
+	return face.get_string_size(str(line["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1,
+		int(line["size_px"])).x
 
 
 # -- the scan itself -----------------------------------------------------------------------------

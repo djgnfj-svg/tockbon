@@ -84,20 +84,22 @@ func run(t) -> void:
 	_the_ring_goes_round_the_island(t)
 	_the_stride_visits_every_beach(t)
 	_seaward_points_off_the_land(t)
-	_no_boat_before_the_first_clock(t)
+	_the_first_hull_is_born_one_crossing_before_the_wave_lands(t)
 	_the_first_boat_is_born_out_at_sea(t)
 	_it_closes_the_distance_at_the_boat_speed(t)
 	_it_stops_short_of_the_shore_and_stays(t)
 	_an_emptied_hull_waits_and_is_gone(t)
 	_a_hull_with_riders_still_aboard_never_goes(t)
-	_the_second_boat_comes_one_interval_later_and_far_round(t)
+	_the_next_hull_comes_one_gap_later_and_far_round(t)
+	_the_wave_table_is_what_comes(t)
+	_the_warning_opens_three_minutes_out_and_falls_to_zero(t)
+	_a_used_battle_opens_like_a_fresh_one(t)
 	_the_stored_stop_is_measured_from_the_water(t)
 	_the_drawn_shore_is_not_the_tile_grid(t)
 	_the_riders_are_aboard_and_not_on_the_board(t)
 	_the_crossing_is_the_same_at_any_frame_rate(t)
 	_a_board_with_no_coast_launches_nothing(t)
 	_the_switch_decides_whether_boats_come_at_all(t)
-	_the_switch_on_leaves_the_launch_times_where_they_were(t)
 	_the_deck_offsets_are_the_mesh_s_own_benches(t)
 
 
@@ -111,8 +113,49 @@ func run(t) -> void:
 ## what goes red when somebody retunes the crossing — and a crossing that measures the same at any speed
 ## measures nothing.
 func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
-	t.eq(Rules.BOAT_FIRST_SEC, 5.0, "첫 배는 5초에 온다")
-	t.eq(Rules.BOAT_INTERVAL_SEC, 30.0, "그 뒤로는 30초마다다 — 일정하게, 랜덤이 아니다")
+	# ⚠⚠ **THE TWO CONSTANTS THAT STOOD HERE — `BOAT_FIRST_SEC` 5.0 AND `BOAT_INTERVAL_SEC` 30.0 —
+	# ARE DELETED** (2026-09-03, 티켓 12-01). A boat was not a wave: hulls launched one at a time for
+	# ever and nothing grouped them. **What replaces them is the wave clock**, and pinning it here is
+	# what this function is for.
+	t.eq(Rules.WAVE_FIRST_SEC, 480.0, "첫 웨이브는 8분에 내린다 — 「처음 웨이브는 팔 분」")
+	t.eq(Rules.WAVE_INTERVAL_SEC, 480.0, "그 뒤로 8분마다다 — 「팔 분마다」, 한 시간에 일곱")
+	t.eq(Rules.WAVE_WARNING_SEC, 180.0, "예고는 3분 전에 뜬다 — 「예고는 3분전」, 한 숫자다")
+
+	# **The two tables, read through the accessor and not off the array.** They are `const Array`s, so
+	# their elements are untyped and nothing can mutate them at runtime — the accessor is what the rest
+	# of this file drives, and it is what carries the 「일곱째 줄이 계속 반복된다」 rule.
+	var boats := []
+	var gaps := []
+	for n in Rules.WAVE_BOATS.size():
+		boats.append(Rules.wave_boats_of(n))
+		gaps.append(Rules.wave_gap_of(n))
+	t.eq(boats, [1, 2, 3, 3, 4, 5, 6], "웨이브마다 배가 1·2·3·3·4·5·6 척이다 — 손으로 쓴 일곱 줄")
+	t.eq(gaps, [15.0, 15.0, 15.0, 10.0, 10.0, 10.0, 10.0],
+		"한 웨이브 안의 배 간격은 1~3 웨이브가 15초, 4~7 이 10초다")
+	t.eq(Rules.WAVE_BOAT_GAP_SEC.size(), Rules.WAVE_BOATS.size(), "두 표의 줄 수가 같다 (자가 점검)")
+
+	# **The eighth wave reads the seventh row**, which is the whole of 「그 뒤로는 계속 그 줄」. ⚠ Asked
+	# of the accessor at a number far past the table, because an `Array[k]` past the end throws rather
+	# than repeating.
+	t.eq(Rules.wave_row(7), 6, "여덟째 웨이브는 일곱째 줄을 읽는다")
+	t.eq(Rules.wave_row(800), 6, "팔백째도 그렇다 — 마지막 줄이 계속 반복된다")
+	t.eq(Rules.wave_boats_of(7), Rules.wave_boats_of(6), "그래서 여덟째도 여섯 척이다")
+	t.eq(Rules.wave_gap_of(7), Rules.wave_gap_of(6), "간격도 일곱째 것 그대로다")
+
+	# **When a wave lands.** ⚠ The formula lives in `Rules` and the sim holds only which wave is next;
+	# a net that recomputed it here would be measuring its own arithmetic.
+	t.eq(Rules.wave_land_sec(0), Rules.WAVE_FIRST_SEC, "0번 웨이브는 첫 시각에 내린다")
+	t.eq(Rules.wave_land_sec(7), 480.0 + 7.0 * 480.0, "여덟째 웨이브는 64분에 내린다")
+
+	# ⚠⚠ **DERIVED AND NOT PINNED, WHICH IS THE POINT OF IT.** 「the wave lands at 8:00」 needs the lead
+	# time, and writing 18.25 down here would rot the day the speed or the distance moves — this row
+	# asserts the derivation, and the row below asserts it is not zero.
+	t.eq(Rules.BOAT_CROSSING_SEC,
+		(Rules.BOAT_START_DIST_TILES - Rules.BOAT_STANDOFF_TILES) / Rules.BOAT_SPEED_TILES,
+		"건너는 시간은 거리에서 서는 자리를 뺀 것을 속도로 나눈 값이다 — 따로 적은 숫자가 아니다")
+	t.ok(Rules.BOAT_CROSSING_SEC > 0.0 and Rules.BOAT_CROSSING_SEC < Rules.WAVE_FIRST_SEC,
+		"그리고 첫 웨이브 안에 드는 양수다 (%.2f초) — 배가 판이 열리기 전에 뜨지 않는다"
+			% Rules.BOAT_CROSSING_SEC)
 	t.eq(Rules.BOAT_LINGER_SEC, 3.0, "내려놓은 배는 3초 있다가 사라진다")
 	t.eq(Rules.BOAT_SPEED_TILES, 1.2, "배는 초당 1.2조각으로 간다")
 	t.eq(Rules.BOAT_START_DIST_TILES, 24.0, "해변 조각에서 24조각 떨어진 데서 뜬다")
@@ -557,16 +600,51 @@ func _seaward_points_off_the_land(t) -> void:
 
 # == the crossing =====================================================================================
 
-func _no_boat_before_the_first_clock(t) -> void:
-	var b := _battle(ISLE)
-	b.step(Rules.BOAT_FIRST_SEC - 0.1)
-	t.eq(b.boat_pos.size(), 0, "첫 시각 전에는 배가 하나도 없다")
+## **The first hull is born one crossing before the first wave lands, and it lands a little early.**
+##
+## ⚠⚠ **THIS IS WHAT 「웨이브는 팔 분」 ACTUALLY MEANS** (2026-09-03): the first hull LANDS at 8:00, so
+## it is born at 7:41.75. **Both sides of that boundary**, because 「그 전에는 없다」 alone is green for
+## a clock that never launches at all, and 「그 시각에는 있다」 alone is green for one that fired at 0.
+##
+## ⚠⚠ **AND THE ARRIVAL IS EARLY, NEVER LATE.** A hull walks its line in whole sub-steps and stops on
+## the first one that reaches, so it comes ashore a little short of `BOAT_CROSSING_SEC` — measured
+## across the real ring at 0.507 to 0.888 s early. **The row asserts the sign as well as the size**: a
+## crossing that overran its own minute would be the alarm lying, and a bound alone would not see it.
+func _the_first_hull_is_born_one_crossing_before_the_wave_lands(t) -> void:
+	var lead := _first_hull_sec()
+	t.ok(lead > 0.0, "첫 배가 뜨는 시각이 양수다 (%.2f초) (자가 점검)" % lead)
+
+	var b := _battle_real()
+	b.step(lead - 0.1)
+	t.eq(b.boat_pos.size(), 0, "%.2f초 직전에는 배가 하나도 없다" % lead)
 	t.ok(b.elapsed > 0.0, "그런데 시계는 돌았다 (자가 점검 — 안 돌았으면 위가 공허하다)")
+
+	b.step(0.2)
+	t.eq(b.boat_pos.size(), 1, "%.2f초에 첫 배가 뜬다 — 한 척이다" % lead)
+
+	# One sub-step at a time from here, because 「언제 닿았나」 cannot be read off a fat step.
+	var landed_at := -1.0
+	var guard := int(round((Rules.BOAT_CROSSING_SEC + 2.0) / Rules.SIM_SUBSTEP_SEC))
+	for _i in guard:
+		b.step(Rules.SIM_SUBSTEP_SEC)
+		if int(b.boat_state[0]) != Battle.BoatState.SAILING:
+			landed_at = b.elapsed
+			break
+	t.ok(landed_at > 0.0, "그 배가 %.3f초에 해변에 닿았다 (자가 점검)" % landed_at)
+	var early := Rules.WAVE_FIRST_SEC - landed_at
+	t.ok(early >= 0.0, "웨이브가 제 시각(%.1f초)보다 늦지 않게 내린다 — %.3f초 이르다"
+		% [Rules.WAVE_FIRST_SEC, early])
+	t.ok(early < 0.9, "그리고 1초 안쪽으로만 이르다 (%.3f초)" % early)
+
+	# **Wave 1 is ONE hull and it stays one.** The table's first row, read by driving rather than by
+	# asking `Rules` — the accessor is pinned above and this is the sim obeying it.
+	b.step(Rules.WAVE_INTERVAL_SEC * 0.5)
+	t.eq(b.boat_pos.size(), 1, "첫 웨이브는 배 한 척이고, 반 간격을 더 돌려도 그대로다")
 
 
 func _the_first_boat_is_born_out_at_sea(t) -> void:
 	var b := _battle(ISLE)
-	b.step(Rules.BOAT_FIRST_SEC)
+	b.step(_first_hull_sec())
 	t.eq(b.boat_pos.size(), 1, "첫 시각에 배가 하나 뜬다")
 	t.eq(b.boat_state.size(), 1, "상태 칸도 같이 하나다 (자가 점검)")
 	t.eq(int(b.boat_state[0]), Battle.BoatState.SAILING, "그 배는 오는 중이다")
@@ -590,7 +668,7 @@ func _the_first_boat_is_born_out_at_sea(t) -> void:
 
 func _it_closes_the_distance_at_the_boat_speed(t) -> void:
 	var b := _battle(ISLE)
-	b.step(Rules.BOAT_FIRST_SEC)
+	b.step(_first_hull_sec())
 	var start: Vector2 = b.boat_pos[0]
 	var beach := int(b.boat_beach[0])
 	var target := Vector2(beach % b.grid.w, beach / b.grid.w)
@@ -613,7 +691,7 @@ func _it_closes_the_distance_at_the_boat_speed(t) -> void:
 func _it_stops_short_of_the_shore_and_stays(t) -> void:
 	var b := _battle(ISLE)
 	var crossing := (Rules.BOAT_START_DIST_TILES - Rules.BOAT_STANDOFF_TILES) / Rules.BOAT_SPEED_TILES
-	b.step(Rules.BOAT_FIRST_SEC)
+	b.step(_first_hull_sec())
 	b.step(crossing - 0.1)
 	t.eq(int(b.boat_state[0]), Battle.BoatState.SAILING, "다 오기 전에는 아직 오는 중이다")
 
@@ -646,7 +724,7 @@ func _it_stops_short_of_the_shore_and_stays(t) -> void:
 func _an_emptied_hull_waits_and_is_gone(t) -> void:
 	var b := _battle(ISLE)
 	var crossing := (Rules.BOAT_START_DIST_TILES - Rules.BOAT_STANDOFF_TILES) / Rules.BOAT_SPEED_TILES
-	b.step(Rules.BOAT_FIRST_SEC)
+	b.step(_first_hull_sec())
 	b.step(crossing + 0.1)
 	t.eq(int(b.boat_state[0]), Battle.BoatState.ARRIVED, "배가 다 와서 서 있다 (자가 점검)")
 	t.eq(int(b.boat_riders[0]), 0, "그리고 갑판이 비었다 (자가 점검)")
@@ -695,10 +773,10 @@ func _a_hull_with_riders_still_aboard_never_goes(t) -> void:
 	# counting two boats. ⚠ **The self-check is here and not left to 「배가 한 척 왔다」**, which reads as
 	# a boat-clock defect rather than as a fixture whose arithmetic ran out.
 	var waited := Rules.BOAT_LINGER_SEC * 3.0
-	t.ok(crossing + waited < Rules.BOAT_INTERVAL_SEC,
-		"자가 점검 — 건너기 %.2f초에 기다림 %.2f초가 배 간격 %.1f초 안에 든다"
-			% [crossing, waited, Rules.BOAT_INTERVAL_SEC])
-	b.step(Rules.BOAT_FIRST_SEC + crossing + waited)
+	t.ok(crossing + waited < Rules.WAVE_INTERVAL_SEC,
+		"자가 점검 — 건너기 %.2f초에 기다림 %.2f초가 웨이브 간격 %.1f초 안에 든다"
+			% [crossing, waited, Rules.WAVE_INTERVAL_SEC])
+	b.step(_first_hull_sec() + crossing + waited)
 	t.eq(b.boat_pos.size(), 1, "배가 한 척 왔다 (자가 점검)")
 	t.eq(int(b.boat_state[0]), Battle.BoatState.ARRIVED, "그리고 다 와서 서 있다 (자가 점검)")
 	t.ok(b.living_enemy_ids().size() > 0, "설 자리가 있는 만큼은 내렸다 (자가 점검)")
@@ -716,16 +794,23 @@ func _a_hull_with_riders_still_aboard_never_goes(t) -> void:
 ## the angle itself, because the stride is rounded to a whole 조각 and then nudged to the nearest
 ## coprime one — the exact angle is a consequence of the ring's size, and the claim is 「a different
 ## side」.
-func _the_second_boat_comes_one_interval_later_and_far_round(t) -> void:
+func _the_next_hull_comes_one_gap_later_and_far_round(t) -> void:
+	# ⚠⚠ **WAVE 2 AND NOT WAVE 1, BECAUSE WAVE 1 IS ONE BOAT.** The table's second row is two hulls
+	# `Rules.wave_gap_of(1)` apart — this is the first place in the file where 「a wave is not a
+	# broadside」 has two hulls to be about.
 	var b := _battle_real()
-	b.step(Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC - 0.1)
-	t.eq(b.boat_pos.size(), 1, "한 간격이 차기 전에는 아직 한 척이다")
+	var lead := Rules.wave_land_sec(1) - Rules.BOAT_CROSSING_SEC
+	var gap := Rules.wave_gap_of(1)
+	t.eq(Rules.wave_boats_of(1), 2, "둘째 웨이브는 배가 둘이다 (자가 점검)")
+
+	b.step(lead + gap - 0.1)
+	t.eq(b.boat_pos.size(), 2, "%.1f초 간격이 차기 전에는 이 웨이브의 배가 아직 하나다 (통틀어 둘)" % gap)
 
 	b.step(0.2)
-	t.eq(b.boat_pos.size(), 2, "한 간격 뒤에 둘째가 뜬다")
-	var a0 := int(b.boat_beach[0])
-	var a1 := int(b.boat_beach[1])
-	t.ok(a0 != a1, "그리고 첫 배와 다른 조각으로 온다 (%d · %d)" % [a0, a1])
+	t.eq(b.boat_pos.size(), 3, "%.1f초 뒤에 그 웨이브의 둘째가 뜬다" % gap)
+	var a0 := int(b.boat_beach[1])
+	var a1 := int(b.boat_beach[2])
+	t.ok(a0 != a1, "그리고 같은 웨이브의 앞 배와 다른 조각으로 온다 (%d · %d)" % [a0, a1])
 
 	var centre := b.grid.island_centre()
 	var v0 := Vector2(a0 % b.grid.w, a0 / b.grid.w) - centre
@@ -733,12 +818,14 @@ func _the_second_boat_comes_one_interval_later_and_far_round(t) -> void:
 	var apart := absf(rad_to_deg(v0.angle_to(v1)))
 	t.ok(apart > 90.0, "섬 가운데에서 보면 둘이 %.0f도 떨어져 있다 — 옆이 아니라 반대편이다" % apart)
 
-	# ⚠⚠ **THE FIRST ONE IS ALREADY GONE BY THE TIME THE SECOND IS BORN** (2026-09-01), which is a fact
-	# about the SCREEN and not only about this array: it landed at about 23 seconds and waited
-	# `Rules.BOAT_LINGER_SEC`. **Two hulls are never on the water together any more.** ⚠ Its ROW is still
-	# here and still index 0 — that is what keeps 「둘째」 meaning the second boat.
-	t.eq(int(b.boat_state[0]), Battle.BoatState.GONE, "먼저 온 배는 이미 사라졌다")
-	t.eq(int(b.boat_state[1]), Battle.BoatState.SAILING, "둘째는 오는 중이다")
+	# ⚠⚠ **「TWO HULLS ARE NEVER ON THE WATER TOGETHER」 IS DEAD AND THIS ROW IS WHERE IT DIED**
+	# (2026-09-03). It was true of the 30-second drip, and 15 seconds is shorter than one crossing —
+	# **so the wave's first hull is still SAILING when its second is born.** Driven on the wave table
+	# for 65 minutes: at most three hulls not-GONE at once. ⚠ The row keeps its old shape and asserts
+	# the opposite fact, rather than being deleted for going false.
+	t.eq(int(b.boat_state[0]), Battle.BoatState.GONE, "첫 웨이브의 배는 이미 사라졌다")
+	t.eq(int(b.boat_state[1]), Battle.BoatState.SAILING, "그런데 이 웨이브의 첫 배는 아직 오는 중이다")
+	t.eq(int(b.boat_state[2]), Battle.BoatState.SAILING, "둘째도 오는 중이다 — 물 위에 둘이 같이 있다")
 
 
 ## **What the sim actually STORED, on the real island, for beaches that really do have land jutting out
@@ -784,7 +871,11 @@ func _the_stored_stop_is_measured_from_the_water(t) -> void:
 		var idx := int(juts[k])
 		var b := _battle_on(_real())
 		b._beach_cursor = idx
-		b.step(Rules.BOAT_FIRST_SEC)
+		# ⚠⚠ **THE HULL IS BORN DIRECTLY AND NO CLOCK IS WOUND** (2026-09-03). This drove to the drip's
+		# first due time, five seconds in; the wave clock puts the first hull 461.75 seconds in, and
+		# **this row is about the stop `Battle` STORED and not about when.** `_launch_one` is the
+		# primitive the launch queue itself pops onto, so what is measured is still the game's own.
+		b._launch_one()
 		if b.boat_pos.is_empty():
 			continue
 		checked += 1
@@ -910,7 +1001,7 @@ func _the_drawn_shore_is_not_the_tile_grid(t) -> void:
 
 func _the_riders_are_aboard_and_not_on_the_board(t) -> void:
 	var b := _battle(ISLE)
-	b.step(Rules.BOAT_FIRST_SEC)
+	b.step(_first_hull_sec())
 	t.eq(int(b.boat_riders[0]), Rules.BOAT_CAPACITY, "첫 배에 넷이 타 있다")
 
 	# Nothing landed. **Both halves**: no body is standing, and no 조각 is claimed by one.
@@ -945,7 +1036,8 @@ func _the_riders_are_aboard_and_not_on_the_board(t) -> void:
 func _the_crossing_is_the_same_at_any_frame_rate(t) -> void:
 	var fine := _battle(ISLE)
 	var coarse := _battle(ISLE)
-	var total := Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC + 3.0
+	# Far enough to hold three hulls in three different states: wave 1's, and both of wave 2's.
+	var total := Rules.wave_land_sec(1) + 5.0
 	var n := int(round(total * 60.0))
 	for _i in n:
 		fine.step(1.0 / 60.0)
@@ -969,9 +1061,9 @@ func _a_board_with_no_coast_launches_nothing(t) -> void:
 	var grid := _grid(DRY)
 	t.eq(grid.beach_ring(Rules.BOAT_START_DIST_TILES).size(), 0, "물이 없는 판에는 해변이 없다 (자가 점검)")
 	var b := _battle(DRY)
-	b.step(Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC + 1.0)
+	b.step(_first_hull_sec() + 1.0)
 	t.eq(b.boat_pos.size(), 0, "그런 판에서는 배가 한 척도 안 뜬다")
-	t.ok(b.elapsed > Rules.BOAT_FIRST_SEC, "그래도 시계는 돌았다 (자가 점검)")
+	t.ok(b.elapsed > _first_hull_sec(), "그래도 시계는 돌았다 (자가 점검)")
 
 
 ## **`Battle.boats_come` decides whether the drip happens at all, and BOTH arms are driven here.**
@@ -991,8 +1083,8 @@ func _a_board_with_no_coast_launches_nothing(t) -> void:
 ## net in this repo builds a `Battle` and expects boats; if that default flipped, this row is where it
 ## is caught rather than in the twenty rows above that would silently stop measuring a crossing.
 func _the_switch_decides_whether_boats_come_at_all(t) -> void:
-	# Four intervals past the first launch — long enough that 「아직 이르다」 cannot be the reason.
-	var driven := Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC * 4.0 + 1.0
+	# Past the first wave's landing — long enough that 「아직 이르다」 cannot be the reason.
+	var driven := Rules.WAVE_FIRST_SEC + 1.0
 
 	var on := _battle_real()
 	t.ok(on.boats_come, "새로 지은 Battle 은 배가 오는 쪽이다 — 기본값이 뒤집히면 여기서 잡힌다")
@@ -1011,26 +1103,158 @@ func _the_switch_decides_whether_boats_come_at_all(t) -> void:
 			% [off.elapsed, on.elapsed])
 
 
-## **With the switch on, the clock is untouched: the first boat is still at 5.0 s and the second at
-## 35.0 s.** The two rows above measure that boats come at all; this measures that the switch did not
-## quietly become a delay on the way in.
+# == the wave table ===================================================================================
+
+## **Every row of the table, driven: how many hulls each wave puts on the water and how far apart.**
 ##
-## ⚠ **The boundary is asserted from BOTH sides at each launch** — a hair before, nothing new; a hair
-## after, one more. A one-sided 「there are two by 35 s」 is green for a drip that fires everything on
-## the first sub-step.
-func _the_switch_on_leaves_the_launch_times_where_they_were(t) -> void:
-	var b := _battle_real()
-	t.ok(b.boats_come, "이 판은 켜져 있다 (자가 점검)")
+## ⚠⚠ **ONE DRIVE, EIGHT WAVES, ON `PERCH` AND NOT ON THE REAL ISLAND.** A 조각 of land takes
+## `Rules.TILE_CAPACITY` 늑대 and no more, so the beasts ashore never grow past three however many hulls
+## arrive — **which is what makes 64 minutes of simulated time affordable.** The subject is the hulls,
+## and the hulls are born whatever the beach does with their riders.
+##
+## ⚠⚠ **THE EIGHTH WAVE IS THE ROW THAT MATTERS MOST**: `Rules.WAVE_BOATS` has seven rows and the run
+## does not stop at 56 분, so the seventh has to repeat. Read by driving, not by asking the accessor —
+## the accessor is pinned in `_the_numbers_are_the_ones_that_were_chosen` and this is the sim obeying it.
+func _the_wave_table_is_what_comes(t) -> void:
+	var b := _battle(PERCH)
+	var counts := []
+	var want := []
+	for n in 8:
+		# Past this wave's landing and far enough past it that every one of its hulls is born: the last
+		# one launches `(boats - 1) * gap` after the lead, which for the widest row is 31.75 s after the
+		# landing itself.
+		var before := b.boat_pos.size()
+		b.step(Rules.wave_land_sec(n) + Rules.wave_gap_of(n) * 8.0 - b.elapsed)
+		counts.append(b.boat_pos.size() - before)
+		want.append(Rules.wave_boats_of(n))
+	t.eq(counts, want, "웨이브마다 뜬 배 수가 표 그대로다 %s" % str(counts))
+	t.eq(counts[7], counts[6], "그리고 여덟째가 일곱째와 같다 — 마지막 줄이 반복된다")
+	t.ok(int(counts[0]) == 1, "자가 점검 — 첫 웨이브가 한 척이다: 전부 0 이면 위가 공허하다")
 
-	b.step(Rules.BOAT_FIRST_SEC - 0.1)
-	t.eq(b.boat_pos.size(), 0, "5.0초 직전에는 아직 없다")
-	b.step(0.2)
-	t.eq(b.boat_pos.size(), 1, "5.0초에 첫 배가 뜬다")
+	# **The gap inside a wave, from both sides, on two rows with different gaps.** ⚠ A row that only
+	# counted hulls is green for a wave that fires its whole table on one sub-step, which is exactly the
+	# 「여러 척이 한 번에 온다기보다는 천천히」 the user refused.
+	_the_gap_inside_one_wave(t, 1)
+	_the_gap_inside_one_wave(t, 3)
 
-	b.step(Rules.BOAT_INTERVAL_SEC - 0.2)
-	t.eq(b.boat_pos.size(), 1, "35.0초 직전까지는 그대로 한 척이다")
-	b.step(0.2)
-	t.eq(b.boat_pos.size(), 2, "35.0초에 둘째가 뜬다")
+
+## One wave's hulls, born one `wave_gap_of` apart and not all at once.
+func _the_gap_inside_one_wave(t, ordinal: int) -> void:
+	var b := _battle(PERCH)
+	var lead := Rules.wave_land_sec(ordinal) - Rules.BOAT_CROSSING_SEC
+	var gap := Rules.wave_gap_of(ordinal)
+	var boats := Rules.wave_boats_of(ordinal)
+	t.ok(boats >= 2, "%d번 웨이브는 배가 %d척이다 (자가 점검 — 하나면 간격이 없다)" % [ordinal, boats])
+
+	b.step(lead + 0.1)
+	var born := b.boat_pos.size()
+	for k in range(1, boats):
+		b.step(lead + float(k) * gap - 0.2 - b.elapsed)
+		t.eq(b.boat_pos.size(), born + k - 1,
+			"%d번 웨이브의 %d째 배가 %.1f초 간격이 차기 전에는 아직 안 뜬다" % [ordinal, k + 1, gap])
+		b.step(0.4)
+		t.eq(b.boat_pos.size(), born + k,
+			"%.1f초가 지나면 뜬다 — 한 번에 쏟아지지 않는다" % gap)
+
+
+# == the warning ======================================================================================
+
+## **The warning opens three minutes out, counts down to zero, and closes when the wave lands — on
+## every one of the seven rows.**
+##
+## ⚠⚠ **THE COUNTDOWN IS READ OFF THE LANDING CLOCK AND NOT OFF THE LAUNCH QUEUE, AND THAT IS THE WHOLE
+## DEFECT THIS ROW EXISTS FOR.** The first draft of 12-01 advanced one counter on LAUNCH: **wave 1 is a
+## single boat, so it closed its own warning the moment its hull was born and the countdown vanished at
+## 18 s instead of reaching 0.** In the other direction a wave whose last hull launches after its own
+## minute left a negative countdown on screen for up to 31.75 s.
+##
+## ⚠ **The raw difference is watched as well as the floored one.** `wave_seconds_left` can never go
+## negative because of its `max`, so a row that only read it back would be green on a landing clock that
+## had stopped advancing at all — what is asserted below is that the number the `max` is applied to
+## never falls more than a sub-step under zero either.
+func _the_warning_opens_three_minutes_out_and_falls_to_zero(t) -> void:
+	var b := _battle(PERCH)
+	var worst_raw := INF
+	var worst_shown := INF
+	var lowest := []
+	for n in Rules.WAVE_BOATS.size():
+		var land := Rules.wave_land_sec(n)
+		var opens := land - Rules.WAVE_WARNING_SEC
+
+		b.step(opens - 1.0 - b.elapsed)
+		t.ok(not b.wave_warning_open, "%d번 웨이브: 예고가 열리기 1초 전에는 안 떠 있다" % n)
+		t.ok(absf(b.wave_seconds_left - (Rules.WAVE_WARNING_SEC + 1.0)) < 0.05,
+			"그때 남은 시간이 %.2f초다 — 예고 길이 + 1초" % b.wave_seconds_left)
+
+		b.step(1.2)
+		t.ok(b.wave_warning_open, "3분 안으로 들어오면 예고가 뜬다")
+		t.ok(b.wave_seconds_left <= Rules.WAVE_WARNING_SEC,
+			"그리고 남은 시간이 %.1f초 아래다 (%.2f초)" % [Rules.WAVE_WARNING_SEC, b.wave_seconds_left])
+
+		# The whole window, one sub-step at a time.
+		var low := INF
+		while b.elapsed < land - Rules.SIM_SUBSTEP_SEC * 0.25:
+			b.step(Rules.SIM_SUBSTEP_SEC)
+			low = minf(low, b.wave_seconds_left)
+			worst_shown = minf(worst_shown, b.wave_seconds_left)
+			worst_raw = minf(worst_raw, b.wave_land_sec - b.elapsed)
+		lowest.append(low)
+
+		b.step(Rules.SIM_SUBSTEP_SEC * 2.0)
+		t.ok(not b.wave_warning_open, "웨이브가 내리면 예고가 닫힌다")
+		t.ok(b.wave_seconds_left > Rules.WAVE_WARNING_SEC,
+			"그리고 남은 시간이 다음 웨이브 것으로 뛴다 (%.1f초)" % b.wave_seconds_left)
+		t.eq(b.wave_ordinal, n + 1, "다음 웨이브를 세고 있다")
+
+	var above := 0
+	for raw in lowest:
+		if float(raw) > Rules.SIM_SUBSTEP_SEC * 0.5:
+			above += 1
+	t.eq(above, 0, "일곱 줄 전부 0 까지 내려간다 — 서브스텝 반 안쪽 %s" % str(lowest))
+	t.ok(worst_shown >= 0.0, "그리고 한 번도 음수를 안 보인다 (제일 낮은 값 %.6f)" % worst_shown)
+	t.ok(worst_raw >= -Rules.SIM_SUBSTEP_SEC,
+		"바닥을 안 씌운 차이도 서브스텝 하나보다 더 내려가지 않는다 (%.6f) — max 가 음수를 가린 게 아니다"
+			% worst_raw)
+
+
+## **A `Battle` that ran a wave and was `setup` again is indistinguishable from a fresh one.**
+##
+## ⚠⚠ **`Run` MAKES A FRESH `Battle` PER ISLAND, SO THE GAME WOULD NEVER SHOW THIS.** What breaks is the
+## contract `setup`'s own comments are written about, silently, exactly where nobody looks: a reused
+## `Battle` carrying an ordinal of 7 opens the next island with its warning already up and its first
+## wave six hulls big.
+func _a_used_battle_opens_like_a_fresh_one(t) -> void:
+	var g := _grid(ISLE)
+	var army := Army.new()
+	army.add_starting_force()
+	var used := Battle.new()
+	used.setup(g, army, [])
+	used.step(Rules.WAVE_FIRST_SEC + 5.0)
+	t.ok(used.boat_pos.size() > 0, "쓰던 판이 웨이브를 한 번 겪었다 (자가 점검)")
+	t.ok(used.wave_ordinal > 0, "그래서 웨이브 번호도 올라가 있다 (자가 점검 — %d)" % used.wave_ordinal)
+
+	var g2 := _grid(ISLE)
+	var army2 := Army.new()
+	army2.add_starting_force()
+	used.setup(g2, army2, [])
+	var fresh := _battle(ISLE)
+
+	t.eq(used.wave_ordinal, fresh.wave_ordinal, "다시 setup 하면 웨이브 번호가 새 판과 같다")
+	t.eq(used.wave_land_sec, fresh.wave_land_sec, "내릴 시각도 같다")
+	t.eq(used.wave_seconds_left, fresh.wave_seconds_left, "남은 시간도 같다")
+	t.eq(used.wave_warning_open, fresh.wave_warning_open, "예고가 떠 있는지도 같다")
+	t.eq(used.boat_pos.size(), 0, "지난 섬의 선체가 하나도 안 남았다")
+	t.eq(used.elapsed, 0.0, "시계도 0 이다 (자가 점검)")
+
+	# ⚠ **And the two are driven side by side**, because equal opening fields is green for a queue that
+	# survived: the leftover schedule shows up only when the clock reaches it.
+	used.step(Rules.WAVE_FIRST_SEC + 5.0)
+	fresh.step(Rules.WAVE_FIRST_SEC + 5.0)
+	t.eq(used.boat_pos.size(), fresh.boat_pos.size(),
+		"같은 시간을 굴리면 뜬 배 수가 같다 — 지난 판의 예약이 안 남았다")
+	t.eq(used.wave_ordinal, fresh.wave_ordinal, "웨이브 번호도 같이 간다")
+	t.eq(int(used.boat_beach[0]), int(fresh.boat_beach[0]),
+		"겨눈 조각도 같다 — 해변 커서도 처음으로 돌아갔다")
 
 
 # == the hull the deck offsets were read off ===========================================================
@@ -1266,6 +1490,13 @@ func _battle(rows: Array) -> Battle:
 
 func _battle_real() -> Battle:
 	return _battle_on(_real())
+
+
+## **When the first hull of a run is born**, in seconds: one crossing before the first wave lands.
+## ⚠ **Derived here and nowhere copied.** 「the wave lands at 8:00」 is the decided number; the launch is
+## what that means for the water, and it moves the day the crossing does.
+func _first_hull_sec() -> float:
+	return Rules.WAVE_FIRST_SEC - Rules.BOAT_CROSSING_SEC
 
 
 func _battle_on(g: Grid) -> Battle:

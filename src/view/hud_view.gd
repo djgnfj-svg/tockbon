@@ -7,6 +7,12 @@ extends Node2D
 ## Red letters, it just appears, and that is the end."*). **The island keeps drawing behind it and the
 ## board stops answering**, which is the same day's answer and lives in `game.gd`.
 ##
+## ⚠⚠ **「ONE THING」 IS THREE NOW AND THIS LINE IS THE COUNT**: the words, **the picked body's panel**
+## (03-02, 2026-09-02) and **the wave alarm** (12-01, 2026-09-03). Each is a plate pulled in a tool
+## with lettering typed over it, each is switched by a bool the shell hands in, and each has its own
+## `_paint_*` leaves so no net counting one can see another's calls. The paragraph below is the day
+## the count was one, kept because what it records is the BAR, not the number.
+##
 ## ⚠⚠ **「ONE THING」 WAS TWO FOR PART OF 2026-09-02 AND IS ONE AGAIN** (ticket 03-12): **the selection
 ## box** the left drag pulls over the island lived here for a few hours — a pulled picture cut into four
 ## corners and four stretched edges, in SCREEN space — and the user's verdict on it was that it was not
@@ -81,6 +87,27 @@ var _picked := PackedInt32Array()
 ## **The plate under the fifteen lines.** Pulled in a tool and loaded, for the reason `_tex_over` gives.
 var _tex_panel: Texture2D = load(Look.PANEL_TEX) as Texture2D
 
+## **Whether a wave is inside its warning window** (12-01, the user: 「시간은 3분때만 뜨면 될듯」 —
+## *"I think the time only needs to show during the 3 minutes."*). Written by `game._process` off
+## `battle.wave_warning_open`, never read off `battle` here, for the reason `_over` gives.
+var _warning := false
+
+## **The countdown, ALREADY AS THE SCREEN WILL PRINT IT.**
+##
+## ⚠⚠ **THE STRING AND NOT THE FLOAT, AND THAT IS WHAT KEEPS THE REDRAWS DOWN TO ONE A SECOND.**
+## `wave_seconds_left` changes sixty times a second and 「M:SS」 changes once; holding the float here
+## would mean `set_warning` could not tell a frame that changed the picture from one that did not,
+## and the layer would ask the engine to repaint an identical canvas fifty-nine times over. **One
+## place formats it** — `Look.alarm_clock_text` — and the guard and the draw read that one answer.
+var _warning_text := ""
+
+## **The alarm's plate.** Pulled in a tool and loaded, for the reason `_tex_over` gives.
+var _tex_alarm: Texture2D = load(Look.ALARM_TEX) as Texture2D
+
+## **The countdown's face**, loaded once and kept beside the other two, and STATIC for the same
+## reason they are.
+static var _clock_face: Font = null
+
 ## Resolved once and kept, and STATIC because panel_view needs the same face — the explanation for
 ## picking it lives here only, in one file, rather than in both view files.
 ## `ThemeDB` is available untreed and headless: "there is no font outside the tree" was measured
@@ -113,6 +140,15 @@ static func panel_font() -> Font:
 	return _panel_face
 
 
+## **The face the countdown is typed in** — numerals and a colon, not the panel's Hangul face.
+## ⚠ It has no Hangul at all, so the alarm's label goes through `panel_font` and only the digits come
+## through here; `Look.ALARM_CLOCK_FONT` says why.
+static func alarm_font() -> Font:
+	if _clock_face == null:
+		_clock_face = load(Look.ALARM_CLOCK_FONT) as Font
+	return _clock_face
+
+
 ## The word a player reads for a beast row. **One line reading the unit table**, so the name on the
 ## refit strip and the name in the reward list cannot say two different things.
 static func type_label(type_id: int) -> String:
@@ -129,6 +165,11 @@ func bind(b: Battle) -> void:
 	# ⚠ Cleared for the same reason `_over` is: the ids survive an island and the last island's pick
 	# would open the next one with a panel about a body standing nowhere yet.
 	_picked = PackedInt32Array()
+	# ⚠ And the alarm, for the third time the same reason: `Run` builds a fresh `Battle` per island so
+	# the new one's wave clock starts at a whole interval, and a latched warning would put 「늑대 무리
+	# 0:00」 over an island where the next wave is eight minutes out.
+	_warning = false
+	_warning_text = ""
 	queue_redraw()
 
 
@@ -162,6 +203,23 @@ func set_over(over: bool) -> void:
 	queue_redraw()
 
 
+## The shell says a wave is inside its warning window and how long is left, and the alarm goes up.
+##
+## ⚠⚠ **THE GUARD COMPARES THE PRINTED STRING, NOT THE FLOAT** — see `_warning_text`. The shell calls
+## this every frame while the sim runs; the picture changes once a second, and comparing the seconds
+## the screen would show is the difference between one redraw and sixty.
+## ⚠ **It takes the window's state rather than being a `note_wave()`**, so the OFF edge exists: the
+## call that closes the window is the frame the plate comes down, and a setter with no false arm
+## would leave the alarm up for the rest of the island.
+func set_warning(open: bool, seconds_left: float) -> void:
+	var shown := Look.alarm_clock_text(seconds_left) if open else ""
+	if open == _warning and shown == _warning_text:
+		return
+	_warning = open
+	_warning_text = shown
+	queue_redraw()
+
+
 ## ⚠⚠ **THERE IS NO `_process` ANY MORE.** It called `queue_redraw()` every frame so the enemy count
 ## could follow the sim; **with nothing drawn there is nothing to keep fresh**, and a node asking the
 ## engine to redraw an empty canvas sixty times a second is work nobody can see. It comes back with
@@ -187,6 +245,21 @@ func set_over(over: bool) -> void:
 ## | 능력치 | 「공격력 N」 · 「방어력 N」 · 「공격간격 N.N초」 | `Army.damage_of` · `Rules.defense_of` · `Army.period_of` |
 ## | 적성 | one 「<word> N/최대」 per row of `Rules.APTITUDES` | `Army.aptitude_of` / `Rules.APTITUDE_MAX` |
 ##
+## **And the wave alarm, while a wave is inside its warning window** (12-01): the plate top-left,
+## flush with the viewport edge, with 「늑대 무리」 on it and the countdown beside that. It is drawn
+## above the `_over` return and above the panel, so the alarm and the panel stand together — the
+## alarm's corner is TOP_LEFT and the panel's is BOTTOM_LEFT, and `Look.corner_origin_px` is the one
+## place that says what either of those means.
+##
+## ⚠⚠ **AND `not _over`, WHICH IS A REPAIR AND NOT A TIDY-UP.** Drawn without it, a lost run was
+## photographed under GAME OVER with the alarm still up and **frozen at 「2:57」** — the sim stops
+## advancing after a loss, so the countdown stops with it. **A finished run promising 늑대 in three
+## minutes is the screen saying something that is not true**, which is the one thing this layer is
+## not allowed to do. ⚠ **The panel deliberately does NOT take this guard**: 「이 몸의 체력은 이것이다」
+## is still true on a board that has fallen, and a promise about the future is not.
+## ⚠ **`_warning` and not `battle.wave_warning_open`** — see `set_warning`; the shell owns which
+## screen is up, exactly as it does for the loss.
+##
 ## ⚠ **The 「특성 」 line is painted with its blank value**, so the count is fifteen whether or not
 ## a body has a word there — a count that moved with the data would be a net that cannot pin it.
 ## ⚠ **The first id the hand holds is shown, alive or not** — `Hand` never prunes a dead body, so
@@ -197,6 +270,13 @@ func set_over(over: bool) -> void:
 ## is pulled AT that size and the net asserts it is; a layout that re-fitted itself to the file would
 ## hide a wrongly-sized plate under green checks.
 func _draw() -> void:
+	if _warning and not _over and _tex_alarm != null:
+		var alarm_at := Look.alarm_origin_px(Look.ALARM_SIZE_PX)
+		_paint_alarm(_tex_alarm, alarm_at)
+		_paint_alarm_line(Look.ALARM_LABEL, Look.alarm_baseline_px(alarm_at, 0), panel_font(),
+			Look.ALARM_LABEL_FONT_PX, Look.COL_ALARM_TEXT)
+		_paint_alarm_line(_warning_text, Look.alarm_baseline_px(alarm_at, 1), alarm_font(),
+			Look.ALARM_CLOCK_FONT_PX, Look.COL_ALARM_TEXT)
 	if battle != null and not _picked.is_empty() and _tex_panel != null:
 		var font := panel_font()
 		var ascent := font.get_ascent(Look.PANEL_FONT_PX)
@@ -290,4 +370,26 @@ func _paint_panel(tex: Texture2D, at: Vector2) -> void:
 ## every hook capture still green; through the argument, `net_panel` reads 15 off the call.
 ## `at` IS the baseline — `Look.panel_line_baseline_px` already added the ascent.
 func _paint_line(text: String, at: Vector2, font: Font, size_px: int, col: Color) -> void:
+	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, col)
+
+
+## The alarm's plate, drawn 1:1 at its own size.
+##
+## ⚠⚠ **ONE `draw_texture` AND NO RECT**, like the three leaves above it. The banner — the red, the
+## gold rails, the torn ends — is all in the file; a rect or a border typed here would be chrome
+## nobody chose, over a picture the user chose by looking.
+func _paint_alarm(tex: Texture2D, at: Vector2) -> void:
+	draw_texture(tex, at)
+
+
+## One line on the alarm's plate, typed in whichever face it was handed at whichever size.
+##
+## ⚠⚠ **IT IS A SECOND LEAF AND NOT `_paint_line`, ON PURPOSE.** The two bodies are the same call and
+## that is not an accident to be tidied away: `net_panel` spies `_paint_line` and counts what comes
+## through it as the panel's fifteen lines, so an alarm sharing that hook would put two more in the
+## spy's list the moment a warning opened over a picked body — a net going red about a panel that
+## never changed. **A leaf per plate keeps each one's count its own**, which is also what lets
+## `net_draw_leaf` say 「the alarm painted nothing while it was closed」 without reading any text.
+## `at` IS the baseline — `Look.alarm_baseline_px` already placed it.
+func _paint_alarm_line(text: String, at: Vector2, font: Font, size_px: int, col: Color) -> void:
 	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, col)

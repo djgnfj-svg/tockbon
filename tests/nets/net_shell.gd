@@ -159,7 +159,8 @@ func run(t) -> void:
 	await _one_press_reaches_the_first_island(t)
 	# ⚠ **Up here with the other own-`Game` rows**, and for the same reason they are: it must not be one
 	# of the rows a red halfway down `run()` quietly stops running.
-	await _the_shell_opens_an_island_with_no_boats_coming(t)
+	await _the_shell_opens_an_island_with_the_boats_coming(t)
+	await _the_body_sprites_count_the_deck_and_the_beasts_too(t)
 	# ⚠⚠ **AT THE TOP, AND FOR THE REASON THE TERRAIN BLOCK BELOW SPELLS OUT**: a red row halfway down
 	# `run()` has twice abandoned everything after it, and 티켓 15's red is still standing. This builds
 	# its own `Game` and lets go of it, so it cannot be one of the rows that quietly stops running.
@@ -349,9 +350,18 @@ func run(t) -> void:
 	# and its subject is gone too: nobody presses to make a boat any more. **Re-aimed at the subject
 	# that replaced it**: the beasts' hulls are `_boats_used`, and the claim that survives is the same
 	# one — **before the first boat's clock there is nothing to draw.**
-	t.ok(game.battle.elapsed < Rules.BOAT_FIRST_SEC,
-		"자가 점검 — 이 섬의 시계가 아직 첫 배 앞이다 (%.3f초)" % game.battle.elapsed)
-	t.eq(fs._boats_used, 0, "첫 배가 뜨기 전에는 선체가 하나도 안 그려진다")
+	# ⚠⚠ **THIS SELF-CHECK WAS A TIME COMPARISON AND IT WOULD HAVE GONE ALWAYS-TRUE** (2026-09-03).
+	# It read `elapsed < Rules.BOAT_FIRST_SEC`, five seconds; the wave clock puts the first hull
+	# **461.75 seconds in**, and this file's `elapsed` here is two pumped frames. Swapped constant for
+	# constant it still compiles and **stops measuring anything at all** — the same species of failure
+	# its own note below records it being repaired for once already.
+	# ⇒ **Re-anchored to the sim's own answer instead of to a clock**: what makes 「아무것도 안 그렸다」
+	# a claim is that `sim` has no hull to draw, and that is a fact this file can reach on any board at
+	# any second. A launch clock that moved to 0 reddens it; a clock that moved to an hour does not
+	# quietly hollow it.
+	t.eq(game.battle.boat_pos.size(), 0,
+		"자가 점검 — 이 섬에는 아직 sim 이 아는 배가 하나도 없다 (%.3f초)" % game.battle.elapsed)
+	t.eq(fs._boats_used, 0, "그래서 선체도 하나도 안 그려진다")
 
 	_the_pan_keys_move_the_camera_and_stop(t, game, fs)
 	await _a_drag_boxes_and_a_click_picks_or_orders(t, game, fs, hs)
@@ -451,6 +461,13 @@ func run(t) -> void:
 	for k in b.boat_riders.size():
 		riders += int(b.boat_riders[k])
 	var bodies := _body_sprites(fs)
+	# ⚠⚠ **THE THREE TERMS ARE 「몸 + 0 + 0」 HERE SINCE 2026-09-03 AND THAT IS A LOSS, NOT A PASS.** The
+	# first hull is now born at 7:41.75, and this file's island is two frames old — **so nothing is
+	# aboard and nothing has landed, and the identity collapses to 「몸 스프라이트 = 섬에 선 몸」.** Its
+	# own note above records that it once passed with eight deck wolves on screen and did not see them.
+	# **It does not go red. It goes hollow.** ⇒ the two other terms are driven past a landing in
+	# `_the_body_sprites_count_the_deck_and_the_beasts_too`, which is where the row keeps its meaning;
+	# what survives here is the frame this file's camera rows are read against.
 	t.eq(bodies.size(), ashore.size() + b.living_enemy_ids().size() + riders,
 		"몸 스프라이트 수 = 섬에 선 몸 + 판 위의 짐승 + 갑판 위의 늑대 (%d + %d + %d) — 화면에 있는 것과 sim 이 아는 것이 같다"
 			% [ashore.size(), b.living_enemy_ids().size(), riders])
@@ -2712,21 +2729,25 @@ func _one_press_reaches_the_first_island(t) -> void:
 	game.queue_free()
 
 
-## **The island the shell opens has the 늑대 boats turned off.** 2026-09-03, the user: 「일단 이제 늑대
-## 안와도 됨」 — *"For now the wolves don't have to come any more."*
+## **The island the shell opens has the 늑대 boats ON.**
+##
+## ⚠⚠ **THIS ROW ASSERTED THE OPPOSITE FACT UNTIL 2026-09-03 AND THE REVERSAL IS THE TICKET.** The user
+## had said 「일단 이제 늑대 안와도 됨」 — *"for now the wolves don't have to come any more"* — and
+## `_open_island` wrote `boats_come = false` on one line. **It was 「일단」 and not a decision that waves
+## are cancelled**: 티켓 12-01 took over the launch clock and deleted that line, so what the shell opens
+## with is the wave table. The row is turned round rather than deleted, because a row that goes away
+## takes the fact with it.
 ##
 ## ⚠⚠ **THE BOARD IS THE ONE A PRESS ON 시작하기 OPENED, NOT A HAND-BUILT ONE.** `boats_come` defaults to
-## true and `Battle` is the only thing that could have turned it off; a fixture that set it here would
-## measure this file writing a field. **The wiring line in `_open_island` is the subject**, and deleting
-## it must redden this row.
+## true, so a fixture that set it here would measure this file writing a field. **A silencing line put
+## back into `_open_island` is the subject**, and it must redden this row.
 ##
 ## ⚠⚠ **THE SIM IS DRIVEN THROUGH `game._process`, WHICH IS THE ONLY CALLER OF `battle.step`.** A row
 ## that called `battle.step` itself would be green on a shell that had stopped stepping at all.
 ##
-## ⚠ **The last two lines are the falsifier for THIS check.** 「한 척도 안 왔다」 is green for a drive too
-## short, a board with no coast, and a `_process` that never stepped — so the same board, flipped back
-## on, must produce a hull within a sub-step or two.
-func _the_shell_opens_an_island_with_no_boats_coming(t) -> void:
+## ⚠ **Both sides of the lead time, and then the landing.** 「배가 왔다」 alone is green for a clock that
+## fired on the opening frame; 「아직 안 왔다」 alone is green for a shell that never stepped.
+func _the_shell_opens_an_island_with_the_boats_coming(t) -> void:
 	var game := QuitGame.new()
 	t.root.add_child(game)
 	await t.pump_frames(2)
@@ -2744,20 +2765,27 @@ func _the_shell_opens_an_island_with_no_boats_coming(t) -> void:
 		game.queue_free()
 		return
 
-	t.ok(not b.boats_come, "셸이 연 판은 배가 안 오는 쪽으로 서 있다")
+	t.ok(b.boats_come, "셸이 연 판은 배가 오는 쪽으로 서 있다")
 
-	var driven := Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC + 1.0
-	game._process(driven)
-	t.eq(b.boat_pos.size(), 0, "그래서 셸이 %.0f초를 굴려도 배가 한 척도 안 온다" % driven)
+	# **Nothing before the first wave's lead, and a hull the moment it is reached.** ⚠ **Both sides**,
+	# because 「아직 없다」 alone is green for a shell that stopped stepping, and 「왔다」 alone is green
+	# for a clock that fired at 0.
+	var lead := Rules.WAVE_FIRST_SEC - Rules.BOAT_CROSSING_SEC
+	game._process(lead - 1.0)
+	t.eq(b.boat_pos.size(), 0, "%.2f초까지는 배가 한 척도 안 온다" % (lead - 1.0))
 	t.eq(b.living_enemy_ids().size(), 0, "늑대도 한 마리 안 내렸다")
-	t.ok(b.elapsed >= driven - Rules.SIM_SUBSTEP_SEC * 2.0,
+	t.ok(b.elapsed >= lead - 1.0 - Rules.SIM_SUBSTEP_SEC * 2.0,
 		"그동안 셸이 시뮬레이션을 실제로 굴렸다 — 시계가 %.2f초까지 갔다 (자가 점검)" % b.elapsed)
 
-	b.boats_come = true
-	game._process(Rules.SIM_SUBSTEP_SEC * 2.0)
-	t.ok(b.boat_pos.size() > 0,
-		"같은 판을 켜 놓고 굴리면 %d척이 온다 — 위의 0 이 짧은 시간이나 해변 없는 판 때문이 아니다"
-			% b.boat_pos.size())
+	game._process(1.2)
+	t.eq(b.boat_pos.size(), 1,
+		"%.2f초를 넘기면 첫 웨이브의 배 한 척이 뜬다 — 셸이 조용히 꺼 놓지 않는다" % lead)
+
+	# **And it really lands**, which is the half a launch alone does not say. Driven through the shell's
+	# own `_process`, the only caller of `battle.step`.
+	game._process(Rules.BOAT_CROSSING_SEC + 1.0)
+	t.ok(b.living_enemy_ids().size() > 0,
+		"그 배가 늑대를 %d 마리 내려놓는다" % b.living_enemy_ids().size())
 
 	t.root.remove_child(game)
 	game.queue_free()
@@ -3298,3 +3326,70 @@ func battle_ashore(b: Battle) -> Array:
 	for raw in b.ashore_ids():
 		out.append(int(raw))
 	return out
+
+
+## **The body sprites count the deck and the beasts too, driven past a landing.**
+##
+## ⚠⚠ **IT EXISTS BECAUSE THE CONSERVATION ROW UP IN `run()` WENT HOLLOW ON 2026-09-03.** That row reads
+## `몸 스프라이트 = 섬에 선 몸 + 판 위의 짐승 + 갑판 위의 늑대` on an island two frames old, and the first
+## hull is now born at 7:41.75 — **so two of its three terms are 0 and the identity collapses to
+## 「몸 스프라이트 = 섬에 선 몸」.** Its own comment records it once passing with eight deck wolves on
+## screen that it could not see. **A hollow row is not a red one**, so the terms are driven here.
+##
+## ⚠⚠ **TWO INSTANTS AND NOT ONE**: a hull at sea with a full deck, and the same board after that deck
+## has walked ashore. Either alone leaves one term at 0 — **and the pair is what makes 「갑판 위의 늑대」
+## and 「판 위의 짐승」 different numbers rather than the same zero twice.**
+##
+## ⚠ **The sim is driven through `game._process` and the frame is pumped after it.** The row above
+## records what a stale paint does here: a body read where it is and painted where it was.
+func _the_body_sprites_count_the_deck_and_the_beasts_too(t) -> void:
+	var game := QuitGame.new()
+	t.root.add_child(game)
+	await t.pump_frames(2)
+	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
+	await t.pump_frames(1)
+	game.set_process(false)
+	await t.pump_frames(1)
+
+	var b: Battle = game.battle
+	var fs: FieldView = game.field_view
+	t.ok(b != null and fs != null, "시작하기를 누르면 섬과 화면이 선다 (자가 점검)")
+	if b == null or fs == null:
+		t.root.remove_child(game)
+		game.queue_free()
+		return
+
+	# **Aboard**: past the first wave's launch, and half a crossing short of its beach.
+	var lead := Rules.WAVE_FIRST_SEC - Rules.BOAT_CROSSING_SEC
+	game._process(lead + Rules.BOAT_CROSSING_SEC * 0.5)
+	await t.pump_frames(1)
+	_the_three_terms_add_up(t, b, fs, "건너는 중")
+	var riders := 0
+	for k in b.boat_riders.size():
+		riders += int(b.boat_riders[k])
+	t.eq(riders, Rules.BOAT_CAPACITY, "그때 갑판에 %d 마리가 타 있다 (자가 점검)" % Rules.BOAT_CAPACITY)
+	t.eq(b.living_enemy_ids().size(), 0, "그리고 판 위에는 아직 하나도 없다 (자가 점검)")
+
+	# **Ashore**: the same board a crossing later.
+	game._process(Rules.BOAT_CROSSING_SEC * 0.5 + 1.0)
+	await t.pump_frames(1)
+	_the_three_terms_add_up(t, b, fs, "내린 뒤")
+	t.ok(b.living_enemy_ids().size() > 0,
+		"그때는 판 위에 짐승이 %d 마리 서 있다 (자가 점검)" % b.living_enemy_ids().size())
+
+	t.root.remove_child(game)
+	game.queue_free()
+
+
+## The conservation identity itself: what the engine draws against what `sim` knows.
+## ⚠ **The three terms come from the SIM**, never from the pool — counted off the pool this would be
+## comparing it with itself.
+func _the_three_terms_add_up(t, b: Battle, fs: FieldView, when: String) -> void:
+	var ashore := battle_ashore(b)
+	var riders := 0
+	for k in b.boat_riders.size():
+		riders += int(b.boat_riders[k])
+	var bodies := _body_sprites(fs)
+	t.eq(bodies.size(), ashore.size() + b.living_enemy_ids().size() + riders,
+		"%s: 몸 스프라이트 수 = 섬에 선 몸 + 판 위의 짐승 + 갑판 위의 늑대 (%d + %d + %d)"
+			% [when, ashore.size(), b.living_enemy_ids().size(), riders])

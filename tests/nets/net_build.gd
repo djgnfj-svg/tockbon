@@ -78,7 +78,7 @@ func _the_pool_carries_no_boats(t) -> void:
 	var b := _battle()
 	t.eq(b.grid.beach_ring(Rules.BOAT_START_DIST_TILES).size(), 0,
 		"자가 점검 — 배가 댈 해변이 하나도 없다")
-	_run_for(b, Rules.BOAT_FIRST_SEC + 1.0)
+	_run_for(b, Rules.WAVE_FIRST_SEC - Rules.BOAT_CROSSING_SEC + 1.0)
 	t.eq(b.boat_pos.size(), 0, "자가 점검 — 그래서 배가 한 척도 안 뜬다")
 
 
