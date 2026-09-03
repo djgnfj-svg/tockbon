@@ -17,11 +17,45 @@ page, and it says the true thing.**
 
 | File | What is in it |
 |---|---|
-| `blend/island.blend` | The island as one mesh, **plus its 32 block parts standing separately** |
+| `blend/island.blend` | `island` (22,075 verts) · `pads` (11,480 verts) · **the 31-block kit standing separately** — see the section below. **33 objects in all** |
 | `blend/boat.blend` | Hull · gunwale · deck · mast · yard · sail · stem · stern post · four benches |
 | `blend/buildings.blend` | Keep · house · tower · store · wall |
 | `blend/props.blend` | Six trees · a stump · rock · stone (a pebble) · the 철광석. ⚠⚠ **The bush is NOT here** — it is a picture, `assets/props/flat/lp_bush_v*.png`, drawn by `src/view/prop_card.gdshader`. **A prop kind is a node in this file OR a PNG in that folder, and the mesh wins**, so moving a thing from 3D to 2D is deleting it from here |
 | `blend/boat_small.blend` | The small boat |
+
+## The block kit — **31 blocks in `island.blend`, and this is where they are**
+
+**They are objects in `blend/island.blend`, standing beside `island` and `pads`.** The name is the
+address: **`KIT_<level>_<kind>_<n>`** — `KIT_0_edge_18`, `KIT_2_corner_5`. ⚠ **`<n>` is a running index
+over the whole kit (0..30), not a count within its kind**, so `KIT_0_solid_25` is the 26th object and
+not the 26th solid.
+
+| Kind | level 0 | level 2 |
+|---|---|---|
+| `solid` | 3 | 1 |
+| `edge` | 6 | 3 |
+| `corner` | 4 | 4 |
+| `strait` | 3 | 1 |
+| `cape` | 3 | 1 |
+| `islet` | 1 | 1 |
+| **total** | **20** | **11** |
+
+**What every one of them shares**: it sits at the ORIGIN, spans **±1.0** (one 칸) with a coastal skirt
+out to **±1.25**, and carries a vertex-colour layer named `Col`. ⚠⚠ **None has a UV layer and none has
+a material** — the colour is on the vertices and nothing else. `pads` is the opposite and carries two
+UV layers, `UVMap` and `UVMap.001`.
+
+**Height**: level 0 spans z **−0.12 .. 0.21**, level 2 spans z **−0.12 .. 1.21**.
+
+**Vertices per block**, and they rise with how much coast the block has:
+
+| | `solid` | `edge` | `strait` | `corner` | `cape` | `islet` |
+|---|---|---|---|---|---|---|
+| level 0 | 33 | 105 | 177 | 225 | 345 | 513 |
+| level 2 | 65 | 147 | 229 | 291 | 435 | 641 |
+
+⇒ **`assets/terrain/pieces.glb` is these 31 blocks exported**, and it is what `tools/look/piece_viewer.gd`
+opens by default. ⚠ **It is re-bakeable** — export the `KIT_*` objects out of `island.blend` again.
 
 ## ⚠⚠ Four rules the code pairs with GEOMETRY, and nothing can check them but an eye
 
@@ -48,8 +82,10 @@ purpose; `look.gd` carries the note.
 2. **Change the shape.** ⚠ The user does detail work here with a mouse; leave the file in a state they
    can open.
 3. **Export the `.glb`** into `assets/` over the file that is already there. Keep the same name —
-   `assets/props/boat.glb`, `assets/terrain/island.glb`, `assets/buildings/buildings.glb`,
-   `assets/props/props.glb`.
+   `assets/terrain/island.glb` (`island` + `pads`), `assets/terrain/pieces.glb` (the 31 `KIT_*` blocks),
+   `assets/props/boat.glb`, `assets/props/boat_small.glb`, `assets/buildings/buildings.glb`,
+   `assets/props/props.glb`. ⚠ **`island.blend` exports TWO files**, and re-baking one does not re-bake
+   the other.
 4. **Save the `.blend` back.** ⚠⚠ **An export is not a save.** A shape that only exists in a `.glb`
    is a shape nobody can edit again, which is the whole failure this page exists to stop.
 5. **Re-import, or Godot draws yesterday's mesh** — see the trap below.
@@ -104,8 +140,12 @@ evening's island.
 
 | File | What it holds | Who reads it |
 |---|---|---|
-| `assets/terrain/island.json` | passability · levels · harbours · the coast | `Islands` — **the game's whole idea of the ground** |
+| `assets/terrain/island.json` | `rows` (passability, 30x26) · `tiers` (levels) · `coast` · `builds` · `props` | `Islands` — **the game's whole idea of the ground** |
 | `assets/buildings/buildings.json` | each building's kind, footprint in 조각, and name | `Builds` — how many 조각 a keep covers |
+
+⚠ **`rows` is 388 `~` · 284 `.` · 108 `H`, and `H` is a BORDER letter and nothing else.** 항구 is a dead
+word (2026-09-02) and no code in `src/` launches a boat from an `H`; a page that calls this file's
+contents 「harbours」 is re-proposing a thing the user deleted.
 
 **Move a block in `island.blend` and the mesh changes while the game's idea of the ground does not** —
 bodies will walk through walls or refuse open ground. **Resize a building and its footprint still says
@@ -136,9 +176,16 @@ the game where a body's feet go. **If they disagree, bodies walk through the sta
   26.6°, and a real staircase is 30 to 37.
 - ⚠⚠ **A block's corners are NOT cut at 45° — they are slightly tilted.** This is a live rule and it
   has been trampled once by a round that opened Blender without reading it first.
-- **The island is one mesh, ~1100 vertices, one draw call.** Nothing here is a performance problem, and
-  optimisation is never a reason to change the approach.
-- **The boat's length and beam are a RULE, not a picture** — `Rules.BOAT_HULL_HALF_TILES` (2.1) and
-  `BOAT_HULL_BEAM_TILES` (2.01) are the mesh's own box read back, and the sim beaches every boat off
-  them. ⚠ **Change the hull's length and change that constant in the same edit**, or the boat stops
-  short of the sand.
+- **The island is one mesh and one draw call, and so is `pads` beside it.** Measured 2026-09-03:
+  **22,075 verts in Blender, 80,723 in the exported `island.glb`** — the export splits a vertex per face
+  for flat shading, so the exported number is the one Godot loads and it is about 3.7x the Blender
+  count. `pads` is 11,480 in Blender and 28,176 exported. ⚠ **The old figure here was 「~1100
+  vertices」 and it was wrong by a factor of twenty.** The conclusion it was written to carry still
+  stands: **nothing here is a performance problem, and optimisation is never a reason to change the
+  approach.**
+- **The boat's length and beam are a RULE, not a picture** — `Rules.BOAT_HULL_HALF_TILES` (1.5) and
+  `BOAT_HULL_BEAM_TILES` (1.5) are read back off **`blend/boat_small.blend` / `assets/props/boat_small.glb`**,
+  which is the hull that actually arrives, and the sim beaches every boat off them. ⚠ **Change the hull's
+  length and change that constant in the same edit**, or the boat stops short of the sand. ⚠ **This page
+  carried 2.1 and 2.01, which were `boat.glb`'s and were replaced on 2026-09-01 when the small boat took
+  over** — `blend/boat.blend` is still an original and is not what lands.

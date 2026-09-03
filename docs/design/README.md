@@ -19,7 +19,7 @@
 
 **사람 회사가 섬 하나를 지키고 키운다.** 짐승이 배를 타고 쳐들어오는 쪽이고, 플레이어는 검사 부대다.
 부대는 **판 위에서 언제든 명령한다.** 시간이 차면 보스가 오고, 다른 섬을 털러 나가는 것으로 섬이 는다.
-**12월은 데모다.** ⚠⚠ **이 줄은 2026-08-26 하루에 두 번 뒤집혔다** — 아침에 「출시」가 됐다가 저녁에 사용자가 ***"12월 데모로 변경"*** 이라고 해서 되돌아왔다. **논쟁으로 정해지는 줄이 아니라 마지막에 말한 것이 답인 줄이다.**
+⚠⚠ **12월은 얼리액세스 출시다 (2026-09-02).** 그날까지는 「12월 데모」였고, 이 줄은 2026-08-26 하루에 두 번 뒤집혀 데모로 돌아왔다가 다시 출시가 된 것이다. **논쟁으로 정해지는 줄이 아니라 마지막에 말한 것이 답인 줄이다** — 지금 답은 `CLAUDE.md` 가 든다. ⚠ **아래 갈래 문서들은 「12월 데모」 시절에 쓰였고 그 낟말이 본문에 남아 있다.**
 ⚠⚠ **2026-08-26에 진영이 뒤집혔다.** 그 전까지는 짐승이 되어 섬 여덟을 깨는 게임이었고, 지도 화면 ·
 노드 걷기 · 노드 보상 · 섬 여덟 · 종족 카드는 **그날 코드에서 지워졌다.**
 ⚠⚠ **2026-08-29에 성장 고리가 통째로 지워졌다** — 보상 카드 화면과 정비 화면, 그리고 뽑는 기구가
@@ -36,7 +36,7 @@
 
 | 문서 | 무엇을 접었나 |
 |---|---|
-| [A left press on nothing keeps the hand](a-left-press-on-nothing-keeps-the-hand.md) | A left press on empty ground keeping the 부대, with ESC the only way to let go. ⚠⚠ **Reversed by the user on 2026-09-02** — a left press on nothing lets go (StarCraft, which the user named) and ESC stays as the second way; the walk moved to the right button (ticket 03-11). The reason it existed — one button did both jobs — is spent, and the doc says why |
+| [A left press on nothing keeps the hand](a-left-press-on-nothing-keeps-the-hand.md) | A left press on empty ground keeping the 부대, with ESC the only way to let go. ⚠⚠ **뒤집혔다가 같은 날 저녁에 다시 섬다 (2026-09-02, 티켓 03-12).** 아침에 오른쪽 버튼이 이동을 가져가면서 규칙이 무너졌고, 저녁에 사용자가 오른쪽 버튼을 통째로 없애면서 **한 버튼이 두 일을 다시 하게 돈 — 이 문서가 대던 이유 그대로다.** 문서 첫 줄의 `Status:` 가 진짜다 |
 | [해안선을 열고 고정 선착장을 버린다](open-coastline-over-fixed-docks.md) | 정해진 상륙 지점. ⚠ **규칙은 살아 있고 주인만 뒤집혔다** — 이제 적이 내린다 |
 | [배 수를 안 막는다](unlimited-boats-not-a-five-boat-cap.md) | 배 다섯 척 상한. ⚠⚠ **배는 이제 적의 것이다** — 플레이어는 배를 안 놓는다. 논증은 웨이브 표를 짤 때 다시 쓴다 |
 | [하늘에서 떨어뜨린다, 배로 대지 않는다](dropped-from-the-sky-not-landed-by-boat.md) | 배로 상륙시키는 것. ⚠ **결론은 그대로, 배를 타고 오는 쪽이 짐승이 됐다** |

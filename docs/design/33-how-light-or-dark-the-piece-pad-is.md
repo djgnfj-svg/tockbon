@@ -39,7 +39,9 @@ python .prototypes/pads/look_sheet.py
 ```
 
 ⚠ **The gutter needs a re-bake to change, the tone does not.** The tone is one uniform pushed from
-`look.gd`; the gutter is geometry in `tools/blender/island_build.py`.
+`look.gd`; the gutter is geometry. ⚠ **It said `tools/blender/island_build.py` — that folder was
+deleted 2026-08-31 and the geometry is now edited in `blend/island.blend` (the `pads` object) and
+re-exported; `docs/manual/blender.md` carries the loop.**
 
 ## What is already known from looking
 

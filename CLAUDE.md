@@ -79,7 +79,7 @@ resets.
 | Path | What it holds |
 |---|---|
 | `docs/roadmap/` | **The only map.** `README.md` is what is being done and this folder's own shape; `log.md` is why it came out that way, and every quotation. ⚠⚠ **Only `wrap-up` writes here**, and only after the conversation is finished |
-| `docs/design/` | What is being made, and the forks that were rejected. ⚠ **Sixteen fork docs and NO GDD, which is the defect.** A reversal is written ONTO a fork doc, never by deleting it |
+| `docs/design/` | What is being made, and the forks that were rejected. ⚠ **Seventeen fork docs and NO GDD, which is the defect.** A reversal is written ONTO a fork doc, never by deleting it |
 | `docs/reference/` | **What came in from outside** — the screenshots a decision was made from, and what `research` brings back. All `YYYY-MM-DD-what-it-is`. ⚠ **A ticket keeps the conclusion; the material stays here** |
 | `docs/manual/` | **How to work an instrument** — making what the player sees, and Blender |
 | `docs/개발지식/` | The measured tool knowledge, in Korean, written for the user to read |

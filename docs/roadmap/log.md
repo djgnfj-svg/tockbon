@@ -1077,6 +1077,14 @@ and it is a file.
 | **One Blender run writes both halves** | `island_build.py` → the 5 MB mesh AND the walk data. *"They cannot disagree, because nothing writes one without the other"* |
 | ✅ **But the parts already exist separately** | `pieces.glb`, 8 KB — twelve sets from 2026-08-29 ⇒ **what varies per run is the arrangement, not the geometry** |
 
+⚠⚠ **CORRECTION 2026-09-03** — the row above names the wrong file. `pieces.glb` held **ten** dead parts
+from an attempt abandoned 2026-08-24, and **nothing in `src/` or `tests/` ever read it**. **The real kit
+is 31 blocks standing separately inside `blend/island.blend`**, named `KIT_<level>_<kind>_<n>` — twenty
+at level 0, eleven at level 2, six kinds (`solid` `edge` `corner` `strait` `cape` `islet`), each at the
+origin spanning ±1.0 with a coastal skirt to ±1.25, each carrying a vertex-colour layer `Col` and no UV
+and no material. **The conclusion the row drew still holds** — what varies per run is the arrangement,
+not the geometry — **but the count and the file were both wrong.**
+
 ⚠ **`08-01` is `Type: grilling`** — four things are unanswered and a generator built before them builds
 the wrong island: **what varies · how much · does the drawn island survive · is there a seed.**
 ⚠⚠ **The island standing now is the only one the user has ever passed by eye** (2026-08-30). A generator
@@ -1375,7 +1383,8 @@ The user had been describing it for days: *"the diamond is always visible ... fa
 **It was the shading data on the island mesh, not its shape.**
 
 - **섬 본체만 부드러운 음영이었다** — 폴리곤 22724 중 22292. **그 섬을 이루는 KIT 부품 32 개는 전부
-  각져 있었다.** 평평한 바닥 삼각형의 **85.4%** 가 제 꼭짓점 법선이 서로 달랐고, 중앙값 7.53 도 기울어
+  각져 있었다.** ⚠ **CORRECTION 2026-09-03: `KIT_*` 블록은 31 개다** (눈금 0 이 스무 벌 · 눈금 2 가
+  열한 벌). `blend/island.blend` 의 물체 33 개 중 나머지 둘은 `island` 와 `pads` 다. 평평한 바닥 삼각형의 **85.4%** 가 제 꼭짓점 법선이 서로 달랐고, 중앙값 7.53 도 기울어
   있었다. 조각 하나가 삼각형 둘이라 **둘이 만나는 대각선**이 마름모였다.
 - **바닥 색도 같은 대각선에서 어긋나 있었다** — 삼각형의 **54.8%**.
 
@@ -2073,7 +2082,11 @@ own.**
 ***"바꾸고 열 개로 시작하는 게 맞고"*** → (몇 시간 뒤) ***"접고 그냥 게임 한 번 보여주자"***
 
 ⚠⚠ **`tools/blender/pieces.py` 는 2026-08-27 에 지워졌다.** 칸 열 개는 `assets/terrain/pieces.glb`
-에 구워진 채로 남아 있고 `piece_viewer.gd` 가 아직 그것을 읽지만, **다시 구울 방법은 없다.** 지운
+에 구워진 채로 남아 있고 `piece_viewer.gd` 가 아직 그것을 읽지만, **다시 구울 방법은 없다.**
+⚠⚠ **CORRECTION 2026-09-03 — 그 열 개는 죽은 파일이었다.** 2026-08-24 이후 바이트가 안 바뀌었고
+**`src/` 도 `tests/` 도 한 번도 안 읽었다** (위의 `piece_viewer.gd` 는 그 뒤 없어졌다). 살아 있는
+키트는 `blend/island.blend` 안에 따로 서 있는 **`KIT_*` 블록 31 개**다. 2026-09-03 에 그 31 개의
+내보내기가 `pieces.glb` 를 대신한다. 지운
 이유는 그 열 개가 이미 뒤집힌 규칙(해변 옆면)으로 만들어졌고, 색이 하나도 안 실려 게임의 해 아래에서
 전부 새하얗게 날아가기 때문이다.
 
@@ -5408,9 +5421,18 @@ comment naming two things that do not exist, and four orphan `.uid` sidecars.
   **Nothing can check those four but an eye.** They are a table in `docs/manual/blender.md` now.
 - **`pieces.glb` holds TEN parts, not the twelve the map said** — `top_0` `top_0b` `top_1` `top_2a`
   `top_2o` `top_3` `top_4` `wall_coast` `wall_cliff` `stair`.
+  ⚠⚠ **CORRECTION 2026-09-03 — that count is right and the conclusion drawn from it is wrong.** Those
+  ten are a **dead** file: unchanged since 2026-08-24 when that attempt was abandoned, POSITION+NORMAL
+  only, one material `stone`, no colour, no UV, and **read by nothing in `src/` or `tests/`.** The
+  living kit was never in that file — it is **31 blocks standing separately inside `blend/island.blend`**,
+  `KIT_<level>_<kind>_<n>`: twenty at level 0 (solid 3 · edge 6 · corner 4 · strait 3 · cape 3 · islet 1)
+  and eleven at level 2 (solid 1 · edge 3 · corner 4 · strait 1 · cape 1 · islet 1), each at the origin
+  spanning ±1.0 with a coastal skirt to ±1.25, each with a vertex-colour layer `Col`, no UV, no material.
+  Level 0 spans z −0.12..0.21 and level 2 z −0.12..1.21.
 - **08-01's other half is blocked on three things**, which is why it was not attempted: the 판 자국 and
   the outline are baked per island rather than per part, the parts are ten, and the bake is a `.blend`
-  opened by hand.
+  opened by hand. ⚠⚠ **CORRECTION 2026-09-03: the second of those three was false** — the parts are
+  31 and they were already cut. **Only two things blocked it.**
 - **A 개발지식 page could not be written** — that folder's own bar is 「the page's lab launched on screen
   this round and was looked at」, and nothing could be launched. **The rule held and stopped a page that
   would have looked like knowledge.**

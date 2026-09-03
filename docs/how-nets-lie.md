@@ -10,6 +10,11 @@ casebook is not. **Read this file before writing a check, and before believing a
 the two deleted games, that turned out to guarantee nothing. **Do not delete an entry because it looks
 unlikely** — the whole point is that each of them looked unlikely to whoever shipped it.
 
+⚠⚠ **A NET NAMED IN A DATED ENTRY IS THE NAME IT HAD THAT DAY, NOT A FILE TO GO OPEN.** Checked
+2026-09-03: **`net_battle`, `net_cards`, `net_run` and `net_slots` no longer exist**, and neither do some
+of the view files these entries name. **The failure each entry records still binds; the file it happened
+in may be gone.** ⇒ **`ls tests/nets/` is the list of nets, and this page is never it.**
+
 ---
 
 ## No fake code
@@ -79,7 +84,9 @@ These survive **even after you confirm every mutation goes red**:
   that stood here — 「in `field_view.gd` (each leaf exactly 1, `_paint_cell` 7)」 — died with the flat
   2D board and was removed 2026-08-27.** `_paint_cell` has never existed in that file, and the net's
   `field_view.gd` table is now **every entry 0**, which is the whole of what it claims about a view
-  that draws a 3D world. The counting still runs, against `refit_view.gd`. ⇒ **Argument capture proves a value was computed and handed on. It
+  that draws a 3D world. The counting still runs, against `hud_view.gd` and `title_view.gd`.
+  ⚠ **`refit_view.gd` stood here and was deleted 2026-08-28 with the refit screen** — the sentence
+  outlived the file by five days. ⇒ **Argument capture proves a value was computed and handed on. It
   never proves the value was used.** Chase it to a leaf, then pin the leaf by counting
 - **The plan's own fix gets applied to one value and not to its siblings.** Plan 3 predicted in writing
   that five internal slots could change nothing on screen and stay green; the builder closed **corner**
@@ -402,8 +409,9 @@ exact at every zoom, yaw and pitch").
 
 ## The island was rebuilt and the game kept drawing the old one (2026-08-26)
 
-**Measured, not reasoned.** `tools/blender/island_build.py` writes `assets/terrain/island.glb`, and the
-game loads that file. The Blender run said `exported glb + json`, the file's timestamp moved, and the
+**Measured, not reasoned.** A Blender run writes `assets/terrain/island.glb`, and the game loads that
+file. (⚠ The run was `tools/blender/island_build.py` then; **that folder was deleted 2026-08-31** and
+the original is `blend/island.blend` — the trap below is the same either way.) The Blender run said `exported glb + json`, the file's timestamp moved, and the
 game **drew the previous island anyway** — three screenshots were taken of a mesh that no longer existed
 on disk, and nothing anywhere said so.
 

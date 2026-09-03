@@ -5,24 +5,24 @@ extends SceneTree
 ## .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/piece_viewer.gd
 ## ```
 ##
-## ⚠⚠ **THIS IS THE GODOT SIDE OF `tools/blender/one_piece.py`, AND THE DIFFERENCE IS THE POINT.**
-## That script shows a piece in the Blender viewport, under Blender's light. This one shows the SAME
-## baked piece under **the field's sun, the field's ambient and the field's outline pass**, because
-## **ticket 01, 한 조각이 무엇인가**, records the failure that keeps happening: **a value that
-## reads correctly in Blender goes black in the game.** A piece judged here has been judged where it
-## has to survive.
+## ⚠⚠ **A PIECE SHOWN UNDER BLENDER'S LIGHT LIES, AND THAT IS THE WHOLE REASON THIS FILE EXISTS.**
+## The Blender-side viewer it was written against (`tools/blender/one_piece.py`) was deleted 2026-08-27
+## and the whole `tools/blender/` folder went on 2026-08-31; **this is what is left, and it shows the
+## same baked block under the field's sun, the field's ambient and the field's outline pass.** The
+## failure it keeps catching: **a value that reads correctly in Blender goes black in the game.** A
+## block judged here has been judged where it has to survive.
 ##
-## ⚠ **It loads `assets/terrain/pieces.glb` and adds NOTHING of its own to the geometry.** If a piece
-## looks wrong here, the piece is wrong — not the viewer. The only things this file invents are the
+## ⚠ **It loads `assets/terrain/pieces.glb` and adds NOTHING of its own to the geometry.** If a block
+## looks wrong here, the block is wrong — not the viewer. The only things this file invents are the
 ## camera, the light, the sea plane and the labels, and each of them is copied from `field_view.gd`
 ## rather than retuned, so there is one place those numbers live and it is `src/look.gd`.
 ##
 ## ⚠ **Not a net and never green.** Nothing here asserts. It exists so a human can look, which is the
-## only way ticket 04's bar («사용자가 화면을 보고 「됐다」고 말한다») can ever be met.
+## only way 「사용자가 화면을 보고 「됐다」고 말한다」 can ever be met.
 ##
 ## The hand:
-##   **← →** or **A D**   the previous / next piece
-##   **Tab**              one piece  <->  all ten in a row
+##   **← →** or **A D**   the previous / next block
+##   **Tab**              one block  <->  the whole kit in a row
 ##   **left-drag**        pan (the island is twenty tiles across and the stair is not in the middle)
 ##   **H**                back to the middle
 ##   **right-drag / Q E** turn
@@ -34,14 +34,15 @@ extends SceneTree
 ##   **Esc**              quit
 ##
 ## The flags, all after a bare `--`:
-##   `--glb res://assets/terrain/island.glb`   look at the baked island instead of the ten pieces
+##   `--glb res://assets/terrain/island.glb`   look at the baked island instead of the 31-block kit
 ##   `--at X,Z`                                aim at a spot rather than the middle
 ##   `--zoom N`                                start N tiles wide
 ##   `--shot1`                                 render THIS aim from three yaws and quit
 ##
 ## ⚠ **`--shot` stood beside `--shot1` until 2026-08-27 and is gone** — the tombstone where `_shoot_all`
 ## stood, below `_zoom`, carries what it knew. `--shot1` is the flag that survived, because it is the one
-## `tools/blender/README.md`'s own loop actually carries.
+## the Blender manual's own loop actually carries. (`tools/blender/README.md`, which carried that
+## loop until 2026-08-31, is deleted with the rest of that folder.)
 
 const GLB := "res://assets/terrain/pieces.glb"
 
@@ -51,10 +52,19 @@ const GLB := "res://assets/terrain/pieces.glb"
 const SHOT_DIR := "res://tools/shot/out/pieces"
 
 ## ⚠⚠ **`pieces.glb` AND `island.glb` ARE NOT THE SAME KIND OF FILE, AND THE VIEWER HAS TO KNOW WHICH.**
-## Measured 2026-08-27 by reading both:
+## Measured 2026-09-03 by reading both:
 ##
-##   `pieces.glb`  ten meshes · **no colour attribute at all** · one flat stone albedo (0.70, 0.68, 0.73)
-##   `island.glb`  ONE mesh   · **a colour per vertex**        · white albedo the colours multiply
+##   `pieces.glb`  the 31 `KIT_*` blocks · **a colour per vertex** (layer `Col` in `island.blend`)
+##   `island.glb`  `island` and `pads`   · **a colour per vertex** · white albedo the colours multiply
+##
+## ⚠ **BOTH CARRY COLOUR TODAY AND THE TEST BELOW STILL HAS TO RUN.** Until 2026-09-03 `pieces.glb` was
+## ten dead parts with **no colour attribute at all** and one flat stone albedo, and that is what this
+## switch was written for. A `.glb` dropped in here with no colours would still be handed a switch that
+## multiplies its albedo by nothing, so the test stays.
+## ⚠⚠ **THE `KIT_*` BLOCKS CARRY NO MATERIAL IN `island.blend`.** `_apply_outline` and the colour switch
+## below both reach for `surface_get_material(i)` and both skip a surface that has none, so **whether
+## the kit shows an outline here depends on what the export gave it.** If a block comes up flat and
+## un-outlined, that is this, and it is the export to fix — not the viewer.
 ##
 ## The game turns `vertex_color_use_as_albedo` on for the island and **deliberately not** for anything
 ## without colours — `field_view` carries the bug report for the day it was turned on for the buildings
@@ -62,9 +72,14 @@ const SHOT_DIR := "res://tools/shot/out/pieces"
 ## has no colours is not handed a switch that would multiply its albedo by nothing.
 var _vertex_coloured := false
 
-## ⚠ **A piece is 2x2 tiles** (ticket 01 rule 1, and `pieces.py`'s `S`), so the single-piece view is
-## framed on 2 tiles plus air and the row on ten of them. Framing on the mesh's own AABB instead would
-## make a tall piece look the same size as a flat one, which is exactly the comparison being made.
+## ⚠ **A block is 2x2 조각** — `Rules.BLOCK_TILES` = 2, and every `KIT_*` object in `island.blend` spans
+## ±1.0 with a coastal skirt out to ±1.25. So the single-block view is framed on 2 tiles plus air.
+## Framing on the mesh's own AABB instead would make a tall block look the same size as a flat one,
+## which is exactly the comparison being made.
+## ⚠⚠ **`ROW_VIEW_TILES` WAS CHOSEN FOR TEN BLOCKS AND THE KIT IS 31.** Ten at a 2.6 span needed 31
+## tiles; 31 blocks need about 81, so `Tab` now frames roughly the middle twelve and the rest stand off
+## the sides. **The wheel still zooms out to 60** — which is not enough either. Left as it is on purpose:
+## this is a number to move, not a bug to hunt.
 const PIECE_TILES := 2.0
 const ONE_VIEW_TILES := 4.2
 const ROW_VIEW_TILES := 31.0
@@ -135,15 +150,17 @@ func _initialize() -> void:
 		_shoot_one(at)
 
 
-## Every top-level child of the baked scene is one piece, in the order `pieces.py` built them.
-## ⚠ **The order is the file's and is not re-sorted here** — `pieces.py`'s header explains why those
-## ten and in that sequence, and a viewer that re-orders them makes that header unreadable.
+## Every top-level child of the baked scene is one block, in the order the export laid them down.
+## ⚠ **The order is the file's and is not re-sorted here.** The kit's names carry it — `KIT_<level>_<kind>_<n>`,
+## with `<n>` running 0..30 across the whole kit — so the label under a block says which one it is and a
+## viewer that re-sorted them would say something else. See the Blender manual for the counts.
 func _load_pieces(path: String) -> bool:
 	var packed := ResourceLoader.load(path) as PackedScene
 	if packed == null:
-		# ⚠ `pieces.py` was deleted 2026-08-27 and there is no way to re-bake this file. The viewer's
-		# live use is `-- --glb res://assets/terrain/island.glb`.
-		push_error("piece_viewer: %s 를 못 읽었다. pieces.glb 는 다시 구울 수 없다 — `-- --glb res://assets/terrain/island.glb` 로 섬을 봐라" % path)
+		# ⚠ **`pieces.glb` CAN be re-baked** — export the 31 `KIT_*` objects out of `blend/island.blend`
+		# again; the Blender manual carries the loop. (This said 「there is no way to re-bake this
+		# file」 while it pointed at ten dead parts, and that stopped being true on 2026-09-03.)
+		push_error("piece_viewer: %s 를 못 읽었다. blend/island.blend 의 KIT_* 를 다시 구워라 — 섬을 보려면 `-- --glb res://assets/terrain/island.glb`" % path)
 		return false
 	var baked := packed.instantiate()
 	for child in baked.get_children():
@@ -155,12 +172,12 @@ func _load_pieces(path: String) -> bool:
 			# inconsistent」 on stderr. This repo counts undeclared stderr as a failure, so it is
 			# cleared here rather than tolerated.
 			piece.owner = null
-			# ⚠⚠ **EVERY PIECE CARRIES ITS OWN TRANSLATION AND IT IS NOT ZERO.** `pieces.py` lays the
-			# ten out in a row before it exports, so `top_3` arrives standing at z = 3.6 and a viewer
-			# that frames the origin photographs **empty sea**. That is exactly what the first run of
-			# this file did. ⇒ **The transform is cleared and the piece is centred on its own AABB
-			# below**, which also handles the two walls — they are thin slabs whose centre is nowhere
-			# near a tile centre.
+			# ⚠⚠ **CLEARED BECAUSE A BAKE THAT LAYS THE BLOCKS OUT SIDEWAYS AIMS THIS VIEWER AT
+			# EMPTY SEA.** The old ten-part `pieces.glb` was exported as a row, so a part arrived standing
+			# at z = 3.6 and the first run of this file photographed water. **The 31 `KIT_*` blocks all sit
+			# at the ORIGIN in `island.blend`**, so today this line is a no-op — and it stays, because it
+			# is one line and the failure it stops is silent.
+			# ⇒ **The transform is cleared and the block is centred on its own AABB below.**
 			piece.transform = Transform3D.IDENTITY
 			_pieces.append(piece)
 			_names.append(piece.name)
@@ -216,9 +233,9 @@ func _build_world() -> void:
 	_world.add_child(_cam)
 
 	# ⚠ **A flat sea, and it is NOT the game's water shader.** The shader reads a coastline the baked
-	# island exports and a lone piece has none, so it would draw a white rim round nothing. This is a
-	# plain plane at the waterline, there to say which way is down and where a coast wall ends — the
-	# wave and the foam are ticket 07 and are judged on the island, not here.
+	# island exports and a lone block has none, so it would draw a white rim round nothing. This is a
+	# plain plane at the waterline, there to say which way is down and where a block's coastal skirt ends
+	# — the wave and the foam are judged on the island, not here.
 	_sea = MeshInstance3D.new()
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(400.0, 400.0)
@@ -258,7 +275,7 @@ func _show() -> void:
 	# Removing the slot alone leaves the piece parented to a node that is no longer in the tree, and
 	# the next `add_child` then fails with 「already has a parent」 — **every piece after the first
 	# frame silently failed to appear and the shots came back as empty sea.** Freeing the slot without
-	# detaching first would take the ten pieces down with it, and they are the only copy there is.
+	# detaching first would take the whole kit down with it, and they are the only copy there is.
 	for piece in _pieces:
 		var parent := piece.get_parent()
 		if parent != null:
@@ -290,10 +307,10 @@ func _show() -> void:
 	_write_label()
 
 
-## How far a piece has to be shifted for its own middle to sit on the origin.
-## ⚠ **Sideways only — the height is left alone.** Centring y as well would put every piece's waist on
-## the waterline, and **where a piece sits against the water is half of what is being judged**: a coast
-## wall that carries 0.62 below the line and a top that floats 0.26 above it are the same picture only
+## How far a block has to be shifted for its own middle to sit on the origin.
+## ⚠ **Sideways only — the height is left alone.** Centring y as well would put every block's waist on
+## the waterline, and **where a block sits against the water is half of what is being judged**: a level 0
+## block spanning z -0.12 .. 0.21 and a level 2 block spanning -0.12 .. 1.21 are the same picture only
 ## if the sea stays where it is.
 ## The wider of a mesh's two ground axes, in tiles. Turning is around the vertical, so the frame has to
 ## hold the LONGER of the two or a 90° turn walks the subject off the side of the screen.
@@ -348,7 +365,7 @@ func _place_camera() -> void:
 func _write_label() -> void:
 	var head := ""
 	if _row:
-		head = "열 조각 나란히 — %s" % ", ".join(_names)
+		head = "블록 %d 개 나란히 — %s" % [_pieces.size(), ", ".join(_names)]
 	else:
 		head = "%d / %d   %s" % [_index + 1, _pieces.size(), _names[_index]]
 	_label.text = "%s\n돌리기 오른쪽드래그·Q E   기울기 R F   확대 휠   외곽선 O (%s)   바다 G (%s)   한장/전체 Tab   저장 S   끝 Esc" % [
@@ -443,8 +460,8 @@ func _on_key(key: InputEventKey) -> void:
 			_save_shot()
 
 
-## ⚠ **Wraps rather than clamping.** Ten pieces judged one after another is a loop the hand does
-## dozens of times; a clamp at either end makes the last piece feel like a wall.
+## ⚠ **Wraps rather than clamping.** Thirty-one blocks judged one after another is a loop the hand
+## does dozens of times; a clamp at either end makes the last block feel like a wall.
 func _step(by: int) -> void:
 	if _row:
 		_row = false
@@ -466,33 +483,36 @@ func _zoom(by: float) -> void:
 
 ## ⚠⚠ **TOMBSTONE — `_shoot_all()` and its `--shot` flag stood here and were deleted 2026-08-27.**
 ##
-## **What it did.** Given `-- --shot`, it drove the viewer with a hand made of code: for each of the ten
-## meshes in the loaded glb it framed the piece, photographed it twice — once at the game's own yaw with
-## the sea plane ON, once turned 55° with the sea OFF — then switched to the ten-in-a-row view, saved one
+## **What it did.** Given `-- --shot`, it drove the viewer with a hand made of code: for each mesh in the
+## loaded glb it framed the piece, photographed it twice — once at the game's own yaw with the sea plane
+## ON, once turned 55° with the sea OFF — then switched to the all-in-a-row view, saved one
 ## last frame, printed a count and quit. Everything it saved went to `SHOT_DIR`, the same folder `S`
 ## still writes to.
 ##
-## **Why it is dead.** Its only entry was its own CLI flag; nothing in `src/`, `tests/` or any script
-## invoked it, and no round ever consumed its output folder. It was also aimed at a file that can no
-## longer exist: it was written for `pieces.glb`'s ten meshes, and `pieces.py` — the only thing that
-## could bake that file — was deleted 2026-08-27. The live target, `island.glb`, holds **ONE** mesh, so
-## "walk every mesh from two angles and then line them up in a row" degenerates to one piece
-## photographed twice plus a row of one. `--shot1` does that job properly and is the flag
-## `tools/blender/README.md`'s loop actually carries.
+## **Why it was killed.** Its only entry was its own CLI flag; nothing in `src/`, `tests/` or any script
+## invoked it, and no round ever consumed its output folder. It was also aimed at a file that had gone
+## dead: it was written for the ten parts of the old `pieces.glb`, whose baking script was deleted
+## 2026-08-27, and the live target `island.glb` holds one island mesh, so "walk every mesh from two
+## angles and then line them up in a row" degenerated to one piece photographed twice plus a row of one.
+## `--shot1` does that job properly and is the flag the Blender manual's loop carries.
+## ⚠⚠ **THE PREMISE MOVED BACK ON 2026-09-03**: `pieces.glb` is now the 31 `KIT_*` blocks out of
+## `blend/island.blend`, and it IS re-bakeable. **A sheet of 31 blocks is a real thing to want again** —
+## this tombstone is kept as the design of the one that would be written, not as a reason not to.
 ##
 ## **What it knew, and it outlives the code.** ⚠⚠ **THE SECOND SHOT TURNED THE SEA OFF, AND THAT WAS
-## NOT A PREFERENCE.** The two wall pieces hang from the waterline DOWNWARDS — `wall_coast` ran from
-## y -0.62 to +0.02 — so an opaque sea plane hides all but the top 0.05 of them, and the first run of
-## this mode photographed **a white line**. A coast wall is the piece ticket 01 has failed on most
-## often; a picture that cannot show it is not a picture of it. ⇒ **`G` (sea off) is not a garnish. Any
-## future judgement of a wall piece is taken with the sea off, whatever takes the picture.**
+## NOT A PREFERENCE.** The old kit's two wall parts hung from the waterline DOWNWARDS — `wall_coast` ran
+## from y -0.62 to +0.02 — so an opaque sea plane hid all but the top 0.05 of them, and the first run of
+## this mode photographed **a white line**. ⚠ **Those two parts are gone**; what replaces them is every
+## `KIT_*` block's coastal skirt, which reaches out to ±1.25 and down to z -0.12 — **under the water
+## again.** ⇒ **`G` (sea off) is not a garnish. Any judgement of how a block meets the water is taken
+## with the sea off, whatever takes the picture.**
 ##
 ## ⚠ **Why two angles and not one**: the shore wall and the slightly-tilted corner are the two things
-## ticket 01 keeps failing on, and neither of them shows from straight ahead. The 55° turn existed for
+## this repo kept failing on, and neither of them shows from straight ahead. The 55° turn existed for
 ## the corner. **This is the argument for `Q`/`E` still being hand controls** — turning is how a corner
 ## is judged, and a still picture cannot be turned.
 ##
-## ⚠ **Why it was added at all** (2026-08-26, ticket 04): two rounds of judgement never happened because
+## ⚠ **Why it was added at all** (2026-08-26): two rounds of judgement never happened because
 ## the user was on mobile and could not see the screen, so a picture that survives a phone was worth
 ## having. **It was never a substitute for the window**, and its own header said so.
 ##

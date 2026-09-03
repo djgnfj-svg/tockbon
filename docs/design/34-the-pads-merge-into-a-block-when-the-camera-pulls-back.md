@@ -15,6 +15,13 @@ whole 칸 far out.
 ⚠ **The two thresholds were never judged in the game** — the island opens at zoom 0.76, which is
 already 94% merged. **That is the first thing to move if the change reads too early.**
 
+⚠⚠ **THE RAMP IS GONE (2026-09-01), AND HALF OF THIS PARAGRAPH IS NOW HISTORY.** The order became
+칸-sized, so `Look.PAD_MERGE_ZOOM`, `PAD_APART_ZOOM` and `field_view.pad_merge()` were all deleted and
+**`merge` is pinned at 1.0** — one mark per 칸 at every zoom. **The geometry half survived**: the second
+UV per vertex is still there (`UVMap.001` on the `pads` object in `blend/island.blend`), and
+`src/view/pads.gdshader` still walks each point along it. ⇒ **What is dead is the ZOOM deciding the
+blend, not the displacement.** The argument below stands the day a zoom ramp is wanted back.
+
 ## The question
 
 **Four mechanisms are built and photographed. Which one goes into the bake?**
@@ -64,6 +71,6 @@ without naming one**, so nothing was applied.
 
 ## What the pick costs afterwards
 
-**The winner is rebuilt in `tools/blender/island_build.py`**, since the shipped 판 is baked rather than
-built at runtime. ⚠ **`01-grow` needs a second attribute per vertex** (where each point goes), and
+**The winner is rebuilt in `blend/island.blend`'s `pads` object and re-exported**, since the shipped 판
+is baked rather than built at runtime. ⚠ **`01-grow` needs a second attribute per vertex** (where each point goes), and
 `03-crossfade` needs a second 판 object in `island.glb`; the other two need nothing new in the file.

@@ -9,11 +9,16 @@ extends RefCounted
 ## WRITES a board, it does not hold one.** Nothing here is typed out; every 조각 comes from the seed.
 ##
 ## ⚠⚠ **WHAT THIS BUILDS IS THE BOARD, NOT THE PICTURE.** It answers the same dictionary
-## `assets/terrain/island.json` holds — `w` `h` `rows` `tiers` `builds` `props` `base_h` `level_h` — so
+## `assets/terrain/island.json` holds — `w` `h` `rows` `tiers` `coast` `builds` `props` `base_h`
+## `level_h`, plus `spots` and three counts the file does not carry — so
 ## `Grid` walks a generated island exactly as it walks the drawn one. **`coast` comes back EMPTY and
 ## the 3D is not stood up**: the drawn island's outline and its 5 MB mesh are baked by Blender, and
-## standing the twelve part sets on a generated board is the other half of 08-01. **Until that half
-## exists nothing in `src/` reads this file** — the nets do, and they are what says it is right.
+## **laying the 31 `KIT_*` blocks of `assets/terrain/pieces.glb` down on a generated board is the other
+## half of 08-01** — six kinds (solid · edge · corner · strait · cape · islet), twenty at level 0 and
+## eleven at level 2, each carrying its own vertex colour. ⚠⚠ **There is no stair among them**, and the
+## 판 자국 and the 윤곽 are baked per island rather than per block, so neither comes free with the kit.
+## **Until that half exists nothing in `src/` reads this file** — the nets do, and they are what says
+## it is right.
 ##
 ## ⚠ **Nothing here is a Node**, so a net drives hundreds of seeds with `.new()` and no tree at all.
 ##

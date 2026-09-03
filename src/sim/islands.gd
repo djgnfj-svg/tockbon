@@ -16,8 +16,15 @@ class_name Islands
 ## stands on one island.
 ##
 ## Legend (unchanged — `grid.gd` reads these same characters):
-##   `~` water · `H` harbour (water a boat may sail from) · `.` land · `#` inland hole ·
+##   `~` water · `H` water a boat may sail from · `.` land · `#` inland hole ·
 ##   `^` coastal cliff · `/` ramp · `W` land with a wolf on it
+##
+## ⚠⚠ **「항구」 IS A DEAD WORD** (2026-09-02, the user: 「항구? 그런건 없는데 그냥 어디서드지 오는거임
+## 미리보고 대응해야지」 — *"a harbour? there is no such thing, they just come from anywhere; you see
+## them early and respond."*). **The code was already there**: a beast boat departs from open sea and
+## aims at whatever beach `Grid.beach_ring` finds, and **nothing in `src/` routes a boat from an `H`
+## any more.** The drawn board's 108 `H` are its outer rim, one 조각 thick, and `IslandGen` writes
+## none. ⚠ The letter still parses as water, so it is kept rather than removed.
 ##
 ## ⚠⚠ **TIER BOARD — THE CHARACTER IS A NOTCH, NOT A STOREY, AND WRITING THE PLATEAU AS `1` BREAKS
 ## THE ISLAND IN SILENCE.** `grid.gd` reads these through `TIER_CHARS` / `TIER_LEVELS`:

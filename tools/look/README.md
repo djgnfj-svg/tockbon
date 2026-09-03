@@ -1,25 +1,35 @@
 # tools/look — the game screenshots itself
 
-**This is verify-look without the bridge.** Five scripts live in this folder and **all five run**:
+**This is verify-look without the bridge.** **Ten scripts live in this folder** — one standing
+instrument and nine sheets shot for one question each:
 
 | Script | Reads pixels? | The one question it answers |
 |---|---|---|
-| `piece_viewer.gd` | on `S` and `--shot1` | **what does one baked block look like under the GAME's light?** Driven by hand: a window, one piece at a time, turn it, tilt it, outline on and off |
+| `piece_viewer.gd` | on `S` and `--shot1` | **what does one baked block look like under the GAME's light?** Driven by hand: a window, one block at a time, turn it, tilt it, outline on and off. **The only standing instrument here** |
 | `capture_ground.gd` | yes | **what does the ground actually look like?** Two frames — the island, the sea and the mats, with the buildings hidden and nobody stood up |
 | `capture_boat.gd` | yes | **where is the arriving hull, and what does it look like up close?** Opens the title, presses 시작하기 through a real mouse event, then `find` (scan with the pan keys) or `close` (centre one and zoom in) |
 | `capture_float.gd` | yes | **what makes the boat read as floating?** One frozen moment, shot once with everything on and then once per part removed — the part that takes the floating with it is the answer |
 | `capture_float2.gd` | yes | **which white mark stands off the hull?** The water draws four things about a boat — halo, contact shadow, break line, trail — and this turns them off one at a time |
+| `capture_task02.gd` | yes | **task 02 on the real screen** — the boat, the keep, the bars, the ground, GAME OVER |
+| `capture_task02b.gd` | yes | **the three frames the pass above could not stage**: riders on a deck still at sea, a hurt 몸 wearing a bar, the recruit ceiling. ⚠ **It pins `keep_hp`** to run the board past 100 초 |
+| `capture_task02c.gd` | yes | **one frame: the hull still at sea with its riders.** It exists because the zoom has to come BEFORE the centring or `_clamp_cam` pins the camera and the hull stays off the glass |
+| `capture_0312.gd` | yes | **the selection box on the real screen** — mid-drag, after a quarter turn, the picked rim, the reach and the 이동선. Four modes: `box` `reach` `move` `yaw` |
+| `capture_0701.gd` | yes | **does a 검사 turn to face a 늑대 he noticed?** Two modes: `noticed` (one body, one turn) and `wave` (the first wave meeting the watch at the door) |
 
-⚠⚠ **The last three were written on 2026-08-30 for the boat and they are one-off sheets by shape**, not
-standing instruments: each stages one framing and answers one question. **Read one before writing a sixth**
-— `capture_boat.gd` is the closest thing here to a template, because it opens the game the way a player
-does and shoots a known-answer frame first.
+⚠⚠ **Everything below `piece_viewer.gd` is a one-off sheet by shape**, not a standing instrument: each
+stages one framing and answers one question, and each is dated to the round that asked it (the boat three
+on 2026-08-30, the task-02 three on 2026-09-01, `capture_0312` and `capture_0701` on 2026-09-02).
+**Read one before writing another** — `capture_boat.gd` is the closest thing here to a template, because
+it opens the game the way a player does and shoots a known-answer frame first.
+⚠ **A sheet whose subject dies gets distilled and deleted**, which is the rule the paragraph below names.
 
 ⚠⚠ **`piece_viewer.gd` is the answer to 「블록 하나하나를 내가 보고 싶어」** (2026-08-27, the user). It
-exists because a piece shown under BLENDER's light lies: ticket 01 records over and over that a value
-which reads correctly there goes wrong in the game. (`one_piece.py`, the Blender-side viewer it was
-written against, was deleted 2026-08-27.) **Its sun, ambient, camera and outline
+exists because a block shown under BLENDER's light lies: a value that reads correctly there goes wrong in
+the game, over and over. (`one_piece.py`, the Blender-side viewer it was written against, was deleted
+2026-08-27, and the whole of `tools/blender/` went on 2026-08-31.) **Its sun, ambient, camera and outline
 pass are copied from `field_view.gd` line for line** — retuning any of them makes it lie.
+⚠ **It opens `assets/terrain/pieces.glb`, which is the 31 `KIT_*` blocks out of `blend/island.blend`**
+since 2026-09-03. Counts and names are in `docs/manual/blender.md`.
 
 ⚠⚠ **`capture_ground.gd` HIDES, it does not delete.** The keep and the scatter go invisible and every
 body goes back to `RESERVE` off the map; nothing it does changes what the game builds. **A frame that
@@ -44,16 +54,24 @@ below; the rest is gone.
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_boat.gd -- <output-dir> close
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_float.gd -- <output-dir>
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_float2.gd -- <output-dir>
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_task02.gd -- <output-dir>
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_task02b.gd -- <output-dir>
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_task02c.gd -- <output-dir>
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_0312.gd -- <output-dir> box|reach|move|yaw
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_0701.gd -- <output-dir> noticed|wave
 ```
 
-**The viewer's hand**: `← →` the piece · `Tab` one / all ten · **left-drag pan** · `H` re-centre ·
+**The viewer's hand**: `← →` the block · `Tab` one / the whole kit · **left-drag pan** · `H` re-centre ·
 right-drag or `Q E` turn · `R F` tilt · wheel zoom · `O` outline · `G` sea · `S` save · `Esc` quit.
 **Flags**: `--glb <path>` · `--at X,Z` · `--zoom N` · `--shot1` (this aim, three yaws, then quit). **Not
 `--headless`** — there is nothing to look at.
 ⚠ **`--shot` was deleted 2026-08-27.** It walked EVERY mesh in the loaded glb and shot each one twice,
-which made sense against `pieces.glb` and its ten blocks; the live target `island.glb` holds exactly one
-mesh, so the mode had degenerated to photographing one piece twice and calling it a row. **What it knew
-is recorded in the viewer itself** — why the second shot turns the sea off, and why two angles exist. Shots land in `tools/shot/out/pieces/`, which sits behind a `.gdignore`.
+which made sense against the old ten-part `pieces.glb`; by then the only live target was `island.glb`, so
+the mode had degenerated to photographing one mesh twice and calling it a row. ⚠⚠ **That premise moved
+back on 2026-09-03** — `pieces.glb` is 31 blocks again and re-bakeable, so a sheet of the whole kit is a
+real thing to want. **What the deleted mode knew is recorded in the viewer itself** — why the second shot
+turns the sea off, and why two angles exist. Shots land in `tools/shot/out/pieces/`, which sits behind a
+`.gdignore`.
 
 Two PNGs from `capture_ground.gd` — the board, then the same board zoomed five steps in — and it quits
 on its own.
@@ -92,9 +110,9 @@ back unable to answer it, and read exactly like a zoom that had no effect.
 ⇒ **A capture harness is an instrument, and `CLAUDE.md`'s rule about inverting the instrument rather than
 the subject applies to it too.** The script that carried this rule was `capture_refit.gd`, which shot
 `00_title` first — a screen this repo had already looked at — for exactly this reason.
-⚠⚠ **It is deleted, and the rule came back on 2026-08-30**: `capture_boat.gd`, `capture_float.gd` and
-`capture_float2.gd` all shoot `00_title` first — a screen this repo has looked at many times — before they
-touch their subject. **`capture_ground.gd` is the one still without one**: its first frame is the island at
+⚠⚠ **It is deleted, and the rule came back on 2026-08-30 and has held since**: **eight of the nine
+sheets shoot `00_title` first** — a screen this repo has looked at many times — before they touch their
+subject. **`capture_ground.gd` is the one still without one**: its first frame is the island at
 play scale, which is the nearest thing to a known answer it has, but it is the subject and the check at
 once, and **if it is wrong the second frame is unreadable** in exactly the way this paragraph describes.
 
