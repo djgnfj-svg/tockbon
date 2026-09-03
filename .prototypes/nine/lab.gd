@@ -648,11 +648,13 @@ func _enter_move() -> void:
 	_base = {}
 	_goal_block = -1
 	_goal_tiles = []
-	# ⚠⚠ **NO BOAT SAILS WHILE THIS LAB IS RUNNING.** `_launch_if_due` puts the first one on the water
-	# at `Rules.BOAT_FIRST_SEC`, five seconds in, and a walk takes about six — so the crossing being
-	# looked at always had a hull and eight riders arriving in the middle of it. **The due time counts
-	# off how many have launched**, so saying a great many already have is the whole of the switch.
-	bat._boats_launched = 1_000_000
+	# ⚠⚠ **NO BOAT SAILS WHILE THIS LAB IS RUNNING.** A hull and eight riders arriving in the middle
+	# of the crossing being looked at is what this switch exists to stop.
+	# ⚠ **It said `bat._boats_launched = 1_000_000` until 2026-09-03 and that field no longer exists**
+	# — 티켓 12-01 replaced the endless drip's launch counter with a wave queue, and the lab would not
+	# have opened at all. `boats_come` is the gate the queue itself is checked against, so it does the
+	# same job at the cause rather than by lying about a count.
+	bat.boats_come = false
 
 
 ## Back to the still board: the nine let go of their 조각 and stand on the current seat plan again.

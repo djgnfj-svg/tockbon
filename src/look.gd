@@ -1349,9 +1349,12 @@ const WATER_FLECK_CURRENT := Vector2(-0.055, -0.030)
 ## handed in as a uniform. **`net_wake` reads that file's own text and compares the two**, so they go
 ## red rather than drift.
 ##
-## ⚠⚠ **BOATS PILE UP AND NOTHING EVER REMOVES ONE.** One lands every `Rules.BOAT_INTERVAL_SEC` and
-## stays there, so this count is how long an island can run before a hull gets no marks at all: at
+## ⚠⚠ **BOATS PILE UP AND NOTHING EVER REMOVES ONE.** Hulls arrive by the wave table in `Rules` and
+## stay there, so this count is how long an island can run before a hull gets no marks at all: at
 ## twelve, **the thirteenth landing is drawn with dry water round it** — drawn, not dropped.
+## ⚠ **Measured 2026-09-03, driving the real launcher on that table: the twelfth hull is reached at
+## 40 분.** The endless drip this replaced reached it at 5.6 분, so the ceiling got further away, not
+## nearer — which is why 12 was left where it stood.
 const WAKE_HULLS := 12
 ## ⚠ **Slot 0 is where the hull is NOW and the other seven are where it has been.** Both marks come
 ## out of one block because they are one shape — see the head of this section.
@@ -2230,8 +2233,18 @@ const COL_PANEL_TEXT := COL_HUD_TEXT
 ## ⚠ Derived from the canvas the same way `game_over_origin_px` is: `window/stretch/mode` is
 ## `canvas_items`, so the answer survives a resize and a typed `Vector2(0, 628)` would not.
 static func panel_origin_px(size: Vector2) -> Vector2:
+	return corner_origin_px(size, PANEL_CORNER)
+
+
+## **A plate's top-left for any corner**, flush with the viewport edge, no margin.
+##
+## ⚠⚠ **TWO PLATES SHARE THIS ARITHMETIC AND THAT IS WHY IT IS A FUNCTION** — the panel is
+## BOTTOM_LEFT and the wave alarm is TOP_LEFT, so a second copy of the subtraction is a second place
+## for「flush」to stop meaning the same thing. **The corner each plate sits in is its own constant;
+## where that corner IS lives here.**
+static func corner_origin_px(size: Vector2, corner: PanelCorner) -> Vector2:
 	var far := viewport_size_px() - size
-	match PANEL_CORNER:
+	match corner:
 		PanelCorner.TOP_LEFT:
 			return Vector2.ZERO
 		PanelCorner.TOP_RIGHT:
@@ -2259,6 +2272,86 @@ static func panel_line_baseline_px(origin: Vector2, line: int, ascent_px: float)
 static func panel_cell_baseline_px(origin: Vector2, col: int, line: int, ascent_px: float) -> Vector2:
 	return origin + Vector2(float(int(PANEL_COL_X_PX[col])),
 		float(PANEL_PAD_PX) + ascent_px + float((1 + line) * PANEL_LINE_PX))
+
+# ---------------------------------------------------------------------------------------------
+# The wave alarm — what is coming, and how long is left (12-01)
+# ---------------------------------------------------------------------------------------------
+
+## **The alarm's plate** — a deep red banner with gold rails and torn ends, on a transparent ground.
+## Pulled in a tool and chosen by looking (2026-09-03, the user: 「빨간색 3번」), and drawn 1:1 at its
+## own size like every other picture this layer holds.
+const ALARM_TEX := "res://assets/ui/alarm_plate.png"
+
+## **The size the plate was pulled at.** Every number below is measured inside this box, so a plate
+## re-pulled at another size moves the lettering with it only if this line moves too.
+const ALARM_SIZE_PX := Vector2(384, 96)
+
+## **Top left, flush with the viewport edge** (2026-09-03, the user: 「알람은 다르게 떠야할듯한데 왼쪽
+## 위에」 — *"I think the alarm should come up differently — top left."*).
+## ⚠ **`PANEL_CORNER` is BOTTOM_LEFT**, so the two plates cannot collide however tall either grows.
+const ALARM_CORNER := PanelCorner.TOP_LEFT
+
+## **Where the two lines start, in plate pixels from the plate's left edge**: the label, then the
+## countdown. ⚠ **Measured off the picture itself, not chosen** — the gold rails cover y 2..8 and
+## y 85..92, the flat crimson field runs y 10..83 and x 14..370, and the ends are torn as far in as
+## x 10. Both lines are laid inside that field rather than inside the file's full 384 x 96.
+## ⚠ Plain `Array` — a `const` packed array does not parse on 4.7.1; every read casts to `int`.
+const ALARM_TEXT_X_PX := [20, 236]
+
+## **The one baseline both lines stand on**, in plate pixels from the plate's top.
+##
+## ⚠⚠ **THE DIGITS HANG NOTHING UNDER IT AND NEITHER DOES HANGUL**, so the baseline is the bottom of
+## the ink and not a middle: the countdown's numerals stand 0.562 em over it and the label's Hangul
+## 0.933 em, which puts their ink at 28..64 and 36..64 — inside the crimson field, and the larger of
+## the two centred in it.
+const ALARM_BASELINE_PX := 64
+
+## **What is coming, in words.** ⚠ **One phrase and not a lookup**: `Rules.BOAT_RIDER_TYPE` names the
+## one beast there is, and a table indexed by it would be a second place saying 늑대. The day a wave
+## carries something else, this is what grows a row — see the ticket, not this line, for whose call
+## that is.
+const ALARM_LABEL := "늑대 무리"
+
+## The label is typed in the panel's own Hangul face at **twice** its native 15 px, so the pixel grid
+## survives; 22 or 26 would land the font between its own texels.
+const ALARM_LABEL_FONT_PX := 30
+
+## **The countdown's own face.** Numerals, punctuation and Latin, designed on a 16 px em.
+## ⚠⚠ **IT CARRIES NO HANGUL**, which is why the label above is not typed in it — a missing glyph is
+## silent, and 「늑대 무리」 in this face would come out of the system fallback or come out blank.
+## ⚠ Its `0`-`9` and its `:` were checked against the file's own cmap before it was read here.
+const ALARM_CLOCK_FONT := "res://assets/font/tockbon-digits.ttf"
+## Four times the design's own em, for the reason `ALARM_LABEL_FONT_PX` gives.
+const ALARM_CLOCK_FONT_PX := 64
+
+## The alarm's lettering, in **the plate's own gold** — sampled off its rails, so the two lines read
+## as part of the banner instead of as text laid over it.
+const COL_ALARM_TEXT := Color(0.992, 0.933, 0.482)
+
+
+## **The plate's top-left for `ALARM_CORNER`.** Derived from the canvas, for the reason
+## `panel_origin_px` gives.
+static func alarm_origin_px(size: Vector2) -> Vector2:
+	return corner_origin_px(size, ALARM_CORNER)
+
+
+## **The BASELINE of alarm line `slot`** — 0 is the label, 1 is the countdown — which is the point
+## `draw_string` takes; nothing is added inside the leaf.
+static func alarm_baseline_px(origin: Vector2, slot: int) -> Vector2:
+	return origin + Vector2(float(int(ALARM_TEXT_X_PX[slot])), float(ALARM_BASELINE_PX))
+
+
+## **The countdown, as the screen prints it** — 「M:SS」, from `Battle.wave_seconds_left`.
+##
+## ⚠⚠ **IT FLOORS, AND THAT IS WHAT MAKES IT REACH 0:00.** Rounding up would show 3:00 for a whole
+## second and then jump from 0:01 to a closed alarm, so 0:00 would never be on the glass; flooring
+## shows 3:00 only at the instant the window opens and holds 0:00 for the last second before the hull
+## lands. **The ticket's own acceptance is that it reaches 0.**
+## ⚠ The floor at zero is `Battle`'s already — this one is the second, because a negative here would
+## print as 「-1:-1」 rather than reading as wrong.
+static func alarm_clock_text(seconds_left: float) -> String:
+	var whole := int(maxf(0.0, seconds_left))
+	return "%d:%02d" % [whole / 60, whole % 60]
 
 # ---------------------------------------------------------------------------------------------
 # Panel — reward pick, win, lose, restart

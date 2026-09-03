@@ -241,14 +241,12 @@ func _open_island() -> void:
 	var opened := run.begin_island()
 	if opened != null:
 		battle = opened
-		# ⚠⚠ **THE ONE LINE THAT STOPS THE 늑대 BOATS, AND THE ONE LINE THAT PUTS THEM BACK.**
-		# 2026-09-03, the user: 「일단 이제 늑대 안와도 됨」 — *"For now the wolves don't have to come
-		# any more."* Delete this line and the endless drip returns exactly as it was; `Battle` still
-		# defaults to boats coming, so nothing that drives the sim on its own is quieted with it.
-		# ⚠⚠ **IT IS 「일단」 — TEMPORARY, AND NOT A DECISION THAT WAVES ARE CANCELLED.** 태스크 12
-		# replaces the endless drip with announced waves and 티켓 12-01 is what eventually owns the
-		# launch clock; this line is what 12-01 deletes when it takes it over.
-		battle.boats_come = false
+		# ⚠⚠ **A `battle.boats_come = false` STOOD HERE AND 티켓 12-01 DELETED IT** (2026-09-03). It
+		# was the one line that stopped the 늑대 boats while the user played quietly — 「일단 이제 늑대
+		# 안와도 됨」 — and it was written as 「일단」, temporary, with 12-01 named as what would take
+		# the launch clock over. **It has.** The boats come by the wave table now, announced three
+		# minutes ahead, and `Battle.boats_come` is still a field with both arms driven by `net_boats`
+		# — the shell simply does not set it any more.
 		# ⚠ **A hand holding bodies from the last island would light a reach built on the last GRID.**
 		# The ids survive an island; the 조각 they were measured against do not.
 		_let_go()
@@ -368,6 +366,13 @@ func _process(delta: float) -> void:
 	# **And what the hand holds, every frame** (03-02) — the panel's 체력 line follows the fight
 	# through this call, which is why it is here beside `set_over` and not on the press.
 	hud_view.set_picked(hand.ids)
+	# **And whether a wave is announced, every frame** (12-01, the user: 「웨이브가 오기 전에 확실한
+	# 신호를 주자」 — *"Before a wave comes, give a clear signal."*). ⚠ **BELOW `step`, for the reason
+	# `set_over` gives**: read before it, the countdown would trail the sim by a frame forever.
+	# ⚠ **Two values and not the `Battle`.** The view holds no reader of the wave clock, so there is
+	# one place that decides the window is open and no pair to keep in step — `set_over`'s argument,
+	# and the whole of why `src/view/` never reaches into `sim` for a screen's state.
+	hud_view.set_warning(battle.wave_warning_open, battle.wave_seconds_left)
 
 
 ## ⚠ **`_release_hold` stood here and it is deleted** with the hold. It closed the island that had
