@@ -1,5 +1,10 @@
 # tests — the nets, and every trap measured while writing them
 
+⚠⚠ **NO NET IS WRITTEN PER TICKET** (`CLAUDE.md`, the user's call). **Everything below governs the
+suite that exists and the batches the user asks for** — it is how the runner behaves, not an
+instruction to add files. **The suite is still run**: every wrap-up, and any time the user asks.
+⚠ **An unrun suite is not a passing one**, and that has not changed.
+
 **A net is `tests/nets/net_*.gd` with one method, `func run(t)`.** Run the round with
 
 ```

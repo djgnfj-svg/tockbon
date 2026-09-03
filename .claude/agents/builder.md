@@ -50,7 +50,10 @@ can pass both verifiers, and then the lie is in the repo.
 say so before writing it** — the deleted game ran three clocks and every defect worth the name came out of
 the seams between them, and no net here is written to watch a seam.
 
-## If the plan has you writing a net
+## Nets — you do not write one unless the ticket says so
+
+**A ticket ships without a new net** (`CLAUDE.md`). **You run the game and look**; the existing suite
+still runs and a red in it is still a red. Write a check only when the ticket or the user asks, and then:
 
 **Invert every new check.** An uninverted check proves "it runs", not "it measures" — and **a new check
 needs a case that fails *it*, not only the subject.** Twice in one night a check was written to catch a

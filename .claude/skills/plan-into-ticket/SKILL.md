@@ -35,7 +35,8 @@ a team boundary, and here the person who decided it is the person reading it.
 |---|---|
 | **What already stands** at this spot | `src/`, the tools, the docs. **Name it, so nobody builds it twice** |
 | **What already died** here — deleted or reversed | `git log`. **Reviving a dead thing costs a round** |
-| **Which net measures it**, and is it green right now | `tests/nets/` |
+| **Which existing net measures it**, and is it green right now | `tests/nets/`. ⚠ **「none」 is the
+normal answer** — the plan does not add one, it says how to RUN the thing |
 | **Which green went false here** | `docs/how-nets-lie.md`, searched for this spot |
 
 ⚠⚠ **An empty answer is an answer** — say a section is empty rather than dropping it. **A dropped section

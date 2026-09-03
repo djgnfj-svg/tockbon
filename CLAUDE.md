@@ -46,6 +46,18 @@ files drifts.
 **Code that pretends to work is worse than code that doesn't, and a green that measures less than its
 label says is worse than a red. If you can't do it, say you can't.**
 
+# Nets are not written per ticket
+
+**A ticket ships without a new net.** The suite that exists stays and still runs in 23 seconds; **a check
+is written only when the user asks for a batch of them.**
+
+⚠ **The cost is what decided it**: the checks are **21,942 lines against 17,723 lines of game**, the
+largest net is **3,300 lines carrying 443 checks**, and **a check written against something not yet
+decided is rewritten every time the design flips.**
+
+⚠⚠ **THIS DOES NOT SOFTEN THE LINE ABOVE IT.** What a net used to say is now said by **running the game
+and looking at it.** A ticket nobody ran is not a ticket that works.
+
 # Anything the player LOOKS at is MADE, never typed
 
 **A HUD, a button, an icon, a panel, a mark on the ground — build it in a tool and load the result.**

@@ -85,7 +85,10 @@ against a measured 63.
 
 **Done when** each of the seven has an answer, including 「doesn't apply」.
 
-## 8. Run the nets
+## 8. Run the nets — **this is the batch**
+
+⚠⚠ **No net is written per ticket** (`CLAUDE.md`), so this run is where the suite earns its keep.
+**Never skip it, and never add a net here to cover the round.**
 
 ```
 powershell -ExecutionPolicy Bypass -File tests/run_nets.ps1
