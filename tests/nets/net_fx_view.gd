@@ -1525,20 +1525,17 @@ func _the_wolf_ashore_wears_the_picture_that_was_chosen(t) -> void:
 	t.ok(fv._sprites_used > ashore, "그리고 갑판에도 아직 남아 있다 (자가 점검) — 한 프레임에 둘 다 있다")
 	if ashore <= 0 or fv._sprites_used <= 0:
 		return
-	# ⚠⚠ **THE STEM AND NOT THE WHOLE PATH, AND THAT IS NOT A LOOSENING** (2026-09-03). This asked for
-	# one of the four EXACT files, and the four are the standing pictures — so it was silently also
-	# asserting **that the animal happened to be at rest in this frame**, which was never its subject
-	# and which the wave clock moved: the fixture now stands at 949.75 s instead of 35 s. A walking
-	# 늑대 wears `east_walk_2.png`, which is the same row, the same folder and the same facing.
-	# ⇒ **The stem is what the row is about**: the wrong species, the bare square, and the deleted
-	# side-on 늑대 all still redden it, because none of them starts with one of these four.
+	# ⚠⚠ **THIS ROW IS RED AND IT WAS RED BEFORE 티켓 12-01 TOUCHED THE FILE** (measured 2026-09-03 by
+	# running this net at the commit before the wave clock: same file, same message,
+	# `wolf_h/east_walk_2.png`). **It is left exactly as it stands.** A round that widened it to accept
+	# the walk frame would have turned somebody else's standing red green while changing nothing, which
+	# is the failure `how-nets-lie` names — and the reason it was briefly widened is written here so
+	# nobody widens it again for the same wrong reason.
+	# ⚠ **The wave clock is NOT what reddened it**, and the fixture moving from 35 s to 949.75 s did not
+	# change the message by one character.
 	var sp: Sprite3D = fv._sprites[0]
-	var worn := str(sp.texture.resource_path)
-	var stem_ok := false
-	for raw_p in paths:
-		if worn.begins_with(str(raw_p).trim_suffix(".png")):
-			stem_ok = true
-	t.ok(stem_ok, "판 위의 몸이 입은 것이 늑대 줄 넉 장 중 한 방향의 그림이다 (%s)" % worn)
+	t.ok(paths.has(str(sp.texture.resource_path)),
+		"판 위의 몸이 입은 것이 늑대 줄의 그림이다 (%s)" % str(sp.texture.resource_path))
 	# ⚠⚠ **DELETED** (02-08): 「92 x 92 다 — 74 x 40 이 남아 있으면 여기서 문다」. The wolf's frames are
 	# **92 x 66**. **What stopped being measured: the frame's size at all**, so the old 74 x 40 strip
 	# coming back would go unnoticed here — that is the whole thing this row was written to catch.
