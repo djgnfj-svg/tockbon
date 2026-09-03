@@ -11,8 +11,10 @@ could not be steered because neither side could say which one they meant.
 
 ⚠⚠ **`GLOSSARY.md` is the ONLY glossary.** Do not start a second one, and do not accept a per-folder
 one — **a name that lives anywhere else is a name nothing can see.**
-⚠⚠ **It holds no implementation details, no spec, no decisions** — those live in the log. **Only terms
-this project actually coined** belong; a general programming concept is not a row.
+⚠⚠ **It holds no implementation details, no spec, no history** — a term's row says what the word means
+NOW. **Only terms this project actually coined** belong; a general programming concept is not a row.
+⚠⚠ **A reversed word is deleted, not struck through** — the only thing kept is its name on the
+「다시 제안하지 않는 낱말」 list, so nobody proposes it again.
 
 ## When this is the right skill
 

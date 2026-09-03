@@ -2,11 +2,11 @@
 
 **Every mesh in this game has a saved `.blend` in `blend/`, and that file is the original.**
 Open it, change it, export from it. **There is no build script to re-run** — `tools/blender/` was
-deleted 2026-08-31 once the originals existed.
+deleted once the originals existed.
 
 > ***"We have to work while saving the Blender original files too. You make a model and use it WITH an
 > original file present — you leaving it as code on your own is completely unreasonable."***
-> (2026-08-31, the user)
+> (the user)
 
 ⚠⚠ **The reason the rule is written here and not in a folder of scripts**: the old
 `tools/blender/README.md` asserted the opposite — *"Every mesh in this game is generated. No `.blend`
@@ -26,19 +26,19 @@ page, and it says the true thing.**
 ## ⚠⚠ Four rules the code pairs with GEOMETRY, and nothing can check them but an eye
 
 **The bake used to be a Python file and `src/` cited it by name in fourteen places.** Those citations
-were repointed here on 2026-09-03; the rules themselves did not move, they simply stopped being code.
+were repointed here; the rules themselves did not move, they simply stopped being code.
 **Each of these is a number or an order written down in `src/` whose other half is the way a part is
 actually CUT in `blend/island.blend`** — change one side and the game and the picture disagree with
 nothing going red.
 
 | The code says | The geometry has to match |
 |---|---|
-| `Grid.STAIR_MOUTH_ORDER` — west, east, north, south, lowest 조각 index first | Which side of a corner staircase is its MOUTH. Get it wrong and the body walks ACROSS the treads instead of up them — 2026-08-28, the user: 「계단 이동할때 뚫는거 같은데」 |
+| `Grid.STAIR_MOUTH_ORDER` — west, east, north, south, lowest 조각 index first | Which side of a corner staircase is its MOUTH. Get it wrong and the body walks ACROSS the treads instead of up them — the user: 「계단 이동할때 뚫는거 같은데」 |
 | `Rules.STAIR_TREADS` = 6 | How many steps are cut into the staircase part |
 | `Rules.TIER_STEP_TILES`, and `level_h` in `island.json` | How tall one 눈금 is in the mesh. Disagree and every body sinks into the ground |
 | `Rules.BLOCK_TILES` = 2, and the outline turning on even tiles only | The parts are 2.0 wide. **The day a part stops being 2x2, `Grid.block_of` is wrong and nothing else is** |
 
-⚠ **The water was baked at 0 and the game raised its sea to `SEA_Y_TILES` = +0.075** (2026-08-28, the
+⚠ **The water was baked at 0 and the game raised its sea to `SEA_Y_TILES` = +0.075** (the
 user: 「물 높이를 좀 더 올려줄래?」). The exported waterline and the drawn one are half a tile apart on
 purpose; `look.gd` carries the note.
 
@@ -60,7 +60,7 @@ purpose; `look.gd` carries the note.
 ## Reaching Blender
 
 **The `mcp__blender__*` tools work.** `execute_blender_code` runs Python inside the running Blender and
-returns its stdout; `get_scene_info` lists the scene. Measured 2026-08-31 on **Blender 5.1**.
+returns its stdout; `get_scene_info` lists the scene. Measured on **Blender 5.1**.
 
 ⚠ **A doc that says a tool is broken is a doc to re-test, not to quote.** This page said the MCP was
 unusable for four days after the user had already fixed it, and a session hand-rolled what the tools
@@ -68,7 +68,7 @@ already did.
 
 ## ⚠⚠ Why the originals sit in their OWN folder and not beside the `.glb`
 
-**Godot scans the whole project and tries to import every `.blend` it finds.** Measured 2026-08-31,
+**Godot scans the whole project and tries to import every `.blend` it finds.** Measured,
 with the five originals in place:
 
 ```
@@ -92,9 +92,8 @@ machine's absolute path** — the same reason this repo already gitignores its M
 
 ⚠⚠ **1. Godot serves a CACHED mesh and says nothing.**
 Blender writes the `.glb`; Godot reads its own converted copy under `.godot/imported/`, and running the
-game does **not** re-convert a changed source. **Three bakes in a row came back identical on
-2026-08-27** and the third was investigated as a modelling bug — the screen was drawing the previous
-evening's island.
+game does **not** re-convert a changed source. **Three bakes in a row came back identical**, and the third was investigated as a modelling bug — the
+screen was drawing the previous evening's island.
 ⇒ **Re-import before believing anything you see:**
 ```
 .\Godot_v4.7.1-stable_win64.exe --headless --path . --import
@@ -124,7 +123,7 @@ z is low, so a floor facing down comes out as rock.
 ⇒ **After any new face: render it and look. A face you did not see is a face that is not there.**
 
 ⚠ **4. The stair is computed twice and the two must agree.**
-`Grid._build_runs()` in `src/sim/grid.gd` works out which tiles form a stair, which way it climbs and
+`Grid._build_runs` in `src/sim/grid.gd` works out which tiles form a stair, which way it climbs and
 how long the run is — **the same thing the island's geometry says.** One draws the surface; one tells
 the game where a body's feet go. **If they disagree, bodies walk through the staircase.**
 

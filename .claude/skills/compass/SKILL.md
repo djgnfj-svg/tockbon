@@ -15,14 +15,13 @@ description: Say where the work stands — this week's goal, then every open tic
    each `MM-<slug>/` folder beside it. Each `NN-MM.ticket.md` carries a `Status:` line (`open` · `claimed` ·
    `resolved`) and may carry `Blocked by: MM`. ⚠ **A ticket is named by its two-tier number** — task
    `03`'s second ticket is **03-02**, and each task numbers its own tickets from `01`.
-3. **The decision log's last five rows and the last five commits** — the table at the foot of
-   `docs/roadmap/log.md`, and `git log --oneline -5`. They say what actually landed.
+3. **The last five commits** — `git log --oneline -5`. They say what actually landed.
 
 **Done when every task's `NN.task.md` and every `NN-MM.ticket.md` inside it has been opened**, not a sample.
 
 ## Rank
 
-**Ready** = `Status: open`, and every ticket named in its `Blocked by:` line is `resolved`.
+**Ready** = `Status: open`, and every ticket named in its `Blocked by:` line is `resolved` **or no longer on disk** — ⚠ **a closed ticket's folder is deleted, so a missing number means done, never lost**.
 
 1. **Named by this week's section.** The map pins the week; a ticket it names outranks every other.
 2. **Ready**, lowest number first.

@@ -1,7 +1,7 @@
 extends RefCounted
 ## The drawing scan. It reads the text of `src/view/`, `src/shell/` and `src/`, and almost all of it
 ## measures nothing at runtime — which is the point: a spy on a hook sees the HOOK, never the native
-## call inside it, so the last inch has to be pinned structurally. See lessons-from-two-dead-games.
+## call inside it, so the last inch has to be pinned structurally. See `how-nets-lie`.
 ##
 ## ⚠⚠ **ONE SECTION IS RUNTIME AND IT ARRIVED ON 2026-09-03** (12-01, the wave alarm) — see
 ## `_the_alarm_paints_only_while_its_warning_is_open`. **It is the same argument standing the other
@@ -306,7 +306,12 @@ func _table() -> Dictionary:
 			# strokes.
 			"_advance_seat_glide": 0,
 			"_glided": 0,
+			"_glide_target": 0,
 			"_offset_after": 0,
+			# The ledge rule every glide answer goes through (03-21) and the ring walk under it. Pure
+			# geometry over `Grid`, and neither touches a surface.
+			"_offset_kept_on_level": 0,
+			"_ledge_reach": 0,
 			"_drawn_of": 0,
 			"_hide_unused": 0,
 			# The effect SIMULATION — carried across the move unchanged, still 0 draws each.
@@ -397,8 +402,7 @@ func _table() -> Dictionary:
 			"_maybe_sway": 0,
 			"_paint_sway": 0,
 			# ⚠ **A sine is the wrong shape** — Crysis uses a smoothed triangle and Unity's grass a
-			# sin⁴, both to sharpen the crest so a plant rests between gusts. See the 08-31 note in
-			# `docs/reference/`.
+			# sin⁴, both to sharpen the crest so a plant rests between gusts.
 			"_gust_wave": 0,
 			"_put_flat_prop": 0,
 			# ⚠ **It is a PAINT and it runs every frame**, unlike everything else in this block:

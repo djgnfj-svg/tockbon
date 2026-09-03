@@ -62,8 +62,7 @@ parts. Squads are commanded on the board at any time.
 ⚠ **The bar is Bad North.** **The island HAS a second storey and a stair, and they passed by eye** —
 do not delete them.
 
-**December ships an EARLY-ACCESS RELEASE** (2026-09-02; it was a December demo until that day).
-Roguelike · funding after it. ⚠ **This line has flipped and is settled by whichever the user said
+**December ships an EARLY-ACCESS RELEASE.** Roguelike · funding after it. ⚠ **This line has flipped and is settled by whichever the user said
 last, never by argument.**
 
 ⚠⚠ **What is being made is read out of `docs/roadmap/`, and there is no third place.** Do not go
@@ -74,24 +73,27 @@ looking for one, and do not cite one.
 `salvage/cell-harness` is docs discarded on purpose; `archive-full-history` is everything before the
 resets.
 
-# The docs — **open a folder's README, not the folder**
+# The docs — **only what is true NOW**
+
+⚠⚠ **No logs. No decision history. No failure diaries. No outside-material dumps.** A document says what
+stands today; **what it used to say is deleted, not struck through.** Old documents were measured to be
+the biggest source of confusion in this repo, and every one of them was written by an earlier round
+that thought it was being helpful.
 
 | Path | What it holds |
 |---|---|
-| `docs/roadmap/` | **The only map.** `README.md` is what is being done and this folder's own shape; `log.md` is why it came out that way, and every quotation. ⚠⚠ **Only `wrap-up` writes here**, and only after the conversation is finished |
-| `docs/design/` | What is being made, and the forks that were rejected. ⚠ **Sixteen fork docs and NO GDD, which is the defect.** A reversal is written ONTO a fork doc, never by deleting it |
-| `docs/reference/` | **What came in from outside** — the screenshots a decision was made from, and what `research` brings back. All `YYYY-MM-DD-what-it-is`. ⚠ **A ticket keeps the conclusion; the material stays here** |
+| `docs/roadmap/` | **The only map.** `README.md` is what is being done and this folder's own shape. ⚠⚠ **A finished ticket's folder is DELETED** — what survives is one ✅ in the map's table |
 | `docs/manual/` | **How to work an instrument** — making what the player sees, and Blender |
 | `docs/개발지식/` | The measured tool knowledge, in Korean, written for the user to read |
-| `how-nets-lie` | **Every green measured to be false.** Read it before writing a check and before believing a green round |
-| `planning-principles` | **How to judge a direction.** Survived both resets on purpose — read it first |
-| `lessons-from-two-dead-games` | What the two games that died actually measured |
+| `how-nets-lie` | **The shapes a false green comes in.** Read it before writing a check and before believing a green round. **Shapes only — no incidents, no dates** |
+| `planning-principles` | **How to judge a direction.** One line each — read it first |
 
-- **An idea the user picks becomes a ticket on the map**, not a design doc. **When a fork is taken,
-  record the rejected branch in `docs/design/`**
-- ⚠ **The user's own words about a game are a measurement**, and this repo has had very few. Carry the
-  judgement into the ticket it belongs to, word for word — never soften it, never leave it only in chat
+- **An idea the user picks becomes a ticket on the map.** There is no design-doc folder and no reference
+  folder; **a conclusion goes in the ticket and the material is not kept**
+- ⚠ **The user's own words about a game are a measurement.** Carry the judgement into the ticket it
+  belongs to, word for word — **but only while that ticket is open.** It goes with the ticket
 - **Skeleton first, flesh later.** Do not demand every `TBD` be filled before implementing
+- ⚠ **Writing more is not doing more.** If a paragraph explains why an earlier round was wrong, cut it
 
 # How the code is laid out
 
@@ -100,9 +102,9 @@ whole game headless in seconds.
 
 | Path | The rule it obeys |
 |---|---|
-| `src/sim/` | **Never touches the tree.** No `Node`, no `_draw`, no `Input`, no `get_node`, no `$`. Constructible and drivable with `.new()` and nothing else |
+| `src/sim/` | **Never touches the tree.** No `Node`, no `_draw`, no `Input`, no `get_node`, no `$`. Constructible and drivable with `.new` and nothing else |
 | `src/view/` | **Reads `sim`, never writes it.** Everything that is a Node or draws lives here. ⚠ The field's `_paint_*` hooks build a 3D world, so asserting their arguments does not measure what the player sees |
-| `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. A net calling `_ready()` exercises the real wiring |
+| `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. A net calling `_ready` exercises the real wiring |
 | `src/look.gd` | **Every presentation constant, in exactly one file.** `src/sim/rules.gd` holds every constant that changes what happens |
 
 ⚠⚠ **What died in the 3D move asserted pixels; what survived measured input → state.** Prefer the shape

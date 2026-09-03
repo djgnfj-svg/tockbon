@@ -11,7 +11,7 @@ When assessing a candidate for deepening, classify its dependencies. The categor
 Pure computation, in-memory state, no I/O. Always deepenable: merge the modules and test through the new interface directly. No adapter needed.
 
 ⚠⚠ **In this repo that is `src/sim/`, and it is most of the game.** The folder rule — no `Node`, no
-tree, constructible with `.new()` — exists so this category stays the big one.
+tree, constructible with `.new` — exists so this category stays the big one.
 
 ### 2. Local-substitutable
 
@@ -21,7 +21,7 @@ no port at the module's external interface.
 
 ### 3. True external
 
-⚠⚠ **The game has no network boundary and no third-party service** — the user settled 2026-08-30 that
+⚠⚠ **The game has no network boundary and no third-party service** — the user settled that
 it is single-player and stays deterministic. **What is genuinely outside is the art pipeline**: Blender,
 the local ComfyUI, pixellab. **None of them run while the game runs** — they bake a file and the game
 loads it. ⇒ **The seam is the file on disk, not a port**, and nothing needs mocking.

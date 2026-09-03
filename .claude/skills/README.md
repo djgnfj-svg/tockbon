@@ -1,6 +1,6 @@
 # .claude/skills — 16 skills, and **every one of them fires on its own**
 
-⚠⚠ **Nothing here has to be typed as a slash command** (2026-08-27, the user: *"having to type them
+⚠⚠ **Nothing here has to be typed as a slash command** (the user: *"having to type them
 myself is far too much bother — I would rather just say it"*). **Re-count instead of trusting this
 total**: `ls -d .claude/skills/*/ | wc -l`.
 
@@ -11,7 +11,7 @@ outside when an outside fact is needed) → **`build-loop`** (one ticket to code
 five agents) → **`wrap-up`** (write the answers into the map and the tickets, then commit), with
 **`roadmap`** checking the whole way.
 
-⚠⚠ **When a LOOK is what is being chosen, `prototype` hangs off `grilling` at both ends** (2026-08-29):
+⚠⚠ **When a LOOK is what is being chosen, `prototype` hangs off `grilling` at both ends** :
 grilling settles what the thing must do and what the candidates are **before** a folder exists, and the
 remarks the user makes on the finished sheet go back through it rather than straight into an edit.
 
@@ -19,14 +19,14 @@ remarks the user makes on the finished sheet go back through it rather than stra
 at, and both treat a remark on that sheet as a question rather than a work order.
 
 ⚠⚠ **The user answers, and only `wrap-up` writes.** Nothing in this chain edits the map during a
-conversation — that rule was set on 2026-08-27 after it was broken twice in one session.
+conversation — that rule was set after it was broken twice in one session.
 
-**`docs/roadmap/` is what that chain reads and writes** — the map, the log, and the task folders.
+**`docs/roadmap/` is what that chain reads and writes** — the map and the task folders. ⚠⚠ **There is no log**, and a closed ticket's folder is deleted.
 
 ## ⚠⚠ How a skill here is written — **short by default, length is earned**
 
 **The failure mode is sprawl**: a document that is simply too long, **even when every line is live and
-unique.** Attention thins across the excess. `wrap-up` hit 129 lines and was cut to 69 on 2026-08-27.
+unique.** Attention thins across the excess. `wrap-up` hit 129 lines and was cut to 69.
 
 | Rule | Why |
 |---|---|
@@ -40,8 +40,7 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 
 ## The user's three
 
-**These are the ones they said they actually use** (2026-08-27).
-⚠ **It was four until 2026-08-29** — the fourth was `press`, and it went out that day. The row was pulled and this heading was not, so it read "four" over a table of three until 2026-08-30.
+**These are the ones the user said they actually use.**
 
 | Skill | What it does |
 |---|---|
@@ -58,26 +57,26 @@ wrong. ⚠⚠ **No skill here is invocation-gated** — all of them fire on thei
 | **`build-loop`** | One ticket, plan → build → verify, each in its own agent |
 | **`plan-into-ticket`** | Writes an `## Implementation plan` INTO the ticket. Synthesis only, no interview |
 | **`grilling`** | Works the tree of **what is being made**, until nothing is left assumed. **Called by `roadmap`, `compass` and `build-loop`** |
-| **`prototype`** | Builds one thing **three or more genuinely different ways** and puts them side by side, so a look is chosen by seeing rather than by argument. ⚠ **Called `spike` until 2026-08-29** — renamed to the word the user actually says |
+| **`prototype`** | Builds one thing **three or more genuinely different ways** and puts them side by side, so a look is chosen by seeing rather than by argument. ⚠ **Called `spike` once** — renamed to the word the user actually says |
 | **`listup`** | **Names what is actually at one spot, one line each, grouped by kind.** ⚠ **It judges nothing** |
 | **`commission`** | **시안** — pulls candidate PICTURES so the user chooses by looking. **대화 → 로컬 → 유료**, in that order. ⚠ **Paid generation only when the user says so** |
 | **`knowledge`** | **개발지식** — reaches `docs/개발지식/` before code is written against Godot, Blender or an instrument, and adds a page when a round measures something durable. ⚠ **It decides nothing and writes no ticket** |
 
 ## Kept from `mattpocock/skills`
 
-**They came in on 2026-08-22.** These sit at spots the chain does not cover.
+**They came in.** These sit at spots the chain does not cover.
 
 | Skill | Why it stays |
 |---|---|
 | **`diagnosing-bugs`** | The hard bug: intermittent, or a regression between two known-good states |
-| ~~`domain-modeling`~~ | ⚠⚠ **Folded into `naming` on 2026-08-29.** Both wrote `GLOSSARY.md` and asked the same question; `naming` was this repo's own. **Its ADR half was dropped** — there is no `docs/adr/` here and decisions go to `docs/roadmap/log.md` |
+| ~~`domain-modeling`~~ | ⚠⚠ **Folded into `naming`.** Both wrote `GLOSSARY.md` and asked the same question. **Its ADR half was dropped** — there is no `docs/adr/` here and no decision log; a decision lives in the open ticket |
 | **`codebase-design`** | The deep-module vocabulary interfaces are designed with |
 | **`writing-for-agents`** | How to write a skill. **The ones written here were written with it** |
 | **`resolving-merge-conflicts`** | Two sessions have collided on `main` once already |
 
 ## What was deleted, and what it means to restore one
 
-**2026-08-27, in three rounds.** ⚠ **The morning said keep everything** — an audit proposed cutting
+**In three rounds.** ⚠ **The morning said keep everything** — an audit proposed cutting
 sixteen and the user overruled it. **The evening reversed that** once the chain stood, and **the night
 cut three more the user said they do not use.** **The later word wins.**
 
@@ -85,15 +84,15 @@ cut three more the user said they do not use.** **The later word wins.**
 |---|---|
 | **`breakdown`** | **`grilling` asks and `wrap-up` writes** — restoring it means two skills that both split work into tickets |
 | **`tdd`** | The rule it carried survives: **no check at a seam that is not agreed**, and the agreed three are in `GLOSSARY.md` |
-| ~~**`prototype`**~~ | ⚠⚠ **The NAME came back on 2026-08-29** on a different skill — the one written here that builds three mechanisms side by side. **The imported skill is still gone**, and restoring it now means two skills wearing one word. ⚠ This row used to say it never fired; the record shows **one** call |
+| ~~**`prototype`**~~ | ⚠⚠ **The NAME came back** on a different skill — the one written here that builds three mechanisms side by side. **The imported skill is still gone**, and restoring it now means two skills wearing one word. ⚠ This row used to say it never fired; the record shows **one** call |
 | `wayfinder` `to-spec` `to-tickets` | **`compass` + `grilling` + the roadmap file replaced all three.** Restoring means two planning shapes at once |
 | `triage` `to-questionnaire` | Both assume **other people** — a reporter filing bugs, a colleague to send a questionnaire to |
 | `implement` `improve-codebase-architecture` | `build-loop` owns the build; the architecture sweep never fired once |
 | `grill-me` `grill-with-docs` | Both wrap `grilling`, which is kept |
 | `ask-matt` `handoff` `teach` `wizard` `setup-matt-pocock-skills` | The router described the upstream flow only; the rest never fired |
-| `research` **the skill** | ⚠⚠ **It came back on 2026-08-27 as an AGENT, not a skill** — `scout` is the trigger, `research` is who goes and reads |
+| `research` **the skill** | ⚠⚠ **It came back as an AGENT, not a skill** — `scout` is the trigger, `research` is who goes and reads |
 
-## ⚠⚠ **Three more went on 2026-08-29, and the record is what they cost**
+## ⚠⚠ **Three more went, and the record is what they cost**
 
 **All three had fired ZERO times**, and the call counts were read out of the session transcripts rather
 than guessed at.
