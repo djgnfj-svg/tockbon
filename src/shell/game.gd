@@ -321,6 +321,11 @@ func _process(delta: float) -> void:
 	# frame where nothing moved costs 0.04 ms and a frame where something did costs 3.9 ms — measured on
 	# the real island with a 부대 of nine.
 	_show_route(_pointer_at)
+	# ⚠ **And 지을 자리 with it, for the same reason** (2026-09-03): the board slides under a cursor
+	# that never moved, and a mark left on the 조각 the cursor used to be over is a press aimed at a
+	# different 조각 than the one lit. **Below the pan**, so it answers for the camera this frame ends
+	# on. It costs nothing while the mode is off — `_show_build_spot` returns on the first line.
+	_show_build_spot(_pointer_at)
 	# ⚠⚠ **AND THE HOVER PLATE IS RE-ASKED EVERY FRAME TOO, SINCE 2026-09-02.** `set_hover_tile` had
 	# exactly one call site — the motion branch — and **a keyboard turn produces no motion event**, so
 	# one press of E left the white plate sitting on the 조각 the cursor used to be over, a quarter of
@@ -440,8 +445,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		# long as a key is, so the release edge has nothing to undo.
 		# ⚠ **It sits above the turn keys** so a press cannot both let go and move the board, and above
 		# the `not key.pressed` return so the branch is reached at all.
+		# ⚠⚠ **AND SINCE 2026-09-03 IT LEAVES 짓기 모드 FIRST** (ticket 05-08). **The two are not one
+		# action**: leaving the mode gives the player back the hand they had — the 부대 is still
+		# picked and its reach is still lit — and `_let_go` would empty it, which is the mode
+		# charging the player a selection for pressing the key that gets them out of it. **One ESC
+		# undoes one thing**, so a second press is what lets go.
 		if key.keycode == KEY_ESCAPE and key.pressed and not key.echo:
-			_let_go()
+			if hand.is_building():
+				_leave_the_build_mode()
+			else:
+				_let_go()
+			return
+		# ⚠⚠ **B IS 짓기 모드, AND THE MODE IS WHAT KEEPS A FOURTH MEANING OFF THE LEFT BUTTON**
+		# (2026-09-03, the user, choosing between a mode, a list along the bottom and reviving the
+		# right button: 「짓기모드가 맞을듯」 — *"build mode seems right"*). **It toggles**: the same key
+		# in and out, and ESC out as well.
+		# ⚠ **Pressed edge only, like ESC and unlike TAB** — it is an action and not a state held for
+		# as long as a key is down, so the release edge has nothing to undo. ⚠ **It sits above the pan
+		# keys** so it cannot be swallowed by one, and B is not one of them.
+		if key.keycode == KEY_B and key.pressed and not key.echo:
+			_toggle_the_build_mode()
 			return
 		# ⚠⚠ **THE WASD BRANCH STOOD HERE, WAS DELETED ON 2026-08-31, AND IT IS BACK** (2026-09-02).
 		# The old line closed with 「TAB is the only two-edged key left」; **it is not — this is the
@@ -542,12 +565,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		# it is the motion — a line drawn on the press would appear at the same instant the walk does
 		# and would be a picture of a decision already made.
 		_show_route(motion.position)
+		# ⚠ **지을 자리 is asked here as well as in `_process`**, exactly as the hover plate and the
+		# 이동선 are and for the same pair of reasons: the motion is where the hand actually is, and
+		# the frame is what follows a board that slid under a cursor that never moved.
+		_show_build_spot(motion.position)
 		# ⚠ **The summon aim used to sit above the pan and consume every motion while a slot was
 		# armed** (deleted 2026-08-28). With it gone a motion on the field is a box or it is nothing.
 		# **The threshold, and it is measured from the press point rather than accumulated per motion.**
 		# ⚠ A sum of `relative` would let a hand that wanders out and back cross the threshold without
 		# ever being far from where it started, which is a click that turns into a box under the user.
-		if _press_open and not _boxing \
+		# ⚠⚠ **A DRAG INSIDE 짓기 모드 IS NOT A BOX** (2026-09-03, ticket 05-08). 「Inside the mode the
+		# left press means build here and nothing else」 has to hold for a press that TRAVELS too, or a
+		# hand that wobbles past the threshold selects a 부대 with the mode still on — the fourth
+		# meaning the mode exists to prevent, arriving through the release instead of the press.
+		# ⚠ **Gated here and not at the release**, so no mint box is ever laid on the ground: a box
+		# started and then ignored would be a picture of a gesture that is not happening.
+		if _press_open and not _boxing and not hand.is_building() \
 				and motion.position.distance_to(_press_at) > Look.DRAG_PAN_THRESHOLD_PX:
 			_boxing = true
 		# ⚠⚠ **`field_view.pan_by(motion.relative)` STOOD HERE AND IT IS DELETED** (2026-09-02, ticket
@@ -805,6 +838,62 @@ func _order_the_island(block: int) -> bool:
 	# decide.**
 	_let_go()
 	return sent > 0
+
+
+## **Turns 짓기 모드 on and off** (ticket 05-08, the user: 「짓기모드가 맞을듯」).
+##
+## ⚠ **The 창고 is the one building wired, and which building the mode holds is the only thing a second
+## one changes** — `Hand.building` carries a kind, so the chrome that names it (a 시안 round, not
+## built) has a field to write into rather than a flag to widen.
+func _toggle_the_build_mode() -> void:
+	if hand.is_building():
+		_leave_the_build_mode()
+		return
+	hand.take_the_building(Builds.STORE)
+	# **The mark goes up under the cursor at once and not on the next motion.** The pointer is already
+	# somewhere; waiting for it to move would open the mode with nothing on screen saying it is open.
+	_show_build_spot(_pointer_at)
+	# ⚠ **The 이동선 comes down with it.** A line promising a walk while the press builds is the picture
+	# disagreeing with the button, which is this repo's named 「screen says one thing」 fake.
+	field_view.set_move_lines([])
+
+
+## **Leaves 짓기 모드 and gives the hand back exactly as it was.**
+##
+## ⚠⚠ **`hand.clear()` IS NOT CALLED AND THAT IS THE WHOLE FUNCTION.** The 부대 and its lit reach
+## survive the mode; nothing is re-picked, because nothing was ever put down.
+func _leave_the_build_mode() -> void:
+	hand.put_the_building_down()
+	field_view.set_build_spot(-1, false)
+
+
+## **A press inside 짓기 모드.** True when a building actually stood on that 조각.
+##
+## ⚠⚠ **THE MODE ENDS ON A SUCCESSFUL BUILD AND NOBODY CHOSE THAT.** Staying in it would leave the
+## next press still meaning 「build here」, and with one 창고 an island that press MOVES the building the
+## player just placed — a click meant for a 부대 teleporting their 창고 across the island. **Leaving is
+## the arm that cannot destroy anything silently**, and it is what a build mode does in the games the
+## user has named. ⚠ **A refused press keeps the mode**, so aiming at water costs nothing.
+func _build_the_island(tile: int) -> bool:
+	if battle == null or tile < 0:
+		return false
+	if not hand.build(battle, tile):
+		return false
+	_leave_the_build_mode()
+	return true
+
+
+## **The 조각 짓기 모드 would build on, pushed to the ground under the cursor.** Nothing while the mode
+## is off, which is also what leaving it restores.
+##
+## ⚠ **`Hand.can_build` decides the colour and this only carries it.** The mark and the press ask one
+## function, so a 조각 that lights as buildable is a 조각 the press builds on.
+func _show_build_spot(at: Vector2) -> void:
+	if battle == null or not hand.is_building():
+		field_view.set_build_spot(-1, false)
+		return
+	var tile := _tile_at(at)
+	field_view.set_build_spot(tile, tile >= 0 and hand.can_build(battle, tile))
 
 
 ## **Every button gesture, dropped at once** — the left pair and the right flag.
@@ -1110,6 +1199,13 @@ func _notification(what: int) -> void:
 func _press_the_island(at: Vector2) -> bool:
 	if battle == null:
 		return false
+	# **Arm 0 — inside 짓기 모드 the press builds, and it is the only thing the press can be**
+	# (2026-09-03, ticket 05-08). ⚠⚠ **ABOVE EVERY OTHER ARM AND RETURNING WHETHER IT STOOD OR NOT.**
+	# The whole reason the mode exists is that the left button already carries three meanings; an arm
+	# that fell through on a refused 조각 would hand the press to the order arm below and the player
+	# would aim at water and move their 부대 there instead.
+	if hand.is_building():
+		return _build_the_island(_tile_at(at))
 	# **Arm 1 — a full hand on a lit 칸 is an order, whoever is drawn on it.** ⚠⚠ **`body_at_px` IS
 	# NOT ASKED FIRST**, and that order is the rule: asked first, a body standing on a 칸 you meant to
 	# send the 부대 TO would be picked instead — the exact thing the user felt on 2026-08-31 (「이게 조각에
@@ -1246,6 +1342,12 @@ func _let_go() -> void:
 ## aimed 칸, and only his route is handed to the view — its first point under his drawn feet, its last
 ## 조각 the seat `order` gives him. Nobody walking (everybody already on the 칸) draws nothing.
 func _show_route(at: Vector2) -> void:
+	# ⚠ **Nothing is previewed inside 짓기 모드** (2026-09-03, ticket 05-08). The 부대 is still held —
+	# that is what leaving the mode gives back — but the press builds, so a line saying 「they walk
+	# here」 would be the screen naming a gesture the button does not carry. **The line already came
+	# down when the mode opened**; this is what keeps the per-frame rebuild from putting it back.
+	if hand.is_building():
+		return
 	if battle == null or hand.is_empty():
 		return
 	var tile := _tile_at(at)

@@ -303,6 +303,11 @@ func _table() -> Dictionary:
 			"_wash_cells": 0,
 			"_stand_h": 0,
 			"_rebuild_buildings": 0,
+			# **Every building standing right now** — the island file's, plus the 창고 짓기 모드 put up
+			# (2026-09-03, ticket 05-08). ⚠ **It is a list and not a second placer**: the loop above it
+			# is the only thing that puts a building on the ground, so the 창고 gets the same footprint
+			# centring, ground height and outline the 성채 does.
+			"_standing_buildings": 0,
 			"_rebuild_props": 0,
 			# **The other half of the scatter: a prop drawn as a PICTURE** (2026-08-31, the user:
 			# 「the tree is 2D, the bush is 2D too, and the stone, the iron ore and the buildings are
@@ -352,6 +357,12 @@ func _table() -> Dictionary:
 			# very mark it was pointing at. This asks `Grid` where the middle of that 칸 is; it draws
 			# nothing itself, which is why it is 0 like every other name in this block.
 			"_block_middle_tiles": 0,
+			# **지을 자리** (2026-09-03, ticket 05-08, the user: 「짓기모드가 맞을듯」). `set_build_spot`
+			# takes the 조각 and the shell's yes-or-no in; `_paint_build_spot` lays it on the ground
+			# through `_g_tri`. ⚠ **It draws through the fx buffer and not through `_draw`**, which is
+			# why its count here is 0 like every other ground mark.
+			"set_build_spot": 0,
+			"_paint_build_spot": 0,
 			# **The white rim on the picked body** (2026-08-31, the user: 「내가 누른 캐릭이 티가
 			# 나야할듯함」). `set_picked` takes the ids in, `_put_pick_outline` places one rim from the
 			# body's own finished sprite, and `_rim_sprite` is that pool's own `_sprite`.

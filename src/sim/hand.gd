@@ -44,6 +44,24 @@ extends RefCounted
 ## Empty is 「nothing picked」 and is the resting state.
 var ids := PackedInt32Array()
 
+## **The building the hand is holding, as a `Builds` kind — 「」 for the ordinary hand.** Ticket 05-08.
+##
+## ⚠⚠ **THIS FIELD IS 짓기 모드, AND THE MODE EXISTS TO KEEP A FOURTH MEANING OFF THE LEFT BUTTON**
+## (2026-09-03, asked to choose between a mode, a list along the bottom of the screen and reviving the
+## right button, the user: ***"Build mode seems right."*** 「짓기모드가 맞을듯」). The left button
+## already boxes a 부대, orders it onto a 칸 and keeps the hand on a press over nothing. **While this
+## is not empty a left press means 「build here」 and means nothing else**; while it is empty every one
+## of those three gestures is exactly what it was.
+##
+## ⚠⚠ **IT SITS BESIDE `ids` RATHER THAN REPLACING IT, AND THAT IS 「the selection survives」 BY
+## CONSTRUCTION.** Entering and leaving the mode never touch the picked list, so there is no 「put the
+## 부대 back」 step to forget — the alternative, a mode that emptied the hand and restored it, is two
+## copies of the selection with a moment in between where the game owns both.
+##
+## ⚠ **A kind and not a bool**, so a second building is a second key and not a second flag. What the
+## chrome that NAMES the kind looks like is a 시안 round and is not built.
+var building := ""
+
 ## **Every 조각 the picked bodies may be POINTED at**, ascending. ⚠ **This is what lights up**, and it
 ## asks two things only: the 조각 is passable, and it is not a stair — a stair is walked THROUGH and
 ## never stood on.
@@ -121,7 +139,14 @@ var _routes: Array = []
 
 ## **Lets go of everything.** ⚠ Called on any press that is neither a body nor a lit 조각, which is
 ## what makes 「press the sea to deselect」 true by construction rather than by a special case.
+##
+## ⚠⚠ **THE BUILDING GOES TOO, AND ESC THEREFORE DOES NOT COME THROUGH HERE** (2026-09-03). 「The hand
+## holds nothing」 is one fact and this is the one place that writes it — an island opening with a
+## building still held would put the player on new ground in a mode they left behind. **But ESC inside
+## 짓기 모드 must keep the 부대**, so the shell calls `put_the_building_down` for that edge and this
+## for every other; see that function.
 func clear() -> void:
+	building = ""
 	ids = PackedInt32Array()
 	reach = PackedInt32Array()
 	_in_reach = {}
@@ -136,6 +161,58 @@ func is_empty() -> bool:
 
 func has(soldier_id: int) -> bool:
 	return ids.has(soldier_id)
+
+
+# --- 짓기 모드: the hand holding a building instead of pointing bodies -------------------------------
+
+## **Takes up one building and enters 짓기 모드.** False for a kind no building table row answers to.
+##
+## ⚠ **The kind is checked against `Builds` and not against a list here.** A made-up kind would enter a
+## mode whose press can never succeed, which on screen is a game that has stopped responding.
+func take_the_building(kind: String) -> bool:
+	if Builds.footprint_of(kind) == Vector2i.ZERO:
+		return false
+	building = kind
+	return true
+
+
+## **Leaves 짓기 모드 and keeps the 부대.** ⚠ **The one exit that is not `clear`**, and the difference
+## is the whole of it: ESC out of the mode gives the player back the hand they had, and `clear` is for
+## every other way a hand empties.
+func put_the_building_down() -> void:
+	building = ""
+
+
+## Whether 짓기 모드 is on. ⚠ **Not `is_empty`'s twin** — a hand may hold a 부대 and a building at once,
+## which is exactly what makes leaving the mode a restoration rather than a re-pick.
+func is_building() -> bool:
+	return building != ""
+
+
+## **Whether the held building would stand on `tile`.** ⚠ **Asked of `Battle` and never worked out
+## here** — the mark on the ground and the press both come through this one line, so a rule that moved
+## cannot leave one of them behind.
+func can_build(battle: Battle, tile: int) -> bool:
+	if battle == null or building == "":
+		return false
+	if building == Builds.STORE:
+		return battle.can_place_store(tile)
+	return false
+
+
+## **Puts the held building on `tile`.** True when something actually stood there.
+##
+## ⚠⚠ **ONE ARM PER KIND AND TODAY THERE IS ONE.** The 바리케이트 is ticket 09-02 and is deliberately
+## not wired: it is paid for out of the 창고, it may seal the island, and neither of those has a
+## gesture yet — `Battle.place_barricade` is the door it comes through and this is where it plugs in.
+## ⚠ **The two placements cannot collapse into a table row**, because their rules differ: one is
+## unique to the island, the other costs wood and may be raised many times.
+func build(battle: Battle, tile: int) -> bool:
+	if battle == null or building == "":
+		return false
+	if building == Builds.STORE:
+		return battle.place_store(tile)
+	return false
 
 
 ## **Picks one body.** The single-body door, and it is a one-line wrapper over the list door on

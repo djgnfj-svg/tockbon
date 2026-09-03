@@ -566,6 +566,10 @@ func _process(delta: float) -> void:
 	# whether the shell handed over one rect or twelve since the last one. See `set_box`.
 	if _box_dirty or (_box.size != Vector2.ZERO and _box_cam != _box_cam_key()):
 		_rebuild_box()
+	# ⚠ **The one place a building raised mid-island reaches the ground** — see `_builds_store_tile`.
+	# A 조각 comparison and not a rebuild every frame: the buildings are a node tree, not a buffer.
+	if battle != null and battle.store_tile != _builds_store_tile:
+		_rebuild_buildings()
 	# ⚠ **The buffer is opened BEFORE the bodies and flushed after them.** A body's shadow is painted
 	# from inside `_paint_bodies` — it is a per-body fact, and that is the one loop with a body's
 	# centre and radius in hand at the same time.
@@ -576,6 +580,7 @@ func _process(delta: float) -> void:
 	# ⚠ **Before the bodies and that is the stacking order.** The buffer is one surface drawn in the
 	# order it was filled, so a route laid down first passes UNDER the shadows of the bodies walking
 	# it — which is the way round that reads as a line on the ground rather than over the feet.
+	_paint_build_spot()
 	_paint_move_lines()
 	_paint_bodies()
 	_paint_marks()
@@ -1215,12 +1220,24 @@ var _keep_roof_known := false
 ## shell on hover, read by `_paint_move_lines` inside the fx pass, and cleared by handing back an
 ## empty array. ⚠ **It holds 조각 and not points** — the height each piece is laid at is decided at
 ## draw time by `_ground_y_px`, exactly as every other ground mark is.
+## The 조각 지을 자리 is on, or -1. Written only by `set_build_spot`; read only by `_paint_build_spot`.
+var _build_spot := -1
+var _build_spot_ok := false
 var _move_lines: Array = []
 
 ## Whose line each entry of `_move_lines` is, in the same order. **Empty is allowed** and means no
 ## seat — a line leaving the middle of a 조각 rather than a body's feet.
 var _move_ids := PackedInt32Array()
 var _builds: Node3D = null
+## **The `battle.store_tile` the standing buildings were last built against**, so a 창고 that goes up
+## mid-island reaches the ground.
+##
+## ⚠⚠ **THE BUILDINGS ARE BUILT ONCE PER ISLAND AND THE 창고 IS NOT** (ticket 05-08). `_rebuild_terrain`
+## is the only other caller and it runs at `setup`; a building the player raises after that would
+## otherwise be a number in the simulation with nothing on the ground — the repo's own 「the sim changes
+## but the screen doesn't」 fake, wearing a building.
+## ⚠ **A remembered 조각 and not a bool**, so moving the 창고 is a change too.
+var _builds_store_tile := -1
 var _props: Node3D = null
 ## **The picture props, and the two numbers `_paint_flat_props` needs to redraw them.**
 ## ⚠ **Three parallel arrays and they are built in one place** — `_put_flat_prop` appends to all three
@@ -1403,6 +1420,19 @@ func set_reach(tiles: PackedInt32Array) -> void:
 ## ⚠ **Stored and not drawn here.** Every ground mark in this file is built inside the one fx pass in
 ## `_process`, between the buffer opening and its flush — a mark drawn outside it is a mark on a
 ## buffer that has already been committed, and it never reaches the screen.
+## **The 조각 짓기 모드 would build on, and whether the building would actually stand there** — -1 for
+## no mark, which is the resting state and the state leaving the mode restores (ticket 05-08).
+##
+## ⚠⚠ **THE SHELL DECIDES `ok`, NOT THIS FILE.** It is `Battle.can_place_store`'s answer carried in;
+## a view that asked the board itself would be a second copy of the placing rule, and the mark would
+## go on saying 「yes」 for a press the simulation refuses.
+## ⚠ **Stored and not drawn here**, like every other ground mark: the drawing happens inside the one
+## fx pass in `_process`, and a triangle laid outside it goes into a buffer already committed.
+func set_build_spot(tile: int, ok: bool) -> void:
+	_build_spot = tile
+	_build_spot_ok = ok
+
+
 func set_move_lines(lines: Array, ids: PackedInt32Array = PackedInt32Array()) -> void:
 	_move_lines = lines
 	# ⚠ **The ids are what let the line leave the FEET.** A body at rest is drawn off its 조각's middle
@@ -1433,6 +1463,9 @@ func set_picked(ids: PackedInt32Array) -> void:
 ## those there** — a picture that stopped agreeing with them is a question for the sim, not for this
 ## function.
 func _rebuild_buildings() -> void:
+	# ⚠ **Stamped before every early return**, so a frame that could not draw does not ask again for
+	# the rest of the run — see `_builds_store_tile`.
+	_builds_store_tile = battle.store_tile if battle != null else -1
 	if _world == null:
 		return
 	if _builds != null:
@@ -1443,7 +1476,7 @@ func _rebuild_buildings() -> void:
 	_keep_roof_known = false
 	if battle == null:
 		return
-	var placed := Islands.builds()
+	var placed := _standing_buildings()
 	if placed.is_empty():
 		return
 	var packed := load(BUILDINGS_SCENE) as PackedScene
@@ -1490,6 +1523,23 @@ func _rebuild_buildings() -> void:
 	# geometry was never the problem, and two rounds were spent on normals and coplanar faces first.
 	_outline(_builds)
 	lib.free()
+
+
+## **Every building standing on this island right now** — the ones the island file opened with, plus
+## the 창고 the player has put up (ticket 05-08).
+##
+## ⚠⚠ **THE 창고 IS APPENDED HERE AND NOT DRAWN SOMEWHERE ELSE.** A second placer with its own node
+## would be a second copy of 「how a building is put on the ground」 — the footprint centring, the
+## ground height, the scale, the outline — and the two would part company the first time either was
+## tuned. **One list, one loop.**
+## ⚠ **The row's shape is the island file's own** (`kind`/`x`/`y`, low corner), so the loop below
+## cannot tell the two apart, which is the point.
+func _standing_buildings() -> Array:
+	var placed: Array = Islands.builds().duplicate()
+	if battle != null and battle.store_tile >= 0 and battle.grid != null:
+		placed.append({"kind": Builds.STORE,
+			"x": battle.store_tile % battle.grid.w, "y": battle.store_tile / battle.grid.w})
+	return placed
 
 
 ## **Tells the sea where the land is.** ⚠⚠ **This is what replaces the shore band that failed.** A ring
@@ -4306,6 +4356,40 @@ func _paint_move_lines() -> void:
 	for k in stops.size():
 		_g_disc(Look.tile_point_px(stops[k]), Look.MOVE_LINE_END_PX * steady,
 			Look.COL_MOVE_LINE_END)
+
+
+## **Lays 지을 자리 over one 조각** — the mark 짓기 모드 puts under the cursor (ticket 05-08).
+##
+## ⚠⚠ **CUT INTO PIECES LIKE EVERY OTHER GROUND MARK.** One quad over a 조각 that straddles a stair is
+## a chord across the slope with half of it underground — the same reason `_g_ribbon` is cut, and the
+## same `Look.FX_GROUND_STEP_PX` deciding how finely.
+##
+## ⚠⚠ **ONE 조각 AND NOT ONE 칸, BECAUSE THAT IS WHAT `Battle.place_store` TAKES** (2026-09-02, the
+## user: 「건물을 짓는건 조각단위로」 — *"building is done by the 조각"*). Commands and resources are 칸
+## and buildings alone are 조각, so a mark drawn on the 칸 would be four times the ground the press
+## actually claims.
+## ⚠ **The footprint table is NOT read here** and a building wider than one 조각 would be drawn too
+## small: `place_store` fills a single 조각 whatever `buildings.json` says its footprint is, and a mark
+## that promised more than the placing does is the picture lying. **The 창고 is 1x1 and the two agree
+## today**; the day a 2x2 building is placeable, both sides move together or neither does.
+func _paint_build_spot() -> void:
+	if _build_spot < 0 or battle == null or battle.grid == null:
+		return
+	var tx := _build_spot % battle.grid.w
+	var ty := _build_spot / battle.grid.w
+	var col := Look.COL_BUILD_SPOT if _build_spot_ok else Look.COL_BUILD_SPOT_REFUSED
+	col.a = Look.BUILD_SPOT_FILL_ALPHA
+	var n := maxi(1, int(ceil(Look.TILE_PX / Look.FX_GROUND_STEP_PX)))
+	var low := Vector2(float(tx) * Look.TILE_PX, float(ty) * Look.TILE_PX)
+	var cell := Look.TILE_PX / float(n)
+	for j in n:
+		for i in n:
+			var a := low + Vector2(float(i) * cell, float(j) * cell)
+			var b := a + Vector2(cell, 0.0)
+			var c := a + Vector2(cell, cell)
+			var d := a + Vector2(0.0, cell)
+			_g_tri(a, b, c, col)
+			_g_tri(a, c, d, col)
 
 
 ## **The middle of the 칸 a 조각 sits in, in `Hand.route_points`' own units** — corner-anchored, so

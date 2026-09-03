@@ -71,3 +71,9 @@ static func label_of(kind: String) -> String:
 ## here rather than spelled as a string at every call site, so the day it is renamed there is one line
 ## to change and no silent survivor.
 const KEEP := "keep"
+
+## ⚠ **The 창고 is the one the player builds**, and the first one they build (ticket 05-08). Named here
+## for the same reason the 성채 is: 짓기 모드 holds a kind, `Hand.build` matches on it and the view asks
+## this table for its footprint, and a string spelled at three call sites is three chances to typo a
+## mode that silently never places anything.
+const STORE := "store"
