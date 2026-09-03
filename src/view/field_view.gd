@@ -1245,7 +1245,13 @@ func _rebuild_terrain() -> void:
 	if _island != null:
 		_island.queue_free()
 		_island = null
-	if battle == null:
+	# ⚠⚠ **`battle.grid` is the half of this guard that was missing**, and a board with no ground is a
+	# real state `_map_tiles` already answers for. The Z offset below is the grid's own `h`; with no
+	# grid there is no number to slide the mesh by, and the fallback size is 48 x 32 against an island
+	# that is 30 x 26 — so laying it anyway would put the ground six 조각 off and nothing would say so.
+	# ⚠ **`_ground_h` has carried the complete guard all along**; `_rebuild_buildings` and
+	# `_rebuild_props` were missing the same half and only survived because this line crashed first.
+	if battle == null or battle.grid == null:
 		return
 	var packed := load(ISLAND_SCENE) as PackedScene
 	if packed == null:
@@ -1441,7 +1447,9 @@ func _rebuild_buildings() -> void:
 	# ⚠ **Forgotten with the buildings and not beside them.** A roof remembered from the last island
 	# is a bar hanging over open ground on this one.
 	_keep_roof_known = false
-	if battle == null:
+	# ⚠ The grid half of the guard — the loop below strides by `battle.grid.w` to find each building's
+	# 조각. See `_rebuild_terrain` for why the three of these lost it together.
+	if battle == null or battle.grid == null:
 		return
 	var placed := Islands.builds()
 	if placed.is_empty():
@@ -1789,7 +1797,8 @@ func _rebuild_props() -> void:
 	if _props != null:
 		_props.queue_free()
 		_props = null
-	if battle == null:
+	# ⚠ Same missing half as `_rebuild_buildings` — the loop strides by `battle.grid.w`.
+	if battle == null or battle.grid == null:
 		return
 	var placed := Islands.props()
 	if placed.is_empty():
@@ -2116,7 +2125,15 @@ func _put_outline(body: Sprite3D) -> void:
 	edge.pixel_size = Look.SPRITE_PIXEL_SIZE * Look.BODY_OUTLINE_SCALE
 	edge.centered = body.centered
 	edge.offset = body.offset
-	edge.position = body.position - _cam.global_transform.basis.z * Look.BODY_OUTLINE_BACK_TILES
+	# ⚠⚠ **`_cam.transform`, NEVER `_cam.global_transform`.** `_cam` and the body sprite are both
+	# children of `_world`, so the body's `position` is already in `_world`'s space and the push has to
+	# be read in the same one — the note on `_put_ground_shadow` says this for the same pair of points,
+	# and `_put_hp_bar` reads the same local basis.
+	# ⚠ **The global read did not merely bark, it pushed the wrong way.** Outside the tree
+	# `global_transform` answers the identity and raises `!is_inside_tree()`, so the copy went along
+	# WORLD +z — the one direction the note above this function says it must never take. Headless that
+	# was 630 barks a round and a `net_fx_view` pump cut from thirty frames to seven to quiet them.
+	edge.position = body.position - _cam.transform.basis.z * Look.BODY_OUTLINE_BACK_TILES
 
 
 ## ⚠⚠ **`_hull_box` STOOD HERE AND IT IS DELETED** (2026-08-29) with the boats. **The fact it cost a
