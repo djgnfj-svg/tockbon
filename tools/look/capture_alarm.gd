@@ -8,6 +8,14 @@ extends SceneTree
 ## .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_alarm.gd -- <out-dir>
 ## ```
 ##
+## ⚠⚠ **THIS ONE IS THE RUN, AND `capture_alarm4.gd` IS THE BOUNDARY.** Both walk the real clock and
+## neither stages it, so they are not the same instrument twice: **this one photographs eight
+## human-readable minutes** — quiet, the window opening, it falling, the hull landing — and is what
+## answers 「does the alarm come and go over a run」. **`capture_alarm4.gd` steps one sub-step at a
+## time onto the FIRST frame a window is open and the LAST**, which is the only way to see the value
+## the plate ends a wave on. ⚠ The two staged ones are `capture_alarm2.gd` (the alarm beside the body
+## panel) and `capture_alarm3.gd` (the alarm on a lost board); both write `elapsed` by hand and say so.
+##
 ## ⚠ **`00_title` is the known-answer frame** — a screen this repo has already looked at. If it comes
 ## back wrong nothing below it is readable.
 ## ⚠ **Every input is an `InputEvent` handed to the engine.** No Win32, no key injection.
@@ -72,10 +80,36 @@ func _run() -> void:
 
 
 ## Runs the shell forward to `sec` of run time, then shoots.
+##
+## ⚠⚠ **THE STEP HAS A FLOOR OF ONE SUB-STEP AND IT SPUN FOREVER WITHOUT ONE.** `Battle.step`
+## accumulates `dt` and moves `elapsed` only in whole `Rules.SIM_SUBSTEP_SEC`, carrying the leftover
+## — so a final `dt` clamped to the remaining distance, a hair under a sub-step, advanced the clock
+## not at all and this loop handed it the same hair again. **Two runs sat at 100 % of one core for
+## thirteen minutes between 6:00 and 7:59, with no error line and no frame written.** Measured
+## 2026-09-03. ⇒ The shot lands up to one sub-step PAST `sec` rather than on it, which is the price
+## and is worth saying out loud.
+## ⚠ **The second road to the same hang is a lost board**: `Battle.step` returns early once `lost`,
+## so `elapsed` stops for a reason no floor can fix. That is what the equality guard catches, and it
+## is why the guard is 「did the clock move」 rather than 「did we run out of turns」.
+## ⚠ The cap is DERIVED from the target — one sub-step is the smallest step this loop can take, so
+## `sec / SIM_SUBSTEP_SEC` is the arithmetic ceiling on how many it can need. A typed number here
+## would be a second thing to keep in step with `CHUNK`.
 func _at(sec: float, name: String, crop: bool) -> void:
 	var b: Battle = _game.battle
+	var cap := int(sec / Rules.SIM_SUBSTEP_SEC) + 8
+	var steps := 0
 	while b.elapsed < sec:
-		_game._process(minf(CHUNK, sec - b.elapsed))
+		if steps >= cap:
+			push_error("capture_alarm: %.2f 로 가는 데 %d 걸음을 썼다 (지금 %.3f)" % [sec, steps, b.elapsed])
+			quit(1)
+			return
+		var before := b.elapsed
+		_game._process(maxf(Rules.SIM_SUBSTEP_SEC, minf(CHUNK, sec - b.elapsed)))
+		steps += 1
+		if b.elapsed == before:
+			push_error("capture_alarm: 시계가 %.3f 에서 멈췄다 (lost=%s)" % [b.elapsed, str(b.lost)])
+			quit(1)
+			return
 	await _shot(name, crop)
 
 

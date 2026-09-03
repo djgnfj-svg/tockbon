@@ -74,15 +74,29 @@ const ALARM_LABEL := "늑대 무리"
 ## it, and 「3:00」 was on none of the eight waves. **The value here is now the one the simulation
 ## actually produces**, which is the whole difference between a check and a decoration
 ## (`how-nets-lie` keeps this species).
-## ⚠ **0.4 reads 0:01 and not 0:00, and that is the cost of ceiling written down**: 0:00 belongs to
-## the single sub-step where the value is exactly 0.0, which is the row under it.
+## ⚠⚠ **FOUR ROWS ARE THE MEASURED RESIDUALS OF WAVES 1-4, AND `[0.0, "0:00"]` DOES NOT COVER THEM.**
+## The last open sub-step of a wave almost never lands on exactly 0.0 — `elapsed` is a sum of one
+## sixtieths — so it reports **1.08e-10 · 5.44e-10 · 9.81e-10 · 1.42e-09** and only waves 5-8 reach
+## the zero row. **Rounding up alone turned every one of those into 「0:01」 and 0:00 was on half the
+## waves and no more.** These four are the values the run actually produces, exactly as the 3:00 row
+## above is; the exact zero is kept beside them because it is what waves 5-8 do hand over.
+## ⚠⚠ **`[1.0, "0:01"]` IS THE EPSILON'S OWN LEASH.** A settle wide enough to swallow a real second
+## would turn a whole second left into 「0:00」 and every row above would still be green. **It is the
+## only row that goes red if the epsilon grows**, which is the half of the pair that measures the fix
+## rather than the defect.
+## ⚠ **0.4 reads 0:01 and not 0:00** — that is what ceiling costs, written down rather than hidden.
 ## ⚠ The last row is a value `Battle` already clamps at zero. It is here because the SCREEN must not
 ## depend on that holding somewhere else: two clamps, and the second is the one the player sees.
 const CLOCK_PROBES := [
 	[179.999999999944, "3:00"],
 	[179.0, "2:59"],
 	[60.0, "1:00"],
+	[1.0, "0:01"],
 	[0.4, "0:01"],
+	[1.08e-10, "0:00"],
+	[5.44e-10, "0:00"],
+	[9.81e-10, "0:00"],
+	[1.42e-09, "0:00"],
 	[0.0, "0:00"],
 	[-5.0, "0:00"],
 ]

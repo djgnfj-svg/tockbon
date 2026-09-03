@@ -2328,6 +2328,19 @@ const ALARM_CLOCK_FONT_PX := 64
 ## as part of the banner instead of as text laid over it.
 const COL_ALARM_TEXT := Color(0.992, 0.933, 0.482)
 
+## **How close to a whole second counts as arrived**, before `alarm_clock_text` rounds up.
+##
+## ⚠⚠ **IT EXISTS BECAUSE `elapsed` IS A SUM OF ONE SIXTIETHS AND LANDS ON NO MARK AT ALL.** Eight
+## minutes is 28800 additions of 1/60, and the double that comes out is within a nanosecond of every
+## boundary the alarm reads and never on one: the opening sub-step reports 179.999999999944, and the
+## last open sub-step of waves 1 to 4 reports 1.08e-10, 5.44e-10, 9.81e-10, 1.42e-09. **Without this,
+## rounding up turned each of those four residuals into a whole second and 「0:00」 was on none of
+## those waves.** Measured 2026-09-03 over a 66 분 run.
+## ⚠ **A microsecond, which is roughly a thousand times the largest residual measured and sixty
+## thousand times smaller than one displayed tick** — it cannot swallow a second the player is owed,
+## and no wall-clock reading is anywhere near this fine.
+const ALARM_CLOCK_SETTLE_SEC := 0.000001
+
 
 ## **The plate's top-left for `ALARM_CORNER`.** Derived from the canvas, for the reason
 ## `panel_origin_px` gives.
@@ -2348,15 +2361,20 @@ static func alarm_baseline_px(origin: Vector2, slot: int) -> Vector2:
 ## reports **179.999999999944** — five parts in a hundred billion under the whole warning. **Flooring
 ## turned that into 2:59, on every one of the eight waves**, and the comment that stood here claimed
 ## 3:00 showed 「at the instant the window opens」: an instant that does not exist. Measured headless.
-## ⚠ **What ceiling costs, said plainly**: 0:00 is reached only where `wave_seconds_left` is exactly
-## 0.0 — one sub-step, not a whole second. **It IS reached** (measured over 66 분: minimum exactly
-## 0.0, never negative), which is the ticket's acceptance, and 3:00 is now on screen for a whole
-## second rather than never.
+## ⚠⚠ **AND THE SAME ARITHMETIC ATE 「0:00」 ON HALF THE WAVES UNTIL THE EPSILON WENT IN.** Ceiling
+## turns any positive residual into 1, and the last open sub-step of waves 1 to 4 carries one —
+## measured **1.08e-10 · 5.44e-10 · 9.81e-10 · 1.42e-09**, deterministic and not luck, because
+## `elapsed` only ever grows by one sixtieth. **Waves 1-4 ended on 0:01 and only 5-8 reached 0:00.**
+## `ALARM_CLOCK_SETTLE_SEC` is what closes that, and the same subtraction leaves 179.999999999944
+## rendering 3:00 because it is nowhere near a second wide.
 ## ⚠ The clamp at zero is `Battle`'s already — this is the second, because a negative here would
-## print as 「-1:-1」 rather than reading as wrong. **It goes before the ceiling**, or -5.0 ceils to
-## -0.0 and prints 「0:00」 for a reason nobody wrote down.
+## print as 「-1:-1」 rather than reading as wrong.
+## ⚠⚠ **THE CLAMP DOES NOT MAKE THE SUBTRACTION SAFE ON ITS OWN — the settle being UNDER ONE SECOND
+## does.** Clamped zero minus the settle is a small negative, and a small negative ceils to -0.0 and
+## prints 0:00; **a settle of a whole second prints 「0:-1」**, which is what the net measured when it
+## was driven there. The two zero rows in `net_draw_leaf` are what hold that end.
 static func alarm_clock_text(seconds_left: float) -> String:
-	var whole := int(ceilf(maxf(0.0, seconds_left)))
+	var whole := int(ceilf(maxf(0.0, seconds_left) - ALARM_CLOCK_SETTLE_SEC))
 	return "%d:%02d" % [whole / 60, whole % 60]
 
 # ---------------------------------------------------------------------------------------------
