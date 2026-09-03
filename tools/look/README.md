@@ -6,7 +6,7 @@ instrument and nine sheets shot for one question each:
 | Script | Reads pixels? | The one question it answers |
 |---|---|---|
 | `piece_viewer.gd` | on `S` and `--shot1` | **what does one baked block look like under the GAME's light?** Driven by hand: a window, one block at a time, turn it, tilt it, outline on and off. **The only standing instrument here** |
-| `capture_ground.gd` | yes | **what does the ground actually look like?** Two frames — the island, the sea and the mats, with the buildings hidden and nobody stood up |
+| `capture_ground.gd` | yes | **what does the ground actually look like?** Two frames — the island, the sea and the mats, with the buildings hidden and nobody stood up. ⚠ **A second argument picks which ground**: `blocks` (the board's 칸 stood out of the kit, and what the game opens on) or `baked` (the one mesh, the yardstick) |
 | `capture_boat.gd` | yes | **where is the arriving hull, and what does it look like up close?** Opens the title, presses 시작하기 through a real mouse event, then `find` (scan with the pan keys) or `close` (centre one and zoom in) |
 | `capture_float.gd` | yes | **what makes the boat read as floating?** One frozen moment, shot once with everything on and then once per part removed — the part that takes the floating with it is the answer |
 | `capture_float2.gd` | yes | **which white mark stands off the hull?** The water draws four things about a boat — halo, contact shadow, break line, trail — and this turns them off one at a time |
@@ -49,7 +49,7 @@ below; the rest is gone.
 ```
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/piece_viewer.gd
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/piece_viewer.gd -- --glb res://assets/terrain/island.glb
-.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_ground.gd -- <output-dir>
+.\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_ground.gd -- <output-dir> [blocks|baked]
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_boat.gd -- <output-dir> find
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_boat.gd -- <output-dir> close
 .\Godot_v4.7.1-stable_win64.exe --path . --script res://tools/look/capture_float.gd -- <output-dir>

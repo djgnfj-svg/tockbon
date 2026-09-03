@@ -144,6 +144,11 @@ func _table() -> Dictionary:
 			"_tile_h": 0,
 			"_ground_h": 0,
 			"_rebuild_terrain": 0,
+			# 티켓 08-01 stage 2's two arms — `ground_source` picks one. The blocks are what the
+			# board opens on; the baked mesh is the yardstick the assembled one is measured against.
+			# Neither strokes a canvas: both hand nodes to the engine.
+			"_baked_island": 0,
+			"_island_of_blocks": 0,
 			# The bodies, as pooled billboards. `_put_*` writes node fields the engine consumes —
 			# that is the 3D leaf, and `net_shell` reads those fields back per enemy.
 			"_sprite": 0,

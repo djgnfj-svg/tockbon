@@ -72,6 +72,9 @@ const PADS_SHADER := "res://src/view/pads.gdshader"
 ## The name Blender gives the 판 object inside `island.glb`. ⚠ **Both sides spell it once**: the
 ## export out of `blend/island.blend` names it, and this is the only place the game reads it.
 const PADS_NODE := "pads"
+## The node `_island_of_blocks` builds its blocks under. ⚠ **Not a name out of any file** — nothing is
+## loaded by it; it is what the assembled island answers to in the remote tree.
+const BLOCKS_NODE := "island_of_blocks"
 
 
 # --- what it reads, and never writes ---------------------------------------------------------------
@@ -1132,6 +1135,9 @@ func _stand_h(p: Vector2) -> float:
 ##
 ## ⚠ **The mesh carries its own colour in VERTEX COLOURS**, so there is no palette here either. What
 ## decides how the island looks lives in the Blender script, next to the shape it belongs to.
+##
+## ⚠⚠ **ONLY THE DRAWN ISLAND HAS ONE.** A board that came out of `IslandGen` has no baked mesh and
+## never will — see `Ground` below.
 const ISLAND_SCENE := "res://assets/terrain/island.glb"
 ## ⚠ **The buildings arrive as one file with one node per kind**, and the game clones out of it. Loading
 ## a scene per building would be five imports for five boxes.
@@ -1151,6 +1157,25 @@ const PROP_CARD_SHADER := "res://src/view/prop_card.gdshader"
 ## ⚠ **It sits here and not in `look.gd` because it is a scene path**, and the three above it already
 ## decided where those live. Every number the hull is DRAWN with is still `look.gd`'s.
 const BOAT_SCENE := "res://assets/props/boat_small.glb"
+
+## **Where the ground's shape comes from** (ticket 08-01, stage 2).
+##
+## ⚠⚠ **THE BAKED MESH IS KEPT BECAUSE IT IS THE YARDSTICK, not because either arm is provisional.**
+## The drawn island is the only board a baked mesh exists for, and it is what the assembled one is
+## measured and photographed against; delete this arm and the one comparison that proves the look
+## survived the move to blocks goes with it.
+enum Ground {
+	## **Every land 칸 of the board stood separately, out of `pieces.glb`** — `IslandKit.plan` says
+	## which block goes where. **The only arm a generated board can use.**
+	KIT_BLOCKS,
+	## **The one 80,723-vertex mesh inside `island.glb`.** ⚠ On any board that is not the drawn one
+	## this arm lays the drawn island's geometry over a board of a different shape.
+	BAKED_MESH,
+}
+
+## ⚠ **Read by `_rebuild_terrain` and nothing else**, so a change to it lands on the next island
+## rather than the next frame.
+var ground_source := Ground.KIT_BLOCKS
 
 var _island: Node3D = null
 ## **The 판 object, found inside the island scene by name**, and the material this file put on it.
@@ -1263,22 +1288,17 @@ func _rebuild_terrain() -> void:
 		_island.queue_free()
 		_island = null
 	# ⚠⚠ **`battle.grid` is the half of this guard that was missing**, and a board with no ground is a
-	# real state `_map_tiles` already answers for. The Z offset below is the grid's own `h`; with no
-	# grid there is no number to slide the mesh by, and the fallback size is 48 x 32 against an island
-	# that is 30 x 26 — so laying it anyway would put the ground six 조각 off and nothing would say so.
+	# real state `_map_tiles` already answers for. **Both arms below need the grid** — the baked one to
+	# know how far to slide the mesh, the assembled one to know which 칸 are land — and the fallback
+	# size is 48 x 32 against an island that is 30 x 26, so laying ground anyway would put it six 조각
+	# off and nothing would say so.
 	# ⚠ **`_ground_h` has carried the complete guard all along**; `_rebuild_buildings` and
 	# `_rebuild_props` were missing the same half and only survived because this line crashed first.
 	if battle == null or battle.grid == null:
 		return
-	var packed := load(ISLAND_SCENE) as PackedScene
-	if packed == null:
+	_island = _baked_island() if ground_source == Ground.BAKED_MESH else _island_of_blocks()
+	if _island == null:
 		return
-	_island = packed.instantiate() as Node3D
-	# ⚠⚠ **The Z offset, and it is not a fudge.** glTF's Y-up conversion maps Blender +Y to Godot −Z,
-	# so an island authored over 0..h in Blender arrives over −h..0 here. The Blender script already
-	# reverses the row order (so north stays north); this slides it back into 0..h, where the sim's
-	# tile coordinates are. Without it every body walks on open water beside the island.
-	_island.position.z = float(battle.grid.h)
 	_world.add_child(_island)
 	# ⚠ **Vertex colours are OFF by default on an imported material.** Without this the island comes in
 	# as flat white and every tone the Blender script decided is thrown away silently.
@@ -1297,6 +1317,63 @@ func _rebuild_terrain() -> void:
 	_rebuild_props()
 
 
+## **The drawn island as the one mesh Blender baked** — `Ground.BAKED_MESH`, and the yardstick.
+func _baked_island() -> Node3D:
+	var packed := load(ISLAND_SCENE) as PackedScene
+	if packed == null:
+		return null
+	var out := packed.instantiate() as Node3D
+	# ⚠⚠ **The Z offset, and it is not a fudge.** glTF's Y-up conversion maps Blender +Y to Godot −Z,
+	# so an island authored over 0..h in Blender arrives over −h..0 here. The Blender script already
+	# reverses the row order (so north stays north); this slides it back into 0..h, where the sim's
+	# tile coordinates are. Without it every body walks on open water beside the island.
+	out.position.z = float(battle.grid.h)
+	return out
+
+
+## **The island STOOD OUT OF THE KIT, one block per land 칸** — `Ground.KIT_BLOCKS`, and the arm a
+## generated board has to use because it has no baked mesh.
+##
+## ⚠⚠ **NOTHING IS TURNED AND NOTHING IS LIFTED, and both are the point.** All thirty-two open-side
+## combinations were baked in Blender so the game looks a name up and turns nothing at run time; and
+## **every block already carries its own storey** — measured off `pieces.glb`, a 눈금 0 block spans
+## −0.12..0.21 and a 눈금 2 block −0.12..1.21 — so a plateau block raised by a storey would stand two
+## storeys up. **Every block goes down at y 0.**
+##
+## ⚠⚠ **AND NOTHING IS SLID BY THE BOARD'S HEIGHT EITHER, WHICH IS WHY `_baked_island`'s `h` IS NOT
+## HERE.** That offset undoes a Y-up conversion applied to a mesh authored over the whole board; a
+## block is authored about its OWN origin, so the same conversion turns it the right way round and
+## leaves it where it stands — its Blender `y+` face comes in on `−z`, which is the board's north.
+## ⇒ **a 칸 whose centre is `(x, y)` in 조각 stands at world `(x, 0, y)`**, which is the very placement
+## `_rebuild_buildings` gives a building's footprint centre. **One notion of where a 조각 is, and both
+## halves of this file read it.**
+func _island_of_blocks() -> Node3D:
+	# ⚠ **`IslandKit`'s own path and not a second copy of it.** The names come from there, so the file
+	# they live in comes from there too.
+	var packed := load(IslandKit.KIT_PATH) as PackedScene
+	if packed == null:
+		return null
+	var lib := packed.instantiate()
+	var out := Node3D.new()
+	out.name = BLOCKS_NODE
+	for row in IslandKit.plan(battle.grid):
+		var d := row as Dictionary
+		var block_name := str(d["name"])
+		var src := lib.find_child(block_name, true, false) as MeshInstance3D
+		if src == null:
+			# ⚠ **A bark and a hole, never a substitute.** `IslandKit` answers only names out of its
+			# own table, so a name the file does not hold means the table and the bake have parted —
+			# and a stand-in block would put the wrong cliff on ground nobody would think to check.
+			push_error("pieces.glb 에 %s 가 없다" % block_name)
+			continue
+		var one := src.duplicate() as MeshInstance3D
+		var centre: Vector2 = d["centre"]
+		one.position = Vector3(centre.x, 0.0, centre.y)
+		out.add_child(one)
+	lib.free()
+	return out
+
+
 ## **Finds the 판 inside the island scene and gives it its shader.**
 ##
 ## ⚠⚠ **THE 판 IS A SECOND OBJECT IN THE SAME FILE** (2026-08-28). It spent one day welded into the
@@ -1308,6 +1385,12 @@ func _rebuild_terrain() -> void:
 ## the split simply has no such child, and every writer below checks for null rather than this
 ## function inventing a mesh the artist did not author (`CLAUDE.md`: what the player looks at is made,
 ## not typed).
+##
+## ⚠⚠ **AND `Ground.KIT_BLOCKS` HAS NO `pads` NODE AT ALL, SO THE 판 자국 DOES NOT DRAW ON IT.** The 판
+## is baked per ISLAND, not per block — one welded mesh with the drawn board's width 30 in every
+## vertex — so there is nothing in `pieces.glb` to find. **This is a live regression on the arm the
+## game runs**, not a state that resolves itself: 티켓 08-01's stage 3 is where one mark becomes a
+## block and its 조각 number moves off the vertices onto the placement.
 func _adopt_the_pads() -> void:
 	_pads = null
 	_pads_mat = null
