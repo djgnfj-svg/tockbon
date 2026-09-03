@@ -232,15 +232,15 @@ func _the_resource_blocks_are_counted_and_they_block(t, made: Array) -> void:
 func _no_harbour_and_no_third_storey(t, made: Array) -> void:
 	var clean := 0
 	var flat := 0
-	for row in made:
-		var board: Dictionary = row["board"]
+	for entry in made:
+		var board: Dictionary = entry["board"]
 		var harbour := false
 		var high := false
 		for row in board["rows"] as PackedStringArray:
 			if String(row).find("H") >= 0:
 				harbour = true
-		for row in board["tiers"] as PackedStringArray:
-			var line := String(row)
+		for tier_row in board["tiers"] as PackedStringArray:
+			var line := String(tier_row)
 			for i in line.length():
 				if "./12".find(line[i]) < 0:
 					high = true

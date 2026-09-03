@@ -433,7 +433,7 @@ func _build_runs() -> void:
 			# lowest tile index wins, and among its own sides `STAIR_MOUTH_ORDER` decides.
 			# ⚠⚠ **THE OTHER HALF OF THIS PAIR IS GEOMETRY AND NOT CODE, AND THAT IS THE HARD PART.** It
 			# used to live in a Python bake called `lowside`; the bake was deleted on 2026-08-31 once the
-			# originals existed (`docs/manual/blender.md`), so **the mouth this picks now has to match
+			# originals existed (see the Blender manual), so **the mouth this picks now has to match
 			# the way the staircase parts are actually cut in `blend/island.blend`** — which nothing can
 			# check but an eye. It is
 			# the third pair in this pattern, after `TIER_STEP_TILES`/`level_h` and `STAIR_TREADS`.

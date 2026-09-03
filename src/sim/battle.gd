@@ -756,6 +756,13 @@ func recruit(slot: int) -> int:
 	soldier_swing_at.append(TARGET_NONE)
 	soldier_blows.append(0)
 	soldier_revive.append(0.0)
+	# ⚠⚠ **THESE TWO WERE MISSING AND `place_ashore` WROTE PAST THE END OF `soldier_starving`.** 05-07
+	# and 05-05 each added a column to `setup` and not to here, and nothing barked until the 성채 first
+	# turned somebody out — the columns above had carried every earlier body. **The block comment on
+	# this function said this list was complete while it was two short**, which is why the check that
+	# holds it now reads the column names off the object rather than repeating them.
+	soldier_starving.append(0)
+	soldier_gather.append(0.0)
 	soldier_pos.append(OFFMAP)
 	_soldier_goal.append(OFFMAP)
 	_soldier_path.append(PackedInt32Array())

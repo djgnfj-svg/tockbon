@@ -136,6 +136,20 @@ const HP_NEAR := 1e-3
 ## the step whatever the float sum does.
 const FIRST_BLOW_SEC := Rules.SWING_LAND_SEC + Rules.SIM_SUBSTEP_SEC * 1.5
 
+## The Variant types `_columns_match` accepts as a column. Anything else with a matching name is not a
+## per-body array and is skipped rather than being asked for a size it does not have.
+## ⚠ A plain `const` Array, not a typed packed one — `const X := PackedInt32Array([...])` does not parse
+## on 4.7.1, which every flat table in this repo has walked into.
+const _ARRAY_TYPES := [
+	TYPE_ARRAY, TYPE_PACKED_BYTE_ARRAY, TYPE_PACKED_INT32_ARRAY, TYPE_PACKED_INT64_ARRAY,
+	TYPE_PACKED_FLOAT32_ARRAY, TYPE_PACKED_FLOAT64_ARRAY, TYPE_PACKED_STRING_ARRAY,
+	TYPE_PACKED_VECTOR2_ARRAY, TYPE_PACKED_VECTOR3_ARRAY, TYPE_PACKED_COLOR_ARRAY,
+]
+## **Floors on how many columns the sweep found**, counted on 2026-09-03: sixteen per 검사, eleven per
+## 짐승. They exist so a sweep that matches nothing cannot report a clean pass — see `_columns_match`.
+const _SOLDIER_COLUMNS := 16
+const _ENEMY_COLUMNS := 11
+
 
 func run(t) -> void:
 	_the_numbers_are_the_ones_that_were_chosen(t)
@@ -555,6 +569,11 @@ func _an_arrived_boat_puts_its_riders_on_the_board(t) -> void:
 		if (b.enemy_pos[int(raw)] as Vector2).distance_to(beach_pt) > 4.0:
 			far += 1
 	t.eq(far, 0, "그리고 겨눈 해변 언저리에 내렸다 — 섬 아무 데나가 아니다")
+
+	# ⚠ **The beast side of the short-column sweep.** `land_beast` appends its own list, and 검사 쪽 was
+	# two columns short for a day before anything read it back — the same hole here would be an
+	# out-of-range read on the sub-step after a landing.
+	_enemy_columns_are_level(t, b, "내린 뒤")
 
 
 ## **Bodies pack a 조각 to `Rules.TILE_CAPACITY` and no further, and every one of them claims a slot.**
@@ -1007,26 +1026,47 @@ func _a_recruit_with_nowhere_to_stand_is_refused(t) -> void:
 
 ## **Every column this file indexes by 검사 is the same length as the roster.** A column left short is
 ## not a wrong number — it is an out-of-range read on the first sub-step that touches the new body.
+##
+## ⚠⚠ **THE NAMES ARE READ OFF THE OBJECT AND NEVER TYPED HERE, AND THAT IS THE WHOLE FIX.** This
+## helper used to hold a written-out list of fourteen, which was a second copy of the list `recruit`
+## appends — so when 05-07 added 허기's column and 05-05 added 채집's, **both copies missed both, and
+## the check that existed to catch a short column went green over two of them.** A list typed twice
+## drifts in the same direction on the same day. `get_property_list` cannot.
 func _columns_are_level(t, b: Battle, when: String) -> void:
-	var rows := b.army.type_id.size()
-	var lens := {
-		"soldier_state": b.soldier_state.size(),
-		"soldier_order": b.soldier_order.size(),
-		"soldier_hp": b.soldier_hp.size(),
-		"soldier_target": b.soldier_target.size(),
-		"soldier_cool": b.soldier_cool.size(),
-		"soldier_swing": b.soldier_swing.size(),
-		"soldier_swing_at": b.soldier_swing_at.size(),
-		"soldier_blows": b.soldier_blows.size(),
-		"soldier_revive": b.soldier_revive.size(),
-		"soldier_pos": b.soldier_pos.size(),
-		"_soldier_stale": b._soldier_stale.size(),
-		"_soldier_goal": b._soldier_goal.size(),
-		"_soldier_path": b._soldier_path.size(),
-		"_soldier_path_i": b._soldier_path_i.size(),
-	}
-	for name: String in lens:
-		t.eq(int(lens[name]), rows, "%s — %s 가 명부와 같은 길이다" % [when, name])
+	_columns_match(t, b, ["soldier_", "_soldier_"], b.army.type_id.size(), "명부", when, _SOLDIER_COLUMNS)
+
+
+## **The beast side of the same sweep**, against the length `land_beast` grows. Same reason, same shape:
+## the landing appends its own list and nothing else was reading it back.
+func _enemy_columns_are_level(t, b: Battle, when: String) -> void:
+	_columns_match(t, b, ["enemy_", "_enemy_"], b.enemy_type.size(), "짐승 줄 수", when, _ENEMY_COLUMNS)
+
+
+## Sizes of every array-valued property on `b` whose name starts with one of `prefixes`, each against
+## `rows`.
+##
+## ⚠⚠ **THE COUNT IS PINNED BECAUSE A SWEEP THAT MATCHES NOTHING IS GREEN.** A prefix typo, a rename,
+## or `get_property_list` answering differently would leave this loop running zero times and reporting
+## a clean pass — `how-nets-lie` carries that exact shape ("a loop whose condition is false from the
+## start never runs the check at all"). **`least` is a floor and not a census**: it rises when a column
+## is added, and it is lowered only when one is genuinely deleted.
+func _columns_match(t, b: Battle, prefixes: Array, rows: int, of_what: String, when: String, least: int) -> void:
+	var found := 0
+	for prop: Dictionary in b.get_property_list():
+		var col := String(prop["name"])
+		var mine := false
+		for pre: String in prefixes:
+			if col.begins_with(pre):
+				mine = true
+		if not mine:
+			continue
+		var val: Variant = b.get(col)
+		if not _ARRAY_TYPES.has(typeof(val)):
+			continue
+		found += 1
+		t.eq(int(val.size()), rows, "%s — %s 가 %s와 같은 길이다" % [when, col, of_what])
+	t.ok(found >= least, "%s — %s 로 시작하는 칸을 %d 개 훑었다 (바닥 %d)"
+		% [when, String(prefixes[0]), found, least])
 
 
 # == the keep burns ===================================================================================

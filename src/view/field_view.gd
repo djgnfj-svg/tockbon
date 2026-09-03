@@ -1123,7 +1123,7 @@ func _stand_h(p: Vector2) -> float:
 ## heights, shore fades and skirts stood here and the user rejected the picture they made six times
 ## (2026-08-26). The shape is now authored — `blend/island.blend` holds it and an export out of that
 ## file writes `assets/terrain/island.glb`, and this function's whole job is to put that file on
-## screen. See `docs/manual/blender.md`.
+## screen. See the Blender manual.
 ##
 ## ⚠ **The mesh carries its own colour in VERTEX COLOURS**, so there is no palette here either. What
 ## decides how the island looks lives in the Blender script, next to the shape it belongs to.

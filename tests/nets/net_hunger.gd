@@ -245,10 +245,28 @@ func _a_body_that_stands_again_stands_fed(t) -> void:
 	b.soldier_hp[0] = 0.0
 	b.step(Rules.SIM_SUBSTEP_SEC)
 	t.eq(int(b.soldier_state[0]), Battle.SoldierState.DEAD, "자가 점검 — 몸이 죽었다")
-	_run_for(b, Rules.REVIVE_SEC + 1.0)
+
+	# ⚠⚠ **READ ON THE SUB-STEP THE BODY STANDS, AND THAT IS THE WHOLE OF THIS ROW'S CORRECTION.** It
+	# used to run a whole second past the revival and then demand an untouched `HUNGER_MAX` — and 허기
+	# drains every sub-step a body is ASHORE, so that second cost it 0.4 and the row was red for
+	# something the sim does on purpose. **The ordering is what says the sim is right**: `step` runs
+	# `_phase_hunger` FIRST and `_phase_muster` LAST, so the refill is the last write on the sub-step a
+	# body stands and nothing drains between them. ⚠ **The expectation did not move** — it is still
+	# exactly `HUNGER_MAX`; the moment it is read did.
+	var stood := _step_until_ashore(b, 0, Rules.REVIVE_SEC + 1.0)
+	t.ok(stood > 0, "자가 점검 — 다시 서기까지 서브스텝 %d 번을 돌았다 (0 이면 아무것도 안 잰 것이다)" % stood)
 	t.eq(int(b.soldier_state[0]), Battle.SoldierState.ASHORE, "자가 점검 — 다시 섰다")
 	t.eq(b.army.hunger_of(0), Rules.HUNGER_MAX, "다시 선 몸의 허기는 가득이다")
 	t.eq(int(b.soldier_starving[0]), 0, "굶는 중 표시도 내려간다")
+
+	# ⚠ **And it stays standing.** Reading 허기 on the standing sub-step alone is green for a refill
+	# that is undone on the next one — which is the very failure this row exists for (a body back at
+	# zero 허기 dies again immediately, forever). One more second, and the body is still on the board
+	# with 허기 above the 창고 line.
+	_run_for(b, 1.0)
+	t.eq(int(b.soldier_state[0]), Battle.SoldierState.ASHORE, "일 초 더 돌아도 그대로 서 있다 — 바로 다시 안 죽는다")
+	t.ok(b.army.hunger_of(0) > Rules.HUNGER_SEEK,
+		"그 사이 허기는 창고를 찾는 선 위에 있다 (실측 %.1f)" % [b.army.hunger_of(0)])
 
 
 # == fixtures =========================================================================================
@@ -286,3 +304,20 @@ func _run_for(b: Battle, seconds: float) -> void:
 	var frames := int(seconds * 60.0)
 	for _k in frames:
 		b.step(1.0 / 60.0)
+
+
+## **Steps one sub-step at a time and stops on the sub-step body `id` is standing.** Answers how many
+## sub-steps that took, or 0 if it never stood inside `limit` seconds.
+##
+## ⚠⚠ **A VALUE WRITTEN AT A DOOR HAS TO BE READ AT THAT DOOR.** `_run_for` swallows the whole duration,
+## so anything the sim changes per sub-step has already moved by the time it returns — which is exactly
+## how the revival row came to demand a full 허기 a second after the refill.
+## ⚠ **The count is answered rather than the state** so the caller can put a floor under it: a loop that
+## exits on its first pass, or never enters, is green in every reading of final state.
+func _step_until_ashore(b: Battle, id: int, limit: float) -> int:
+	var steps := int(limit / Rules.SIM_SUBSTEP_SEC)
+	for k in steps:
+		b.step(Rules.SIM_SUBSTEP_SEC)
+		if int(b.soldier_state[id]) == Battle.SoldierState.ASHORE:
+			return k + 1
+	return 0
