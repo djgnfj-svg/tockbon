@@ -18,7 +18,7 @@ question nobody pinned down costs a round and teaches nothing.
 ## 1. 구체화 — **pin down what is being pulled, and that is all**
 
 **One line: what picture, for what, at what size.** ⚠ **This is a sentence, not an interview** — asking a
-table of questions here is what the user cut on 2026-08-30 (*"the five questions are a bit odd"*).
+table of questions here is what the user cut (*"the five questions are a bit odd"*).
 
 **Ask only what is genuinely missing from that one line.** The rest you find yourself: the pixel height
 it will be drawn at, what it stands beside, and which of this game's styles it joins are all readable in
@@ -57,7 +57,7 @@ shape here rather than inventing another.
 
 **Judging: a remark on that screen is a QUESTION, not a work order.** The user writes in fragments —
 「둥글게」, 「좀 더 정교하게」, 「이거 말고」. **Collect them, put them back as questions, and change
-nothing until they are answered.** ⚠ **Measured 2026-08-29**: four fragments became four edits and the
+nothing until they are answered.** ⚠ **Measured**: four fragments became four edits and the
 third contradicted the first. **Then change ONE thing and pull again.**
 
 ## 5. Add the facings and the animation — **to the winner only**

@@ -26,14 +26,13 @@ and task 04 has its own `02`.
 ## ⚠⚠ The grain is the TASK, not the ticket
 
 > *"I never said a ticket is one a day. There can be many tickets. What is two is the TASKS. Per week."*
-> (2026-09-01, the user)
+> (the user)
 
 ⇒ **Two tasks a week, and a task carries as many tickets as the work takes** — one, or eight, and several
 may be finished in one sitting.
 
 ⚠⚠ **Do not split a ticket to make it fit a day, and do not count tickets against the days left in the
-week.** ⚠ **How a task is cut, in what order, and where it stops is never yours** — that was rolled back
-twice, 2026-08-30 and 2026-08-31.
+week.** ⚠ **How a task is cut, in what order, and where it stops is never yours** — that was rolled back twice.
 
 ## Read
 
@@ -42,7 +41,7 @@ twice, 2026-08-30 and 2026-08-31.
    a measurement, not a fault** — say so
 3. **The commits since the map was last true** — ⚠ **there is no decision log**; the commits are the record
 4. **The nets, run once.** ⚠⚠ **The map's net counts go stale faster than anything else on it** —
-   measured 2026-08-30, the map said 실패 79 against a real 통과 629 · 실패 59, and named three red nets
+   measured, the map said 실패 79 against a real 통과 629 · 실패 59, and named three red nets
    when seven of eleven were red
 
 **Done when every row has been checked against a commit or a task.**
@@ -69,7 +68,7 @@ status mark · **the tickets that already exist**, never ones invented to fill t
 **What belongs to the user instead**: how many tickets and in what order · how many days · how far the
 task reaches · which of several things named in one sentence comes first.
 
-⚠⚠ **Cutting a task into tickets is the user's call, never yours** (2026-08-30, the user: *"you deciding
+⚠⚠ **Cutting a task into tickets is the user's call, never yours** (the user: *"you deciding
 details on your own must never happen"*). Measured the same day: a stretch was cut into five ordered
 tickets with acceptance lists, **every cut the model's own**, and the round was rolled back.
 

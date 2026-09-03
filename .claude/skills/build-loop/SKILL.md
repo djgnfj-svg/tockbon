@@ -26,7 +26,7 @@ anything you understood but did not write down does not exist.
 
 ### Attack it first — the `adversary` agent
 
-⚠⚠ **ALWAYS, and there is no small-ticket exception** (2026-08-29, the user). Send it at the finished
+⚠⚠ **ALWAYS, and there is no small-ticket exception** (the user). Send it at the finished
 plan **before the user sees it**. On a genuinely small ticket it comes back in one line, and that line is
 cheap. **Put its blockers in front of the user WITH the plan**, never instead of it. It does not decide.
 
@@ -40,7 +40,7 @@ cheap. **Put its blockers in front of the user WITH the plan**, never instead of
 
 ## 3. Build — the `builder` agent
 
-- **`sim` work writes the net FIRST. Screen work writes it after** (2026-08-24, the user)
+- **`sim` work writes the net FIRST. Screen work writes it after** (the user)
 - **Measured, not preferred**: the 3D move put 1033 drawing-bound checks at risk and about 480 died. What
   lived measured **input → state**; what died asserted pixels
 - ⚠⚠ **No check at a seam that is not agreed** — the agreed three are in the glossary. A new seam is the
@@ -50,7 +50,7 @@ cheap. **Put its blockers in front of the user WITH the plan**, never instead of
 
 ### Split it
 
-***"Whatever can be split should be split and run in parallel"*** (2026-08-30, the user).
+***"Whatever can be split should be split and run in parallel"*** (the user).
 
 - ⚠ **Never split work touching the SAME file** — three agents in one view file voided the measurement
   three times and cost two rounds. Blender work and code work never collide
@@ -61,7 +61,7 @@ cheap. **Put its blockers in front of the user WITH the plan**, never instead of
 
 ### Four questions before a net is written
 
-**Measured 2026-08-30: 15 nets, 11,845 lines, 790 each — and the whole suite runs in 14 seconds.**
+**Measured: 15 nets, 11,845 lines, 790 each — and the whole suite runs in 14 seconds.**
 ⇒ **Writing is what costs the round, never running.** `diagnosing-bugs` holds the long form.
 
 | | |

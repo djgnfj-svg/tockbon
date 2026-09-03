@@ -62,8 +62,7 @@ parts. Squads are commanded on the board at any time.
 ⚠ **The bar is Bad North.** **The island HAS a second storey and a stair, and they passed by eye** —
 do not delete them.
 
-**December ships an EARLY-ACCESS RELEASE** (2026-09-02; it was a December demo until that day).
-Roguelike · funding after it. ⚠ **This line has flipped and is settled by whichever the user said
+**December ships an EARLY-ACCESS RELEASE.** Roguelike · funding after it. ⚠ **This line has flipped and is settled by whichever the user said
 last, never by argument.**
 
 ⚠⚠ **What is being made is read out of `docs/roadmap/`, and there is no third place.** Do not go
@@ -103,9 +102,9 @@ whole game headless in seconds.
 
 | Path | The rule it obeys |
 |---|---|
-| `src/sim/` | **Never touches the tree.** No `Node`, no `_draw`, no `Input`, no `get_node`, no `$`. Constructible and drivable with `.new()` and nothing else |
+| `src/sim/` | **Never touches the tree.** No `Node`, no `_draw`, no `Input`, no `get_node`, no `$`. Constructible and drivable with `.new` and nothing else |
 | `src/view/` | **Reads `sim`, never writes it.** Everything that is a Node or draws lives here. ⚠ The field's `_paint_*` hooks build a 3D world, so asserting their arguments does not measure what the player sees |
-| `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. A net calling `_ready()` exercises the real wiring |
+| `src/shell/` | **The only place that reads `Input`**, and the only place that wires `sim` to `view`. A net calling `_ready` exercises the real wiring |
 | `src/look.gd` | **Every presentation constant, in exactly one file.** `src/sim/rules.gd` holds every constant that changes what happens |
 
 ⚠⚠ **What died in the 3D move asserted pixels; what survived measured input → state.** Prefer the shape

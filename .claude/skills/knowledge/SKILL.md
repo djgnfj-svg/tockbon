@@ -47,7 +47,7 @@ warning outlived its fault.
 ## The lab
 
 **A page is a folder of four files** — `README.md`, `그림.svg`, `lab.gd`, `stage.gd`. **The code sits
-beside the prose so it can be launched from there and read there** (2026-08-31, the user).
+beside the prose so it can be launched from there and read there** (the user).
 
 ### Every technique carries its real name
 
@@ -72,7 +72,7 @@ first.**
 **Every dial's starting value carries its origin on that line**: **measured** this round · **sourced**
 from a named outside source, linked · ⚠ **`# 추정`**, a guess marked as one.
 
-⚠⚠ **A bare number with no origin is the failure** (2026-08-31, the user: ***"You pick those values far
+⚠⚠ **A bare number with no origin is the failure** (the user: ***"You pick those values far
 too casually. Nobody studies anything from a test like this."***) — six numbers shipped in `01` with no
 origin for any of them.
 

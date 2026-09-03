@@ -91,6 +91,14 @@ truncated result.
 ### The instrument itself
 
 - **A crashed net is counted as "0 failures" by a wrapper that reads only its header.** Assert the net ran
+- ⚠⚠ **A net PROCESS can die at startup leaving 75 bytes of stdout and 0 bytes of stderr** — no parse
+  error, no bark. Three different nets have done it. What the round loses is its whole count, and the
+  header still prints as one whole number. ⇒ **A net that ran no checks and exited 0 must be red**, judged
+  on the check TOTAL off the runner's own summary line — not on the presence of that line (it prints on
+  every path that reaches the end) and not on the pass count (a net whose every check failed also passes 0)
+- ⚠ **One process running a batch prints one summary, so a net vanishing inside a batch is invisible.**
+  Measured: two nets in one process with one class unresolvable printed `[net] 21 passed` at exit code 0,
+  91 checks gone and the guard silent
 - **Renaming a thing leaves the check written for the old name quietly measuring something else.** This is
   why the glossary carries a table of names that mean the opposite of what they say
 - **A skip list that covers no file is not an exception to the scan, it is a hole in it**

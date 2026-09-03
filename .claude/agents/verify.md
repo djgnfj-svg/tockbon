@@ -67,7 +67,7 @@ Calling a Control's `_gui_input(...)` by hand **skips `mouse_filter` entirely**,
 `IGNORE` — one no real click could reach — still passes. `root.push_input(ev, true)` goes through the
 engine's own hit test; `Input.parse_input_event(ev)` skips the GUI and is not a substitute.
 
-**Always attach both controls** (measured here): `STOP` fires once and `gui_get_hovered_control()` returns
+**Always attach both controls** (measured here): `STOP` fires once and `gui_get_hovered_control` returns
 a real Control; `IGNORE` fires zero times and hovered is null. ⚠ **"The window blocked it" and "the GUI is
 dead entirely" observe identically**, and that misreading has happened here.
 
@@ -75,7 +75,7 @@ dead entirely" observe identically**, and that misreading has happened here.
 
 ## Read the wrapper's last line, not the pass count
 
-**`load()` returns a non-null object even on parse failure**, so any check written as "it loads" **passes
+**`load` returns a non-null object even on parse failure**, so any check written as "it loads" **passes
 on a broken file**, and the round reads identical to a clean one.
 
 **What catches it is the stderr guard**: Godot barks, and the wrapper treats **any undeclared stderr line

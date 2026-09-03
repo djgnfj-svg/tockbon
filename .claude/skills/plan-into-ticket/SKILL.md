@@ -8,7 +8,7 @@ description: Turn a decided ticket into an implementation plan written INTO that
 **Turn what the ticket decided into something buildable** — buildable meaning **the builder never has to
 ask back.**
 
-## ⚠⚠ Interview until the ambiguity is gone (2026-08-29, the user)
+## ⚠⚠ Interview until the ambiguity is gone (the user)
 
 ***"An interview is needed, deep enough that the ambiguous parts disappear."***
 

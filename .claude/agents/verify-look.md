@@ -36,12 +36,12 @@ A handful of frames in about ten seconds, quitting on its own. Nothing is writte
 
 1. **Write the script to refuse `--headless` outright**, rather than writing the rule somewhere a reader
    can miss
-2. **Actually create the designed situation** — stage it in the script, drive input through `root.push_input()`
+2. **Actually create the designed situation** — stage it in the script, drive input through `root.push_input`
 3. **Capture that moment.** If the effect flashes past, freeze and step frames — a 16 ms effect is
    invisible in a running frame
 4. **Compare against the `## Screen` section, line by line**
 
-⚠⚠ **Not `--headless`.** No swapchain, `root.get_texture()` comes back blank, **every PNG is a black
+⚠⚠ **Not `--headless`.** No swapchain, `root.get_texture` comes back blank, **every PNG is a black
 rectangle with no error anywhere** — and one deleted tool *hung* there instead, waiting on a
 `frame_post_draw` that never comes.
 
@@ -62,7 +62,7 @@ screen are **forbidden** — the moment you steal focus, their mouse and keyboar
 stopped this in the act**: verify-look, unable to grab the bridge, was building a path to drive the game
 with Win32.
 
-⇒ **Every input goes through `root.push_input()`, inside the engine.**
+⇒ **Every input goes through `root.push_input`, inside the engine.**
 **If you can't capture, stop and report to main.** Do not route around it. **"Stopped, couldn't do it"
 beats "did it by taking the user's input".**
 
@@ -83,7 +83,7 @@ dead entirely" observe identically — click inside the window, then immediately
   (`RenderingServer.frame_post_draw` before every read, or you photograph the previous frame)
 - ⚠ **`Engine.time_scale = 0` does not freeze the simulation.** Anything correcting positions by a flat
   amount per frame keeps moving at zero delta. **Switch the shell's own `_process` off instead** —
-  `set_process` is per-node, so the view keeps redrawing and the picture is still the game's own `_draw()`
+  `set_process` is per-node, so the view keeps redrawing and the picture is still the game's own `_draw`
 
 ## Screenshot cost
 
