@@ -241,6 +241,14 @@ func _open_island() -> void:
 	var opened := run.begin_island()
 	if opened != null:
 		battle = opened
+		# ⚠⚠ **THE ONE LINE THAT STOPS THE 늑대 BOATS, AND THE ONE LINE THAT PUTS THEM BACK.**
+		# 2026-09-03, the user: 「일단 이제 늑대 안와도 됨」 — *"For now the wolves don't have to come
+		# any more."* Delete this line and the endless drip returns exactly as it was; `Battle` still
+		# defaults to boats coming, so nothing that drives the sim on its own is quieted with it.
+		# ⚠⚠ **IT IS 「일단」 — TEMPORARY, AND NOT A DECISION THAT WAVES ARE CANCELLED.** 태스크 12
+		# replaces the endless drip with announced waves and 티켓 12-01 is what eventually owns the
+		# launch clock; this line is what 12-01 deletes when it takes it over.
+		battle.boats_come = false
 		# ⚠ **A hand holding bodies from the last island would light a reach built on the last GRID.**
 		# The ids survive an island; the 조각 they were measured against do not.
 		_let_go()

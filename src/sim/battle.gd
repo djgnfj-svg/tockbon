@@ -314,6 +314,16 @@ var _beach_cursor := 0
 ## two clocks are where this project's defects have come from.
 var _boats_launched := 0
 
+## **Whether the 짐승 boats keep coming at all.** `_launch_if_due` is the only reader; `src/shell/` is
+## the only writer, because a `Rules` const would be a value no net could drive both ways.
+##
+## ⚠⚠ **TRUE HERE ON PURPOSE.** Every net builds a `Battle` with `.new()` and was written against a
+## board where boats come; a default of false would empty them all while they stayed green.
+##
+## ⚠ **`setup` does not touch it.** It is a setting and not per-island state, so it survives an island
+## the way the `Army` does — the reset block below is for what one island leaves behind.
+var boats_come := true
+
 var _fields := {}                         # target tile -> PackedInt32Array
 var _field_age := {}                      # target tile -> seconds since it was built
 
@@ -1349,6 +1359,12 @@ func _count_out(i: int, dt: float) -> void:
 ## float sum. The slack makes the launch happen on the sub-step NEAREST the due time, on every board and
 ## at every frame rate.
 func _launch_if_due() -> void:
+	# ⚠ **ABOVE `_boats_launched` AND NOT BELOW IT**, so a board that has had no boats has had no
+	# launches: the counter and `elapsed` stay the whole clock and neither is fed a launch that did not
+	# happen. ⚠ **Nothing flips this back mid-run** — the shell writes it once at `_open_island` — so
+	# what a live flip would do to a board already an interval past due is undecided and unmeasured.
+	if not boats_come:
+		return
 	var due := Rules.BOAT_FIRST_SEC + float(_boats_launched) * Rules.BOAT_INTERVAL_SEC
 	if elapsed < due - Rules.SIM_SUBSTEP_SEC * 0.5:
 		return

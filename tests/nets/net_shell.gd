@@ -157,6 +157,9 @@ func run(t) -> void:
 	# is deleted with it (03-12): the box is terrain geometry now, measured in `net_fx_view`; what this
 	# file keeps is the WIRING — the shell's rect reaching `FieldView.set_box`, in the drag rows.
 	await _one_press_reaches_the_first_island(t)
+	# ⚠ **Up here with the other own-`Game` rows**, and for the same reason they are: it must not be one
+	# of the rows a red halfway down `run()` quietly stops running.
+	await _the_shell_opens_an_island_with_no_boats_coming(t)
 	# ⚠⚠ **AT THE TOP, AND FOR THE REASON THE TERRAIN BLOCK BELOW SPELLS OUT**: a red row halfway down
 	# `run()` has twice abandoned everything after it, and 티켓 15's red is still standing. This builds
 	# its own `Game` and lets go of it, so it cannot be one of the rows that quietly stops running.
@@ -2499,6 +2502,57 @@ func _one_press_reaches_the_first_island(t) -> void:
 	t.ok(game.battle != null, "누름 %d번 만에 첫 섬이 열렸다" % presses)
 	t.eq(presses, 1, "그 수가 정확히 하나다 — 시작하기, 그것뿐이다")
 	t.ok(presses >= 1, "그리고 0이면 켜자마자 섬이 나온다는 뜻이다 — 타이틀 자체가 없어진 것이다")
+
+	t.root.remove_child(game)
+	game.queue_free()
+
+
+## **The island the shell opens has the 늑대 boats turned off.** 2026-09-03, the user: 「일단 이제 늑대
+## 안와도 됨」 — *"For now the wolves don't have to come any more."*
+##
+## ⚠⚠ **THE BOARD IS THE ONE A PRESS ON 시작하기 OPENED, NOT A HAND-BUILT ONE.** `boats_come` defaults to
+## true and `Battle` is the only thing that could have turned it off; a fixture that set it here would
+## measure this file writing a field. **The wiring line in `_open_island` is the subject**, and deleting
+## it must redden this row.
+##
+## ⚠⚠ **THE SIM IS DRIVEN THROUGH `game._process`, WHICH IS THE ONLY CALLER OF `battle.step`.** A row
+## that called `battle.step` itself would be green on a shell that had stopped stepping at all.
+##
+## ⚠ **The last two lines are the falsifier for THIS check.** 「한 척도 안 왔다」 is green for a drive too
+## short, a board with no coast, and a `_process` that never stepped — so the same board, flipped back
+## on, must produce a hull within a sub-step or two.
+func _the_shell_opens_an_island_with_no_boats_coming(t) -> void:
+	var game := QuitGame.new()
+	t.root.add_child(game)
+	await t.pump_frames(2)
+	game._unhandled_input(_click(Look.title_slot_hit_rect_px(0).get_center()))
+	# The shell's own clock stops here so the seconds below are the ones this row asked for and not the
+	# ones the tree happened to deliver.
+	game.set_process(false)
+	await t.pump_frames(1)
+	game.set_process(false)
+
+	var b: Battle = game.battle
+	t.ok(b != null, "시작하기를 누르면 섬이 열린다 (자가 점검)")
+	if b == null:
+		t.root.remove_child(game)
+		game.queue_free()
+		return
+
+	t.ok(not b.boats_come, "셸이 연 판은 배가 안 오는 쪽으로 서 있다")
+
+	var driven := Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC + 1.0
+	game._process(driven)
+	t.eq(b.boat_pos.size(), 0, "그래서 셸이 %.0f초를 굴려도 배가 한 척도 안 온다" % driven)
+	t.eq(b.living_enemy_ids().size(), 0, "늑대도 한 마리 안 내렸다")
+	t.ok(b.elapsed >= driven - Rules.SIM_SUBSTEP_SEC * 2.0,
+		"그동안 셸이 시뮬레이션을 실제로 굴렸다 — 시계가 %.2f초까지 갔다 (자가 점검)" % b.elapsed)
+
+	b.boats_come = true
+	game._process(Rules.SIM_SUBSTEP_SEC * 2.0)
+	t.ok(b.boat_pos.size() > 0,
+		"같은 판을 켜 놓고 굴리면 %d척이 온다 — 위의 0 이 짧은 시간이나 해변 없는 판 때문이 아니다"
+			% b.boat_pos.size())
 
 	t.root.remove_child(game)
 	game.queue_free()

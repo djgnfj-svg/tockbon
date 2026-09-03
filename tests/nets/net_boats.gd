@@ -96,6 +96,8 @@ func run(t) -> void:
 	_the_riders_are_aboard_and_not_on_the_board(t)
 	_the_crossing_is_the_same_at_any_frame_rate(t)
 	_a_board_with_no_coast_launches_nothing(t)
+	_the_switch_decides_whether_boats_come_at_all(t)
+	_the_switch_on_leaves_the_launch_times_where_they_were(t)
 	_the_deck_offsets_are_the_mesh_s_own_benches(t)
 
 
@@ -970,6 +972,65 @@ func _a_board_with_no_coast_launches_nothing(t) -> void:
 	b.step(Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC + 1.0)
 	t.eq(b.boat_pos.size(), 0, "그런 판에서는 배가 한 척도 안 뜬다")
 	t.ok(b.elapsed > Rules.BOAT_FIRST_SEC, "그래도 시계는 돌았다 (자가 점검)")
+
+
+## **`Battle.boats_come` decides whether the drip happens at all, and BOTH arms are driven here.**
+## 2026-09-03, the user: 「일단 이제 늑대 안와도 됨」 — *"For now the wolves don't have to come any
+## more."*
+##
+## ⚠⚠ **THE TWO BOARDS ARE THE SAME BOARD AND THE DRIVE IS THE SAME NUMBER.** A 「no boat」 measured on
+## a board or a drive the ON arm never saw would be green for a fixture that could not have launched
+## one anyway — which is exactly what `_a_board_with_no_coast_launches_nothing` is, and why that row
+## cannot stand in for this one.
+##
+## ⚠⚠ **THE ON ARM IS WHAT FALSIFIES THIS CHECK ITSELF.** Without it, 「하나도 안 온다」 stays green if
+## the drive is too short, if the fixture has no coast, or if `step` stopped stepping — three ways to
+## pass while measuring nothing. With it, the same board and the same seconds must produce boats.
+##
+## ⚠ **The DEFAULT is what the ON arm reads**, never `boats_come = true` written back in. Every other
+## net in this repo builds a `Battle` and expects boats; if that default flipped, this row is where it
+## is caught rather than in the twenty rows above that would silently stop measuring a crossing.
+func _the_switch_decides_whether_boats_come_at_all(t) -> void:
+	# Four intervals past the first launch — long enough that 「아직 이르다」 cannot be the reason.
+	var driven := Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC * 4.0 + 1.0
+
+	var on := _battle_real()
+	t.ok(on.boats_come, "새로 지은 Battle 은 배가 오는 쪽이다 — 기본값이 뒤집히면 여기서 잡힌다")
+	on.step(driven)
+	t.ok(on.boat_pos.size() > 0,
+		"켠 채로 %.0f초를 돌리면 배가 %d척 왔다 (자가 점검 — 안 오면 아래가 공허하다)"
+			% [driven, on.boat_pos.size()])
+
+	var off := _battle_real()
+	off.boats_come = false
+	off.step(driven)
+	t.eq(off.boat_pos.size(), 0, "끈 채로 같은 판을 같은 %.0f초 돌리면 한 척도 안 온다" % driven)
+	t.eq(off.living_enemy_ids().size(), 0, "그래서 늑대도 한 마리 안 내린다")
+	t.ok(absf(off.elapsed - on.elapsed) <= NEAR,
+		"두 판의 시계가 같은 데까지 갔다 (%.3f · %.3f) — 끈 쪽이 덜 돈 게 아니다"
+			% [off.elapsed, on.elapsed])
+
+
+## **With the switch on, the clock is untouched: the first boat is still at 5.0 s and the second at
+## 35.0 s.** The two rows above measure that boats come at all; this measures that the switch did not
+## quietly become a delay on the way in.
+##
+## ⚠ **The boundary is asserted from BOTH sides at each launch** — a hair before, nothing new; a hair
+## after, one more. A one-sided 「there are two by 35 s」 is green for a drip that fires everything on
+## the first sub-step.
+func _the_switch_on_leaves_the_launch_times_where_they_were(t) -> void:
+	var b := _battle_real()
+	t.ok(b.boats_come, "이 판은 켜져 있다 (자가 점검)")
+
+	b.step(Rules.BOAT_FIRST_SEC - 0.1)
+	t.eq(b.boat_pos.size(), 0, "5.0초 직전에는 아직 없다")
+	b.step(0.2)
+	t.eq(b.boat_pos.size(), 1, "5.0초에 첫 배가 뜬다")
+
+	b.step(Rules.BOAT_INTERVAL_SEC - 0.2)
+	t.eq(b.boat_pos.size(), 1, "35.0초 직전까지는 그대로 한 척이다")
+	b.step(0.2)
+	t.eq(b.boat_pos.size(), 2, "35.0초에 둘째가 뜬다")
 
 
 # == the hull the deck offsets were read off ===========================================================
