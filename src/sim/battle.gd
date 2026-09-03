@@ -309,12 +309,45 @@ var boat_linger := PackedFloat32Array()
 ## ⚠ **`Rules.beach_stride_for` is what advances it** — see that function for why the stride is derived
 ## from the ring's own size rather than written down.
 var _beach_cursor := 0
-## How many launches this island has had, including ones a coastless board refused. **It and `elapsed`
-## are the whole clock**: a second countdown of its own would be a second clock, and the seams between
-## two clocks are where this project's defects have come from.
-var _boats_launched := 0
+# --- the wave clock. ⚠⚠ **TWO CLOCKS AND THAT IS THE WHOLE POINT** --------------------------------
+## ⚠⚠ **THE LANDING CLOCK AND THE LAUNCH QUEUE ARE SEPARATE, AND THE FIRST DRAFT OF 12-01 PROVED WHY.**
+## It advanced one counter on LAUNCH and read the warning off it, so **wave 1 — a single boat — closed
+## its own warning the moment its hull was born and the countdown vanished at 18 s instead of reaching
+## 0**; and in the other direction a wave whose last hull launches after its own minute left a
+## **negative countdown on screen for up to 31.75 s** (wave 7). ⇒ **what the screen reads and what puts
+## hulls in the water are two different questions.**
+##
+## ⚠⚠ **NEITHER IS A SECOND REAL CLOCK.** Both ride `elapsed` and the existing 60 Hz sub-step and
+## nothing here counts down by subtraction. `how-nets-lie` opens on the deleted game's three clocks and
+## the five defects that came out of the seams between them.
 
-## **Whether the 짐승 boats keep coming at all.** `_launch_if_due` is the only reader; `src/shell/` is
+## **Which wave lands NEXT**, counted from 0. ⚠⚠ **It advances when `elapsed` reaches the LANDING time
+## and never when a hull is born.**
+var wave_ordinal := 0
+## **When that wave lands**, in seconds — `Rules.wave_land_sec(wave_ordinal)`, held so the screen and
+## the queue read one answer rather than two computations of it.
+var wave_land_sec := Rules.wave_land_sec(0)
+## **How long until it lands**, in seconds, floored at 0. ⚠ **The floor is what keeps a negative
+## countdown off the screen**, and it is load-bearing: the ordinal advances on the first sub-step PAST
+## the landing time, so the sub-step nearest it reports an exact 0 rather than a hair below one.
+var wave_seconds_left := Rules.wave_land_sec(0)
+## **Whether the warning is up.** Opens at `WAVE_WARNING_SEC` left and closes in the same sub-step the
+## ordinal advances and `wave_seconds_left` jumps back to a whole interval.
+var wave_warning_open := false
+
+## **The wave whose hulls are already in the queue**, counted from 0; -1 until the first is scheduled.
+## ⚠ **Compared against `wave_ordinal`**, so a wave is scheduled exactly once however many sub-steps
+## its lead time is straddled by.
+var _wave_scheduled := -1
+## **When each hull still to come is born**, in seconds of simulated time, ascending.
+##
+## ⚠⚠ **IT OUTLIVES `wave_ordinal` ADVANCING, AND THAT IS CORRECT.** Wave 7's last hull is born 31.75 s
+## AFTER its own minute, by which time the landing clock is already counting the next wave — which is
+## the whole reason the two are not one counter. ⚠ At 8-minute intervals two waves' queues can never
+## overlap, so this holds one wave's hulls at a time.
+var _launch_queue := PackedFloat32Array()
+
+## **Whether the 짐승 boats keep coming at all.** `_phase_waves` is the only reader; `src/shell/` is
 ## the only writer, because a `Rules` const would be a value no net could drive both ways.
 ##
 ## ⚠⚠ **TRUE HERE ON PURPOSE.** Every net builds a `Battle` with `.new()` and was written against a
@@ -381,7 +414,18 @@ func setup(grid: Grid, army: Army, spawns: Array,
 	boat_riders = PackedInt32Array()
 	boat_linger = PackedFloat32Array()
 	_beach_cursor = 0
-	_boats_launched = 0
+
+	# ⚠⚠ **EVERY TIME, AND THIS IS THE ONE NOTHING IN `src/` WOULD SHOW.** `Run` builds a fresh
+	# `Battle` per island, so a leftover wave clock never reaches the game — **it reaches the contract**,
+	# which is that a reused `Battle` is indistinguishable from a new one. A reused one carrying an
+	# ordinal of 7 would open the next island with its warning already up and its first wave six of a
+	# row's worth too big, silently, exactly where nobody looks.
+	wave_ordinal = 0
+	wave_land_sec = Rules.wave_land_sec(0)
+	wave_seconds_left = Rules.wave_land_sec(0)
+	wave_warning_open = false
+	_wave_scheduled = -1
+	_launch_queue = PackedFloat32Array()
 
 	# Every time, for the same reason the hulls are: a reused `Battle` carrying the previous island's
 	# beasts would open the next one with the last one's 늑대 already ashore.
@@ -1351,7 +1395,7 @@ func _phase_boats(dt: float) -> void:
 			boat_linger[i] = Rules.BOAT_LINGER_SEC
 			continue
 		boat_pos[i] = here + (stop - here) / left * step_len
-	_launch_if_due()
+	_phase_waves()
 
 
 ## One ARRIVED hull's wait, one sub-step of it.
@@ -1373,29 +1417,55 @@ func _count_out(i: int, dt: float) -> void:
 	boat_linger[i] = left
 
 
-## Births one boat when the clock has reached the next launch.
+## **One sub-step of the wave clock**: the landing clock the screen reads, then the launch queue that
+## puts hulls in the water. See the field block for why they are two things and not one counter.
 ##
-## ⚠⚠ **THE DUE TIME IS COUNTED OFF `_boats_launched` AND NOT OFF A COUNTDOWN.** `elapsed` is the only
-## clock in this file and a countdown beside it would be a second one; worse, a countdown reset by
-## subtraction drifts, so the tenth boat would arrive at a time nobody chose.
-##
-## ⚠ **Half a sub-step of slack, and it is not a fudge.** `elapsed` is a sum of `SIM_SUBSTEP_SEC`, so
-## whether it lands a hair above or a hair below an exact 5.0 is decided by the last bit of a 300-term
-## float sum. The slack makes the launch happen on the sub-step NEAREST the due time, on every board and
+## ⚠ **Half a sub-step of slack everywhere a time is compared, and it is not a fudge.** `elapsed` is a
+## sum of `SIM_SUBSTEP_SEC`, so whether it lands a hair above or a hair below an exact 480.0 is decided
+## by the last bit of a 28800-term float sum. The slack fixes which sub-step answers, on every board and
 ## at every frame rate.
-func _launch_if_due() -> void:
-	# ⚠ **ABOVE `_boats_launched` AND NOT BELOW IT**, so a board that has had no boats has had no
-	# launches: the counter and `elapsed` stay the whole clock and neither is fed a launch that did not
-	# happen. ⚠ **Nothing flips this back mid-run** — the shell writes it once at `_open_island` — so
-	# what a live flip would do to a board already an interval past due is undecided and unmeasured.
-	if not boats_come:
-		return
-	var due := Rules.BOAT_FIRST_SEC + float(_boats_launched) * Rules.BOAT_INTERVAL_SEC
-	if elapsed < due - Rules.SIM_SUBSTEP_SEC * 0.5:
-		return
-	# ⚠ **Counted whether or not a hull is born.** A board with no coast would otherwise be due on every
-	# sub-step for the rest of the island.
-	_boats_launched += 1
+func _phase_waves() -> void:
+	# -- the landing clock -------------------------------------------------------------------------
+	# ⚠⚠ **A `while` AND NOT AN `if`.** `step` is driven with any `dt`, and a net that hands this file a
+	# whole interval in one call would otherwise advance one wave and be a wave behind for ever.
+	# ⚠ **PAST the landing time and not nearest it**, which is what lets `wave_seconds_left` report an
+	# exact 0 for one sub-step instead of stopping a sub-step short of it. The floor below is what that
+	# sub-step's hair-negative difference becomes.
+	while elapsed >= wave_land_sec + Rules.SIM_SUBSTEP_SEC * 0.5:
+		wave_ordinal += 1
+		wave_land_sec = Rules.wave_land_sec(wave_ordinal)
+	wave_seconds_left = maxf(0.0, wave_land_sec - elapsed)
+	wave_warning_open = wave_seconds_left <= Rules.WAVE_WARNING_SEC
+
+	# -- the launch queue --------------------------------------------------------------------------
+	# ⚠⚠ **THE HULLS' TIMES ARE COUNTED OFF THE LANDING TIME AND NOT OFF `elapsed`.** Taking the moment
+	# this happened to fire would fold half a sub-step of slack into every wave and the error would
+	# accumulate down the run — the whole wave hangs off one number that `Rules` computes.
+	var lead := wave_land_sec - Rules.BOAT_CROSSING_SEC
+	if wave_ordinal > _wave_scheduled and elapsed >= lead - Rules.SIM_SUBSTEP_SEC * 0.5:
+		_wave_scheduled = wave_ordinal
+		var gap := Rules.wave_gap_of(wave_ordinal)
+		for k in Rules.wave_boats_of(wave_ordinal):
+			_launch_queue.append(lead + float(k) * gap)
+
+	# ⚠⚠ **THE QUEUE DRAINS WHETHER OR NOT BOATS COME, AND ONLY THE BIRTH IS GATED.** A queue that
+	# stopped draining while the switch was off would fire a whole wave at once the moment somebody
+	# flipped it back — and the switch is a setting about hulls, not about time. ⚠ **Nothing flips it
+	# back mid-run today**, so a live flip is undecided and unmeasured; draining is the arm that makes
+	# the undecided case the harmless one.
+	while not _launch_queue.is_empty() \
+			and elapsed >= float(_launch_queue[0]) - Rules.SIM_SUBSTEP_SEC * 0.5:
+		_launch_queue.remove_at(0)
+		if boats_come:
+			_launch_one()
+
+
+## **Births one boat at the beach the cursor is standing on**, and advances the cursor.
+##
+## ⚠ **It takes no time and asks no clock.** Whether a hull is due is `_phase_waves`'s question and this
+## is the answer to it, which is also what lets `tools/look/capture_boat.gd` stand a hull on a named
+## beach without recomputing anybody's schedule.
+func _launch_one() -> void:
 	var ring := grid.beach_ring(Rules.BOAT_START_DIST_TILES)
 	if ring.is_empty():
 		# **Not swallowed and not an error.** A board with no coast a boat can come to is a board

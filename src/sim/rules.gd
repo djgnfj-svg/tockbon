@@ -496,16 +496,23 @@ const MUSTER_SLOT := 0
 ## ⚠ **Chosen by the builder, not by the user and not by play** (2026-08-30). The arithmetic it was
 ## chosen off: a boat lands `BOAT_CAPACITY` 늑대 at `damage_of(WOLF)` a blow every `period_of(WOLF)`,
 ## which is 16 a second if every one of them reaches the walls — so this is **fifteen seconds of one
-## undefended boat**, and `BOAT_INTERVAL_SEC` is thirty. **A single boat that walks in unopposed must
-## not end the run, and two must.** ⚠ It is a literal and not that product: retuning the 늑대 must not
-## silently move the 성채's health.
+## undefended boat**. ⚠ It is a literal and not that product: retuning the 늑대 must not silently move
+## the 성채's health.
 ##
 ## ⚠⚠ **240 -> 120 ON 2026-09-01, BECAUSE THE BOATLOAD HALVED AND THIS NUMBER IS DERIVED FROM IT**
 ## (the user: 「내려」, choosing to lower it rather than accept 「one boat alone cannot lose you the run」
 ## as a new rule). **240 was fifteen seconds of one undefended boat at `BOAT_CAPACITY` 8.** At four the
-## same arithmetic gave **thirty seconds — exactly `BOAT_INTERVAL_SEC`**, so one boat walking in
-## unopposed stopped ending the run and `net_fight` went red on it. **120 restores the fifteen seconds
-## the old value was chosen to produce**, so the rule the number exists for survives the hull swap.
+## same arithmetic gave thirty seconds, so one boat walking in unopposed stopped ending the run and
+## `net_fight` went red on it. **120 restores the fifteen seconds the old value was chosen to
+## produce**, so the rule the number exists for survives the hull swap.
+##
+## ⚠⚠ **THE ANCHOR THOSE FIFTEEN SECONDS WERE MEASURED AGAINST IS GONE AND HAS NOT BEEN REPLACED**
+## (2026-09-03). 「one boat must not end the run, two must, inside one 30-second interval」 was written
+## against `BOAT_INTERVAL_SEC`, and the wave table deleted that constant: a wave's boats are now 10 to
+## 15 s apart and its waves 8 분 apart, and no candidate replacement makes the old inequality true.
+## **The user kept 120 rather than retune it** (「추천대로 해줘」), so what stands is the fifteen seconds
+## as a fact and not as a rule — `net_fight` pins the 15.0 and says the same thing there.
+## ⚠ **Stated and not hidden**: wave 1 is one boat, so an unopposed first wave ends the run at 8:15.
 ##
 ## ⚠ **It is still a literal and not that product.** The arithmetic above is what CHOSE it, twice now;
 ## retuning the 늑대 must not silently move the 성채's health. **The day `BOAT_CAPACITY` moves again,
@@ -654,12 +661,74 @@ static func speed_mul_of(slot: int) -> float:
 ## distance and the speed are rules and not presentation: they decide WHEN something arrives.
 ## The bob, the roll and the deck offsets are the screen's and live in `look.gd`.
 
-## When the first boat of an island is born, in seconds of simulated time. Long enough to see the
-## island empty, short enough that the launch itself is on screen.
-const BOAT_FIRST_SEC := 5.0
-## And every one after it. **「일정하게」** — random timing is a later round's, so this is one number
-## and not a band.
-const BOAT_INTERVAL_SEC := 30.0
+# --- the wave clock --------------------------------------------------------------------------------
+## ⚠⚠ **THE WAVE TABLE REPLACED THE ENDLESS DRIP ON 2026-09-03, AND `BOAT_FIRST_SEC` 5.0 AND
+## `BOAT_INTERVAL_SEC` 30.0 DIED WITH IT.** A boat was not a wave: hulls launched one at a time
+## forever and nothing grouped them. **The user handed over the whole clock in one round** — 「일단은
+## 한판에 한 한 시간은 돼야 되듯」 · 「처음 웨이브는 팔 분」 · 「팔 분마다」 · 「예고는 3분전」 — and they
+## are FIRST numbers rather than balance: 「처음에는 한 시간을 잡고 갈 듯」.
+##
+## ⚠ **The boss's clock is NOT here.** 24 분 and a second boss and winning were answered the same day
+## and no ticket owns them; 티켓 12-01 owns the wave alarm only.
+
+## **When the first wave LANDS**, in seconds of simulated time. 「처음 웨이브는 팔 분」.
+## ⚠ **The landing and not the launch** (2026-09-03) — the first hull is born `BOAT_CROSSING_SEC`
+## earlier so that the minute the player was promised is the minute something touches the sand.
+const WAVE_FIRST_SEC := 480.0
+## And every wave after it. 「팔 분마다」 — seven in the hour a run is held at.
+## ⚠ **One number and not a band**: 「일정하게」 still stands, and random timing is a later round's.
+const WAVE_INTERVAL_SEC := 480.0
+## **How long before a wave lands the warning goes up**, in seconds. 「예고는 3분전」.
+##
+## ⚠⚠ **ONE NUMBER, AND IT DOES NOT SPLIT BY WHERE THE PLAYER IS.** The recommendation offered 1 분 at
+## home and 5 분 away — both numbers the user had said on 2026-09-02 — and **the user replaced both
+## with a single 3 분.** A second warning length would be a second rule with nothing deciding between
+## them.
+const WAVE_WARNING_SEC := 180.0
+
+## **How many hulls each wave lands.** One row per wave, waves 1 to 7.
+##
+## ⚠⚠ **HAND WRITTEN AND NOT A FORMULA, WHICH IS THE SHAPE THE USER DEMANDED** (2026-09-03: 「그건
+## 웨이브마다 설계해야할듯」 — *"I think that has to be designed per wave."*). The recommendation was
+## one boat rising by one per wave and **the user refused the shape, not the number.** Balance is
+## decided by playing; adding an eighth wave is one more row here and nothing else in the repo.
+##
+## ⚠ **The LAST row repeats for ever** — see `wave_row`. Wave 7 is at 56 분 and normally never runs,
+## because the second boss at 48 분 ends the run; it is the row for a player who has not killed it.
+## ⚠⚠ **`const Array` and NOT `PackedInt32Array`**: a packed array in a `const` is a parse error on
+## 4.7.1, and element typing does not survive a plain `const` — which is why every read casts.
+const WAVE_BOATS := [1, 2, 3, 3, 4, 5, 6]
+## **How far apart one wave's hulls land**, in seconds, one row per wave. 「여러 척이 한 번에 온다기보다는
+## 천천히 시간을 두고 올 거 같아」 (2026-09-02) — **a wave is not a broadside.**
+## ⚠ Same length and same repeat rule as `WAVE_BOATS`, and the same `const Array` trap.
+const WAVE_BOAT_GAP_SEC := [15.0, 15.0, 15.0, 10.0, 10.0, 10.0, 10.0]
+
+## **Which row of the two tables a wave reads**, counted from 0.
+##
+## ⚠⚠ **THIS IS THE WHOLE OF 「THE SEVENTH ROW REPEATS FOR EVER」** (2026-09-03, 「나머지는 추천대로」),
+## and it is one line in one place so that wave 8 and wave 800 cannot disagree about it. **An eighth
+## wave is one more row in `WAVE_BOATS` and `WAVE_BOAT_GAP_SEC` and nothing else anywhere.**
+static func wave_row(ordinal: int) -> int:
+	return clampi(ordinal, 0, WAVE_BOATS.size() - 1)
+
+
+## **When wave `ordinal` LANDS**, in seconds of simulated time, counted from 0.
+## ⚠ **The formula lives here and the current answer lives in `Battle.wave_land_sec`** — the sim holds
+## which wave is next, this holds what that means in seconds.
+static func wave_land_sec(ordinal: int) -> float:
+	return WAVE_FIRST_SEC + float(ordinal) * WAVE_INTERVAL_SEC
+
+
+## **How many hulls wave `ordinal` lands.** ⚠ **Read through here and never off the array**: the table
+## is a `const Array`, so its elements are untyped and a raw read hands back a `Variant`.
+static func wave_boats_of(ordinal: int) -> int:
+	return int(WAVE_BOATS[wave_row(ordinal)])
+
+
+## **How far apart wave `ordinal`'s hulls launch**, in seconds. Same reason as above.
+static func wave_gap_of(ordinal: int) -> float:
+	return float(WAVE_BOAT_GAP_SEC[wave_row(ordinal)])
+
 ## **How long an emptied hull sits off its beach before it stops being there**, in seconds.
 ##
 ## ⚠⚠ **IT REVERSES 「배는 쌓인다」, WHICH WAS A DELIBERATE LINE AND NOT AN OVERSIGHT** (2026-09-01, the
@@ -668,10 +737,15 @@ const BOAT_INTERVAL_SEC := 30.0
 ## and the user named the disappearance an allowance rather than a fiction that has to hold up — so
 ## there is no return leg to write and no fade to shade. **It is a cut.**
 ##
-## ⚠ **Three against thirty is the whole of why it is three**: a boat comes every `BOAT_INTERVAL_SEC`,
-## so this is long enough to watch the unloading and still leaves the water clear before the next hull
-## is anywhere near the shore. ⚠⚠ **Two hulls are no longer on the water at the same time**, which is
-## a claim about the SCREEN that was true every round until this one.
+## ⚠⚠ **「TWO HULLS ARE NEVER ON THE WATER AT ONCE」 STOOD HERE AND IT IS FALSE** (2026-09-03). It was
+## true of the endless drip, and its arithmetic — three against the thirty of `BOAT_INTERVAL_SEC` —
+## quotes a constant that no longer exists. **Driven on the wave table for 65 minutes: at most THREE
+## hulls not-GONE at the same time**, because a wave's boats launch 10 to 15 s apart and one crossing
+## is `BOAT_CROSSING_SEC`.
+##
+## ⚠ **Three seconds was chosen against the drip and NOT re-chosen against the waves.** It is still
+## long enough to watch a deck empty; what it no longer buys is clear water, and nothing has been
+## retuned to get that back.
 const BOAT_LINGER_SEC := 3.0
 ## 조각 per second.
 ##
@@ -685,6 +759,13 @@ const BOAT_LINGER_SEC := 3.0
 ## what this number buys. At `BOAT_START_DIST_TILES` it is 22 조각, so 1.2 makes the crossing **18.3
 ## seconds**. **The reference is Bad North**, where a boat takes about thirty seconds to arrive and the
 ## camera is the player's with nothing pointing at it.
+##
+## ⚠⚠ **THE REASON ABOVE IS SPENT AS OF 2026-09-03 AND THE NUMBER WAS NOT RETUNED.** 티켓 12-01 built
+## the alarm the 2026-08-30 line says does not exist, so the crossing no longer has to last long enough
+## for a panning player to find a hull — **the player is told.** The number is left exactly where it
+## was, because the day the board gets easier the reason has to be attributable to the alarm and not to
+## a speed that moved in the same edit. ⚠ **It is now also the wave's lead time** — see
+## `BOAT_CROSSING_SEC`, which is what 「the wave lands at 8:00」 is measured back from.
 const BOAT_SPEED_TILES := 1.2
 ## How far out to sea a boat is born, measured from the CENTRE of the 조각 it is aimed at.
 ##
@@ -752,6 +833,18 @@ const BOAT_BEACH_GAP_TILES := 0.6
 ## the crossing, which is the thing worth watching.
 ## ⚠ **Derived, so it cannot fall under the boat's own length again.** See the two above.
 const BOAT_STANDOFF_TILES := BOAT_HULL_HALF_TILES + BOAT_BEACH_GAP_TILES
+
+## **How long one crossing takes, in seconds — birth out at sea to the hull coming to rest.**
+##
+## ⚠⚠ **DERIVED, BECAUSE IT IS THE LEAD TIME AND A LITERAL WOULD ROT.** 「처음 웨이브는 팔 분」 means the
+## first hull LANDS at 8:00 (2026-09-03), so the launch is one of these earlier — and writing 18.25
+## down would be right until the day somebody moves the speed or the distance.
+##
+## ⚠⚠ **IT IS AN ESTIMATE AND THE ERROR IS MEASURED, NOT GUESSED** (2026-09-03). A hull walks its line
+## in whole `SIM_SUBSTEP_SEC` steps and stops on the first one that reaches, so it arrives a little
+## short of this: across all 59 beaches of the shipped island's ring, **0.507 to 0.888 s EARLY, mean
+## 0.547, never late and never past one second.** A wave lands a little before its own minute.
+const BOAT_CROSSING_SEC := (BOAT_START_DIST_TILES - BOAT_STANDOFF_TILES) / BOAT_SPEED_TILES
 ## How many ride one boat. ⚠ **Decided, not tuned.** **Two benches, two each**, and
 ## `Look.BOAT_DECK_SLOTS` is what puts them on the deck.
 ##
@@ -759,8 +852,9 @@ const BOAT_STANDOFF_TILES := BOAT_HULL_HALF_TILES + BOAT_BEACH_GAP_TILES
 ## (the user: 「일단 오는 걸 작은 배에 있는 늑대 네 마리로 교체하고 ...」). 티켓 41's 「한 배에 몇 —
 ## 여덟」 was decided against `boat.glb`, which is no longer what arrives.
 ## ⚠⚠ **THE CLOCK DID NOT MOVE WITH IT** (2026-09-01, the user taking the recommendation: 「이 위에
-## 열여섯 개 물어봤던 거 다 추천대로 좀 해줘」). `BOAT_FIRST_SEC` and `BOAT_INTERVAL_SEC` are
-## byte-for-byte what they were, **so that a board that got easier says which of the two made it so.**
+## 열여섯 개 물어봤던 거 다 추천대로 좀 해줘」). The launch clock of that day was byte-for-byte what it
+## had been, **so that a board that got easier says which of the two made it so.** ⚠ **That clock is
+## gone as of 2026-09-03** — the wave table replaced it — and the boatload did not move with it either.
 ## ⚠ **`KEEP_MAX_HP` MOVED WITH IT, 240 -> 120** — the user's call the same day, so that one boat
 ## ignored still ends the run. **It is the one number that followed the hull; the clock did not.**
 ## Read that constant, where the whole of it is written down.

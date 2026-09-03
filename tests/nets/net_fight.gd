@@ -47,10 +47,12 @@ const ISLE_MUSTER := 7 + 4 * ISLE_W
 ## **The same board with no water at all**, so no beach ring exists and **no boat is ever born.**
 ##
 ## ⚠⚠ **THE BURN ROWS BELOW CANNOT BE MEASURED ON A BOARD WITH A COAST, AND THAT WAS MEASURED THE HARD
-## WAY.** Burning `KEEP_MAX_HP` with one 늑대 takes sixty seconds, and `BOAT_INTERVAL_SEC` is thirty —
+## WAY.** Burning `KEEP_MAX_HP` with one 늑대 takes sixty seconds, and boats used to land every thirty —
 ## **another boat lands during the row**, so 「it had not fallen yet」 was already false at half the time and
 ## the floor under the burn read as a defect in the burn. **A landlocked board is the only place one
-## 늑대 is one 늑대.**
+## 늑대 is one 늑대.** ⚠ The wave clock of 2026-09-03 puts the first hull 461.75 s out, which would HIDE
+## that collision rather than fix it — the board stays landlocked so these rows cannot start depending
+## on a launch time again.
 ## ⚠ Same 조각 numbers as `ISLE`, so `ISLE_KEEP` and `ISLE_MUSTER` name the same places.
 const LAND := [
 	"............",
@@ -198,9 +200,10 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 	# automatic muster on 2026-09-02 (the user: 「자동 병사 생성 지워줘」), so there is no period to pin.
 	t.eq(Rules.MUSTER_CAP, 9, "검사는 아홉이 천장이다")
 	# ⚠⚠ **240 -> 120 ON 2026-09-01, WITH THE BOATLOAD** (the user: 「내려」). 240 was fifteen seconds
-	# of one undefended boat at `BOAT_CAPACITY` 8; at four the same arithmetic hit exactly
-	# `BOAT_INTERVAL_SEC` and 「a boat ignored whole loses you the run」 went false. **120 puts those
-	# fifteen seconds back.** See the burn rows below, which are what this pin protects.
+	# of one undefended boat at `BOAT_CAPACITY` 8; at four the same arithmetic hit the whole 30-second
+	# boat interval of that day and 「a boat ignored whole loses you the run」 went false. **120 puts
+	# those fifteen seconds back.** See the burn row below, which is what this pin protects — and read
+	# its note: the interval it was measured against died with the wave table on 2026-09-03.
 	t.eq(Rules.KEEP_MAX_HP, 120.0, "성채 체력은 120 이다")
 	t.eq(Rules.BOAT_RIDER_TYPE, Rules.WOLF, "배에 타고 오는 것은 늑대다")
 
@@ -270,17 +273,25 @@ func _the_numbers_are_the_ones_that_were_chosen(t) -> void:
 	t.ok(absf(Rules.detect_of(Rules.WOLF) - (6.0 + Rules.REACH_BONUS)) > NEAR,
 		"탐지는 표의 칸 그대로다 — 사거리 보너스가 두 번 더해지지 않는다")
 
-	# ⚠ **The 성채 has to outlast one boat and fall to two**, which is what `KEEP_MAX_HP`'s own comment
-	# says it was chosen off. Derived here so a retune of either side moves this row rather than the
-	# arithmetic quietly stopping being true.
+	# ⚠⚠ **THE ANCHOR THIS ROW WAS WRITTEN AGAINST DIED ON 2026-09-03 AND HAS NOT BEEN REPLACED.** It
+	# read 「그 초는 배 간격보다 짧고 간격의 4분의 1보다는 길다」 — one boat must not end the run, two
+	# must, inside one 30-second interval — and the constant it named is deleted. **No candidate
+	# replacement makes both halves true**: the wave's 15 s gap gives `15 < 15` false, its 10 s gap
+	# gives `15 < 10` false, and the 480 s wave interval gives `15 > 120` false.
+	#
+	# ✅ **The user kept 120 and had the row rewritten to pin the fact instead** (「추천대로 해줘」).
+	# What survives is the fifteen seconds as a NUMBER: the row still goes red if the 성채, the boatload,
+	# the damage or the period moves, which is what it was for. **It no longer claims a rule it cannot
+	# measure.**
+	# ⚠ **Stated and not hidden**: wave 1 is one boat, so an unopposed first wave ends the run at 8:15.
+	# Balance is decided by playing, not by this file.
 	var one_boat_dps := float(Rules.BOAT_CAPACITY) * Rules.damage_of(Rules.WOLF) 			/ Rules.period_of(Rules.WOLF)
 	var burn_sec := Rules.KEEP_MAX_HP / one_boat_dps
-	t.ok(burn_sec > 0.0, "배 한 척이 아무도 안 막으면 성채를 %.1f초에 태운다 (자가 점검)" % burn_sec)
-	t.ok(burn_sec < Rules.BOAT_INTERVAL_SEC,
-		"그 %.1f초는 배 간격 %.1f초보다 짧다 — 한 척을 통째로 흘리면 진다"
-			% [burn_sec, Rules.BOAT_INTERVAL_SEC])
-	t.ok(burn_sec > Rules.BOAT_INTERVAL_SEC * 0.25,
-		"그런데 간격의 4분의 1보다는 길다 — 한 척이 닿자마자 끝나지는 않는다")
+	t.ok(absf(burn_sec - 15.0) < 0.001,
+		"배 한 척이 아무도 안 막으면 성채를 15.0초에 태운다 (얻은 값 %.3f)"
+			% burn_sec)
+	t.ok(Rules.KEEP_MAX_HP == 120.0 and Rules.BOAT_CAPACITY == 4,
+		"그 15초를 만드는 네 값 중 하나라도 움직이면 위가 빨강이다 (자가 점검)")
 
 
 ## **`reach = range + REACH_BONUS`, in one place, and the window that number was measured into.**
@@ -536,7 +547,7 @@ func _the_keep_is_read_off_the_island_file(t) -> void:
 ## read the boat. **The two are asserted against each other.**
 func _an_arrived_boat_puts_its_riders_on_the_board(t) -> void:
 	var b := _battle(ISLE)
-	b.step(Rules.BOAT_FIRST_SEC)
+	b.step(_first_hull_sec())
 	t.eq(b.boat_pos.size(), 1, "배가 한 척 떴다 (자가 점검)")
 	t.eq(int(b.boat_riders[0]), Rules.BOAT_CAPACITY, "넷이 타 있다 (자가 점검)")
 	t.eq(b.living_enemy_ids().size(), 0, "그리고 아직 판에 짐승이 하나도 없다")
@@ -1129,7 +1140,7 @@ func _a_lost_run_stops_the_clock(t) -> void:
 
 ## **The same fight at 1x and at a tenth of the frame rate lands on the same state.**
 func _the_fight_is_the_same_at_any_frame_rate(t) -> void:
-	var total := Rules.BOAT_FIRST_SEC + _crossing_sec() + 12.0
+	var total := _first_hull_sec() + _crossing_sec() + 12.0
 	var fine := _battle_on(_grid(ISLE), _keep(), ISLE_MUSTER)
 	var coarse := _battle_on(_grid(ISLE), _keep(), ISLE_MUSTER)
 	fine.place_ashore(0, fine.grid.tile_index(4, 3))
@@ -1630,7 +1641,7 @@ func _the_shipped_island_s_first_wave_meets_the_watch_at_the_door(t) -> void:
 
 	# The landing, one sub-step at a time and not a second past it. Unchanged by this ticket: the
 	# nearest 검사 is outside 6.0 of the beach.
-	var guard := int(round((Rules.BOAT_FIRST_SEC + _crossing_sec() + 10.0) / Rules.SIM_SUBSTEP_SEC))
+	var guard := int(round((_first_hull_sec() + _crossing_sec() + 10.0) / Rules.SIM_SUBSTEP_SEC))
 	var landed_at := -1.0
 	for _i in guard:
 		b.step(Rules.SIM_SUBSTEP_SEC)
@@ -1787,7 +1798,7 @@ func _plateau_no_keep() -> Battle:
 ## **Steps one sub-step at a time until the first boat has put everybody ashore.** Bounded, because a
 ## net that hangs prints no verdict at all and that disarms mutation testing on the whole file.
 func _step_until_landed(b: Battle) -> void:
-	var guard := int(round((Rules.BOAT_FIRST_SEC + _crossing_sec() + 5.0) / Rules.SIM_SUBSTEP_SEC))
+	var guard := int(round((_first_hull_sec() + _crossing_sec() + 5.0) / Rules.SIM_SUBSTEP_SEC))
 	for _i in guard:
 		b.step(Rules.SIM_SUBSTEP_SEC)
 		if not b.boat_riders.is_empty() and int(b.boat_riders[0]) == 0:
@@ -1798,6 +1809,16 @@ func _step_until_landed(b: Battle) -> void:
 ## are `net_boats`' to hold.
 func _crossing_sec() -> float:
 	return (Rules.BOAT_START_DIST_TILES - Rules.BOAT_STANDOFF_TILES) / Rules.BOAT_SPEED_TILES
+
+
+## **When the first hull of a run is born**, in seconds: one crossing before the first wave lands.
+##
+## ⚠⚠ **IT WAS FIVE SECONDS UNTIL 2026-09-03 AND IT IS NOW 461.75.** Four rows in this file open a
+## coastal board and wait for a hull; **they go quiet rather than red** if the time they wait for stops
+## being reachable, which is why the number lives in one function here.
+## ⚠ **`net_boats` is what holds the wave clock itself.** This is a caller, not a second copy of it.
+func _first_hull_sec() -> float:
+	return Rules.WAVE_FIRST_SEC - Rules.BOAT_CROSSING_SEC
 
 
 ## **How far `p` is from the nearest 조각 of the 성채, height included** — this file's OWN arithmetic and

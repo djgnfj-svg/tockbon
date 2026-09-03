@@ -1503,7 +1503,7 @@ func _the_wolf_ashore_wears_the_picture_that_was_chosen(t) -> void:
 	# no longer stands a beast on the island — they come by boat since 티켓 41, and three functions in
 	# this file are red on exactly that. **These wolves walked off a deck**, which is also the only way
 	# to have one ashore and one aboard in one frame.
-	var pack := _boat_view(Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC)
+	var pack := _boat_view(_second_hull_sec() + 8.0)
 	var fv: FieldView = pack["fv"]
 	var b: Battle = pack["b"]
 	fv.cam_yaw_deg = 0.0
@@ -1525,9 +1525,20 @@ func _the_wolf_ashore_wears_the_picture_that_was_chosen(t) -> void:
 	t.ok(fv._sprites_used > ashore, "그리고 갑판에도 아직 남아 있다 (자가 점검) — 한 프레임에 둘 다 있다")
 	if ashore <= 0 or fv._sprites_used <= 0:
 		return
+	# ⚠⚠ **THE STEM AND NOT THE WHOLE PATH, AND THAT IS NOT A LOOSENING** (2026-09-03). This asked for
+	# one of the four EXACT files, and the four are the standing pictures — so it was silently also
+	# asserting **that the animal happened to be at rest in this frame**, which was never its subject
+	# and which the wave clock moved: the fixture now stands at 949.75 s instead of 35 s. A walking
+	# 늑대 wears `east_walk_2.png`, which is the same row, the same folder and the same facing.
+	# ⇒ **The stem is what the row is about**: the wrong species, the bare square, and the deleted
+	# side-on 늑대 all still redden it, because none of them starts with one of these four.
 	var sp: Sprite3D = fv._sprites[0]
-	t.ok(paths.has(str(sp.texture.resource_path)),
-		"판 위의 몸이 입은 것이 늑대 줄의 그림이다 (%s)" % str(sp.texture.resource_path))
+	var worn := str(sp.texture.resource_path)
+	var stem_ok := false
+	for raw_p in paths:
+		if worn.begins_with(str(raw_p).trim_suffix(".png")):
+			stem_ok = true
+	t.ok(stem_ok, "판 위의 몸이 입은 것이 늑대 줄 넉 장 중 한 방향의 그림이다 (%s)" % worn)
 	# ⚠⚠ **DELETED** (02-08): 「92 x 92 다 — 74 x 40 이 남아 있으면 여기서 문다」. The wolf's frames are
 	# **92 x 66**. **What stopped being measured: the frame's size at all**, so the old 74 x 40 strip
 	# coming back would go unnoticed here — that is the whole thing this row was written to catch.
@@ -1607,7 +1618,7 @@ func _distinct(items: Array) -> int:
 ## ⚠ **The expected point goes through `Look.tile_point_px`**, the same conversion every body uses, so
 ## a 조각 centre is half a 조각 along both axes and this row cannot silently accept a corner.
 func _every_hull_stands_on_its_own_boat(t) -> void:
-	var pack := _boat_view(Rules.BOAT_FIRST_SEC + Rules.BOAT_INTERVAL_SEC)
+	var pack := _boat_view(_second_hull_sec() + 8.0)
 	var fv: FieldView = pack["fv"]
 	var b: Battle = pack["b"]
 	t.eq(b.boat_pos.size(), 2, "sim 에 배 줄이 둘 있다 (자가 점검 — 하나면 아래가 전부 공허하다)")
@@ -2009,14 +2020,14 @@ func _the_disc_is_wider_than_the_wolf_standing_on_it(t) -> void:
 # == the boat's fixture ================================================================================
 
 ## An arena with one boat on it, painted once. `secs` is how long the sim is driven before the frame —
-## the default is `Rules.BOAT_FIRST_SEC`, which is the sub-step the first hull is born on.
+## the default is `_first_hull_sec()`, which is the sub-step the first hull is born on.
 ##
 ## ⚠ **`_process` is called ONCE here and the rows that want motion call it again themselves.** A
 ## fixture that pumped its own frames would hand every row a different view clock.
 func _boat_view(secs: float = -1.0) -> Dictionary:
 	var rows := _open(ARENA_W, ARENA_H)
 	var b := _battle_of(rows, _army_of([]), [])
-	b.step(Rules.BOAT_FIRST_SEC if secs < 0.0 else secs)
+	b.step(_first_hull_sec() if secs < 0.0 else secs)
 	var fv := _view_of(b, rows)
 	fv._process(0.0)
 	return {"fv": fv, "b": b}
@@ -2456,3 +2467,16 @@ func _all_inside_tile(verts: Array, tx: int, ty: int) -> bool:
 		if not _inside_tile(v, tx, ty):
 			return false
 	return true
+
+
+## **When the first hull of a run is born**, in seconds: one crossing before the first wave lands.
+## ⚠⚠ **IT WAS FIVE SECONDS UNTIL 2026-09-03 AND IT IS NOW 461.75** — the wave table replaced the drip.
+## `net_boats` holds the wave clock; this is a caller and not a second copy of it.
+func _first_hull_sec() -> float:
+	return Rules.WAVE_FIRST_SEC - Rules.BOAT_CROSSING_SEC
+
+
+## **When the second hull of a run is born**: the second wave's first, which is the earliest moment two
+## hulls exist at once. ⚠ **Wave 1 is ONE boat**, so 「배 둘」 cannot be reached inside it at all.
+func _second_hull_sec() -> float:
+	return Rules.wave_land_sec(1) - Rules.BOAT_CROSSING_SEC

@@ -318,15 +318,14 @@ func _rank2() -> void:
 	var ring := b.grid.beach_ring(Rules.BOAT_START_DIST_TILES)
 	print("--- ring holds %d beaches" % ring.size())
 	var rows: Array = []
-	# Wind the clock past the first due time once; then each forced launch is immediate.
-	while b.elapsed < Rules.BOAT_FIRST_SEC + 0.1:
-		b.step(0.2)
-		await process_frame
+	# ⚠⚠ **NO CLOCK IS WOUND ANY MORE.** This waited past the drip's first due time and then forged a
+	# due time per beach by zeroing a private launch counter; **the wave clock has no such counter, and
+	# the first hull of a run is now 461.75 seconds in.** `Battle._launch_one` is the primitive the
+	# queue itself pops onto, so a hull can be stood on a named beach without a schedule at all.
 	for k in ring.size():
 		var before := b.boat_pos.size()
-		b._boats_launched = 0
 		b._beach_cursor = k
-		b._launch_if_due()
+		b._launch_one()
 		if b.boat_pos.size() == before:
 			print("---   ring #%d launched nothing" % k)
 			continue
@@ -382,16 +381,13 @@ func _rank2() -> void:
 func _farout() -> void:
 	var b: Battle = _game.battle
 	var ring := b.grid.beach_ring(Rules.BOAT_START_DIST_TILES)
-	while b.elapsed < Rules.BOAT_FIRST_SEC + 0.1:
-		b.step(0.2)
-		await process_frame
+	# ⚠ **Nothing is waited for** — see `_rank2`. `_launch_one` needs no clock.
 	var best_k := -1
 	var best_d := -1.0
 	for k in ring.size():
 		var before := b.boat_pos.size()
-		b._boats_launched = 0
 		b._beach_cursor = k
-		b._launch_if_due()
+		b._launch_one()
 		if b.boat_pos.size() == before:
 			continue
 		var i := before
@@ -453,15 +449,12 @@ func _final() -> void:
 	print("---   %s" % str(missing))
 
 	# Every beach's stop, from the game's own launch.
-	while b.elapsed < Rules.BOAT_FIRST_SEC + 0.1:
-		b.step(0.2)
-		await process_frame
+	# ⚠ **Nothing is waited for** — see `_rank2`. `_launch_one` needs no clock.
 	var rows: Array = []
 	for k in ring.size():
 		var before := b.boat_pos.size()
-		b._boats_launched = 0
 		b._beach_cursor = k
-		b._launch_if_due()
+		b._launch_one()
 		if b.boat_pos.size() == before:
 			continue
 		var i := before
@@ -549,17 +542,20 @@ func _hull_clear(stop: Vector2, head: Vector2) -> float:
 
 
 ## Drives the sim's own beach cursor to `k` and lets the game launch its own boat there.
+##
+## ⚠⚠ **IT RECOMPUTED THE NEXT DUE TIME BY HAND AND WOUND THE CLOCK TO IT, AND THAT TECHNIQUE IS GONE**
+## (2026-09-03). The wave clock schedules a whole wave's hulls into a queue, so there is no single next
+## due time to recompute — and the first hull of a run is 461.75 seconds in, which is minutes of real
+## time to wind through at 0.2 s a frame. **`_launch_one` is the primitive the queue pops onto**, so the
+## hull is born here directly and the crossing that follows is the game's own.
 func _force_arrival(k: int, n: int, predicted: float) -> void:
 	var b: Battle = _game.battle
 	var before := b.boat_pos.size()
-	var due := Rules.BOAT_FIRST_SEC + float(b._boats_launched) * Rules.BOAT_INTERVAL_SEC
-	while b.elapsed < due - 0.5:
-		b.step(0.2)
-		await process_frame
 	b._beach_cursor = k
-	while b.boat_pos.size() == before:
-		b.step(0.05)
-		await process_frame
+	b._launch_one()
+	if b.boat_pos.size() == before:
+		print("--- ring #%d launched nothing" % k)
+		return
 	var i := before
 	print("--- forced boat %d at beach %d (wanted ring #%d), predicted clearance %+.2f"
 		% [i, int(b.boat_beach[i]), k, predicted])
@@ -735,10 +731,17 @@ func _arrivals() -> void:
 	var b: Battle = _game.battle
 	var shot := 0
 	while shot < 8:
-		var want := Rules.BOAT_FIRST_SEC + float(shot) * Rules.BOAT_INTERVAL_SEC + 20.0
-		while b.elapsed < want:
+		# ⚠⚠ **THE SHOTS ARE FORCED, NOT WAITED FOR** (2026-09-03). This wound the clock to
+		# `first + shot * interval + 20`, and the wave clock has neither number: eight arrivals on the
+		# real table straddle 24 분 of simulated time. **One hull per shot, born on the ring in order**,
+		# and then the crossing is driven to its own arrival.
+		if shot >= b.boat_pos.size():
+			b._launch_one()
+		var guard := 0
+		while shot < b.boat_pos.size() and int(b.boat_state[shot]) != 1 and guard < 600:
 			b.step(0.2)
 			await process_frame
+			guard += 1
 		if shot >= b.boat_pos.size() or int(b.boat_state[shot]) != 1:
 			print("--- boat %d not arrived at t=%.1f" % [shot, b.elapsed])
 			shot += 1
