@@ -5,6 +5,7 @@
 | Page | Read it before |
 |---|---|
 | `making-what-the-player-sees.md` | building a HUD, a button, an icon, a panel, a mark on the ground |
+| `pixellab.md` | ⚠⚠ **writing ANY prompt that pulls a picture** — the three rules, what dissolves a held tool, and the one-batch rule |
 | `blender.md` | touching any mesh — the originals, the loop, the four measured traps, the numbers |
 | `godot-mcp-bridge.md` | ⚠ only if the `godot` MCP server is switched back on — it is OFF today |
 

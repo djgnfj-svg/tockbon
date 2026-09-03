@@ -10,6 +10,11 @@
 | Anything with a shape in the world | **Blender** — read `blender.md` in this folder first |
 | Anything flat | **`tools/pixel/`** (local ComfyUI), or **pixellab** when the user says so |
 
+⚠⚠ **A BODY IS ALWAYS pixellab, AND `pixellab.md` IN THIS FOLDER IS READ BEFORE THE PROMPT IS
+WRITTEN.** Every human frame in the game came from one character there, and a frame pulled from the
+local ComfyUI can never be made to match it. **Sixteen candidates were burned on 2026-09-03 writing
+prompts against that page's rules without having read them.**
+
 ⚠⚠ **`draw_rect` + `draw_string` chrome is not a placeholder, it is the thing that ships.** That is
 exactly how the island wore a grey button and a digit nobody chose, until both were deleted.
 **If a screen is worth having, it is worth being designed.**

@@ -24,6 +24,12 @@ table of questions here is what the user cut on 2026-08-30 (*"the five questions
 it will be drawn at, what it stands beside, and which of this game's styles it joins are all readable in
 `src/look.gd` and `assets/`.
 
+⚠⚠ **READ `docs/manual/pixellab.md` BEFORE WRITING A PROMPT, EVERY TIME** (2026-09-03, the user:
+***"Go find a prompting guide and put it in, and refer to that document every time you pull images
+from now on."***). It holds **the three rules that page measured being broken** — 3 to 6 words, never
+name the held object, no environment — and **why a tool goes in a character STATE and never in the
+animation prompt.** ⚠ **Sixteen candidates were burned in one round writing against those rules.**
+
 ⚠⚠ **READ `.candidates/README.md` BEFORE WRITING A PROMPT.** It holds **the four views every body in
 this game is pulled in** — 정면우 · 정면좌 · 후면우 · 후면좌, four DIAGONALS and no side view — with the
 exact phrase for each and the trap that flips them (the animal's own left is the screen's right).
