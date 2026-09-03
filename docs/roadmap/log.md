@@ -5315,3 +5315,99 @@ comment naming two things that do not exist, and four orphan `.uid` sidecars.
 **Nothing was verified.** The last measured suite is 2026-09-02's **3187 pass / 4 fail**, and no number
 has been taken since. ⚠ **The work sits on `claude/main-push-timing-8kvpv1`, not on `main`**, one commit
 per ticket so a wrong one can go back alone.
+
+---
+
+## ✅ **The engine came back, eight reds went green, and the hand learned to build — 2026-09-03, the PC round**
+
+**The previous round had built seven tickets on a machine with no Godot and verified none of it.** This
+one opened on the user's own PC, ran the suite for the first time in two days, and found that the
+unverified night had broken six nets while nobody was looking.
+
+### What the user said
+
+> On opening: ***"I haven't tested what was made yesterday — run it once for me."*** (「어제 만든거 테스트
+> ㅏㄴ해봤는데 한번 돌려봐줘」)
+>
+> On the 늑대: ***"For now the wolves don't have to come any more."*** (「일단 이제 늑대 안와도 됨」)
+>
+> On how the player says 「build here」, offered a build mode, a bottom-of-screen building list, or
+> reviving the right mouse button: ***"Build mode seems right."*** (「짓기모드가 맞을듯」)
+>
+> On why the work was split across worktrees: ***"I want to split worktrees so I can consult on the
+> other things while they run and make it into a proper plan."*** (「워크트리 나눠서 다른것들 상담하면서
+> 제대로된 기획으로 만들려고」)
+>
+> On merging: ***"Then shall we merge with main? So I can test it properly now."*** (「그럼 메인하고
+> 합칠까? 이제 제대로 테스트 해보게」)
+
+### The measurement that made the round
+
+**The suite was run three times, on three trees, so the night's damage could be attributed rather than
+guessed at**: a worktree at the commit BEFORE the night round, `main` with the night round in it, and
+`main` at the end of this one.
+
+| Tree | pass | red nets |
+|---|---|---|
+| **2ec130c9 — before the night round** | **3568** | **five** |
+| **a25dac7d — the night round merged** | **3763** | **eleven** |
+| **end of this round** | **3965** | **two** |
+
+⚠⚠ **The middle row is the price of a round that could not measure itself.** Six new reds, and one of
+them was a crash reachable the moment the 성채 turned out a body.
+
+### What was broken, and what it says about the shape of the code
+
+- **`net_island_gen` had never run once.** Three `for` loops bound an iterator named `row` in one scope,
+  the file failed to parse, and the net reported **zero passes** while the round that wrote it called
+  the generator built. Renamed, it passes **24 checks over 200 seeds**. ⚠ **A net that reports zero and
+  a net that reports green look the same in a summary line** — the runner prints 「(불완전)」 and nobody
+  had read it.
+- ⚠⚠ **A per-body column list was written out by hand in TWO places** — the code that makes a body and
+  the net that checks it. 허기 and 채집 each added a column to `setup` and to neither, so **the code and
+  its own check missed the same two columns together** and `place_ashore` wrote past the end of a
+  `PackedByteArray`. It scans now, with a floor on the count.
+- ⚠⚠ **The body outline was reading the camera's GLOBAL transform**, which is the one thing that
+  function's own comment forbids. Outside the tree it answers identity, so **the outline was pushed
+  along world +z instead of the camera axis** — a screen defect that leaked only as 630 engine barks
+  that two nets carried while staying green.
+- **`FieldView` had three half-guards** — `battle == null` checked, `battle.grid == null` not. The first
+  one crashed and hid the other two.
+- **The generator opened the 격자 by itself**, bypassing everything `Islands.load_into` does afterwards.
+  **The door was widened, not holed**: `Islands.load_board` is the door now. ⚠ It takes a missing key as
+  an empty value, so a half-filled board can load silently.
+- **허기 was the one place a net was moved rather than the code**, with the ordering as evidence:
+  `_phase_hunger` runs first in a sub-step and `_phase_muster` last, so a body that stands is refilled
+  after the drain and **is** full. The net had stepped one extra second before looking. The expectation
+  stayed at `HUNGER_MAX`; the reading moment moved.
+
+### 짓기 모드 — the fourth meaning that did not go on the left button
+
+**The left button already carries three**: a drag boxes, a short press orders, a press on nothing keeps
+the hand. A fourth would have been the reversal the 2026-09-02 evening round had just finished making.
+**B enters the mode, ESC leaves it, and inside it a left press builds and does nothing else.** The mark
+for the 조각 is ground geometry — it climbs the 2층 and turns with the board — amber when the 창고 would
+stand and brick when it would not, and **which colour comes from the sim's own answer, never the view's.**
+
+⚠ **Three things came out of the builder's hand, not the user's, and are written into 05-08**: a second
+build **moves** the 창고 instead of being refused, a successful build **leaves** the mode, and the three
+colours were tuned without being seen.
+
+⚠ **And one thing the code had already decided that nobody chose**: a gathering body does not walk
+anything back — the count rises where it stands, and the 창고 gates it without receiving it.
+
+### What is NOT done
+
+**Nothing was looked at.** Eight open tickets touched by the last two rounds all end their `Done when`
+with 「the user sees it on screen」, and **not one of those lines was crossed off.** The 창고 mesh, the
+성벽 mesh, the build mark's colours, the corrected outline — all of it is code-verified and eye-unverified.
+
+⚠ **`net_boats` could not be fixed and that is a finding, not a failure.** The row allows six beaches
+that cannot stand a hull and the board gives seven. The regression it exists to catch was reinstated
+and measured: **still seven, to the last decimal.** The literal has never been true on this board — the
+commit that set it is the commit that re-baked the island — so **the row currently separates nothing.**
+Re-aiming it changes what it guarantees, which is the caller's decision.
+
+⚠ **`net_fx_view` is still red for a reason this round misread.** It was handed to an agent as 「it only
+barks」; it had two failing rows about the 늑대 sprite's on-screen size from the start, and nobody had
+been reading them.
