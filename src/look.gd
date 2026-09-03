@@ -23,8 +23,7 @@ extends RefCounted
 ##
 ## EVERY RATIO CARRIES ITS PIXEL VALUE IN THE COMMENT BESIDE IT. A radius of 8 was quoted as "8px"
 ## in the last game and reached the screen at 38px — a camera and a window stretch in between — and
-## the same shape bit four separate times. See lessons-from-two-dead-games, "a constant is not what
-## reaches the screen".
+## the same shape bit four separate times. **A constant is not what reaches the screen.**
 ##
 ## Nothing here is `const X := PackedInt32Array([...])`: that form is a parse error on 4.7.1
 ## ("Assigned value for constant isn't a constant expression"). Plain `const` Arrays are used and

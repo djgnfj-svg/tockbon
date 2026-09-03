@@ -3,7 +3,7 @@ name: grilling
 description: Grill the user relentlessly about a plan, decision, or idea. Use ONLY when the user is choosing a direction or brainstorming, or uses a 'grill' trigger phrase — never as the tail of an ordinary reply.
 ---
 
-⚠⚠ **This skill is the ONLY place questions are asked in rounds** (2026-08-27, the user: *"There are too
+⚠⚠ **This skill is the ONLY place questions are asked in rounds** (the user: *"There are too
 many questions. Let us pull this out into a skill. It only needs to happen when brainstorming, but it
 happens far too often. It is making me not want to read."*).
 **An ordinary reply answers and stops.** ⇒ **Do not invoke this because a reply felt short.** It is for
@@ -13,7 +13,7 @@ Interview the user relentlessly until you reach a shared understanding. Map this
 
 Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Then wait for the user's answers before the next round.
 
-⚠⚠ **The shape of each question is the user's, given 2026-08-24** — they wrote the three labels out and
+⚠⚠ **The shape of each question is the user's, given ** — they wrote the three labels out and
 said that was the right shape. **A horizontal rule, then numbered blocks of three labelled lines.**
 ⚠ **The labels stay Korean**: they are printed to the user, who reads Korean, so translating them would
 break the very thing they name.
@@ -38,7 +38,7 @@ break the very thing they name.
   may be asked, never how much is asked
 - ⚠⚠ **No emoji.** The template above used them; **this repo's no-emoji rule wins**
 
-## ⚠⚠ **Everything that is not a question is kept to a MINIMUM** (2026-09-01, the user)
+## ⚠⚠ **Everything that is not a question is kept to a MINIMUM** (the user)
 
 ***"Do not do anything but those questions and recommendations this session. It gets too long. And from
 now on too, when brainstorming, everything but the question and the recommendation is too long. It makes
@@ -54,7 +54,7 @@ they are actually being asked.
   it is not what the user needs in order to answer
 - **Nothing after the last question** — no summary, no next step, no offer
 
-## ⚠⚠ **And the QUESTIONS are minimised too** (2026-09-01, the user)
+## ⚠⚠ **And the QUESTIONS are minimised too** (the user)
 
 ***"I said minimise this — minimise what is outside the questions. Minimise the questions too. The
 questions too."*** ⚠ **Said one round after the body was cut**, because cutting the body alone left four

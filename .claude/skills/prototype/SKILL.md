@@ -9,10 +9,9 @@ A **prototype** here is a throwaway implementation written to answer one questio
 **set** of them: three or more, each getting the same result by a **different mechanism**, all
 photographed from one camera so the difference on screen is the only difference in the picture.
 
-⚠⚠ **This skill was called `spike` until 2026-08-29** (the user: *"prototype is the right name, because
-that is what I call it"*). **A name the user does not reach for is not a name** — this repo learned that
-when 「물가」 had to be renamed 「해안선」 for the same reason.
-⚠ **There was an imported `prototype` skill and it was deleted on 2026-08-27.** This is not that one
+⚠⚠ **It is called 프로토타입, never 「스파이크」** (the user: *"prototype is the right name, because that is
+what I call it"*). **A name the user does not reach for is not a name.**
+⚠ **There was an imported `prototype` skill and it was deleted.** This is not that one
 coming back; it is this skill wearing the word the user actually uses.
 
 ## ⚠⚠ A prototype set is a different MECHANISM, not a different setting
@@ -25,7 +24,7 @@ one implementation and the thing they want is not reachable from any setting of 
 from **Y**, and X and Y are different sources.* Depth buffer versus baked field is a set. Wider
 band versus narrower band is not.
 
-⚠ **This skill exists because a round was spent proving the point** (2026-08-28): four sheets of water
+⚠ **This skill exists because a round was spent proving the point** : four sheets of water
 candidates, forty dials moved, and the user's answer was ***"아니그냥 어떻게 구현해야할지 모르겠다"***.
 **Every one of those candidates was the same shader.**
 
@@ -34,7 +33,7 @@ candidates, forty dials moved, and the user's answer was ***"아니그냥 어떻
 0. ⚠⚠ **SETTLE THE SET WITH THE USER BEFORE A FOLDER EXISTS.** Put the question, and the list of
    candidates, to them in `grilling`'s shape — **질문 · 추천 · 왜** — and wait. **What the thing must
    DO, where and when it appears, and what UNIT it works on** are the three that decide whether the set
-   is about the right thing at all. ⚠ **This step was added on 2026-08-29 after a set of five was built
+   is about the right thing at all. ⚠ **This step was added after a set of five was built
    without asking any of them**: two candidates answered a question nobody had, and the unit was wrong
    in a third.
 1. **Write the question down in one sentence**, and put it at the top of the sheet. Without it every
@@ -65,7 +64,7 @@ candidates, forty dials moved, and the user's answer was ***"아니그냥 어떻
    is the one that decides, and it is the one that is always missing.
 8. ⚠⚠ **THE JUDGING ROUND: A REMARK ON THE SHEET IS A QUESTION, NOT A WORK ORDER.** The user looking at
    candidates writes in fragments — 「둥글게」, 「호버도」, 「칸만」. **Collect them, put them back as
-   questions, and change nothing until they are answered.** ⚠ **Measured 2026-08-29**: four fragments
+   questions, and change nothing until they are answered.** ⚠ **Measured**: four fragments
    in a row were turned straight into four edits, and the third contradicted the first
    (***"your concept is a bit wrong"*** 「니가 개념이 좀 잘못된듯?」). **Then change ONE thing and
    re-photograph**, so what moved is what is being looked at.
@@ -80,7 +79,9 @@ this skill is written against, because two mechanisms cannot show a spread.
 
 ## Where it lands
 
-**The winner becomes a ticket.** The sheet goes to `docs/reference/` as `YYYY-MM-DD-<subject>-prototypes`,
-and the ticket names it; **each version's three lines stay in its own `NOTES.md`** under
-`.prototypes/<subject>/`. ⚠ **The losers are deleted once one has won** — a throwaway left in the
+**The winner becomes a ticket**, and what the user chose is written into that ticket in one line.
+**Each version's three lines stay in its own `NOTES.md`** under `.prototypes/<subject>/`.
+⚠⚠ **The sheet is not filed anywhere** — this repo keeps no reference folder, and a contact sheet whose
+choice is already in the ticket is one more old file to be confused by.
+⚠ **The losers are deleted once one has won** — a throwaway left in the
 tree becomes code nobody dares remove, and this repo has paid that before.

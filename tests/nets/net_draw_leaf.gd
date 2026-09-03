@@ -1,7 +1,7 @@
 extends RefCounted
 ## The drawing scan. It reads the text of `src/view/`, `src/shell/` and `src/`, and it measures
 ## nothing at runtime — which is the point: a spy on a hook sees the HOOK, never the native call
-## inside it, so the last inch has to be pinned structurally. See lessons-from-two-dead-games.
+## inside it, so the last inch has to be pinned structurally. See `how-nets-lie`.
 ##
 ## Four things are pinned here, and each one exists because its absence shipped a bug under a green
 ## round in this repo before:
@@ -325,8 +325,7 @@ func _table() -> Dictionary:
 			"_maybe_sway": 0,
 			"_paint_sway": 0,
 			# ⚠ **A sine is the wrong shape** — Crysis uses a smoothed triangle and Unity's grass a
-			# sin⁴, both to sharpen the crest so a plant rests between gusts. See the 08-31 note in
-			# `docs/reference/`.
+			# sin⁴, both to sharpen the crest so a plant rests between gusts.
 			"_gust_wave": 0,
 			"_put_flat_prop": 0,
 			# ⚠ **It is a PAINT and it runs every frame**, unlike everything else in this block:

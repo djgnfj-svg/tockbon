@@ -48,35 +48,18 @@ recommendation into something the user had to re-decide, and they said so. **The
 complete.** When the case against is strong enough to matter, **it becomes a fork the caller puts to the
 user as a question**, not a footnote under an answer.
 
-## ⚠⚠ Write it down — **the reading is the expensive half**
+## ⚠⚠ Where it lands — **the ticket, and nowhere else**
 
-**A search done twice is a search nobody kept.** When the reading took real work and the answer will be
-wanted again, **leave a note behind**:
+**This repo keeps no reference folder.** A search leaves no file behind: **the conclusion goes into the
+open ticket that asked for it, with its links inline**, and the material that did not make the conclusion
+is not kept.
 
-`docs/reference/YYYY-MM-DD-<what-it-answers>.md`
-
-```markdown
-# <the question, as a question>
-
-**Answer in one line.**
-
-## Cases
-| Who | What they did | How it turned out | Source |
-
-## Who did the opposite
-<and why>
-
-## What this does not settle
-<the part the search could not reach>
-```
-
-- ⚠ **Every row carries its link.** A row with no link says so **on that row**
-- ⚠⚠ **The note is the material; the caller's answer is the conclusion.** Do not make the caller read
-  the file to learn what you found — **report the conclusion and hand back the path**
-- **Skip the file for a one-off lookup.** A note nobody will reach for again is one more thing to keep
-  true. **When in doubt, the test is whether a future round would otherwise search this again**
-- ⚠ **Never edit somebody else's note to fit today's answer.** A new date is a new file; **a note that
-  turned out wrong gets a line saying so at the top**, and stays
+- ⚠ **Every case you report carries its link.** A case with no link says so, on that line
+- ⚠⚠ **Report the conclusion, not a path.** The caller should never have to open a file to learn what you
+  found
+- **Three cases and one opposite is the whole shape.** More rows is not more research
+- ⚠ **Never write a dated note** — a note nobody reaches for is one more thing that has to stay true, and
+  old files were measured to be this repo's biggest source of confusion
 
 ## Report
 

@@ -9,7 +9,7 @@ description: Name everything that actually exists at one spot, one line each, gr
 
 ## ⚠⚠ The list comes from the filesystem, never from an index document
 
-**Measured 2026-08-29**: two README files in this repo each listed scripts that had been deleted a commit
+**Measured**: two README files in this repo each listed scripts that had been deleted a commit
 earlier, run commands included, and each missed the one that had been added. **A hand-kept index is
 always the version before the last commit.** ⇒ `ls` / `find` the spot, then open the files. **An index
 document is one more thing to list, not the source of the list.**

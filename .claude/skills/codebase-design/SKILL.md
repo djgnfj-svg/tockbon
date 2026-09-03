@@ -52,15 +52,15 @@ verification concentrate in one place. Fix once, fixed everywhere.
 gives two answers:
 
 ```gdscript
-func resolve(fight: Fight, rng: RandomNumberGenerator) -> void:   # testable, deterministic
-func resolve(fight: Fight) -> void:                               # rng made inside — unreachable
+func resolve(fight: Fight, rng: RandomNumberGenerator) -> void: # testable, deterministic
+func resolve(fight: Fight) -> void: # rng made inside — unreachable
 ```
 
 **Return results, do not produce side effects** — the net asserts the number without a body existing:
 
 ```gdscript
-func damage_for(attacker: Unit, target: Unit) -> int:   # testable
-func strike(attacker: Unit, target: Unit) -> void:      # build the whole fight to read one number
+func damage_for(attacker: Unit, target: Unit) -> int: # testable
+func strike(attacker: Unit, target: Unit) -> void: # build the whole fight to read one number
 ```
 
 **Small surface area.** Fewer methods, fewer tests; fewer parameters, simpler setup.

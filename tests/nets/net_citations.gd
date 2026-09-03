@@ -3,8 +3,8 @@ extends RefCounted
 ##
 ## Three shapes are forbidden in `src/`, `tests/` and `tools/`:
 ##  · a path into the plans folder — that folder IS the status, so the path dies the day the doc moves
-##  · **any path to a doc at all** — `docs/design/` is a folder where the newest doc wins, so a superseded
-##    doc gets renamed and the citation points at nothing while still reading as precise. Name the doc.
+##  · **any path to a doc at all** — this repo DELETES a doc the moment it stops being true, so a
+##    citation points at nothing while still reading as precise. Name the doc, never its path.
 ##    This half was honour-based while the plans half was scanned, and it rotted in two files
 ##  · a `file.gd:NNN` line number — adding four lines to a header killed ten citations at once
 ##

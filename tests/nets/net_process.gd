@@ -21,7 +21,7 @@ extends RefCounted
 ## same functions** — not a second copy written to agree with them.
 
 const SCRATCH := "res://docs/roadmap"
-const MAP_FILE := "log.md"
+const MAP_FILE := "README.md"
 ## ⚠⚠ **Rewritten 2026-08-31: there is no flat `tickets/` folder any more, and a ticket is a FOLDER.**
 ## A task is `task-NN-name/` sitting directly under `docs/roadmap/`, its `NN.task.md` says what the task
 ## is, and each `MM-name/` folder beside it is one ticket — `NN-MM.ticket.md` describes it and **whatever
@@ -39,15 +39,13 @@ const TYPES := ["grilling", "research", "prototype", "task"]
 ## (the roadmap says so) and this list red-flagged both for a month.
 const STATES := ["open", "claimed", "resolved", "superseded"]
 const ANSWER_HEAD := "## Answer"
-## Assembled so this file's own header cannot trip the scan it performs.
-const DECIDED_HEAD := "## 지금까지의" + " 결정"
 
-## ⚠⚠ **Four of the five sections this once demanded died on 2026-08-27**, when the map was rewritten
-## and `log.md` was narrowed to 「왜 그렇게 됐나」 alone — the plan folder's own README is what says so.
-## `## Destination`, `## Notes`, `## Not yet specified` and `## Out of scope` belonged to a map shape no
-## file in this repo has worn since, and **this net went on demanding all four**, so its red said the docs
-## were broken when the net was. **What is left is the one section the log genuinely carries.**
-const MAP_SECTIONS := [DECIDED_HEAD]
+## ⚠⚠ **This net hangs its whole tree walk off ONE file existing.** `_effort_dirs` returns nothing when
+## `MAP_FILE` is missing, and every check below then passes on an empty list — **green while walking zero
+## folders.** It used to point at a file that got deleted, which is exactly how that would have happened.
+## `efforts.size()` is asserted so it cannot come back.
+## ⚠ **The sections demanded are the map's own two**, and nothing here demands a log any more.
+const MAP_SECTIONS := ["## 주 지도", "## 태스크"]
 
 
 func run(t) -> void:
@@ -115,6 +113,10 @@ func _tree(t) -> void:
 					resolved_without_answer.append(name)
 
 	var walked := "로드맵 %d개 · 태스크 %d개 · 티켓 %d개" % [efforts.size(), task_count, tickets]
+	# ⚠⚠ **Without this the whole walk above can measure nothing and stay green** — every list it fills
+	# is empty when `_effort_dirs` finds no map file, and every `is_empty()` below then passes.
+	t.eq(efforts.size(), 1, "%s — 지도를 찾았다" % walked)
+	t.ok(task_count > 0, "%s — 태스크 폴더를 걸었다" % walked)
 	t.ok(bad_head.is_empty(), "%s — 로드맵이 요구된 절을 다 갖고 있다 %s" % [walked, str(bad_head)])
 	t.ok(task_without_task_file.is_empty(),
 		"%s — 태스크 폴더는 자기 번호로 된 .task.md 를 들고 있다 %s" % [walked, str(task_without_task_file)])
@@ -236,9 +238,9 @@ func _scanner_self_checks(t) -> void:
 
 
 # -- io ---------------------------------------------------------------------------------------------------
-## ⚠⚠ **Rewritten 2026-08-27: planning is ONE folder now, not one folder per effort.** `docs/roadmap/`
-## holds the map, the log and the task folders directly — there is nothing to enumerate. **The old
-## version walked subdirectories and would have found zero here, going green while measuring nothing.**
+## ⚠⚠ **Planning is ONE folder.** `docs/roadmap/` holds the map and the task folders directly — there is
+## nothing to enumerate. ⚠ **An empty return here silently greens every check in `_tree`**, which is why
+## `efforts.size()` is asserted there.
 func _effort_dirs() -> Array[String]:
 	var out: Array[String] = []
 	if FileAccess.file_exists(SCRATCH.path_join(MAP_FILE)):
@@ -247,8 +249,8 @@ func _effort_dirs() -> Array[String]:
 
 
 ## Every `task-NN-name/` sitting directly under the map's folder. ⚠ **A folder that does not open with
-## `task-` is not a task** — the map's own `README.md` and `log.md` are files, not folders, and nothing
-## else is expected here.
+## `task-` is not a task** — the map's own `README.md` is a file, not a folder, and nothing else is
+## expected here.
 func _task_dirs(effort: String) -> Array[String]:
 	var out: Array[String] = []
 	var d := DirAccess.open(effort)
