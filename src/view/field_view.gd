@@ -2255,7 +2255,16 @@ func _pitch_stretch() -> float:
 ## the seat is a still point a body stands on, so the ground and the shadow belong under it, where the
 ## sway (which moves every frame) still does not. **The `crowd_px` parameter stood between these two and
 ## is deleted** with the per-조각 ring; the shadow needs no second offset now.
-func _put_body(centre_px: Vector2, at_tiles: Vector2, type_id: int, colour: Color,
+## ⚠⚠ **`ground_tiles` IS THE SIM'S OWN POINT AND THE FOOT HEIGHT IS READ FROM IT, NEVER FROM `at_tiles`**
+## (2026-09-03, the user: 「a 3D object that is blocked should go AROUND, not climb — it is so obvious
+## there is no way to explain it」). **The walk already goes around**: `Grid.can_step` refuses a 눈금 gap
+## of two, refuses it on diagonals, and refuses a corner squeeze. What climbed was the PICTURE — the
+## body has no height of its own, so the height was re-derived from wherever the picture had been
+## pushed to, and the 칸 seat pushes it up to 0.943 조각 while the 조각 boundary is 0.5 away.
+## ⇒ **The height is a property of the 조각 the sim says the body stands on.** `at_tiles` moves the
+## picture sideways and can no longer move it upward, which is the whole of the rule the reference
+## `2026-09-03-grid-sim-under-a-3d-mesh` found every studio holding.
+func _put_body(centre_px: Vector2, at_tiles: Vector2, ground_tiles: Vector2, type_id: int, colour: Color,
 		squash: Vector2, tex: Texture2D, outlined: bool = false) -> float:
 	var radius := Look.body_radius_of(type_id)
 	# ⚠⚠ **THE ROW'S INK FRACTION, AND DIVIDING BY IT IS THE WHOLE POINT** (2026-08-31).
@@ -2296,7 +2305,7 @@ func _put_body(centre_px: Vector2, at_tiles: Vector2, type_id: int, colour: Colo
 	# at the mouth and sink half a storey at the head. **The sim's own height is untouched** — see
 	# `Grid.surface_h`, which exists next to `height_at` precisely so the drawn ground and the measured
 	# ground can differ without either pretending to be the other.
-	var foot := _stand_h(at_tiles) + Look.BODY_LIFT_PX / Look.TILE_PX
+	var foot := _stand_h(ground_tiles) + Look.BODY_LIFT_PX / Look.TILE_PX
 	# ⚠⚠ **AND THE FRAME'S BOTTOM IS NOT THE ANIMAL'S FEET** — see `_measure_body_feet`, which the deck
 	# has needed since it was built and the island needs now that the wolf ashore is a 92 x 92 frame
 	# with 11 to 25 empty rows under it. **Footed by the frame it hangs 0.26 조각 above the ground, by a
@@ -2373,7 +2382,7 @@ func _paint_bodies() -> void:
 		var ety := int(battle.enemy_type[e])
 		_put_walker("e%d" % e, ety,
 			_drawn_of("e%d" % e, battle.enemy_pos[e], Battle.ENEMY_UID_BASE + e, _resting_enemy(e)),
-			true, false, _hp_frac(float(battle.enemy_hp[e]), Rules.hp_of(ety)))
+			battle.enemy_pos[e], true, false, _hp_frac(float(battle.enemy_hp[e]), Rules.hp_of(ety)))
 
 	# ⚠ **Emptied here and not on the empty path above**, so a frame with no island leaves the last
 	# frame's map standing — and the last frame's sprites are hidden, which `body_at_px` reads.
@@ -2384,7 +2393,7 @@ func _paint_bodies() -> void:
 		# army since the revival, and `max_hp_of` is the one answer to 「what is this body healed to」.
 		_put_walker("s%d" % i, int(army.type_id[i]),
 			_drawn_of("s%d" % i, battle.soldier_pos[i], i, _resting_soldier(i)),
-			false, _picked.has(i), _hp_frac(float(battle.soldier_hp[i]), army.max_hp_of(i)))
+			battle.soldier_pos[i], false, _picked.has(i), _hp_frac(float(battle.soldier_hp[i]), army.max_hp_of(i)))
 		# The sprite `_put_walker` just took is this body's — see `_sprite_of_soldier` for why the
 		# index is read here and nowhere else.
 		_sprite_of_soldier[i] = _sprites_used - 1
@@ -2402,7 +2411,7 @@ func _paint_bodies() -> void:
 		var b: Dictionary = _body[key]
 		if float(b["dying"]) <= 0.0:
 			continue
-		_put_walker(key, int(b["type"]), _seat_glide.get(key, b["last"]), key.begins_with("e"))
+		_put_walker(key, int(b["type"]), _seat_glide.get(key, b["last"]), b["ground"], key.begins_with("e"))
 
 	# ⚠ **Inside this function and not beside it.** The riders come out of the same `Sprite3D` pool the
 	# bodies do, and that pool is opened by the `_sprites_used = 0` above and closed by the
@@ -2644,7 +2653,7 @@ func _clock_of(b: Dictionary, anim: int) -> float:
 ## seat offset it left with for one walking, and the point in between while it slides. **This function moves nothing**; the glide stepped
 ## in `_advance_seat_glide` before the 이동선 was laid, so the line under the feet and the feet agree.
 ## ⚠ **The `slot` parameter stood here and it is deleted** with the per-조각 ring it indexed.
-func _put_walker(key: String, type_id: int, drawn: Vector2, is_enemy: bool,
+func _put_walker(key: String, type_id: int, drawn: Vector2, ground: Vector2, is_enemy: bool,
 		outlined: bool = false, hp_frac: float = 1.0) -> void:
 	var centre := Look.tile_point_px(drawn) + _body_offset_of(key)
 	# A body faces the way it last walked. `_facing_of` returns RIGHT when it has never moved, so a
@@ -2659,7 +2668,7 @@ func _put_walker(key: String, type_id: int, drawn: Vector2, is_enemy: bool,
 	var swing := _swing_squash(key)
 	# ⚠ **`outlined` rides along untouched** — whether this body is the one in hand is the shell's
 	# answer, not a thing the view re-derives.
-	var top := _put_body(centre, drawn, type_id, lit,
+	var top := _put_body(centre, drawn, ground, type_id, lit,
 		Vector2(gait.x * swing.x, gait.y * swing.y), tex, outlined)
 	# ⚠ **Here and not in `_paint_bodies`**, because this is the one line where the body's drawn top is
 	# in hand. `_put_body`'s own note carries what re-deriving it off the radius cost.
@@ -4053,6 +4062,10 @@ func _fx_step(delta: float) -> void:
 				"gait": 0.0,
 				"head": Vector2.RIGHT,
 				"last": drawn,
+				# **The SIM's point, which is the one the foot height is read from** (2026-09-03).
+				# ⚠⚠ A falling body has no sim point left — `enemy_pos` is OFFMAP the frame it dies — so the
+				# last one it stood on is kept here and the death strip is drawn at that height.
+				"ground": here,
 				# How wide this body is DRAWN, so the knock and the sway are sized off the picture and
 				# not off the sim radius. Looked up once — a body's species never changes.
 				"half": float(Look.sprite_half_px(type_id)),
@@ -4149,6 +4162,7 @@ func _fx_step(delta: float) -> void:
 			if to_aim.length_squared() > Rules.EPS:
 				b["head"] = to_aim.normalized()
 		b["last"] = drawn
+		b["ground"] = here
 
 ## ⚠ **`_drain_events` stood here and it is deleted** (2026-08-29) — see the effects block below.
 
