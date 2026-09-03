@@ -2730,7 +2730,27 @@ func _offset_after(key: String, at: Vector2, drawn: Vector2, resting: bool) -> V
 ## ⚠⚠ **A WALKING BODY IS `at` PLUS ITS `_seat_offset`, NEVER `at` ALONE** — `at` alone is the snap
 ## the user saw on every move order (see `_seat_offset`). A body with no offset entry walks on the sim's
 ## point, which is the same thing.
+## ⚠⚠ **EVERY ANSWER GOES THROUGH `_offset_kept_on_level`, WALKING AND RESTING BOTH** (티켓 03-21). It is
+## here rather than at each reader because this is the one writer of `_seat_glide` — the body, its shadow,
+## its outline, a falling body and the 이동선's first point all read that table.
+## ⚠⚠ **THE RESTING BRANCH IS NOT EXEMPT AND THAT COST A ROUND.** The first build clamped the walking
+## branch only, on the argument that a body at rest cannot lift; **that argument is about the resting
+## branch's DESTINATION and the glide is a straight line to it.** `verify` measured 224 of 70880 glides on
+## the hand island crossing a 조각 of another 눈금 on the way — the worst at 조각 (8,3), the very 조각 the
+## user named, a whole storey up for about 0.15 초. The user still saw the bug after the walking fix.
+## ⚠ **A settled resting body is never moved by this**, and that is the argument the first build should
+## have made: `at` and its seat are both inside one 칸, a 칸 is one 눈금 on every board measured, and the
+## segment between two points of a 칸 stays in it. Only the glide's line leaves.
 func _glided(key: String, at: Vector2, unit_id: int, resting: bool, delta: float) -> Vector2:
+	var g: Grid = battle.grid if battle != null else null
+	var target := _glide_target(key, at, unit_id, resting, delta)
+	return at + _offset_kept_on_level(g, at, target - at)
+
+
+## **Where the glide would put this body if the ground were flat** — `_glided`'s answer before the ledge
+## rule. Walking, the sim's point plus the seat offset it left with; resting, one frame's slide from last
+## frame's drawn point toward the seat.
+func _glide_target(key: String, at: Vector2, unit_id: int, resting: bool, delta: float) -> Vector2:
 	if not resting:
 		return at + _seat_offset.get(key, Vector2.ZERO)
 	var stand := _stand_point(at, unit_id, resting)
@@ -2740,6 +2760,87 @@ func _glided(key: String, at: Vector2, unit_id: int, resting: bool, delta: float
 	if from.distance_to(stand) > float(Rules.BLOCK_TILES):
 		return stand
 	return from.move_toward(stand, Look.SEAT_GLIDE_TILES_PER_S * delta)
+
+
+## **The seat offset, shortened so the drawn point never leaves the sim's 눈금** (티켓 03-21).
+##
+## ⚠⚠ **THE DEFECT IT EXISTS FOR**: `Look.SEAT_OFFSET_MAX_TILES` is a whole 조각 wide and `Grid.surface_h`
+## ROUNDS its point to a 조각, so a walking body carrying its seat offset across a 칸 line was drawn a
+## whole storey up — 46 조각 on the hand island, 33 on the average generated one. Nothing in `src/` owns
+## a collider or a navmesh, so the rule has to hold in the arithmetic; the reference
+## `2026-09-03-grid-sim-under-a-3d-mesh` holds the two studios that hold it the same way.
+##
+## ⚠⚠ **IT IS A LENGTH CAP AND IT WAS A RAY, AND THE RAY TELEPORTED THE PICTURE.** The first two builds
+## walked out ALONG `off` and stopped before the first differing 조각 — so the answer depended on which
+## way the offset pointed, and when `at` crossed into a 조각 of another 눈금 the ledge that had been
+## behind the body was suddenly in front of it. **Measured over the hand island and three generated
+## seeds, restricted to steps `Grid.can_step` allows: a 0.02 조각 step of `at` moved the drawn point up
+## to 0.960 조각 — 168 such positions on the hand island alone.** A body walking onto a stair had its
+## picture snap most of a 조각 sideways. **The drawn point was continuous before this ticket**, so the
+## ray shape was buying the cliff at the price of a teleport.
+## ⇒ **The cap asks only where the nearest differing 눈금 is, in ANY direction** — a question about `at`
+## and the grid, not about `off`. At a 눈금 line the answer is near zero from BOTH sides, so the flip has
+## nothing left to jump by.
+## ⚠ **It stays strictly shorter than the ray answer**, which is what carries every row the ray shape
+## passed: whatever 조각 the ray would have stopped at, its square is at most that far away, so the cap
+## is at most the ray's length.
+##
+## ⚠⚠ **AND IT COSTS THE SPREAD NEAR A LEDGE, IN EVERY DIRECTION.** A seat pointing inland from the foot
+## of a cliff is pulled in exactly as far as one pointing at the cliff. **At rest that floor is half a
+## 조각** — `at` is a 조각 centre and a neighbouring 조각's square is 0.5 away — so a standing 부대 keeps
+## most of its spread; only the corner seats, which reach 0.943, are drawn in. `net_feet` measures both.
+##
+## ⚠ **No differing 눈금 within reach → `off` comes back untouched, the same bits it went in as.** The
+## seat spread is not a thing this may quietly delete; `net_feet`'s 「no ledge, no shrink」 row is the one
+## that stops `Vector2.ZERO` passing as a fix.
+## ⚠ **It takes the grid rather than reading `battle`**, so a net drives it with `Grid.new()` and no tree.
+func _offset_kept_on_level(grid: Grid, at: Vector2, off: Vector2) -> Vector2:
+	if grid == null or grid.w <= 0:
+		return off
+	var reach := off.length()
+	if reach <= 0.0:
+		return off
+	var cap := _ledge_reach(grid, at, reach)
+	# ⚠⚠ **STRICTLY GREATER, AND `>=` WAS A HOLE.** A 조각 IS its square, and a drawn point touching that
+	# square's edge is already inside it (`round` takes the far side of a `k + 0.5`), so an offset whose
+	# length is EXACTLY the distance to the ledge lands on the ledge. Measured: `>=` let 조각 (8,3) with a
+	# half-조각 offset through, which is the user's own 조각.
+	if cap > reach:
+		return off
+	return off.limit_length(maxf(cap - Look.LEDGE_INSET_TILES, 0.0))
+
+
+## **How far the drawn point may go from `at` before it is over a 조각 of another 눈금 — in the worst
+## direction.** `INF` when there is none within `limit`, which is the answer 「nothing to shorten」 and is
+## why the caller can hand `off` back bit for bit.
+##
+## ⚠⚠ **RINGS, AND IT STOPS AS SOON AS IT CANNOT IMPROVE.** A 조각 whose index is `r` away has its square
+## at least `r - 1` from `at` (the point is within half a 조각 of its own centre and the square starts
+## half a 조각 in), so ring `r` is worth walking only while the best answer so far is beyond `r - 1`.
+## **For every offset a seat can actually be — up to a whole 조각 — that is ring one and eight reads.**
+## ⚠ **Off the grid answers 눈금 0**, which is `Grid.level_at`'s own rule and the sea's own height; a body
+## on a plateau near the edge is therefore capped by the water, which is what the picture wants anyway.
+func _ledge_reach(grid: Grid, at: Vector2, limit: float) -> float:
+	var cx := int(round(at.x))
+	var cy := int(round(at.y))
+	var base := grid.level_at(cx, cy)
+	var best := INF
+	var rings := floori(limit + 1.0)
+	for r in range(1, rings + 1):
+		if best <= float(r - 1):
+			break
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if maxi(absi(dx), absi(dy)) != r:
+					continue
+				if grid.level_at(cx + dx, cy + dy) == base:
+					continue
+				# Distance from the point to that 조각's SQUARE, not to its centre: the 조각 is the whole
+				# square, and `round` puts the drawn point inside it the moment it touches an edge.
+				var qx := maxf(absf(at.x - float(cx + dx)) - 0.5, 0.0)
+				var qy := maxf(absf(at.y - float(cy + dy)) - 0.5, 0.0)
+				best = minf(best, sqrt(qx * qx + qy * qy))
+	return best
 
 
 ## **Where a body is drawn this frame** — its glide entry, or its stand point when it has none (a
