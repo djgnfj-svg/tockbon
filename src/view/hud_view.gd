@@ -246,10 +246,17 @@ func set_warning(open: bool, seconds_left: float) -> void:
 ## | 적성 | one 「<word> N/최대」 per row of `Rules.APTITUDES` | `Army.aptitude_of` / `Rules.APTITUDE_MAX` |
 ##
 ## **And the wave alarm, while a wave is inside its warning window** (12-01): the plate top-left,
-## flush with the viewport edge, with 「늑대 무리」 on it and the countdown beside that. ⚠⚠ **IT IS
-## DRAWN ABOVE THE `_over` RETURN AND ABOVE THE PANEL**, which is what lets all three stand at once —
-## the alarm's corner is TOP_LEFT and the panel's is BOTTOM_LEFT, and `Look.corner_origin_px` is the
-## one place that says what either of those means.
+## flush with the viewport edge, with 「늑대 무리」 on it and the countdown beside that. It is drawn
+## above the `_over` return and above the panel, so the alarm and the panel stand together — the
+## alarm's corner is TOP_LEFT and the panel's is BOTTOM_LEFT, and `Look.corner_origin_px` is the one
+## place that says what either of those means.
+##
+## ⚠⚠ **AND `not _over`, WHICH IS A REPAIR AND NOT A TIDY-UP.** Drawn without it, a lost run was
+## photographed under GAME OVER with the alarm still up and **frozen at 「2:57」** — the sim stops
+## advancing after a loss, so the countdown stops with it. **A finished run promising 늑대 in three
+## minutes is the screen saying something that is not true**, which is the one thing this layer is
+## not allowed to do. ⚠ **The panel deliberately does NOT take this guard**: 「이 몸의 체력은 이것이다」
+## is still true on a board that has fallen, and a promise about the future is not.
 ## ⚠ **`_warning` and not `battle.wave_warning_open`** — see `set_warning`; the shell owns which
 ## screen is up, exactly as it does for the loss.
 ##
@@ -263,7 +270,7 @@ func set_warning(open: bool, seconds_left: float) -> void:
 ## is pulled AT that size and the net asserts it is; a layout that re-fitted itself to the file would
 ## hide a wrongly-sized plate under green checks.
 func _draw() -> void:
-	if _warning and _tex_alarm != null:
+	if _warning and not _over and _tex_alarm != null:
 		var alarm_at := Look.alarm_origin_px(Look.ALARM_SIZE_PX)
 		_paint_alarm(_tex_alarm, alarm_at)
 		_paint_alarm_line(Look.ALARM_LABEL, Look.alarm_baseline_px(alarm_at, 0), panel_font(),

@@ -63,17 +63,27 @@ const ALARM_LINES := 2
 ## What the label says. ⚠ **Typed, not read off `Look`** — read back it would be green for any phrase.
 const ALARM_LABEL := "늑대 무리"
 
-## **What the countdown reads at five points, and the five are the ticket's own acceptance**: it opens
+## **What the countdown reads at six points, and the six are the ticket's own acceptance**: it opens
 ## at the whole warning, falls, **reaches 0:00**, and **never shows a negative number**. ⚠ **Typed,
 ## not computed** — `Look.alarm_clock_text` is the thing under test, and a net that called it would
 ## agree with any formatting at all, 「179」 and 「-1:-1」 included.
-## ⚠ The last row is a value `Battle` already floors at zero. It is here because the SCREEN must not
-## depend on that being true somewhere else: two floors, and the second is the one the player sees.
+##
+## ⚠⚠ **THE FIRST ROW READ `180.0` UNTIL 2026-09-03 AND THAT WAS A PIN ON AN INPUT THE SIM CANNOT
+## PRODUCE.** `elapsed` is one sixtieth added 28800 times, so the sub-step the window opens on hands
+## the screen **179.999999999944** and never 180.0 — the row was green, nothing on the glass hung off
+## it, and 「3:00」 was on none of the eight waves. **The value here is now the one the simulation
+## actually produces**, which is the whole difference between a check and a decoration
+## (`how-nets-lie` keeps this species).
+## ⚠ **0.4 reads 0:01 and not 0:00, and that is the cost of ceiling written down**: 0:00 belongs to
+## the single sub-step where the value is exactly 0.0, which is the row under it.
+## ⚠ The last row is a value `Battle` already clamps at zero. It is here because the SCREEN must not
+## depend on that holding somewhere else: two clamps, and the second is the one the player sees.
 const CLOCK_PROBES := [
-	[180.0, "3:00"],
+	[179.999999999944, "3:00"],
 	[179.0, "2:59"],
 	[60.0, "1:00"],
-	[0.4, "0:00"],
+	[0.4, "0:01"],
+	[0.0, "0:00"],
 	[-5.0, "0:00"],
 ]
 ## Every glyph the countdown can ask for. ⚠⚠ **A MISSING GLYPH DRAWS NOTHING AND RAISES NOTHING** —
@@ -1021,12 +1031,14 @@ func _the_alarm_paints_only_while_its_warning_is_open(t) -> void:
 	t.ok(int(clock["size_px"]) > int(label["size_px"]), "남은 시간이 이름보다 크게 찍힌다")
 
 	# **What the countdown reads, at the five points the ticket's acceptance names.**
+	# ⚠ The label prints the probe with `str` and not `%.1f` — rounded to one place, the opening
+	# 179.999999999944 reads as 「180.0초」 and the row would name a value nobody can produce.
 	for row: Array in CLOCK_PROBES:
 		spy.set_warning(true, float(row[0]))
 		await t.pump_frames(1)
-		t.eq(spy.lines.size(), ALARM_LINES, "%.1f초 남았을 때도 글줄은 둘이다" % float(row[0]))
+		t.eq(spy.lines.size(), ALARM_LINES, "%s초 남았을 때도 글줄은 둘이다" % str(row[0]))
 		t.eq(str(spy.lines[1]["text"]), str(row[1]),
-			"%.1f초 남으면 「%s」로 찍힌다" % [float(row[0]), str(row[1])])
+			"%s초 남으면 「%s」로 찍힌다" % [str(row[0]), str(row[1])])
 
 	# **Closed again**, and the plate comes down. The OFF edge is what a `note_wave()` with no false
 	# arm would have lost — the alarm would stand for the rest of the island.
@@ -1035,11 +1047,25 @@ func _the_alarm_paints_only_while_its_warning_is_open(t) -> void:
 	t.eq(spy.plates.size(), 0, "창이 닫히면 알람 판이 내려간다")
 	t.eq(spy.lines.size(), 0, "글줄도 같이 내려간다")
 
-	# **And a bind clears it**, for the reason `_over` is cleared: a fresh island's wave clock starts
-	# at a whole interval and the last island's countdown must not open it.
+	# ⚠⚠ **AND THE RUN ENDING TAKES IT DOWN — MEASURED ON THE GLASS, 2026-09-03.** A lost board was
+	# photographed under GAME OVER with the alarm still standing and **frozen at 「2:57」**: `_process`
+	# stops advancing the sim after a loss, so the window never closes and the countdown never moves.
+	# **The screen was promising 늑대 in three minutes on a run that was over.** This row is that
+	# photograph, and the OFF arm below is what proves the guard is `_over` and not the alarm having
+	# quietly died.
 	spy.set_warning(true, Rules.WAVE_WARNING_SEC)
 	await t.pump_frames(1)
 	t.eq(spy.plates.size(), 1, "자가 점검 — 다시 열면 판이 다시 뜬다")
+	spy.set_over(true)
+	await t.pump_frames(1)
+	t.eq(spy.plates.size(), 0, "판이 끝나면 예고 창이 열려 있어도 알람이 내려간다")
+	t.eq(spy.lines.size(), 0, "글줄도 같이 내려간다 — 끝난 판이 3 분 뒤를 약속하지 않는다")
+	spy.set_over(false)
+	await t.pump_frames(1)
+	t.eq(spy.plates.size(), 1, "자가 점검 — 게임 오버가 걷히면 알람이 다시 선다")
+
+	# **And a bind clears it**, for the reason `_over` is cleared: a fresh island's wave clock starts
+	# at a whole interval and the last island's countdown must not open it.
 	spy.bind(null)
 	await t.pump_frames(1)
 	t.eq(spy.plates.size(), 0, "섬을 새로 매면 알람이 지워진다")

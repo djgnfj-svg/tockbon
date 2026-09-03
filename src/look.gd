@@ -2343,14 +2343,20 @@ static func alarm_baseline_px(origin: Vector2, slot: int) -> Vector2:
 
 ## **The countdown, as the screen prints it** — 「M:SS」, from `Battle.wave_seconds_left`.
 ##
-## ⚠⚠ **IT FLOORS, AND THAT IS WHAT MAKES IT REACH 0:00.** Rounding up would show 3:00 for a whole
-## second and then jump from 0:01 to a closed alarm, so 0:00 would never be on the glass; flooring
-## shows 3:00 only at the instant the window opens and holds 0:00 for the last second before the hull
-## lands. **The ticket's own acceptance is that it reaches 0.**
-## ⚠ The floor at zero is `Battle`'s already — this one is the second, because a negative here would
-## print as 「-1:-1」 rather than reading as wrong.
+## ⚠⚠ **IT CEILS, AND IT FLOORED UNTIL 2026-09-03 WITH 「3:00」 NEVER ONCE ON THE GLASS.** `elapsed` is
+## one sixtieth added 28800 times and cannot land on 300.0, so the sub-step the window opens on
+## reports **179.999999999944** — five parts in a hundred billion under the whole warning. **Flooring
+## turned that into 2:59, on every one of the eight waves**, and the comment that stood here claimed
+## 3:00 showed 「at the instant the window opens」: an instant that does not exist. Measured headless.
+## ⚠ **What ceiling costs, said plainly**: 0:00 is reached only where `wave_seconds_left` is exactly
+## 0.0 — one sub-step, not a whole second. **It IS reached** (measured over 66 분: minimum exactly
+## 0.0, never negative), which is the ticket's acceptance, and 3:00 is now on screen for a whole
+## second rather than never.
+## ⚠ The clamp at zero is `Battle`'s already — this is the second, because a negative here would
+## print as 「-1:-1」 rather than reading as wrong. **It goes before the ceiling**, or -5.0 ceils to
+## -0.0 and prints 「0:00」 for a reason nobody wrote down.
 static func alarm_clock_text(seconds_left: float) -> String:
-	var whole := int(maxf(0.0, seconds_left))
+	var whole := int(ceilf(maxf(0.0, seconds_left)))
 	return "%d:%02d" % [whole / 60, whole % 60]
 
 # ---------------------------------------------------------------------------------------------
